@@ -26,7 +26,7 @@ template<class Input, class Output, class Handler>
 kernel::Task<void> execute_route(std::shared_ptr<RouteState<Input, Handler>> state,
                                 http::HttpConn& connection, http::HttpRequest request,
                                 bool head) {
-    const bool keep_alive = request.header().isKeepAlive() && !request.header().isConnectionClose();
+    const bool keep_alive = request.header().is_keep_alive() && !request.header().is_connection_close();
     int status = state->operation.success_status;
     std::string body;
     bool json_body = false;

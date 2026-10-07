@@ -23,7 +23,7 @@ bool check(bool condition, const char* message)
     return condition;
 }
 
-std::string makeTempFile()
+std::string make_temp_file()
 {
     char path[] = "/tmp/galay-kernel-file-descriptor-XXXXXX";
     int fd = ::mkstemp(path);
@@ -35,7 +35,7 @@ std::string makeTempFile()
     return path;
 }
 
-bool testOpenFailureReturnsExpectedError()
+bool test_open_failure_returns_expected_error()
 {
     galay::kernel::FileDescriptor fd;
     auto result = fd.open("/tmp/galay-kernel-file-descriptor-missing", O_RDONLY);
@@ -45,16 +45,16 @@ bool testOpenFailureReturnsExpectedError()
     if (!check(!fd.valid(), "descriptor should remain invalid after failed open")) {
         return false;
     }
-    if (!check(fd.lastError().has_value(), "lastError should store the open failure")) {
+    if (!check(fd.last_error().has_value(), "lastError should store the open failure")) {
         return false;
     }
     return check(galay::kernel::IOError::contains(result.error().code(), galay::kernel::kOpenFailed),
                  "open failure should be reported as kOpenFailed");
 }
 
-bool testOpenAndMoveTransferOwnership()
+bool test_open_and_move_transfer_ownership()
 {
-    const std::string path = makeTempFile();
+    const std::string path = make_temp_file();
     if (path.empty()) {
         return false;
     }
@@ -86,9 +86,9 @@ bool testOpenAndMoveTransferOwnership()
     return ok;
 }
 
-bool testReleaseStopsOwnership()
+bool test_release_stops_ownership()
 {
-    const std::string path = makeTempFile();
+    const std::string path = make_temp_file();
     if (path.empty()) {
         return false;
     }
@@ -119,9 +119,9 @@ bool testReleaseStopsOwnership()
     return check(raw_fd_still_open, "released fd should remain open after wrapper destruction");
 }
 
-bool testOpenRejectsWhenAlreadyOpen()
+bool test_open_rejects_when_already_open()
 {
-    const std::string path = makeTempFile();
+    const std::string path = make_temp_file();
     if (path.empty()) {
         return false;
     }
@@ -150,9 +150,9 @@ bool testOpenRejectsWhenAlreadyOpen()
 int main()
 {
     bool ok = true;
-    ok = testOpenFailureReturnsExpectedError() && ok;
-    ok = testOpenAndMoveTransferOwnership() && ok;
-    ok = testReleaseStopsOwnership() && ok;
-    ok = testOpenRejectsWhenAlreadyOpen() && ok;
+    ok = test_open_failure_returns_expected_error() && ok;
+    ok = test_open_and_move_transfer_ownership() && ok;
+    ok = test_release_stops_ownership() && ok;
+    ok = test_open_rejects_when_already_open() && ok;
     return ok ? 0 : 1;
 }

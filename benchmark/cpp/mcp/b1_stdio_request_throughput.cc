@@ -26,7 +26,7 @@ struct PerformanceStats {
     double maxLatencyMs = 0.0;
     std::vector<double> latencies;
 
-    void addLatency(double latencyMs) {
+    void add_latency(double latencyMs) {
         latencies.push_back(latencyMs);
         totalTimeMs += latencyMs;
         minLatencyMs = std::min(minLatencyMs, latencyMs);
@@ -34,11 +34,11 @@ struct PerformanceStats {
         totalRequests++;
     }
 
-    double getAvgLatencyMs() const {
+    double get_avg_latency_ms() const {
         return totalRequests > 0 ? totalTimeMs / totalRequests : 0.0;
     }
 
-    double getMedianLatencyMs() {
+    double get_median_latency_ms() {
         if (latencies.empty()) return 0.0;
         std::vector<double> sorted = latencies;
         std::sort(sorted.begin(), sorted.end());
@@ -49,7 +49,7 @@ struct PerformanceStats {
         return sorted[mid];
     }
 
-    double getP95LatencyMs() {
+    double get_p95_latency_ms() {
         if (latencies.empty()) return 0.0;
         std::vector<double> sorted = latencies;
         std::sort(sorted.begin(), sorted.end());
@@ -57,7 +57,7 @@ struct PerformanceStats {
         return sorted[std::min(idx, sorted.size() - 1)];
     }
 
-    double getP99LatencyMs() {
+    double get_p99_latency_ms() {
         if (latencies.empty()) return 0.0;
         std::vector<double> sorted = latencies;
         std::sort(sorted.begin(), sorted.end());
@@ -65,9 +65,9 @@ struct PerformanceStats {
         return sorted[std::min(idx, sorted.size() - 1)];
     }
 
-    double getStdDevMs() const {
+    double get_std_dev_ms() const {
         if (latencies.size() < 2) return 0.0;
-        double avg = getAvgLatencyMs();
+        double avg = get_avg_latency_ms();
         double sumSquares = 0.0;
         for (double lat : latencies) {
             double diff = lat - avg;
@@ -76,18 +76,18 @@ struct PerformanceStats {
         return std::sqrt(sumSquares / latencies.size());
     }
 
-    void printReport(const std::string& testName) const {
+    void print_report(const std::string& testName) const {
         std::cerr << "\n=== " << testName << " Performance Report ===" << std::endl;
         std::cerr << std::fixed << std::setprecision(2);
         std::cerr << "Total Requests:  " << totalRequests << std::endl;
         std::cerr << "Total Time:      " << totalTimeMs << " ms" << std::endl;
-        std::cerr << "Avg Latency:     " << const_cast<PerformanceStats*>(this)->getAvgLatencyMs() << " ms" << std::endl;
-        std::cerr << "Median Latency:  " << const_cast<PerformanceStats*>(this)->getMedianLatencyMs() << " ms" << std::endl;
+        std::cerr << "Avg Latency:     " << const_cast<PerformanceStats*>(this)->get_avg_latency_ms() << " ms" << std::endl;
+        std::cerr << "Median Latency:  " << const_cast<PerformanceStats*>(this)->get_median_latency_ms() << " ms" << std::endl;
         std::cerr << "Min Latency:     " << minLatencyMs << " ms" << std::endl;
         std::cerr << "Max Latency:     " << maxLatencyMs << " ms" << std::endl;
-        std::cerr << "P95 Latency:     " << const_cast<PerformanceStats*>(this)->getP95LatencyMs() << " ms" << std::endl;
-        std::cerr << "P99 Latency:     " << const_cast<PerformanceStats*>(this)->getP99LatencyMs() << " ms" << std::endl;
-        std::cerr << "Std Dev:         " << getStdDevMs() << " ms" << std::endl;
+        std::cerr << "P95 Latency:     " << const_cast<PerformanceStats*>(this)->get_p95_latency_ms() << " ms" << std::endl;
+        std::cerr << "P99 Latency:     " << const_cast<PerformanceStats*>(this)->get_p99_latency_ms() << " ms" << std::endl;
+        std::cerr << "Std Dev:         " << get_std_dev_ms() << " ms" << std::endl;
         if (totalTimeMs > 0) {
             std::cerr << "Throughput:      " << (totalRequests * 1000.0 / totalTimeMs) << " req/s" << std::endl;
         }
@@ -95,14 +95,14 @@ struct PerformanceStats {
 };
 
 // 测试工具调用性能
-void benchmarkToolCall(McpClient& client, size_t iterations) {
+void benchmark_tool_call(McpClient& client, size_t iterations) {
     PerformanceStats stats;
 
     std::cerr << "\nBenchmarking tool calls (" << iterations << " iterations)..." << std::endl;
 
     for (size_t i = 0; i < iterations; ++i) {
         std::string args;
-        auto argsWriter = makeJsonWriter(args);
+        auto argsWriter = make_json_writer(args);
         // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
         (void)argsWriter.start_object();
         (void)argsWriter.key("a");
@@ -116,16 +116,16 @@ void benchmarkToolCall(McpClient& client, size_t iterations) {
         }
 
         auto start = high_resolution_clock::now();
-        auto result = client.callTool("add", args);
+        auto result = client.call_tool("add", args);
         auto end = high_resolution_clock::now();
 
         if (!result) {
-            std::cerr << "Error in iteration " << i << ": " << result.error().toString() << std::endl;
+            std::cerr << "Error in iteration " << i << ": " << result.error().to_string() << std::endl;
             continue;
         }
 
         double latencyMs = duration_cast<microseconds>(end - start).count() / 1000.0;
-        stats.addLatency(latencyMs);
+        stats.add_latency(latencyMs);
 
         // 进度显示
         if ((i + 1) % 100 == 0) {
@@ -133,27 +133,27 @@ void benchmarkToolCall(McpClient& client, size_t iterations) {
         }
     }
 
-    stats.printReport("Tool Call");
+    stats.print_report("Tool Call");
 }
 
 // 测试资源读取性能
-void benchmarkResourceRead(McpClient& client, size_t iterations) {
+void benchmark_resource_read(McpClient& client, size_t iterations) {
     PerformanceStats stats;
 
     std::cerr << "\nBenchmarking resource reads (" << iterations << " iterations)..." << std::endl;
 
     for (size_t i = 0; i < iterations; ++i) {
         auto start = high_resolution_clock::now();
-        auto result = client.readResource("file:///test.txt");
+        auto result = client.read_resource("file:///test.txt");
         auto end = high_resolution_clock::now();
 
         if (!result) {
-            std::cerr << "Error in iteration " << i << ": " << result.error().toString() << std::endl;
+            std::cerr << "Error in iteration " << i << ": " << result.error().to_string() << std::endl;
             continue;
         }
 
         double latencyMs = duration_cast<microseconds>(end - start).count() / 1000.0;
-        stats.addLatency(latencyMs);
+        stats.add_latency(latencyMs);
 
         // 进度显示
         if ((i + 1) % 100 == 0) {
@@ -161,11 +161,11 @@ void benchmarkResourceRead(McpClient& client, size_t iterations) {
         }
     }
 
-    stats.printReport("Resource Read");
+    stats.print_report("Resource Read");
 }
 
 // 测试列表操作性能
-void benchmarkListOperations(McpClient& client, size_t iterations) {
+void benchmark_list_operations(McpClient& client, size_t iterations) {
     PerformanceStats toolsStats;
     PerformanceStats resourcesStats;
     PerformanceStats promptsStats;
@@ -173,36 +173,36 @@ void benchmarkListOperations(McpClient& client, size_t iterations) {
     std::cerr << "\nBenchmarking list operations (" << iterations << " iterations)..." << std::endl;
 
     for (size_t i = 0; i < iterations; ++i) {
-        // 测试 listTools
+        // 测试 list_tools
         {
             auto start = high_resolution_clock::now();
-            auto result = client.listTools();
+            auto result = client.list_tools();
             auto end = high_resolution_clock::now();
             if (result) {
                 double latencyMs = duration_cast<microseconds>(end - start).count() / 1000.0;
-                toolsStats.addLatency(latencyMs);
+                toolsStats.add_latency(latencyMs);
             }
         }
 
-        // 测试 listResources
+        // 测试 list_resources
         {
             auto start = high_resolution_clock::now();
-            auto result = client.listResources();
+            auto result = client.list_resources();
             auto end = high_resolution_clock::now();
             if (result) {
                 double latencyMs = duration_cast<microseconds>(end - start).count() / 1000.0;
-                resourcesStats.addLatency(latencyMs);
+                resourcesStats.add_latency(latencyMs);
             }
         }
 
-        // 测试 listPrompts
+        // 测试 list_prompts
         {
             auto start = high_resolution_clock::now();
-            auto result = client.listPrompts();
+            auto result = client.list_prompts();
             auto end = high_resolution_clock::now();
             if (result) {
                 double latencyMs = duration_cast<microseconds>(end - start).count() / 1000.0;
-                promptsStats.addLatency(latencyMs);
+                promptsStats.add_latency(latencyMs);
             }
         }
 
@@ -212,13 +212,13 @@ void benchmarkListOperations(McpClient& client, size_t iterations) {
         }
     }
 
-    toolsStats.printReport("List Tools");
-    resourcesStats.printReport("List Resources");
-    promptsStats.printReport("List Prompts");
+    toolsStats.print_report("List Tools");
+    resourcesStats.print_report("List Resources");
+    promptsStats.print_report("List Prompts");
 }
 
 // 测试Ping性能
-void benchmarkPing(McpClient& client, size_t iterations) {
+void benchmark_ping(McpClient& client, size_t iterations) {
     PerformanceStats stats;
 
     std::cerr << "\nBenchmarking ping (" << iterations << " iterations)..." << std::endl;
@@ -229,12 +229,12 @@ void benchmarkPing(McpClient& client, size_t iterations) {
         auto end = high_resolution_clock::now();
 
         if (!result) {
-            std::cerr << "Error in iteration " << i << ": " << result.error().toString() << std::endl;
+            std::cerr << "Error in iteration " << i << ": " << result.error().to_string() << std::endl;
             continue;
         }
 
         double latencyMs = duration_cast<microseconds>(end - start).count() / 1000.0;
-        stats.addLatency(latencyMs);
+        stats.add_latency(latencyMs);
 
         // 进度显示
         if ((i + 1) % 100 == 0) {
@@ -242,10 +242,10 @@ void benchmarkPing(McpClient& client, size_t iterations) {
         }
     }
 
-    stats.printReport("Ping");
+    stats.print_report("Ping");
 }
 
-void printSystemInfo() {
+void print_system_info() {
     std::cerr << "\n=== System Information ===" << std::endl;
     std::cerr << "Test Date: " << __DATE__ << " " << __TIME__ << std::endl;
 
@@ -263,11 +263,11 @@ void printSystemInfo() {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    printSystemInfo();
+    print_system_info();
 
     std::cerr << "\n=== Stdio MCP Performance Benchmark ===" << std::endl;
     std::cerr << "This benchmark requires a running MCP server on stdin/stdout" << std::endl;
@@ -279,10 +279,10 @@ int main(int argc, char* argv[]) {
     std::cerr << "\nInitializing client..." << std::endl;
     auto initResult = client.initialize("benchmark-client", "1.0.0");
     if (!initResult) {
-        std::cerr << "Failed to initialize: " << initResult.error().toString() << std::endl;
+        std::cerr << "Failed to initialize: " << initResult.error().to_string() << std::endl;
         return 1;
     }
-    std::cerr << "Connected to: " << client.getServerInfo().name << std::endl;
+    std::cerr << "Connected to: " << client.get_server_info().name << std::endl;
 
     // 运行各项性能测试
     size_t iterations = 1000;
@@ -295,10 +295,10 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    benchmarkPing(client, iterations);
-    benchmarkToolCall(client, iterations);
-    benchmarkResourceRead(client, iterations);
-    benchmarkListOperations(client, iterations);
+    benchmark_ping(client, iterations);
+    benchmark_tool_call(client, iterations);
+    benchmark_resource_read(client, iterations);
+    benchmark_list_operations(client, iterations);
 
     // 断开连接
     client.disconnect();

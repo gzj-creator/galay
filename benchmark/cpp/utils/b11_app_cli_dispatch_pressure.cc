@@ -21,7 +21,7 @@ protected:
     int_type overflow(int_type ch) override { return traits_type::not_eof(ch); }
 };
 
-bool runScenario(const char* name, galay::utils::App& app, int argc,
+bool run_scenario(const char* name, galay::utils::App& app, int argc,
                  const char* const* argv, std::ostream& sink,
                  std::size_t iterations) {
     const auto start = std::chrono::steady_clock::now();
@@ -45,7 +45,7 @@ bool runScenario(const char* name, galay::utils::App& app, int argc,
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -68,10 +68,10 @@ int main() {
     const char* emptyArgv[] = {"risk-control"};
     const char* versionArgv[] = {"risk-control", "-v"};
 
-    if (!runScenario("BM_AppEmptyUsage", app, 1, emptyArgv, sink, iterations)) {
+    if (!run_scenario("BM_AppEmptyUsage", app, 1, emptyArgv, sink, iterations)) {
         return 1;
     }
-    if (!runScenario("BM_AppShortVersion", app, 2, versionArgv, sink, iterations)) {
+    if (!run_scenario("BM_AppShortVersion", app, 2, versionArgv, sink, iterations)) {
         return 1;
     }
     return 0;

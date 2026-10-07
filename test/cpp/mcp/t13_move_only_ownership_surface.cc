@@ -16,8 +16,8 @@ using galay::mcp::ParsedJsonRpcRequest;
 using galay::mcp::ParsedJsonRpcResponse;
 using galay::mcp::PromptArgumentBuilder;
 using galay::mcp::SchemaBuilder;
-using galay::mcp::parseJsonRpcRequest;
-using galay::mcp::parseJsonRpcResponse;
+using galay::mcp::parse_json_rpc_request;
+using galay::mcp::parse_json_rpc_response;
 
 static_assert(!std::copy_constructible<json::stream::StreamWriter>);
 static_assert(!std::is_copy_assignable_v<json::stream::StreamWriter>);
@@ -68,12 +68,12 @@ bool contains(std::string_view text, std::string_view needle)
     return text.find(needle) != std::string_view::npos;
 }
 
-bool jsonWriterSinksAreIndependent()
+bool json_writer_sinks_are_independent()
 {
     std::string originalJson;
     std::string cloneJson;
-    auto writer = galay::mcp::makeJsonWriter(originalJson);
-    auto copy = galay::mcp::makeJsonWriter(cloneJson);
+    auto writer = galay::mcp::make_json_writer(originalJson);
+    auto copy = galay::mcp::make_json_writer(cloneJson);
 
     (void)writer.start_object();
     (void)writer.key("before");
@@ -102,13 +102,13 @@ bool jsonWriterSinksAreIndependent()
                    "second JSON writer observed the first writer's later mutation");
 }
 
-bool schemaBuilderCloneIsIndependent()
+bool schema_builder_clone_is_independent()
 {
     SchemaBuilder builder;
-    builder.addString("name", "Name", true);
+    builder.add_string("name", "Name", true);
 
     SchemaBuilder copy = builder.clone();
-    builder.addInteger("age", "Age", false);
+    builder.add_integer("age", "Age", false);
 
     const auto originalSchema = builder.build();
     const auto cloneSchema = copy.build();
@@ -120,13 +120,13 @@ bool schemaBuilderCloneIsIndependent()
                    "cloned SchemaBuilder lost existing property");
 }
 
-bool promptArgumentBuilderCloneIsIndependent()
+bool prompt_argument_builder_clone_is_independent()
 {
     PromptArgumentBuilder builder;
-    builder.addArgument("topic", "Topic", true);
+    builder.add_argument("topic", "Topic", true);
 
     PromptArgumentBuilder copy = builder.clone();
-    builder.addArgument("audience", "Audience", false);
+    builder.add_argument("audience", "Audience", false);
 
     const auto originalArguments = builder.build();
     const auto cloneArguments = copy.build();
@@ -135,9 +135,9 @@ bool promptArgumentBuilderCloneIsIndependent()
            require(cloneArguments.front().name == "topic", "cloned PromptArgumentBuilder lost existing argument");
 }
 
-bool movedParsedRequestKeepsViewsReadable()
+bool moved_parsed_request_keeps_views_readable()
 {
-    auto parsed = parseJsonRpcRequest(
+    auto parsed = parse_json_rpc_request(
         R"({"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"echo","arguments":{"text":"hello"}}})");
     if (!require(parsed.has_value(), "failed to parse JSON-RPC request")) {
         return false;
@@ -157,9 +157,9 @@ bool movedParsedRequestKeepsViewsReadable()
     return require(*name == "echo", "moved request params view changed");
 }
 
-bool movedParsedResponseKeepsViewsReadable()
+bool moved_parsed_response_keeps_views_readable()
 {
-    auto parsed = parseJsonRpcResponse(R"({"jsonrpc":"2.0","id":8,"result":{"ok":true}})");
+    auto parsed = parse_json_rpc_response(R"({"jsonrpc":"2.0","id":8,"result":{"ok":true}})");
     if (!require(parsed.has_value(), "failed to parse JSON-RPC response")) {
         return false;
     }
@@ -182,19 +182,19 @@ bool movedParsedResponseKeepsViewsReadable()
 
 int main()
 {
-    if (!jsonWriterSinksAreIndependent()) {
+    if (!json_writer_sinks_are_independent()) {
         return 1;
     }
-    if (!schemaBuilderCloneIsIndependent()) {
+    if (!schema_builder_clone_is_independent()) {
         return 1;
     }
-    if (!promptArgumentBuilderCloneIsIndependent()) {
+    if (!prompt_argument_builder_clone_is_independent()) {
         return 1;
     }
-    if (!movedParsedRequestKeepsViewsReadable()) {
+    if (!moved_parsed_request_keeps_views_readable()) {
         return 1;
     }
-    if (!movedParsedResponseKeepsViewsReadable()) {
+    if (!moved_parsed_response_keeps_views_readable()) {
         return 1;
     }
 

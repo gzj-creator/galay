@@ -123,7 +123,7 @@ public:
      * @param param_types 参数类型列表
      * @return 查询结果集或错误
      */
-    MysqlResult stmtExecute(uint32_t stmt_id,
+    MysqlResult stmt_execute(uint32_t stmt_id,
                             const std::vector<std::optional<std::string>>& params,
                             const std::vector<uint8_t>& param_types = {});
 
@@ -132,43 +132,43 @@ public:
      * @param stmt_id 语句ID
      * @return 成功或错误
      */
-    MysqlVoidResult stmtClose(uint32_t stmt_id);
+    MysqlVoidResult stmt_close(uint32_t stmt_id);
 
     // ======================== 事务 ========================
 
-    MysqlVoidResult beginTransaction();  ///< 开启事务
+    MysqlVoidResult begin_transaction();  ///< 开启事务
     MysqlVoidResult commit();             ///< 提交事务
     MysqlVoidResult rollback();           ///< 回滚事务
 
     // ======================== 工具 ========================
 
     MysqlVoidResult ping();                                ///< 发送心跳检测
-    MysqlVoidResult useDatabase(const std::string& database); ///< 切换数据库
+    MysqlVoidResult use_database(const std::string& database); ///< 切换数据库
 
     // ======================== 连接管理 ========================
 
     void close();                                           ///< 关闭连接
-    bool isConnected() const { return m_connected; }        ///< 检查是否已连接
+    bool is_connected() const { return m_connected; }        ///< 检查是否已连接
 
 private:
     using Packet = std::pair<uint8_t, std::string>; ///< 包类型：序列号 + payload
 
     static constexpr size_t kRecvBufferCapacity = 256 * 1024; ///< 接收缓冲区容量（256KB）
 
-    MysqlVoidResult connectSocket(const std::string& host, uint16_t port,
+    MysqlVoidResult connect_socket(const std::string& host, uint16_t port,
                                   uint32_t timeout_ms,
                                   bool tcp_no_delay = true); ///< 创建TCP连接
-    void closeSocket() noexcept; ///< 关闭套接字
+    void close_socket() noexcept; ///< 关闭套接字
 
-    MysqlVoidResult sendAll(std::string_view data); ///< 发送全部数据
-    MysqlVoidResult sendAllv(std::span<const struct iovec> iovecs); ///< 通过iovec发送全部数据
+    MysqlVoidResult send_all(std::string_view data); ///< 发送全部数据
+    MysqlVoidResult send_allv(std::span<const struct iovec> iovecs); ///< 通过iovec发送全部数据
 
-    MysqlVoidResult recvIntoRingBuffer(); ///< 从套接字读取数据到环形缓冲区
-    std::expected<std::optional<Packet>, MysqlError> tryExtractPacket(); ///< 尝试从环形缓冲区提取包
-    std::expected<Packet, MysqlError> recvPacket(); ///< 接收一个完整的MySQL包
+    MysqlVoidResult recv_into_ring_buffer(); ///< 从套接字读取数据到环形缓冲区
+    std::expected<std::optional<Packet>, MysqlError> try_extract_packet(); ///< 尝试从环形缓冲区提取包
+    std::expected<Packet, MysqlError> recv_packet(); ///< 接收一个完整的MySQL包
 
-    MysqlResult receiveResultSet(); ///< 接收完整结果集
-    MysqlVoidResult runSimpleStatement(const std::string& sql); ///< 执行简单SQL语句
+    MysqlResult receive_result_set(); ///< 接收完整结果集
+    MysqlVoidResult run_simple_statement(const std::string& sql); ///< 执行简单SQL语句
 
     galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> m_recv_ring_buffer; ///< 接收环形缓冲区
     std::string m_parse_scratch;                 ///< 解析临时缓冲区

@@ -58,7 +58,7 @@ namespace galay::redis::protocol
          * @brief 检查连接状态
          * @return 已连接返回 true
          */
-        bool isConnected() const { return m_connected; }
+        bool is_connected() const { return m_connected; }
 
         /**
          * @brief 发送数据
@@ -71,7 +71,7 @@ namespace galay::redis::protocol
          * @brief 接收并解析 Redis 响应
          * @return 解析后的 RedisReply 或错误
          */
-        std::expected<RedisReply, RedisError> receiveReply();
+        std::expected<RedisReply, RedisError> receive_reply();
 
         /**
          * @brief 发送命令并接收响应（便捷方法）

@@ -16,13 +16,13 @@ using SurfaceResult = std::expected<size_t, IOError>;
 using SurfaceSequence = SequenceAwaitable<SurfaceResult, 4>;
 
 struct SurfaceFlow {
-    void onRecv(SequenceOps<SurfaceResult, 4>&, RecvIOContext&) {}
-    void onLocal(SequenceOps<SurfaceResult, 4>&) {}
-    void onFinish(SequenceOps<SurfaceResult, 4>&) {}
+    void on_recv(SequenceOps<SurfaceResult, 4>&, RecvIOContext&) {}
+    void on_local(SequenceOps<SurfaceResult, 4>&) {}
+    void on_finish(SequenceOps<SurfaceResult, 4>&) {}
 };
 
-using SurfaceRecvStep = SequenceStep<SurfaceResult, 4, SurfaceFlow, RecvIOContext, &SurfaceFlow::onRecv>;
-using SurfaceLocalStep = LocalSequenceStep<SurfaceResult, 4, SurfaceFlow, &SurfaceFlow::onLocal>;
+using SurfaceRecvStep = SequenceStep<SurfaceResult, 4, SurfaceFlow, RecvIOContext, &SurfaceFlow::on_recv>;
+using SurfaceLocalStep = LocalSequenceStep<SurfaceResult, 4, SurfaceFlow, &SurfaceFlow::on_local>;
 using SurfaceBuilder = AwaitableBuilder<SurfaceResult, 4, SurfaceFlow>;
 
 static_assert(std::is_constructible_v<SurfaceSequence, IOController*>);

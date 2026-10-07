@@ -40,7 +40,7 @@ void require(bool condition, const char* message)
     }
 }
 
-uint16_t pickFreePort()
+uint16_t pick_free_port()
 {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -82,7 +82,7 @@ uint16_t pickFreePort()
     return port;
 }
 
-int connectWithRetry(uint16_t port)
+int connect_with_retry(uint16_t port)
 {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -119,7 +119,7 @@ int connectWithRetry(uint16_t port)
     fail("connect retry exhausted");
 }
 
-void waitForCount(const std::atomic<int>& value, int expected, const char* message)
+void wait_for_count(const std::atomic<int>& value, int expected, const char* message)
 {
     for (int i = 0; i < 100; ++i) {
         if (value.load() >= expected) {
@@ -130,7 +130,7 @@ void waitForCount(const std::atomic<int>& value, int expected, const char* messa
     fail(message);
 }
 
-int readTcpNoDelay(int fd)
+int read_tcp_no_delay(int fd)
 {
     int value = 0;
     socklen_t value_len = sizeof(value);
@@ -149,7 +149,7 @@ public:
         , m_continue_after_probe(continue_after_probe) {}
 
     Task<bool> handle(Runtime&, SocketType& socket, const Host&) override {
-        m_state->observed_nodelay.store(readTcpNoDelay(socket.handle().fd));
+        m_state->observed_nodelay.store(read_tcp_no_delay(socket.handle().fd));
         m_state->calls.fetch_add(1);
         co_return m_continue_after_probe;
     }
@@ -159,7 +159,7 @@ private:
     bool m_continue_after_probe;
 };
 
-Task<void> closeConn(HttpConn conn, ProbeState* state)
+Task<void> close_conn(HttpConn conn, ProbeState* state)
 {
     auto close_result = co_await conn.close();
     if (!close_result) {
@@ -170,29 +170,29 @@ Task<void> closeConn(HttpConn conn, ProbeState* state)
     co_return;
 }
 
-int observePlainServerTcpNoDelay(bool tcp_no_delay)
+int observe_plain_server_tcp_no_delay(bool tcp_no_delay)
 {
     ProbeState state;
-    const uint16_t port = pickFreePort();
+    const uint16_t port = pick_free_port();
     HttpServer server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
-        .tcpNoDelay(tcp_no_delay)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
+        .tcp_no_delay(tcp_no_delay)
         .build());
 
-    require(server.addAcceptPlugin(std::make_unique<NoDelayProbePlugin<AsyncTcpSocket>>(&state)),
+    require(server.add_accept_plugin(std::make_unique<NoDelayProbePlugin<AsyncTcpSocket>>(&state)),
             "nodelay probe plugin should register");
 
     server.start([&state](HttpConn conn) -> Task<void> {
-        co_await closeConn(std::move(conn), &state);
+        co_await close_conn(std::move(conn), &state);
     });
-    require(server.isRunning(), "server should start for nodelay probe");
+    require(server.is_running(), "server should start for nodelay probe");
 
-    const int client_fd = connectWithRetry(port);
-    waitForCount(state.calls, 1, "nodelay probe plugin did not observe accepted socket");
-    waitForCount(state.close_count, 1, "server handler did not close accepted socket");
+    const int client_fd = connect_with_retry(port);
+    wait_for_count(state.calls, 1, "nodelay probe plugin did not observe accepted socket");
+    wait_for_count(state.close_count, 1, "server handler did not close accepted socket");
 
     if (::close(client_fd) != 0) {
         server.stop();
@@ -203,19 +203,19 @@ int observePlainServerTcpNoDelay(bool tcp_no_delay)
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-int observeHttpsServerTcpNoDelay(bool tcp_no_delay)
+int observe_https_server_tcp_no_delay(bool tcp_no_delay)
 {
     ProbeState state;
-    const uint16_t port = pickFreePort();
+    const uint16_t port = pick_free_port();
     HttpsServer server(HttpsServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
-        .tcpNoDelay(tcp_no_delay)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
+        .tcp_no_delay(tcp_no_delay)
         .build());
 
-    require(server.addAcceptPlugin(
+    require(server.add_accept_plugin(
                 std::make_unique<NoDelayProbePlugin<galay::ssl::SslSocket>>(&state, false)),
             "https nodelay probe plugin should register");
 
@@ -226,10 +226,10 @@ int observeHttpsServerTcpNoDelay(bool tcp_no_delay)
         }
         co_return;
     });
-    require(server.isRunning(), "https server should start for nodelay probe");
+    require(server.is_running(), "https server should start for nodelay probe");
 
-    const int client_fd = connectWithRetry(port);
-    waitForCount(state.calls, 1, "https nodelay probe plugin did not observe accepted socket");
+    const int client_fd = connect_with_retry(port);
+    wait_for_count(state.calls, 1, "https nodelay probe plugin did not observe accepted socket");
 
     if (::close(client_fd) != 0) {
         server.stop();
@@ -242,37 +242,37 @@ int observeHttpsServerTcpNoDelay(bool tcp_no_delay)
 
 void test_builder_config_surface()
 {
-    auto default_http_config = HttpServerBuilder().buildConfig();
+    auto default_http_config = HttpServerBuilder().build_config();
     require(default_http_config.tcp_no_delay, "HttpServerConfig should enable TCP_NODELAY by default");
 
-    auto disabled_http_config = HttpServerBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_http_config = HttpServerBuilder().tcp_no_delay(false).build_config();
     require(!disabled_http_config.tcp_no_delay, "HttpServerBuilder should support disabling TCP_NODELAY");
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    auto default_https_config = HttpsServerBuilder().buildConfig();
+    auto default_https_config = HttpsServerBuilder().build_config();
     require(default_https_config.tcp_no_delay, "HttpsServerConfig should enable TCP_NODELAY by default");
 
-    auto disabled_https_config = HttpsServerBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_https_config = HttpsServerBuilder().tcp_no_delay(false).build_config();
     require(!disabled_https_config.tcp_no_delay, "HttpsServerBuilder should support disabling TCP_NODELAY");
 #endif
 }
 
 void test_plain_server_applies_config_to_accepted_socket()
 {
-    const int default_nodelay = observePlainServerTcpNoDelay(true);
+    const int default_nodelay = observe_plain_server_tcp_no_delay(true);
     require(default_nodelay != 0, "default HttpServer accepted socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observePlainServerTcpNoDelay(false);
+    const int disabled_nodelay = observe_plain_server_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled HttpServer accepted socket should leave TCP_NODELAY off");
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 void test_https_server_applies_config_to_accepted_socket()
 {
-    const int default_nodelay = observeHttpsServerTcpNoDelay(true);
+    const int default_nodelay = observe_https_server_tcp_no_delay(true);
     require(default_nodelay != 0, "default HttpsServer accepted socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeHttpsServerTcpNoDelay(false);
+    const int disabled_nodelay = observe_https_server_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled HttpsServer accepted socket should leave TCP_NODELAY off");
 }
 #endif

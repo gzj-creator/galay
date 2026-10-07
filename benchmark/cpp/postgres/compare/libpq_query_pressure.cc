@@ -35,7 +35,7 @@ struct BenchmarkState
     std::atomic<uint64_t> failed{0};
 };
 
-void rememberError(BenchmarkState* state, std::string message)
+void remember_error(BenchmarkState* state, std::string message)
 {
     std::lock_guard lock(state->error_mutex);
     if (state->first_error.empty()) {
@@ -43,7 +43,7 @@ void rememberError(BenchmarkState* state, std::string message)
     }
 }
 
-std::string libpqError(PGconn* connection, std::string fallback)
+std::string libpq_error(PGconn* connection, std::string fallback)
 {
     const char* message = connection != nullptr ? PQerrorMessage(connection) : nullptr;
     return message != nullptr && message[0] != '\0' ? std::string(message)
@@ -74,7 +74,7 @@ PGconn* connect(const postgres_benchmark::Config& config)
     return connection;
 }
 
-bool executeQuery(PGconn* connection, const std::string& sql, uint64_t* response_bytes)
+bool execute_query(PGconn* connection, const std::string& sql, uint64_t* response_bytes)
 {
     PGresult* result = PQexec(connection, sql.c_str());
     if (result == nullptr) {
@@ -100,7 +100,7 @@ bool executeQuery(PGconn* connection, const std::string& sql, uint64_t* response
     return succeeded;
 }
 
-void runWorker(const postgres_benchmark::Config* config,
+void run_worker(const postgres_benchmark::Config* config,
                BenchmarkState* state,
                std::barrier<>* ready_barrier,
                std::barrier<>* start_barrier,
@@ -109,14 +109,14 @@ void runWorker(const postgres_benchmark::Config* config,
     PGconn* connection = connect(*config);
     bool ready = connection != nullptr && PQstatus(connection) == CONNECTION_OK;
     if (!ready) {
-        rememberError(state, libpqError(connection, "libpq connection failed"));
+        remember_error(state, libpq_error(connection, "libpq connection failed"));
     }
 
     if (ready) {
         for (size_t index = 0; index < kWarmupQueries; ++index) {
             uint64_t response_bytes = 0;
-            if (!executeQuery(connection, config->sql, &response_bytes)) {
-                rememberError(state, libpqError(connection, "libpq warmup query failed"));
+            if (!execute_query(connection, config->sql, &response_bytes)) {
+                remember_error(state, libpq_error(connection, "libpq warmup query failed"));
                 ready = false;
                 break;
             }
@@ -142,7 +142,7 @@ void runWorker(const postgres_benchmark::Config* config,
     for (size_t index = 0; index < config->queries; ++index) {
         const auto started = std::chrono::steady_clock::now();
         uint64_t response_bytes = 0;
-        const bool succeeded = executeQuery(connection, config->sql, &response_bytes);
+        const bool succeeded = execute_query(connection, config->sql, &response_bytes);
         const auto finished = std::chrono::steady_clock::now();
         local_samples.push_back(static_cast<uint64_t>(
             std::chrono::duration_cast<std::chrono::nanoseconds>(finished - started).count()));
@@ -151,7 +151,7 @@ void runWorker(const postgres_benchmark::Config* config,
             local_response_bytes += response_bytes;
         } else {
             ++local_failed;
-            rememberError(state, libpqError(connection, "libpq query failed"));
+            remember_error(state, libpq_error(connection, "libpq query failed"));
         }
     }
 
@@ -168,7 +168,7 @@ void runWorker(const postgres_benchmark::Config* config,
     PQfinish(connection);
 }
 
-double percentileMs(const std::vector<uint64_t>& sorted_samples, double fraction)
+double percentile_ms(const std::vector<uint64_t>& sorted_samples, double fraction)
 {
     if (sorted_samples.empty()) {
         return 0.0;
@@ -182,12 +182,12 @@ double percentileMs(const std::vector<uint64_t>& sorted_samples, double fraction
 
 int main(int argc, char** argv)
 {
-    auto config = postgres_benchmark::loadConfig();
-    if (!postgres_benchmark::parseArgs(config, argc, argv)) {
-        postgres_benchmark::printUsage(argv[0]);
+    auto config = postgres_benchmark::load_config();
+    if (!postgres_benchmark::parse_args(config, argc, argv)) {
+        postgres_benchmark::print_usage(argv[0]);
         return 2;
     }
-    postgres_benchmark::printConfig(config);
+    postgres_benchmark::print_config(config);
 
     BenchmarkState state;
     state.samples_ns.reserve(config.clients * config.queries);
@@ -198,7 +198,7 @@ int main(int argc, char** argv)
     std::vector<std::thread> workers;
     workers.reserve(config.clients);
     for (size_t index = 0; index < config.clients; ++index) {
-        workers.emplace_back(runWorker,
+        workers.emplace_back(run_worker,
                              &config,
                              &state,
                              &ready_barrier,
@@ -231,10 +231,10 @@ int main(int argc, char** argv)
               << state.response_bytes.load(std::memory_order_relaxed) << '\n'
               << "elapsed_sec: " << seconds << '\n'
               << "qps: " << qps << '\n'
-              << "p50_latency_ms: " << percentileMs(state.samples_ns, 0.50) << '\n'
-              << "p95_latency_ms: " << percentileMs(state.samples_ns, 0.95) << '\n'
-              << "p99_latency_ms: " << percentileMs(state.samples_ns, 0.99) << '\n'
-              << "max_latency_ms: " << percentileMs(state.samples_ns, 1.0) << '\n';
+              << "p50_latency_ms: " << percentile_ms(state.samples_ns, 0.50) << '\n'
+              << "p95_latency_ms: " << percentile_ms(state.samples_ns, 0.95) << '\n'
+              << "p99_latency_ms: " << percentile_ms(state.samples_ns, 0.99) << '\n'
+              << "max_latency_ms: " << percentile_ms(state.samples_ns, 1.0) << '\n';
     if (!state.first_error.empty()) {
         std::cout << "first_error: " << state.first_error;
         if (state.first_error.back() != '\n') {

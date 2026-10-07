@@ -24,18 +24,18 @@ namespace {
 struct SslReadContractState {
     using ResultType = std::expected<int, Http2ErrorCode>;
 
-    bool hasResult() const { return true; }
-    ResultType takeResult() { return 0; }
-    bool parseFromRingBuffer() { return false; }
-    bool completeIfClosing() { return false; }
-    bool prepareRecvWindow(char*& buffer, size_t& length) {
+    bool has_result() const { return true; }
+    ResultType take_result() { return 0; }
+    bool parse_from_ring_buffer() { return false; }
+    bool complete_if_closing() { return false; }
+    bool prepare_recv_window(char*& buffer, size_t& length) {
         buffer = nullptr;
         length = 0;
         return false;
     }
-    void setSslRecvError(const galay::ssl::SslError&) {}
-    void setProtocolError(Http2ErrorCode, std::string_view) {}
-    void onBytesReceived(size_t) {}
+    void set_ssl_recv_error(const galay::ssl::SslError&) {}
+    void set_protocol_error(Http2ErrorCode, std::string_view) {}
+    void on_bytes_received(size_t) {}
 };
 #endif
 
@@ -49,25 +49,25 @@ concept HasConcreteClone = requires(const T& value) {
     { value.clone() } -> std::same_as<T>;
 };
 
-void assertFrameClonePreservesDynamicTypeAndPayload()
+void assert_frame_clone_preserves_dynamic_type_and_payload()
 {
     Http2HeadersFrame headers;
     headers.header().stream_id = 3;
-    headers.setEndHeaders(true);
-    headers.setHeaderBlock("encoded-headers");
+    headers.set_end_headers(true);
+    headers.set_header_block("encoded-headers");
 
     Http2HeadersFrame cloned_headers = headers.clone();
     assert(&cloned_headers != &headers);
-    assert(cloned_headers.isHeaders());
-    assert(cloned_headers.streamId() == 3);
-    assert(cloned_headers.isEndHeaders());
-    assert(cloned_headers.headerBlock() == "encoded-headers");
+    assert(cloned_headers.is_headers());
+    assert(cloned_headers.stream_id() == 3);
+    assert(cloned_headers.is_end_headers());
+    assert(cloned_headers.header_block() == "encoded-headers");
 
-    headers.setHeaderBlock("mutated");
-    assert(cloned_headers.headerBlock() == "encoded-headers");
+    headers.set_header_block("mutated");
+    assert(cloned_headers.header_block() == "encoded-headers");
 }
 
-const std::string* findHeader(const std::vector<Http2HeaderField>& headers,
+const std::string* find_header(const std::vector<Http2HeaderField>& headers,
                               const std::string& name)
 {
     for (const auto& header : headers) {
@@ -78,7 +78,7 @@ const std::string* findHeader(const std::vector<Http2HeaderField>& headers,
     return nullptr;
 }
 
-void assertBodyRequestResponseCloneDeepCopies()
+void assert_body_request_response_clone_deep_copies()
 {
     Http2ChunkedBody body;
     body.append(std::string("first"));
@@ -97,14 +97,14 @@ void assertBodyRequestResponseCloneDeepCopies()
     request.authority = "example.test";
     request.path = "/clone";
     request.headers.push_back({"x-request", "one"});
-    request.setCommonHeader(galay::http2::detail::Http2RequestCommonHeaderIndex::ContentType,
+    request.set_common_header(galay::http2::detail::Http2RequestCommonHeaderIndex::ContentType,
                             "text/plain");
     request.body.append(std::string("body"));
 
     auto request_clone = request.clone();
     assert(request_clone.method == "POST");
-    assert(request_clone.getHeader("content-type") == "text/plain");
-    assert(request_clone.coalescedBody() == "body");
+    assert(request_clone.get_header("content-type") == "text/plain");
+    assert(request_clone.coalesced_body() == "body");
 
     request.headers[0].value = "mutated";
     request.body.append(std::string("-original"));
@@ -112,22 +112,22 @@ void assertBodyRequestResponseCloneDeepCopies()
     request_clone.body.append(std::string("-clone"));
     assert(request.headers[0].value == "mutated");
     assert(request_clone.headers[0].value == "clone");
-    assert(request.coalescedBody() == "body-original");
-    assert(request_clone.coalescedBody() == "body-clone");
+    assert(request.coalesced_body() == "body-original");
+    assert(request_clone.coalesced_body() == "body-clone");
 
     Http2Response response;
-    response.setStatus(201);
-    response.setHeader("x-response", "one");
-    response.setBody("payload");
+    response.set_status(201);
+    response.set_header("x-response", "one");
+    response.set_body("payload");
 
     auto response_clone = response.clone();
-    response.setHeader("x-response", "mutated");
-    response.setBody("original");
-    response_clone.setHeader("x-response", "clone");
+    response.set_header("x-response", "mutated");
+    response.set_body("original");
+    response_clone.set_header("x-response", "clone");
     response_clone.body.append("-copy");
     assert(response.status == 201);
-    const std::string* response_header = findHeader(response.headers, "x-response");
-    const std::string* response_clone_header = findHeader(response_clone.headers, "x-response");
+    const std::string* response_header = find_header(response.headers, "x-response");
+    const std::string* response_clone_header = find_header(response_clone.headers, "x-response");
     assert(response_header != nullptr);
     assert(response_clone_header != nullptr);
     assert(*response_header == "mutated");
@@ -137,14 +137,14 @@ void assertBodyRequestResponseCloneDeepCopies()
     assert(response_clone.body == "payload-copy");
 }
 
-void assertHpackStateCloneDeepCopies()
+void assert_hpack_state_clone_deep_copies()
 {
     HpackDynamicTable table;
     table.add({"x-one", "1"});
 
     auto table_clone = table.clone();
     assert(table_clone.count() == table.count());
-    assert(table_clone.currentSize() == table.currentSize());
+    assert(table_clone.current_size() == table.current_size());
     assert(table_clone.get(0) != nullptr);
     assert(table_clone.get(0)->value == "1");
 
@@ -154,26 +154,26 @@ void assertHpackStateCloneDeepCopies()
     assert(table_clone.get(0)->name == "x-one");
 
     HpackEncoder encoder;
-    encoder.dynamicTable().add({"x-encoder", "1"});
-    encoder.setMaxTableSize(128);
+    encoder.dynamic_table().add({"x-encoder", "1"});
+    encoder.set_max_table_size(128);
 
     auto encoder_clone = encoder.clone();
-    assert(encoder_clone.dynamicTable().count() == encoder.dynamicTable().count());
-    assert(encoder_clone.dynamicTable().maxSize() == encoder.dynamicTable().maxSize());
-    encoder.dynamicTable().add({"x-encoder-original", "2"});
-    assert(encoder.dynamicTable().count() == 2);
-    assert(encoder_clone.dynamicTable().count() == 1);
+    assert(encoder_clone.dynamic_table().count() == encoder.dynamic_table().count());
+    assert(encoder_clone.dynamic_table().max_size() == encoder.dynamic_table().max_size());
+    encoder.dynamic_table().add({"x-encoder-original", "2"});
+    assert(encoder.dynamic_table().count() == 2);
+    assert(encoder_clone.dynamic_table().count() == 1);
 
     HpackDecoder decoder;
-    decoder.dynamicTable().add({"x-decoder", "1"});
-    decoder.setMaxHeaderListSize(64);
+    decoder.dynamic_table().add({"x-decoder", "1"});
+    decoder.set_max_header_list_size(64);
 
     auto decoder_clone = decoder.clone();
-    assert(decoder_clone.dynamicTable().count() == decoder.dynamicTable().count());
-    assert(decoder_clone.maxHeaderListSize() == 64);
-    decoder.dynamicTable().add({"x-decoder-original", "2"});
-    assert(decoder.dynamicTable().count() == 2);
-    assert(decoder_clone.dynamicTable().count() == 1);
+    assert(decoder_clone.dynamic_table().count() == decoder.dynamic_table().count());
+    assert(decoder_clone.max_header_list_size() == 64);
+    decoder.dynamic_table().add({"x-decoder-original", "2"});
+    assert(decoder.dynamic_table().count() == 2);
+    assert(decoder_clone.dynamic_table().count() == 1);
 }
 
 } // namespace
@@ -270,9 +270,9 @@ int main()
     static_assert(std::is_copy_constructible_v<Http2RuntimeConfig>);
     static_assert(std::is_copy_assignable_v<Http2RuntimeConfig>);
 
-    assertFrameClonePreservesDynamicTypeAndPayload();
-    assertBodyRequestResponseCloneDeepCopies();
-    assertHpackStateCloneDeepCopies();
+    assert_frame_clone_preserves_dynamic_type_and_payload();
+    assert_body_request_response_clone_deep_copies();
+    assert_hpack_state_clone_deep_copies();
 
     std::cout << "t93_h2_move_only_surface PASS\n";
     return 0;

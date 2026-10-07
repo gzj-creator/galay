@@ -35,13 +35,13 @@ void require(bool condition, const char* message)
     }
 }
 
-void checkMovedFrom(SslSocket& socket)
+void check_moved_from(SslSocket& socket)
 {
-    require(!socket.isValid(), "moved-from socket is invalid");
+    require(!socket.is_valid(), "moved-from socket is invalid");
     require(socket.handle() == GHandle::invalid(), "moved-from handle is invalid");
     require(socket.controller() == nullptr, "moved-from controller is empty");
-    require(!socket.engine()->isValid(), "moved-from engine is empty");
-    require(!socket.option().handleNonBlock(), "moved-from option reports an error");
+    require(!socket.engine()->is_valid(), "moved-from engine is empty");
+    require(!socket.option().handle_non_block(), "moved-from option reports an error");
     const auto bound = socket.bind(Host(IPType::IPV4, "127.0.0.1", 0));
     require(!bound && bound.error().code() == kClosed, "moved-from bind reports closed");
     const auto listening = socket.listen();
@@ -51,10 +51,10 @@ void checkMovedFrom(SslSocket& socket)
 
     SslOperationDriver driver(&socket);
     char byte = 0;
-    driver.startRecv(&byte, 1);
-    require(!driver.takeRecvResult(), "moved-from recv reports an error");
-    driver.startSend(&byte, 1);
-    require(!driver.takeSendResult(), "moved-from send reports an error");
+    driver.start_recv(&byte, 1);
+    require(!driver.take_recv_result(), "moved-from recv reports an error");
+    driver.start_send(&byte, 1);
+    require(!driver.take_send_result(), "moved-from send reports an error");
 }
 
 } // namespace
@@ -62,26 +62,26 @@ void checkMovedFrom(SslSocket& socket)
 int main()
 {
     SslContext context(SslMethod::TLS_Client);
-    require(context.isValid(), "context creation");
+    require(context.is_valid(), "context creation");
     IOController* registration_owner = nullptr;
     SslSocket destination(&context, GHandle::invalid());
     int transferred_fd = -1;
     {
         SslSocket source(&context);
-        require(source.isValid(), "socket creation");
+        require(source.is_valid(), "socket creation");
         auto* const controller = source.controller();
         auto* const engine = source.engine()->native();
         transferred_fd = source.handle().fd;
         auto close_before_move = source.close();
 #if defined(USE_EPOLL) || defined(USE_KQUEUE)
-        controller->bindRegistrationOwnerSlot(&registration_owner);
+        controller->bind_registration_owner_slot(&registration_owner);
 #endif
 
         SslSocket moved(std::move(source));
         require(moved.controller() == controller, "move construction preserves controller address");
         require(moved.handle().fd == transferred_fd, "move construction transfers fd");
         require(moved.engine()->native() == engine, "move construction transfers TLS engine");
-        checkMovedFrom(source);
+        check_moved_from(source);
 
         destination = std::move(moved);
         require(destination.controller() == controller, "move assignment preserves controller address");
@@ -89,12 +89,12 @@ int main()
         require(destination.engine()->native() == engine, "move assignment transfers TLS engine");
         require(close_before_move.m_controller == destination.controller(),
                 "pre-move awaitable still refers to the owned controller");
-        checkMovedFrom(moved);
+        check_moved_from(moved);
 
         SslSocket empty(std::move(source));
-        checkMovedFrom(empty);
+        check_moved_from(empty);
         moved = std::move(empty);
-        checkMovedFrom(moved);
+        check_moved_from(moved);
     }
     require(::fcntl(transferred_fd, F_GETFD) >= 0, "source destruction preserves transferred fd");
 #if defined(USE_EPOLL) || defined(USE_KQUEUE)
@@ -102,8 +102,8 @@ int main()
 #endif
     auto& self = destination;
     auto& assigned = (destination = std::move(self));
-    require(&assigned == &destination && destination.isValid(), "self-move preserves socket");
-    require(destination.option().handleNonBlock().has_value(), "moved socket remains usable");
+    require(&assigned == &destination && destination.is_valid(), "self-move preserves socket");
+    require(destination.option().handle_non_block().has_value(), "moved socket remains usable");
 
     // SslSocket retains its explicit-close contract; no scheduler is needed here.
     require(::close(transferred_fd) == 0, "close transferred fd");
@@ -111,7 +111,7 @@ int main()
     {
         SslSocket owner(std::move(destination));
         owner = std::move(destination);
-        checkMovedFrom(owner);
+        check_moved_from(owner);
     }
     require(registration_owner == nullptr, "replacing controller clears registration owner");
     std::puts("SSL socket move PASS");

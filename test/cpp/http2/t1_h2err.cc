@@ -11,15 +11,15 @@ using namespace galay::http2;
 
 int main() {
     Http2RuntimeError err = Http2RuntimeError::ProtocolViolation;
-    std::string err_text = http2RuntimeErrorToString(err);
+    std::string err_text = http2_runtime_error_to_string(err);
     assert(!err_text.empty());
 
-    assert(http2IsConnectionFatal(Http2RuntimeError::ProtocolViolation));
-    assert(http2IsConnectionFatal(Http2RuntimeError::FlowControlViolation));
-    assert(!http2IsConnectionFatal(Http2RuntimeError::StreamReset));
-    assert(!http2IsConnectionFatal(Http2RuntimeError::StreamClosed));
-    assert(!http2IsConnectionFatal(Http2RuntimeError::Timeout));
-    assert(!http2IsConnectionFatal(Http2RuntimeError::PeerClosed));
+    assert(http2_is_connection_fatal(Http2RuntimeError::ProtocolViolation));
+    assert(http2_is_connection_fatal(Http2RuntimeError::FlowControlViolation));
+    assert(!http2_is_connection_fatal(Http2RuntimeError::StreamReset));
+    assert(!http2_is_connection_fatal(Http2RuntimeError::StreamClosed));
+    assert(!http2_is_connection_fatal(Http2RuntimeError::Timeout));
+    assert(!http2_is_connection_fatal(Http2RuntimeError::PeerClosed));
 
     H2CoreError protocol_error{
         .kind = H2CoreError::Kind::Protocol,

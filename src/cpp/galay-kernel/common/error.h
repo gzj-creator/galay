@@ -90,7 +90,7 @@ private:
     * @param system_code 高 32 位
     * @return 打包的 64 位错误码
     */
-    uint64_t makeErrorCode(IOErrorCode io_error_code, uint32_t system_code);
+    uint64_t make_error_code(IOErrorCode io_error_code, uint32_t system_code);
 private:
     uint64_t m_code;  ///< 打包的错误码
 };

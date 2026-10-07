@@ -7,15 +7,15 @@ namespace galay::http2
 namespace
 {
 
-bool hasPendingData(const H2PendingData& pending)
+bool has_pending_data(const H2PendingData& pending)
 {
     return pending.end_stream || !pending.chunks.empty();
 }
 
-bool hasQueuedData(const std::vector<H2StreamSendState>& streams)
+bool has_queued_data(const std::vector<H2StreamSendState>& streams)
 {
     for (const auto& stream : streams) {
-        if (hasPendingData(stream.pending)) {
+        if (has_pending_data(stream.pending)) {
             return true;
         }
     }
@@ -24,7 +24,7 @@ bool hasQueuedData(const std::vector<H2StreamSendState>& streams)
 
 } // namespace
 
-Http2ConnectionCore::TimerEvent Http2ConnectionCore::checkTimers(std::chrono::steady_clock::time_point now) noexcept
+Http2ConnectionCore::TimerEvent Http2ConnectionCore::check_timers(std::chrono::steady_clock::time_point now) noexcept
 {
     if (m_settings_ack_pending.load(std::memory_order_acquire) &&
         m_timer_config.settings_ack_timeout.count() > 0 &&
@@ -53,53 +53,53 @@ Http2ConnectionCore::TimerEvent Http2ConnectionCore::checkTimers(std::chrono::st
     return TimerEvent::None;
 }
 
-bool Http2ConnectionCore::hasOutboundWork() const noexcept
+bool Http2ConnectionCore::has_outbound_work() const noexcept
 {
     return !m_outbound_queues.control_frames.empty() ||
            !m_outbound_queues.header_frames.empty() ||
-           hasQueuedData(m_outbound_queues.data_streams);
+           has_queued_data(m_outbound_queues.data_streams);
 }
 
-bool Http2ConnectionCore::acceptsNewStreams() const noexcept
+bool Http2ConnectionCore::accepts_new_streams() const noexcept
 {
     const auto current = state();
     return current == State::Idle || current == State::Running;
 }
 
-void Http2ConnectionCore::applyTimerEvent(TimerEvent event) noexcept
+void Http2ConnectionCore::apply_timer_event(TimerEvent event) noexcept
 {
     if (event == TimerEvent::SettingsAckTimeout ||
         event == TimerEvent::PingAckTimeout ||
         event == TimerEvent::GracefulShutdownTimeout) {
-        forceClose();
+        force_close();
     }
 }
 
-void Http2ConnectionCore::enqueueDispatchAction(const H2DispatchAction& action)
+void Http2ConnectionCore::enqueue_dispatch_action(const H2DispatchAction& action)
 {
     switch (action.type) {
         case H2DispatchActionType::SendGoaway: {
             auto frame = std::make_unique<Http2GoAwayFrame>();
-            frame->setErrorCode(action.error_code);
+            frame->set_error_code(action.error_code);
             m_outbound_queues.control_frames.push_back(std::move(frame));
             m_outbound_ready = true;
             break;
         }
         case H2DispatchActionType::SendRstStream:
             m_outbound_queues.control_frames.push_back(
-                Http2FrameBuilder::rstStream(action.stream_id, action.error_code));
+                Http2FrameBuilder::rst_stream(action.stream_id, action.error_code));
             m_outbound_ready = true;
             break;
         case H2DispatchActionType::AckSettings: {
             auto frame = std::make_unique<Http2SettingsFrame>();
-            frame->setAck(true);
+            frame->set_ack(true);
             m_outbound_queues.control_frames.push_back(std::move(frame));
             m_outbound_ready = true;
             break;
         }
         case H2DispatchActionType::AckPing: {
             auto frame = std::make_unique<Http2PingFrame>();
-            frame->setAck(true);
+            frame->set_ack(true);
             m_outbound_queues.control_frames.push_back(std::move(frame));
             m_outbound_ready = true;
             break;
@@ -113,16 +113,16 @@ void Http2ConnectionCore::enqueueDispatchAction(const H2DispatchAction& action)
     }
 }
 
-H2DispatchResult Http2ConnectionCore::receiveFrame(const Http2Frame& frame)
+H2DispatchResult Http2ConnectionCore::receive_frame(const Http2Frame& frame)
 {
     auto result = Http2FrameDispatcher::dispatch(frame, m_dispatch_state);
     for (const auto& action : result.actions) {
-        enqueueDispatchAction(action);
+        enqueue_dispatch_action(action);
     }
     return result;
 }
 
-void Http2ConnectionCore::enqueueData(uint32_t stream_id,
+void Http2ConnectionCore::enqueue_data(uint32_t stream_id,
                                       std::string data,
                                       bool end_stream,
                                       uint8_t weight)
@@ -139,19 +139,19 @@ void Http2ConnectionCore::enqueueData(uint32_t stream_id,
     m_outbound_ready = true;
 }
 
-H2OutboundSelection Http2ConnectionCore::flushOutbound(H2OutboundBudget budget,
+H2OutboundSelection Http2ConnectionCore::flush_outbound(H2OutboundBudget budget,
                                                        H2SchedulerConfig config)
 {
-    auto selection = Http2OutboundScheduler::pickSendableFrames(budget, m_outbound_queues, config);
-    m_outbound_ready = hasOutboundWork();
+    auto selection = Http2OutboundScheduler::pick_sendable_frames(budget, m_outbound_queues, config);
+    m_outbound_ready = has_outbound_work();
     return selection;
 }
 
-H2OutboundBytesSelection Http2ConnectionCore::flushOutboundBytes(H2OutboundBudget budget,
+H2OutboundBytesSelection Http2ConnectionCore::flush_outbound_bytes(H2OutboundBudget budget,
                                                                  H2SchedulerConfig config)
 {
-    auto selection = Http2OutboundScheduler::pickSendableBytes(budget, m_outbound_queues, config);
-    m_outbound_ready = hasOutboundWork();
+    auto selection = Http2OutboundScheduler::pick_sendable_bytes(budget, m_outbound_queues, config);
+    m_outbound_ready = has_outbound_work();
     return selection;
 }
 
@@ -161,9 +161,9 @@ galay::kernel::Task<void> Http2ConnectionCore::run()
         m_state.store(State::Running, std::memory_order_release);
     }
     while (!m_stop_requested.load(std::memory_order_acquire)) {
-        // Skeleton loop: actual I/O owners call receiveFrame()/flushOutbound() on events.
-        const auto timer_event = checkTimers(std::chrono::steady_clock::now());
-        applyTimerEvent(timer_event);
+        // Skeleton loop: actual I/O owners call receive_frame()/flush_outbound() on events.
+        const auto timer_event = check_timers(std::chrono::steady_clock::now());
+        apply_timer_event(timer_event);
         co_await galay::kernel::sleep(std::chrono::milliseconds(1));
     }
     m_state.store(State::Stopped, std::memory_order_release);

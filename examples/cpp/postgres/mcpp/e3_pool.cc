@@ -33,12 +33,12 @@ int main()
     galay::kernel::Runtime runtime;
     const auto started = runtime.start();
     if (!started) return 1;
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     std::atomic<bool> done{false};
     if (scheduler == nullptr ||
-        !galay::kernel::scheduleTask(
+        !galay::kernel::schedule_task(
             scheduler,
-            run(scheduler, &done, postgres_example::loadConfig()))) {
+            run(scheduler, &done, postgres_example::load_config()))) {
         runtime.stop();
         return 1;
     }

@@ -18,37 +18,37 @@ int main()
 {
     int calls = 0;
     RpcCancellationToken empty;
-    auto inert = empty.registerCallback([&] { ++calls; });
+    auto inert = empty.register_callback([&] { ++calls; });
     if (empty.cancelled() || calls != 0) return 1;
 
     RpcCancellationSource source;
     auto token = source.token();
     {
-        auto detached = token.registerCallback([&] { calls += 100; });
+        auto detached = token.register_callback([&] { calls += 100; });
     }
-    auto first = token.registerCallback([&] { ++calls; });
+    auto first = token.register_callback([&] { ++calls; });
     auto moved = std::move(first);
-    auto second = token.registerCallback([&] { calls += 100; });
+    auto second = token.register_callback([&] { calls += 100; });
     second.deactivate();
     second.deactivate();
-    auto third = token.registerCallback([&] { calls += 10; });
+    auto third = token.register_callback([&] { calls += 10; });
     RpcCancellationRegistration assigned;
     assigned = std::move(third);
     source.cancel();
     source.cancel();
     if (!token.cancelled() || calls != 11) return 2;
-    auto late = token.registerCallback([&] { ++calls; });
+    auto late = token.register_callback([&] { ++calls; });
     if (calls != 12) return 3;
 
     // Callbacks may unregister, recursively cancel, and destroy themselves.
     RpcCancellationSource reentrant;
-    auto skipped = reentrant.token().registerCallback([&] { calls += 100; });
+    auto skipped = reentrant.token().register_callback([&] { calls += 100; });
     std::optional<RpcCancellationRegistration> self;
-    self.emplace(reentrant.token().registerCallback([&] {
+    self.emplace(reentrant.token().register_callback([&] {
         skipped.deactivate();
         self.reset();
         reentrant.cancel();
-        auto nested = reentrant.token().registerCallback([&] { ++calls; });
+        auto nested = reentrant.token().register_callback([&] { ++calls; });
         ++calls;
     }));
     reentrant.cancel();
@@ -57,22 +57,22 @@ int main()
     RpcCancellationRegistration survivor;
     {
         RpcCancellationSource local;
-        survivor = local.token().registerCallback([&] { calls += 100; });
+        survivor = local.token().register_callback([&] { calls += 100; });
     }
     survivor.deactivate();
     if (calls != 14) return 5;
 
     RpcCancellationSource reused;
     for (int i = 0; i < 100000; ++i) {
-        auto registration = reused.token().registerCallback([&] { ++calls; });
+        auto registration = reused.token().register_callback([&] { ++calls; });
     }
     reused.cancel();
     if (calls != 14) return 6;
 
     // Moving non-head nodes and replacing a live registration repair both links.
     RpcCancellationSource relocation;
-    auto tail = relocation.token().registerCallback([&] { ++calls; });
-    auto head = relocation.token().registerCallback([&] { ++calls; });
+    auto tail = relocation.token().register_callback([&] { ++calls; });
+    auto head = relocation.token().register_callback([&] { ++calls; });
     auto relocated_tail = std::move(tail);
     head = std::move(relocated_tail);
     relocation.cancel();
@@ -82,7 +82,7 @@ int main()
     RpcCancellationSource fanout;
     std::vector<RpcCancellationRegistration> registrations;
     for (int i = 0; i < 4096; ++i) {
-        registrations.push_back(fanout.token().registerCallback([&] { ++calls; }));
+        registrations.push_back(fanout.token().register_callback([&] { ++calls; }));
     }
     for (size_t i = 0; i < registrations.size(); i += 2) {
         registrations[i].deactivate();

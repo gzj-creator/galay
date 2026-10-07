@@ -109,27 +109,27 @@ public:
     const std::string& name() const { return m_name; }             ///< 获取列名
     MysqlFieldType type() const { return m_type; }                 ///< 获取字段类型
     uint16_t flags() const { return m_flags; }                     ///< 获取字段标志
-    uint32_t columnLength() const { return m_column_length; }      ///< 获取列长度
+    uint32_t column_length() const { return m_column_length; }      ///< 获取列长度
     uint8_t decimals() const { return m_decimals; }                ///< 获取小数位数
 
-    void setCatalog(std::string catalog) { m_catalog = std::move(catalog); }     ///< 设置目录名
-    void setSchema(std::string schema) { m_schema = std::move(schema); }         ///< 设置数据库名
-    void setTable(std::string table) { m_table = std::move(table); }             ///< 设置表名
-    void setOrgTable(std::string org_table) { m_org_table = std::move(org_table); } ///< 设置原始表名
-    void setOrgName(std::string org_name) { m_org_name = std::move(org_name); }  ///< 设置原始列名
-    void setCharacterSet(uint16_t cs) { m_character_set = cs; }                  ///< 设置字符集
+    void set_catalog(std::string catalog) { m_catalog = std::move(catalog); }     ///< 设置目录名
+    void set_schema(std::string schema) { m_schema = std::move(schema); }         ///< 设置数据库名
+    void set_table(std::string table) { m_table = std::move(table); }             ///< 设置表名
+    void set_org_table(std::string org_table) { m_org_table = std::move(org_table); } ///< 设置原始表名
+    void set_org_name(std::string org_name) { m_org_name = std::move(org_name); }  ///< 设置原始列名
+    void set_character_set(uint16_t cs) { m_character_set = cs; }                  ///< 设置字符集
 
     const std::string& catalog() const { return m_catalog; }       ///< 获取目录名
     const std::string& schema() const { return m_schema; }         ///< 获取数据库名
     const std::string& table() const { return m_table; }           ///< 获取表名
-    const std::string& orgTable() const { return m_org_table; }    ///< 获取原始表名
-    const std::string& orgName() const { return m_org_name; }      ///< 获取原始列名
-    uint16_t characterSet() const { return m_character_set; }      ///< 获取字符集
+    const std::string& org_table() const { return m_org_table; }    ///< 获取原始表名
+    const std::string& org_name() const { return m_org_name; }      ///< 获取原始列名
+    uint16_t character_set() const { return m_character_set; }      ///< 获取字符集
 
-    bool isNotNull() const { return m_flags & NOT_NULL_FLAG; }         ///< 是否不允许NULL
-    bool isPrimaryKey() const { return m_flags & PRI_KEY_FLAG; }       ///< 是否为主键
-    bool isAutoIncrement() const { return m_flags & AUTO_INCREMENT_FLAG; } ///< 是否自增
-    bool isUnsigned() const { return m_flags & UNSIGNED_FLAG; }        ///< 是否无符号
+    bool is_not_null() const { return m_flags & NOT_NULL_FLAG; }         ///< 是否不允许NULL
+    bool is_primary_key() const { return m_flags & PRI_KEY_FLAG; }       ///< 是否为主键
+    bool is_auto_increment() const { return m_flags & AUTO_INCREMENT_FLAG; } ///< 是否自增
+    bool is_unsigned() const { return m_flags & UNSIGNED_FLAG; }        ///< 是否无符号
 
 private:
     std::string m_catalog;                          ///< 目录名
@@ -194,7 +194,7 @@ public:
      * @param index 列索引
      * @return 为NULL时返回true
      */
-    bool isNull(size_t index) const;
+    bool is_null(size_t index) const;
 
     /**
      * @brief 获取指定列的字符串值
@@ -202,7 +202,7 @@ public:
      * @param default_val 列为NULL时的默认值
      * @return 字符串值
      */
-    std::string getString(size_t index, const std::string& default_val = "") const;
+    std::string get_string(size_t index, const std::string& default_val = "") const;
 
     /**
      * @brief 获取指定列的有符号64位整数值
@@ -210,7 +210,7 @@ public:
      * @param default_val 列为NULL或转换失败时的默认值
      * @return 整数值
      */
-    int64_t getInt64(size_t index, int64_t default_val = 0) const;
+    int64_t get_int64(size_t index, int64_t default_val = 0) const;
 
     /**
      * @brief 获取指定列的无符号64位整数值
@@ -218,7 +218,7 @@ public:
      * @param default_val 列为NULL或转换失败时的默认值
      * @return 整数值
      */
-    uint64_t getUint64(size_t index, uint64_t default_val = 0) const;
+    uint64_t get_uint64(size_t index, uint64_t default_val = 0) const;
 
     /**
      * @brief 获取指定列的双精度浮点值
@@ -226,7 +226,7 @@ public:
      * @param default_val 列为NULL或转换失败时的默认值
      * @return 浮点值
      */
-    double getDouble(size_t index, double default_val = 0.0) const;
+    double get_double(size_t index, double default_val = 0.0) const;
 
     /**
      * @brief 获取所有列值的引用
@@ -244,7 +244,7 @@ private:
 /**
  * @brief 完整结果集
  * @details 包含查询结果的列定义、行数据以及OK包信息（影响行数、最后插入ID等）。
- *          如果没有列定义（hasResultSet()为false），则表示仅包含OK包的响应。
+ *          如果没有列定义（has_result_set()为false），则表示仅包含OK包的响应。
  */
 class MysqlResultSet
 {
@@ -263,19 +263,19 @@ public:
      * @brief 添加列定义
      * @param field 列定义
      */
-    void addField(MysqlField field);
+    void add_field(MysqlField field);
 
     /**
      * @brief 预分配列定义空间
      * @param n 预分配数量
      */
-    void reserveFields(size_t n) { m_fields.reserve(n); }
+    void reserve_fields(size_t n) { m_fields.reserve(n); }
 
     /**
      * @brief 获取列数
      * @return 列数量
      */
-    size_t fieldCount() const { return m_fields.size(); }
+    size_t field_count() const { return m_fields.size(); }
 
     /**
      * @brief 获取指定索引的列定义
@@ -294,19 +294,19 @@ public:
      * @brief 添加行数据
      * @param row 行数据
      */
-    void addRow(MysqlRow row);
+    void add_row(MysqlRow row);
 
     /**
      * @brief 预分配行数据空间
      * @param n 预分配数量
      */
-    void reserveRows(size_t n) { m_rows.reserve(n); }
+    void reserve_rows(size_t n) { m_rows.reserve(n); }
 
     /**
      * @brief 获取行数
      * @return 行数量
      */
-    size_t rowCount() const { return m_rows.size(); }
+    size_t row_count() const { return m_rows.size(); }
 
     /**
      * @brief 获取指定索引的行数据
@@ -326,26 +326,26 @@ public:
      * @param name 列名
      * @return 列索引，未找到返回-1
      */
-    int findField(const std::string& name) const;
+    int find_field(const std::string& name) const;
 
     // OK包信息
-    void setAffectedRows(uint64_t n) { m_affected_rows = n; }     ///< 设置影响行数
-    void setLastInsertId(uint64_t id) { m_last_insert_id = id; }  ///< 设置最后插入ID
-    void setWarnings(uint16_t w) { m_warnings = w; }              ///< 设置警告数
-    void setStatusFlags(uint16_t f) { m_status_flags = f; }       ///< 设置状态标志
-    void setInfo(std::string info) { m_info = std::move(info); }  ///< 设置附加信息
+    void set_affected_rows(uint64_t n) { m_affected_rows = n; }     ///< 设置影响行数
+    void set_last_insert_id(uint64_t id) { m_last_insert_id = id; }  ///< 设置最后插入ID
+    void set_warnings(uint16_t w) { m_warnings = w; }              ///< 设置警告数
+    void set_status_flags(uint16_t f) { m_status_flags = f; }       ///< 设置状态标志
+    void set_info(std::string info) { m_info = std::move(info); }  ///< 设置附加信息
 
-    uint64_t affectedRows() const { return m_affected_rows; }     ///< 获取影响行数
-    uint64_t lastInsertId() const { return m_last_insert_id; }    ///< 获取最后插入ID
+    uint64_t affected_rows() const { return m_affected_rows; }     ///< 获取影响行数
+    uint64_t last_insert_id() const { return m_last_insert_id; }    ///< 获取最后插入ID
     uint16_t warnings() const { return m_warnings; }              ///< 获取警告数
-    uint16_t statusFlags() const { return m_status_flags; }       ///< 获取状态标志
+    uint16_t status_flags() const { return m_status_flags; }       ///< 获取状态标志
     const std::string& info() const { return m_info; }            ///< 获取附加信息
 
     /**
      * @brief 判断是否包含结果集（有列定义）
      * @return 有列定义时返回true，仅OK包时返回false
      */
-    bool hasResultSet() const { return !m_fields.empty(); }
+    bool has_result_set() const { return !m_fields.empty(); }
 
 private:
     std::vector<MysqlField> m_fields;      ///< 列定义数组

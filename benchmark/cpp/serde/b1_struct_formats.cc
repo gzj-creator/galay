@@ -65,7 +65,7 @@ bool measure(std::string_view name, std::size_t iterations, std::size_t bytes,
 }
 
 int main(int argc, char** argv) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 

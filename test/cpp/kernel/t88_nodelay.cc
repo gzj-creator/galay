@@ -18,7 +18,7 @@ int main() {
         return 1;
     }
 
-    auto result = galay::kernel::HandleOption(GHandle{fd}).handleTcpNoDelay();
+    auto result = galay::kernel::HandleOption(GHandle{fd}).handle_tcp_no_delay();
     if (!result) {
         std::cerr << "[T88] handleTcpNoDelay failed: " << result.error().message() << "\n";
         ::close(fd);

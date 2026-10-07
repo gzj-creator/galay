@@ -7,7 +7,7 @@
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -19,7 +19,7 @@ int main(int argc, char** argv)
     args.io_schedulers = 1;
     args.mode = galay::etcd::benchmark::AsyncBenchmarkMode::Put;
 
-    auto result = galay::etcd::benchmark::runAsyncBenchmark(args);
+    auto result = galay::etcd::benchmark::run_async_benchmark(args);
     if (!result.has_value()) {
         std::cerr << "async benchmark run failed: " << result.error() << '\n';
         return 1;

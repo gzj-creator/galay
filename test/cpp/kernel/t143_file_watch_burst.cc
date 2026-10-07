@@ -28,12 +28,12 @@ namespace {
 
 constexpr int kEventCount = 100;
 
-Task<void> watchCreates(const std::filesystem::path& dir,
+Task<void> watch_creates(const std::filesystem::path& dir,
                         std::atomic<int>* create_count,
                         std::atomic<bool>* done)
 {
     galay::async::AsyncFileWatcher watcher;
-    auto watch_result = watcher.addWatch(dir.string(), FileWatchEvent::Create);
+    auto watch_result = watcher.add_watch(dir.string(), FileWatchEvent::Create);
     if (!watch_result) {
         done->store(true, std::memory_order_release);
         co_return;
@@ -54,7 +54,7 @@ Task<void> watchCreates(const std::filesystem::path& dir,
     co_return;
 }
 
-void createBurst(const std::filesystem::path& dir)
+void create_burst(const std::filesystem::path& dir)
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     for (int i = 0; i < kEventCount; ++i) {
@@ -83,14 +83,14 @@ int main()
 
     std::atomic<int> create_count{0};
     std::atomic<bool> done{false};
-    if (!scheduleTask(scheduler, watchCreates(dir, &create_count, &done))) {
+    if (!schedule_task(scheduler, watch_creates(dir, &create_count, &done))) {
         scheduler.stop();
         std::filesystem::remove_all(dir, ec);
         std::cerr << "failed to schedule watch task\n";
         return 1;
     }
 
-    std::thread producer(createBurst, dir);
+    std::thread producer(create_burst, dir);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!done.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() < deadline) {

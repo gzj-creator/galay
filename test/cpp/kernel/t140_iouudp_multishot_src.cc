@@ -12,7 +12,7 @@
 
 namespace {
 
-std::string readAll(const std::filesystem::path& path)
+std::string read_all(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -22,7 +22,7 @@ std::string readAll(const std::filesystem::path& path)
                        std::istreambuf_iterator<char>());
 }
 
-bool requireText(const std::string& text, const std::string& needle, const char* message)
+bool require_text(const std::string& text, const std::string& needle, const char* message)
 {
     if (text.find(needle) != std::string::npos) {
         return true;
@@ -31,7 +31,7 @@ bool requireText(const std::string& text, const std::string& needle, const char*
     return false;
 }
 
-bool rejectText(const std::string& text, const std::string& needle, const char* message)
+bool reject_text(const std::string& text, const std::string& needle, const char* message)
 {
     if (text.find(needle) == std::string::npos) {
         return true;
@@ -40,7 +40,7 @@ bool rejectText(const std::string& text, const std::string& needle, const char* 
     return false;
 }
 
-std::string extractSection(const std::string& content,
+std::string extract_section(const std::string& content,
                            const std::string& begin,
                            const std::string& end)
 {
@@ -60,81 +60,81 @@ std::string extractSection(const std::string& content,
 int main()
 {
     const std::filesystem::path root(GALAY_SOURCE_ROOT);
-    const std::string controller = readAll(root / "galay-kernel/core/io_controller.hpp");
+    const std::string controller = read_all(root / "galay-kernel/core/io_controller.hpp");
     const std::string& scheduler = controller;
-    const std::string reactor_h = readAll(root / "galay-kernel/core/uring_reactor.h");
-    const std::string reactor_cc = readAll(root / "galay-kernel/core/uring_reactor.cc");
+    const std::string reactor_h = read_all(root / "galay-kernel/core/uring_reactor.h");
+    const std::string reactor_cc = read_all(root / "galay-kernel/core/uring_reactor.cc");
     if (controller.empty() || scheduler.empty() || reactor_h.empty() || reactor_cc.empty()) {
         std::cerr << "[T140] failed to read io_uring source files\n";
         return 1;
     }
 
     bool ok = true;
-    ok = requireText(controller, "ReadyRecvDatagram",
+    ok = require_text(controller, "ReadyRecvDatagram",
                      "expected a datagram-specific ready queue entry") && ok;
-    ok = requireText(controller, "m_ready_recvfrom",
+    ok = require_text(controller, "m_ready_recvfrom",
                      "expected IOController to queue complete UDP datagrams") && ok;
-    ok = requireText(controller, "tryConsumeReadyRecvFrom",
+    ok = require_text(controller, "try_consume_ready_recv_from",
                      "expected queued datagrams to be delivered without stream concatenation") && ok;
-    ok = requireText(controller, "m_recvfrom_multishot_armed",
+    ok = require_text(controller, "m_recvfrom_multishot_armed",
                      "expected IOController to track persistent recvmsg state") && ok;
-    ok = requireText(controller, "m_recvfrom_result_assigned",
+    ok = require_text(controller, "m_recvfrom_result_assigned",
                      "expected one suspended recvfrom awaitable to receive at most one datagram") && ok;
 
-    ok = requireText(scheduler, "m_recvfrom_result_assigned = false",
+    ok = require_text(scheduler, "m_recvfrom_result_assigned = false",
                      "expected recvfrom awaitable rebinding to preserve the persistent request epoch") && ok;
 
-    ok = requireText(reactor_h, "submitMultishotRecvFrom",
+    ok = require_text(reactor_h, "submit_multishot_recv_from",
                      "expected a dedicated UDP multishot submit path") && ok;
-    ok = requireText(reactor_h, "processRecvFromCompletion",
+    ok = require_text(reactor_h, "process_recv_from_completion",
                      "expected a dedicated UDP multishot completion path") && ok;
-    ok = requireText(reactor_h, "m_recvmsg_multishot_supported",
+    ok = require_text(reactor_h, "m_recvmsg_multishot_supported",
                      "expected runtime capability gating for recvmsg multishot") && ok;
-    ok = requireText(reactor_h, "m_recvmsg_multishot_confirmed",
+    ok = require_text(reactor_h, "m_recvmsg_multishot_confirmed",
                      "expected successful CQEs to confirm recvmsg multishot capability") && ok;
-    ok = requireText(reactor_h, "initializeRecvFromBufferPool",
+    ok = require_text(reactor_h, "initialize_recv_from_buffer_pool",
                      "expected lazy UDP provided-buffer initialization") && ok;
 
-    ok = requireText(reactor_cc, "io_uring_prep_recvmsg_multishot(",
+    ok = require_text(reactor_cc, "io_uring_prep_recvmsg_multishot(",
                      "expected recvmsg multishot SQE preparation") && ok;
-    ok = requireText(reactor_cc, "kernelAtLeast(6, 0)",
+    ok = require_text(reactor_cc, "kernel_at_least(6, 0)",
                      "expected the UDP multishot path to require Linux kernel 6.0+") && ok;
-    ok = requireText(reactor_cc, "io_uring_opcode_supported(probe, IORING_OP_RECVMSG)",
+    ok = require_text(reactor_cc, "io_uring_opcode_supported(probe, IORING_OP_RECVMSG)",
                      "expected RECVMSG opcode probing before multishot enablement") && ok;
-    ok = requireText(reactor_cc, "io_uring_recvmsg_validate(",
+    ok = require_text(reactor_cc, "io_uring_recvmsg_validate(",
                      "expected recvmsg CQE metadata validation") && ok;
-    ok = requireText(reactor_cc, "io_uring_recvmsg_payload(",
+    ok = require_text(reactor_cc, "io_uring_recvmsg_payload(",
                      "expected payload extraction from the selected buffer") && ok;
-    ok = requireText(reactor_cc, "io_uring_recvmsg_name(",
+    ok = require_text(reactor_cc, "io_uring_recvmsg_name(",
                      "expected source address extraction from recvmsg output") && ok;
-    ok = requireText(reactor_cc, "addRecvFromOneShot",
+    ok = require_text(reactor_cc, "add_recv_from_one_shot",
                      "expected the existing one-shot recvmsg behavior to remain as fallback") && ok;
-    ok = requireText(
+    ok = require_text(
              reactor_cc,
-             "#if GALAY_HAS_IO_URING_RECVMSG_MULTISHOT\ninline bool kernelAtLeast",
+             "#if GALAY_HAS_IO_URING_RECVMSG_MULTISHOT\ninline bool kernel_at_least",
              "expected the kernel-version helper to be absent from old-liburing builds") && ok;
 
-    const std::string start = extractSection(
+    const std::string start = extract_section(
         reactor_cc,
         "std::expected<void, IOError> IOUringReactor::start()",
         "IOUringReactor::~IOUringReactor()");
-    ok = rejectText(start, "kRecvFromBufferCount",
+    ok = reject_text(start, "kRecvFromBufferCount",
                     "reactor start must not eagerly allocate the optional UDP pool") && ok;
 
-    const std::string add_recvfrom = extractSection(
+    const std::string add_recvfrom = extract_section(
         reactor_cc,
-        "int IOUringReactor::addRecvFrom(IOController* controller)",
-        "std::expected<void, IOError> IOUringReactor::initializeRecvFromBufferPool()");
-    ok = requireText(add_recvfrom, "ioErrorCodeFromError(error)",
+        "int IOUringReactor::add_recv_from(IOController* controller)",
+        "std::expected<void, IOError> IOUringReactor::initialize_recv_from_buffer_pool()");
+    ok = require_text(add_recvfrom, "io_error_code_from_error(error)",
                      "expected lazy UDP pool failures to preserve the framework error") && ok;
-    ok = requireText(add_recvfrom, "systemCodeFromError(error)",
+    ok = require_text(add_recvfrom, "system_code_from_error(error)",
                      "expected lazy UDP pool failures to preserve the system error") && ok;
 
-    const std::string completion = extractSection(
+    const std::string completion = extract_section(
         reactor_cc,
-        "void IOUringReactor::processRecvFromCompletion",
+        "void IOUringReactor::process_recv_from_completion",
         "}  // namespace galay::kernel");
-    ok = requireText(completion, "cqe->res == -EINVAL && !m_recvmsg_multishot_confirmed",
+    ok = require_text(completion, "cqe->res == -EINVAL && !m_recvmsg_multishot_confirmed",
                      "expected EINVAL to disable multishot only before capability confirmation") && ok;
 
     if (!ok) {

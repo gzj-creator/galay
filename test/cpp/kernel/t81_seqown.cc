@@ -1,7 +1,7 @@
 /**
  * @file t81_seqown.cc
  * @brief 用途：验证同一方向（read/read）sequence owner 冲突时第二个会被立即拒绝。
- * 关键覆盖点：`suspendSequenceAwaitable(...)` 同方向 owner 冲突策略。
+ * 关键覆盖点：`suspend_sequence_awaitable(...)` 同方向 owner 冲突策略。
  * 通过条件：第一个 read sequence 正常完成；第二个 read sequence 立即返回 `kNotReady`。
  */
 
@@ -39,13 +39,13 @@ struct ReadOnlyFlow {
     explicit ReadOnlyFlow(std::atomic<bool>* await_bound)
         : m_await_bound(await_bound) {}
 
-    void onAwaitContext(const AwaitContext&) {
+    void on_await_context(const AwaitContext&) {
         if (m_await_bound != nullptr) {
             m_await_bound->store(true, std::memory_order_release);
         }
     }
 
-    void onRecv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& ctx) {
+    void on_recv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& ctx) {
         ops.complete(std::move(ctx.m_result));
     }
 
@@ -65,27 +65,27 @@ struct SharedState {
     std::atomic<int> second_error{0};
 };
 
-Task<void> firstOwnerTask(SharedState* state) {
+Task<void> first_owner_task(SharedState* state) {
     ReadOnlyFlow flow(&state->first_await_bound);
     auto awaitable = AwaitableBuilder<SequenceResult, 4, ReadOnlyFlow>(&state->controller, flow)
-        .recv<&ReadOnlyFlow::onRecv>(&flow.m_byte, 1)
+        .recv<&ReadOnlyFlow::on_recv>(&flow.m_byte, 1)
         .build();
     auto result = co_await awaitable;
     state->first_value.store(result ? static_cast<int>(result.value()) : -1, std::memory_order_release);
     state->first_done.store(true, std::memory_order_release);
 }
 
-Task<void> secondOwnerTask(SharedState* state) {
+Task<void> second_owner_task(SharedState* state) {
     ReadOnlyFlow flow(nullptr);
     auto awaitable = AwaitableBuilder<SequenceResult, 4, ReadOnlyFlow>(&state->controller, flow)
-        .recv<&ReadOnlyFlow::onRecv>(&flow.m_byte, 1)
+        .recv<&ReadOnlyFlow::on_recv>(&flow.m_byte, 1)
         .build();
     auto result = co_await awaitable;
     state->second_error.store(result ? 0 : static_cast<int>(result.error().code()), std::memory_order_release);
     state->second_done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -98,12 +98,12 @@ bool waitUntil(auto&& predicate,
     return predicate();
 }
 
-bool setNonBlocking(int fd) {
+bool set_non_blocking(int fd) {
     const int flags = fcntl(fd, F_GETFL, 0);
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool sendByteWithRetry(int fd,
+bool send_byte_with_retry(int fd,
                        char value,
                        std::chrono::milliseconds timeout = 1000ms,
                        std::chrono::milliseconds step = 2ms) {
@@ -133,7 +133,7 @@ int main() {
         std::perror("[T81] socketpair");
         return 1;
     }
-    if (!setNonBlocking(fds[0]) || !setNonBlocking(fds[1])) {
+    if (!set_non_blocking(fds[0]) || !set_non_blocking(fds[1])) {
         std::cerr << "[T81] failed to set non-blocking mode\n";
         close(fds[0]);
         close(fds[1]);
@@ -144,9 +144,9 @@ int main() {
     scheduler.start();
 
     SharedState state(fds[0]);
-    scheduleTask(scheduler, firstOwnerTask(&state));
+    schedule_task(scheduler, first_owner_task(&state));
 
-    const bool first_in_position = waitUntil([&]() {
+    const bool first_in_position = wait_until([&]() {
         return state.first_await_bound.load(std::memory_order_acquire);
     });
     if (!first_in_position) {
@@ -157,14 +157,14 @@ int main() {
         return 1;
     }
 
-    scheduleTask(scheduler, secondOwnerTask(&state));
+    schedule_task(scheduler, second_owner_task(&state));
 
-    const bool second_failed_fast = waitUntil([&]() {
+    const bool second_failed_fast = wait_until([&]() {
         return state.second_done.load(std::memory_order_acquire);
     }, 150ms);
 
     constexpr char kPayload = 'z';
-    if (!sendByteWithRetry(fds[1], kPayload)) {
+    if (!send_byte_with_retry(fds[1], kPayload)) {
         std::cerr << "[T81] failed to send wake payload\n";
         scheduler.stop();
         close(fds[0]);
@@ -172,7 +172,7 @@ int main() {
         return 1;
     }
 
-    const bool first_completed = waitUntil([&]() {
+    const bool first_completed = wait_until([&]() {
         return state.first_done.load(std::memory_order_acquire);
     });
 

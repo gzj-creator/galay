@@ -33,7 +33,7 @@ struct BenchmarkState
     std::atomic<uint64_t> checksum{0};
 };
 
-void runWorker(const postgres_benchmark::Config* config,
+void run_worker(const postgres_benchmark::Config* config,
                BenchmarkState* state,
                std::barrier<>* ready_barrier,
                std::barrier<>* start_barrier,
@@ -51,7 +51,7 @@ void runWorker(const postgres_benchmark::Config* config,
         for (size_t index = 0; index < kWarmupQueries; ++index) {
             const std::vector<std::optional<std::string>> parameters{std::to_string(index)};
             auto result = client.execute("galay_benchmark", parameters);
-            if (!result || result->rowCount() == 0) {
+            if (!result || result->row_count() == 0) {
                 ready = false;
                 break;
             }
@@ -78,12 +78,12 @@ void runWorker(const postgres_benchmark::Config* config,
         const auto finished = std::chrono::steady_clock::now();
         local_samples.push_back(static_cast<uint64_t>(
             std::chrono::duration_cast<std::chrono::nanoseconds>(finished - started).count()));
-        if (!result || result->rowCount() == 0) {
+        if (!result || result->row_count() == 0) {
             ++local_failed;
             continue;
         }
         ++local_succeeded;
-        local_checksum += result->row(0).getUint64(0);
+        local_checksum += result->row(0).get_uint64(0);
     }
 
     state->succeeded.fetch_add(local_succeeded, std::memory_order_relaxed);
@@ -96,7 +96,7 @@ void runWorker(const postgres_benchmark::Config* config,
                                  local_samples.begin(),
                                  local_samples.end());
     }
-    auto closed = client.closePrepared("galay_benchmark");
+    auto closed = client.close_prepared("galay_benchmark");
     if (!closed) {
         state->failed.fetch_add(1, std::memory_order_relaxed);
     }
@@ -106,16 +106,16 @@ void runWorker(const postgres_benchmark::Config* config,
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    auto config = postgres_benchmark::loadConfig();
-    if (!postgres_benchmark::parseArgs(config, argc, argv)) {
-        postgres_benchmark::printUsage(argv[0]);
+    auto config = postgres_benchmark::load_config();
+    if (!postgres_benchmark::parse_args(config, argc, argv)) {
+        postgres_benchmark::print_usage(argv[0]);
         return 2;
     }
-    postgres_benchmark::printConfig(config);
+    postgres_benchmark::print_config(config);
 
     BenchmarkState state;
     std::barrier ready_barrier(static_cast<std::ptrdiff_t>(config.clients + 1));
@@ -124,7 +124,7 @@ int main(int argc, char** argv)
     std::vector<std::thread> workers;
     workers.reserve(config.clients);
     for (size_t index = 0; index < config.clients; ++index) {
-        workers.emplace_back(runWorker,
+        workers.emplace_back(run_worker,
                              &config,
                              &state,
                              &ready_barrier,

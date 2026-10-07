@@ -21,19 +21,19 @@ namespace {
 constexpr uint64_t kRoundCount = 10'000'000;
 constexpr int kStealerCount = 4;
 
-TaskRef makeTaggedTask(uint64_t id) {
+TaskRef make_tagged_task(uint64_t id) {
     auto* state = new TaskState(std::coroutine_handle<>{});
     state->m_runtime =
         reinterpret_cast<Runtime*>(static_cast<uintptr_t>(id + 1));
     return TaskRef(state, false);
 }
 
-uint64_t taggedTaskId(const TaskRef& task) {
+uint64_t tagged_task_id(const TaskRef& task) {
     return static_cast<uint64_t>(
         reinterpret_cast<uintptr_t>(task.state()->m_runtime) - 1);
 }
 
-bool runStressScenario() {
+bool run_stress_scenario() {
     ChaseLevTaskRing ring;
     std::vector<std::atomic<uint8_t>> seen(kRoundCount);
     for (auto& slot : seen) {
@@ -46,7 +46,7 @@ bool runStressScenario() {
     std::atomic<uint64_t> duplicates{0};
 
     auto consume = [&](TaskRef task) {
-        const uint64_t id = taggedTaskId(task);
+        const uint64_t id = tagged_task_id(task);
         if (id >= kRoundCount) {
             duplicates.fetch_add(1, std::memory_order_relaxed);
             return;
@@ -73,7 +73,7 @@ bool runStressScenario() {
                 if (outstanding > target_depth) {
                     break;
                 }
-                if (!ring.push_back(makeTaggedTask(next_id))) {
+                if (!ring.push_back(make_tagged_task(next_id))) {
                     break;
                 }
                 ++next_id;
@@ -142,7 +142,7 @@ bool runStressScenario() {
 }  // namespace
 
 int main() {
-    if (!runStressScenario()) {
+    if (!run_stress_scenario()) {
         return 1;
     }
 

@@ -15,7 +15,7 @@ using namespace galay::mongo::protocol;
 namespace
 {
 
-size_t parseIterations(int argc, char** argv)
+size_t parse_iterations(int argc, char** argv)
 {
     if (argc < 2) {
         return 200000;
@@ -29,7 +29,7 @@ size_t parseIterations(int argc, char** argv)
 }
 
 template <typename Fn>
-double benchNsPerOp(size_t iterations, Fn&& fn)
+double bench_ns_per_op(size_t iterations, Fn&& fn)
 {
     const auto start = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
@@ -45,15 +45,15 @@ double benchNsPerOp(size_t iterations, Fn&& fn)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    const size_t iterations = parseIterations(argc, argv);
+    const size_t iterations = parse_iterations(argc, argv);
 
     size_t invalid_oid_unexpected_success = 0;
-    const double invalid_oid_ns = benchNsPerOp(iterations, [&](size_t) {
-        auto value = MongoValue::fromObjectId("not-a-24-byte-objectid");
+    const double invalid_oid_ns = bench_ns_per_op(iterations, [&](size_t) {
+        auto value = MongoValue::from_object_id("not-a-24-byte-objectid");
         if (value.has_value()) {
             ++invalid_oid_unexpected_success;
         }
@@ -62,8 +62,8 @@ int main(int argc, char** argv)
     MongoDocument invalid_key_doc;
     invalid_key_doc.append(std::string("bad\0key", 7), int32_t(1));
     size_t invalid_key_unexpected_success = 0;
-    const double invalid_key_ns = benchNsPerOp(iterations, [&](size_t) {
-        auto encoded = BsonCodec::encodeDocument(invalid_key_doc);
+    const double invalid_key_ns = bench_ns_per_op(iterations, [&](size_t) {
+        auto encoded = BsonCodec::encode_document(invalid_key_doc);
         if (encoded.has_value()) {
             ++invalid_key_unexpected_success;
         }
@@ -74,8 +74,8 @@ int main(int argc, char** argv)
     ping.append("$db", "admin");
     size_t valid_op_msg_errors = 0;
     size_t total_bytes = 0;
-    const double valid_op_msg_ns = benchNsPerOp(iterations, [&](size_t i) {
-        auto encoded = MongoProtocol::encodeOpMsg(static_cast<int32_t>(i + 1), ping);
+    const double valid_op_msg_ns = bench_ns_per_op(iterations, [&](size_t i) {
+        auto encoded = MongoProtocol::encode_op_msg(static_cast<int32_t>(i + 1), ping);
         if (!encoded.has_value()) {
             ++valid_op_msg_errors;
             return;

@@ -25,7 +25,7 @@ namespace {
 
 using namespace std::chrono_literals;
 
-uint16_t pickPort()
+uint16_t pick_port()
 {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return 0;
@@ -51,7 +51,7 @@ uint16_t pickPort()
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -65,28 +65,28 @@ int main(int argc, char** argv)
         }
     }
 
-    const auto port = pickPort();
+    const auto port = pick_port();
     if (port == 0) {
         std::cerr << "failed to pick benchmark port\n";
         return 1;
     }
 
     galay::mcp::v2::McpHttpServer server("127.0.0.1", port, 2, 0);
-    server.addTool("pressure", "pressure", "{}",
+    server.add_tool("pressure", "pressure", "{}",
                    [](const json::Json&,
                       std::expected<std::string, galay::mcp::McpError>& result)
                        -> galay::kernel::Task<void> {
                        result = "ok";
                        co_return;
                    });
-    server.addResource("mem://pressure", "pressure", "pressure", "text/plain",
+    server.add_resource("mem://pressure", "pressure", "pressure", "text/plain",
                        [](const std::string&,
                           std::expected<std::string, galay::mcp::McpError>& result)
                            -> galay::kernel::Task<void> {
                            result = "ok";
                            co_return;
                        });
-    server.addPrompt("pressure", "pressure", {},
+    server.add_prompt("pressure", "pressure", {},
                      [](const std::string&, const json::Json&,
                         std::expected<std::string, galay::mcp::McpError>& result)
                          -> galay::kernel::Task<void> {
@@ -96,10 +96,10 @@ int main(int argc, char** argv)
 
     std::thread serverThread([&server] { server.start(); });
     const auto serverDeadline = std::chrono::steady_clock::now() + 3s;
-    while (!server.isRunning() && std::chrono::steady_clock::now() < serverDeadline) {
+    while (!server.is_running() && std::chrono::steady_clock::now() < serverDeadline) {
         std::this_thread::sleep_for(1ms);
     }
-    if (!server.isRunning()) {
+    if (!server.is_running()) {
         server.stop();
         serverThread.join();
         std::cerr << "benchmark server did not start\n";
@@ -107,7 +107,7 @@ int main(int argc, char** argv)
     }
 
     galay::kernel::Runtime runtime =
-        galay::kernel::RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        galay::kernel::RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     const auto runtimeStarted = runtime.start();
     if (!runtimeStarted) {
         server.stop();
@@ -125,7 +125,7 @@ int main(int argc, char** argv)
     filter.resourceSubscriptions.push_back("mem://pressure");
 
     std::expected<galay::mcp::v2::SubscriptionFilter, galay::mcp::McpError> listenResult =
-        std::unexpected(galay::mcp::McpError::invalidResponse("pending acknowledgement"));
+        std::unexpected(galay::mcp::McpError::invalid_response("pending acknowledgement"));
     std::atomic<std::size_t> received{0};
     std::atomic<bool> subscribed{false};
     std::atomic<bool> warmed{false};
@@ -141,7 +141,7 @@ int main(int argc, char** argv)
             return true;
         },
         listenResult);
-    auto listenerHandle = runtime.spawnIO(std::move(listener));
+    auto listenerHandle = runtime.spawn_io(std::move(listener));
     if (!listenerHandle) {
         server.stop();
         serverThread.join();
@@ -154,13 +154,13 @@ int main(int argc, char** argv)
     bool warmupEnqueued = false;
     while (!subscribed.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() < acknowledgementDeadline) {
-        warmupEnqueued = server.notifyToolsListChanged().has_value();
+        warmupEnqueued = server.notify_tools_list_changed().has_value();
         if (!warmupEnqueued) break;
         std::this_thread::sleep_for(1ms);
     }
     // All warmup commands and this marker share one producer's FIFO stream.
     // Receiving the marker proves warmup drained, without a timing assumption.
-    const auto marker = server.notifyResourcesListChanged();
+    const auto marker = server.notify_resources_list_changed();
     while (marker && !warmed.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() < acknowledgementDeadline) {
         std::this_thread::sleep_for(50us);
@@ -179,10 +179,10 @@ int main(int argc, char** argv)
     const auto start = std::chrono::steady_clock::now();
     std::size_t enqueued = 0;
     for (std::size_t i = 0; i < iterations; ++i) {
-        enqueued += server.notifyToolsListChanged().has_value();
-        enqueued += server.notifyResourcesListChanged().has_value();
-        enqueued += server.notifyPromptsListChanged().has_value();
-        enqueued += server.notifyResourceUpdated("mem://pressure").has_value();
+        enqueued += server.notify_tools_list_changed().has_value();
+        enqueued += server.notify_resources_list_changed().has_value();
+        enqueued += server.notify_prompts_list_changed().has_value();
+        enqueued += server.notify_resource_updated("mem://pressure").has_value();
         // Bound in-flight events below the subscriber's capacity. Command
         // acceptance and actual delivery are deliberately checked separately.
         if ((i + 1) % 32 == 0) {

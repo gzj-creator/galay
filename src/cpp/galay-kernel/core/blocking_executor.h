@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 提供按需伸缩的线程池，当线程空闲超过配置的保活超时后自动收缩。
- * 由 Runtime::spawnBlocking() 用于卸载不可协程化的阻塞调用。
+ * 由 Runtime::spawn_blocking() 用于卸载不可协程化的阻塞调用。
  */
 
 #ifndef GALAY_KERNEL_BLOCKING_EXECUTOR_H
@@ -63,7 +63,7 @@ private:
 
 /**
  * @brief 自适应阻塞任务执行器
- * @details 为 Runtime 的 `spawnBlocking()` 提供线程池，适合执行不可协程化的阻塞调用。
+ * @details 为 Runtime 的 `spawn_blocking()` 提供线程池，适合执行不可协程化的阻塞调用。
  */
 class BlockingExecutor
 {
@@ -86,9 +86,9 @@ public:
     std::expected<void, BlockingExecutorError> submit(std::function<void()> task);  ///< 提交一个阻塞任务；必要时会拉起额外工作线程
 
 private:
-    void workerLoop(std::function<void()> initialTask);  ///< 工作线程主循环，持续拉取并执行阻塞任务
-    void retireWorkerLocked();  ///< 在持锁状态下回收一个空闲工作线程计数
-    static size_t defaultMaxWorkers();  ///< 根据当前机器并发度推导默认最大线程数
+    void worker_loop(std::function<void()> initial_task);  ///< 工作线程主循环，持续拉取并执行阻塞任务
+    void retire_worker_locked();  ///< 在持锁状态下回收一个空闲工作线程计数
+    static size_t default_max_workers();  ///< 根据当前机器并发度推导默认最大线程数
 
     size_t m_minWorkers;  ///< 最少保留的工作线程数
     size_t m_maxWorkers;  ///< 允许扩张到的最大工作线程数

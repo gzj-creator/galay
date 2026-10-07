@@ -73,7 +73,7 @@ public:
 
     /**
      * @brief 构造函数
-     * @param tickDuration 每个 tick 的时间间隔（纳秒）
+     * @param tick_duration 每个 tick 的时间间隔（纳秒）
      */
     explicit ThreadSafeTimerManager(uint64_t tickDuration = 1000000ULL)
         : m_wheelSize(0)
@@ -105,7 +105,7 @@ public:
         }
 
         // 触发过期时间计算（延迟计算）
-        timer->getExpireTime();
+        timer->get_expire_time();
 
         // 无锁入队
         if (m_pendingQueue.enqueue(std::move(timer))) {
@@ -120,12 +120,12 @@ public:
      * @param timers 定时器列表
      * @return 成功添加的数量
      */
-    size_t pushBatch(const std::vector<Timer::ptr>& timers)
+    size_t push_batch(const std::vector<Timer::ptr>& timers)
     {
         size_t count = 0;
         for (const auto& timer : timers) {
             if (timer) {
-                timer->getExpireTime();
+                timer->get_expire_time();
                 if (m_pendingQueue.enqueue(timer)) {
                     ++count;
                 }
@@ -156,7 +156,7 @@ public:
     /**
      * @brief 获取时间轮中的定时器数量
      */
-    size_t wheelSize() const
+    size_t wheel_size() const
     {
         return m_wheelSize.load(std::memory_order_relaxed);
     }
@@ -164,7 +164,7 @@ public:
     /**
      * @brief 获取待处理队列中的定时器数量
      */
-    size_t pendingSize() const
+    size_t pending_size() const
     {
         return m_pendingSize.load(std::memory_order_relaxed);
     }
@@ -211,7 +211,7 @@ public:
     void tick()
     {
         // 1. 处理待添加的定时器
-        processPendingTimers();
+        process_pending_timers();
 
         // 2. 快速路径：如果没有定时器，直接返回
         if (m_wheelSize.load(std::memory_order_relaxed) == 0) {
@@ -235,20 +235,20 @@ public:
 
             // 级联处理
             if ((m_currentTick & (WHEEL1_SIZE - 1)) == 0 && m_currentTick > 0) {
-                cascadeWheel2();
+                cascade_wheel2();
             }
             if ((m_currentTick & (WHEEL2_SPAN - 1)) == 0 && m_currentTick > 0) {
-                cascadeWheel3();
+                cascade_wheel3();
             }
             if ((m_currentTick & (WHEEL3_SPAN - 1)) == 0 && m_currentTick > 0) {
-                cascadeWheel4();
+                cascade_wheel4();
             }
             if ((m_currentTick & (WHEEL4_SPAN - 1)) == 0 && m_currentTick > 0) {
-                cascadeWheel5();
+                cascade_wheel5();
             }
 
             // 处理第1层当前槽
-            processWheel1();
+            process_wheel1();
 
             ++m_currentTick;
         }
@@ -265,7 +265,7 @@ private:
     /**
      * @brief 批量处理待添加的定时器
      */
-    void processPendingTimers()
+    void process_pending_timers()
     {
         Timer::ptr timers[BATCH_SIZE];
         size_t count;
@@ -282,7 +282,7 @@ private:
             const uint64_t currentTickFromStart = elapsed / m_tickDuration;
 
             for (size_t i = 0; i < count; ++i) {
-                addTimerToWheel(std::move(timers[i]), nowNs, currentTickFromStart);
+                add_timer_to_wheel(std::move(timers[i]), nowNs, currentTickFromStart);
             }
         }
     }
@@ -290,19 +290,19 @@ private:
     /**
      * @brief 将定时器添加到时间轮的合适位置
      */
-    void addTimerToWheel(Timer::ptr timer, uint64_t nowNs, uint64_t currentTickFromStart)
+    void add_timer_to_wheel(Timer::ptr timer, uint64_t nowNs, uint64_t currentTickFromStart)
     {
         if (!timer || timer->done() || timer->cancelled()) {
             return;
         }
 
         // 获取定时器的绝对过期时间（纳秒）
-        uint64_t expireTimeNs = timer->getExpireTime();
+        uint64_t expireTimeNs = timer->get_expire_time();
 
         // 计算剩余时间（纳秒）
         if (expireTimeNs <= nowNs) {
             // 已经过期，立即执行
-            timer->handleTimeout();
+            timer->handle_timeout();
             return;
         }
 
@@ -311,7 +311,7 @@ private:
 
         if (delayTicks == 0) {
             // 不足一个 tick，立即执行
-            timer->handleTimeout();
+            timer->handle_timeout();
             return;
         }
 
@@ -348,14 +348,14 @@ private:
     /**
      * @brief 处理第1层当前槽的定时器
      */
-    void processWheel1()
+    void process_wheel1()
     {
         size_t idx = m_currentTick & (WHEEL1_SIZE - 1);
         auto& slot = m_wheel1[idx];
 
         for (auto& timer : slot) {
             if (!timer->done() && !timer->cancelled()) {
-                timer->handleTimeout();
+                timer->handle_timeout();
             }
             m_wheelSize.fetch_sub(1, std::memory_order_relaxed);
         }
@@ -365,34 +365,34 @@ private:
     /**
      * @brief 将第2层当前槽的定时器降级到第1层
      */
-    void cascadeWheel2()
+    void cascade_wheel2()
     {
         size_t idx = (m_currentTick >> 8) & (WHEEL2_SIZE - 1);
-        cascadeSlot(m_wheel2[idx]);
+        cascade_slot(m_wheel2[idx]);
     }
 
-    void cascadeWheel3()
+    void cascade_wheel3()
     {
         size_t idx = (m_currentTick >> 14) & (WHEEL3_SIZE - 1);
-        cascadeSlot(m_wheel3[idx]);
+        cascade_slot(m_wheel3[idx]);
     }
 
-    void cascadeWheel4()
+    void cascade_wheel4()
     {
         size_t idx = (m_currentTick >> 20) & (WHEEL4_SIZE - 1);
-        cascadeSlot(m_wheel4[idx]);
+        cascade_slot(m_wheel4[idx]);
     }
 
-    void cascadeWheel5()
+    void cascade_wheel5()
     {
         size_t idx = (m_currentTick >> 26) & (WHEEL5_SIZE - 1);
-        cascadeSlot(m_wheel5[idx]);
+        cascade_slot(m_wheel5[idx]);
     }
 
     /**
      * @brief 将指定槽的定时器重新分配到合适的层
      */
-    void cascadeSlot(TimerList& slot)
+    void cascade_slot(TimerList& slot)
     {
         TimerList temp = std::move(slot);
         slot.clear();
@@ -407,10 +407,10 @@ private:
                 continue;
             }
 
-            uint64_t expireTimeNs = timer->getExpireTime();
+            uint64_t expireTimeNs = timer->get_expire_time();
 
             if (expireTimeNs <= nowNs) {
-                timer->handleTimeout();
+                timer->handle_timeout();
                 m_wheelSize.fetch_sub(1, std::memory_order_relaxed);
                 continue;
             }
@@ -419,14 +419,14 @@ private:
             uint64_t remainingTicks = remainingNs / m_tickDuration;
 
             if (remainingTicks == 0) {
-                timer->handleTimeout();
+                timer->handle_timeout();
                 m_wheelSize.fetch_sub(1, std::memory_order_relaxed);
                 continue;
             }
 
             uint64_t absoluteTick = m_currentTick + remainingTicks;
 
-            // 重新分配到合适的层（不增加 wheelSize，因为已经在轮中）
+            // 重新分配到合适的层（不增加 wheel_size，因为已经在轮中）
             if (remainingTicks < WHEEL1_SPAN) {
                 size_t slot_idx = absoluteTick & (WHEEL1_SIZE - 1);
                 m_wheel1[slot_idx].push_back(std::move(timer));

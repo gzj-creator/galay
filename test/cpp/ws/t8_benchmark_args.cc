@@ -24,34 +24,34 @@ int main()
     char nodelay_invalid[] = "maybe";
 
     char* default_argv[] = {arg0, clients, duration, payload};
-    assert(galay::benchmark::ws::resolveBenchmarkClientUrl(4, default_argv) ==
+    assert(galay::benchmark::ws::resolve_benchmark_client_url(4, default_argv) ==
            std::string(galay::benchmark::ws::kDefaultBenchmarkClientUrl));
-    assert(galay::benchmark::ws::resolveBenchmarkServerNoDelay(4, default_argv, 4));
+    assert(galay::benchmark::ws::resolve_benchmark_server_no_delay(4, default_argv, 4));
 
     char* custom_argv[] = {arg0, clients, duration, payload, url};
-    assert(galay::benchmark::ws::resolveBenchmarkClientUrl(5, custom_argv) == std::string(url));
-    assert(galay::benchmark::ws::resolveBenchmarkServerNoDelay(5, custom_argv, 4));
+    assert(galay::benchmark::ws::resolve_benchmark_client_url(5, custom_argv) == std::string(url));
+    assert(galay::benchmark::ws::resolve_benchmark_server_no_delay(5, custom_argv, 4));
 
     char* off_argv[] = {arg0, clients, duration, nodelay_off};
-    assert(!galay::benchmark::ws::resolveBenchmarkServerNoDelay(4, off_argv, 3));
+    assert(!galay::benchmark::ws::resolve_benchmark_server_no_delay(4, off_argv, 3));
 
     char* false_argv[] = {arg0, clients, duration, nodelay_false};
-    assert(!galay::benchmark::ws::resolveBenchmarkServerNoDelay(4, false_argv, 3));
+    assert(!galay::benchmark::ws::resolve_benchmark_server_no_delay(4, false_argv, 3));
 
     char* zero_argv[] = {arg0, clients, duration, nodelay_zero};
-    assert(!galay::benchmark::ws::resolveBenchmarkServerNoDelay(4, zero_argv, 3));
+    assert(!galay::benchmark::ws::resolve_benchmark_server_no_delay(4, zero_argv, 3));
 
     char* on_argv[] = {arg0, clients, duration, nodelay_on};
-    assert(galay::benchmark::ws::resolveBenchmarkServerNoDelay(4, on_argv, 3));
+    assert(galay::benchmark::ws::resolve_benchmark_server_no_delay(4, on_argv, 3));
 
     char* true_argv[] = {arg0, clients, duration, nodelay_true};
-    assert(galay::benchmark::ws::resolveBenchmarkServerNoDelay(4, true_argv, 3));
+    assert(galay::benchmark::ws::resolve_benchmark_server_no_delay(4, true_argv, 3));
 
     char* one_argv[] = {arg0, clients, duration, nodelay_one};
-    assert(galay::benchmark::ws::resolveBenchmarkServerNoDelay(4, one_argv, 3));
+    assert(galay::benchmark::ws::resolve_benchmark_server_no_delay(4, one_argv, 3));
 
     char* invalid_argv[] = {arg0, clients, duration, nodelay_invalid};
-    assert(galay::benchmark::ws::resolveBenchmarkServerNoDelay(4, invalid_argv, 3));
+    assert(galay::benchmark::ws::resolve_benchmark_server_no_delay(4, invalid_argv, 3));
 
     return 0;
 }

@@ -45,7 +45,7 @@ public:
      * - Sec-WebSocket-Version: 13
      * - Sec-WebSocket-Key 存在
      */
-    static WsUpgradeResult handleUpgrade(HttpRequest& request);
+    static WsUpgradeResult handle_upgrade(HttpRequest& request);
 
     /**
      * @brief 生成 Sec-WebSocket-Accept 值
@@ -57,14 +57,14 @@ public:
      * 2. 计算 SHA-1 哈希
      * 3. Base64 编码
      */
-    static std::string generateAcceptKey(const std::string& key);
+    static std::string generate_accept_key(const std::string& key);
 
     /**
      * @brief 验证请求头是否包含必需的 WebSocket 升级字段
      * @param request HTTP 请求
      * @return 验证结果和错误信息
      */
-    static std::pair<bool, std::string> validateUpgradeRequest(HttpRequest& request);
+    static std::pair<bool, std::string> validate_upgrade_request(HttpRequest& request);
 
     /**
      * @brief 创建 101 Switching Protocols 响应
@@ -72,7 +72,7 @@ public:
      * @param subprotocol 可选的子协议
      * @return HTTP 响应
      */
-    static HttpResponse createUpgradeResponse(
+    static HttpResponse create_upgrade_response(
         const std::string& accept_key,
         const std::string& subprotocol = "");
 

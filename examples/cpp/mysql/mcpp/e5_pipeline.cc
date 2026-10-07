@@ -76,19 +76,19 @@ Task<void> run(IOScheduler* scheduler, AsyncState* state, const mysql_example::D
     }
 
     for (size_t i = 0; i < results.size(); ++i) {
-        if (results[i].rowCount() == 0) {
+        if (results[i].row_count() == 0) {
             state->error = "pipeline result row count is zero";
             state->ok.store(false, std::memory_order_relaxed);
             co_await client.close();
             state->done.store(true, std::memory_order_release);
             co_return;
         }
-        std::cout << "[E5-import] result[" << i << "] => " << results[i].row(0).getString(0) << std::endl;
+        std::cout << "[E5-import] result[" << i << "] => " << results[i].row(0).get_string(0) << std::endl;
     }
 
-    const auto v1 = results[0].row(0).getInt64(0, -1);
-    const auto v2 = results[1].row(0).getInt64(0, -1);
-    const auto v3 = results[2].row(0).getInt64(0, -1);
+    const auto v1 = results[0].row(0).get_int64(0, -1);
+    const auto v2 = results[1].row(0).get_int64(0, -1);
+    const auto v3 = results[2].row(0).get_int64(0, -1);
     if (v1 != 11 || v2 != 22 || v3 != 33) {
         state->error = "pipeline result value mismatch";
         state->ok.store(false, std::memory_order_relaxed);
@@ -105,13 +105,13 @@ Task<void> run(IOScheduler* scheduler, AsyncState* state, const mysql_example::D
 
 int main()
 {
-    const auto cfg = mysql_example::loadDbExampleConfig();
-    mysql_example::printDbExampleConfig(cfg);
+    const auto cfg = mysql_example::load_db_example_config();
+    mysql_example::print_db_example_config(cfg);
 
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "no IO scheduler" << std::endl;
         runtime.stop();
@@ -119,7 +119,7 @@ int main()
     }
 
     AsyncState state;
-    if (!scheduleTask(scheduler, run(scheduler, &state, cfg))) {
+    if (!schedule_task(scheduler, run(scheduler, &state, cfg))) {
         std::cerr << "failed to schedule async pipeline example on IO scheduler" << std::endl;
         runtime.stop();
         return 1;

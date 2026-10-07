@@ -183,8 +183,8 @@ void test_nested_binding() {
     const auto plan = InputBinding<fixture::NestedInput>{}.prepare(HttpMethod::POST, "/nested");
     require(plan.has_value(), "nested static contract accepted");
     HttpRequest req;
-    req.setBodyStr(R"({"children":[{"value":7}],"attributes":{"first":{"value":8}},"mode":"active"})");
-    require(req.header().headerPairs().addHeaderPair("Content-Type", "application/json") == kNoError, "JSON header");
+    req.set_body_str(R"({"children":[{"value":7}],"attributes":{"first":{"value":8}},"mode":"active"})");
+    require(req.header().header_pairs().add_header_pair("Content-Type", "application/json") == kNoError, "JSON header");
     const auto decoded = plan->decode(req);
     require(decoded && decoded->children.front().value == 7 && decoded->attributes.at("first")->value == 8,
             "nested codec accepted unchanged descriptor");
@@ -198,7 +198,7 @@ void test_nested_binding() {
         require(!fixed && !optional, "array/engaged optional descriptor drift rejected");
     }
     fixture::descriptor_mode = 4;
-    req.setBodyStr(R"({"children":[{"value":9}],"attributes":{}})");
+    req.set_body_str(R"({"children":[{"value":9}],"attributes":{}})");
     const auto after_decode = plan->decode(req);
     require(!after_decode && after_decode.error().code == ApiErrorCode::kInvalidBinding,
             "value-dependent nested descriptor rejected after decode");
@@ -247,9 +247,9 @@ int main() {
 
     const auto port = free_port();
     HttpServer server(HttpServerBuilder().host("127.0.0.1").port(port)
-        .ioSchedulerCount(1).parallelSchedulerCount(1).build());
+        .io_scheduler_count(1).parallel_scheduler_count(1).build());
     server.start(std::move(api->router));
-    require(server.isRunning(), "start server");
+    require(server.is_running(), "start server");
     check_response(request(port), 200, "\"value\":7");
     for (int mode = 1; mode <= 3; ++mode) {
         fixture::descriptor_mode = mode;

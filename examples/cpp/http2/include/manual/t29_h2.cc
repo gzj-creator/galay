@@ -22,9 +22,9 @@ using namespace galay::http2;
 static std::atomic<int> g_success{0};
 static std::atomic<int> g_fail{0};
 
-Task<void> runClient(const std::string& host, uint16_t port, int num_requests) {
+Task<void> run_client(const std::string& host, uint16_t port, int num_requests) {
     H2Client<> client(H2ClientBuilder()
-        .verifyPeer(false)
+        .verify_peer(false)
         .build());
 
     auto connect_task_result = co_await client.connect(host, port);
@@ -45,7 +45,7 @@ Task<void> runClient(const std::string& host, uint16_t port, int num_requests) {
         co_return;
     }
 
-    std::string alpn = client.getALPNProtocol();
+    std::string alpn = client.get_alpn_protocol();
     std::cout << "Negotiated ALPN: " << (alpn.empty() ? "(empty)" : alpn) << "\n";
     if (alpn != "h2") {
         std::cerr << "[alpn-fail] expected h2, got " << alpn << "\n";
@@ -63,12 +63,12 @@ Task<void> runClient(const std::string& host, uint16_t port, int num_requests) {
 
         bool finished = false;
         while (!finished) {
-            auto frame_result = co_await stream->getFrame();
+            auto frame_result = co_await stream->get_frame();
             if (!frame_result || !frame_result.value()) {
                 break;
             }
             auto frame = std::move(frame_result.value());
-            if ((frame->isHeaders() || frame->isData()) && frame->isEndStream()) {
+            if ((frame->is_headers() || frame->is_data()) && frame->is_end_stream()) {
                 finished = true;
             }
         }
@@ -100,16 +100,16 @@ int main(int argc, char* argv[]) {
     std::cout << "Requests: " << requests << "\n";
     std::cout << "========================================\n\n";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "No IO scheduler available\n";
         return 1;
     }
 
-    auto join = runtime.spawnIO(runClient(host, port, requests));
+    auto join = runtime.spawn_io(run_client(host, port, requests));
     if (!join) {
         std::cerr << "Failed to spawn client coroutine: " << join.error().message() << "\n";
         runtime.stop();

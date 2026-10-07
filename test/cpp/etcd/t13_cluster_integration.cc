@@ -22,7 +22,7 @@ int fail(const std::string& message)
     return 1;
 }
 
-std::vector<std::string> parseEndpoints(const char* raw)
+std::vector<std::string> parse_endpoints(const char* raw)
 {
     std::vector<std::string> endpoints;
     if (raw == nullptr) {
@@ -46,7 +46,7 @@ std::vector<std::string> parseEndpoints(const char* raw)
     return endpoints;
 }
 
-std::string nowSuffix()
+std::string now_suffix()
 {
     const auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
     return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(now).count());
@@ -56,12 +56,12 @@ std::string nowSuffix()
 
 int main()
 {
-    if (const int skip_code = etcd_test::requireIntegrationEnabledOrSkip("etcd.it.cluster");
+    if (const int skip_code = etcd_test::require_integration_enabled_or_skip("etcd.it.cluster");
         skip_code != 0) {
         return skip_code;
     }
 
-    const auto endpoints = parseEndpoints(std::getenv("GALAY_ETCD_ENDPOINTS"));
+    const auto endpoints = parse_endpoints(std::getenv("GALAY_ETCD_ENDPOINTS"));
     if (endpoints.size() < 2) {
         std::cout << "[SKIP] etcd.it.cluster requires GALAY_ETCD_ENDPOINTS with at least 2 endpoints\n";
         return etcd_test::kEtcdTestSkippedExitCode;
@@ -76,10 +76,10 @@ int main()
     production.retry.jitter = false;
 
     galay::etcd::EtcdClusterClient client = galay::etcd::EtcdClusterClientBuilder()
-        .productionConfig(production)
+        .production_config(production)
         .build();
 
-    auto client_lease = client.tryAcquire();
+    auto client_lease = client.try_acquire();
     if (!client_lease.has_value()) {
         return fail("cluster acquire failed: " + client_lease.error().message());
     }
@@ -88,8 +88,8 @@ int main()
         return fail("cluster connect failed: " + connect.error().message());
     }
 
-    const std::string key = "/galay-etcd/cluster/" + nowSuffix();
-    const std::string value = "value-" + nowSuffix();
+    const std::string key = "/galay-etcd/cluster/" + now_suffix();
+    const std::string value = "value-" + now_suffix();
 
     auto put = client_lease->get()->put(key, value);
     if (!put.has_value()) {

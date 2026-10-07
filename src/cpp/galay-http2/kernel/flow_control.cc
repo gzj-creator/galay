@@ -8,43 +8,43 @@ namespace galay::http2
 namespace
 {
 
-bool wouldExceedMaxWindow(int64_t current, uint32_t increment)
+bool would_exceed_max_window(int64_t current, uint32_t increment)
 {
     return current > kH2MaxFlowControlWindow - static_cast<int64_t>(increment);
 }
 
 } // namespace
 
-std::expected<void, H2FlowControlError> H2FlowController::ensureStream(uint32_t stream_id)
+std::expected<void, H2FlowControlError> H2FlowController::ensure_stream(uint32_t stream_id)
 {
     m_window.stream_windows.try_emplace(stream_id, m_window.initial_stream_window);
     return {};
 }
 
-std::expected<void, H2FlowControlError> H2FlowController::applyConnectionWindowUpdate(uint32_t increment)
+std::expected<void, H2FlowControlError> H2FlowController::apply_connection_window_update(uint32_t increment)
 {
-    if (wouldExceedMaxWindow(m_window.conn_window, increment)) {
+    if (would_exceed_max_window(m_window.conn_window, increment)) {
         return std::unexpected(H2FlowControlError::WindowOverflow);
     }
     m_window.conn_window += static_cast<int64_t>(increment);
     return {};
 }
 
-std::expected<void, H2FlowControlError> H2FlowController::applyStreamWindowUpdate(uint32_t stream_id,
+std::expected<void, H2FlowControlError> H2FlowController::apply_stream_window_update(uint32_t stream_id,
                                                                                  uint32_t increment)
 {
     auto it = m_window.stream_windows.find(stream_id);
     if (it == m_window.stream_windows.end()) {
         return std::unexpected(H2FlowControlError::UnknownStream);
     }
-    if (wouldExceedMaxWindow(it->second, increment)) {
+    if (would_exceed_max_window(it->second, increment)) {
         return std::unexpected(H2FlowControlError::WindowOverflow);
     }
     it->second += static_cast<int64_t>(increment);
     return {};
 }
 
-std::expected<void, H2FlowControlError> H2FlowController::applyInitialStreamWindowSize(uint32_t new_size)
+std::expected<void, H2FlowControlError> H2FlowController::apply_initial_stream_window_size(uint32_t new_size)
 {
     if (new_size > static_cast<uint32_t>(kH2MaxFlowControlWindow)) {
         return std::unexpected(H2FlowControlError::WindowOverflow);
@@ -66,7 +66,7 @@ std::expected<void, H2FlowControlError> H2FlowController::applyInitialStreamWind
     return {};
 }
 
-size_t H2FlowController::availableToSend(uint32_t stream_id,
+size_t H2FlowController::available_to_send(uint32_t stream_id,
                                          size_t requested,
                                          uint32_t max_frame_size) const
 {
@@ -87,7 +87,7 @@ size_t H2FlowController::availableToSend(uint32_t stream_id,
     });
 }
 
-std::expected<void, H2FlowControlError> H2FlowController::consumeSendWindow(uint32_t stream_id,
+std::expected<void, H2FlowControlError> H2FlowController::consume_send_window(uint32_t stream_id,
                                                                            size_t bytes)
 {
     auto it = m_window.stream_windows.find(stream_id);

@@ -44,7 +44,7 @@ public:
      * @brief 构造对象并尝试打开文件。
      * @param path 文件路径，调用期间必须指向有效的 C 字符串
      * @param flags 传给 ::open 的打开标志
-     * @note 打开失败不会抛异常，可通过 valid()/lastError() 或 open() 返回值处理。
+     * @note 打开失败不会抛异常，可通过 valid()/last_error() 或 open() 返回值处理。
      */
     FileDescriptor(const char* path, int flags)
         : m_fd(-1)
@@ -57,7 +57,7 @@ public:
      * @param path 文件路径，调用期间必须指向有效的 C 字符串
      * @param flags 传给 ::open 的打开标志
      * @param mode 创建新文件时使用的权限
-     * @note 打开失败不会抛异常，可通过 valid()/lastError() 或 open() 返回值处理。
+     * @note 打开失败不会抛异常，可通过 valid()/last_error() 或 open() 返回值处理。
      */
     FileDescriptor(const char* path, int flags, mode_t mode)
         : m_fd(-1)
@@ -181,7 +181,7 @@ public:
      * @brief 获取最近一次 open 失败的错误。
      * @return 若最近一次 open 失败则返回 IOError，否则返回 std::nullopt
      */
-    const std::optional<IOError>& lastError() const noexcept
+    const std::optional<IOError>& last_error() const noexcept
     {
         return m_last_error;
     }

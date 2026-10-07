@@ -61,14 +61,14 @@ static_assert(requires(RedisMasterSlaveClientBuilder ms_builder,
                        RedisReadPolicy read_policy,
                        RedisMasterSlaveClient& ms_client,
                        RedisClusterClient& cluster_client) {
-    { ms_builder.retryConfig(retry_config) } -> std::same_as<RedisMasterSlaveClientBuilder&>;
-    { ms_builder.refreshConfig(refresh_config) } -> std::same_as<RedisMasterSlaveClientBuilder&>;
-    { ms_builder.readPolicy(read_policy) } -> std::same_as<RedisMasterSlaveClientBuilder&>;
-    { cluster_builder.retryConfig(retry_config) } -> std::same_as<RedisClusterClientBuilder&>;
-    { cluster_builder.refreshConfig(refresh_config) } -> std::same_as<RedisClusterClientBuilder&>;
-    { cluster_builder.readPolicy(read_policy) } -> std::same_as<RedisClusterClientBuilder&>;
-    { ms_client.getStats() } -> std::same_as<RedisTopologyStats>;
-    { cluster_client.getStats() } -> std::same_as<RedisTopologyStats>;
+    { ms_builder.retry_config(retry_config) } -> std::same_as<RedisMasterSlaveClientBuilder&>;
+    { ms_builder.refresh_config(refresh_config) } -> std::same_as<RedisMasterSlaveClientBuilder&>;
+    { ms_builder.read_policy(read_policy) } -> std::same_as<RedisMasterSlaveClientBuilder&>;
+    { cluster_builder.retry_config(retry_config) } -> std::same_as<RedisClusterClientBuilder&>;
+    { cluster_builder.refresh_config(refresh_config) } -> std::same_as<RedisClusterClientBuilder&>;
+    { cluster_builder.read_policy(read_policy) } -> std::same_as<RedisClusterClientBuilder&>;
+    { ms_client.get_stats() } -> std::same_as<RedisTopologyStats>;
+    { cluster_client.get_stats() } -> std::same_as<RedisTopologyStats>;
 });
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
@@ -79,14 +79,14 @@ static_assert(requires(RedissMasterSlaveClientBuilder ms_builder,
                        RedisReadPolicy read_policy,
                        RedissMasterSlaveClient& ms_client,
                        RedissClusterClient& cluster_client) {
-    { ms_builder.retryConfig(retry_config) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
-    { ms_builder.refreshConfig(refresh_config) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
-    { ms_builder.readPolicy(read_policy) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
-    { cluster_builder.retryConfig(retry_config) } -> std::same_as<RedissClusterClientBuilder&>;
-    { cluster_builder.refreshConfig(refresh_config) } -> std::same_as<RedissClusterClientBuilder&>;
-    { cluster_builder.readPolicy(read_policy) } -> std::same_as<RedissClusterClientBuilder&>;
-    { ms_client.getStats() } -> std::same_as<RedisTopologyStats>;
-    { cluster_client.getStats() } -> std::same_as<RedisTopologyStats>;
+    { ms_builder.retry_config(retry_config) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
+    { ms_builder.refresh_config(refresh_config) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
+    { ms_builder.read_policy(read_policy) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
+    { cluster_builder.retry_config(retry_config) } -> std::same_as<RedissClusterClientBuilder&>;
+    { cluster_builder.refresh_config(refresh_config) } -> std::same_as<RedissClusterClientBuilder&>;
+    { cluster_builder.read_policy(read_policy) } -> std::same_as<RedissClusterClientBuilder&>;
+    { ms_client.get_stats() } -> std::same_as<RedisTopologyStats>;
+    { cluster_client.get_stats() } -> std::same_as<RedisTopologyStats>;
 });
 #endif
 
@@ -98,7 +98,7 @@ struct PoolSurfaceState {
     std::string failure;
 };
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms)
 {
@@ -112,7 +112,7 @@ bool waitUntil(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-Task<void> verifyPoolSurface(PoolSurfaceState* state, IOScheduler* scheduler)
+Task<void> verify_pool_surface(PoolSurfaceState* state, IOScheduler* scheduler)
 {
     ConnectionPoolConfig config = ConnectionPoolConfig::create("127.0.0.1", 1, 2, 5);
     config.initial_connections = 2;
@@ -126,7 +126,7 @@ Task<void> verifyPoolSurface(PoolSurfaceState* state, IOScheduler* scheduler)
         co_return;
     }
 
-    const auto after_init = pool.getStats();
+    const auto after_init = pool.get_stats();
     if (after_init.total_connections != 0) {
         state->failure = "initialize must not create disconnected placeholder connections, got total=" +
                          std::to_string(after_init.total_connections);
@@ -152,7 +152,7 @@ Task<void> verifyPoolSurface(PoolSurfaceState* state, IOScheduler* scheduler)
         co_return;
     }
 
-    const auto after_acquire = pool.getStats();
+    const auto after_acquire = pool.get_stats();
     if (after_acquire.total_connections != 0 || after_acquire.available_connections != 0) {
         state->failure = "failed acquire should remove pending connection, got total=" +
                          std::to_string(after_acquire.total_connections) +
@@ -177,15 +177,15 @@ Task<void> verifyPoolSurface(PoolSurfaceState* state, IOScheduler* scheduler)
 int main()
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
     runtime.start();
 
     PoolSurfaceState state;
-    scheduleTask(runtime.getNextIOScheduler(), verifyPoolSurface(&state, runtime.getNextIOScheduler()));
+    schedule_task(runtime.get_next_io_scheduler(), verify_pool_surface(&state, runtime.get_next_io_scheduler()));
 
-    const bool completed = waitUntil(state.done, 2000ms);
+    const bool completed = wait_until(state.done, 2000ms);
 
     runtime.stop();
 

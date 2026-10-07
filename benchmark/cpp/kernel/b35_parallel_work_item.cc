@@ -24,13 +24,13 @@ namespace {
 
 constexpr std::size_t kNodes = 2000;
 
-Task<void> graphBatch(std::size_t nodes,
+Task<void> graph_batch(std::size_t nodes,
                       galay::benchmark::CompletionLatch* completion,
                       std::atomic<std::size_t>* executed)
 {
     ParallelGraph graph;
     for (std::size_t index = 0; index < nodes; ++index) {
-        auto added = graph.add(makeParallelWork([executed]() noexcept {
+        auto added = graph.add(make_parallel_work([executed]() noexcept {
             executed->fetch_add(1, std::memory_order_relaxed);
         }));
         if (!added.has_value()) {
@@ -48,7 +48,7 @@ Task<void> graphBatch(std::size_t nodes,
     co_return;
 }
 
-Task<void> coroutineNode(galay::benchmark::CompletionLatch* completion,
+Task<void> coroutine_node(galay::benchmark::CompletionLatch* completion,
                          std::atomic<std::size_t>* executed)
 {
     executed->fetch_add(1, std::memory_order_relaxed);
@@ -56,7 +56,7 @@ Task<void> coroutineNode(galay::benchmark::CompletionLatch* completion,
     co_return;
 }
 
-Task<void> coroutineBatch(std::size_t nodes,
+Task<void> coroutine_batch(std::size_t nodes,
                           galay::benchmark::CompletionLatch* completion,
                           std::atomic<std::size_t>* executed)
 {
@@ -67,7 +67,7 @@ Task<void> coroutineBatch(std::size_t nodes,
     }
 
     for (std::size_t index = 0; index < nodes; ++index) {
-        auto submitted = runtime->spawnCpu(coroutineNode(completion, executed));
+        auto submitted = runtime->spawn_cpu(coroutine_node(completion, executed));
         if (!submitted.has_value()) {
             completion->arrive();
         }
@@ -93,11 +93,11 @@ std::int64_t measure(Submit&& submit,
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(0).parallelSchedulerCount(4).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(0).parallel_scheduler_count(4).build();
     const auto started = runtime.start();
     if (!started.has_value()) {
         std::cerr << "parallel_work_item runtime_start_failed\n";
@@ -107,7 +107,7 @@ int main()
     std::atomic<std::size_t> graph_executed{0};
     const auto graph_us = measure(
         [&runtime](auto* completion, auto* executed) {
-            auto submitted = runtime.spawnCpu(graphBatch(kNodes, completion, executed));
+            auto submitted = runtime.spawn_cpu(graph_batch(kNodes, completion, executed));
             if (!submitted.has_value()) {
                 completion->arrive();
             }
@@ -118,7 +118,7 @@ int main()
     std::atomic<std::size_t> coroutine_executed{0};
     const auto coroutine_us = measure(
         [&runtime](auto* completion, auto* executed) {
-            auto submitted = runtime.spawnCpu(coroutineBatch(kNodes, completion, executed));
+            auto submitted = runtime.spawn_cpu(coroutine_batch(kNodes, completion, executed));
             if (!submitted.has_value()) {
                 completion->arrive(kNodes);
             }

@@ -10,32 +10,32 @@
 
 using namespace galay::http;
 
-void test_chunk_toChunk() {
+void test_chunk_to_chunk() {
     std::cout << "Testing Chunk::toChunk()..." << std::endl;
 
     // 测试1: 普通chunk
     std::string data1 = "Hello";
-    std::string chunk1 = Chunk::toChunk(data1, false);
+    std::string chunk1 = Chunk::to_chunk(data1, false);
     std::string expected1 = "5\r\nHello\r\n";
     assert(chunk1 == expected1);
     std::cout << "  ✓ Normal chunk: " << chunk1.size() << " bytes" << std::endl;
 
     // 测试2: 最后一个chunk
     std::string empty_data = "";
-    std::string chunk2 = Chunk::toChunk(empty_data, true);
+    std::string chunk2 = Chunk::to_chunk(empty_data, true);
     std::string expected2 = "0\r\n\r\n";
     assert(chunk2 == expected2);
     std::cout << "  ✓ Last chunk: " << chunk2.size() << " bytes" << std::endl;
 
     // 测试3: 从buffer创建
     const char* buffer = "World!";
-    std::string chunk3 = Chunk::toChunk(buffer, 6, false);
+    std::string chunk3 = Chunk::to_chunk(buffer, 6, false);
     std::string expected3 = "6\r\nWorld!\r\n";
     assert(chunk3 == expected3);
     std::cout << "  ✓ Chunk from buffer: " << chunk3.size() << " bytes" << std::endl;
 }
 
-void test_chunk_fromIOVec() {
+void test_chunk_from_io_vec() {
     std::cout << "\nTesting Chunk::fromIOVec()..." << std::endl;
 
     // 测试1: 解析单个chunk
@@ -45,7 +45,7 @@ void test_chunk_fromIOVec() {
     iovecs1[0].iov_len = input1.size();
 
     std::string output1;
-    auto result1 = Chunk::fromIOVec(iovecs1, output1);
+    auto result1 = Chunk::from_io_vec(iovecs1, output1);
     assert(result1.has_value());
     assert(result1.value().first == false);  // 不是最后一个chunk
     assert(result1.value().second == input1.size());  // 消费了所有字节
@@ -59,7 +59,7 @@ void test_chunk_fromIOVec() {
     iovecs2[0].iov_len = input2.size();
 
     std::string output2;
-    auto result2 = Chunk::fromIOVec(iovecs2, output2);
+    auto result2 = Chunk::from_io_vec(iovecs2, output2);
     assert(result2.has_value());
     assert(result2.value().first == true);  // 是最后一个chunk
     assert(result2.value().second == input2.size());
@@ -73,7 +73,7 @@ void test_chunk_fromIOVec() {
     iovecs3[0].iov_len = input3.size();
 
     std::string output3;
-    auto result3 = Chunk::fromIOVec(iovecs3, output3);
+    auto result3 = Chunk::from_io_vec(iovecs3, output3);
     assert(result3.has_value());
     assert(result3.value().first == false);  // 不是最后一个chunk
     assert(output3 == "HelloWorld!");  // 追加方式
@@ -86,7 +86,7 @@ void test_chunk_fromIOVec() {
     iovecs4[0].iov_len = input4.size();
 
     std::string output4;
-    auto result4 = Chunk::fromIOVec(iovecs4, output4);
+    auto result4 = Chunk::from_io_vec(iovecs4, output4);
     assert(!result4.has_value());
     assert(result4.error().code() == kIncomplete);
     std::cout << "  ✓ Incomplete data detected" << std::endl;
@@ -101,7 +101,7 @@ void test_chunk_fromIOVec() {
     iovecs5[1].iov_len = part2.size();
 
     std::string output5;
-    auto result5 = Chunk::fromIOVec(iovecs5, output5);
+    auto result5 = Chunk::from_io_vec(iovecs5, output5);
     assert(result5.has_value());
     assert(output5 == "Hello");
     std::cout << "  ✓ Cross-iovec chunk parsed: \"" << output5 << "\"" << std::endl;
@@ -114,11 +114,11 @@ void test_chunk_roundtrip() {
     std::string data1 = "First";
     std::string data2 = "Second";
     std::string data3 = "Third";
-    std::string chunk1 = Chunk::toChunk(data1, false);
-    std::string chunk2 = Chunk::toChunk(data2, false);
-    std::string chunk3 = Chunk::toChunk(data3, false);
+    std::string chunk1 = Chunk::to_chunk(data1, false);
+    std::string chunk2 = Chunk::to_chunk(data2, false);
+    std::string chunk3 = Chunk::to_chunk(data3, false);
     std::string empty_data = "";
-    std::string lastChunk = Chunk::toChunk(empty_data, true);
+    std::string lastChunk = Chunk::to_chunk(empty_data, true);
 
     // 合并所有chunk
     std::string allChunks = chunk1 + chunk2 + chunk3 + lastChunk;
@@ -129,7 +129,7 @@ void test_chunk_roundtrip() {
     iovecs[0].iov_len = allChunks.size();
 
     std::string output;
-    auto result = Chunk::fromIOVec(iovecs, output);
+    auto result = Chunk::from_io_vec(iovecs, output);
 
     assert(result.has_value());
     assert(result.value().first == true);  // 最后一个chunk
@@ -141,8 +141,8 @@ int main() {
     std::cout << "=== HTTP Chunk Unit Tests ===" << std::endl;
 
     try {
-        test_chunk_toChunk();
-        test_chunk_fromIOVec();
+        test_chunk_to_chunk();
+        test_chunk_from_io_vec();
         test_chunk_roundtrip();
 
         std::cout << "\n✅ All tests passed!" << std::endl;

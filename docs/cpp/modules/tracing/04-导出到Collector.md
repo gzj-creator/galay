@@ -12,8 +12,8 @@ galay::tracing::OtlpHttpExporterConfig config{
     .timeout = std::chrono::milliseconds(500),
     .headers = {{"authorization", "Bearer token"}},
     .resource_attributes = {
-        galay::tracing::spanAttribute("service.name", "order-service"),
-        galay::tracing::spanAttribute("deployment.environment", "prod"),
+        galay::tracing::span_attribute("service.name", "order-service"),
+        galay::tracing::span_attribute("deployment.environment", "prod"),
     },
     .scope = {
         .name = "order-handler",
@@ -53,13 +53,13 @@ galay::tracing::BatchSpanProcessor processor(std::move(exporter), {
 
 galay::tracing::Span span("operation", context);
 span.end();
-processor.onEnd(std::move(span));
-processor.forceFlush(std::chrono::seconds(2));
+processor.on_end(std::move(span));
+processor.force_flush(std::chrono::seconds(2));
 ```
 
-`schedule_mode` 控制后台批处理线程的唤醒策略：`kTimed` 仅按 `flush_interval` 定时处理，`kOnEnd` 每次 sampled span 入队后唤醒，`kBatchSize` 在队列达到 `max_batch_size` 后唤醒。`forceFlush()` 和 `shutdown()` 始终会立即唤醒后台线程并排空队列。
+`schedule_mode` 控制后台批处理线程的唤醒策略：`kTimed` 仅按 `flush_interval` 定时处理，`kOnEnd` 每次 sampled span 入队后唤醒，`kBatchSize` 在队列达到 `max_batch_size` 后唤醒。`force_flush()` 和 `shutdown()` 始终会立即唤醒后台线程并排空队列。
 
-当前版本没有全局 tracer provider，也没有自动把 `SpanGuard` 结束事件送进 processor。生产接入时需要在边界层或业务封装里显式调用 `processor.onEnd(...)`。
+当前版本没有全局 tracer provider，也没有自动把 `SpanGuard` 结束事件送进 processor。生产接入时需要在边界层或业务封装里显式调用 `processor.on_end(...)`。
 
 ## Collector 兼容性
 
@@ -77,10 +77,10 @@ OTLP JSON trace span 当前会输出 resource attributes、instrumentation scope
 
 ## Scheduler Thread 阻塞保护
 
-`makeGalayHttpOtlpTransport()` 是同步 transport：调用 `exportSpans()` 的线程会等待 HTTP 完成。默认配置会拒绝在 `galay-kernel` scheduler thread 上执行同步导出：
+`make_galay_http_otlp_transport()` 是同步 transport：调用 `export_spans()` 的线程会等待 HTTP 完成。默认配置会拒绝在 `galay-kernel` scheduler thread 上执行同步导出：
 
 ```cpp
-auto transport = galay::tracing::makeGalayHttpOtlpTransport({
+auto transport = galay::tracing::make_galay_http_otlp_transport({
     .io_scheduler_count = 1,
     .reject_on_runtime_thread = true,
 });

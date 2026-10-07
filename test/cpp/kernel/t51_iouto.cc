@@ -30,7 +30,7 @@ struct TestState {
     std::atomic<int> setup_error{0};
 };
 
-Task<void> acceptTimeoutThenClose(TestState* state) {
+Task<void> accept_timeout_then_close(TestState* state) {
     auto listener_result = AsyncTcpSocket::create(IPType::IPV4);
     if (!listener_result) {
         state->setup_error.store(1, std::memory_order_release);
@@ -39,8 +39,8 @@ Task<void> acceptTimeoutThenClose(TestState* state) {
     }
 
     AsyncTcpSocket listener = std::move(*listener_result);
-    auto reuse = listener.option().handleReuseAddr();
-    auto nonblock = listener.option().handleNonBlock();
+    auto reuse = listener.option().handle_reuse_addr();
+    auto nonblock = listener.option().handle_non_block();
     auto bind = listener.bind(Host(IPType::IPV4, "127.0.0.1", 0));
     auto listen = listener.listen(16);
     if (!reuse || !nonblock || !bind || !listen) {
@@ -60,7 +60,7 @@ Task<void> acceptTimeoutThenClose(TestState* state) {
     state->done.store(true, std::memory_order_release);
 }
 
-bool waitDone(const TestState& state) {
+bool wait_done(const TestState& state) {
     const auto deadline = std::chrono::steady_clock::now() + 2s;
     while (std::chrono::steady_clock::now() < deadline) {
         if (state.done.load(std::memory_order_acquire)) {
@@ -82,13 +82,13 @@ int main() {
     }
 
     TestState state;
-    if (!scheduleTask(scheduler, acceptTimeoutThenClose(&state))) {
+    if (!schedule_task(scheduler, accept_timeout_then_close(&state))) {
         scheduler.stop();
         std::cerr << "[T51] schedule task failed\n";
         return 1;
     }
 
-    const bool completed = waitDone(state);
+    const bool completed = wait_done(state);
     scheduler.stop();
 
     if (!completed) {

@@ -32,7 +32,7 @@ std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_done{false};
 std::atomic<size_t> g_received{0};
 
-bool createTestFile() {
+bool create_test_file() {
     int fd = ::open(kTestFile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
         return false;
@@ -54,10 +54,10 @@ bool createTestFile() {
     return true;
 }
 
-Task<void> sendfileServer() {
+Task<void> sendfile_server() {
     AsyncTcpSocket listener;
-    listener.option().handleReuseAddr();
-    listener.option().handleNonBlock();
+    listener.option().handle_reuse_addr();
+    listener.option().handle_non_block();
 
     auto bindResult = listener.bind(Host(IPType::IPV4, "127.0.0.1", kPort));
     if (!bindResult) {
@@ -81,7 +81,7 @@ Task<void> sendfileServer() {
     }
 
     AsyncTcpSocket client(accepted.value());
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     int fd = ::open(kTestFile, O_RDONLY);
     if (fd < 0) {
@@ -107,13 +107,13 @@ Task<void> sendfileServer() {
     g_done.store(true, std::memory_order_release);
 }
 
-Task<void> sendfileClient() {
+Task<void> sendfile_client() {
     while (!g_server_ready.load(std::memory_order_acquire)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     AsyncTcpSocket socket;
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     auto connected = co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", kPort));
     if (!connected) {
@@ -137,17 +137,17 @@ Task<void> sendfileClient() {
 }  // namespace
 
 int main() {
-    if (!createTestFile()) {
+    if (!create_test_file()) {
         std::cerr << "failed to create test file\n";
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
-    auto* io = runtime.getNextIOScheduler();
-    scheduleTask(io, sendfileServer());
-    scheduleTask(io, sendfileClient());
+    auto* io = runtime.get_next_io_scheduler();
+    schedule_task(io, sendfile_server());
+    schedule_task(io, sendfile_client());
 
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!g_done.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline) {

@@ -20,9 +20,9 @@ std::atomic<int> g_fail{0};
 std::atomic<int> g_completed{0};
 
 // 单连接多请求 (keep-alive)
-Task<void> keepAliveRequests(int conn_id, int requests_per_conn) {
+Task<void> keep_alive_requests(int conn_id, int requests_per_conn) {
     HttpsClient client(HttpsClientBuilder()
-        .verifyPeer(false)
+        .verify_peer(false)
         .build());
 
     try {
@@ -43,15 +43,15 @@ Task<void> keepAliveRequests(int conn_id, int requests_per_conn) {
             co_return;
         }
 
-        auto session_result = client.getSession();
+        auto session_result = client.get_session();
         if (!session_result) {
             co_await client.close();
             co_return;
         }
         auto& session = *session_result.value();
 
-        auto& writer = session.getWriter();
-        auto& reader = session.getReader();
+        auto& writer = session.get_writer();
+        auto& reader = session.get_reader();
 
         // 在同一连接上发送多个请求
         for (int i = 0; i < requests_per_conn; i++) {
@@ -59,12 +59,12 @@ Task<void> keepAliveRequests(int conn_id, int requests_per_conn) {
             auto request = Http1_1RequestBuilder::get("/")
                 .host("localhost")
                 .connection("keep-alive")
-                .buildMove();
+                .build_move();
 
             // 发送请求
             bool send_ok = false;
             while (true) {
-                auto send_result = co_await writer.sendRequest(request);
+                auto send_result = co_await writer.send_request(request);
                 if (!send_result) {
                     break;
                 }
@@ -84,7 +84,7 @@ Task<void> keepAliveRequests(int conn_id, int requests_per_conn) {
             HttpResponse response;
             bool recv_ok = false;
             while (true) {
-                auto recv_result = co_await reader.getResponse(response);
+                auto recv_result = co_await reader.get_response(response);
                 if (!recv_result) {
                     break;
                 }
@@ -115,7 +115,7 @@ Task<void> keepAliveRequests(int conn_id, int requests_per_conn) {
     co_return;
 }
 
-bool runKeepAliveTest(Runtime& rt, int total_requests, int connections, const std::string& test_name) {
+bool run_keep_alive_test(Runtime& rt, int total_requests, int connections, const std::string& test_name) {
     g_success = 0;
     g_fail = 0;
     g_completed = 0;
@@ -130,9 +130,9 @@ bool runKeepAliveTest(Runtime& rt, int total_requests, int connections, const st
 
     // 启动所有连接
     for (int i = 0; i < connections; i++) {
-        auto* scheduler = rt.getNextIOScheduler();
+        auto* scheduler = rt.get_next_io_scheduler();
         if (scheduler) {
-            scheduleTask(scheduler, keepAliveRequests(i, requests_per_conn));
+            schedule_task(scheduler, keep_alive_requests(i, requests_per_conn));
         }
     }
 
@@ -161,25 +161,25 @@ int main() {
     std::cout << "==========================================" << std::endl;
     std::cout << "请确保 T21-HttpsServer 已在 8443 端口运行!" << std::endl;
 
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(4).parallelSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().io_scheduler_count(4).parallel_scheduler_count(0).build();
     rt.start();
 
     bool all_ok = true;
 
     // 测试1: 单连接 100 请求
-    all_ok = runKeepAliveTest(rt, 100, 1, "测试1: 单连接 100请求") && all_ok;
+    all_ok = run_keep_alive_test(rt, 100, 1, "测试1: 单连接 100请求") && all_ok;
 
     // 测试2: 10连接 各100请求
-    all_ok = runKeepAliveTest(rt, 1000, 10, "测试2: 10连接 各100请求") && all_ok;
+    all_ok = run_keep_alive_test(rt, 1000, 10, "测试2: 10连接 各100请求") && all_ok;
 
     // 测试3: 20连接 各100请求
-    all_ok = runKeepAliveTest(rt, 2000, 20, "测试3: 20连接 各100请求") && all_ok;
+    all_ok = run_keep_alive_test(rt, 2000, 20, "测试3: 20连接 各100请求") && all_ok;
 
     // 测试4: 50连接 各100请求
-    all_ok = runKeepAliveTest(rt, 5000, 50, "测试4: 50连接 各100请求") && all_ok;
+    all_ok = run_keep_alive_test(rt, 5000, 50, "测试4: 50连接 各100请求") && all_ok;
 
     // 测试5: 100连接 各100请求
-    all_ok = runKeepAliveTest(rt, 10000, 100, "测试5: 100连接 各100请求") && all_ok;
+    all_ok = run_keep_alive_test(rt, 10000, 100, "测试5: 100连接 各100请求") && all_ok;
 
     rt.stop();
 

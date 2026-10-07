@@ -27,7 +27,7 @@ struct EntryProbe {
     size_t releases = 0;
 };
 
-void releaseProbe(void* state) noexcept {
+void release_probe(void* state) noexcept {
     ++static_cast<EntryProbe*>(state)->releases;
 }
 
@@ -35,7 +35,7 @@ constexpr detail::ReadyEntryHooks kHooks{
     .owner_scheduler = nullptr,
     .resume_owner_only = nullptr,
     .resume = nullptr,
-    .release = releaseProbe,
+    .release = release_probe,
 };
 
 bool measure(std::string_view sample, size_t iterations, bool print) {
@@ -44,7 +44,7 @@ bool measure(std::string_view sample, size_t iterations, bool print) {
     std::array<EntryProbe, 64> probes{};
     for (auto& probe : probes) { probe.header.hooks = &kHooks; }
     ChaseLevTaskRing ring;
-    ring.setStealingEnabled(shared);
+    ring.set_stealing_enabled(shared);
     size_t completed = 0;
     size_t errors = 0;
     galay::benchmark::MicroMeasurement measurement;
@@ -54,7 +54,7 @@ bool measure(std::string_view sample, size_t iterations, bool print) {
         for (size_t i = 0; i < count; ++i) {
             detail::ReadyEntry entry(detail::ReadyEntryKind::CCoroutine, &probes[i]);
             if (!ring.push_back(entry)) {
-                detail::releaseReadyEntry(entry);
+                detail::release_ready_entry(entry);
                 ++errors;
                 break;
             }
@@ -66,7 +66,7 @@ bool measure(std::string_view sample, size_t iterations, bool print) {
             detail::ReadyEntry entry;
             if (!ring.pop_back(entry)) { ++errors; break; }
             errors += entry.state() != &probes[i - 1];
-            detail::releaseReadyEntry(entry);
+            detail::release_ready_entry(entry);
             ++completed;
         }
         if (errors != 0) { break; }
@@ -91,9 +91,9 @@ bool measure(std::string_view sample, size_t iterations, bool print) {
 } // namespace
 
 int main(int argc, char** argv) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) { return 1; }
+    if (!galay::benchmark::initialize_benchmark_environment()) { return 1; }
     galay::benchmark::MicroOptions options;
-    if (!galay::benchmark::parseMicroOptions(argc, argv, options)) {
+    if (!galay::benchmark::parse_micro_options(argc, argv, options)) {
         std::cerr << "Usage: --sample owner-1|owner-64|shared-1|shared-64 --iterations N\n";
         return 1;
     }

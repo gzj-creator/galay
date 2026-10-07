@@ -52,7 +52,7 @@ concept HasJsonOpAwaitableBase = requires {
 
 template <typename ClientT>
 concept HasLastError = requires(ClientT& client) {
-    client.lastError();
+    client.last_error();
 };
 
 template <typename ClientT>
@@ -103,8 +103,8 @@ concept SyncClientReturnsDirectResults = requires(
     { client.put(key, value, lease_id) } -> std::same_as<galay::etcd::EtcdBoolResult>;
     { client.get(key) } -> std::same_as<galay::etcd::EtcdGetResult>;
     { client.del(key) } -> std::same_as<galay::etcd::EtcdDeleteResult>;
-    { client.grantLease(3) } -> std::same_as<galay::etcd::EtcdLeaseGrantResult>;
-    { client.keepAliveOnce(lease_id) } -> std::same_as<galay::etcd::EtcdLeaseGrantResult>;
+    { client.grant_lease(3) } -> std::same_as<galay::etcd::EtcdLeaseGrantResult>;
+    { client.keep_alive_once(lease_id) } -> std::same_as<galay::etcd::EtcdLeaseGrantResult>;
     { client.pipeline(std::span<const PipelineOp>(ops.data(), ops.size())) } ->
         std::same_as<galay::etcd::EtcdPipelineResult>;
 };

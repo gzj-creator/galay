@@ -7,23 +7,23 @@
 using galay::etcd::PipelineOp;
 using galay::etcd::PipelineOpType;
 using galay::etcd::EtcdWatchEventType;
-using galay::etcd::internal::buildDeleteRequestBody;
-using galay::etcd::internal::buildGetRequestBody;
-using galay::etcd::internal::buildLeaseGrantRequestBody;
-using galay::etcd::internal::buildLeaseKeepAliveRequestBody;
-using galay::etcd::internal::buildPutRequestBody;
-using galay::etcd::internal::buildTxnBody;
-using galay::etcd::internal::buildWatchRequestBody;
-using galay::etcd::internal::encodeBase64;
-using galay::etcd::internal::parseDeleteResponseDeletedCount;
-using galay::etcd::internal::parseEtcdSuccessObject;
-using galay::etcd::internal::parseGetResponseKvs;
-using galay::etcd::internal::parseLeaseGrantResponseId;
-using galay::etcd::internal::parseLeaseKeepAliveResponseId;
-using galay::etcd::internal::parsePipelineTxnResponse;
-using galay::etcd::internal::parsePipelineResponses;
-using galay::etcd::internal::parsePutResponse;
-using galay::etcd::internal::parseWatchResponse;
+using galay::etcd::internal::build_delete_request_body;
+using galay::etcd::internal::build_get_request_body;
+using galay::etcd::internal::build_lease_grant_request_body;
+using galay::etcd::internal::build_lease_keep_alive_request_body;
+using galay::etcd::internal::build_put_request_body;
+using galay::etcd::internal::build_txn_body;
+using galay::etcd::internal::build_watch_request_body;
+using galay::etcd::internal::encode_base64;
+using galay::etcd::internal::parse_delete_response_deleted_count;
+using galay::etcd::internal::parse_etcd_success_object;
+using galay::etcd::internal::parse_get_response_kvs;
+using galay::etcd::internal::parse_lease_grant_response_id;
+using galay::etcd::internal::parse_lease_keep_alive_response_id;
+using galay::etcd::internal::parse_pipeline_txn_response;
+using galay::etcd::internal::parse_pipeline_responses;
+using galay::etcd::internal::parse_put_response;
+using galay::etcd::internal::parse_watch_response;
 
 namespace
 {
@@ -46,17 +46,17 @@ int main()
     const std::string key = "/internal/helpers/key";
     const std::string value = "hello";
 
-    auto put_body = buildPutRequestBody(key, value, 123);
+    auto put_body = build_put_request_body(key, value, 123);
     if (!put_body.has_value()) {
         return fail("buildPutRequestBody failed: " + put_body.error().message());
     }
-    if (!contains(*put_body, "\"key\":\"" + encodeBase64(key) + "\"") ||
-        !contains(*put_body, "\"value\":\"" + encodeBase64(value) + "\"") ||
+    if (!contains(*put_body, "\"key\":\"" + encode_base64(key) + "\"") ||
+        !contains(*put_body, "\"value\":\"" + encode_base64(value) + "\"") ||
         !contains(*put_body, "\"lease\":\"123\"")) {
         return fail("buildPutRequestBody missing expected fields");
     }
 
-    auto get_body = buildGetRequestBody(key, true, 5);
+    auto get_body = build_get_request_body(key, true, 5);
     if (!get_body.has_value()) {
         return fail("buildGetRequestBody failed: " + get_body.error().message());
     }
@@ -64,7 +64,7 @@ int main()
         return fail("buildGetRequestBody missing prefix/limit fields");
     }
 
-    auto del_body = buildDeleteRequestBody(key, true);
+    auto del_body = build_delete_request_body(key, true);
     if (!del_body.has_value()) {
         return fail("buildDeleteRequestBody failed: " + del_body.error().message());
     }
@@ -72,28 +72,28 @@ int main()
         return fail("buildDeleteRequestBody missing range_end");
     }
 
-    auto lease_grant_body = buildLeaseGrantRequestBody(10);
+    auto lease_grant_body = build_lease_grant_request_body(10);
     if (!lease_grant_body.has_value() || !contains(*lease_grant_body, "\"TTL\":10")) {
         return fail("buildLeaseGrantRequestBody failed");
     }
 
-    auto keepalive_body = buildLeaseKeepAliveRequestBody(321);
+    auto keepalive_body = build_lease_keep_alive_request_body(321);
     if (!keepalive_body.has_value() || !contains(*keepalive_body, "\"ID\":\"321\"")) {
         return fail("buildLeaseKeepAliveRequestBody failed");
     }
 
-    auto watch_body = buildWatchRequestBody(key);
+    auto watch_body = build_watch_request_body(key);
     if (!watch_body.has_value() || !contains(*watch_body, "\"create_request\"") ||
-        !contains(*watch_body, "\"key\":\"" + encodeBase64(key) + "\"")) {
+        !contains(*watch_body, "\"key\":\"" + encode_base64(key) + "\"")) {
         return fail("buildWatchRequestBody failed");
     }
 
     std::vector<PipelineOp> ops;
-    ops.push_back(PipelineOp::Put(key, value));
-    ops.push_back(PipelineOp::Get(key));
-    ops.push_back(PipelineOp::Del(key));
+    ops.push_back(PipelineOp::put(key, value));
+    ops.push_back(PipelineOp::get(key));
+    ops.push_back(PipelineOp::del(key));
 
-    auto txn_body = buildTxnBody(std::span<const PipelineOp>(ops.data(), ops.size()));
+    auto txn_body = build_txn_body(std::span<const PipelineOp>(ops.data(), ops.size()));
     if (!txn_body.has_value()) {
         return fail("buildTxnBody failed: " + txn_body.error().message());
     }
@@ -107,16 +107,16 @@ int main()
     const std::string range_value = "range-value";
     const std::string response = std::string("{\"succeeded\":true,\"responses\":[")
         + "{\"response_put\":{}},"
-        + "{\"response_range\":{\"kvs\":[{\"key\":\"" + encodeBase64(range_key)
-        + "\",\"value\":\"" + encodeBase64(range_value) + "\"}]}}"
+        + "{\"response_range\":{\"kvs\":[{\"key\":\"" + encode_base64(range_key)
+        + "\",\"value\":\"" + encode_base64(range_value) + "\"}]}}"
         + ",{\"response_delete_range\":{\"deleted\":\"2\"}}]}";
 
-    auto root = parseEtcdSuccessObject(response, "parse helper response");
+    auto root = parse_etcd_success_object(response, "parse helper response");
     if (!root.has_value()) {
         return fail("parseEtcdSuccessObject failed: " + root.error().message());
     }
 
-    auto parsed = parsePipelineResponses(root.value(), std::span<const PipelineOp>(ops.data(), ops.size()));
+    auto parsed = parse_pipeline_responses(root.value(), std::span<const PipelineOp>(ops.data(), ops.size()));
     if (!parsed.has_value()) {
         return fail("parsePipelineResponses failed: " + parsed.error().message());
     }
@@ -136,40 +136,40 @@ int main()
         return fail("delete pipeline item parse mismatch");
     }
 
-    auto put_ok = parsePutResponse("{}");
+    auto put_ok = parse_put_response("{}");
     if (!put_ok.has_value()) {
         return fail("parsePutResponse should accept empty success object");
     }
 
-    auto get_kvs = parseGetResponseKvs(
-        std::string("{\"kvs\":[{\"key\":\"") + encodeBase64("gk")
-            + "\",\"value\":\"" + encodeBase64("gv") + "\"}]}");
+    auto get_kvs = parse_get_response_kvs(
+        std::string("{\"kvs\":[{\"key\":\"") + encode_base64("gk")
+            + "\",\"value\":\"" + encode_base64("gv") + "\"}]}");
     if (!get_kvs.has_value() || get_kvs->size() != 1 || get_kvs->front().key != "gk" || get_kvs->front().value != "gv") {
         return fail("parseGetResponseKvs mismatch");
     }
 
-    auto deleted = parseDeleteResponseDeletedCount("{\"deleted\":\"7\"}");
+    auto deleted = parse_delete_response_deleted_count("{\"deleted\":\"7\"}");
     if (!deleted.has_value() || deleted.value() != 7) {
         return fail("parseDeleteResponseDeletedCount mismatch");
     }
 
-    auto lease_id = parseLeaseGrantResponseId("{\"ID\":\"123\"}");
+    auto lease_id = parse_lease_grant_response_id("{\"ID\":\"123\"}");
     if (!lease_id.has_value() || lease_id.value() != 123) {
         return fail("parseLeaseGrantResponseId mismatch");
     }
 
-    auto keepalive_id = parseLeaseKeepAliveResponseId("{\"ID\":\"321\"}", 321);
+    auto keepalive_id = parse_lease_keep_alive_response_id("{\"ID\":\"321\"}", 321);
     if (!keepalive_id.has_value() || keepalive_id.value() != 321) {
         return fail("parseLeaseKeepAliveResponseId mismatch");
     }
 
-    auto keepalive_mismatch = parseLeaseKeepAliveResponseId("{\"ID\":\"322\"}", 321);
+    auto keepalive_mismatch = parse_lease_keep_alive_response_id("{\"ID\":\"322\"}", 321);
     if (keepalive_mismatch.has_value()) {
         return fail("parseLeaseKeepAliveResponseId should fail on id mismatch");
     }
 
     std::vector<PipelineOpType> op_types{PipelineOpType::Put, PipelineOpType::Get, PipelineOpType::Delete};
-    auto txn_parsed = parsePipelineTxnResponse(
+    auto txn_parsed = parse_pipeline_txn_response(
         response,
         std::span<const PipelineOpType>(op_types.data(), op_types.size()));
     if (!txn_parsed.has_value() || txn_parsed->size() != 3) {
@@ -177,9 +177,9 @@ int main()
     }
 
     const std::string watch_value = "watch-value";
-    auto watch_response = parseWatchResponse(
+    auto watch_response = parse_watch_response(
         std::string("{\"result\":{\"watch_id\":\"7\",\"created\":true,\"events\":[{\"type\":\"PUT\",\"kv\":{\"key\":\"")
-        + encodeBase64(key) + "\",\"value\":\"" + encodeBase64(watch_value) + "\"}}]}}");
+        + encode_base64(key) + "\",\"value\":\"" + encode_base64(watch_value) + "\"}}]}}");
     if (!watch_response.has_value()) {
         return fail("parseWatchResponse failed: " + watch_response.error().message());
     }

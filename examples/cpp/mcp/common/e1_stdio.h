@@ -8,17 +8,17 @@ using namespace galay::mcp;
  *
  * 创建一个MCP服务器，提供基本的工具和资源
  */
-void runSimpleServer() {
+void run_simple_server() {
     McpStdioServer server;
 
     // 设置服务器信息
-    server.setServerInfo("example-server", "1.0.0");
+    server.set_server_info("example-server", "1.0.0");
 
     // 添加一个简单的echo工具
     auto echoSchema = SchemaBuilder()
-        .addString("message", "要回显的消息", true)
+        .add_string("message", "要回显的消息", true)
         .build();
-    server.addTool(
+    server.add_tool(
         "echo",
         "回显输入的消息",
         echoSchema,
@@ -39,7 +39,7 @@ void runSimpleServer() {
             }
 
             std::string result;
-            auto writer = makeJsonWriter(result);
+            auto writer = make_json_writer(result);
             // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
             (void)writer.start_object();
             (void)writer.key("echo");
@@ -56,7 +56,7 @@ void runSimpleServer() {
     );
 
     // 添加一个简单的资源
-    server.addResource(
+    server.add_resource(
         "example://greeting",
         "greeting",
         "简单的问候资源",
@@ -76,22 +76,22 @@ void runSimpleServer() {
  *
  * 创建一个MCP客户端，连接到服务器并调用功能
  */
-void runSimpleClient() {
+void run_simple_client() {
     McpClient client(McpStdioClientConfig{});
 
     // 初始化连接
     std::cout << "Initializing client..." << std::endl;
     auto initResult = client.initialize("example-client", "1.0.0");
     if (!initResult) {
-        std::cerr << "Failed to initialize: " << initResult.error().toString() << std::endl;
+        std::cerr << "Failed to initialize: " << initResult.error().to_string() << std::endl;
         return;
     }
 
-    std::cout << "Connected to server: " << client.getServerInfo().name << std::endl;
+    std::cout << "Connected to server: " << client.get_server_info().name << std::endl;
 
     // 列出可用工具
     std::cout << "\nListing tools..." << std::endl;
-    auto toolsResult = client.listTools();
+    auto toolsResult = client.list_tools();
     if (toolsResult) {
         for (const auto& tool : toolsResult.value()) {
             std::cout << "  - " << tool.name << ": " << tool.description << std::endl;
@@ -101,7 +101,7 @@ void runSimpleClient() {
     // 调用echo工具
     std::cout << "\nCalling echo tool..." << std::endl;
     std::string args;
-    auto argsWriter = makeJsonWriter(args);
+    auto argsWriter = make_json_writer(args);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)argsWriter.start_object();
     (void)argsWriter.key("message");
@@ -111,14 +111,14 @@ void runSimpleClient() {
         std::cerr << "Failed to encode arguments" << std::endl;
         return;
     }
-    auto callResult = client.callTool("echo", args);
+    auto callResult = client.call_tool("echo", args);
     if (callResult) {
         std::cout << "Result: " << callResult.value() << std::endl;
     }
 
     // 列出资源
     std::cout << "\nListing resources..." << std::endl;
-    auto resourcesResult = client.listResources();
+    auto resourcesResult = client.list_resources();
     if (resourcesResult) {
         for (const auto& resource : resourcesResult.value()) {
             std::cout << "  - " << resource.uri << ": " << resource.name << std::endl;
@@ -127,7 +127,7 @@ void runSimpleClient() {
 
     // 读取资源
     std::cout << "\nReading resource..." << std::endl;
-    auto readResult = client.readResource("example://greeting");
+    auto readResult = client.read_resource("example://greeting");
     if (readResult) {
         std::cout << "Content: " << readResult.value() << std::endl;
     }
@@ -152,9 +152,9 @@ int main(int argc, char* argv[]) {
     std::string mode = argv[1];
 
     if (mode == "server") {
-        runSimpleServer();
+        run_simple_server();
     } else if (mode == "client") {
-        runSimpleClient();
+        run_simple_client();
     } else {
         std::cerr << "Invalid mode: " << mode << std::endl;
         std::cerr << "Use 'server' or 'client'" << std::endl;

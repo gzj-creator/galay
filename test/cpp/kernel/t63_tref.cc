@@ -1,7 +1,7 @@
 /**
  * @file t63_tref.cc
  * @brief 用途：锁定 `Scheduler` 公开提交面只暴露 `TaskRef` 风格接口。
- * 关键覆盖点：`schedule(TaskRef)`、`scheduleDeferred(TaskRef)`、`scheduleImmediately(TaskRef)` 存在，旧 `spawn(...)` 风格接口被移除。
+ * 关键覆盖点：`schedule(TaskRef)`、`schedule_deferred(TaskRef)`、`schedule_immediately(TaskRef)` 存在，旧 `spawn(...)` 风格接口被移除。
  * 通过条件：编译期静态断言全部通过，测试返回 0。
  */
 
@@ -21,12 +21,12 @@ concept HasSchedule = requires(T scheduler, TaskRef task) {
 
 template <typename T>
 concept HasScheduleDeferred = requires(T scheduler, TaskRef task) {
-    { scheduler.scheduleDeferred(std::move(task)) } -> std::same_as<bool>;
+    { scheduler.schedule_deferred(std::move(task)) } -> std::same_as<bool>;
 };
 
 template <typename T>
 concept HasScheduleImmediately = requires(T scheduler, TaskRef task) {
-    { scheduler.scheduleImmediately(std::move(task)) } -> std::same_as<bool>;
+    { scheduler.schedule_immediately(std::move(task)) } -> std::same_as<bool>;
 };
 
 template <typename T>

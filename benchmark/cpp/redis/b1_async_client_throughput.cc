@@ -110,7 +110,7 @@ struct PrebuiltBenchmarkInputs {
     std::vector<std::string> values;
 };
 
-bool parseInt(const std::string& text, int& value)
+bool parse_int(const std::string& text, int& value)
 {
     try {
         size_t used = 0;
@@ -123,7 +123,7 @@ bool parseInt(const std::string& text, int& value)
     }
 }
 
-bool parseSize(const std::string& text, size_t& value)
+bool parse_size(const std::string& text, size_t& value)
 {
     try {
         size_t used = 0;
@@ -136,7 +136,7 @@ bool parseSize(const std::string& text, size_t& value)
     }
 }
 
-void printUsage(const char* program)
+void print_usage(const char* program)
 {
     std::cout << "Usage: " << program
               << " [-h host] [-p port] [-c clients] [-n operations] "
@@ -146,7 +146,7 @@ void printUsage(const char* program)
               << std::endl;
 }
 
-bool parseArgs(int argc, char* argv[], BenchmarkOptions& options, bool& show_help)
+bool parse_args(int argc, char* argv[], BenchmarkOptions& options, bool& show_help)
 {
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -173,21 +173,21 @@ bool parseArgs(int argc, char* argv[], BenchmarkOptions& options, bool& show_hel
             continue;
         }
         if (arg == "-p" || arg == "--port") {
-            if (!parseInt(value, options.port) || options.port <= 0 || options.port > 65535) {
+            if (!parse_int(value, options.port) || options.port <= 0 || options.port > 65535) {
                 std::cerr << "Invalid port: " << value << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "-c" || arg == "--clients") {
-            if (!parseInt(value, options.clients) || options.clients <= 0) {
+            if (!parse_int(value, options.clients) || options.clients <= 0) {
                 std::cerr << "Invalid clients: " << value << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "-n" || arg == "--operations") {
-            if (!parseInt(value, options.operations) || options.operations <= 0) {
+            if (!parse_int(value, options.operations) || options.operations <= 0) {
                 std::cerr << "Invalid operations: " << value << std::endl;
                 return false;
             }
@@ -198,21 +198,21 @@ bool parseArgs(int argc, char* argv[], BenchmarkOptions& options, bool& show_hel
             continue;
         }
         if (arg == "-b" || arg == "--batch-size") {
-            if (!parseInt(value, options.batch_size) || options.batch_size <= 0) {
+            if (!parse_int(value, options.batch_size) || options.batch_size <= 0) {
                 std::cerr << "Invalid batch-size: " << value << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "--timeout-ms") {
-            if (!parseInt(value, options.timeout_ms) || options.timeout_ms < -1) {
+            if (!parse_int(value, options.timeout_ms) || options.timeout_ms < -1) {
                 std::cerr << "Invalid timeout-ms: " << value << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "--buffer-size") {
-            if (!parseSize(value, options.buffer_size) || options.buffer_size == 0) {
+            if (!parse_size(value, options.buffer_size) || options.buffer_size == 0) {
                 std::cerr << "Invalid buffer-size: " << value << std::endl;
                 return false;
             }
@@ -233,13 +233,13 @@ bool parseArgs(int argc, char* argv[], BenchmarkOptions& options, bool& show_hel
     return true;
 }
 
-void markClientCompleted()
+void mark_client_completed()
 {
     g_completed_clients.fetch_add(1, std::memory_order_release);
     g_completed_sem.release();
 }
 
-void storeClientResult(int client_id,
+void store_client_result(int client_id,
                        std::int64_t success,
                        std::int64_t error,
                        std::int64_t timeout,
@@ -267,7 +267,7 @@ std::int64_t percentile(const std::vector<std::int64_t>& sorted, double p)
     return sorted[std::min(idx, sorted.size() - 1)];
 }
 
-PrebuiltBenchmarkInputs buildInputs(std::string_view prefix, int client_id, int operations)
+PrebuiltBenchmarkInputs build_inputs(std::string_view prefix, int client_id, int operations)
 {
     PrebuiltBenchmarkInputs inputs;
     inputs.keys.reserve(static_cast<size_t>(operations));
@@ -281,7 +281,7 @@ PrebuiltBenchmarkInputs buildInputs(std::string_view prefix, int client_id, int 
 }
 
 template <typename T>
-void countSingleResult(const T& result, std::int64_t& success, std::int64_t& error, std::int64_t& timeout)
+void count_single_result(const T& result, std::int64_t& success, std::int64_t& error, std::int64_t& timeout)
 {
     if (result && result.value()) {
         ++success;
@@ -301,7 +301,7 @@ void countSingleResult(const T& result, std::int64_t& success, std::int64_t& err
 }
 
 template <typename T>
-void countBatchResult(
+void count_batch_result(
     const T& result,
     std::int64_t count,
     std::int64_t& success,
@@ -325,9 +325,9 @@ void countBatchResult(
     error += count;
 }
 
-Task<void> benchmarkNormal(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
+Task<void> benchmark_normal(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
 {
-    auto client = RedisClientBuilder().scheduler(scheduler).bufferSize(options->buffer_size).build();
+    auto client = RedisClientBuilder().scheduler(scheduler).buffer_size(options->buffer_size).build();
     protocol::RespEncoder encoder;
     std::string set_encoded;
     std::string get_encoded;
@@ -346,24 +346,24 @@ Task<void> benchmarkNormal(IOScheduler* scheduler, const BenchmarkOptions* optio
     }
     if (!connect_result) {
         local_error += static_cast<std::int64_t>(options->operations) * 2;
-        storeClientResult(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
-        markClientCompleted();
+        store_client_result(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
+        mark_client_completed();
         co_return;
     }
 
-    auto inputs = buildInputs("bench:normal", client_id, options->operations);
-    auto encodeSet = [&](std::string_view key, std::string_view value) -> RedisBorrowedCommand {
+    auto inputs = build_inputs("bench:normal", client_id, options->operations);
+    auto encode_set = [&](std::string_view key, std::string_view value) -> RedisBorrowedCommand {
         const std::array<std::string_view, 2> args{key, value};
         set_encoded.clear();
-        set_encoded.reserve(encoder.estimateCommandBytes("SET", args));
-        encoder.appendCommandFast(set_encoded, "SET", args);
+        set_encoded.reserve(encoder.estimate_command_bytes("SET", args));
+        encoder.append_command_fast(set_encoded, "SET", args);
         return RedisBorrowedCommand(set_encoded, 1);
     };
-    auto encodeGet = [&](std::string_view key) -> RedisBorrowedCommand {
+    auto encode_get = [&](std::string_view key) -> RedisBorrowedCommand {
         const std::array<std::string_view, 1> args{key};
         get_encoded.clear();
-        get_encoded.reserve(encoder.estimateCommandBytes("GET", args));
-        encoder.appendCommandFast(get_encoded, "GET", args);
+        get_encoded.reserve(encoder.estimate_command_bytes("GET", args));
+        encoder.append_command_fast(get_encoded, "GET", args);
         return RedisBorrowedCommand(get_encoded, 1);
     };
 
@@ -373,34 +373,34 @@ Task<void> benchmarkNormal(IOScheduler* scheduler, const BenchmarkOptions* optio
         const auto& value = inputs.values[static_cast<size_t>(i)];
 
         const auto set_begin = std::chrono::high_resolution_clock::now();
-        RedisBorrowedCommand set_packet = encodeSet(key, value);
+        RedisBorrowedCommand set_packet = encode_set(key, value);
         std::expected<std::optional<std::vector<RedisValue>>, RedisError> set_result;
         if (options->timeout_ms >= 0) {
-            set_result = co_await client.commandBorrowed(set_packet).timeout(request_timeout);
+            set_result = co_await client.command_borrowed(set_packet).timeout(request_timeout);
         } else {
-            set_result = co_await client.commandBorrowed(set_packet);
+            set_result = co_await client.command_borrowed(set_packet);
         }
         const auto set_end = std::chrono::high_resolution_clock::now();
         local_latencies.push_back(std::chrono::duration_cast<std::chrono::microseconds>(set_end - set_begin).count());
-        countSingleResult(set_result, local_success, local_error, local_timeout);
+        count_single_result(set_result, local_success, local_error, local_timeout);
 
         const auto get_begin = std::chrono::high_resolution_clock::now();
-        RedisBorrowedCommand get_packet = encodeGet(key);
+        RedisBorrowedCommand get_packet = encode_get(key);
         std::expected<std::optional<std::vector<RedisValue>>, RedisError> get_result;
         if (options->timeout_ms >= 0) {
-            get_result = co_await client.commandBorrowed(get_packet).timeout(request_timeout);
+            get_result = co_await client.command_borrowed(get_packet).timeout(request_timeout);
         } else {
-            get_result = co_await client.commandBorrowed(get_packet);
+            get_result = co_await client.command_borrowed(get_packet);
         }
         const auto get_end = std::chrono::high_resolution_clock::now();
         local_latencies.push_back(std::chrono::duration_cast<std::chrono::microseconds>(get_end - get_begin).count());
-        countSingleResult(get_result, local_success, local_error, local_timeout);
+        count_single_result(get_result, local_success, local_error, local_timeout);
     }
     const auto end = std::chrono::high_resolution_clock::now();
 
     (void)co_await client.close();
 
-    storeClientResult(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
+    store_client_result(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
 
     if (options->verbose) {
         const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -408,12 +408,12 @@ Task<void> benchmarkNormal(IOScheduler* scheduler, const BenchmarkOptions* optio
                   << duration.count() << "ms" << std::endl;
     }
 
-    markClientCompleted();
+    mark_client_completed();
 }
 
-Task<void> benchmarkPipeline(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
+Task<void> benchmark_pipeline(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
 {
-    auto client = RedisClientBuilder().scheduler(scheduler).bufferSize(options->buffer_size).build();
+    auto client = RedisClientBuilder().scheduler(scheduler).buffer_size(options->buffer_size).build();
     std::int64_t local_success = 0;
     std::int64_t local_error = 0;
     std::int64_t local_timeout = 0;
@@ -430,12 +430,12 @@ Task<void> benchmarkPipeline(IOScheduler* scheduler, const BenchmarkOptions* opt
     }
     if (!connect_result) {
         local_error += options->operations;
-        storeClientResult(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
-        markClientCompleted();
+        store_client_result(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
+        mark_client_completed();
         co_return;
     }
 
-    auto inputs = buildInputs("bench:pipeline", client_id, options->operations);
+    auto inputs = build_inputs("bench:pipeline", client_id, options->operations);
 
     const auto start = std::chrono::high_resolution_clock::now();
     int offset = 0;
@@ -458,14 +458,14 @@ Task<void> benchmarkPipeline(IOScheduler* scheduler, const BenchmarkOptions* opt
             builder.append("SET", std::array<std::string_view, 2>{key, value});
         }
         if (options->timeout_ms >= 0) {
-            pipeline_result = co_await client.batchBorrowed(builder.encoded(), builder.size()).timeout(request_timeout);
+            pipeline_result = co_await client.batch_borrowed(builder.encoded(), builder.size()).timeout(request_timeout);
         } else {
-            pipeline_result = co_await client.batchBorrowed(builder.encoded(), builder.size());
+            pipeline_result = co_await client.batch_borrowed(builder.encoded(), builder.size());
         }
         const auto call_end = std::chrono::high_resolution_clock::now();
         local_latencies.push_back(std::chrono::duration_cast<std::chrono::microseconds>(call_end - call_begin).count());
 
-        countBatchResult(
+        count_batch_result(
             pipeline_result,
             static_cast<std::int64_t>(current_batch),
             local_success,
@@ -477,7 +477,7 @@ Task<void> benchmarkPipeline(IOScheduler* scheduler, const BenchmarkOptions* opt
 
     (void)co_await client.close();
 
-    storeClientResult(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
+    store_client_result(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
 
     if (options->verbose) {
         const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -485,12 +485,12 @@ Task<void> benchmarkPipeline(IOScheduler* scheduler, const BenchmarkOptions* opt
                   << duration.count() << "ms" << std::endl;
     }
 
-    markClientCompleted();
+    mark_client_completed();
 }
 
-Task<void> benchmarkNormalBatch(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
+Task<void> benchmark_normal_batch(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
 {
-    auto client = RedisClientBuilder().scheduler(scheduler).bufferSize(options->buffer_size).build();
+    auto client = RedisClientBuilder().scheduler(scheduler).buffer_size(options->buffer_size).build();
     std::int64_t local_success = 0;
     std::int64_t local_error = 0;
     std::int64_t local_timeout = 0;
@@ -507,8 +507,8 @@ Task<void> benchmarkNormalBatch(IOScheduler* scheduler, const BenchmarkOptions* 
     }
     if (!connect_result) {
         local_error += static_cast<std::int64_t>(options->operations) * 2;
-        storeClientResult(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
-        markClientCompleted();
+        store_client_result(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
+        mark_client_completed();
         co_return;
     }
 
@@ -541,7 +541,7 @@ Task<void> benchmarkNormalBatch(IOScheduler* scheduler, const BenchmarkOptions* 
         const auto call_end = std::chrono::high_resolution_clock::now();
         local_latencies.push_back(std::chrono::duration_cast<std::chrono::microseconds>(call_end - call_begin).count());
 
-        countBatchResult(
+        count_batch_result(
             batch_result,
             static_cast<std::int64_t>(current_batch) * 2,
             local_success,
@@ -553,7 +553,7 @@ Task<void> benchmarkNormalBatch(IOScheduler* scheduler, const BenchmarkOptions* 
 
     (void)co_await client.close();
 
-    storeClientResult(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
+    store_client_result(client_id, local_success, local_error, local_timeout, std::move(local_latencies));
 
     if (options->verbose) {
         const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -561,21 +561,21 @@ Task<void> benchmarkNormalBatch(IOScheduler* scheduler, const BenchmarkOptions* 
                   << duration.count() << "ms" << std::endl;
     }
 
-    markClientCompleted();
+    mark_client_completed();
 }
 
 }  // namespace
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     BenchmarkOptions options;
     bool show_help = false;
-    if (!parseArgs(argc, argv, options, show_help)) {
-        printUsage(argv[0]);
+    if (!parse_args(argc, argv, options, show_help)) {
+        print_usage(argv[0]);
         return show_help ? 0 : 1;
     }
 
@@ -619,18 +619,18 @@ int main(int argc, char* argv[])
     const auto bench_start = std::chrono::high_resolution_clock::now();
 
     for (int i = 0; i < options.clients; ++i) {
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             std::cerr << "Failed to get IO scheduler for client " << i << std::endl;
             runtime.stop();
             return 1;
         }
         if (options.mode == "pipeline") {
-            scheduleTask(scheduler, benchmarkPipeline(scheduler, &options, i));
+            schedule_task(scheduler, benchmark_pipeline(scheduler, &options, i));
         } else if (options.mode == "normal-batch") {
-            scheduleTask(scheduler, benchmarkNormalBatch(scheduler, &options, i));
+            schedule_task(scheduler, benchmark_normal_batch(scheduler, &options, i));
         } else {
-            scheduleTask(scheduler, benchmarkNormal(scheduler, &options, i));
+            schedule_task(scheduler, benchmark_normal(scheduler, &options, i));
         }
     }
 

@@ -7,7 +7,7 @@ namespace galay::websocket
 
 namespace {
 
-void fillMaskingKey(uint8_t masking_key[4])
+void fill_masking_key(uint8_t masking_key[4])
 {
     thread_local static std::random_device rd;
     thread_local static std::mt19937 gen(rd());
@@ -19,7 +19,7 @@ void fillMaskingKey(uint8_t masking_key[4])
 
 } // namespace
 
-size_t wsFrameHeaderLength(uint64_t payload_len, bool use_mask)
+size_t ws_frame_header_length(uint64_t payload_len, bool use_mask)
 {
     size_t header_len = 2;
     if (payload_len >= 126 && payload_len <= 0xFFFF) {
@@ -33,7 +33,7 @@ size_t wsFrameHeaderLength(uint64_t payload_len, bool use_mask)
     return header_len;
 }
 
-void appendWsFrameHeader(std::string& out,
+void append_ws_frame_header(std::string& out,
                          WsOpcode opcode,
                          bool fin,
                          bool rsv1,
@@ -71,20 +71,20 @@ void appendWsFrameHeader(std::string& out,
     }
 
     if (use_mask) {
-        fillMaskingKey(masking_key);
+        fill_masking_key(masking_key);
         for (int i = 0; i < 4; ++i) {
             out.push_back(static_cast<char>(masking_key[i]));
         }
     }
 }
 
-void appendWsFrameHeader(std::string& out,
+void append_ws_frame_header(std::string& out,
                          const WsFrame& frame,
                          uint64_t payload_len,
                          bool use_mask,
                          uint8_t masking_key[4])
 {
-    appendWsFrameHeader(out,
+    append_ws_frame_header(out,
                         frame.header.opcode,
                         frame.header.fin,
                         frame.header.rsv1,
@@ -95,7 +95,7 @@ void appendWsFrameHeader(std::string& out,
                         masking_key);
 }
 
-std::string buildWsClosePayload(WsCloseCode code, const std::string& reason)
+std::string build_ws_close_payload(WsCloseCode code, const std::string& reason)
 {
     std::string payload;
     payload.reserve(2 + reason.size());

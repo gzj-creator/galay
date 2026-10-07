@@ -16,7 +16,7 @@ enum class ReadError {
     kPath,
 };
 
-std::expected<std::string, ReadError> repoRoot()
+std::expected<std::string, ReadError> repo_root()
 {
     std::string path(__FILE__);
     const std::string marker = "/test/cpp/http2/";
@@ -28,7 +28,7 @@ std::expected<std::string, ReadError> repoRoot()
     return path;
 }
 
-std::expected<std::string, ReadError> readFile(const std::string& path)
+std::expected<std::string, ReadError> read_file(const std::string& path)
 {
     const int fd = ::open(path.c_str(), O_RDONLY);
     if (fd < 0) {
@@ -66,9 +66,9 @@ std::expected<std::string, ReadError> readFile(const std::string& path)
     return content;
 }
 
-std::expected<std::string, ReadError> readRepoFile(std::string_view relative)
+std::expected<std::string, ReadError> read_repo_file(std::string_view relative)
 {
-    auto root = repoRoot();
+    auto root = repo_root();
     if (!root.has_value()) {
         return std::unexpected(root.error());
     }
@@ -77,10 +77,10 @@ std::expected<std::string, ReadError> readRepoFile(std::string_view relative)
     if (&appended != &path) {
         return std::unexpected(ReadError::kPath);
     }
-    return readFile(path);
+    return read_file(path);
 }
 
-int requireContains(std::string_view haystack, std::string_view needle, const char* message)
+int require_contains(std::string_view haystack, std::string_view needle, const char* message)
 {
     const size_t found = haystack.find(needle);
     if (found == std::string_view::npos) {
@@ -90,7 +90,7 @@ int requireContains(std::string_view haystack, std::string_view needle, const ch
     return 0;
 }
 
-int requireNotContains(std::string_view haystack, std::string_view needle, const char* message)
+int require_not_contains(std::string_view haystack, std::string_view needle, const char* message)
 {
     const size_t found = haystack.find(needle);
     if (found != std::string_view::npos) {
@@ -104,44 +104,44 @@ int requireNotContains(std::string_view haystack, std::string_view needle, const
 
 int main()
 {
-    auto stream_manager = readRepoFile("/src/cpp/galay-http2/kernel/stream_manager.h");
+    auto stream_manager = read_repo_file("/src/cpp/galay-http2/kernel/stream_manager.h");
     if (!stream_manager.has_value()) {
         std::cerr << "failed to read HTTP/2 stream_manager.h\n";
         return 1;
     }
-    auto static_file = readRepoFile("/src/cpp/galay-http2/server/h2_static_file.cc");
+    auto static_file = read_repo_file("/src/cpp/galay-http2/server/h2_static_file.cc");
     if (!static_file.has_value()) {
         std::cerr << "failed to read HTTP/2 h2_static_file.cc\n";
         return 1;
     }
 
-    if (const int rc = requireContains(*stream_manager,
-                                       "spawnBlocking",
+    if (const int rc = require_contains(*stream_manager,
+                                       "spawn_blocking",
                                        "HTTP/2 static file body read must use runtime blocking pool")) {
         return rc;
     }
-    if (const int rc = requireContains(*stream_manager,
-                                       "readStaticFileChunksBlocking",
+    if (const int rc = require_contains(*stream_manager,
+                                       "read_static_file_chunks_blocking",
                                        "HTTP/2 static file body read must be isolated outside the event-loop path")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*stream_manager,
+    if (const int rc = require_not_contains(*stream_manager,
                                           "std::ifstream",
                                           "HTTP/2 stream manager must not synchronously read files with ifstream")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*static_file,
+    if (const int rc = require_not_contains(*static_file,
                                           "std::ifstream",
                                           "HTTP/2 static cache miss path must not synchronously read file bodies")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*static_file,
-                                          "readSmallFile",
+    if (const int rc = require_not_contains(*static_file,
+                                          "read_small_file",
                                           "HTTP/2 small file cache miss must not synchronously read body")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*static_file,
-                                          "readFileRange",
+    if (const int rc = require_not_contains(*static_file,
+                                          "read_file_range",
                                           "HTTP/2 range lookup must not synchronously read body")) {
         return rc;
     }

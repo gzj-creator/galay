@@ -1,6 +1,6 @@
 /**
  * @file t149_timeout_policy_surface.cc
- * @brief 锁定 timeout policy 的编译期契约与 ownsIoRegistration 定制点。
+ * @brief 锁定 timeout policy 的编译期契约与 owns_io_registration 定制点。
  */
 
 #include <galay/cpp/galay-kernel/core/timeout.hpp>
@@ -35,20 +35,20 @@ struct ExistingResultAwaitable
 
     result_type await_resume() noexcept { return std::move(m_result); }
 
-    void setTimeout() noexcept {
+    void set_timeout() noexcept {
         m_result = std::unexpected(IOError(kTimeout, 0));
     }
 
-    bool ownsIoRegistration() const noexcept { return false; }
+    bool owns_io_registration() const noexcept { return false; }
 
 private:
     result_type m_result{42};
 };
 
-void checkExplicitOwnershipHookWins() {
+void check_explicit_ownership_hook_wins() {
     auto wrapped = ExistingResultAwaitable{}.timeout(std::chrono::milliseconds(1));
-    wrapped.ensureTimer();
-    wrapped.m_timer->handleTimeout();
+    wrapped.ensure_timer();
+    wrapped.m_timer->handle_timeout();
 
     auto result = wrapped.await_resume();
     assert(result.has_value());
@@ -58,6 +58,6 @@ void checkExplicitOwnershipHookWins() {
 }  // namespace
 
 int main() {
-    checkExplicitOwnershipHookWins();
+    check_explicit_ownership_hook_wins();
     return 0;
 }

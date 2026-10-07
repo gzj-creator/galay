@@ -46,7 +46,7 @@ MongoCommandBuilder& MongoCommandBuilder::append(std::string_view command_name,
     return append(std::move(command));
 }
 
-MongoCommandBuilder& MongoCommandBuilder::appendPing()
+MongoCommandBuilder& MongoCommandBuilder::append_ping()
 {
     return append("ping", int32_t(1));
 }
@@ -67,15 +67,15 @@ bool MongoCommandBuilder::empty() const noexcept
 }
 
 std::expected<std::string, std::string>
-MongoCommandBuilder::encodePipeline(std::string_view database,
+MongoCommandBuilder::encode_pipeline(std::string_view database,
                                     int32_t first_request_id,
                                     size_t reserve_per_command) const
 {
-    return encodePipeline(database, first_request_id, commands(), reserve_per_command);
+    return encode_pipeline(database, first_request_id, commands(), reserve_per_command);
 }
 
 std::expected<std::string, std::string>
-MongoCommandBuilder::encodePipeline(std::string_view database,
+MongoCommandBuilder::encode_pipeline(std::string_view database,
                                     int32_t first_request_id,
                                     std::span<const MongoDocument> commands,
                                     size_t reserve_per_command)
@@ -102,7 +102,7 @@ MongoCommandBuilder::encodePipeline(std::string_view database,
         const int32_t request_id = static_cast<int32_t>(request_id_i64);
 
         const MongoDocument& command = commands[i];
-        auto appended = MongoProtocol::appendOpMsgWithDatabase(encoded, request_id, command, database);
+        auto appended = MongoProtocol::append_op_msg_with_database(encoded, request_id, command, database);
         if (!appended) {
             return std::unexpected(appended.error());
         }

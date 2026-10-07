@@ -48,7 +48,7 @@ public:
      */
     [[nodiscard]] TrieTree clone() const {
         TrieTree copy;
-        copy.m_root = cloneNode(m_root.get());
+        copy.m_root = clone_node(m_root.get());
         copy.m_size = m_size;
         return copy;
     }
@@ -81,7 +81,7 @@ public:
      * @return 存在返回 true
      */
     bool contains(const std::string& word) const {
-        TrieNode* node = findNode(word);
+        TrieNode* node = find_node(word);
         return node != nullptr && node->m_isEnd;
     }
 
@@ -90,8 +90,8 @@ public:
      * @param prefix 前缀字符串
      * @return 存在返回 true
      */
-    bool startsWith(const std::string& prefix) const {
-        return findNode(prefix) != nullptr;
+    bool starts_with(const std::string& prefix) const {
+        return find_node(prefix) != nullptr;
     }
 
     /**
@@ -100,7 +100,7 @@ public:
      * @return 出现次数，不存在返回 0
      */
     int query(const std::string& word) const {
-        TrieNode* node = findNode(word);
+        TrieNode* node = find_node(word);
         if (node && node->m_isEnd) {
             return node->m_count;
         }
@@ -117,7 +117,7 @@ public:
             return false;
         }
 
-        removeHelper(m_root.get(), word, 0);
+        remove_helper(m_root.get(), word, 0);
         --m_size;
         return true;
     }
@@ -127,12 +127,12 @@ public:
      * @param prefix 前缀字符串
      * @return 匹配的单词列表
      */
-    std::vector<std::string> getWordsWithPrefix(const std::string& prefix) const {
+    std::vector<std::string> get_words_with_prefix(const std::string& prefix) const {
         std::vector<std::string> result;
-        TrieNode* node = findNode(prefix);
+        TrieNode* node = find_node(prefix);
 
         if (node) {
-            collectWords(node, prefix, result);
+            collect_words(node, prefix, result);
         }
 
         return result;
@@ -142,9 +142,9 @@ public:
      * @brief 获取字典树中的所有单词
      * @return 所有单词列表
      */
-    std::vector<std::string> getAllWords() const {
+    std::vector<std::string> get_all_words() const {
         std::vector<std::string> result;
-        collectWords(m_root.get(), "", result);
+        collect_words(m_root.get(), "", result);
         return result;
     }
 
@@ -160,7 +160,7 @@ private:
     TrieTree(const TrieTree&) = delete;
     TrieTree& operator=(const TrieTree&) = delete;
 
-    static std::unique_ptr<TrieNode> cloneNode(const TrieNode* node) {
+    static std::unique_ptr<TrieNode> clone_node(const TrieNode* node) {
         if (node == nullptr) {
             return nullptr;
         }
@@ -169,12 +169,12 @@ private:
         copy->m_isEnd = node->m_isEnd;
         copy->m_count = node->m_count;
         for (const auto& [character, child] : node->children) {
-            copy->children.emplace(character, cloneNode(child.get()));
+            copy->children.emplace(character, clone_node(child.get()));
         }
         return copy;
     }
 
-    TrieNode* findNode(const std::string& prefix) const {
+    TrieNode* find_node(const std::string& prefix) const {
         TrieNode* node = m_root.get();
         for (char c : prefix) {
             auto it = node->children.find(c);
@@ -186,17 +186,17 @@ private:
         return node;
     }
 
-    void collectWords(TrieNode* node, const std::string& prefix, std::vector<std::string>& result) const {
+    void collect_words(TrieNode* node, const std::string& prefix, std::vector<std::string>& result) const {
         if (node->m_isEnd) {
             result.push_back(prefix);
         }
 
         for (const auto& [c, child] : node->children) {
-            collectWords(child.get(), prefix + c, result);
+            collect_words(child.get(), prefix + c, result);
         }
     }
 
-    bool removeHelper(TrieNode* node, const std::string& word, size_t depth) {
+    bool remove_helper(TrieNode* node, const std::string& word, size_t depth) {
         if (depth == word.length()) {
             if (node->m_isEnd) {
                 node->m_isEnd = false;
@@ -212,7 +212,7 @@ private:
             return false;
         }
 
-        bool shouldDelete = removeHelper(it->second.get(), word, depth + 1);
+        bool shouldDelete = remove_helper(it->second.get(), word, depth + 1);
 
         if (shouldDelete) {
             node->children.erase(it);

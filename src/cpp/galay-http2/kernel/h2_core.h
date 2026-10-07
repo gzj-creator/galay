@@ -63,46 +63,46 @@ public:
     Http2ConnectionCore() = default;
 
     State state() const noexcept { return m_state.load(std::memory_order_acquire); }
-    bool stopRequested() const noexcept { return m_stop_requested.load(std::memory_order_acquire); }
-    bool outboundReady() const noexcept { return m_outbound_ready; }
-    bool hasOutboundWork() const noexcept;
-    bool acceptsNewStreams() const noexcept;
+    bool stop_requested() const noexcept { return m_stop_requested.load(std::memory_order_acquire); }
+    bool outbound_ready() const noexcept { return m_outbound_ready; }
+    bool has_outbound_work() const noexcept;
+    bool accepts_new_streams() const noexcept;
 
-    void requestStop() noexcept { m_stop_requested.store(true, std::memory_order_release); }
-    void forceClose() noexcept {
+    void request_stop() noexcept { m_stop_requested.store(true, std::memory_order_release); }
+    void force_close() noexcept {
         m_state.store(State::Closing, std::memory_order_release);
-        requestStop();
+        request_stop();
     }
 
-    void setTimerConfig(TimerConfig cfg) noexcept { m_timer_config = cfg; }
-    const TimerConfig& timerConfig() const noexcept { return m_timer_config; }
+    void set_timer_config(TimerConfig cfg) noexcept { m_timer_config = cfg; }
+    const TimerConfig& timer_config() const noexcept { return m_timer_config; }
 
-    void markSettingsSent() noexcept {
-        markSettingsSent(std::chrono::steady_clock::now());
+    void mark_settings_sent() noexcept {
+        mark_settings_sent(std::chrono::steady_clock::now());
     }
-    void markSettingsSent(std::chrono::steady_clock::time_point at) noexcept {
+    void mark_settings_sent(std::chrono::steady_clock::time_point at) noexcept {
         m_settings_ack_pending.store(true, std::memory_order_release);
         m_settings_sent_at = at;
     }
-    void markSettingsAcked() noexcept { m_settings_ack_pending.store(false, std::memory_order_release); }
-    bool isSettingsAckPending() const noexcept { return m_settings_ack_pending.load(std::memory_order_acquire); }
+    void mark_settings_acked() noexcept { m_settings_ack_pending.store(false, std::memory_order_release); }
+    bool is_settings_ack_pending() const noexcept { return m_settings_ack_pending.load(std::memory_order_acquire); }
 
-    void markFrameReceivedAt(std::chrono::steady_clock::time_point at) noexcept { m_last_frame_recv_at = at; }
-    void markPingSent(std::chrono::steady_clock::time_point at) noexcept {
+    void mark_frame_received_at(std::chrono::steady_clock::time_point at) noexcept { m_last_frame_recv_at = at; }
+    void mark_ping_sent(std::chrono::steady_clock::time_point at) noexcept {
         m_waiting_ping_ack = true;
         m_last_ping_sent_at = at;
     }
-    void markPingAcked() noexcept { m_waiting_ping_ack = false; }
-    bool waitingPingAck() const noexcept { return m_waiting_ping_ack; }
+    void mark_ping_acked() noexcept { m_waiting_ping_ack = false; }
+    bool waiting_ping_ack() const noexcept { return m_waiting_ping_ack; }
 
-    void beginGracefulShutdown(std::chrono::steady_clock::time_point at) noexcept {
+    void begin_graceful_shutdown(std::chrono::steady_clock::time_point at) noexcept {
         m_graceful_shutdown_started = true;
         m_graceful_shutdown_started_at = at;
         m_state.store(State::Draining, std::memory_order_release);
     }
 
-    TimerEvent checkTimers(std::chrono::steady_clock::time_point now) noexcept;
-    void applyTimerEvent(TimerEvent event) noexcept;
+    TimerEvent check_timers(std::chrono::steady_clock::time_point now) noexcept;
+    void apply_timer_event(TimerEvent event) noexcept;
 
     /**
      * @brief 处理一帧入站 HTTP/2 帧
@@ -110,7 +110,7 @@ public:
      * @param frame 入站帧，调用方负责保证其生命周期覆盖本次调用
      * @return dispatcher 结果，错误通过作用域和 action 表达
      */
-    H2DispatchResult receiveFrame(const Http2Frame& frame);
+    H2DispatchResult receive_frame(const Http2Frame& frame);
 
     /**
      * @brief 入队待发送 DATA
@@ -119,7 +119,7 @@ public:
      * @param end_stream 数据发送完后是否附带 END_STREAM
      * @param weight stream 调度权重
      */
-    void enqueueData(uint32_t stream_id, std::string data, bool end_stream, uint8_t weight = 16);
+    void enqueue_data(uint32_t stream_id, std::string data, bool end_stream, uint8_t weight = 16);
 
     /**
      * @brief 立即调度当前出站队列
@@ -128,7 +128,7 @@ public:
      * @param config DRR 调度配置
      * @return 本次选出的待发送帧
      */
-    H2OutboundSelection flushOutbound(H2OutboundBudget budget, H2SchedulerConfig config = {});
+    H2OutboundSelection flush_outbound(H2OutboundBudget budget, H2SchedulerConfig config = {});
 
     /**
      * @brief 立即调度当前出站队列并返回已序列化帧 bytes
@@ -138,12 +138,12 @@ public:
      * @param config DRR 调度配置
      * @return 本次选出的已序列化帧 bytes
      */
-    H2OutboundBytesSelection flushOutboundBytes(H2OutboundBudget budget, H2SchedulerConfig config = {});
+    H2OutboundBytesSelection flush_outbound_bytes(H2OutboundBudget budget, H2SchedulerConfig config = {});
 
     galay::kernel::Task<void> run();
 
 private:
-    void enqueueDispatchAction(const H2DispatchAction& action);
+    void enqueue_dispatch_action(const H2DispatchAction& action);
 
     TimerConfig m_timer_config{};
     std::chrono::steady_clock::time_point m_settings_sent_at{};

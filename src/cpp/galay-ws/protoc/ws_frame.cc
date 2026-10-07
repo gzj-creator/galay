@@ -18,7 +18,7 @@ namespace galay::websocket
 
 namespace {
 
-void applyMaskBytesImpl(char* data, size_t len, const uint8_t masking_key[4]) {
+void apply_mask_bytes_impl(char* data, size_t len, const uint8_t masking_key[4]) {
     if (data == nullptr || len == 0) {
         return;
     }
@@ -103,11 +103,11 @@ public:
         return m_total_length - m_consumed;
     }
 
-    bool readByte(uint8_t& out) {
-        return readBytes(&out, 1);
+    bool read_byte(uint8_t& out) {
+        return read_bytes(&out, 1);
     }
 
-    bool readBytes(void* dst, size_t len) {
+    bool read_bytes(void* dst, size_t len) {
         uint8_t* out = static_cast<uint8_t*>(dst);
         size_t need = len;
 
@@ -156,15 +156,15 @@ private:
 } // namespace
 
 std::expected<size_t, WsError>
-WsFrameParser::fromIOVec(const std::vector<iovec>& iovecs, WsFrame& frame, bool is_server)
+WsFrameParser::from_io_vec(const std::vector<iovec>& iovecs, WsFrame& frame, bool is_server)
 {
-    return fromIOVec(iovecs.data(), iovecs.size(), frame, is_server);
+    return from_io_vec(iovecs.data(), iovecs.size(), frame, is_server);
 }
 
 std::expected<size_t, WsError>
-WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame& frame, bool is_server)
+WsFrameParser::from_io_vec(const struct iovec* iovecs, size_t iovec_count, WsFrame& frame, bool is_server)
 {
-    const size_t total_length = getTotalLength(iovecs, iovec_count);
+    const size_t total_length = get_total_length(iovecs, iovec_count);
     if (total_length < 2) {
         return std::unexpected(WsError(kWsIncomplete));
     }
@@ -173,7 +173,7 @@ WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame
     uint8_t byte1 = 0;
     uint8_t byte2 = 0;
 
-    if (!cursor.readByte(byte1)) {
+    if (!cursor.read_byte(byte1)) {
         return std::unexpected(WsError(kWsIncomplete));
     }
 
@@ -196,11 +196,11 @@ WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame
     frame.header.opcode = static_cast<WsOpcode>(opcode_value);
 
     // 控制帧必须设置FIN位
-    if (isControlFrame(frame.header.opcode) && !frame.header.fin) {
+    if (is_control_frame(frame.header.opcode) && !frame.header.fin) {
         return std::unexpected(WsError(kWsControlFrameFragmented));
     }
 
-    if (!cursor.readByte(byte2)) {
+    if (!cursor.read_byte(byte2)) {
         return std::unexpected(WsError(kWsIncomplete));
     }
 
@@ -224,7 +224,7 @@ WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame
         frame.header.payload_length = payload_len;
     } else if (payload_len == 126) {
         uint8_t len_buf[2];
-        if (!cursor.readBytes(len_buf, sizeof(len_buf))) {
+        if (!cursor.read_bytes(len_buf, sizeof(len_buf))) {
             return std::unexpected(WsError(kWsIncomplete));
         }
         const uint16_t extended_len = (static_cast<uint16_t>(len_buf[0]) << 8) | len_buf[1];
@@ -234,7 +234,7 @@ WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame
         frame.header.payload_length = extended_len;
     } else {
         uint8_t len_buf[8];
-        if (!cursor.readBytes(len_buf, sizeof(len_buf))) {
+        if (!cursor.read_bytes(len_buf, sizeof(len_buf))) {
             return std::unexpected(WsError(kWsIncomplete));
         }
         if ((len_buf[0] & 0x80) != 0) {
@@ -251,13 +251,13 @@ WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame
     }
 
     // 控制帧的payload不能超过125字节
-    if (isControlFrame(frame.header.opcode) && frame.header.payload_length > 125) {
+    if (is_control_frame(frame.header.opcode) && frame.header.payload_length > 125) {
         return std::unexpected(WsError(kWsControlFrameTooLarge));
     }
 
     // 读取掩码密钥（如果有）
     if (frame.header.mask) {
-        if (!cursor.readBytes(frame.header.masking_key, sizeof(frame.header.masking_key))) {
+        if (!cursor.read_bytes(frame.header.masking_key, sizeof(frame.header.masking_key))) {
             return std::unexpected(WsError(kWsIncomplete));
         }
     }
@@ -273,13 +273,13 @@ WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame
 
     frame.payload.clear();
     frame.payload.resize(payload_size);
-    if (payload_size > 0 && !cursor.readBytes(frame.payload.data(), payload_size)) {
+    if (payload_size > 0 && !cursor.read_bytes(frame.payload.data(), payload_size)) {
         return std::unexpected(WsError(kWsInvalidFrame));
     }
 
     // 如果有掩码，解除掩码
     if (frame.header.mask) {
-        applyMask(frame.payload, frame.header.masking_key);
+        apply_mask(frame.payload, frame.header.masking_key);
     }
 
     if (frame.header.opcode == WsOpcode::Close) {
@@ -300,7 +300,7 @@ WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame
                 return std::unexpected(WsError(kWsInvalidCloseCode));
             }
             if (payload_size > 2 &&
-                !isValidUtf8Bytes(frame.payload.data() + 2, payload_size - 2)) {
+                !is_valid_utf8_bytes(frame.payload.data() + 2, payload_size - 2)) {
                 return std::unexpected(WsError(kWsInvalidUtf8));
             }
         }
@@ -308,7 +308,7 @@ WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame
 
     // 验证文本帧的UTF-8编码
     if (frame.header.opcode == WsOpcode::Text && frame.header.fin) {
-        if (!isValidUtf8(frame.payload)) {
+        if (!is_valid_utf8(frame.payload)) {
             return std::unexpected(WsError(kWsInvalidUtf8));
         }
     }
@@ -316,22 +316,22 @@ WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame
     return cursor.consumed();
 }
 
-std::string WsFrameParser::toBytes(const WsFrame& frame, bool use_mask)
+std::string WsFrameParser::to_bytes(const WsFrame& frame, bool use_mask)
 {
     std::string result;
-    encodeInto(result, frame, use_mask);
+    encode_into(result, frame, use_mask);
     return result;
 }
 
-void WsFrameParser::encodeInto(std::string& out, const WsFrame& frame, bool use_mask)
+void WsFrameParser::encode_into(std::string& out, const WsFrame& frame, bool use_mask)
 {
     const uint64_t payload_len = frame.payload.size();
-    const size_t header_len = wsFrameHeaderLength(payload_len, use_mask);
+    const size_t header_len = ws_frame_header_length(payload_len, use_mask);
     uint8_t masking_key[4] = {0, 0, 0, 0};
 
     out.clear();
     out.reserve(header_len + static_cast<size_t>(payload_len));
-    appendWsFrameHeader(out, frame, payload_len, use_mask, masking_key);
+    append_ws_frame_header(out, frame, payload_len, use_mask, masking_key);
     if (payload_len == 0) {
         return;
     }
@@ -339,23 +339,23 @@ void WsFrameParser::encodeInto(std::string& out, const WsFrame& frame, bool use_
     const size_t payload_offset = out.size();
     out.append(frame.payload.data(), frame.payload.size());
     if (use_mask) {
-        WsFrameParser::applyMaskBytes(out.data() + payload_offset, static_cast<size_t>(payload_len), masking_key);
+        WsFrameParser::apply_mask_bytes(out.data() + payload_offset, static_cast<size_t>(payload_len), masking_key);
     }
 }
 
-void WsFrameParser::encodeMessageInto(std::string& out,
+void WsFrameParser::encode_message_into(std::string& out,
                                       WsOpcode opcode,
                                       std::string_view payload,
                                       bool fin,
                                       bool use_mask)
 {
     const uint64_t payload_len = payload.size();
-    const size_t header_len = wsFrameHeaderLength(payload_len, use_mask);
+    const size_t header_len = ws_frame_header_length(payload_len, use_mask);
     uint8_t masking_key[4] = {0, 0, 0, 0};
 
     out.clear();
     out.reserve(header_len + static_cast<size_t>(payload_len));
-    appendWsFrameHeader(out, opcode, fin, false, false, false, payload_len, use_mask, masking_key);
+    append_ws_frame_header(out, opcode, fin, false, false, false, payload_len, use_mask, masking_key);
     if (payload_len == 0) {
         return;
     }
@@ -363,18 +363,18 @@ void WsFrameParser::encodeMessageInto(std::string& out,
     const size_t payload_offset = out.size();
     out.append(payload.data(), payload.size());
     if (use_mask) {
-        WsFrameParser::applyMaskBytes(out.data() + payload_offset, static_cast<size_t>(payload_len), masking_key);
+        WsFrameParser::apply_mask_bytes(out.data() + payload_offset, static_cast<size_t>(payload_len), masking_key);
     }
 }
 
-void WsFrameParser::encodeMessageInto(std::string& out,
+void WsFrameParser::encode_message_into(std::string& out,
                                       WsOpcode opcode,
                                       std::string&& payload,
                                       bool fin,
                                       bool use_mask)
 {
     const uint64_t payload_len = payload.size();
-    const size_t header_len = wsFrameHeaderLength(payload_len, use_mask);
+    const size_t header_len = ws_frame_header_length(payload_len, use_mask);
     uint8_t masking_key[4] = {0, 0, 0, 0};
 
     out.clear();
@@ -382,7 +382,7 @@ void WsFrameParser::encodeMessageInto(std::string& out,
 
     std::string header;
     header.reserve(header_len);
-    appendWsFrameHeader(header, opcode, fin, false, false, false, payload_len, use_mask, masking_key);
+    append_ws_frame_header(header, opcode, fin, false, false, false, payload_len, use_mask, masking_key);
 
     if (out.empty()) {
         out = std::move(header);
@@ -395,36 +395,36 @@ void WsFrameParser::encodeMessageInto(std::string& out,
     std::memmove(out.data() + header.size(), out.data(), payload_size);
     std::memcpy(out.data(), header.data(), header.size());
     if (use_mask) {
-        WsFrameParser::applyMaskBytes(out.data() + header.size(), static_cast<size_t>(payload_len), masking_key);
+        WsFrameParser::apply_mask_bytes(out.data() + header.size(), static_cast<size_t>(payload_len), masking_key);
     }
 }
 
-std::string WsFrameParser::toBytesHeader(const WsFrame& frame, bool use_mask, uint8_t masking_key[4])
+std::string WsFrameParser::to_bytes_header(const WsFrame& frame, bool use_mask, uint8_t masking_key[4])
 {
     std::string result;
     const uint64_t payload_len = frame.payload.size();
-    const size_t header_len = wsFrameHeaderLength(payload_len, use_mask);
+    const size_t header_len = ws_frame_header_length(payload_len, use_mask);
     result.reserve(header_len);
-    appendWsFrameHeader(result, frame, payload_len, use_mask, masking_key);
+    append_ws_frame_header(result, frame, payload_len, use_mask, masking_key);
     return result;
 }
 
-WsFrame WsFrameParser::createCloseFrame(WsCloseCode code, const std::string& reason)
+WsFrame WsFrameParser::create_close_frame(WsCloseCode code, const std::string& reason)
 {
-    return WsFrameBuilder().close(code, reason).buildMove();
+    return WsFrameBuilder().close(code, reason).build_move();
 }
 
-void WsFrameParser::applyMaskBytes(char* data, size_t len, const uint8_t masking_key[4])
+void WsFrameParser::apply_mask_bytes(char* data, size_t len, const uint8_t masking_key[4])
 {
-    applyMaskBytesImpl(data, len, masking_key);
+    apply_mask_bytes_impl(data, len, masking_key);
 }
 
-void WsFrameParser::applyMask(std::string& data, const uint8_t masking_key[4])
+void WsFrameParser::apply_mask(std::string& data, const uint8_t masking_key[4])
 {
-    applyMaskBytes(data.data(), data.size(), masking_key);
+    apply_mask_bytes(data.data(), data.size(), masking_key);
 }
 
-bool WsFrameParser::isValidUtf8Bytes(const char* data, size_t len)
+bool WsFrameParser::is_valid_utf8_bytes(const char* data, size_t len)
 {
     if (data == nullptr) {
         return len == 0;
@@ -522,7 +522,7 @@ bool WsFrameParser::isValidUtf8Bytes(const char* data, size_t len)
     return true;
 }
 
-bool WsFrameParser::isValidUtf8MaskedBytes(const char* data,
+bool WsFrameParser::is_valid_utf8_masked_bytes(const char* data,
                                            size_t len,
                                            const uint8_t masking_key[4])
 {
@@ -621,17 +621,17 @@ bool WsFrameParser::isValidUtf8MaskedBytes(const char* data,
     return true;
 }
 
-bool WsFrameParser::isValidUtf8(const std::string& data)
+bool WsFrameParser::is_valid_utf8(const std::string& data)
 {
-    return isValidUtf8Bytes(data.data(), data.size());
+    return is_valid_utf8_bytes(data.data(), data.size());
 }
 
-size_t WsFrameParser::getTotalLength(const std::vector<iovec>& iovecs)
+size_t WsFrameParser::get_total_length(const std::vector<iovec>& iovecs)
 {
-    return getTotalLength(iovecs.data(), iovecs.size());
+    return get_total_length(iovecs.data(), iovecs.size());
 }
 
-size_t WsFrameParser::getTotalLength(const struct iovec* iovecs, size_t iovec_count)
+size_t WsFrameParser::get_total_length(const struct iovec* iovecs, size_t iovec_count)
 {
     if (iovecs == nullptr || iovec_count == 0) {
         return 0;

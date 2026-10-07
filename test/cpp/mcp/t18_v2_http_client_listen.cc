@@ -22,7 +22,7 @@ namespace {
 
 using namespace std::chrono_literals;
 
-uint16_t pickPort()
+uint16_t pick_port()
 {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return 0;
@@ -44,7 +44,7 @@ uint16_t pickPort()
     return ok ? port : 0;
 }
 
-galay::kernel::Task<void> runListener(
+galay::kernel::Task<void> run_listener(
     galay::mcp::v2::McpHttpClient* client,
     galay::mcp::v2::SubscriptionFilter filter,
     std::expected<galay::mcp::v2::SubscriptionFilter, galay::mcp::McpError>* listenResult,
@@ -63,7 +63,7 @@ galay::kernel::Task<void> runListener(
     listenerDone->store(true, std::memory_order_release);
 }
 
-galay::kernel::Task<void> runClientChecks(
+galay::kernel::Task<void> run_client_checks(
     galay::kernel::Runtime* runtime,
     galay::mcp::v2::McpHttpClient* client,
     std::expected<galay::mcp::v2::SubscriptionFilter, galay::mcp::McpError>* listenResult,
@@ -75,10 +75,10 @@ galay::kernel::Task<void> runClientChecks(
 {
     galay::mcp::v2::SubscriptionFilter filter;
     filter.toolsListChanged = true;
-    auto listenTask = runListener(client, std::move(filter), listenResult,
+    auto listenTask = run_listener(client, std::move(filter), listenResult,
                                   callbacks, callbackOwned, listenerDone);
 
-    if (!galay::kernel::scheduleTask(client->owner(), std::move(listenTask))) {
+    if (!galay::kernel::schedule_task(client->owner(), std::move(listenTask))) {
         taskDone->store(true, std::memory_order_release);
         co_return;
     }
@@ -125,14 +125,14 @@ galay::kernel::Task<void> runClientChecks(
 
 int main()
 {
-    const auto port = pickPort();
+    const auto port = pick_port();
     if (port == 0) {
         std::cerr << "failed to pick v2 client test port\n";
         return 1;
     }
 
     galay::mcp::v2::McpHttpServer server("127.0.0.1", port, 2, 1);
-    server.addTool("echo", "Echo", "{}",
+    server.add_tool("echo", "Echo", "{}",
                    [](const json::Json&,
                       std::expected<std::string, galay::mcp::McpError>& result)
                         -> galay::kernel::Task<void> {
@@ -143,20 +143,20 @@ int main()
     std::this_thread::sleep_for(80ms);
 
     galay::kernel::Runtime runtime =
-        galay::kernel::RuntimeBuilder().ioSchedulerCount(2).parallelSchedulerCount(0).build();
+        galay::kernel::RuntimeBuilder().io_scheduler_count(2).parallel_scheduler_count(0).build();
     if (!runtime.start()) { server.stop(); serverThread.join(); return 1; }
     galay::mcp::v2::McpHttpClient client(
         runtime, "http://127.0.0.1:" + std::to_string(port) + "/mcp");
 
     std::expected<galay::mcp::v2::SubscriptionFilter, galay::mcp::McpError> listenResult =
-        std::unexpected(galay::mcp::McpError::invalidResponse("pending acknowledgement"));
+        std::unexpected(galay::mcp::McpError::invalid_response("pending acknowledgement"));
     std::atomic<int> callbacks{0};
     std::atomic<bool> callbackOwned{false};
     std::atomic<bool> discoverOk{false};
     std::atomic<bool> listenerDone{false};
     std::atomic<bool> taskDone{false};
 
-    auto handle = runtime.spawnIO(runClientChecks(
+    auto handle = runtime.spawn_io(run_client_checks(
         &runtime, &client, &listenResult, &callbacks, &callbackOwned,
         &discoverOk, &listenerDone, &taskDone));
     if (!handle) {
@@ -170,7 +170,7 @@ int main()
     const auto deadline = std::chrono::steady_clock::now() + 7s;
     while (!taskDone.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() < deadline) {
-        const auto sent = server.notifyToolsListChanged();
+        const auto sent = server.notify_tools_list_changed();
         if (!sent) break;
         std::this_thread::sleep_for(10ms);
     }

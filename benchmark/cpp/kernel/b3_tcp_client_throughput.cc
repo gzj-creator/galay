@@ -36,7 +36,7 @@ using namespace galay::kernel;
 
 namespace {
 
-constexpr const char* benchmarkBackend() {
+constexpr const char* benchmark_backend() {
 #if defined(USE_KQUEUE)
     return "kqueue";
 #elif defined(USE_IOURING)
@@ -48,7 +48,7 @@ constexpr const char* benchmarkBackend() {
 #endif
 }
 
-constexpr const char* benchmarkBuildMode() {
+constexpr const char* benchmark_build_mode() {
 #ifdef NDEBUG
     return "release-like";
 #else
@@ -94,7 +94,7 @@ struct ConnectLatencySummary {
     uint32_t maxUs = 0;
 };
 
-void resetBenchStats() {
+void reset_bench_stats() {
     g_total_requests.store(0, std::memory_order_relaxed);
     g_total_bytes.store(0, std::memory_order_relaxed);
     g_success_count.store(0, std::memory_order_relaxed);
@@ -115,7 +115,7 @@ void resetBenchStats() {
     }
 }
 
-void recordConnectLatency(uint64_t latency_us) {
+void record_connect_latency(uint64_t latency_us) {
     g_connect_latency_total_us.fetch_add(latency_us, std::memory_order_relaxed);
     uint64_t observed_max = g_connect_latency_max_us.load(std::memory_order_relaxed);
     while (observed_max < latency_us &&
@@ -131,12 +131,12 @@ void recordConnectLatency(uint64_t latency_us) {
     }
 }
 
-void recordConnectError(const IOError& error) {
+void record_connect_error(const IOError& error) {
     std::lock_guard<std::mutex> lock(g_connect_errors_mu);
     g_connect_error_hist[error.code()]++;
 }
 
-uint32_t percentileValue(std::vector<uint32_t>& samples, double p) {
+uint32_t percentile_value(std::vector<uint32_t>& samples, double p) {
     if (samples.empty()) {
         return 0;
     }
@@ -150,7 +150,7 @@ uint32_t percentileValue(std::vector<uint32_t>& samples, double p) {
     return samples[index];
 }
 
-ConnectLatencySummary summarizeConnectLatency() {
+ConnectLatencySummary summarize_connect_latency() {
     std::vector<uint32_t> samples;
     {
         std::lock_guard<std::mutex> lock(g_connect_samples_mu);
@@ -165,14 +165,14 @@ ConnectLatencySummary summarizeConnectLatency() {
     ConnectLatencySummary summary;
     summary.avgUs = static_cast<double>(g_connect_latency_total_us.load(std::memory_order_relaxed)) /
                     static_cast<double>(samples.size());
-    summary.p50Us = percentileValue(samples, 0.50);
-    summary.p90Us = percentileValue(samples, 0.90);
-    summary.p99Us = percentileValue(samples, 0.99);
+    summary.p50Us = percentile_value(samples, 0.50);
+    summary.p90Us = percentile_value(samples, 0.90);
+    summary.p99Us = percentile_value(samples, 0.99);
     summary.maxUs = samples.back();
     return summary;
 }
 
-void printConnectErrorHistogram() {
+void print_connect_error_histogram() {
     std::vector<std::pair<uint64_t, uint64_t>> sorted;
     {
         std::lock_guard<std::mutex> lock(g_connect_errors_mu);
@@ -203,9 +203,9 @@ void printConnectErrorHistogram() {
 }
 
 // 单个客户端连接的压测协程
-Task<void> benchClient(const BenchConfig& config, [[maybe_unused]] int clientId) {
+Task<void> bench_client(const BenchConfig& config, [[maybe_unused]] int clientId) {
     AsyncTcpSocket client;
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     Host serverHost(IPType::IPV4, config.host, config.port);
     g_connect_attempts.fetch_add(1, std::memory_order_relaxed);
@@ -220,12 +220,12 @@ Task<void> benchClient(const BenchConfig& config, [[maybe_unused]] int clientId)
     const auto connect_end = std::chrono::steady_clock::now();
     const auto connect_latency_us =
         std::chrono::duration_cast<std::chrono::microseconds>(connect_end - connect_start).count();
-    recordConnectLatency(static_cast<uint64_t>(connect_latency_us));
+    record_connect_latency(static_cast<uint64_t>(connect_latency_us));
 
     if (!connectResult) {
         g_error_count.fetch_add(1, std::memory_order_relaxed);
         g_connect_failed.fetch_add(1, std::memory_order_relaxed);
-        recordConnectError(connectResult.error());
+        record_connect_error(connectResult.error());
         if (IOError::contains(connectResult.error().code(), kTimeout)) {
             g_connect_timeout.fetch_add(1, std::memory_order_relaxed);
         }
@@ -279,9 +279,9 @@ Task<void> benchClient(const BenchConfig& config, [[maybe_unused]] int clientId)
 }
 
 // 统计打印线程
-void statsThread(const BenchConfig& config) {
+void stats_thread(const BenchConfig& config) {
     if (g_connected_latch != nullptr &&
-        !g_connected_latch->waitFor(std::chrono::seconds(5))) {
+        !g_connected_latch->wait_for(std::chrono::seconds(5))) {
         std::cout << "[warmup] connection gate timed out, starting with available clients" << std::endl;
     }
     if (!config.connectOnly) {
@@ -356,7 +356,7 @@ void statsThread(const BenchConfig& config) {
     }
 }
 
-void printUsage(const char* program) {
+void print_usage(const char* program) {
     std::cout << "Usage: " << program << " [options]\n"
               << "Options:\n"
               << "  -h <host>        Server host (default: 127.0.0.1)\n"
@@ -371,13 +371,13 @@ void printUsage(const char* program) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     BenchConfig config;
     g_running.store(true, std::memory_order_release);
-    resetBenchStats();
+    reset_bench_stats();
 
     // 解析命令行参数
     for (int i = 1; i < argc; i++) {
@@ -398,13 +398,13 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "--connect-timeout-ms") == 0 && i + 1 < argc) {
             config.connectTimeoutMs = std::atoi(argv[++i]);
         } else if (strcmp(argv[i], "--help") == 0) {
-            printUsage(argv[0]);
+            print_usage(argv[0]);
             return 0;
         }
     }
     if (config.connections <= 0 || config.messageSize <= 0 || config.duration <= 0 ||
         config.ioSchedulers <= 0) {
-        printUsage(argv[0]);
+        print_usage(argv[0]);
         return 1;
     }
 
@@ -416,8 +416,8 @@ int main(int argc, char* argv[]) {
     std::cout << "IO Schedulers: " << config.ioSchedulers << std::endl;
     std::cout << "Connect Timeout: " << config.connectTimeoutMs << " ms" << std::endl;
     std::cout << "Mode: " << (config.connectOnly ? "connect-only" : "echo") << std::endl;
-    std::cout << "Meta: backend=" << benchmarkBackend()
-              << " | build=" << benchmarkBuildMode()
+    std::cout << "Meta: backend=" << benchmark_backend()
+              << " | build=" << benchmark_build_mode()
               << " | role=client"
               << " | io_mode=plain"
               << " | scenario=" << (config.connectOnly ? "tcp-connect-only" : "tcp-echo")
@@ -456,13 +456,13 @@ int main(int argc, char* argv[]) {
     g_connected_latch = &connected_latch;
 
     // 启动统计线程
-    std::thread stats(statsThread, std::ref(config));
+    std::thread stats(stats_thread, std::ref(config));
 
     // 启动所有客户端连接
     std::cout << "Starting " << config.connections << " connections..." << std::endl;
     for (int i = 0; i < config.connections; i++) {
         auto& scheduler = *schedulers[static_cast<std::size_t>(i) % schedulers.size()];
-        if (!scheduleTask(scheduler, benchClient(config, i))) {
+        if (!schedule_task(scheduler, bench_client(config, i))) {
             g_connect_attempts.fetch_add(1, std::memory_order_relaxed);
             g_connect_failed.fetch_add(1, std::memory_order_relaxed);
             g_error_count.fetch_add(1, std::memory_order_relaxed);
@@ -490,7 +490,7 @@ int main(int argc, char* argv[]) {
     const uint64_t connect_success = g_connect_success.load(std::memory_order_relaxed);
     const uint64_t connect_failed = g_connect_failed.load(std::memory_order_relaxed);
     const uint64_t connect_timeout = g_connect_timeout.load(std::memory_order_relaxed);
-    const auto connect_latency = summarizeConnectLatency();
+    const auto connect_latency = summarize_connect_latency();
 
     std::cout << "\n=== Final Results ===" << std::endl;
     std::cout << "Total Requests: " << requests << std::endl;
@@ -518,7 +518,7 @@ int main(int argc, char* argv[]) {
               << " p99=" << connect_latency.p99Us
               << " max=" << connect_latency.maxUs
               << std::endl;
-    printConnectErrorHistogram();
+    print_connect_error_histogram();
 
     return 0;
 }

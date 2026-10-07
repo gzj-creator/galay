@@ -46,7 +46,7 @@ public:
      * @param required 是否为必填属性
      * @return 当前构建器引用，支持链式调用
      */
-    SchemaBuilder& addString(const std::string& name,
+    SchemaBuilder& add_string(const std::string& name,
                              const std::string& description,
                              bool required = false) {
         Property prop;
@@ -65,7 +65,7 @@ public:
      * @param required 是否为必填属性
      * @return 当前构建器引用，支持链式调用
      */
-    SchemaBuilder& addNumber(const std::string& name,
+    SchemaBuilder& add_number(const std::string& name,
                              const std::string& description,
                              bool required = false) {
         Property prop;
@@ -84,7 +84,7 @@ public:
      * @param required 是否为必填属性
      * @return 当前构建器引用，支持链式调用
      */
-    SchemaBuilder& addInteger(const std::string& name,
+    SchemaBuilder& add_integer(const std::string& name,
                               const std::string& description,
                               bool required = false) {
         Property prop;
@@ -103,7 +103,7 @@ public:
      * @param required 是否为必填属性
      * @return 当前构建器引用，支持链式调用
      */
-    SchemaBuilder& addBoolean(const std::string& name,
+    SchemaBuilder& add_boolean(const std::string& name,
                               const std::string& description,
                               bool required = false) {
         Property prop;
@@ -123,7 +123,7 @@ public:
      * @param required 是否为必填属性
      * @return 当前构建器引用，支持链式调用
      */
-    SchemaBuilder& addArray(const std::string& name,
+    SchemaBuilder& add_array(const std::string& name,
                             const std::string& description,
                             const std::string& itemType = "string",
                             bool required = false) {
@@ -145,7 +145,7 @@ public:
      * @param required 是否为必填属性
      * @return 当前构建器引用，支持链式调用
      */
-    SchemaBuilder& addObject(const std::string& name,
+    SchemaBuilder& add_object(const std::string& name,
                              const std::string& description,
                              const std::string& objectSchema,
                              bool required = false) {
@@ -167,11 +167,11 @@ public:
      * @param required 是否为必填属性
      * @return 当前构建器引用，支持链式调用
      */
-    SchemaBuilder& addObject(const std::string& name,
+    SchemaBuilder& add_object(const std::string& name,
                              const std::string& description,
                              const SchemaBuilder& objectSchema,
                              bool required = false) {
-        return addObject(name, description, objectSchema.build(), required);
+        return add_object(name, description, objectSchema.build(), required);
     }
 
     /**
@@ -182,7 +182,7 @@ public:
      * @param required 是否为必填属性
      * @return 当前构建器引用，支持链式调用
      */
-    SchemaBuilder& addEnum(const std::string& name,
+    SchemaBuilder& add_enum(const std::string& name,
                            const std::string& description,
                            const std::vector<std::string>& enumValues,
                            bool required = false) {
@@ -202,7 +202,7 @@ public:
      */
     std::string build() const {
         std::string out;
-        auto writer = makeJsonWriter(out);
+        auto writer = make_json_writer(out);
         // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
         (void)writer.start_object();
         (void)writer.key("type");
@@ -211,7 +211,7 @@ public:
         (void)writer.start_object();
         for (const auto& prop : m_properties) {
             (void)writer.key(prop.name);
-            writeProperty(writer, prop);
+            write_property(writer, prop);
         }
         (void)writer.end_object();
 
@@ -274,7 +274,7 @@ private:
      * @param writer JSON写入器
      * @param prop 属性定义
      */
-    static void writeProperty(json::stream::StreamWriter& writer, const Property& prop) {
+    static void write_property(json::stream::StreamWriter& writer, const Property& prop) {
         // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
         if (prop.kind == PropertyKind::Object && !prop.objectSchema.empty()) {
             if (prop.description.empty()) {
@@ -295,7 +295,7 @@ private:
             const json::Json& obj = parsed.value().root();
 
             std::string mergedOut;
-            auto merged = makeJsonWriter(mergedOut);
+            auto merged = make_json_writer(mergedOut);
             // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
             (void)merged.start_object();
             (void)merged.key("description");
@@ -403,7 +403,7 @@ public:
      * @param required 是否为必填参数
      * @return 当前构建器引用，支持链式调用
      */
-    PromptArgumentBuilder& addArgument(const std::string& name,
+    PromptArgumentBuilder& add_argument(const std::string& name,
                                        const std::string& description,
                                        bool required = false) {
         PromptArgument arg;

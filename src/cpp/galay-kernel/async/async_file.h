@@ -46,7 +46,7 @@ enum class FileOpenMode : int {
  * @brief 基于 kqueue 和 io_uring 后端的协程友好异步文件
  *
  * @details 封装 IOController，通过调度器的可等待类型提供独立的异步读、写和关闭操作。
- * 不支持 AsyncAio 使用的批量 preRead/preWrite/commit 模式。
+ * 不支持 AsyncAio 使用的批量 pre_read/pre_write/commit 模式。
  *
  * @note 对于基于 epoll 的系统，请使用 AsyncAio。
  */
@@ -158,11 +158,11 @@ public:
      * @brief 获取内部 IO 控制器（用于高级操作）
      * @return IOController 指针；移动后的源对象返回 nullptr
      */
-    galay::kernel::IOController* getController() { return m_controller.get(); }
+    galay::kernel::IOController* get_controller() { return m_controller.get(); }
 
 private:
     // 析构、移动赋值和 adopt 无错误返回通道；关闭失败记录原始 errno。
-    void releaseOwnedHandle() noexcept;
+    void release_owned_handle() noexcept;
 
     std::unique_ptr<galay::kernel::IOController> m_controller;
 };

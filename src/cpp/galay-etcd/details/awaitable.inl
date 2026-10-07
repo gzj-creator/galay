@@ -6,8 +6,8 @@
 details::PostJsonAwaitable::Context::Context(AsyncEtcdClient& client,
                                              std::string api_path,
                                              std::string body)
-    : awaitable(client.m_http_session->sendSerializedRequest(
-          client.buildSerializedPostRequest(api_path, body)))
+    : awaitable(client.m_http_session->send_serialized_request(
+          client.build_serialized_post_request(api_path, body)))
     , owner(&client)
 {
 }
@@ -20,7 +20,7 @@ details::PostJsonAwaitable::PostJsonAwaitable(
     : m_ctx(std::nullopt)
 {
     if (!client.m_connected || client.m_socket == nullptr || client.m_http_session == nullptr) {
-        client.setError(EtcdErrorType::NotConnected, "etcd client is not connected");
+        client.set_error(EtcdErrorType::NotConnected, "etcd client is not connected");
         return;
     }
 
@@ -28,7 +28,7 @@ details::PostJsonAwaitable::PostJsonAwaitable(
 
     if (force_timeout.has_value()) {
         m_ctx->awaitable.timeout(force_timeout.value());
-    } else if (client.m_network_config.isRequestTimeoutEnabled()) {
+    } else if (client.m_network_config.is_request_timeout_enabled()) {
         m_ctx->awaitable.timeout(client.m_network_config.request_timeout);
     }
 }
@@ -47,8 +47,8 @@ std::expected<std::string, EtcdError> details::PostJsonAwaitable::await_resume()
 
     auto response_result = m_ctx->awaitable.await_resume();
     if (!response_result.has_value()) {
-        const auto mapped = mapHttpError(response_result.error());
-        m_ctx->owner->setError(mapped);
+        const auto mapped = map_http_error(response_result.error());
+        m_ctx->owner->set_error(mapped);
         ETCD_LOG_ERROR("[async] [request]", "http request failed endpoint={} error={}",
                        m_ctx->owner->m_config.endpoint,
                        mapped.message());
@@ -57,7 +57,7 @@ std::expected<std::string, EtcdError> details::PostJsonAwaitable::await_resume()
 
     if (!response_result->has_value()) {
         EtcdError error(EtcdErrorType::Internal, "http response incomplete");
-        m_ctx->owner->setError(error);
+        m_ctx->owner->set_error(error);
         ETCD_LOG_ERROR("[async] [request]", "http response incomplete endpoint={}",
                        m_ctx->owner->m_config.endpoint);
         return std::unexpected(error);
@@ -65,14 +65,14 @@ std::expected<std::string, EtcdError> details::PostJsonAwaitable::await_resume()
 
     auto response = std::move(response_result->value());
     const int status_code = static_cast<int>(response.header().code());
-    const std::string response_body = response.getBodyStr();
+    const std::string response_body = response.get_body_str();
 
     if (status_code < 200 || status_code >= 300) {
         EtcdError error(
             EtcdErrorType::Server,
             "HTTP status=" + std::to_string(status_code) +
             ", body=" + response_body);
-        m_ctx->owner->setError(error);
+        m_ctx->owner->set_error(error);
         ETCD_LOG_WARN("[async] [request]", "unexpected http status endpoint={} status={} body_size={}",
                       m_ctx->owner->m_config.endpoint,
                       status_code,
@@ -93,7 +93,7 @@ details::JsonOpAwaitableBase::JsonOpAwaitableBase(AsyncEtcdClient& client)
 {
 }
 
-void details::JsonOpAwaitableBase::startPost(
+void details::JsonOpAwaitableBase::start_post(
     std::string api_path,
     std::string body,
     std::optional<std::chrono::milliseconds> force_timeout)
@@ -101,14 +101,14 @@ void details::JsonOpAwaitableBase::startPost(
     m_post_awaitable.emplace(*m_client, std::move(api_path), std::move(body), force_timeout);
 }
 
-bool details::JsonOpAwaitableBase::awaitReady() const noexcept
+bool details::JsonOpAwaitableBase::await_ready() const noexcept
 {
     return !m_post_awaitable.has_value() || m_post_awaitable->await_ready();
 }
 
-std::expected<std::string, EtcdError> details::JsonOpAwaitableBase::resumePost()
+std::expected<std::string, EtcdError> details::JsonOpAwaitableBase::resume_post()
 {
-    return m_client->resumePostOrCurrent(
+    return m_client->resume_post_or_current(
         m_post_awaitable.has_value() ? &*m_post_awaitable : nullptr);
 }
 
@@ -118,31 +118,31 @@ details::PutAwaitable::PutAwaitable(AsyncEtcdClient& client,
                                    std::optional<int64_t> lease_id)
     : JsonOpAwaitableBase(client)
 {
-    m_client->resetLastOperation();
-    auto body = buildPutRequestBody(key, value, lease_id);
+    m_client->reset_last_operation();
+    auto body = build_put_request_body(key, value, lease_id);
     if (!body.has_value()) {
-        m_client->setError(body.error());
+        m_client->set_error(body.error());
         return;
     }
 
-    startPost("/kv/put", std::move(body.value()));
+    start_post("/kv/put", std::move(body.value()));
 }
 
 bool details::PutAwaitable::await_ready() const noexcept
 {
-    return awaitReady();
+    return await_ready();
 }
 
 EtcdBoolResult details::PutAwaitable::await_resume()
 {
-    auto response_body = resumePost();
+    auto response_body = resume_post();
     if (!response_body.has_value()) {
         return std::unexpected(response_body.error());
     }
 
-    auto put_result = parsePutResponse(response_body.value());
+    auto put_result = parse_put_response(response_body.value());
     if (!put_result.has_value()) {
-        m_client->setError(put_result.error());
+        m_client->set_error(put_result.error());
         return std::unexpected(put_result.error());
     }
 
@@ -152,10 +152,10 @@ EtcdBoolResult details::PutAwaitable::await_resume()
 details::ConnectAwaitable::SharedState::SharedState(AsyncEtcdClient& owner)
     : client(&owner)
 {
-    client->resetLastOperation();
+    client->reset_last_operation();
     if (client->m_scheduler == nullptr) {
         EtcdError error(EtcdErrorType::Internal, "IOScheduler is null");
-        client->setError(error);
+        client->set_error(error);
         ETCD_LOG_ERROR("[async] [connect]", "scheduler is null endpoint={}",
                        client->m_config.endpoint);
         result = std::unexpected(error);
@@ -174,7 +174,7 @@ details::ConnectAwaitable::SharedState::SharedState(AsyncEtcdClient& owner)
             ? "invalid endpoint"
             : client->m_endpoint_error;
         EtcdError error(EtcdErrorType::InvalidEndpoint, message);
-        client->setError(error);
+        client->set_error(error);
         ETCD_LOG_ERROR("[async] [connect]", "invalid endpoint endpoint={} error={}",
                        client->m_config.endpoint,
                        error.message());
@@ -184,10 +184,10 @@ details::ConnectAwaitable::SharedState::SharedState(AsyncEtcdClient& owner)
 
     try {
         client->m_socket = std::make_unique<galay::async::AsyncTcpSocket>(client->m_ip_type);
-        auto nonblock_result = client->m_socket->option().handleNonBlock();
+        auto nonblock_result = client->m_socket->option().handle_non_block();
         if (!nonblock_result.has_value()) {
-            EtcdError error = mapKernelIoError(nonblock_result.error(), EtcdErrorType::Connection);
-            client->setError(error);
+            EtcdError error = map_kernel_io_error(nonblock_result.error(), EtcdErrorType::Connection);
+            client->set_error(error);
             ETCD_LOG_ERROR("[async] [connect]", "set nonblocking failed endpoint={} error={}",
                            client->m_config.endpoint,
                            error.message());
@@ -198,10 +198,10 @@ details::ConnectAwaitable::SharedState::SharedState(AsyncEtcdClient& owner)
         }
 
         if (client->m_network_config.tcp_no_delay) {
-            auto nodelay_result = client->m_socket->option().handleTcpNoDelay();
+            auto nodelay_result = client->m_socket->option().handle_tcp_no_delay();
             if (!nodelay_result.has_value()) {
-                EtcdError error = mapKernelIoError(nodelay_result.error(), EtcdErrorType::Connection);
-                client->setError(error);
+                EtcdError error = map_kernel_io_error(nodelay_result.error(), EtcdErrorType::Connection);
+                client->set_error(error);
                 ETCD_LOG_ERROR("[async] [connect]", "set TCP_NODELAY failed endpoint={} error={}",
                                client->m_config.endpoint,
                                error.message());
@@ -218,7 +218,7 @@ details::ConnectAwaitable::SharedState::SharedState(AsyncEtcdClient& owner)
                       client->m_config.endpoint);
     } catch (const std::exception& ex) {
         EtcdError error(EtcdErrorType::Connection, ex.what());
-        client->setError(error);
+        client->set_error(error);
         ETCD_LOG_ERROR("[async] [connect]", "prepare connect failed endpoint={} error={}",
                        client->m_config.endpoint,
                        error.message());
@@ -242,19 +242,19 @@ details::ConnectAwaitable::Machine::advance()
     }
 
     if (m_state->phase == Phase::Connect) {
-        return galay::kernel::MachineAction<result_type>::waitConnect(m_state->host);
+        return galay::kernel::MachineAction<result_type>::wait_connect(m_state->host);
     }
 
-    m_state->result = m_state->client->currentBoolResult();
+    m_state->result = m_state->client->current_bool_result();
     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
 }
 
-void details::ConnectAwaitable::Machine::onConnect(
+void details::ConnectAwaitable::Machine::on_connect(
     std::expected<void, galay::kernel::IOError> result)
 {
     if (!result.has_value()) {
-        EtcdError error = mapKernelIoError(result.error());
-        m_state->client->setError(error);
+        EtcdError error = map_kernel_io_error(result.error());
+        m_state->client->set_error(error);
         ETCD_LOG_ERROR("[async] [connect]", "connect failed endpoint={} error={}",
                        m_state->client->m_config.endpoint,
                        error.message());
@@ -277,7 +277,7 @@ void details::ConnectAwaitable::Machine::onConnect(
     } catch (const std::exception& ex) {
         EtcdError error(EtcdErrorType::Internal,
                         std::string("create http session failed: ") + ex.what());
-        m_state->client->setError(error);
+        m_state->client->set_error(error);
         ETCD_LOG_ERROR("[async] [connect]", "create http session failed endpoint={} error={}",
                        m_state->client->m_config.endpoint,
                        error.message());
@@ -290,12 +290,12 @@ void details::ConnectAwaitable::Machine::onConnect(
     m_state->phase = Phase::Done;
 }
 
-void details::ConnectAwaitable::Machine::onRead(
+void details::ConnectAwaitable::Machine::on_read(
     std::expected<size_t, galay::kernel::IOError>)
 {
 }
 
-void details::ConnectAwaitable::Machine::onWrite(
+void details::ConnectAwaitable::Machine::on_write(
     std::expected<size_t, galay::kernel::IOError>)
 {
 }
@@ -304,9 +304,9 @@ details::ConnectAwaitable::ConnectAwaitable(AsyncEtcdClient& client)
     : m_state(std::make_shared<SharedState>(client))
 {
     auto* controller =
-        client.m_socket != nullptr ? client.m_socket->controller() : &invalidController();
+        client.m_socket != nullptr ? client.m_socket->controller() : &invalid_controller();
     m_inner = std::make_unique<InnerAwaitable>(
-        galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
+        galay::kernel::AwaitableBuilder<Result>::from_state_machine(
             controller,
             Machine(m_state))
             .build());
@@ -325,18 +325,18 @@ EtcdBoolResult details::ConnectAwaitable::await_resume()
 details::CloseAwaitable::CloseAwaitable(AsyncEtcdClient& client)
     : IoAwaitableBase(client)
 {
-    m_client->resetLastOperation();
+    m_client->reset_last_operation();
     if (m_client->m_socket == nullptr) {
         m_client->m_http_session.reset();
         m_client->m_connected = false;
         return;
     }
-    startIo(m_client->m_socket->close());
+    start_io(m_client->m_socket->close());
 }
 
 bool details::CloseAwaitable::await_ready() const noexcept
 {
-    return awaitReady();
+    return await_ready();
 }
 
 EtcdBoolResult details::CloseAwaitable::await_resume()
@@ -346,18 +346,18 @@ EtcdBoolResult details::CloseAwaitable::await_resume()
     if (io_awaitable.has_value()) {
         auto close_result = io_awaitable->await_resume();
         if (!close_result.has_value()) {
-            EtcdError error = mapKernelIoError(close_result.error());
-            m_client->setError(error);
+            EtcdError error = map_kernel_io_error(close_result.error());
+            m_client->set_error(error);
             ETCD_LOG_ERROR("[async] [close]", "close failed endpoint={} error={}",
                            m_client->m_config.endpoint,
                            error.message());
             result = std::unexpected(error);
         }
     } else {
-        result = m_client->currentBoolResult();
+        result = m_client->current_bool_result();
     }
 
-    m_client->stopWatchWorkers();
+    m_client->stop_watch_workers();
     m_client->m_http_session.reset();
     m_client->m_socket.reset();
     m_client->m_connected = false;
@@ -371,31 +371,31 @@ details::GetAwaitable::GetAwaitable(AsyncEtcdClient& client,
                                    std::optional<int64_t> limit)
     : JsonOpAwaitableBase(client)
 {
-    m_client->resetLastOperation();
-    auto body = buildGetRequestBody(key, prefix, limit);
+    m_client->reset_last_operation();
+    auto body = build_get_request_body(key, prefix, limit);
     if (!body.has_value()) {
-        m_client->setError(body.error());
+        m_client->set_error(body.error());
         return;
     }
 
-    startPost("/kv/range", std::move(body.value()));
+    start_post("/kv/range", std::move(body.value()));
 }
 
 bool details::GetAwaitable::await_ready() const noexcept
 {
-    return awaitReady();
+    return await_ready();
 }
 
 EtcdGetResult details::GetAwaitable::await_resume()
 {
-    auto response_body = resumePost();
+    auto response_body = resume_post();
     if (!response_body.has_value()) {
         return std::unexpected(response_body.error());
     }
 
-    auto kvs_result = parseGetResponseKvs(response_body.value());
+    auto kvs_result = parse_get_response_kvs(response_body.value());
     if (!kvs_result.has_value()) {
-        m_client->setError(kvs_result.error());
+        m_client->set_error(kvs_result.error());
         return std::unexpected(kvs_result.error());
     }
 
@@ -407,31 +407,31 @@ details::DeleteAwaitable::DeleteAwaitable(AsyncEtcdClient& client,
                                          bool prefix)
     : JsonOpAwaitableBase(client)
 {
-    m_client->resetLastOperation();
-    auto body = buildDeleteRequestBody(key, prefix);
+    m_client->reset_last_operation();
+    auto body = build_delete_request_body(key, prefix);
     if (!body.has_value()) {
-        m_client->setError(body.error());
+        m_client->set_error(body.error());
         return;
     }
 
-    startPost("/kv/deleterange", std::move(body.value()));
+    start_post("/kv/deleterange", std::move(body.value()));
 }
 
 bool details::DeleteAwaitable::await_ready() const noexcept
 {
-    return awaitReady();
+    return await_ready();
 }
 
 EtcdDeleteResult details::DeleteAwaitable::await_resume()
 {
-    auto response_body = resumePost();
+    auto response_body = resume_post();
     if (!response_body.has_value()) {
         return std::unexpected(response_body.error());
     }
 
-    auto deleted_result = parseDeleteResponseDeletedCount(response_body.value());
+    auto deleted_result = parse_delete_response_deleted_count(response_body.value());
     if (!deleted_result.has_value()) {
-        m_client->setError(deleted_result.error());
+        m_client->set_error(deleted_result.error());
         return std::unexpected(deleted_result.error());
     }
     return deleted_result.value();
@@ -442,31 +442,31 @@ details::GrantLeaseAwaitable::GrantLeaseAwaitable(
     int64_t ttl_seconds)
     : JsonOpAwaitableBase(client)
 {
-    m_client->resetLastOperation();
-    auto body = buildLeaseGrantRequestBody(ttl_seconds);
+    m_client->reset_last_operation();
+    auto body = build_lease_grant_request_body(ttl_seconds);
     if (!body.has_value()) {
-        m_client->setError(body.error());
+        m_client->set_error(body.error());
         return;
     }
 
-    startPost("/lease/grant", std::move(body.value()));
+    start_post("/lease/grant", std::move(body.value()));
 }
 
 bool details::GrantLeaseAwaitable::await_ready() const noexcept
 {
-    return awaitReady();
+    return await_ready();
 }
 
 EtcdLeaseGrantResult details::GrantLeaseAwaitable::await_resume()
 {
-    auto response_body = resumePost();
+    auto response_body = resume_post();
     if (!response_body.has_value()) {
         return std::unexpected(response_body.error());
     }
 
-    auto lease_result = parseLeaseGrantResponseId(response_body.value());
+    auto lease_result = parse_lease_grant_response_id(response_body.value());
     if (!lease_result.has_value()) {
-        m_client->setError(lease_result.error());
+        m_client->set_error(lease_result.error());
         return std::unexpected(lease_result.error());
     }
     return lease_result.value();
@@ -478,36 +478,36 @@ details::KeepAliveAwaitable::KeepAliveAwaitable(
     : JsonOpAwaitableBase(client)
     , m_lease_id(lease_id)
 {
-    m_client->resetLastOperation();
-    auto body = buildLeaseKeepAliveRequestBody(m_lease_id);
+    m_client->reset_last_operation();
+    auto body = build_lease_keep_alive_request_body(m_lease_id);
     if (!body.has_value()) {
-        m_client->setError(body.error());
+        m_client->set_error(body.error());
         return;
     }
 
     std::optional<std::chrono::milliseconds> timeout = std::nullopt;
-    if (!m_client->m_network_config.isRequestTimeoutEnabled()) {
+    if (!m_client->m_network_config.is_request_timeout_enabled()) {
         timeout = std::chrono::seconds(5);
     }
 
-    startPost("/lease/keepalive", std::move(body.value()), timeout);
+    start_post("/lease/keepalive", std::move(body.value()), timeout);
 }
 
 bool details::KeepAliveAwaitable::await_ready() const noexcept
 {
-    return awaitReady();
+    return await_ready();
 }
 
 EtcdLeaseGrantResult details::KeepAliveAwaitable::await_resume()
 {
-    auto response_body = resumePost();
+    auto response_body = resume_post();
     if (!response_body.has_value()) {
         return std::unexpected(response_body.error());
     }
 
-    auto keepalive_result = parseLeaseKeepAliveResponseId(response_body.value(), m_lease_id);
+    auto keepalive_result = parse_lease_keep_alive_response_id(response_body.value(), m_lease_id);
     if (!keepalive_result.has_value()) {
-        m_client->setError(keepalive_result.error());
+        m_client->set_error(keepalive_result.error());
         return std::unexpected(keepalive_result.error());
     }
 
@@ -518,18 +518,18 @@ details::PipelineAwaitable::PipelineAwaitable(AsyncEtcdClient& client,
                                               std::span<const PipelineOp> operations)
     : JsonOpAwaitableBase(client)
 {
-    m_client->resetLastOperation();
+    m_client->reset_last_operation();
     m_operation_types.reserve(operations.size());
     for (const auto& op : operations) {
         m_operation_types.push_back(op.type);
     }
 
-    auto body = buildTxnBody(operations);
+    auto body = build_txn_body(operations);
     if (!body.has_value()) {
-        m_client->setError(body.error());
+        m_client->set_error(body.error());
         return;
     }
-    startPost("/kv/txn", std::move(body.value()));
+    start_post("/kv/txn", std::move(body.value()));
 }
 
 details::PipelineAwaitable::PipelineAwaitable(AsyncEtcdClient& client,
@@ -540,21 +540,21 @@ details::PipelineAwaitable::PipelineAwaitable(AsyncEtcdClient& client,
 
 bool details::PipelineAwaitable::await_ready() const noexcept
 {
-    return awaitReady();
+    return await_ready();
 }
 
 EtcdPipelineResult details::PipelineAwaitable::await_resume()
 {
-    auto response_body = resumePost();
+    auto response_body = resume_post();
     if (!response_body.has_value()) {
         return std::unexpected(response_body.error());
     }
 
-    auto pipeline_results = parsePipelineTxnResponse(
+    auto pipeline_results = parse_pipeline_txn_response(
         response_body.value(),
         std::span<const PipelineOpType>(m_operation_types.data(), m_operation_types.size()));
     if (!pipeline_results.has_value()) {
-        m_client->setError(pipeline_results.error());
+        m_client->set_error(pipeline_results.error());
         return std::unexpected(pipeline_results.error());
     }
 

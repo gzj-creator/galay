@@ -102,19 +102,19 @@ struct H2OutboundQueues
 class Http2OutboundScheduler
 {
 public:
-    static H2OutboundSelection pickSendableFrames(H2OutboundBudget budget,
+    static H2OutboundSelection pick_sendable_frames(H2OutboundBudget budget,
                                                   std::vector<H2StreamSendState>& streams,
                                                   H2SchedulerConfig config = {});
 
-    static H2OutboundSelection pickSendableFrames(H2OutboundBudget budget,
+    static H2OutboundSelection pick_sendable_frames(H2OutboundBudget budget,
                                                   H2OutboundQueues& queues,
                                                   H2SchedulerConfig config = {});
 
-    static H2OutboundBytesSelection pickSendableBytes(H2OutboundBudget budget,
+    static H2OutboundBytesSelection pick_sendable_bytes(H2OutboundBudget budget,
                                                       H2OutboundQueues& queues,
                                                       H2SchedulerConfig config = {});
 
-    static H2OutboundBytesSelection pickSendableBytes(H2OutboundBudget budget,
+    static H2OutboundBytesSelection pick_sendable_bytes(H2OutboundBudget budget,
                                                       std::vector<H2StreamSendState>& streams,
                                                       H2SchedulerConfig config = {});
 };

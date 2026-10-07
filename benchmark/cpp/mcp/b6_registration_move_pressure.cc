@@ -30,7 +30,7 @@ struct BenchmarkResult {
     std::int64_t elapsedUs = 0;
 };
 
-bool parseIterations(int argc, char** argv, std::size_t& registrations)
+bool parse_iterations(int argc, char** argv, std::size_t& registrations)
 {
     if (argc <= 1) {
         return true;
@@ -48,7 +48,7 @@ bool parseIterations(int argc, char** argv, std::size_t& registrations)
     return true;
 }
 
-std::string makeLargeSchema()
+std::string make_large_schema()
 {
     constexpr std::size_t fieldCount = 32;
     constexpr std::size_t descriptionBytes = 256;
@@ -71,7 +71,7 @@ std::string makeLargeSchema()
     return schema;
 }
 
-std::vector<galay::mcp::PromptArgument> makeLargeArguments()
+std::vector<galay::mcp::PromptArgument> make_large_arguments()
 {
     constexpr std::size_t argumentCount = 64;
     constexpr std::size_t descriptionBytes = 128;
@@ -189,12 +189,12 @@ public:
 };
 
 template <typename Function, typename Callable>
-Function makeCountingFunction(const std::shared_ptr<CopyStats>& stats)
+Function make_counting_function(const std::shared_ptr<CopyStats>& stats)
 {
     return Function{Callable(stats)};
 }
 
-BenchmarkResult runStdioRegistration(std::size_t registrations,
+BenchmarkResult run_stdio_registration(std::size_t registrations,
                                       const std::string& schemaTemplate,
                                       const std::vector<galay::mcp::PromptArgument>& argumentsTemplate)
 {
@@ -205,25 +205,25 @@ BenchmarkResult runStdioRegistration(std::size_t registrations,
     for (std::size_t i = 0; i < registrations; ++i) {
         const std::string suffix = std::to_string(i);
         auto tool =
-            makeCountingFunction<galay::mcp::McpStdioServer::ToolHandler, StdioToolHandler>(stats);
+            make_counting_function<galay::mcp::McpStdioServer::ToolHandler, StdioToolHandler>(stats);
         auto resource =
-            makeCountingFunction<galay::mcp::McpStdioServer::ResourceReader, StdioResourceReader>(stats);
+            make_counting_function<galay::mcp::McpStdioServer::ResourceReader, StdioResourceReader>(stats);
         auto prompt =
-            makeCountingFunction<galay::mcp::McpStdioServer::PromptGetter, StdioPromptGetter>(stats);
+            make_counting_function<galay::mcp::McpStdioServer::PromptGetter, StdioPromptGetter>(stats);
 
         std::string schema = schemaTemplate;
         std::vector<galay::mcp::PromptArgument> arguments = argumentsTemplate;
 
-        server.addTool("stdio-tool-" + suffix,
+        server.add_tool("stdio-tool-" + suffix,
                        "Stdio tool " + suffix,
                        std::move(schema),
                        std::move(tool));
-        server.addResource("mem://stdio/" + suffix,
+        server.add_resource("mem://stdio/" + suffix,
                            "stdio-resource-" + suffix,
                            "Stdio resource " + suffix,
                            "text/plain",
                            std::move(resource));
-        server.addPrompt("stdio-prompt-" + suffix,
+        server.add_prompt("stdio-prompt-" + suffix,
                          "Stdio prompt " + suffix,
                          std::move(arguments),
                          std::move(prompt));
@@ -236,7 +236,7 @@ BenchmarkResult runStdioRegistration(std::size_t registrations,
     };
 }
 
-BenchmarkResult runHttpRegistration(std::size_t registrations,
+BenchmarkResult run_http_registration(std::size_t registrations,
                                      const std::string& schemaTemplate,
                                      const std::vector<galay::mcp::PromptArgument>& argumentsTemplate)
 {
@@ -247,25 +247,25 @@ BenchmarkResult runHttpRegistration(std::size_t registrations,
     for (std::size_t i = 0; i < registrations; ++i) {
         const std::string suffix = std::to_string(i);
         auto tool =
-            makeCountingFunction<galay::mcp::McpHttpServer::ToolHandler, HttpToolHandler>(stats);
+            make_counting_function<galay::mcp::McpHttpServer::ToolHandler, HttpToolHandler>(stats);
         auto resource =
-            makeCountingFunction<galay::mcp::McpHttpServer::ResourceReader, HttpResourceReader>(stats);
+            make_counting_function<galay::mcp::McpHttpServer::ResourceReader, HttpResourceReader>(stats);
         auto prompt =
-            makeCountingFunction<galay::mcp::McpHttpServer::PromptGetter, HttpPromptGetter>(stats);
+            make_counting_function<galay::mcp::McpHttpServer::PromptGetter, HttpPromptGetter>(stats);
 
         std::string schema = schemaTemplate;
         std::vector<galay::mcp::PromptArgument> arguments = argumentsTemplate;
 
-        server.addTool("http-tool-" + suffix,
+        server.add_tool("http-tool-" + suffix,
                        "HTTP tool " + suffix,
                        std::move(schema),
                        std::move(tool));
-        server.addResource("mem://http/" + suffix,
+        server.add_resource("mem://http/" + suffix,
                            "http-resource-" + suffix,
                            "HTTP resource " + suffix,
                            "text/plain",
                            std::move(resource));
-        server.addPrompt("http-prompt-" + suffix,
+        server.add_prompt("http-prompt-" + suffix,
                          "HTTP prompt " + suffix,
                          std::move(arguments),
                          std::move(prompt));
@@ -282,20 +282,20 @@ BenchmarkResult runHttpRegistration(std::size_t registrations,
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     std::size_t registrations = 500;
-    if (!parseIterations(argc, argv, registrations)) {
+    if (!parse_iterations(argc, argv, registrations)) {
         return 2;
     }
 
-    const auto schema = makeLargeSchema();
-    const auto arguments = makeLargeArguments();
+    const auto schema = make_large_schema();
+    const auto arguments = make_large_arguments();
 
-    const auto stdio = runStdioRegistration(registrations, schema, arguments);
-    const auto http = runHttpRegistration(registrations, schema, arguments);
+    const auto stdio = run_stdio_registration(registrations, schema, arguments);
+    const auto http = run_http_registration(registrations, schema, arguments);
     const auto totalCopies = stdio.callableCopies + http.callableCopies;
 
     std::cout << "MCP registration move pressure registrations per server: " << registrations << '\n';

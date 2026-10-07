@@ -23,7 +23,7 @@ import toml;
 
 int main()
 {
-    const auto page_size = galay::utils::Memory::pageSize();
+    const auto page_size = galay::utils::Memory::page_size();
     assert(page_size && *page_size > 0);
     galay::http::HttpRequest request;
     auto config = galay::redis::ConnectionPoolConfig::create("127.0.0.1", 1, 0, 1);

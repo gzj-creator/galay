@@ -16,7 +16,7 @@
 using namespace galay::http2;
 
 // 模拟典型 HTTP/2 请求头
-static std::vector<Http2HeaderField> makeRequestHeaders(int variant) {
+static std::vector<Http2HeaderField> make_request_headers(int variant) {
     std::vector<Http2HeaderField> h;
     h.push_back({":method", "GET"});
     h.push_back({":scheme", "https"});
@@ -32,7 +32,7 @@ static std::vector<Http2HeaderField> makeRequestHeaders(int variant) {
 }
 
 // 模拟典型 HTTP/2 响应头
-static std::vector<Http2HeaderField> makeResponseHeaders(int variant) {
+static std::vector<Http2HeaderField> make_response_headers(int variant) {
     std::vector<Http2HeaderField> h;
     h.push_back({":status", "200"});
     h.push_back({"content-type", "application/json; charset=utf-8"});
@@ -52,19 +52,19 @@ struct BenchResult {
     size_t total_encoded_bytes;
 };
 
-BenchResult runBench(int iterations) {
+BenchResult run_bench(int iterations) {
     // 预生成头部列表（模拟不同请求）
     constexpr int kVariants = 256;
     std::vector<std::vector<Http2HeaderField>> req_headers(kVariants);
     std::vector<std::vector<Http2HeaderField>> resp_headers(kVariants);
     for (int i = 0; i < kVariants; i++) {
-        req_headers[i] = makeRequestHeaders(i);
-        resp_headers[i] = makeResponseHeaders(i);
+        req_headers[i] = make_request_headers(i);
+        resp_headers[i] = make_response_headers(i);
     }
 
     BenchResult result{};
 
-    // ---- Encode benchmark ----
+    // ---- encode benchmark ----
     {
         size_t total_bytes = 0;
         auto t0 = std::chrono::steady_clock::now();
@@ -84,7 +84,7 @@ BenchResult runBench(int iterations) {
         result.total_encoded_bytes = total_bytes;
     }
 
-    // ---- Decode benchmark ----
+    // ---- decode benchmark ----
     // 先编码一批数据用于解码
     std::vector<std::string> encoded_blocks;
     {
@@ -117,7 +117,7 @@ BenchResult runBench(int iterations) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -133,7 +133,7 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================\n\n";
 
     // Warmup
-    runBench(10);
+    run_bench(10);
 
     // Real run (3 rounds, take best)
     constexpr int kRounds = 3;
@@ -141,7 +141,7 @@ int main(int argc, char* argv[]) {
     double best_encode_ns = 1e18, best_decode_ns = 1e18;
 
     for (int r = 0; r < kRounds; r++) {
-        auto res = runBench(iterations);
+        auto res = run_bench(iterations);
         std::cout << "Round " << (r + 1) << ": "
                   << "encode=" << static_cast<int>(res.encode_ops) << " ops/s ("
                   << static_cast<int>(res.encode_ns) << " ns/op)  "

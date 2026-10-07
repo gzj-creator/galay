@@ -20,11 +20,11 @@ void require(bool condition, std::string_view message)
     }
 }
 
-void testDefaultsAndFactories()
+void test_defaults_and_factories()
 {
     using namespace galay::postgres;
 
-    const PostgresConfig defaults = PostgresConfig::defaultConfig();
+    const PostgresConfig defaults = PostgresConfig::default_config();
     require(defaults.host == "127.0.0.1", "default host mismatch");
     require(defaults.port == 5432, "default port mismatch");
     require(defaults.username.empty(), "default username must be empty");
@@ -44,24 +44,24 @@ void testDefaultsAndFactories()
     require(created.connect_timeout_ms == 5000, "factory must preserve timeout default");
 
     const AsyncPostgresConfig async_defaults{};
-    require(!async_defaults.isSendTimeoutEnabled(), "send timeout must be disabled by default");
-    require(!async_defaults.isRecvTimeoutEnabled(), "receive timeout must be disabled by default");
+    require(!async_defaults.is_send_timeout_enabled(), "send timeout must be disabled by default");
+    require(!async_defaults.is_recv_timeout_enabled(), "receive timeout must be disabled by default");
     require(async_defaults.buffer_size == 16384, "default receive buffer mismatch");
     require(async_defaults.result_row_reserve_hint == 0, "default row reserve mismatch");
     require(async_defaults.tcp_no_delay, "async TCP_NODELAY must be enabled by default");
 
-    const AsyncPostgresConfig timed = AsyncPostgresConfig::withTimeout(250ms, 750ms);
-    require(timed.isSendTimeoutEnabled() && timed.send_timeout == 250ms,
+    const AsyncPostgresConfig timed = AsyncPostgresConfig::with_timeout(250ms, 750ms);
+    require(timed.is_send_timeout_enabled() && timed.send_timeout == 250ms,
             "send timeout factory mismatch");
-    require(timed.isRecvTimeoutEnabled() && timed.recv_timeout == 750ms,
+    require(timed.is_recv_timeout_enabled() && timed.recv_timeout == 750ms,
             "receive timeout factory mismatch");
 
-    const AsyncPostgresConfig untimed = AsyncPostgresConfig::noTimeout();
-    require(!untimed.isSendTimeoutEnabled() && !untimed.isRecvTimeoutEnabled(),
+    const AsyncPostgresConfig untimed = AsyncPostgresConfig::no_timeout();
+    require(!untimed.is_send_timeout_enabled() && !untimed.is_recv_timeout_enabled(),
             "noTimeout must disable both directions");
 }
 
-void testErrorMappingAndServerMetadata()
+void test_error_mapping_and_server_metadata()
 {
     using namespace galay::postgres;
 
@@ -87,7 +87,7 @@ void testErrorMappingAndServerMetadata()
         const PostgresError error(type);
         require(error.type() == type, "error type accessor mismatch");
         require(!error.message().empty(), "every public error type needs a message");
-        require(error.sqlState().empty(), "local errors must not have SQLSTATE");
+        require(error.sql_state().empty(), "local errors must not have SQLSTATE");
         require(error.severity().empty(), "local errors must not have severity");
     }
 
@@ -99,7 +99,7 @@ void testErrorMappingAndServerMetadata()
                                "42601",
                                "ERROR",
                                "syntax error at or near SELECT");
-    require(server.sqlState() == "42601", "server SQLSTATE mismatch");
+    require(server.sql_state() == "42601", "server SQLSTATE mismatch");
     require(server.severity() == "ERROR", "server severity mismatch");
     require(server.message().find("42601") != std::string::npos,
             "formatted server error must include SQLSTATE");
@@ -115,7 +115,7 @@ void testErrorMappingAndServerMetadata()
 
 int main()
 {
-    testDefaultsAndFactories();
-    testErrorMappingAndServerMetadata();
+    test_defaults_and_factories();
+    test_error_mapping_and_server_metadata();
     return EXIT_SUCCESS;
 }

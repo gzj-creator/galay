@@ -79,8 +79,8 @@ galay::http::HttpResponse get(std::uint16_t port, std::string_view path)
     close_fd(fd);
     galay::http::HttpResponse response;
     std::vector<iovec> views{{.iov_base = bytes.data(), .iov_len = bytes.size()}};
-    const auto [error, consumed] = response.fromIOVec(views);
-    require(error == galay::http::kNoError && consumed > 0 && response.isComplete(), "complete HTTP response");
+    const auto [error, consumed] = response.from_io_vec(views);
+    require(error == galay::http::kNoError && consumed > 0 && response.is_complete(), "complete HTTP response");
     require(response.header().code() == galay::http::HttpStatusCode::OK_200, "HTTP status 200");
     return response;
 }
@@ -108,22 +108,22 @@ int main()
     config.parallel_scheduler_count = 1;
     ApiServer<HttpSwagger> server(config);
     require(server.start(std::move(*prepared)).has_value(), "start default Swagger without deployed files");
-    require(get(config.port, "/value").bodyStr() == "\"installed\"", "typed GET result");
-    require(get(config.port, "/openapi.json").bodyStr() == *document, "immutable REST document");
-    require(get(config.port, "/docs").bodyStr().find("swagger-ui") != std::string::npos, "UI HTML");
+    require(get(config.port, "/value").body_str() == "\"installed\"", "typed GET result");
+    require(get(config.port, "/openapi.json").body_str() == *document, "immutable REST document");
+    require(get(config.port, "/docs").body_str().find("swagger-ui") != std::string::npos, "UI HTML");
     constexpr std::array<std::string_view, 9> names{
         "swagger-ui.css", "swagger-ui-bundle.js", "swagger-ui-standalone-preset.js",
         "favicon-16x16.png", "favicon-32x32.png", "LICENSE", "NOTICE", "README.md", "SHA256SUMS"};
     for (const auto name : names) {
         auto response = get(config.port, "/docs/" + std::string(name));
-        require(!response.bodyStr().empty(), "embedded asset bytes");
-        require(response.header().headerPairs().getValue("X-Content-Type-Options") == "nosniff", "asset nosniff");
+        require(!response.body_str().empty(), "embedded asset bytes");
+        require(response.header().header_pairs().get_value("X-Content-Type-Options") == "nosniff", "asset nosniff");
         if (name.ends_with(".png")) {
-            require(response.bodyStr().starts_with(std::string_view("\x89PNG\r\n\x1a\n", 8)) &&
-                    response.bodyStr().find('\0') != std::string::npos, "PNG signature and embedded NUL survive");
+            require(response.body_str().starts_with(std::string_view("\x89PNG\r\n\x1a\n", 8)) &&
+                    response.body_str().find('\0') != std::string::npos, "PNG signature and embedded NUL survive");
         }
-        if (name == "README.md") require(response.bodyStr().find("5.17.14") != std::string::npos, "pinned version");
-        if (name == "LICENSE") require(response.bodyStr().find("Apache License") != std::string::npos, "license retained");
+        if (name == "README.md") require(response.body_str().find("5.17.14") != std::string::npos, "pinned version");
+        if (name == "LICENSE") require(response.body_str().find("Apache License") != std::string::npos, "license retained");
     }
     server.stop();
     require(std::puts("Relocated installed API loopback and nine embedded resources passed without share") >= 0,

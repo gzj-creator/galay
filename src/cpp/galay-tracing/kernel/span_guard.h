@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 提供 SpanGuard RAII 守卫，在构造时自动创建 Span 并设置当前线程上下文，
- * 析构时自动结束 Span 并恢复之前的上下文。同时提供 startSpan 和 startServerSpan
+ * 析构时自动结束 Span 并恢复之前的上下文。同时提供 start_span 和 start_server_span
  * 便捷函数用于创建不同类型的 Span。
  */
 
@@ -96,7 +96,7 @@ private:
  * @param name Span 操作名称
  * @return 守卫新创建 Span 的 SpanGuard
  */
-[[nodiscard]] SpanGuard startSpan(std::string_view name);
+[[nodiscard]] SpanGuard start_span(std::string_view name);
 
 /**
  * @brief 创建并激活一个新的服务端 Span（带父上下文）
@@ -105,6 +105,6 @@ private:
  * @param parent 父 Span 的追踪上下文
  * @return 守卫新创建 Span 的 SpanGuard
  */
-[[nodiscard]] SpanGuard startServerSpan(std::string_view name, const TraceContext& parent);
+[[nodiscard]] SpanGuard start_server_span(std::string_view name, const TraceContext& parent);
 
 } // namespace galay::tracing

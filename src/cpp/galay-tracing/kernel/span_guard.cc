@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 实现 SpanGuard 的移动语义、上下文保存/恢复逻辑，
- * 以及 startSpan 和 startServerSpan 便捷函数中的采样决策和上下文传播。
+ * 以及 start_span 和 start_server_span 便捷函数中的采样决策和上下文传播。
  */
 
 #include "span_guard.h"
@@ -24,37 +24,37 @@ namespace {
 
 constexpr std::uint8_t kSampledFlag = 0x01;
 
-[[nodiscard]] SpanContext makeRootContext() {
+[[nodiscard]] SpanContext make_root_context() {
     return SpanContext(TraceId::random(), SpanId::random());
 }
 
-[[nodiscard]] SpanContext makeChildContext(const SpanContext& parent) {
-    SpanContext context(parent.traceId(), SpanId::random(), parent.traceFlags());
-    context.setParentSpanId(parent.spanId());
+[[nodiscard]] SpanContext make_child_context(const SpanContext& parent) {
+    SpanContext context(parent.trace_id(), SpanId::random(), parent.trace_flags());
+    context.set_parent_span_id(parent.span_id());
     return context;
 }
 
-[[nodiscard]] SpanContext makeChildContext(const TraceContext& parent) {
-    SpanContext context(parent.traceId(), SpanId::random(), parent.traceFlags());
-    context.setParentSpanId(parent.spanId());
+[[nodiscard]] SpanContext make_child_context(const TraceContext& parent) {
+    SpanContext context(parent.trace_id(), SpanId::random(), parent.trace_flags());
+    context.set_parent_span_id(parent.span_id());
     return context;
 }
 
-[[nodiscard]] SpanContext makeNextContext(const std::optional<SpanContext>& parent) {
-    if (parent.has_value() && parent->isValid()) {
-        return makeChildContext(*parent);
+[[nodiscard]] SpanContext make_next_context(const std::optional<SpanContext>& parent) {
+    if (parent.has_value() && parent->is_valid()) {
+        return make_child_context(*parent);
     }
-    return makeRootContext();
+    return make_root_context();
 }
 
-void applySampling(SpanContext& context, const SpanContext* parent) noexcept {
-    auto flags = context.traceFlags();
-    if (currentSampler().shouldSample(parent, context.traceId())) {
+void apply_sampling(SpanContext& context, const SpanContext* parent) noexcept {
+    auto flags = context.trace_flags();
+    if (current_sampler().should_sample(parent, context.trace_id())) {
         flags |= kSampledFlag;
     } else {
         flags &= static_cast<std::uint8_t>(~kSampledFlag);
     }
-    context.setTraceFlags(flags);
+    context.set_trace_flags(flags);
 }
 
 } // namespace
@@ -102,50 +102,50 @@ void SpanGuard::restore() noexcept {
     }
 
     end();
-    if (m_span.spanContext().sampled()) {
-        if (auto* processor = currentSpanProcessor(); processor != nullptr) {
+    if (m_span.span_context().sampled()) {
+        if (auto* processor = current_span_processor(); processor != nullptr) {
             try {
-                processor->onEnd(std::move(m_span));
+                processor->on_end(std::move(m_span));
             } catch (...) {
             }
         }
     }
     try {
-        detail::setCurrentContextState(detail::CurrentContextState{
+        detail::set_current_context_state(detail::CurrentContextState{
             .tracestate = std::move(m_previousTracestate),
             .spanContext = std::move(m_previousContext),
         });
     } catch (...) {
-        clearCurrentContext();
+        clear_current_context();
     }
     m_active = false;
 }
 
-SpanGuard startSpan(std::string_view name) {
-    auto previous = detail::currentContextState();
-    const auto* parent = previous.spanContext.has_value() && previous.spanContext->isValid()
+SpanGuard start_span(std::string_view name) {
+    auto previous = detail::current_context_state();
+    const auto* parent = previous.spanContext.has_value() && previous.spanContext->is_valid()
         ? &*previous.spanContext
         : nullptr;
-    auto context = makeNextContext(previous.spanContext);
-    applySampling(context, parent);
+    auto context = make_next_context(previous.spanContext);
+    apply_sampling(context, parent);
     auto tracestate = previous.spanContext.has_value() ? previous.tracestate : std::string();
     Span span(std::string(name), context, tracestate);
-    detail::setCurrentContextState(detail::CurrentContextState{
+    detail::set_current_context_state(detail::CurrentContextState{
         .tracestate = tracestate,
         .spanContext = context,
     });
     return SpanGuard(std::move(span), std::move(previous.spanContext), std::move(previous.tracestate));
 }
 
-SpanGuard startServerSpan(std::string_view name, const TraceContext& parent) {
-    auto previous = detail::currentContextState();
-    auto context = parent.isValid() ? makeChildContext(parent) : makeRootContext();
-    auto samplingParent = parent.isValid() ? std::optional<SpanContext>(SpanContext(parent)) : std::nullopt;
-    applySampling(context, samplingParent.has_value() ? &*samplingParent : nullptr);
-    auto tracestate = parent.isValid() ? parent.tracestate() : std::string();
+SpanGuard start_server_span(std::string_view name, const TraceContext& parent) {
+    auto previous = detail::current_context_state();
+    auto context = parent.is_valid() ? make_child_context(parent) : make_root_context();
+    auto samplingParent = parent.is_valid() ? std::optional<SpanContext>(SpanContext(parent)) : std::nullopt;
+    apply_sampling(context, samplingParent.has_value() ? &*samplingParent : nullptr);
+    auto tracestate = parent.is_valid() ? parent.tracestate() : std::string();
     Span span(std::string(name), context, tracestate);
-    span.setKind(SpanKind::kServer);
-    detail::setCurrentContextState(detail::CurrentContextState{
+    span.set_kind(SpanKind::kServer);
+    detail::set_current_context_state(detail::CurrentContextState{
         .tracestate = tracestate,
         .spanContext = context,
     });

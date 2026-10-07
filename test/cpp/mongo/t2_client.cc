@@ -10,11 +10,11 @@ int main()
 {
     std::cout << "=== T2: Sync Mongo Session Tests ===" << std::endl;
 
-    const auto test_cfg = mongo_test::loadMongoTestConfig();
-    mongo_test::printMongoTestConfig(test_cfg);
+    const auto test_cfg = mongo_test::load_mongo_test_config();
+    mongo_test::print_mongo_test_config(test_cfg);
 
     MongoClient session;
-    const auto cfg = mongo_test::toMongoConfig(test_cfg);
+    const auto cfg = mongo_test::to_mongo_config(test_cfg);
 
     std::cout << "Connecting to MongoDB..." << std::endl;
     auto connected = session.connect(cfg);
@@ -41,7 +41,7 @@ int main()
     document.append("name", "galay-mongo-sync-test");
     document.append("value", int32_t(42));
 
-    auto insert = session.insertOne(test_cfg.database, "galay_mongo_test", document);
+    auto insert = session.insert_one(test_cfg.database, "galay_mongo_test", document);
     if (!insert) {
         std::cerr << "Insert failed: " << insert.error().message() << std::endl;
         session.close();
@@ -52,7 +52,7 @@ int main()
     MongoDocument filter;
     filter.append("_id", id);
 
-    auto find = session.findOne(test_cfg.database, "galay_mongo_test", filter);
+    auto find = session.find_one(test_cfg.database, "galay_mongo_test", filter);
     if (!find) {
         std::cerr << "Find failed: " << find.error().message() << std::endl;
         session.close();
@@ -60,14 +60,14 @@ int main()
     }
 
     const auto* cursor = find->document().find("cursor");
-    if (cursor && cursor->isDocument()) {
-        const auto* first_batch = cursor->toDocument().find("firstBatch");
-        if (first_batch && first_batch->isArray()) {
-            std::cout << "Find firstBatch size: " << first_batch->toArray().size() << std::endl;
+    if (cursor && cursor->is_document()) {
+        const auto* first_batch = cursor->to_document().find("firstBatch");
+        if (first_batch && first_batch->is_array()) {
+            std::cout << "Find firstBatch size: " << first_batch->to_array().size() << std::endl;
         }
     }
 
-    auto del = session.deleteOne(test_cfg.database, "galay_mongo_test", filter);
+    auto del = session.delete_one(test_cfg.database, "galay_mongo_test", filter);
     if (!del) {
         std::cerr << "Delete failed: " << del.error().message() << std::endl;
         session.close();

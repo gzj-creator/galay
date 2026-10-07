@@ -73,10 +73,10 @@ struct WsClientConfig
  */
 class WsClientBuilder {
 public:
-    WsClientBuilder& tcpNoDelay(bool v) { m_config.tcp_no_delay = v; return *this; }
-    WsClientBuilder& headerMode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
+    WsClientBuilder& tcp_no_delay(bool v) { m_config.tcp_no_delay = v; return *this; }
+    WsClientBuilder& header_mode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
     WsClientImpl<AsyncTcpSocket> build() const;
-    WsClientConfig buildConfig() const { return m_config; }
+    WsClientConfig build_config() const { return m_config; }
 
 private:
     WsClientConfig m_config;
@@ -107,76 +107,76 @@ public:
     WsClientUpgradeState(WsClientUpgradeState&&) = delete;
     WsClientUpgradeState& operator=(WsClientUpgradeState&&) = delete;
 
-    bool isFinished() const {
+    bool is_finished() const {
         return m_result.has_value() || m_error.has_value();
     }
 
-    ResultType takeResult() {
+    ResultType take_result() {
         if (m_error.has_value()) {
             return std::unexpected(std::move(*m_error));
         }
         return m_result.value_or(ResultType(true));
     }
 
-    bool hasPendingSend() const {
-        return !isFinished() && m_send_offset < m_send_buffer.size();
+    bool has_pending_send() const {
+        return !is_finished() && m_send_offset < m_send_buffer.size();
     }
 
-    const char* sendData() const {
+    const char* send_data() const {
         return m_send_buffer.data() + m_send_offset;
     }
 
-    size_t remainingSendBytes() const {
+    size_t remaining_send_bytes() const {
         return m_send_buffer.size() - m_send_offset;
     }
 
-    void prepareSendWindow() {
-        if (!hasPendingSend()) {
+    void prepare_send_window() {
+        if (!has_pending_send()) {
             m_send_iovecs[0] = {.iov_base = nullptr, .iov_len = 0};
             return;
         }
 
         m_send_iovecs[0] = {
-            .iov_base = const_cast<char*>(sendData()),
-            .iov_len = remainingSendBytes()
+            .iov_base = const_cast<char*>(send_data()),
+            .iov_len = remaining_send_bytes()
         };
     }
 
-    const struct iovec* sendIovecsData() const {
+    const struct iovec* send_iovecs_data() const {
         return m_send_iovecs.data();
     }
 
-    size_t sendIovecsCount() const {
-        return hasPendingSend() ? 1 : 0;
+    size_t send_iovecs_count() const {
+        return has_pending_send() ? 1 : 0;
     }
 
-    void onBytesSent(size_t sent_bytes) {
+    void on_bytes_sent(size_t sent_bytes) {
         if (sent_bytes == 0) {
             return;
         }
-        if (sent_bytes > remainingSendBytes()) {
-            setProtocolError("Send progress overflow");
+        if (sent_bytes > remaining_send_bytes()) {
+            set_protocol_error("Send progress overflow");
             return;
         }
         m_send_offset += sent_bytes;
     }
 
-    bool prepareRecvWindow() {
-        if (!ensureResources()) {
+    bool prepare_recv_window() {
+        if (!ensure_resources()) {
             return false;
         }
-        m_write_iovecs = borrowWriteIovecs(*m_ring_buffer);
+        m_write_iovecs = borrow_write_iovecs(*m_ring_buffer);
         return !m_write_iovecs.empty();
     }
 
-    bool prepareRecvWindow(char*& buffer, size_t& length) {
-        if (!prepareRecvWindow()) {
+    bool prepare_recv_window(char*& buffer, size_t& length) {
+        if (!prepare_recv_window()) {
             buffer = nullptr;
             length = 0;
             return false;
         }
 
-        if (!IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
+        if (!IoVecWindow::bind_first_non_empty(m_write_iovecs, buffer, length)) {
             buffer = nullptr;
             length = 0;
             return false;
@@ -185,36 +185,36 @@ public:
         return length > 0;
     }
 
-    const struct iovec* recvIovecsData() const {
+    const struct iovec* recv_iovecs_data() const {
         return m_write_iovecs.data();
     }
 
-    size_t recvIovecsCount() const {
+    size_t recv_iovecs_count() const {
         return m_write_iovecs.size();
     }
 
-    void onBytesReceived(size_t recv_bytes) {
-        if (ensureResources()) {
+    void on_bytes_received(size_t recv_bytes) {
+        if (ensure_resources()) {
             m_ring_buffer->produce(recv_bytes);
         }
     }
 
-    bool tryParseUpgradeResponse() {
-        if (!ensureResources()) {
+    bool try_parse_upgrade_response() {
+        if (!ensure_resources()) {
             return true;
         }
 
-        auto read_iovecs = borrowReadIovecs(*m_ring_buffer);
+        auto read_iovecs = borrow_read_iovecs(*m_ring_buffer);
         if (read_iovecs.empty()) {
             return false;
         }
 
         std::vector<iovec> parse_iovecs;
-        if (IoVecWindow::buildWindow(read_iovecs, parse_iovecs) == 0) {
+        if (IoVecWindow::build_window(read_iovecs, parse_iovecs) == 0) {
             return false;
         }
 
-        auto [error_code, consumed] = m_upgrade_response.fromIOVec(parse_iovecs);
+        auto [error_code, consumed] = m_upgrade_response.from_io_vec(parse_iovecs);
         if (consumed > 0) {
             m_ring_buffer->consume(consumed);
         }
@@ -225,15 +225,15 @@ public:
         }
 
         if (error_code != HttpErrorCode::kNoError) {
-            setProtocolError("Failed to parse upgrade response");
+            set_protocol_error("Failed to parse upgrade response");
             return true;
         }
 
-        if (!m_upgrade_response.isComplete()) {
+        if (!m_upgrade_response.is_complete()) {
             return false;
         }
 
-        if (!validateUpgradeResponse()) {
+        if (!validate_upgrade_response()) {
             return true;
         }
 
@@ -245,11 +245,11 @@ public:
         return true;
     }
 
-    void setSendError(const galay::kernel::IOError& io_error) {
+    void set_send_error(const galay::kernel::IOError& io_error) {
         m_error = WsError(kWsSendError, io_error.message());
     }
 
-    void setRecvError(const galay::kernel::IOError& io_error) {
+    void set_recv_error(const galay::kernel::IOError& io_error) {
         if (galay::kernel::IOError::contains(io_error.code(), galay::kernel::kDisconnectError)) {
             m_error = WsError(kWsConnectionClosed, io_error.message());
             return;
@@ -258,22 +258,22 @@ public:
     }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    void setSslSendError(const galay::ssl::SslError& error) {
+    void set_ssl_send_error(const galay::ssl::SslError& error) {
         m_error = WsError(error);
     }
 
-    void setSslRecvError(const galay::ssl::SslError& error) {
+    void set_ssl_recv_error(const galay::ssl::SslError& error) {
         m_error = WsError(error);
     }
 #endif
 
-    void setProtocolError(std::string message) {
+    void set_protocol_error(std::string message) {
         m_error = WsError(kWsProtocolError, std::move(message));
     }
 
 private:
     void initialize() {
-        if (!ensureResources()) {
+        if (!ensure_resources()) {
             return;
         }
 
@@ -282,7 +282,7 @@ private:
             return;
         }
 
-        m_ws_key = generateWebSocketKey();
+        m_ws_key = generate_web_socket_key();
         auto request = Http1_1RequestBuilder::get(m_url.path)
             .host(m_url.host + ":" + std::to_string(m_url.port))
             .header("Connection", "Upgrade")
@@ -290,35 +290,35 @@ private:
             .header("Sec-WebSocket-Version", "13")
             .header("Sec-WebSocket-Key", m_ws_key)
             .build();
-        m_send_buffer = request.toString();
+        m_send_buffer = request.to_string();
     }
 
-    bool validateUpgradeResponse() {
+    bool validate_upgrade_response() {
         if (m_upgrade_response.header().code() != HttpStatusCode::SwitchingProtocol_101) {
-            return setUpgradeFailed(
+            return set_upgrade_failed(
                 "Upgrade failed with status " +
                 std::to_string(static_cast<int>(m_upgrade_response.header().code())));
         }
 
-        if (!m_upgrade_response.header().headerPairs().hasKey("Sec-WebSocket-Accept")) {
-            return setUpgradeFailed("Missing Sec-WebSocket-Accept header");
+        if (!m_upgrade_response.header().header_pairs().has_key("Sec-WebSocket-Accept")) {
+            return set_upgrade_failed("Missing Sec-WebSocket-Accept header");
         }
 
         const std::string accept_key =
-            m_upgrade_response.header().headerPairs().getValue("Sec-WebSocket-Accept");
-        if (accept_key != WsUpgrade::generateAcceptKey(m_ws_key)) {
-            return setUpgradeFailed("Invalid Sec-WebSocket-Accept value");
+            m_upgrade_response.header().header_pairs().get_value("Sec-WebSocket-Accept");
+        if (accept_key != WsUpgrade::generate_accept_key(m_ws_key)) {
+            return set_upgrade_failed("Invalid Sec-WebSocket-Accept value");
         }
 
         return true;
     }
 
-    bool setUpgradeFailed(std::string message) {
+    bool set_upgrade_failed(std::string message) {
         m_error = WsError(kWsUpgradeFailed, std::move(message));
         return false;
     }
 
-    bool ensureResources() {
+    bool ensure_resources() {
         if (m_socket != nullptr && m_ring_buffer != nullptr && m_ws_conn_ptr != nullptr) {
             return true;
         }
@@ -329,7 +329,7 @@ private:
         return false;
     }
 
-    const char* logScheme() const {
+    const char* log_scheme() const {
         if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
             return "ws";
         } else {
@@ -366,54 +366,54 @@ public:
     WsClientTcpUpgradeMachine& operator=(WsClientTcpUpgradeMachine&&) noexcept = default;
 
     MachineAction<result_type> advance() {
-        if (m_state->isFinished()) {
-            return MachineAction<result_type>::complete(m_state->takeResult());
+        if (m_state->is_finished()) {
+            return MachineAction<result_type>::complete(m_state->take_result());
         }
 
-        if (m_state->hasPendingSend()) {
-            m_state->prepareSendWindow();
-            return MachineAction<result_type>::waitWritev(
-                m_state->sendIovecsData(),
-                m_state->sendIovecsCount());
+        if (m_state->has_pending_send()) {
+            m_state->prepare_send_window();
+            return MachineAction<result_type>::wait_writev(
+                m_state->send_iovecs_data(),
+                m_state->send_iovecs_count());
         }
 
-        if (m_state->tryParseUpgradeResponse()) {
-            return MachineAction<result_type>::complete(m_state->takeResult());
+        if (m_state->try_parse_upgrade_response()) {
+            return MachineAction<result_type>::complete(m_state->take_result());
         }
 
-        if (!m_state->prepareRecvWindow()) {
-            if (!m_state->isFinished()) {
-                m_state->setProtocolError("Upgrade response too large");
+        if (!m_state->prepare_recv_window()) {
+            if (!m_state->is_finished()) {
+                m_state->set_protocol_error("Upgrade response too large");
             }
-            return MachineAction<result_type>::complete(m_state->takeResult());
+            return MachineAction<result_type>::complete(m_state->take_result());
         }
 
-        return MachineAction<result_type>::waitReadv(
-            m_state->recvIovecsData(),
-            m_state->recvIovecsCount());
+        return MachineAction<result_type>::wait_readv(
+            m_state->recv_iovecs_data(),
+            m_state->recv_iovecs_count());
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
-            m_state->setRecvError(result.error());
+            m_state->set_recv_error(result.error());
             return;
         }
 
         if (result.value() == 0) {
-            m_state->setProtocolError("Connection closed");
+            m_state->set_protocol_error("Connection closed");
             return;
         }
 
-        m_state->onBytesReceived(result.value());
+        m_state->on_bytes_received(result.value());
     }
 
-    void onWrite(std::expected<size_t, IOError> result) {
+    void on_write(std::expected<size_t, IOError> result) {
         if (!result) {
-            m_state->setSendError(result.error());
+            m_state->set_send_error(result.error());
             return;
         }
 
-        m_state->onBytesSent(result.value());
+        m_state->on_bytes_sent(result.value());
     }
 
     std::shared_ptr<StateT> m_state;
@@ -435,66 +435,66 @@ public:
     WsClientSslUpgradeMachine& operator=(WsClientSslUpgradeMachine&&) noexcept = default;
 
     galay::ssl::SslMachineAction<result_type> advance() {
-        if (m_state->isFinished()) {
-            return galay::ssl::SslMachineAction<result_type>::complete(m_state->takeResult());
+        if (m_state->is_finished()) {
+            return galay::ssl::SslMachineAction<result_type>::complete(m_state->take_result());
         }
 
-        if (m_state->hasPendingSend()) {
+        if (m_state->has_pending_send()) {
             return galay::ssl::SslMachineAction<result_type>::send(
-                m_state->sendData(),
-                m_state->remainingSendBytes());
+                m_state->send_data(),
+                m_state->remaining_send_bytes());
         }
 
-        if (m_state->tryParseUpgradeResponse()) {
-            return galay::ssl::SslMachineAction<result_type>::complete(m_state->takeResult());
+        if (m_state->try_parse_upgrade_response()) {
+            return galay::ssl::SslMachineAction<result_type>::complete(m_state->take_result());
         }
 
         char* recv_buffer = nullptr;
         size_t recv_length = 0;
-        if (!m_state->prepareRecvWindow(recv_buffer, recv_length)) {
-            if (!m_state->isFinished()) {
-                m_state->setProtocolError("Upgrade response too large");
+        if (!m_state->prepare_recv_window(recv_buffer, recv_length)) {
+            if (!m_state->is_finished()) {
+                m_state->set_protocol_error("Upgrade response too large");
             }
-            return galay::ssl::SslMachineAction<result_type>::complete(m_state->takeResult());
+            return galay::ssl::SslMachineAction<result_type>::complete(m_state->take_result());
         }
 
         return galay::ssl::SslMachineAction<result_type>::recv(recv_buffer, recv_length);
     }
 
-    void onHandshake(std::expected<void, galay::ssl::SslError>) {}
+    void on_handshake(std::expected<void, galay::ssl::SslError>) {}
 
-    void onRecv(std::expected<Bytes, galay::ssl::SslError> result) {
+    void on_recv(std::expected<Bytes, galay::ssl::SslError> result) {
         if (!result) {
-            m_state->setSslRecvError(result.error());
+            m_state->set_ssl_recv_error(result.error());
             return;
         }
 
         const size_t recv_bytes = result.value().size();
         if (recv_bytes == 0) {
-            m_state->setProtocolError("Connection closed");
+            m_state->set_protocol_error("Connection closed");
             return;
         }
 
-        m_state->onBytesReceived(recv_bytes);
+        m_state->on_bytes_received(recv_bytes);
     }
 
-    void onSend(std::expected<size_t, galay::ssl::SslError> result) {
+    void on_send(std::expected<size_t, galay::ssl::SslError> result) {
         if (!result) {
-            m_state->setSslSendError(result.error());
+            m_state->set_ssl_send_error(result.error());
             return;
         }
 
-        m_state->onBytesSent(result.value());
+        m_state->on_bytes_sent(result.value());
     }
 
-    void onShutdown(std::expected<void, galay::ssl::SslError>) {}
+    void on_shutdown(std::expected<void, galay::ssl::SslError>) {}
 
     std::shared_ptr<StateT> m_state;
 };
 #endif
 
 template<typename SocketType>
-auto buildWsClientUpgradeOperation(SocketType* socket,
+auto build_ws_client_upgrade_operation(SocketType* socket,
                                    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>* ring_buffer,
                                    const WsUrl& url,
                                    std::unique_ptr<WsConnImpl<SocketType>>* ws_conn_ptr) {
@@ -509,7 +509,7 @@ auto buildWsClientUpgradeOperation(SocketType* socket,
             controller = (*ws_conn_ptr)->socket().controller();
         }
 
-        return AwaitableBuilder<ResultType>::fromStateMachine(
+        return AwaitableBuilder<ResultType>::from_state_machine(
                    controller,
                    WsClientTcpUpgradeMachine<StateT>(std::move(state)))
             .build();
@@ -520,7 +520,7 @@ auto buildWsClientUpgradeOperation(SocketType* socket,
             active_socket = &(*ws_conn_ptr)->socket();
         }
 
-        return galay::ssl::SslAwaitableBuilder<ResultType>::fromStateMachine(
+        return galay::ssl::SslAwaitableBuilder<ResultType>::from_state_machine(
                    active_socket->controller(),
                    active_socket,
                    WsClientSslUpgradeMachine<StateT>(std::move(state)))
@@ -567,7 +567,7 @@ public:
         }
 
         try {
-            auto operation = detail::buildWsClientUpgradeOperation(
+            auto operation = detail::build_ws_client_upgrade_operation(
                 m_socket,
                 m_ring_buffer,
                 m_url,
@@ -633,13 +633,13 @@ public:
             co_return std::unexpected(IOError(kOpenFailed, errno));
         }
 
-        auto nonblock_result = m_socket->option().handleNonBlock();
+        auto nonblock_result = m_socket->option().handle_non_block();
         if (!nonblock_result) {
             m_socket.reset();
             co_return std::unexpected(nonblock_result.error());
         }
         if (m_config.tcp_no_delay) {
-            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            auto nodelay_result = m_socket->option().handle_tcp_no_delay();
             if (!nodelay_result) {
                 m_socket.reset();
                 co_return std::unexpected(nodelay_result.error());
@@ -661,10 +661,10 @@ public:
      * @param ring_buffer_size Session RingBuffer 大小
      * @param reader_setting Reader 行为配置
      * @return 成功返回 Session 指针；未连接返回 WsError
-     * @details 客户端典型顺序是：`connect()` -> `getSession()` -> `session.upgrade()`
+     * @details 客户端典型顺序是：`connect()` -> `get_session()` -> `session.upgrade()`
      */
     std::expected<std::unique_ptr<WsSessionImpl<SocketType>>, WsError>
-    getSession(const WsWriterSetting& writer_setting,
+    get_session(const WsWriterSetting& writer_setting,
                size_t ring_buffer_size = 8192,
                const WsReaderSetting& reader_setting = WsReaderSetting()) {
         if (!m_socket) {
@@ -685,7 +685,7 @@ public:
         co_return co_await m_socket->close();
     }
 
-    SocketType* getSocket() {
+    SocketType* get_socket() {
         return m_socket.get();
     }
 
@@ -707,12 +707,12 @@ public:
      * @brief 检查底层握手是否已经完成
      * @return 未连接返回 false；明文 socket 视为已完成；TLS socket 返回真实握手状态
      */
-    bool isHandshakeCompleted() const {
+    bool is_handshake_completed() const {
         if (!m_socket) {
             return false;
         }
-        if constexpr (requires { m_socket->isHandshakeCompleted(); }) {
-            return m_socket->isHandshakeCompleted();
+        if constexpr (requires { m_socket->is_handshake_completed(); }) {
+            return m_socket->is_handshake_completed();
         }
         return true;
     }
@@ -750,13 +750,13 @@ class WssClient;
  */
 class WssClientBuilder {
 public:
-    WssClientBuilder& caPath(std::string v) { m_config.ca_path = std::move(v); return *this; }
-    WssClientBuilder& verifyPeer(bool v) { m_config.verify_peer = v; return *this; }
-    WssClientBuilder& verifyDepth(int v) { m_config.verify_depth = v; return *this; }
-    WssClientBuilder& tcpNoDelay(bool v) { m_config.tcp_no_delay = v; return *this; }
-    WssClientBuilder& headerMode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
+    WssClientBuilder& ca_path(std::string v) { m_config.ca_path = std::move(v); return *this; }
+    WssClientBuilder& verify_peer(bool v) { m_config.verify_peer = v; return *this; }
+    WssClientBuilder& verify_depth(int v) { m_config.verify_depth = v; return *this; }
+    WssClientBuilder& tcp_no_delay(bool v) { m_config.tcp_no_delay = v; return *this; }
+    WssClientBuilder& header_mode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
     WssClient build() const;
-    WssClientConfig buildConfig() const { return m_config; }
+    WssClientConfig build_config() const { return m_config; }
 
 private:
     WssClientConfig m_config;
@@ -766,11 +766,11 @@ class WssClient : public WsClientImpl<galay::ssl::SslSocket>
 {
 public:
     WssClient(const WssClientConfig& config = WssClientConfig())
-        : WsClientImpl<galay::ssl::SslSocket>(convertConfig(config))
+        : WsClientImpl<galay::ssl::SslSocket>(convert_config(config))
         , m_wss_config(config)
         , m_ssl_ctx(galay::ssl::SslMethod::TLS_Client)
     {
-        initSslContext();
+        init_ssl_context();
     }
 
     ~WssClient() = default;
@@ -812,20 +812,20 @@ public:
             co_return std::unexpected(IOError(kOpenFailed, errno));
         }
 
-        auto nonblock_result = m_socket->option().handleNonBlock();
+        auto nonblock_result = m_socket->option().handle_non_block();
         if (!nonblock_result) {
             m_socket.reset();
             co_return std::unexpected(nonblock_result.error());
         }
         if (m_wss_config.tcp_no_delay) {
-            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            auto nodelay_result = m_socket->option().handle_tcp_no_delay();
             if (!nodelay_result) {
                 m_socket.reset();
                 co_return std::unexpected(nodelay_result.error());
             }
         }
 
-        auto sni_result = m_socket->setHostname(m_url.host);
+        auto sni_result = m_socket->set_hostname(m_url.host);
         if (!sni_result) {
         }
 
@@ -845,39 +845,39 @@ public:
         co_return co_await m_socket->handshake();
     }
 
-    bool isHandshakeCompleted() const {
+    bool is_handshake_completed() const {
         if (!m_socket) {
             return false;
         }
-        return m_socket->isHandshakeCompleted();
+        return m_socket->is_handshake_completed();
     }
 
 private:
-    static WsClientConfig convertConfig(const WssClientConfig& config) {
+    static WsClientConfig convert_config(const WssClientConfig& config) {
         WsClientConfig base_config;
         base_config.tcp_no_delay = config.tcp_no_delay;
         base_config.header_mode = config.header_mode;
         return base_config;
     }
 
-    void initSslContext() {
-        if (!m_ssl_ctx.isValid()) {
+    void init_ssl_context() {
+        if (!m_ssl_ctx.is_valid()) {
             m_ssl_context_ready = false;
             return;
         }
         m_ssl_context_ready = true;
 
         if (!m_wss_config.ca_path.empty()) {
-            auto result = m_ssl_ctx.loadCACertificate(m_wss_config.ca_path);
+            auto result = m_ssl_ctx.load_ca_certificate(m_wss_config.ca_path);
             if (!result) {
             }
         }
 
         if (m_wss_config.verify_peer) {
-            m_ssl_ctx.setVerifyMode(galay::ssl::SslVerifyMode::Peer);
-            m_ssl_ctx.setVerifyDepth(m_wss_config.verify_depth);
+            m_ssl_ctx.set_verify_mode(galay::ssl::SslVerifyMode::Peer);
+            m_ssl_ctx.set_verify_depth(m_wss_config.verify_depth);
         } else {
-            m_ssl_ctx.setVerifyMode(galay::ssl::SslVerifyMode::None);
+            m_ssl_ctx.set_verify_mode(galay::ssl::SslVerifyMode::None);
         }
     }
 

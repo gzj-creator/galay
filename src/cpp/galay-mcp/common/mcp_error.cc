@@ -4,7 +4,7 @@
 
 namespace galay::mcp {
 
-std::string McpError::toString() const {
+std::string McpError::to_string() const {
     std::ostringstream oss;
     oss << "McpError[" << static_cast<int>(m_code) << "]: " << m_message;
     if (!m_details.empty()) {
@@ -13,7 +13,7 @@ std::string McpError::toString() const {
     return oss.str();
 }
 
-int McpError::toJsonRpcErrorCode() const {
+int McpError::to_json_rpc_error_code() const {
     switch (m_code) {
         case McpErrorCode::ParseError:
             return ErrorCodes::PARSE_ERROR;

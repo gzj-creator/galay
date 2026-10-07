@@ -4,11 +4,11 @@
  */
 
 namespace {
-void recvPumpPublishedTestPoint() noexcept;
+void recv_pump_published_test_point() noexcept;
 }
 
 #define GALAY_MPMC_UNBOUNDED_PUMP_PUBLISHED_TEST_POINT() \
-    recvPumpPublishedTestPoint()
+    recv_pump_published_test_point()
 #include <galay/cpp/galay-kernel/concurrency/mpmc/unbounded_channel.h>
 #undef GALAY_MPMC_UNBOUNDED_PUMP_PUBLISHED_TEST_POINT
 #include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
@@ -40,12 +40,12 @@ namespace galay::mpmc {
 
 struct UnboundedChannelTestAccess
 {
-    static void requestPump(UnboundedChannel<uint64_t>& channel) noexcept
+    static void request_pump(UnboundedChannel<uint64_t>& channel) noexcept
     {
-        channel.requestRecvPump();
+        channel.request_recv_pump();
     }
 
-    static void publishWorkForCleanup(UnboundedChannel<uint64_t>& channel) noexcept
+    static void publish_work_for_cleanup(UnboundedChannel<uint64_t>& channel) noexcept
     {
         // Rescue only a failing test's stale CAS loop so its thread can join.
         const auto previous = channel.m_recvPumpState.fetch_or(
@@ -96,7 +96,7 @@ struct PumpPublishGate {
 
 thread_local PumpPublishGate* pumpPublishGate = nullptr;
 
-void recvPumpPublishedTestPoint() noexcept
+void recv_pump_published_test_point() noexcept
 {
     auto* gate = pumpPublishGate;
     if (gate == nullptr) {
@@ -117,7 +117,7 @@ constexpr uint64_t kIterations = 50;
 constexpr uint64_t kIterations = 1'000;
 #endif
 
-void cpuPause() noexcept
+void cpu_pause() noexcept
 {
 #if defined(__x86_64__) || defined(__i386__)
     _mm_pause();
@@ -138,7 +138,7 @@ struct StressState {
         galay::benchmark::ThreadPlacement::kUnsupported};
 };
 
-Task<void> receiveOneAtATime(
+Task<void> receive_one_at_a_time(
     galay::mpmc::UnboundedChannel<uint64_t>* channel,
     StressState* state)
 {
@@ -193,7 +193,7 @@ struct ObservedReceive {
 };
 
 template <size_t Batch>
-Task<void> receiveParked(galay::mpmc::UnboundedChannel<uint64_t>* channel,
+Task<void> receive_parked(galay::mpmc::UnboundedChannel<uint64_t>* channel,
                          ParkedState* state, uint64_t rounds) {
     for (uint64_t i = 0; i < rounds; ++i) {
         bool valid = true;
@@ -201,7 +201,7 @@ Task<void> receiveParked(galay::mpmc::UnboundedChannel<uint64_t>* channel,
             auto value = co_await ObservedReceive{channel->recv(), state, i + 1};
             valid = value && *value == i;
         } else {
-            auto values = co_await ObservedReceive{channel->recvBatch(Batch), state, i + 1};
+            auto values = co_await ObservedReceive{channel->recv_batch(Batch), state, i + 1};
             valid = values && values->size() == Batch;
             if (valid) {
                 for (size_t j = 0; j < Batch; ++j) {
@@ -224,18 +224,18 @@ Task<void> receiveParked(galay::mpmc::UnboundedChannel<uint64_t>* channel,
 }
 
 template <size_t Batch, bool UseToken>
-bool runParkedLifecycle() {
+bool run_parked_lifecycle() {
     constexpr uint64_t kRounds = 256;
     galay::mpmc::UnboundedChannel<uint64_t> channel;
     ParallelScheduler scheduler;
     ParkedState state;
     const auto started = scheduler.start();
     if (!started) { return false; }
-    bool ok = scheduleTask(scheduler, receiveParked<Batch>(&channel, &state, kRounds));
-    auto token = channel.makeProducerToken();
+    bool ok = schedule_task(scheduler, receive_parked<Batch>(&channel, &state, kRounds));
+    auto token = channel.make_producer_token();
     ok = ok && token.valid();
     const auto deadline = std::chrono::steady_clock::now() + 10s;
-    auto waitArmed = [&](uint64_t ticket) {
+    auto wait_armed = [&](uint64_t ticket) {
         while (state.armed.load(std::memory_order_acquire) != ticket &&
                !state.done.load(std::memory_order_acquire) &&
                std::chrono::steady_clock::now() < deadline) {
@@ -244,7 +244,7 @@ bool runParkedLifecycle() {
         return state.armed.load(std::memory_order_acquire) == ticket;
     };
     for (uint64_t i = 0; ok && i < kRounds; ++i) {
-        ok = waitArmed(i + 1);
+        ok = wait_armed(i + 1);
         if (!ok) { break; }
         if constexpr (Batch == 1) {
             uint64_t value = i;
@@ -252,10 +252,10 @@ bool runParkedLifecycle() {
         } else {
             std::vector<uint64_t> values(Batch);
             for (size_t j = 0; j < Batch; ++j) { values[j] = i * Batch + j; }
-            ok = channel.sendBatch(token, std::move(values));
+            ok = channel.send_batch(token, std::move(values));
         }
     }
-    ok = ok && waitArmed(kRounds + 1);
+    ok = ok && wait_armed(kRounds + 1);
     const auto snapshot = galay::mpmc::UnboundedChannelTestAccess::snapshot(channel);
     ok = ok && snapshot.waiterPath != 0 && state.received.load(std::memory_order_acquire) == kRounds;
     channel.close();
@@ -270,7 +270,7 @@ bool runParkedLifecycle() {
     return ok;
 }
 
-bool runPumpOwnerHandoff()
+bool run_pump_owner_handoff()
 {
     using Access = galay::mpmc::UnboundedChannelTestAccess;
     galay::mpmc::UnboundedChannel<uint64_t> channel;
@@ -280,15 +280,15 @@ bool runPumpOwnerHandoff()
     if (!started) {
         return false;
     }
-    bool ok = scheduleTask(scheduler, receiveParked<1>(&channel, &state, 1));
-    auto waitFor = [](auto ready) {
+    bool ok = schedule_task(scheduler, receive_parked<1>(&channel, &state, 1));
+    auto wait_for = [](auto ready) {
         const auto deadline = std::chrono::steady_clock::now() + 2s;
         while (!ready() && std::chrono::steady_clock::now() < deadline) {
             std::this_thread::yield();
         }
         return ready();
     };
-    ok = ok && waitFor([&] {
+    ok = ok && wait_for([&] {
         return state.armed.load(std::memory_order_acquire) == 1;
     });
     if (!ok) {
@@ -301,7 +301,7 @@ bool runPumpOwnerHandoff()
     std::atomic<bool> senderDone{false};
     std::atomic<bool> sent{false};
     std::thread sender([&] {
-        auto token = channel.makeProducerToken();
+        auto token = channel.make_producer_token();
         if (token.valid()) {
             pumpPublishGate = &gate;
             sent.store(channel.send(token, uint64_t{0}), std::memory_order_release);
@@ -309,28 +309,28 @@ bool runPumpOwnerHandoff()
         }
         senderDone.store(true, std::memory_order_release);
     });
-    ok = waitFor([&] { return gate.entered.load(std::memory_order_acquire); });
+    ok = wait_for([&] { return gate.entered.load(std::memory_order_acquire); });
     if (ok) {
         // Sender published work but has not tried to claim the pump. Another
         // requester drains it and returns the state to idle before sender's CAS.
-        Access::requestPump(channel);
-        ok = waitFor([&] {
+        Access::request_pump(channel);
+        ok = wait_for([&] {
             return state.armed.load(std::memory_order_acquire) == 2;
         });
         ok = ok && state.received.load(std::memory_order_acquire) == 1 &&
             Access::snapshot(channel).pumpState == 0;
     }
     gate.release.store(true, std::memory_order_release);
-    const bool returned = waitFor([&] {
+    const bool returned = wait_for([&] {
         return senderDone.load(std::memory_order_acquire);
     });
     if (!returned) {
         std::cerr << "T173 pump handoff stalled after competing owner returned idle\n";
-        Access::publishWorkForCleanup(channel);
+        Access::publish_work_for_cleanup(channel);
     }
     sender.join();
     channel.close();
-    const bool receiverDone = waitFor([&] {
+    const bool receiverDone = wait_for([&] {
         return state.done.load(std::memory_order_acquire);
     });
     scheduler.stop();
@@ -343,11 +343,11 @@ bool runPumpOwnerHandoff()
 
 int main()
 {
-    if (!runPumpOwnerHandoff()) {
+    if (!run_pump_owner_handoff()) {
         return 1;
     }
-    if (!runParkedLifecycle<1, true>() || !runParkedLifecycle<1, false>() ||
-        !runParkedLifecycle<8, true>()) { return 1; }
+    if (!run_parked_lifecycle<1, true>() || !run_parked_lifecycle<1, false>() ||
+        !run_parked_lifecycle<8, true>()) { return 1; }
     galay::mpmc::UnboundedChannel<uint64_t> channel;
     StressState state;
     ParallelScheduler scheduler;
@@ -356,7 +356,7 @@ int main()
         std::cerr << "T173 scheduler start failed\n";
         return 1;
     }
-    if (!scheduleTask(scheduler, receiveOneAtATime(&channel, &state))) {
+    if (!schedule_task(scheduler, receive_one_at_a_time(&channel, &state))) {
         scheduler.stop();
         std::cerr << "T173 receiver schedule failed\n";
         return 1;
@@ -366,7 +366,7 @@ int main()
         state.producerPlacement.store(
             galay::benchmark::ThreadPlacement::kUnsupported,
             std::memory_order_release);
-        auto token = channel.makeProducerToken();
+        auto token = channel.make_producer_token();
         if (!token.valid()) {
             state.failed.store(true, std::memory_order_release);
             state.stop.store(true, std::memory_order_release);
@@ -377,7 +377,7 @@ int main()
                 if (state.stop.load(std::memory_order_acquire)) {
                     return;
                 }
-                cpuPause();
+                cpu_pause();
                 std::this_thread::yield();
             }
             uint64_t pending = value;
@@ -426,10 +426,10 @@ int main()
     }
     std::cout << "T173-MpmcUnboundedSinglePublishWakeup PASS iterations="
               << kIterations << " producer_placement="
-              << galay::benchmark::threadPlacementName(
+              << galay::benchmark::thread_placement_name(
                      state.producerPlacement.load(std::memory_order_acquire))
               << " consumer_placement="
-              << galay::benchmark::threadPlacementName(
+              << galay::benchmark::thread_placement_name(
                      state.consumerPlacement.load(std::memory_order_acquire))
               << '\n';
     return 0;

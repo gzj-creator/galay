@@ -67,21 +67,21 @@ namespace galay::utils
          * @param url 是否使用 URL 安全字符集（- 和 _ 替换 + 和 /）
          * @return Base64 编码后的字符串
          */
-        static std::string Base64Encode(std::string const &s, bool url = false);
+        static std::string base64_encode(std::string const &s, bool url = false);
 
         /**
          * @brief 以 PEM 格式编码（64 字符换行）
          * @param s 待编码的字符串
          * @return PEM 格式的 Base64 编码字符串
          */
-        static std::string Base64EncodePem(std::string const &s);
+        static std::string base64_encode_pem(std::string const &s);
 
         /**
          * @brief 以 MIME 格式编码（76 字符换行）
          * @param s 待编码的字符串
          * @return MIME 格式的 Base64 编码字符串
          */
-        static std::string Base64EncodeMime(std::string const &s);
+        static std::string base64_encode_mime(std::string const &s);
 
         /**
          * @brief 对 Base64 字符串进行解码
@@ -89,7 +89,7 @@ namespace galay::utils
          * @param remove_linebreaks 是否在解码前移除换行符
          * @return 解码后的字符串，输入无效时返回空字符串
          */
-        static std::string Base64Decode(std::string const &s, bool remove_linebreaks = false);
+        static std::string base64_decode(std::string const &s, bool remove_linebreaks = false);
 
         /**
          * @brief 检查 Base64 字符串是否可解码
@@ -97,7 +97,7 @@ namespace galay::utils
          * @param remove_linebreaks 是否在检查前移除换行符
          * @return 输入可解码时返回 true
          */
-        static bool Base64CanDecode(std::string const &s, bool remove_linebreaks = false);
+        static bool base64_can_decode(std::string const &s, bool remove_linebreaks = false);
 
         /**
          * @brief 对原始字节进行 Base64 编码
@@ -106,7 +106,7 @@ namespace galay::utils
          * @param url 是否使用 URL 安全字符集
          * @return Base64 编码后的字符串
          */
-        static std::string Base64Encode(unsigned char const *, size_t len, bool url = false);
+        static std::string base64_encode(unsigned char const *, size_t len, bool url = false);
 
 #if __cplusplus >= 201703L
         /**
@@ -115,21 +115,21 @@ namespace galay::utils
          * @param url 是否使用 URL 安全字符集
          * @return Base64 编码后的字符串
          */
-        static std::string Base64EncodeView(std::string_view s, bool url = false);
+        static std::string base64_encode_view(std::string_view s, bool url = false);
 
         /**
          * @brief 以 PEM 格式编码 string_view（C++17）
          * @param s 待编码的字符串视图
          * @return PEM 格式的 Base64 编码字符串
          */
-        static std::string Base64EncodePemView(std::string_view s);
+        static std::string base64_encode_pem_view(std::string_view s);
 
         /**
          * @brief 以 MIME 格式编码 string_view（C++17）
          * @param s 待编码的字符串视图
          * @return MIME 格式的 Base64 编码字符串
          */
-        static std::string Base64EncodeMimeView(std::string_view s);
+        static std::string base64_encode_mime_view(std::string_view s);
 
         /**
          * @brief 对 string_view 进行 Base64 解码（C++17）
@@ -137,7 +137,7 @@ namespace galay::utils
          * @param remove_linebreaks 是否在解码前移除换行符
          * @return 解码后的字符串，输入无效时返回空字符串
          */
-        static std::string Base64DecodeView(std::string_view s, bool remove_linebreaks = false);
+        static std::string base64_decode_view(std::string_view s, bool remove_linebreaks = false);
 
         /**
          * @brief 检查 string_view 是否为可解码的 Base64 输入（C++17）
@@ -145,7 +145,7 @@ namespace galay::utils
          * @param remove_linebreaks 是否在检查前移除换行符
          * @return 输入可解码时返回 true
          */
-        static bool Base64CanDecodeView(std::string_view s, bool remove_linebreaks = false);
+        static bool base64_can_decode_view(std::string_view s, bool remove_linebreaks = false);
 #endif
     private:
         static constexpr unsigned int invalid_char = 0xffU;
@@ -241,10 +241,10 @@ namespace galay::utils
         }
 
         template <typename String>
-        static std::string Decode(String const &encoded_string, bool remove_linebreaks)
+        static std::string decode(String const &encoded_string, bool remove_linebreaks)
         {
             //
-            // Decode(…) is templated so that it can be used with String = const std::string&
+            // decode(…) is templated so that it can be used with String = const std::string&
             // or std::string_view (requires at least C++17)
             //
 
@@ -307,7 +307,7 @@ namespace galay::utils
         }
 
         template <typename String>
-        static bool CanDecode(String const &encoded_string, bool remove_linebreaks)
+        static bool can_decode(String const &encoded_string, bool remove_linebreaks)
         {
             if (encoded_string.empty()) {
                 return true;
@@ -391,7 +391,7 @@ namespace galay::utils
         template <typename String, unsigned int line_length>
         static std::string encode_with_line_breaks(String s)
         {
-            return insert_linebreaks(Encode(s, false), line_length);
+            return insert_linebreaks(encode(s, false), line_length);
         }
 
         template <typename String>
@@ -407,14 +407,14 @@ namespace galay::utils
         }
 
         template <typename String>
-        static std::string Encode(String s, bool url)
+        static std::string encode(String s, bool url)
         {
-            return Base64Encode(reinterpret_cast<const unsigned char *>(s.data()), s.length(), url);
+            return base64_encode(reinterpret_cast<const unsigned char *>(s.data()), s.length(), url);
         }
     };
 
-    // Implementation of Base64Encode functions
-    inline std::string Base64Util::Base64Encode(unsigned char const *bytes_to_encode, size_t in_len, bool url)
+    // Implementation of base64_encode functions
+    inline std::string Base64Util::base64_encode(unsigned char const *bytes_to_encode, size_t in_len, bool url)
     {
         const char *base64_chars_selected = base64_chars[url ? 1 : 0];
 
@@ -454,56 +454,56 @@ namespace galay::utils
         return ret;
     }
 
-    inline std::string Base64Util::Base64Encode(std::string const &s, bool url)
+    inline std::string Base64Util::base64_encode(std::string const &s, bool url)
     {
-        return Encode(s, url);
+        return encode(s, url);
     }
 
-    inline std::string Base64Util::Base64EncodePem(std::string const &s)
+    inline std::string Base64Util::base64_encode_pem(std::string const &s)
     {
         return encode_pem(s);
     }
 
-    inline std::string Base64Util::Base64EncodeMime(std::string const &s)
+    inline std::string Base64Util::base64_encode_mime(std::string const &s)
     {
         return encode_mime(s);
     }
 
-    inline std::string Base64Util::Base64Decode(std::string const &s, bool remove_linebreaks)
+    inline std::string Base64Util::base64_decode(std::string const &s, bool remove_linebreaks)
     {
-        return Decode(s, remove_linebreaks);
+        return decode(s, remove_linebreaks);
     }
 
-    inline bool Base64Util::Base64CanDecode(std::string const &s, bool remove_linebreaks)
+    inline bool Base64Util::base64_can_decode(std::string const &s, bool remove_linebreaks)
     {
-        return CanDecode(s, remove_linebreaks);
+        return can_decode(s, remove_linebreaks);
     }
 
 #if __cplusplus >= 201703L
     // String view implementations
-    inline std::string Base64Util::Base64EncodeView(std::string_view s, bool url)
+    inline std::string Base64Util::base64_encode_view(std::string_view s, bool url)
     {
-        return Encode(s, url);
+        return encode(s, url);
     }
 
-    inline std::string Base64Util::Base64EncodePemView(std::string_view s)
+    inline std::string Base64Util::base64_encode_pem_view(std::string_view s)
     {
         return encode_pem(s);
     }
 
-    inline std::string Base64Util::Base64EncodeMimeView(std::string_view s)
+    inline std::string Base64Util::base64_encode_mime_view(std::string_view s)
     {
         return encode_mime(s);
     }
 
-    inline std::string Base64Util::Base64DecodeView(std::string_view s, bool remove_linebreaks)
+    inline std::string Base64Util::base64_decode_view(std::string_view s, bool remove_linebreaks)
     {
-        return Decode(s, remove_linebreaks);
+        return decode(s, remove_linebreaks);
     }
 
-    inline bool Base64Util::Base64CanDecodeView(std::string_view s, bool remove_linebreaks)
+    inline bool Base64Util::base64_can_decode_view(std::string_view s, bool remove_linebreaks)
     {
-        return CanDecode(s, remove_linebreaks);
+        return can_decode(s, remove_linebreaks);
     }
 #endif
 

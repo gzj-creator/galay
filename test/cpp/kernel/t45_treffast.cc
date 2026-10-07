@@ -22,20 +22,20 @@ static_assert(std::same_as<decltype(ParallelTask{}.task), TaskRef>,
 
 std::atomic<int> g_completed{0};
 
-Task<void> countingTask() {
+Task<void> counting_task() {
     g_completed.fetch_add(1, std::memory_order_relaxed);
     co_return;
 }
 
-bool verifyTaskRefFastPath() {
+bool verify_task_ref_fast_path() {
     g_completed.store(0, std::memory_order_relaxed);
 
     ParallelScheduler scheduler;
     scheduler.start();
 
-    Task<void> task = countingTask();
-    detail::setTaskScheduler(detail::TaskAccess::taskRef(task), &scheduler);
-    if (!scheduler.schedule(detail::TaskAccess::taskRef(task))) {
+    Task<void> task = counting_task();
+    detail::set_task_scheduler(detail::TaskAccess::task_ref(task), &scheduler);
+    if (!scheduler.schedule(detail::TaskAccess::task_ref(task))) {
         std::cerr << "[T45] schedule(TaskRef) rejected valid compute task\n";
         scheduler.stop();
         return false;
@@ -54,7 +54,7 @@ bool verifyTaskRefFastPath() {
 }  // namespace
 
 int main() {
-    if (!verifyTaskRefFastPath()) {
+    if (!verify_task_ref_fast_path()) {
         return 1;
     }
 

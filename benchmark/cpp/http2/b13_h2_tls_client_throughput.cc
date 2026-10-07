@@ -40,17 +40,17 @@ struct ActiveClientGuard {
 };
 
 struct BatchBarrier {
-    void addOne() {
+    void add_one() {
         remaining.fetch_add(1, std::memory_order_relaxed);
     }
 
-    void completeOne() {
+    void complete_one() {
         if (remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             done.notify();
         }
     }
 
-    bool hasPending() const {
+    bool has_pending() const {
         return remaining.load(std::memory_order_acquire) > 0;
     }
 
@@ -66,7 +66,7 @@ struct BatchBarrierGuard {
 
     ~BatchBarrierGuard() {
         if (m_barrier) {
-            m_barrier->completeOne();
+            m_barrier->complete_one();
         }
     }
 
@@ -74,12 +74,12 @@ private:
     std::shared_ptr<BatchBarrier> m_barrier;
 };
 
-Task<void> handleResponse(Http2Stream::ptr stream, std::shared_ptr<BatchBarrier> barrier) {
+Task<void> handle_response(Http2Stream::ptr stream, std::shared_ptr<BatchBarrier> barrier) {
     BatchBarrierGuard guard(std::move(barrier));
 
     bool finished = false;
     while (!finished) {
-        auto batch_result = co_await stream->getFrames(16);
+        auto batch_result = co_await stream->get_frames(16);
         if (!batch_result) {
             fail_count++;
             co_return;
@@ -91,7 +91,7 @@ Task<void> handleResponse(Http2Stream::ptr stream, std::shared_ptr<BatchBarrier>
                 stream_closed = true;
                 break;
             }
-            if ((frame->isHeaders() || frame->isData()) && frame->isEndStream()) {
+            if ((frame->is_headers() || frame->is_data()) && frame->is_end_stream()) {
                 finished = true;
                 break;
             }
@@ -111,7 +111,7 @@ Task<void> handleResponse(Http2Stream::ptr stream, std::shared_ptr<BatchBarrier>
     co_return;
 }
 
-Task<void> runClient(int id,
+Task<void> run_client(int id,
                      const std::string& host,
                      uint16_t port,
                      int requests_per_client,
@@ -120,7 +120,7 @@ Task<void> runClient(int id,
     ActiveClientGuard guard;
 
     H2Client<> client(H2ClientBuilder()
-        .verifyPeer(false)
+        .verify_peer(false)
         .build());
 
     auto connect_result = co_await client.connect(host, port);
@@ -130,7 +130,7 @@ Task<void> runClient(int id,
         co_return;
     }
 
-    if (client.getALPNProtocol() != "h2") {
+    if (client.get_alpn_protocol() != "h2") {
         fail_count += requests_per_client;
         co_await client.close();
         co_return;
@@ -150,11 +150,11 @@ Task<void> runClient(int id,
                 fail_count++;
                 continue;
             }
-            barrier->addOne();
-            co_await startDetachedTask(handleResponse(stream, barrier));
+            barrier->add_one();
+            co_await start_detached_task(handle_response(stream, barrier));
         }
 
-        if (barrier->hasPending()) {
+        if (barrier->has_pending()) {
             co_await barrier->done.wait();
         }
 
@@ -165,7 +165,7 @@ Task<void> runClient(int id,
     co_return;
 }
 
-void runBenchmark(const std::string& host,
+void run_benchmark(const std::string& host,
                   uint16_t port,
                   int concurrent_clients,
                   int requests_per_client,
@@ -193,12 +193,12 @@ void runBenchmark(const std::string& host,
     std::cout << "========================================\n\n";
 
     auto start_time = std::chrono::steady_clock::now();
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_schedulers).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(io_schedulers).parallel_scheduler_count(0).build();
     runtime.start();
 
     for (int i = 0; i < concurrent_clients; i++) {
-        auto* scheduler = runtime.getNextIOScheduler();
-        scheduleTask(scheduler, runClient(i, host, port, requests_per_client, streams_per_batch));
+        auto* scheduler = runtime.get_next_io_scheduler();
+        schedule_task(scheduler, run_client(i, host, port, requests_per_client, streams_per_batch));
     }
 
     std::cout << "压测进行中";
@@ -254,7 +254,7 @@ void runBenchmark(const std::string& host,
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -282,7 +282,7 @@ int main(int argc, char* argv[]) {
     if (argc > 6) max_wait_seconds = std::atoi(argv[6]);
     if (argc > 7) io_schedulers = std::max(1, std::atoi(argv[7]));
 
-    runBenchmark(host, port, concurrent_clients, requests_per_client, streams_per_batch,
+    run_benchmark(host, port, concurrent_clients, requests_per_client, streams_per_batch,
                  max_wait_seconds, io_schedulers);
     return 0;
 }
@@ -290,7 +290,7 @@ int main(int argc, char* argv[]) {
 #else
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 

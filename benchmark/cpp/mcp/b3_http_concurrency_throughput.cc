@@ -25,7 +25,7 @@ using namespace std::chrono;
 // 线程安全的性能统计
 class ConcurrentStats {
 public:
-    void addLatency(double latencyMs) {
+    void add_latency(double latencyMs) {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_latencies.push_back(latencyMs);
         m_totalTimeMs += latencyMs;
@@ -34,12 +34,12 @@ public:
         m_totalRequests++;
     }
 
-    void addError() {
+    void add_error() {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_errorCount++;
     }
 
-    void printReport(const std::string& testName, double totalTestTimeMs) {
+    void print_report(const std::string& testName, double totalTestTimeMs) {
         std::lock_guard<std::mutex> lock(m_mutex);
 
         std::cout << "\n=== " << testName << " Concurrent Performance Report ===" << std::endl;
@@ -100,7 +100,7 @@ private:
 };
 
 // 工作协程
-galay::kernel::Task<void> workerTask(McpClient& client, const std::string& url,
+galay::kernel::Task<void> worker_task(McpClient& client, const std::string& url,
                           size_t requestsPerWorker, ConcurrentStats& stats,
                           std::atomic<int>& readyWorkers,
                           std::atomic<int>& finishedWorkers,
@@ -111,7 +111,7 @@ galay::kernel::Task<void> workerTask(McpClient& client, const std::string& url,
     // 连接并初始化
     auto connectResult = co_await client.connect();
     if (!connectResult) {
-        stats.addError();
+        stats.add_error();
         startupFailures++;
         finishedWorkers++;
         disconnectedWorkers++;
@@ -121,10 +121,10 @@ galay::kernel::Task<void> workerTask(McpClient& client, const std::string& url,
     std::expected<void, McpError> initResult;
     co_await client.initialize("concurrent-client", "1.0.0", initResult);
     if (!initResult) {
-        stats.addError();
+        stats.add_error();
         startupFailures++;
         finishedWorkers++;
-        co_await client.disconnectAsync();
+        co_await client.disconnect_async();
         disconnectedWorkers++;
         co_return;
     }
@@ -138,7 +138,7 @@ galay::kernel::Task<void> workerTask(McpClient& client, const std::string& url,
 
     if (benchmarkAborted.load(std::memory_order_acquire)) {
         finishedWorkers++;
-        co_await client.disconnectAsync();
+        co_await client.disconnect_async();
         disconnectedWorkers++;
         co_return;
     }
@@ -146,38 +146,38 @@ galay::kernel::Task<void> workerTask(McpClient& client, const std::string& url,
     // 执行请求
     for (size_t i = 0; i < requestsPerWorker; ++i) {
         std::string args;
-        auto argsWriter = makeJsonWriter(args);
+        auto argsWriter = make_json_writer(args);
         // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
         (void)argsWriter.start_object();
         (void)argsWriter.key("message");
         (void)argsWriter.string("Concurrent test " + std::to_string(i));
         (void)argsWriter.end_object();
         if (!argsWriter.finish()) {
-            stats.addError();
+            stats.add_error();
             continue;
         }
 
         auto start = high_resolution_clock::now();
         std::expected<std::string, McpError> callResult;
-        co_await client.callTool("echo", args, callResult);
+        co_await client.call_tool("echo", args, callResult);
         auto end = high_resolution_clock::now();
 
         if (callResult) {
             double latencyMs = duration_cast<microseconds>(end - start).count() / 1000.0;
-            stats.addLatency(latencyMs);
+            stats.add_latency(latencyMs);
         } else {
-            stats.addError();
+            stats.add_error();
         }
     }
 
     finishedWorkers++;
-    co_await client.disconnectAsync();
+    co_await client.disconnect_async();
     disconnectedWorkers++;
     co_return;
 }
 
 // 并发测试
-void runConcurrentTest(const std::string& url, size_t numWorkers, size_t requestsPerWorker) {
+void run_concurrent_test(const std::string& url, size_t numWorkers, size_t requestsPerWorker) {
     std::cout << "\n=== Concurrent Test ===" << std::endl;
     std::cout << "Workers:           " << numWorkers << std::endl;
     std::cout << "Requests/Worker:   " << requestsPerWorker << std::endl;
@@ -193,7 +193,7 @@ void runConcurrentTest(const std::string& url, size_t numWorkers, size_t request
     std::atomic<bool> benchmarkAborted(false);
 
     // 创建Runtime
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(4).parallelSchedulerCount(2).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(4).parallel_scheduler_count(2).build();
     runtime.start();
 
     // 创建客户端和协程
@@ -205,10 +205,10 @@ void runConcurrentTest(const std::string& url, size_t numWorkers, size_t request
     // 开始测试
     // 启动所有工作协程
     for (size_t i = 0; i < numWorkers; ++i) {
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler ||
-            !scheduleTask(scheduler,
-                          workerTask(*clients[i],
+            !schedule_task(scheduler,
+                          worker_task(*clients[i],
                                           url,
                                           requestsPerWorker,
                                           stats,
@@ -219,7 +219,7 @@ void runConcurrentTest(const std::string& url, size_t numWorkers, size_t request
                                           benchmarkStarted,
                                           benchmarkAborted))) {
             std::cerr << "Failed to schedule worker " << i << std::endl;
-            stats.addError();
+            stats.add_error();
             startupFailures++;
             finishedWorkers++;
             disconnectedWorkers++;
@@ -266,11 +266,11 @@ void runConcurrentTest(const std::string& url, size_t numWorkers, size_t request
     runtime.stop();
 
     // 打印报告
-    stats.printReport("Concurrent Tool Call", totalTestTimeMs);
+    stats.print_report("Concurrent Tool Call", totalTestTimeMs);
 }
 
 // 逐步增加并发测试
-void runScalabilityTest(const std::string& url) {
+void run_scalability_test(const std::string& url) {
     std::cout << "\n=== Scalability Test ===" << std::endl;
     std::cout << "Testing with increasing concurrency levels..." << std::endl;
 
@@ -279,14 +279,14 @@ void runScalabilityTest(const std::string& url) {
 
     for (size_t numWorkers : concurrencyLevels) {
         std::cout << "\n--- Testing with " << numWorkers << " workers ---" << std::endl;
-        runConcurrentTest(url, numWorkers, requestsPerWorker);
+        run_concurrent_test(url, numWorkers, requestsPerWorker);
 
         // 短暂休息，让服务器恢复
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
 
-void printSystemInfo() {
+void print_system_info() {
     std::cout << "\n=== System Information ===" << std::endl;
     std::cout << "Test Date: " << __DATE__ << " " << __TIME__ << std::endl;
 
@@ -304,7 +304,7 @@ void printSystemInfo() {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -336,16 +336,16 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    printSystemInfo();
+    print_system_info();
 
     std::cout << "\n=== Concurrent Requests Benchmark ===" << std::endl;
     std::cout << "Server URL: " << url << std::endl;
     std::cout << "Make sure the HTTP MCP server is running!" << std::endl;
 
     if (scalabilityTest) {
-        runScalabilityTest(url);
+        run_scalability_test(url);
     } else {
-        runConcurrentTest(url, numWorkers, requestsPerWorker);
+        run_concurrent_test(url, numWorkers, requestsPerWorker);
     }
 
     std::cout << "\n=== Benchmark Complete ===" << std::endl;

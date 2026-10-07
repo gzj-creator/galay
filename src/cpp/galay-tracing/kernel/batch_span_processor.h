@@ -26,7 +26,7 @@ namespace galay::tracing {
  * @brief 批处理器后台线程的唤醒策略
  */
 enum class BatchSpanScheduleMode {
-    kTimed,      ///< 仅按 flush_interval 定时唤醒，forceFlush/shutdown 仍会立即唤醒
+    kTimed,      ///< 仅按 flush_interval 定时唤醒，force_flush/shutdown 仍会立即唤醒
     kOnEnd,      ///< 每次成功入队一个 sampled Span 后唤醒后台线程
     kBatchSize,  ///< 队列中 Span 数量达到 max_batch_size 后唤醒后台线程
 };
@@ -69,14 +69,14 @@ public:
      * @details 队列满时丢弃 Span 并增加丢弃计数
      * @param span 已结束的 Span
      */
-    void onEnd(Span&& span) override;
+    void on_end(Span&& span) override;
 
     /**
      * @brief 强制刷新队列中所有 Span
      * @param timeout 超时时间
      * @return 成功刷新返回 true
      */
-    bool forceFlush(std::chrono::milliseconds timeout) override;
+    bool force_flush(std::chrono::milliseconds timeout) override;
 
     /**
      * @brief 关闭处理器并释放资源
@@ -89,7 +89,7 @@ public:
      * @brief 获取因队列满而丢弃的 Span 数量
      * @return 丢弃的 Span 总数
      */
-    [[nodiscard]] std::size_t droppedSpanCount() const noexcept;
+    [[nodiscard]] std::size_t dropped_span_count() const noexcept;
 
 private:
     struct SpanQueue;
@@ -98,7 +98,7 @@ private:
     /**
      * @brief 后台工作线程的主循环
      */
-    void workerLoop();
+    void worker_loop();
 
     /**
      * @brief 从队列中取出最多 maxCount 个 Span
@@ -106,14 +106,14 @@ private:
      * @param maxCount 最大取出数量
      * @return 实际取出的 Span 数量
      */
-    [[nodiscard]] std::size_t drainQueue(std::vector<Span>& batch, std::size_t maxCount);
+    [[nodiscard]] std::size_t drain_queue(std::vector<Span>& batch, std::size_t maxCount);
 
     /**
      * @brief 将一批 Span 导出到后端
      * @param spans 待导出的 Span 视图
      * @return 导出成功返回 true
      */
-    [[nodiscard]] bool exportBatch(std::span<const Span> spans);
+    [[nodiscard]] bool export_batch(std::span<const Span> spans);
 
     std::unique_ptr<SpanExporter> m_exporter;       ///< Span 导出器
     BatchSpanProcessorConfig m_config;              ///< 批处理配置

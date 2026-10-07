@@ -43,7 +43,7 @@ using AsymmetricMemoryBarrierResult =
  *         capability or syscall error. Non-Linux targets return kUnsupported.
  */
 [[nodiscard]] inline const AsymmetricMemoryBarrierResult&
-asymmetricMemoryBarrierSupport() noexcept
+asymmetric_memory_barrier_support() noexcept
 {
     static const AsymmetricMemoryBarrierResult support = []() noexcept
         -> AsymmetricMemoryBarrierResult {
@@ -88,9 +88,9 @@ asymmetricMemoryBarrierSupport() noexcept
 
 /**
  * @brief Compiler-side half of the Linux asymmetric barrier protocol.
- * @pre asymmetricMemoryBarrierSupport() returned success.
+ * @pre asymmetric_memory_barrier_support() returned success.
  */
-inline void asymmetricLightBarrier() noexcept
+inline void asymmetric_light_barrier() noexcept
 {
 #if GALAY_KERNEL_HAS_LINUX_MEMBARRIER && \
     (defined(__GNUC__) || defined(__clang__))
@@ -105,9 +105,9 @@ inline void asymmetricLightBarrier() noexcept
  * @return success, or the capability/syscall error without hiding errno.
  */
 [[nodiscard]] inline AsymmetricMemoryBarrierResult
-asymmetricHeavyBarrier() noexcept
+asymmetric_heavy_barrier() noexcept
 {
-    const auto& support = asymmetricMemoryBarrierSupport();
+    const auto& support = asymmetric_memory_barrier_support();
     if (!support) {
         return std::unexpected(support.error());
     }

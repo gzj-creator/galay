@@ -76,24 +76,24 @@ public:
      * @brief 选择下一次请求使用的端点下标
      * @return 成功返回端点下标；没有可用端点时返回空
      */
-    [[nodiscard]] std::optional<size_t> selectEndpoint();
+    [[nodiscard]] std::optional<size_t> select_endpoint();
 
     /**
      * @brief 记录一次请求开始
      */
-    void recordRequest();
+    void record_request();
 
     /**
      * @brief 记录一次重试
      */
-    void recordRetry();
+    void record_retry();
 
     /**
      * @brief 记录端点成功
      * @param index 端点下标
      * @param when 成功时间，默认使用当前系统时间
      */
-    void markSuccess(
+    void mark_success(
         size_t index,
         std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
 
@@ -103,7 +103,7 @@ public:
      * @param error 失败错误
      * @param endpoint_unhealthy 是否将该端点标记为 unhealthy
      */
-    void markFailure(
+    void mark_failure(
         size_t index,
         EtcdError error,
         bool endpoint_unhealthy = true,
@@ -115,7 +115,7 @@ public:
      * @return 需要主动探测的端点下标列表
      * @note 该方法会在返回前记录本次 probe 时间，避免同一窗口重复探测。
      */
-    [[nodiscard]] std::vector<size_t> collectDueProbes(
+    [[nodiscard]] std::vector<size_t> collect_due_probes(
         std::chrono::system_clock::time_point now = std::chrono::system_clock::now());
 
     /**
@@ -123,7 +123,7 @@ public:
      * @param index 端点下标
      * @param when 探测成功时间
      */
-    void markProbeSuccess(
+    void mark_probe_success(
         size_t index,
         std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
 
@@ -133,7 +133,7 @@ public:
      * @param error 探测失败错误
      * @param when 探测失败时间
      */
-    void markProbeFailure(
+    void mark_probe_failure(
         size_t index,
         EtcdError error,
         std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
@@ -144,7 +144,7 @@ public:
      * @param attempt 已发生的尝试次数（从 0 开始）
      * @return 下一步重试动作
      */
-    [[nodiscard]] EtcdRetryDecision classifyRetry(const EtcdError& error, size_t attempt) const;
+    [[nodiscard]] EtcdRetryDecision classify_retry(const EtcdError& error, size_t attempt) const;
 
     /**
      * @brief 计算某次重试前的退避时间
@@ -152,32 +152,32 @@ public:
      * @return 退避时间，按指数增长并受 max_backoff 限制
      * @note 当前不在此处引入随机抖动，保持离线策略测试可重复。
      */
-    [[nodiscard]] std::chrono::milliseconds backoffForAttempt(size_t attempt) const;
+    [[nodiscard]] std::chrono::milliseconds backoff_for_attempt(size_t attempt) const;
 
     /**
      * @brief 获取端点健康快照
      * @return 只读端点快照列表
      */
-    [[nodiscard]] const std::vector<EtcdEndpointHealthSnapshot>& getEndpointSnapshots() const;
+    [[nodiscard]] const std::vector<EtcdEndpointHealthSnapshot>& get_endpoint_snapshots() const;
 
     /**
      * @brief 获取统计快照
      * @return 当前统计副本
      */
-    [[nodiscard]] EtcdClientStats getStats() const;
+    [[nodiscard]] EtcdClientStats get_stats() const;
 
     /**
      * @brief 获取当前有效重试次数
      * @return 至少为 1 的尝试次数
      */
-    [[nodiscard]] size_t maxAttempts() const;
+    [[nodiscard]] size_t max_attempts() const;
 
 private:
     EtcdClusterState(const EtcdClusterState&) = default;
     EtcdClusterState& operator=(const EtcdClusterState&) = default;
 
-    [[nodiscard]] std::optional<size_t> selectStickyLeaderEndpoint() const;
-    [[nodiscard]] bool hasAlternativeEndpoint(size_t excluded_index) const;
+    [[nodiscard]] std::optional<size_t> select_sticky_leader_endpoint() const;
+    [[nodiscard]] bool has_alternative_endpoint(size_t excluded_index) const;
 
 private:
     EtcdProductionConfig m_production;
@@ -244,10 +244,10 @@ public:
     EtcdClusterClientBuilder& operator=(EtcdClusterClientBuilder&&) noexcept = default;
 
     EtcdClusterClientBuilder& endpoint(std::string endpoint);
-    EtcdClusterClientBuilder& apiPrefix(std::string prefix);
-    EtcdClusterClientBuilder& requestTimeout(std::chrono::milliseconds timeout);
-    EtcdClusterClientBuilder& productionConfig(EtcdProductionConfig config);
-    EtcdClusterClientBuilder& connectionsPerEndpoint(size_t count);
+    EtcdClusterClientBuilder& api_prefix(std::string prefix);
+    EtcdClusterClientBuilder& request_timeout(std::chrono::milliseconds timeout);
+    EtcdClusterClientBuilder& production_config(EtcdProductionConfig config);
+    EtcdClusterClientBuilder& connections_per_endpoint(size_t count);
     EtcdClusterClientBuilder& config(EtcdConfig config);
 
     /**
@@ -260,7 +260,7 @@ public:
     }
 
     [[nodiscard]] EtcdClusterClient build() const;
-    [[nodiscard]] const EtcdConfig& buildConfig() const;
+    [[nodiscard]] const EtcdConfig& build_config() const;
 
 private:
     EtcdClusterClientBuilder(const EtcdClusterClientBuilder&) = default;
@@ -271,10 +271,10 @@ private:
 
 /**
  * @brief 多端点同步 EtcdClient 无锁池
- * @details 为每个 endpoint 创建固定数量的 EtcdClient。调用方通过 tryAcquire()
+ * @details 为每个 endpoint 创建固定数量的 EtcdClient。调用方通过 try_acquire()
  *          获取独占租约并直接执行 connect/put/get 等操作；池本身不代替调用方执行请求、
  *          重试或健康检查。
- * @note tryAcquire() 不阻塞；池空时返回 EtcdErrorType::PoolExhausted。
+ * @note try_acquire() 不阻塞；池空时返回 EtcdErrorType::PoolExhausted。
  */
 class EtcdClusterClient
 {
@@ -292,14 +292,14 @@ public:
      * @return 成功返回租约；配置无效、池内部失败或暂无空闲 client 时返回 EtcdError
      * @note 该操作只访问无锁队列，不连接网络且不阻塞调用线程。
      */
-    [[nodiscard]] EtcdClientAcquireResult tryAcquire();
+    [[nodiscard]] EtcdClientAcquireResult try_acquire();
 
     /**
      * @brief 获取独占租约并确保 client 已连接
      * @return 成功返回已连接租约；池获取或同步建连失败时返回 EtcdError
      * @note 该方法会执行同步网络连接，租约在错误路径上自动归还。
      */
-    [[nodiscard]] EtcdClientAcquireResult acquireConnected();
+    [[nodiscard]] EtcdClientAcquireResult acquire_connected();
 
     /**
      * @brief 使用一个已连接的独占 client 执行同步操作
@@ -309,12 +309,12 @@ public:
      * @note 租约在成功和所有错误路径上都会自动归还；该方法可能同步阻塞。
      */
     template <class Fn>
-    [[nodiscard]] auto withClient(Fn&& fn)
+    [[nodiscard]] auto with_client(Fn&& fn)
         -> std::expected<
             typename std::invoke_result_t<Fn, EtcdClient&>::value_type,
             EtcdError>
     {
-        auto lease = acquireConnected();
+        auto lease = acquire_connected();
         if (!lease.has_value()) {
             return std::unexpected(lease.error());
         }
@@ -324,7 +324,7 @@ public:
     /** @brief 返回池持有的 client 总数。 */
     [[nodiscard]] size_t size() const noexcept;
     /** @brief 返回当前空闲 client 数量的并发快照。 */
-    [[nodiscard]] size_t idleCount() const noexcept;
+    [[nodiscard]] size_t idle_count() const noexcept;
 
 private:
     std::shared_ptr<details::EtcdClientPoolState> m_state;
@@ -339,7 +339,7 @@ inline EtcdClusterClient EtcdClusterClientBuilder::build() const
     return EtcdClusterClient(m_config);
 }
 
-inline const EtcdConfig& EtcdClusterClientBuilder::buildConfig() const
+inline const EtcdConfig& EtcdClusterClientBuilder::build_config() const
 {
     return m_config;
 }

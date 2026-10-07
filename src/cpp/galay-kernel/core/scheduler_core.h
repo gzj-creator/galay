@@ -46,16 +46,16 @@ template <typename>
 inline constexpr bool kUnsupportedReadyResumeCallback = false;
 
 template <typename ResumeFn>
-void invokeReadyEntryResume(ResumeFn& resume_fn, ReadyEntry& entry)
+void invoke_ready_entry_resume(ResumeFn& resume_fn, ReadyEntry& entry)
 {
     if constexpr (std::is_invocable_v<ResumeFn&, ReadyEntry&>) {
         resume_fn(entry);
     } else if constexpr (std::is_invocable_v<ResumeFn&, TaskRef&>) {
-        if (!entry.isCppTask()) {
-            (void)resumeReadyEntry(entry);
+        if (!entry.is_cpp_task()) {
+            (void)resume_ready_entry(entry);
             return;
         }
-        TaskRef task = readyEntryToTaskRef(entry);
+        TaskRef task = ready_entry_to_task_ref(entry);
         resume_fn(task);
     } else {
         static_assert(kUnsupportedReadyResumeCallback<ResumeFn>,
@@ -74,42 +74,42 @@ public:
     {
     }
 
-    void setReadyBudget(size_t ready_budget) noexcept {
+    void set_ready_budget(size_t ready_budget) noexcept {
         m_ready_budget = std::max<size_t>(1, ready_budget);
     }
 
-    size_t readyBudget() const noexcept {
+    size_t ready_budget() const noexcept {
         return m_ready_budget;
     }
 
-    bool hasPendingWork() const noexcept {
-        return m_worker.hasLocalWork() || m_worker.hasPendingInjected();
+    bool has_pending_work() const noexcept {
+        return m_worker.has_local_work() || m_worker.has_pending_injected();
     }
 
-    bool trySteal() noexcept {
-        return m_worker.trySteal();
+    bool try_steal() noexcept {
+        return m_worker.try_steal();
     }
 
     template <typename OnRemoteCollectedFn>
-    size_t collectRemote(OnRemoteCollectedFn&& on_remote_collected_fn) {
-        if (!m_worker.hasLocalWork() ||
-            m_worker.shouldCheckInjected() ||
-            m_worker.hasPendingInjected()) {
-            const size_t drained = m_worker.drainInjected();
+    size_t collect_remote(OnRemoteCollectedFn&& on_remote_collected_fn) {
+        if (!m_worker.has_local_work() ||
+            m_worker.should_check_injected() ||
+            m_worker.has_pending_injected()) {
+            const size_t drained = m_worker.drain_injected();
             on_remote_collected_fn(drained);
             return drained;
         }
         return 0;
     }
 
-    size_t collectRemote() {
-        return collectRemote([](size_t) {});
+    size_t collect_remote() {
+        return collect_remote([](size_t) {});
     }
 
     template <typename ResumeFn, typename OnRemoteCollectedFn>
-    SchedulerReadyPassSummary runReadyPassDetailed(ResumeFn&& resume_fn,
+    SchedulerReadyPassSummary run_ready_pass_detailed(ResumeFn&& resume_fn,
                                                    OnRemoteCollectedFn&& on_remote_collected_fn) {
-        const bool allow_injected_burst = !m_worker.hasLocalWork();
+        const bool allow_injected_burst = !m_worker.has_local_work();
         size_t burst_credit = 0;
         SchedulerReadyPassSummary summary;
         detail::ReadyEntry next;
@@ -119,29 +119,29 @@ public:
         };
 
         while (true) {
-            size_t drained = collectRemote(on_remote_collected);
+            size_t drained = collect_remote(on_remote_collected);
             if (allow_injected_burst) {
                 burst_credit += drained;
             }
 
-            if (!m_worker.popNext(next)) {
-                if (m_worker.hasPendingInjected()) {
+            if (!m_worker.pop_next(next)) {
+                if (m_worker.has_pending_injected()) {
                     continue;
                 }
 
-                drained = m_worker.drainInjected();
+                drained = m_worker.drain_injected();
                 on_remote_collected(drained);
                 if (allow_injected_burst) {
                     burst_credit += drained;
                 }
 
-                if (drained == 0 || !m_worker.popNext(next)) {
+                if (drained == 0 || !m_worker.pop_next(next)) {
                     break;
                 }
             }
 
-            detail::invokeReadyEntryResume(resume_fn, next);
-            detail::releaseReadyEntry(next);
+            detail::invoke_ready_entry_resume(resume_fn, next);
+            detail::release_ready_entry(next);
             ++summary.ran;
             if (allow_injected_burst && burst_credit > 0) {
                 --burst_credit;
@@ -156,7 +156,7 @@ public:
     }
 
     template <typename ResumeFn, typename OnRemoteCollectedFn>
-    SchedulerReadyPassSummary runLocalFollowupPasses(size_t max_passes,
+    SchedulerReadyPassSummary run_local_followup_passes(size_t max_passes,
                                                      ResumeFn&& resume_fn,
                                                      OnRemoteCollectedFn&& on_remote_collected_fn) {
         SchedulerReadyPassSummary aggregate;
@@ -168,14 +168,14 @@ public:
         auto&& on_remote_collected = on_remote_collected_fn;
 
         for (size_t pass = 0; pass < max_passes; ++pass) {
-            auto summary = runReadyPassDetailed(resume, on_remote_collected);
+            auto summary = run_ready_pass_detailed(resume, on_remote_collected);
             aggregate.ran += summary.ran;
             aggregate.drainedRemote += summary.drainedRemote;
             aggregate.passes += summary.passes;
 
             if (summary.ran < m_ready_budget ||
                 summary.drainedRemote != 0 ||
-                !m_worker.hasLocalWork()) {
+                !m_worker.has_local_work()) {
                 break;
             }
         }
@@ -184,36 +184,36 @@ public:
     }
 
     template <typename ResumeFn, typename OnRemoteCollectedFn>
-    size_t runReadyPass(ResumeFn&& resume_fn, OnRemoteCollectedFn&& on_remote_collected_fn) {
-        return runReadyPassDetailed(
+    size_t run_ready_pass(ResumeFn&& resume_fn, OnRemoteCollectedFn&& on_remote_collected_fn) {
+        return run_ready_pass_detailed(
             std::forward<ResumeFn>(resume_fn),
             std::forward<OnRemoteCollectedFn>(on_remote_collected_fn)).ran;
     }
 
     template <typename ResumeFn>
-    size_t runReadyPass(ResumeFn&& resume_fn) {
-        return runReadyPass(std::forward<ResumeFn>(resume_fn), [](size_t) {});
+    size_t run_ready_pass(ResumeFn&& resume_fn) {
+        return run_ready_pass(std::forward<ResumeFn>(resume_fn), [](size_t) {});
     }
 
     template <typename CollectCompletionsFn,
               typename PollFn,
               typename ResumeFn,
               typename StageObserverFn>
-    void runLoopIteration(CollectCompletionsFn&& collect_completions_fn,
+    void run_loop_iteration(CollectCompletionsFn&& collect_completions_fn,
                           PollFn&& poll_fn,
                           ResumeFn&& resume_fn,
         StageObserverFn&& stage_observer_fn) {
         stage_observer_fn(SchedulerCoreStage::CollectRemote);
-        collectRemote();
+        collect_remote();
 
         stage_observer_fn(SchedulerCoreStage::CollectCompletions);
         collect_completions_fn();
 
         stage_observer_fn(SchedulerCoreStage::RunReady);
-        runReadyPass(std::forward<ResumeFn>(resume_fn));
+        run_ready_pass(std::forward<ResumeFn>(resume_fn));
 
-        if (!hasPendingWork()) {
-            if (!trySteal()) {
+        if (!has_pending_work()) {
+            if (!try_steal()) {
                 stage_observer_fn(SchedulerCoreStage::Poll);
                 poll_fn();
             }

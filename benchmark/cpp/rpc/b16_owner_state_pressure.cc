@@ -13,7 +13,7 @@ using namespace galay::rpc;
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -35,7 +35,7 @@ int main()
         auto start = RpcClock::now();
         for (size_t i = 0; i < iterations; ++i) {
             RpcCancellationSource source;
-            auto registration = source.token().registerCallback([&observed] { ++observed; });
+            auto registration = source.token().register_callback([&observed] { ++observed; });
             source.cancel();
         }
         auto stop = RpcClock::now();

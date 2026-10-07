@@ -109,7 +109,7 @@ std::uint16_t free_port() {
 
 HttpServerConfig config(std::uint16_t port) {
     return HttpServerBuilder().host("127.0.0.1").port(port)
-        .ioSchedulerCount(1).parallelSchedulerCount(1).buildConfig();
+        .io_scheduler_count(1).parallel_scheduler_count(1).build_config();
 }
 
 #if defined(__linux__)
@@ -138,6 +138,18 @@ struct ProcessResources {
 
 ProcessResources process_resources() {
     return {entry_count("/proc/self/fd"), entry_count("/proc/self/task")};
+}
+
+ProcessResources idle_process_resources() {
+    // Prior Runtime threads can remain visible in procfs briefly after join.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    for (;;) {
+        const auto resources = process_resources();
+        if (resources.threads == 1) return resources;
+        require(std::chrono::steady_clock::now() < deadline,
+                "prior Runtime threads must exit before the resource baseline");
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
 }
 #endif
 
@@ -236,16 +248,16 @@ struct BorrowingHandler {
 
     Task<ApiResult<std::string_view>> operator()(ApiContext& context, fixture::EchoInput input) {
         const auto* request = &context.request;
-        const std::string before = context.request.bodyStr();
+        const std::string before = context.request.body_str();
         const auto suspended = co_await suspend_twice();
         require(suspended.has_value(), "typed handler scheduling result");
-        require(&context.request == request && context.request.bodyStr() == before,
+        require(&context.request == request && context.request.body_str() == before,
                 "ApiContext/request survive nested co_await");
         require(input.value == "live" && lifetime->label == "builder-owned",
                 "typed input and handler survive builder/PreparedApi destruction");
         const auto previous = lifetime->completed.fetch_add(1);
         require(previous >= 0, "typed handler completion counter");
-        co_return std::string_view(context.request.bodyStr());
+        co_return std::string_view(context.request.body_str());
     }
 };
 
@@ -303,13 +315,13 @@ public:
 #endif
         const PortReservation before_listen(resource_->trace->port);
         const auto previous = resource_->trace->installs.fetch_add(1);
-        require(previous >= 0 && api.router.findHandler(HttpMethod::GET, "/value").handler != nullptr,
+        require(previous >= 0 && api.router.find_handler(HttpMethod::GET, "/value").handler != nullptr,
                 "policy runs before consuming PreparedApi router");
         if (resource_->trace->fail_install.load()) {
             return std::unexpected(ApiError{ApiErrorCode::kResourceError, "retryable policy failure", 503});
         }
         resource_->trace->installed_address.store(this);
-        api.router.addHandler<HttpMethod::GET, HttpMethod::POST>("/policy",
+        api.router.add_handler<HttpMethod::GET, HttpMethod::POST>("/policy",
             [this](HttpConn& connection, HttpRequest request) {
                 return handle(connection, std::move(request));
             });
@@ -319,14 +331,14 @@ public:
 private:
     Task<ApiResult<std::string>> work(ApiContext& context) {
         const auto* request = &context.request;
-        const std::string before = context.request.bodyStr();
+        const std::string before = context.request.body_str();
         const auto suspended = co_await suspend_twice();
         require(suspended.has_value(), "policy handler scheduling result");
         require(resource_->trace->installed_address.load() == this && resource_->trace->destroyed.load() == 0,
                 "server-owned policy has a stable live address across co_await");
-        require(&context.request == request && context.request.bodyStr() == before,
+        require(&context.request == request && context.request.body_str() == before,
                 "policy ApiContext survives nested co_await");
-        co_return resource_->label + ":" + context.request.bodyStr();
+        co_return resource_->label + ":" + context.request.body_str();
     }
 
     Task<void> handle(HttpConn& connection, HttpRequest request) {
@@ -336,9 +348,9 @@ private:
         const auto encoded = json::serialize(**result);
         require(encoded.has_value(), "encode custom policy response");
         auto response = Http1_1ResponseBuilder().status(200).header("Connection", "close")
-            .header("Content-Type", "application/json").body(*encoded).buildMove();
-        auto writer = connection.getWriter();
-        const auto sent = co_await writer.sendResponse(std::move(response));
+            .header("Content-Type", "application/json").body(*encoded).build_move();
+        auto writer = connection.get_writer();
+        const auto sent = co_await writer.send_response(std::move(response));
         require(sent && *sent, "send custom policy response");
         const auto previous = resource_->trace->completed.fetch_add(1);
         require(previous >= 0, "policy handler completion counter");
@@ -405,7 +417,7 @@ public:
 #endif
         const PortReservation before_listen(trace_->port);
         const auto previous = trace_->installs.fetch_add(1);
-        require(previous >= 0 && api.router.findHandler(HttpMethod::GET, "/value").handler != nullptr,
+        require(previous >= 0 && api.router.find_handler(HttpMethod::GET, "/value").handler != nullptr,
                 "HttpSwagger runs before PreparedApi router consumption");
         return swagger_.install(api);
     }
@@ -443,7 +455,7 @@ public:
 #endif
         const PortReservation before_listen(trace_->port);
         const auto previous = trace_->installs.fetch_add(1);
-        require(previous >= 0 && api.router.findHandler(HttpMethod::GET, "/value").handler != nullptr,
+        require(previous >= 0 && api.router.find_handler(HttpMethod::GET, "/value").handler != nullptr,
                 "explicit file strategy runs before PreparedApi router consumption");
         return install_docs_from_directory(api, docs_, directory_);
     }
@@ -514,19 +526,19 @@ void invalid_prepared_has_no_side_effects() {
     const auto port = free_port();
     auto trace = std::make_shared<PolicyTrace>();
 #if defined(__linux__)
-    const auto before = process_resources();
+    const auto before = idle_process_resources();
 #endif
     ApiServer<InstallCounter> server(config(port), InstallCounter(trace));
     auto api = prepared();
     const auto document = api.document;
-    const auto* route = api.router.findHandler(HttpMethod::GET, "/value").handler;
+    const auto* route = api.router.find_handler(HttpMethod::GET, "/value").handler;
     for (const auto invalid : {std::shared_ptr<const std::string>{}, std::make_shared<const std::string>()}) {
         api.document = invalid;
         const auto result = server.start(std::move(api));
         require(!result && !result.error().message.empty(), "invalid PreparedApi is explicitly rejected");
         require(!server.is_running() && !server.document() && trace->installs.load() == 0,
                 "invalid PreparedApi rejected before policy invocation or HTTP startup");
-        require(api.document == invalid && api.router.findHandler(HttpMethod::GET, "/value").handler == route,
+        require(api.document == invalid && api.router.find_handler(HttpMethod::GET, "/value").handler == route,
                 "invalid PreparedApi rejection preserves caller state");
 #if defined(__linux__)
         require(process_resources() == before, "invalid PreparedApi has no fd/thread side effects");
@@ -546,14 +558,14 @@ void directory_policy_failure_retry() {
     auto trace = std::make_shared<PolicyTrace>();
     trace->port = port;
 #if defined(__linux__)
-    trace->before_install = process_resources();
+    trace->before_install = idle_process_resources();
 #endif
     ApiServer<DirectoryDocs> server(config(port), DirectoryDocs(docs, assets.path.string(), trace));
     std::shared_ptr<const std::string> document;
     {
         auto api = prepared();
         document = api.document;
-        const auto* route = api.router.findHandler(HttpMethod::GET, "/value").handler;
+        const auto* route = api.router.find_handler(HttpMethod::GET, "/value").handler;
         const auto failed = server.start(std::move(api));
         require(!failed && failed.error().code == ApiErrorCode::kResourceError &&
                 failed.error().message.find("swagger-ui.css") != std::string::npos,
@@ -561,14 +573,14 @@ void directory_policy_failure_retry() {
         require(!server.is_running() && !server.document() && trace->installs.load() == 1,
                 "failed explicit file install does not initialize server");
         require(!api.docs_installed && api.document == document &&
-                api.router.findHandler(HttpMethod::GET, "/value").handler == route,
+                api.router.find_handler(HttpMethod::GET, "/value").handler == route,
                 "failed explicit file install preserves PreparedApi router/document");
         for (const auto path : {"/reference.json", "/reference", "/reference/", "/reference/swagger-initializer.js",
                                 "/reference/swagger-ui.css", "/reference/swagger-ui-bundle.js",
                                 "/reference/swagger-ui-standalone-preset.js", "/reference/favicon-16x16.png",
                                 "/reference/favicon-32x32.png", "/reference/LICENSE", "/reference/NOTICE",
                                 "/reference/README.md", "/reference/SHA256SUMS"}) {
-            require(api.router.findHandler(HttpMethod::GET, path).handler == nullptr,
+            require(api.router.find_handler(HttpMethod::GET, path).handler == nullptr,
                     "failed explicit file install leaves no partial docs routes");
         }
 #if defined(__linux__)
@@ -611,7 +623,7 @@ void swagger_delegation() {
     auto trace = std::make_shared<PolicyTrace>();
     trace->port = port;
 #if defined(__linux__)
-    trace->before_install = process_resources();
+    trace->before_install = idle_process_resources();
 #endif
     ApiServer<CountingSwagger> server(config(port), CountingSwagger(docs, trace));
 #if defined(__linux__)
@@ -647,18 +659,18 @@ void listener_failure_is_single_use() {
             "occupied loopback port returns explicit transport_error");
     require(!server.is_running() && trace->installs.load() == 1 && server.document() == document,
             "listen failure occurs after one successful install and retains document");
-    require(api.router.findHandler(HttpMethod::GET, "/value").handler == nullptr,
+    require(api.router.find_handler(HttpMethod::GET, "/value").handler == nullptr,
             "HTTP initialization consumes router even when listen fails");
     occupied.release();
     auto unused = prepared();
-    const auto* route = unused.router.findHandler(HttpMethod::GET, "/value").handler;
+    const auto* route = unused.router.find_handler(HttpMethod::GET, "/value").handler;
     const auto repeated = server.start(std::move(unused));
     require(!repeated && repeated.error().code == ApiErrorCode::kServerError && trace->installs.load() == 1,
             "listen failure freezes server even after port becomes available");
     server.stop();
     const auto restarted = server.start(std::move(unused));
     require(!restarted && restarted.error().code == ApiErrorCode::kServerError &&
-            unused.router.findHandler(HttpMethod::GET, "/value").handler == route,
+            unused.router.find_handler(HttpMethod::GET, "/value").handler == route,
             "stop after failed listen cannot restart or consume another router");
     ApiServer<> replacement(config(occupied.port));
     require(replacement.start(std::move(unused)).has_value(), "fresh server and API can use released port");
@@ -695,7 +707,7 @@ void move_only_failure_retry_and_lifetime() {
     auto lifetime = std::make_shared<fixture::HandlerLifetime>();
     std::weak_ptr<fixture::HandlerLifetime> weak = lifetime;
 #if defined(__linux__)
-    trace->before_install = process_resources();
+    trace->before_install = idle_process_resources();
 #endif
     {
         ApiServer<MoveOnlyPolicy> server(config(port), MoveOnlyPolicy(trace));
@@ -707,15 +719,15 @@ void move_only_failure_retry_and_lifetime() {
             auto api = prepared(lifetime);
             lifetime.reset();
             document = api.document;
-            const auto* handler = api.router.findHandler(HttpMethod::GET, "/value").handler;
+            const auto* handler = api.router.find_handler(HttpMethod::GET, "/value").handler;
             const auto failed = server.start(std::move(api));
             require(!failed && failed.error().code == ApiErrorCode::kResourceError &&
                     failed.error().message == "retryable policy failure" && failed.error().status == 503,
                     "failed policy error must propagate unchanged");
             require(!server.is_running() && !server.document() && trace->installs.load() == 1,
                     "failed policy must not publish/start HTTP state");
-            require(api.document == document && api.router.findHandler(HttpMethod::GET, "/value").handler == handler &&
-                    api.router.findHandler(HttpMethod::GET, "/policy").handler == nullptr,
+            require(api.document == document && api.router.find_handler(HttpMethod::GET, "/value").handler == handler &&
+                    api.router.find_handler(HttpMethod::GET, "/policy").handler == nullptr,
                     "failed install must not consume or mutate the caller router");
 #if defined(__linux__)
             require(process_resources() == *trace->before_install, "failed custom install has no fd/thread side effects");
@@ -731,11 +743,11 @@ void move_only_failure_retry_and_lifetime() {
         require(trace->installs.load() == 2 && trace->completed.load() == 2 && trace->destroyed.load() == 0,
                 "custom install runs once per attempt, never during requests");
         auto unused = prepared();
-        const auto* untouched = unused.router.findHandler(HttpMethod::GET, "/value").handler;
+        const auto* untouched = unused.router.find_handler(HttpMethod::GET, "/value").handler;
         const auto repeated = server.start(std::move(unused));
         require(!repeated && repeated.error().code == ApiErrorCode::kServerError && server.is_running(),
                 "start while running must fail with server_error");
-        require(trace->installs.load() == 2 && unused.router.findHandler(HttpMethod::GET, "/value").handler == untouched,
+        require(trace->installs.load() == 2 && unused.router.find_handler(HttpMethod::GET, "/value").handler == untouched,
                 "repeated start must not reinstall or consume another router");
         server.stop();
         const auto restarted = server.start(std::move(unused));

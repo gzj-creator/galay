@@ -22,17 +22,17 @@ public:
     AuthService()
         : RpcService("AuthService")
     {
-        registerMethod("echo", &AuthService::echo);
+        register_method("echo", &AuthService::echo);
     }
 
     Task<void> echo(RpcContext& ctx)
     {
-        ctx.setPayload(ctx.request().payloadView());
+        ctx.set_payload(ctx.request().payload_view());
         co_return;
     }
 };
 
-uint16_t loopbackPort()
+uint16_t loopback_port()
 {
     return static_cast<uint16_t>(43000 + (::getpid() % 3000));
 }
@@ -43,16 +43,16 @@ struct State {
     std::string error;
 };
 
-bool payloadEquals(const RpcCallResult& result, const std::string& expected)
+bool payload_equals(const RpcCallResult& result, const std::string& expected)
 {
     if (!result.has_value() || !result->has_value()) {
         return false;
     }
     const auto& payload = result->value().payload();
-    return result->value().isOk() && std::string(payload.begin(), payload.end()) == expected;
+    return result->value().is_ok() && std::string(payload.begin(), payload.end()) == expected;
 }
 
-Task<void> runClient(uint16_t port, State* state)
+Task<void> run_client(uint16_t port, State* state)
 {
     RpcCallOptions options;
     if (!options.metadata().insert("authorization", "token").has_value()) {
@@ -75,7 +75,7 @@ Task<void> runClient(uint16_t port, State* state)
     auto rejected_task = co_await client.call("AuthService", "echo", "x", missing_options);
     if (!rejected_task.has_value() || !rejected_task->has_value() ||
         !rejected_task->value().has_value() ||
-        rejected_task->value()->errorCode() != RpcErrorCode::UNAUTHENTICATED) {
+        rejected_task->value()->error_code() != RpcErrorCode::UNAUTHENTICATED) {
         state->ok = false;
         state->error = "auth interceptor did not reject with UNAUTHENTICATED";
         co_await client.close();
@@ -84,7 +84,7 @@ Task<void> runClient(uint16_t port, State* state)
     }
 
     auto allowed_task = co_await client.call("AuthService", "echo", "ok", options);
-    if (!allowed_task.has_value() || !payloadEquals(*allowed_task, "ok")) {
+    if (!allowed_task.has_value() || !payload_equals(*allowed_task, "ok")) {
         state->ok = false;
         state->error = "auth interceptor blocked allowed service";
         co_await client.close();
@@ -101,12 +101,12 @@ Task<void> runClient(uint16_t port, State* state)
 
 int main()
 {
-    const uint16_t port = loopbackPort();
+    const uint16_t port = loopback_port();
     auto server = RpcServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .interceptor([](const RpcRequest& request) -> std::expected<void, RpcError> {
             auto authorization = request.metadata().get("authorization");
             if (!authorization.has_value() || *authorization != "token") {
@@ -116,7 +116,7 @@ int main()
         })
         .build();
     AuthService service;
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register auth service: "
                   << registered.error().message() << "\n";
@@ -129,7 +129,7 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();
@@ -138,7 +138,7 @@ int main()
         return 1;
     }
     State state;
-    auto scheduled = runtime.spawnIO(runClient(port, &state));
+    auto scheduled = runtime.spawn_io(run_client(port, &state));
     if (!scheduled.has_value()) {
         runtime.stop();
         server.stop();

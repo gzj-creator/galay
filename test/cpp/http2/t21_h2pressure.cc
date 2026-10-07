@@ -17,7 +17,7 @@ using namespace galay::http2;
 namespace
 {
 
-void stressManyStreamsFairness()
+void stress_many_streams_fairness()
 {
     constexpr size_t kStreams = 1000;
     constexpr size_t kPayloadBytes = 128;
@@ -41,7 +41,7 @@ void stressManyStreamsFairness()
     std::unordered_map<uint32_t, size_t> bytes_by_stream;
     size_t total = 0;
     for (size_t round = 0; round < 16 && total < kStreams * kPayloadBytes; ++round) {
-        auto selected = Http2OutboundScheduler::pickSendableFrames(H2OutboundBudget{
+        auto selected = Http2OutboundScheduler::pick_sendable_frames(H2OutboundBudget{
             .conn_window = static_cast<int32_t>(kStreams * kFrameBytes),
             .max_frame_size = static_cast<uint32_t>(kFrameBytes)
         }, streams, H2SchedulerConfig{
@@ -50,9 +50,9 @@ void stressManyStreamsFairness()
         assert(!selected.frames.empty());
         total += selected.total_data_bytes;
         for (const auto& frame : selected.frames) {
-            const auto* data = frame->asData();
+            const auto* data = frame->as_data();
             assert(data);
-            bytes_by_stream[data->streamId()] += data->data().size();
+            bytes_by_stream[data->stream_id()] += data->data().size();
         }
     }
 
@@ -65,7 +65,7 @@ void stressManyStreamsFairness()
     }
 }
 
-void stressLargeBodyWithoutDataLoss()
+void stress_large_body_without_data_loss()
 {
     constexpr size_t kPayloadBytes = 1024 * 1024;
     constexpr size_t kFrameBytes = 4096;
@@ -86,14 +86,14 @@ void stressLargeBodyWithoutDataLoss()
     size_t total = 0;
     size_t frames = 0;
     while (total < kPayloadBytes) {
-        auto selected = Http2OutboundScheduler::pickSendableFrames(H2OutboundBudget{
+        auto selected = Http2OutboundScheduler::pick_sendable_frames(H2OutboundBudget{
             .conn_window = static_cast<int32_t>(kFrameBytes),
             .max_frame_size = static_cast<uint32_t>(kFrameBytes)
         }, streams, H2SchedulerConfig{
             .base_quantum = kFrameBytes
         });
         assert(selected.frames.size() == 1);
-        const auto* data = selected.frames.front()->asData();
+        const auto* data = selected.frames.front()->as_data();
         assert(data);
         assert(data->data().size() == kFrameBytes);
         total += selected.total_data_bytes;
@@ -103,7 +103,7 @@ void stressLargeBodyWithoutDataLoss()
             assert(streams[0].pending.chunks.size() == 1);
             assert(streams[0].pending.chunks.front().size() == kPayloadBytes);
             assert(streams[0].pending.front_offset == total);
-            assert(!data->isEndStream());
+            assert(!data->is_end_stream());
         }
     }
 
@@ -112,41 +112,41 @@ void stressLargeBodyWithoutDataLoss()
     assert(streams[0].pending.front_offset == 0);
 }
 
-void stressWindowUpdates()
+void stress_window_updates()
 {
     H2FlowController flow;
     constexpr size_t kStreams = 256;
     for (size_t i = 0; i < kStreams; ++i) {
-        assert(flow.ensureStream(static_cast<uint32_t>(1 + i * 2)).has_value());
+        assert(flow.ensure_stream(static_cast<uint32_t>(1 + i * 2)).has_value());
     }
 
     for (size_t round = 0; round < 128; ++round) {
         const uint32_t stream_id = static_cast<uint32_t>(1 + (round % kStreams) * 2);
-        const size_t sendable = flow.availableToSend(stream_id, 512, 512);
+        const size_t sendable = flow.available_to_send(stream_id, 512, 512);
         assert(sendable > 0);
-        assert(flow.consumeSendWindow(stream_id, sendable).has_value());
-        assert(flow.applyConnectionWindowUpdate(static_cast<uint32_t>(sendable)).has_value());
-        assert(flow.applyStreamWindowUpdate(stream_id, static_cast<uint32_t>(sendable)).has_value());
+        assert(flow.consume_send_window(stream_id, sendable).has_value());
+        assert(flow.apply_connection_window_update(static_cast<uint32_t>(sendable)).has_value());
+        assert(flow.apply_stream_window_update(stream_id, static_cast<uint32_t>(sendable)).has_value());
     }
 
-    auto overflow = flow.applyConnectionWindowUpdate(2147483647u - kDefaultInitialWindowSize + 1u);
+    auto overflow = flow.apply_connection_window_update(2147483647u - kDefaultInitialWindowSize + 1u);
     assert(!overflow.has_value());
     assert(overflow.error() == H2FlowControlError::WindowOverflow);
 }
 
-void stressGoawayExistingStreams()
+void stress_goaway_existing_streams()
 {
     H2DispatcherConnectionState state;
     for (uint32_t stream_id = 1; stream_id <= 199; stream_id += 2) {
         Http2HeadersFrame headers;
         headers.header().stream_id = stream_id;
-        headers.setEndHeaders(true);
+        headers.set_end_headers(true);
         auto result = Http2FrameDispatcher::dispatch(headers, state);
         assert(result.ok);
     }
 
     Http2GoAwayFrame goaway;
-    goaway.setLastStreamId(99);
+    goaway.set_last_stream_id(99);
     auto goaway_result = Http2FrameDispatcher::dispatch(goaway, state);
     assert(goaway_result.ok);
     assert(state.goaway_received);
@@ -155,14 +155,14 @@ void stressGoawayExistingStreams()
     for (uint32_t stream_id = 101; stream_id <= 199; stream_id += 2) {
         Http2DataFrame data;
         data.header().stream_id = stream_id;
-        data.setData("x");
+        data.set_data("x");
         auto result = Http2FrameDispatcher::dispatch(data, state);
         assert(result.ok);
     }
 
     Http2HeadersFrame rejected;
     rejected.header().stream_id = 201;
-    rejected.setEndHeaders(true);
+    rejected.set_end_headers(true);
     auto rejected_result = Http2FrameDispatcher::dispatch(rejected, state);
     assert(!rejected_result.ok);
     assert(rejected_result.error_scope == H2DispatchErrorScope::Stream);
@@ -172,10 +172,10 @@ void stressGoawayExistingStreams()
 
 int main()
 {
-    stressManyStreamsFairness();
-    stressLargeBodyWithoutDataLoss();
-    stressWindowUpdates();
-    stressGoawayExistingStreams();
+    stress_many_streams_fairness();
+    stress_large_body_without_data_loss();
+    stress_window_updates();
+    stress_goaway_existing_streams();
 
     std::cout << "T85-H2KernelPressure PASS\n";
     return 0;

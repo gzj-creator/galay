@@ -17,7 +17,7 @@ using namespace galay::kernel;
 #if defined(__GNUC__) && !defined(__clang__)
 __attribute__((noinline))
 #endif
-Task<bool> sendEchoRequest(const std::string& url, const std::string& message) {
+Task<bool> send_echo_request(const std::string& url, const std::string& message) {
     std::cout << "Connecting to " << url << "...\n";
 
     // 创建 HttpClient 并连接
@@ -61,8 +61,8 @@ Task<bool> sendEchoRequest(const std::string& url, const std::string& message) {
     // 打印响应
     std::cout << "Response received:\n";
     std::cout << "  Status: " << static_cast<int>(response.header().code())
-              << " " << httpStatusCodeToString(response.header().code()) << "\n";
-    std::cout << "  Body: " << response.getBodyStr() << "\n";
+              << " " << http_status_code_to_string(response.header().code()) << "\n";
+    std::cout << "  Body: " << response.get_body_str() << "\n";
 
     // GCC13 协程在复杂析构路径上可能触发 ICE，这里依赖析构关闭连接。
     std::cout << "Connection closed\n";
@@ -91,12 +91,12 @@ int main(int argc, char* argv[]) {
 
     try {
         // 创建 Runtime
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
         runtime.start();
 
         std::cout << "Runtime started\n";
 
-        auto join = runtime.spawnIO(sendEchoRequest(url, message));
+        auto join = runtime.spawn_io(send_echo_request(url, message));
         bool ok = false;
         if (join) {
             auto result = join->join();

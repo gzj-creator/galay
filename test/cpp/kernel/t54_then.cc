@@ -26,7 +26,7 @@ std::mutex g_sequence_mutex;
 std::vector<int> g_sequence;
 std::atomic<int> g_completed{0};
 
-Task<void> pushStep(int step) {
+Task<void> push_step(int step) {
     {
         std::lock_guard<std::mutex> lock(g_sequence_mutex);
         g_sequence.push_back(step);
@@ -37,14 +37,14 @@ Task<void> pushStep(int step) {
 
 }  // namespace
 
-static_assert(std::is_same_v<decltype(std::declval<Task<void>&>().then(pushStep(2))), Task<void>&>);
-static_assert(std::is_same_v<decltype(std::declval<Task<void>>().then(pushStep(2))), Task<void>&&>);
+static_assert(std::is_same_v<decltype(std::declval<Task<void>&>().then(push_step(2))), Task<void>&>);
+static_assert(std::is_same_v<decltype(std::declval<Task<void>>().then(push_step(2))), Task<void>&&>);
 
 int main() {
     ParallelScheduler scheduler;
     scheduler.start();
 
-    scheduler.schedule(detail::TaskAccess::detachTask(pushStep(1).then(pushStep(2))));
+    scheduler.schedule(detail::TaskAccess::detach_task(push_step(1).then(push_step(2))));
 
     for (int i = 0; i < 100 && g_completed.load(std::memory_order_acquire) < 2; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));

@@ -10,20 +10,20 @@
 
 namespace galay::mcp::detail {
 
-const std::string& emptyObjectString();
+const std::string& empty_object_string();
 
 template <typename T, typename ParseFn>
-std::expected<std::vector<T>, McpError> parseListField(std::string_view body,
+std::expected<std::vector<T>, McpError> parse_list_field(std::string_view body,
                                                        const char* fieldName,
-                                                       ParseFn&& parseFn) {
+                                                       ParseFn&& parse_fn) {
     auto docExp = JsonDocument::parse(body);
     if (!docExp) {
-        return std::unexpected(McpError::parseError(docExp.error().details()));
+        return std::unexpected(McpError::parse_error(docExp.error().details()));
     }
 
     json::Json obj = docExp.value().root();
     if (!obj.is_object()) {
-        return std::unexpected(McpError::parseError("Expected JSON object"));
+        return std::unexpected(McpError::parse_error("Expected JSON object"));
     }
 
     std::vector<T> values;
@@ -34,9 +34,9 @@ std::expected<std::vector<T>, McpError> parseListField(std::string_view body,
 
     for (size_t i = 0; i < arr.size(); ++i) {
         const json::Json item = arr.at(i);
-        auto parsed = parseFn(item);
+        auto parsed = parse_fn(item);
         if (!parsed) {
-            return std::unexpected(McpError::parseError(parsed.error().message()));
+            return std::unexpected(McpError::parse_error(parsed.error().message()));
         }
         values.emplace_back(std::move(parsed.value()));
     }
@@ -44,9 +44,9 @@ std::expected<std::vector<T>, McpError> parseListField(std::string_view body,
     return values;
 }
 
-std::expected<InitializeResult, McpError> parseInitializeResult(std::string_view body);
-std::expected<std::string, McpError> parseToolCallResult(std::string_view body);
-std::expected<std::string, McpError> parseFirstTextContent(std::string_view body,
+std::expected<InitializeResult, McpError> parse_initialize_result(std::string_view body);
+std::expected<std::string, McpError> parse_tool_call_result(std::string_view body);
+std::expected<std::string, McpError> parse_first_text_content(std::string_view body,
                                                            const char* fieldName);
 
 } // namespace galay::mcp::detail

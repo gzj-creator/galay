@@ -12,11 +12,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -31,22 +31,22 @@ bool contains(const std::string& haystack, const std::string& needle) {
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto ioscheduler = root / "galay-kernel" / "core" / "io_ready_queue.cc";
     const auto scheduler_base = root / "galay-kernel" / "core" / "io_scheduler_base.hpp";
 
     std::vector<std::string> failures;
 
-    const auto ioscheduler_src = readAll(ioscheduler);
+    const auto ioscheduler_src = read_all(ioscheduler);
     if (ioscheduler_src.empty()) {
         failures.push_back(ioscheduler.string() + ": failed to read io_ready_queue.cc");
     } else if (!contains(ioscheduler_src, "!stealing_enabled")) {
         failures.push_back(ioscheduler.string() +
-                           ": trySteal() must guard on worker stealing_enabled");
+                           ": try_steal() must guard on worker stealing_enabled");
     }
 
-    const auto scheduler_src = readAll(scheduler_base);
-    if (!contains(scheduler_src, "m_worker.setStealingEnabled(false);")) {
+    const auto scheduler_src = read_all(scheduler_base);
+    if (!contains(scheduler_src, "m_worker.set_stealing_enabled(false);")) {
         failures.push_back(scheduler_base.string() +
                            ": shared IO scheduler must disable sibling work-stealing");
     }

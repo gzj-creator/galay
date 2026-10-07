@@ -17,7 +17,7 @@ static_assert(requires(McpClient& client, const std::string& url) {
         client.connect(url)
     } -> std::same_as<decltype(std::declval<HttpClient&>().connect(std::declval<const std::string&>()))>;
     {
-        client.disconnectAsync()
+        client.disconnect_async()
     } -> std::same_as<decltype(std::declval<HttpClient&>().close())>;
 });
 

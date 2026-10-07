@@ -84,17 +84,17 @@ public:
     }
 
     bool await_ready() const noexcept {
-        return !m_task.isValid();
+        return !m_task.is_valid();
     }
 
     template<typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        auto* scheduler = handle.promise().taskRefView().belongScheduler();
+        auto* scheduler = handle.promise().task_ref_view().belong_scheduler();
         if (scheduler == nullptr) {
             m_scheduled = false;
             return false;
         }
-        if (!scheduleTask(scheduler, std::move(m_task))) {
+        if (!schedule_task(scheduler, std::move(m_task))) {
             m_scheduled = false;
             return false;
         }
@@ -109,7 +109,7 @@ private:
     bool m_scheduled = true;
 };
 
-inline StartDetachedTaskAwaitable startDetachedTask(Task<void> task) {
+inline StartDetachedTaskAwaitable start_detached_task(Task<void> task) {
     return StartDetachedTaskAwaitable(std::move(task));
 }
 
@@ -127,7 +127,7 @@ public:
         m_ready.push_back(stream);
     }
 
-    std::vector<Http2Stream::ptr> takeReady() {
+    std::vector<Http2Stream::ptr> take_ready() {
         std::vector<Http2Stream::ptr> ready;
         ready.swap(m_ready);
         return ready;
@@ -169,7 +169,7 @@ public:
         }
 
         BatchResult await_resume() {
-            return m_mailbox->popBatch(m_max_count);
+            return m_mailbox->pop_batch(m_max_count);
         }
 
     private:
@@ -177,15 +177,15 @@ public:
         size_t m_max_count;
     };
 
-    void sendBatch(Batch&& batch) {
+    void send_batch(Batch&& batch) {
         if (m_closed || batch.empty()) {
             return;
         }
         m_batches.push_back(std::move(batch));
-        wakeWaiter();
+        wake_waiter();
     }
 
-    RecvBatchAwaitable recvBatch(
+    RecvBatchAwaitable recv_batch(
         size_t max_count = galay::spsc::UnboundedChannel<Http2Stream::ptr>::DEFAULT_BATCH_SIZE) {
         return RecvBatchAwaitable(this, max_count);
     }
@@ -195,7 +195,7 @@ public:
             return;
         }
         m_closed = true;
-        wakeWaiter();
+        wake_waiter();
     }
 
     void reset() {
@@ -208,7 +208,7 @@ public:
 private:
     friend class RecvBatchAwaitable;
 
-    BatchResult popBatch(size_t max_count) {
+    BatchResult pop_batch(size_t max_count) {
         if (m_batches.empty()) {
             if (m_closed) {
                 return std::nullopt;
@@ -231,14 +231,14 @@ private:
         return batch;
     }
 
-    void wakeWaiter() {
+    void wake_waiter() {
         if (!m_hasWaiter) {
             return;
         }
         m_hasWaiter = false;
         auto waiter = std::move(m_waiter);
         m_waiter = {};
-        waiter.wakeUp();
+        waiter.wake_up();
     }
 
     std::deque<Batch> m_batches;
@@ -255,7 +255,7 @@ public:
     public:
         GetActiveStreamsAwaitable(Http2ConnContext* ctx, size_t max_count)
             : m_ctx(ctx)
-            , m_recv_awaitable(ctx->m_mailbox->recvBatch(max_count))
+            , m_recv_awaitable(ctx->m_mailbox->recv_batch(max_count))
         {
         }
 
@@ -299,12 +299,12 @@ public:
     Http2ConnContext(Http2ConnContext&&) = delete;
     Http2ConnContext& operator=(Http2ConnContext&&) = delete;
 
-    auto getActiveStreams(
+    auto get_active_streams(
         size_t max_count = galay::spsc::UnboundedChannel<Http2Stream::ptr>::DEFAULT_BATCH_SIZE) {
         return GetActiveStreamsAwaitable(this, max_count);
     }
 
-    bool isClosed() const {
+    bool is_closed() const {
         return m_closed;
     }
 
@@ -344,91 +344,91 @@ public:
      * - Writer: 从 send channel 接收数据并写入 socket
      */
     Task<void> start(Http2StreamHandler handler) {
-        prepareForStart(false);
+        prepare_for_start(false);
         if constexpr (is_ssl_socket_v<SocketType>) {
-            if (!co_await startDetachedTask(monitorLoopThenNotify(&m_monitor_done))) {
-                markDetachedStartupFailed(true, false);
+            if (!co_await start_detached_task(monitor_loop_then_notify(&m_monitor_done))) {
+                mark_detached_startup_failed(true, false);
                 co_return;
             }
             m_writer_ready.notify();
-            co_await sslServiceLoop(std::move(handler));
-            co_await finishForegroundSslRun();
+            co_await ssl_service_loop(std::move(handler));
+            co_await finish_foreground_ssl_run();
             co_return;
         }
-        if (!co_await startBackgroundLoops()) {
+        if (!co_await start_background_loops()) {
             co_return;
         }
-        co_await readerLoop(std::move(handler));
-        co_await finishForegroundRun();
+        co_await reader_loop(std::move(handler));
+        co_await finish_foreground_run();
         co_return;
     }
 
     Task<void> start(Http2ActiveConnHandler handler) {
-        prepareForStart(true);
+        prepare_for_start(true);
         if constexpr (is_ssl_socket_v<SocketType>) {
-            if (!co_await startDetachedTask(monitorLoopThenNotify(&m_monitor_done))) {
-                markDetachedStartupFailed(true, false);
+            if (!co_await start_detached_task(monitor_loop_then_notify(&m_monitor_done))) {
+                mark_detached_startup_failed(true, false);
                 co_return;
             }
             m_writer_ready.notify();
 
             Http2ConnContext ctx(m_active_stream_mailbox);
             m_active_handlers.fetch_add(1, std::memory_order_acq_rel);
-            if (!co_await startDetachedTask(runActiveHandler(std::move(handler), &ctx))) {
-                finishActiveHandlerSlot();
-                closeActiveStreamQueue();
-                m_conn.initiateClose();
-                co_await finishForegroundSslRun();
+            if (!co_await start_detached_task(run_active_handler(std::move(handler), &ctx))) {
+                finish_active_handler_slot();
+                close_active_stream_queue();
+                m_conn.initiate_close();
+                co_await finish_foreground_ssl_run();
                 co_return;
             }
 
-            co_await sslServiceLoop(nullptr);
-            co_await finishForegroundSslRun();
+            co_await ssl_service_loop(nullptr);
+            co_await finish_foreground_ssl_run();
             co_return;
         }
 
-        if (!co_await startBackgroundLoops()) {
+        if (!co_await start_background_loops()) {
             co_return;
         }
 
         Http2ConnContext ctx(m_active_stream_mailbox);
         m_active_handlers.fetch_add(1, std::memory_order_acq_rel);
-        if (!co_await startDetachedTask(runActiveHandler(std::move(handler), &ctx))) {
-            finishActiveHandlerSlot();
-            closeActiveStreamQueue();
-            m_conn.initiateClose();
-            co_await finishForegroundRun();
+        if (!co_await start_detached_task(run_active_handler(std::move(handler), &ctx))) {
+            finish_active_handler_slot();
+            close_active_stream_queue();
+            m_conn.initiate_close();
+            co_await finish_foreground_run();
             co_return;
         }
 
-        co_await readerLoop(nullptr);
-        co_await finishForegroundRun();
+        co_await reader_loop(nullptr);
+        co_await finish_foreground_run();
         co_return;
     }
 
     /**
      * @brief 将帧入队发送
      */
-    void enqueueSendFrame(Http2Frame::uptr frame,
+    void enqueue_send_frame(Http2Frame::uptr frame,
                           const Http2OutgoingFrame::WaiterPtr& waiter = nullptr) {
-        enqueueOutgoingItem(Http2OutgoingFrame{std::move(frame), waiter});
+        enqueue_outgoing_item(Http2OutgoingFrame{std::move(frame), waiter});
     }
 
-    void enqueueSendBytes(std::string bytes,
+    void enqueue_send_bytes(std::string bytes,
                           const Http2OutgoingFrame::WaiterPtr& waiter = nullptr) {
-        enqueueOutgoingItem(Http2OutgoingFrame{std::move(bytes), waiter});
+        enqueue_outgoing_item(Http2OutgoingFrame{std::move(bytes), waiter});
     }
 
     template<typename FrameType>
-    void enqueueSendFrame(FrameType&& frame,
+    void enqueue_send_frame(FrameType&& frame,
                           const Http2OutgoingFrame::WaiterPtr& waiter = nullptr) {
         using FrameT = std::decay_t<FrameType>;
         static_assert(std::is_base_of_v<Http2Frame, FrameT>, "FrameType must derive from Http2Frame");
-        enqueueOutgoingItem(
+        enqueue_outgoing_item(
             Http2OutgoingFrame{std::make_unique<FrameT>(std::forward<FrameType>(frame)), waiter});
     }
 
-    bool isRunning() const { return m_running; }
+    bool is_running() const { return m_running; }
 
     /**
      * @brief 获取连接引用（供用户 handler 使用）
@@ -439,33 +439,33 @@ public:
      * @brief 从非协程上下文启动 StreamManager
      * @param scheduler 当前 IO 调度器
      * @param handler 用户流处理回调
-     * @details 通过 scheduleTask(scheduler, ) 启动 reader/writer/monitor，
+     * @details 通过 schedule_task(scheduler, ) 启动 reader/writer/monitor，
      *          不需要协程上下文，可从 CustomAwaitable::await_resume() 等普通函数调用。
      */
-    bool startWithScheduler(galay::kernel::Scheduler* scheduler, Http2StreamHandler handler) {
-        prepareForStart(false);
+    bool start_with_scheduler(galay::kernel::Scheduler* scheduler, Http2StreamHandler handler) {
+        prepare_for_start(false);
         if (scheduler == nullptr) {
-            markDetachedStartupFailed(true, true);
+            mark_detached_startup_failed(true, true);
             return false;
         }
 
         if constexpr (is_ssl_socket_v<SocketType>) {
-            if (!scheduleTask(scheduler, monitorLoopThenNotify(&m_monitor_done))) {
-                markDetachedStartupFailed(true, false);
+            if (!schedule_task(scheduler, monitor_loop_then_notify(&m_monitor_done))) {
+                mark_detached_startup_failed(true, false);
                 return false;
             }
             m_writer_ready.notify();
-            if (!scheduleTask(scheduler, sslServiceLoopThenCleanup(std::move(handler)))) {
+            if (!schedule_task(scheduler, ssl_service_loop_then_cleanup(std::move(handler)))) {
                 m_running = false;
-                closeActiveStreamQueue();
+                close_active_stream_queue();
                 m_stop_waiter.notify();
                 return false;
             }
             return true;
         }
 
-        bool writer_started = scheduleTask(scheduler, writerLoopThenNotify(&m_writer_done));
-        bool monitor_started = scheduleTask(scheduler, monitorLoopThenNotify(&m_monitor_done));
+        bool writer_started = schedule_task(scheduler, writer_loop_then_notify(&m_writer_done));
+        bool monitor_started = schedule_task(scheduler, monitor_loop_then_notify(&m_monitor_done));
         if (!writer_started || !monitor_started) {
             if (!writer_started) {
                 m_writer_done.notify();
@@ -475,19 +475,19 @@ public:
             }
             m_running = false;
             if (writer_started) {
-                enqueueOutgoingItem(Http2OutgoingFrame{});
+                enqueue_outgoing_item(Http2OutgoingFrame{});
             }
             m_writer_ready.notify();
-            closeActiveStreamQueue();
+            close_active_stream_queue();
             m_stop_waiter.notify();
             return false;
         }
 
         m_writer_ready.notify();
-        if (!scheduleTask(scheduler, readerLoopThenCleanup(std::move(handler)))) {
+        if (!schedule_task(scheduler, reader_loop_then_cleanup(std::move(handler)))) {
             m_running = false;
-            enqueueOutgoingItem(Http2OutgoingFrame{});
-            closeActiveStreamQueue();
+            enqueue_outgoing_item(Http2OutgoingFrame{});
+            close_active_stream_queue();
             m_stop_waiter.notify();
             return false;
         }
@@ -498,55 +498,55 @@ public:
      * @brief 自动分配 stream ID 并创建流
      * @details 客户端自动分配奇数 ID（3, 5, 7, ...），服务端自动分配偶数 ID（2, 4, 6, ...）
      */
-    Http2Stream::ptr allocateStream() {
+    Http2Stream::ptr allocate_stream() {
         uint32_t id = m_next_local_stream_id;
         m_next_local_stream_id += 2;
-        return newStream(id);
+        return new_stream(id);
     }
 
     /**
      * @brief 优雅关闭：发送 GOAWAY、关闭连接、等待 StreamManager 停止
-     * @details 替代手动的 sendGoaway + conn.close() + waitStopped() 序列
+     * @details 替代手动的 send_goaway + conn.close() + wait_stopped() 序列
      */
     Task<void> shutdown(Http2ErrorCode error = Http2ErrorCode::NoError) {
-        return shutdownImpl(error);
+        return shutdown_impl(error);
     }
 
 private:
-    Task<void> shutdownImpl(Http2ErrorCode error = Http2ErrorCode::NoError) {
+    Task<void> shutdown_impl(Http2ErrorCode error = Http2ErrorCode::NoError) {
         if (!m_started) co_return;
 
         if (m_running) {
-            m_conn.setDraining(true);
+            m_conn.set_draining(true);
 
-            if (m_conn.isClient()) {
+            if (m_conn.is_client()) {
                 m_reject_new_streams = true;
-                auto waiter = sendGoaway(error);
+                auto waiter = send_goaway(error);
                 if (waiter) {
                     co_await waiter->wait();
                 }
             } else {
                 // RFC 推荐的 graceful shutdown：先发 MAX_INT，再发真实 last_stream_id。
-                auto first = sendGoaway(error, "draining", kMaxStreamId);
+                auto first = send_goaway(error, "draining", kMaxStreamId);
                 if (first) {
                     co_await first->wait();
                 }
 
-                auto rtt = m_conn.runtimeConfig().graceful_shutdown_rtt;
+                auto rtt = m_conn.runtime_config().graceful_shutdown_rtt;
                 if (rtt.count() > 0) {
                     co_await galay::kernel::sleep(rtt);
                 }
 
                 m_reject_new_streams = true;
-                auto last_accepted = m_conn.lastPeerStreamId();
-                auto second = sendGoaway(error, "", last_accepted);
+                auto last_accepted = m_conn.last_peer_stream_id();
+                auto second = send_goaway(error, "", last_accepted);
                 if (second) {
                     co_await second->wait();
                 }
             }
 
             // 服务端等待活跃流处理完成，避免直接断开造成业务中断。
-            auto deadline = std::chrono::steady_clock::now() + m_conn.runtimeConfig().graceful_shutdown_timeout;
+            auto deadline = std::chrono::steady_clock::now() + m_conn.runtime_config().graceful_shutdown_timeout;
             while (m_active_handlers.load(std::memory_order_acquire) > 0 &&
                    std::chrono::steady_clock::now() < deadline) {
                 co_await galay::kernel::sleep(std::chrono::milliseconds(5));
@@ -554,17 +554,17 @@ private:
 
             // 批量发送 RST_STREAM 给所有未完成的流
             std::vector<Http2OutgoingFrame> rst_frames;
-            m_conn.forEachStream([&](uint32_t stream_id, Http2Stream::ptr& stream) {
+            m_conn.for_each_stream([&](uint32_t stream_id, Http2Stream::ptr& stream) {
                 if (stream && stream->state() != Http2StreamState::Closed) {
-                    auto bytes = Http2FrameBuilder::rstStreamBytes(stream_id, Http2ErrorCode::NoError);
-                    stream->onRstStreamSent();
+                    auto bytes = Http2FrameBuilder::rst_stream_bytes(stream_id, Http2ErrorCode::NoError);
+                    stream->on_rst_stream_sent();
                     rst_frames.push_back(Http2OutgoingFrame{std::move(bytes), nullptr});
                 }
             });
 
             // 批量入队 RST_STREAM 帧
             for (auto& frame : rst_frames) {
-                enqueueOutgoingItem(std::move(frame));
+                enqueue_outgoing_item(std::move(frame));
             }
 
             // 等待 RST_STREAM 帧发送完成
@@ -573,23 +573,23 @@ private:
             }
 
             // 关闭所有流的帧队列
-            m_conn.forEachStream([](uint32_t, Http2Stream::ptr& stream) {
-                stream->closeFrameQueue();
+            m_conn.for_each_stream([](uint32_t, Http2Stream::ptr& stream) {
+                stream->close_frame_queue();
             });
 
             // 先只触发 transport shutdown，保留现有 awaitable，
-            // 让 readerLoop 从 readFramesBatch() 正常收到 closing/peer-closed 并退出。
-            m_conn.initiateClose();
+            // 让 reader_loop 从 read_frames_batch() 正常收到 closing/peer-closed 并退出。
+            m_conn.initiate_close();
             if (m_running) {
-                co_await waitStopped();
+                co_await wait_stopped();
             }
-            // readerLoop/Writer 全部退出后再真正 close fd，避免提前移除底层 READ/CUSTOM awaitable。
+            // reader_loop/Writer 全部退出后再真正 close fd，避免提前移除底层 READ/CUSTOM awaitable。
             co_await m_conn.close();
         }
         co_return;
     }
 
-    void prepareForStart(bool active_conn_mode) {
+    void prepare_for_start(bool active_conn_mode) {
         m_started = true;
         m_running = true;
         m_active_conn_mode = active_conn_mode;
@@ -606,36 +606,36 @@ private:
         }
 
         if (m_next_local_stream_id == 0) {
-            m_next_local_stream_id = m_conn.isClient() ? 3 : 2;
+            m_next_local_stream_id = m_conn.is_client() ? 3 : 2;
         }
-        if (!m_conn.isClient()) {
-            const uint32_t target_window = m_conn.runtimeConfig().flow_control_target_window;
-            const int32_t current_window = m_conn.connRecvWindow();
+        if (!m_conn.is_client()) {
+            const uint32_t target_window = m_conn.runtime_config().flow_control_target_window;
+            const int32_t current_window = m_conn.conn_recv_window();
             if (target_window > 0 && static_cast<int32_t>(target_window) > current_window) {
                 const auto increment = static_cast<uint32_t>(
                     static_cast<int64_t>(target_window) - current_window);
-                enqueueWindowUpdateAction(0, increment);
-                m_conn.adjustConnRecvWindow(static_cast<int32_t>(increment));
+                enqueue_window_update_action(0, increment);
+                m_conn.adjust_conn_recv_window(static_cast<int32_t>(increment));
             }
         }
-        m_conn.reserveStreams(
-            static_cast<size_t>(std::max<uint32_t>(m_conn.localSettings().max_concurrent_streams, 64u)) + 8);
+        m_conn.reserve_streams(
+            static_cast<size_t>(std::max<uint32_t>(m_conn.local_settings().max_concurrent_streams, 64u)) + 8);
     }
 
-    Task<bool> startBackgroundLoops() {
-        bool writer_started = co_await startDetachedTask(writerLoopThenNotify(&m_writer_done));
+    Task<bool> start_background_loops() {
+        bool writer_started = co_await start_detached_task(writer_loop_then_notify(&m_writer_done));
         if (!writer_started) {
-            markDetachedStartupFailed(true, true);
+            mark_detached_startup_failed(true, true);
             co_return false;
         }
 
-        bool monitor_started = co_await startDetachedTask(monitorLoopThenNotify(&m_monitor_done));
+        bool monitor_started = co_await start_detached_task(monitor_loop_then_notify(&m_monitor_done));
         if (!monitor_started) {
             m_running = false;
-            enqueueOutgoingItem(Http2OutgoingFrame{});
+            enqueue_outgoing_item(Http2OutgoingFrame{});
             m_monitor_done.notify();
             m_writer_ready.notify();
-            closeActiveStreamQueue();
+            close_active_stream_queue();
             m_stop_waiter.notify();
             co_return false;
         }
@@ -644,21 +644,21 @@ private:
         co_return true;
     }
 
-    Task<void> finishForegroundRun() {
+    Task<void> finish_foreground_run() {
         m_draining_handlers.store(true, std::memory_order_release);
         if (m_active_handlers.load(std::memory_order_acquire) > 0) {
             co_await m_handler_waiter.wait();
         }
 
         m_running = false;
-        enqueueOutgoingItem(Http2OutgoingFrame{});
+        enqueue_outgoing_item(Http2OutgoingFrame{});
         co_await m_writer_done.wait();
         co_await m_monitor_done.wait();
         m_stop_waiter.notify();
         co_return;
     }
 
-    Task<void> finishForegroundSslRun() {
+    Task<void> finish_foreground_ssl_run() {
         m_draining_handlers.store(true, std::memory_order_release);
         if (m_active_handlers.load(std::memory_order_acquire) > 0) {
             co_await m_handler_waiter.wait();
@@ -670,8 +670,8 @@ private:
         co_return;
     }
 
-    Task<void> readerLoopThenCleanup(Http2StreamHandler handler) {
-        co_await readerLoop(std::move(handler));
+    Task<void> reader_loop_then_cleanup(Http2StreamHandler handler) {
+        co_await reader_loop(std::move(handler));
 
         m_draining_handlers.store(true, std::memory_order_release);
         if (m_active_handlers.load(std::memory_order_acquire) > 0) {
@@ -679,15 +679,15 @@ private:
         }
 
         m_running = false;
-        enqueueOutgoingItem(Http2OutgoingFrame{});
+        enqueue_outgoing_item(Http2OutgoingFrame{});
         co_await m_writer_done.wait();
         co_await m_monitor_done.wait();
         m_stop_waiter.notify();
         co_return;
     }
 
-    Task<void> sslServiceLoopThenCleanup(Http2StreamHandler handler) {
-        co_await sslServiceLoop(std::move(handler));
+    Task<void> ssl_service_loop_then_cleanup(Http2StreamHandler handler) {
+        co_await ssl_service_loop(std::move(handler));
 
         m_draining_handlers.store(true, std::memory_order_release);
         if (m_active_handlers.load(std::memory_order_acquire) > 0) {
@@ -700,7 +700,7 @@ private:
         co_return;
     }
 
-    void markDetachedStartupFailed(bool monitor_done, bool writer_done) {
+    void mark_detached_startup_failed(bool monitor_done, bool writer_done) {
         m_running = false;
         if (monitor_done) {
             m_monitor_done.notify();
@@ -709,11 +709,11 @@ private:
             m_writer_done.notify();
         }
         m_writer_ready.notify();
-        closeActiveStreamQueue();
+        close_active_stream_queue();
         m_stop_waiter.notify();
     }
 
-    void finishActiveHandlerSlot() {
+    void finish_active_handler_slot() {
         int remaining = m_active_handlers.fetch_sub(1, std::memory_order_acq_rel) - 1;
         if (remaining == 0 && m_draining_handlers.load(std::memory_order_acquire)) {
             m_handler_waiter.notify();
@@ -725,18 +725,18 @@ public:
      * @brief 发送 GOAWAY 帧
      * @return waiter，co_await waiter->wait() 等待发送完成
      */
-    Http2OutgoingFrame::WaiterPtr sendGoaway(Http2ErrorCode error = Http2ErrorCode::NoError,
+    Http2OutgoingFrame::WaiterPtr send_goaway(Http2ErrorCode error = Http2ErrorCode::NoError,
                                              const std::string& debug = "",
                                              std::optional<uint32_t> last_stream_id = std::nullopt) {
         auto waiter = std::make_shared<Http2OutgoingFrame::Waiter>();
-        enqueueGoaway(error, debug, waiter, last_stream_id);
+        enqueue_goaway(error, debug, waiter, last_stream_id);
         return waiter;
     }
 
     /**
      * @brief 等待 StreamManager 停止（start() 完成）
      */
-    galay::kernel::AsyncWaiterAwaitable<void> waitStopped() {
+    galay::kernel::AsyncWaiterAwaitable<void> wait_stopped() {
         return m_stop_waiter.wait();
     }
 
@@ -748,7 +748,7 @@ private:
     static constexpr auto kSslIoOwnerIdlePollInterval = std::chrono::milliseconds(50);
     static constexpr auto kWriterStopPollInterval = std::chrono::milliseconds(50);
 
-    void enqueueOutgoingItem(Http2OutgoingFrame&& item) {
+    void enqueue_outgoing_item(Http2OutgoingFrame&& item) {
         auto waiter = item.waiter;
         if (m_send_channel.send(std::move(item))) {
             return;
@@ -757,11 +757,11 @@ private:
             waiter->notify();
         }
         m_send_channel_failed.store(true, std::memory_order_release);
-        m_conn.initiateClose();
+        m_conn.initiate_close();
     }
 
-    void enqueueOutgoingBatch(std::vector<Http2OutgoingFrame>&& items) {
-        if (m_send_channel.sendBatch(std::move(items))) {
+    void enqueue_outgoing_batch(std::vector<Http2OutgoingFrame>&& items) {
+        if (m_send_channel.send_batch(std::move(items))) {
             return;
         }
         for (auto& item : items) {
@@ -770,14 +770,14 @@ private:
             }
         }
         m_send_channel_failed.store(true, std::memory_order_release);
-        m_conn.initiateClose();
+        m_conn.initiate_close();
     }
 
-    void collectOutgoingFrame(Http2OutgoingFrame&& item,
+    void collect_outgoing_frame(Http2OutgoingFrame&& item,
                               std::vector<Http2OutgoingFrame>& outgoing_batch,
                               std::vector<Http2OutgoingFrame::WaiterPtr>& waiters,
                               bool& has_shutdown) {
-        if (item.isEmpty()) {
+        if (item.is_empty()) {
             has_shutdown = true;
             return;
         }
@@ -787,19 +787,19 @@ private:
         outgoing_batch.push_back(std::move(item));
     }
 
-    void drainOutgoingChannel(std::vector<Http2OutgoingFrame>& outgoing_batch,
+    void drain_outgoing_channel(std::vector<Http2OutgoingFrame>& outgoing_batch,
                               std::vector<Http2OutgoingFrame::WaiterPtr>& waiters,
                               bool& has_shutdown) {
         while (!has_shutdown) {
-            auto item = m_send_channel.tryRecv();
+            auto item = m_send_channel.try_recv();
             if (!item) {
                 break;
             }
-            collectOutgoingFrame(std::move(*item), outgoing_batch, waiters, has_shutdown);
+            collect_outgoing_frame(std::move(*item), outgoing_batch, waiters, has_shutdown);
         }
     }
 
-    void notifyWaiters(std::vector<Http2OutgoingFrame::WaiterPtr>& waiters) {
+    void notify_waiters(std::vector<Http2OutgoingFrame::WaiterPtr>& waiters) {
         for (auto& waiter : waiters) {
             if (waiter) {
                 waiter->notify();
@@ -807,7 +807,7 @@ private:
         }
     }
 
-    bool shouldHotWaitForOutgoing(bool had_ready_active_streams,
+    bool should_hot_wait_for_outgoing(bool had_ready_active_streams,
                                   bool had_pending_spawns) const {
         if (had_ready_active_streams || had_pending_spawns) {
             return true;
@@ -818,26 +818,26 @@ private:
         return m_active_handlers.load(std::memory_order_acquire) > 0;
     }
 
-    std::chrono::milliseconds sslIoOwnerPollInterval(bool low_latency_mode) const {
+    std::chrono::milliseconds ssl_io_owner_poll_interval(bool low_latency_mode) const {
         return low_latency_mode ? kSslIoOwnerActivePollInterval : kSslIoOwnerIdlePollInterval;
     }
 
-    bool shouldEnforceSettingsAckTimeout(std::chrono::steady_clock::time_point now) const {
-        const auto settings_timeout = m_conn.runtimeConfig().settings_ack_timeout;
-        if (settings_timeout.count() <= 0 || !m_conn.isSettingsAckPending()) {
+    bool should_enforce_settings_ack_timeout(std::chrono::steady_clock::time_point now) const {
+        const auto settings_timeout = m_conn.runtime_config().settings_ack_timeout;
+        if (settings_timeout.count() <= 0 || !m_conn.is_settings_ack_pending()) {
             return false;
         }
-        if (now - m_conn.settingsSentAt() <= settings_timeout) {
+        if (now - m_conn.settings_sent_at() <= settings_timeout) {
             return false;
         }
 
         // Once the peer is actively sending frames after our SETTINGS, prefer to
         // keep the connection alive and validate behavior via actual frame-level
         // protocol checks instead of timing out a missing ACK.
-        return m_last_frame_recv_at <= m_conn.settingsSentAt();
+        return m_last_frame_recv_at <= m_conn.settings_sent_at();
     }
 
-    Task<bool> sendSslOutgoingBatch(const std::vector<Http2OutgoingFrame>& outgoing_batch,
+    Task<bool> send_ssl_outgoing_batch(const std::vector<Http2OutgoingFrame>& outgoing_batch,
                                     std::vector<Http2OutgoingFrame::WaiterPtr>& waiters,
                                     std::string& coalesced_buffer) {
         if (outgoing_batch.empty()) {
@@ -846,7 +846,7 @@ private:
 
         size_t total_bytes = 0;
         for (const auto& item : outgoing_batch) {
-            total_bytes += item.serializedSize();
+            total_bytes += item.serialized_size();
         }
 
         coalesced_buffer.clear();
@@ -854,7 +854,7 @@ private:
             coalesced_buffer.reserve(total_bytes);
         }
         for (const auto& item : outgoing_batch) {
-            item.appendTo(coalesced_buffer);
+            item.append_to(coalesced_buffer);
         }
 
         size_t offset = 0;
@@ -863,16 +863,16 @@ private:
                 coalesced_buffer.data() + offset,
                 coalesced_buffer.size() - offset);
             if (!send_result || send_result.value() == 0) {
-                if (m_conn.isClosing() || m_conn.isPeerClosed() ||
-                    m_conn.isGoawaySent() || m_conn.isGoawayReceived()) {
+                if (m_conn.is_closing() || m_conn.is_peer_closed() ||
+                    m_conn.is_goaway_sent() || m_conn.is_goaway_received()) {
                 } else if (send_result) {
                 } else {
                 }
-                notifyWaiters(waiters);
-                m_conn.forEachStream([](uint32_t, Http2Stream::ptr& stream) {
-                    stream->closeFrameQueue();
+                notify_waiters(waiters);
+                m_conn.for_each_stream([](uint32_t, Http2Stream::ptr& stream) {
+                    stream->close_frame_queue();
                 });
-                closeActiveStreamQueue();
+                close_active_stream_queue();
                 co_return false;
             }
             offset += send_result.value();
@@ -881,116 +881,116 @@ private:
         co_return true;
     }
 
-    Task<void> writerLoopThenNotify(AsyncWaiter<void>* done) {
-        co_await writerLoop();
+    Task<void> writer_loop_then_notify(AsyncWaiter<void>* done) {
+        co_await writer_loop();
         if (done) {
             done->notify();
         }
         co_return;
     }
 
-    Task<void> monitorLoopThenNotify(AsyncWaiter<void>* done) {
-        co_await monitorLoop();
+    Task<void> monitor_loop_then_notify(AsyncWaiter<void>* done) {
+        co_await monitor_loop();
         if (done) {
             done->notify();
         }
         co_return;
     }
 
-    Http2Stream::ptr newStream(uint32_t stream_id) {
-        auto stream = m_conn.getStream(stream_id);
+    Http2Stream::ptr new_stream(uint32_t stream_id) {
+        auto stream = m_conn.get_stream(stream_id);
         if (stream) {
-            attachStreamIO(stream);
+            attach_stream_io(stream);
             return stream;
         }
-        return createStreamInternal(stream_id);
+        return create_stream_internal(stream_id);
     }
 
     /**
      * @brief Reader 协程：读取帧、处理连接级帧、分发流级帧
      */
-    Task<void> readerLoop(Http2StreamHandler handler) {
-        // readerLoop 只在 IO 错误（peer closed / connection error）或连接关闭时退出。
+    Task<void> reader_loop(Http2StreamHandler handler) {
+        // reader_loop 只在 IO 错误（peer closed / connection error）或连接关闭时退出。
         // GOAWAY（无论收到还是发出）不退出：GOAWAY 只表示不再有新流，
         // 已有流的帧仍需继续读取直到连接关闭（RFC 9113 §6.8）。
         while (true) {
             if constexpr (!is_ssl_socket_v<SocketType>) {
-                if (m_active_conn_mode && !m_conn.isClient()) {
-                    auto frame_views_result = co_await m_conn.readFrameViewsBatch();
+                if (m_active_conn_mode && !m_conn.is_client()) {
+                    auto frame_views_result = co_await m_conn.read_frame_views_batch();
 
                     if (!frame_views_result) {
-                        if (m_conn.isClosing() || m_conn.isPeerClosed()) {
+                        if (m_conn.is_closing() || m_conn.is_peer_closed()) {
                             break;
                         }
                         if (frame_views_result.error() == Http2ErrorCode::NoError) {
                             continue;
                         }
                         if (frame_views_result.error() == Http2ErrorCode::ProtocolError &&
-                            (m_conn.isPeerClosed() || m_conn.isClosing())) {
+                            (m_conn.is_peer_closed() || m_conn.is_closing())) {
                             break;
                         }
-                        if (m_conn.lastReadError().empty()) {
+                        if (m_conn.last_read_error().empty()) {
                         } else {
                         }
-                        enqueueGoaway(frame_views_result.error());
+                        enqueue_goaway(frame_views_result.error());
                         break;
                     }
 
                     bool exit_loop = false;
                     auto& frame_views = *frame_views_result;
                     for (auto& frame_view : frame_views) {
-                        const uint32_t stream_id = frame_view.streamId();
+                        const uint32_t stream_id = frame_view.stream_id();
                         m_last_frame_recv_at = std::chrono::steady_clock::now();
 
 
-                        if (m_conn.isExpectingContinuation()) {
-                            if (!frame_view.isContinuation() ||
-                                stream_id != m_conn.continuationStreamId()) {
-                                enqueueGoaway(Http2ErrorCode::ProtocolError);
+                        if (m_conn.is_expecting_continuation()) {
+                            if (!frame_view.is_continuation() ||
+                                stream_id != m_conn.continuation_stream_id()) {
+                                enqueue_goaway(Http2ErrorCode::ProtocolError);
                                 exit_loop = true;
                                 break;
                             }
                         }
 
-                        if (frame_view.isConnectionFrame()) {
-                            auto frame = materializeFrameView(frame_view);
+                        if (frame_view.is_connection_frame()) {
+                            auto frame = materialize_frame_view(frame_view);
                             if (!frame) {
-                                enqueueGoaway(frame.error());
+                                enqueue_goaway(frame.error());
                                 exit_loop = true;
                                 break;
                             }
-                            handleConnectionFrame(std::move(*frame));
+                            handle_connection_frame(std::move(*frame));
                             continue;
                         }
 
-                        if (tryDispatchServerActiveFrameView(std::move(frame_view))) {
+                        if (try_dispatch_server_active_frame_view(std::move(frame_view))) {
                             continue;
                         }
 
-                        auto frame = materializeFrameView(frame_view);
+                        auto frame = materialize_frame_view(frame_view);
                         if (!frame) {
-                            enqueueGoaway(frame.error());
+                            enqueue_goaway(frame.error());
                             exit_loop = true;
                             break;
                         }
-                        dispatchStreamFrame(std::move(*frame));
+                        dispatch_stream_frame(std::move(*frame));
                     }
 
-                    flushStaticResponseBatch();
-                    processPendingActions();
-                    drainRetiredStreams();
-                    flushActiveStreams();
+                    flush_static_response_batch();
+                    process_pending_actions();
+                    drain_retired_streams();
+                    flush_active_streams();
 
                     while (!m_pending_spawns.empty()) {
                         auto stream = m_pending_spawns.top();
                         m_pending_spawns.pop();
                         m_active_handlers.fetch_add(1, std::memory_order_acq_rel);
-                        if (!co_await startDetachedTask(runHandler(handler, stream))) {
+                        if (!co_await start_detached_task(run_handler(handler, stream))) {
                             if (stream) {
-                                stream->closeFrameQueue();
-                                enqueueRetireStream(stream->streamId());
+                                stream->close_frame_queue();
+                                enqueue_retire_stream(stream->stream_id());
                             }
-                            finishActiveHandlerSlot();
+                            finish_active_handler_slot();
                         }
                     }
 
@@ -1001,68 +1001,68 @@ private:
                 }
             }
 
-            auto frames_result = co_await m_conn.readFramesBatch();
+            auto frames_result = co_await m_conn.read_frames_batch();
 
             if (!frames_result) {
-                if (m_conn.isClosing() || m_conn.isPeerClosed()) {
+                if (m_conn.is_closing() || m_conn.is_peer_closed()) {
                     break;
                 }
                 if (frames_result.error() == Http2ErrorCode::NoError) {
                     continue;
                 }
                 if (frames_result.error() == Http2ErrorCode::ProtocolError &&
-                    (m_conn.isPeerClosed() || m_conn.isClosing())) {
+                    (m_conn.is_peer_closed() || m_conn.is_closing())) {
                     break;
                 }
-                if (m_conn.lastReadError().empty()) {
+                if (m_conn.last_read_error().empty()) {
                 } else {
                 }
-                enqueueGoaway(frames_result.error());
+                enqueue_goaway(frames_result.error());
                 break;
             }
 
             bool exit_loop = false;
             auto& frames = *frames_result;
             for (auto& frame : frames) {
-                uint32_t stream_id = frame->streamId();
+                uint32_t stream_id = frame->stream_id();
                 m_last_frame_recv_at = std::chrono::steady_clock::now();
 
 
                 // CONTINUATION 状态检查
-                if (m_conn.isExpectingContinuation()) {
-                    if (!frame->isContinuation() || stream_id != m_conn.continuationStreamId()) {
-                        enqueueGoaway(Http2ErrorCode::ProtocolError);
+                if (m_conn.is_expecting_continuation()) {
+                    if (!frame->is_continuation() || stream_id != m_conn.continuation_stream_id()) {
+                        enqueue_goaway(Http2ErrorCode::ProtocolError);
                         exit_loop = true;
                         break;
                     }
                 }
 
                 // 连接级帧
-                if (frame->isSettings() || frame->isPing() || frame->isGoAway() ||
-                    (frame->isWindowUpdate() && stream_id == 0)) {
-                    handleConnectionFrame(std::move(frame));
+                if (frame->is_settings() || frame->is_ping() || frame->is_go_away() ||
+                    (frame->is_window_update() && stream_id == 0)) {
+                    handle_connection_frame(std::move(frame));
                     continue;
                 }
 
                 // 流级帧 → 分发到 Http2Stream 帧队列
-                dispatchStreamFrame(std::move(frame));
+                dispatch_stream_frame(std::move(frame));
             }
 
-            // 处理 dispatchStreamFrame 中标记的待处理动作
-            processPendingActions();
-            flushActiveStreams();
+            // 处理 dispatch_stream_frame 中标记的待处理动作
+            process_pending_actions();
+            flush_active_streams();
 
             // spawn 待处理的流 handler
             while (!m_pending_spawns.empty()) {
                 auto stream = m_pending_spawns.top();
                 m_pending_spawns.pop();
                 m_active_handlers.fetch_add(1, std::memory_order_acq_rel);
-                if (!co_await startDetachedTask(runHandler(handler, stream))) {
+                if (!co_await start_detached_task(run_handler(handler, stream))) {
                     if (stream) {
-                        stream->closeFrameQueue();
-                        enqueueRetireStream(stream->streamId());
+                        stream->close_frame_queue();
+                        enqueue_retire_stream(stream->stream_id());
                     }
-                    finishActiveHandlerSlot();
+                    finish_active_handler_slot();
                 }
             }
 
@@ -1071,16 +1071,16 @@ private:
             }
         }
         // 关闭所有流的帧队列
-        m_conn.forEachStream([](uint32_t, Http2Stream::ptr& stream) {
-            stream->closeFrameQueue();
+        m_conn.for_each_stream([](uint32_t, Http2Stream::ptr& stream) {
+            stream->close_frame_queue();
         });
-        closeActiveStreamQueue();
-        drainRetiredStreams();
+        close_active_stream_queue();
+        drain_retired_streams();
 
         co_return;
     }
 
-    Task<void> sslServiceLoop(Http2StreamHandler handler) {
+    Task<void> ssl_service_loop(Http2StreamHandler handler) {
         std::vector<Http2OutgoingFrame> outgoing_batch;
         std::vector<Http2OutgoingFrame::WaiterPtr> waiters;
         std::vector<uint8_t> frame_scratch;
@@ -1097,36 +1097,36 @@ private:
             waiters.clear();
 
             bool has_shutdown = false;
-            drainOutgoingChannel(outgoing_batch, waiters, has_shutdown);
+            drain_outgoing_channel(outgoing_batch, waiters, has_shutdown);
 
             if (!outgoing_batch.empty()) {
-                if (!co_await sendSslOutgoingBatch(outgoing_batch, waiters, coalesced_buffer)) {
+                if (!co_await send_ssl_outgoing_batch(outgoing_batch, waiters, coalesced_buffer)) {
                     co_return;
                 }
             }
-            notifyWaiters(waiters);
+            notify_waiters(waiters);
 
             bool exit_loop = false;
             bool had_ready_active_streams = false;
             bool had_pending_spawns = false;
             while (!exit_loop) {
-                if (m_active_conn_mode && !m_conn.isClient()) {
-                    auto frame_views_result = detail::parseBufferedFrameViewBatch(
-                        m_conn.ringBuffer(),
-                        m_conn.peerSettings().max_frame_size,
+                if (m_active_conn_mode && !m_conn.is_client()) {
+                    auto frame_views_result = detail::parse_buffered_frame_view_batch(
+                        m_conn.ring_buffer(),
+                        m_conn.peer_settings().max_frame_size,
                         std::numeric_limits<size_t>::max());
                     if (!frame_views_result) {
-                        if (m_conn.isClosing() || m_conn.isPeerClosed()) {
+                        if (m_conn.is_closing() || m_conn.is_peer_closed()) {
                             exit_loop = true;
                             break;
                         }
                         if (frame_views_result.error() == Http2ErrorCode::NoError) {
                             break;
                         }
-                        if (m_conn.lastReadError().empty()) {
+                        if (m_conn.last_read_error().empty()) {
                         } else {
                         }
-                        enqueueGoaway(frame_views_result.error());
+                        enqueue_goaway(frame_views_result.error());
                         exit_loop = true;
                         break;
                     }
@@ -1136,70 +1136,70 @@ private:
 
                     auto& frame_views = *frame_views_result;
                     for (auto& frame_view : frame_views) {
-                        const uint32_t stream_id = frame_view.streamId();
+                        const uint32_t stream_id = frame_view.stream_id();
                         m_last_frame_recv_at = std::chrono::steady_clock::now();
 
 
-                        if (m_conn.isExpectingContinuation()) {
-                            if (!frame_view.isContinuation() ||
-                                stream_id != m_conn.continuationStreamId()) {
-                                enqueueGoaway(Http2ErrorCode::ProtocolError);
+                        if (m_conn.is_expecting_continuation()) {
+                            if (!frame_view.is_continuation() ||
+                                stream_id != m_conn.continuation_stream_id()) {
+                                enqueue_goaway(Http2ErrorCode::ProtocolError);
                                 exit_loop = true;
                                 break;
                             }
                         }
 
-                        if (frame_view.isConnectionFrame()) {
-                            auto frame = materializeFrameView(frame_view);
+                        if (frame_view.is_connection_frame()) {
+                            auto frame = materialize_frame_view(frame_view);
                             if (!frame) {
-                                enqueueGoaway(frame.error());
+                                enqueue_goaway(frame.error());
                                 exit_loop = true;
                                 break;
                             }
-                            handleConnectionFrame(std::move(*frame));
+                            handle_connection_frame(std::move(*frame));
                             continue;
                         }
 
-                        if (tryDispatchServerActiveFrameView(std::move(frame_view))) {
+                        if (try_dispatch_server_active_frame_view(std::move(frame_view))) {
                             continue;
                         }
 
-                        auto frame = materializeFrameView(frame_view);
+                        auto frame = materialize_frame_view(frame_view);
                         if (!frame) {
-                            enqueueGoaway(frame.error());
+                            enqueue_goaway(frame.error());
                             exit_loop = true;
                             break;
                         }
-                        dispatchStreamFrame(std::move(*frame));
+                        dispatch_stream_frame(std::move(*frame));
                     }
 
-                    flushStaticResponseBatch();
+                    flush_static_response_batch();
                     had_ready_active_streams = had_ready_active_streams || !m_active_batch.empty();
-                    processPendingActions();
-                    flushActiveStreams();
+                    process_pending_actions();
+                    flush_active_streams();
                     if (exit_loop) {
                         break;
                     }
                     continue;
                 }
 
-                auto frames_result = detail::parseBufferedFrameBatch(
-                    m_conn.ringBuffer(),
-                    m_conn.peerSettings().max_frame_size,
+                auto frames_result = detail::parse_buffered_frame_batch(
+                    m_conn.ring_buffer(),
+                    m_conn.peer_settings().max_frame_size,
                     std::numeric_limits<size_t>::max(),
                     frame_scratch);
                 if (!frames_result) {
-                    if (m_conn.isClosing() || m_conn.isPeerClosed()) {
+                    if (m_conn.is_closing() || m_conn.is_peer_closed()) {
                         exit_loop = true;
                         break;
                     }
                     if (frames_result.error() == Http2ErrorCode::NoError) {
                         break;
                     }
-                    if (m_conn.lastReadError().empty()) {
+                    if (m_conn.last_read_error().empty()) {
                     } else {
                     }
-                    enqueueGoaway(frames_result.error());
+                    enqueue_goaway(frames_result.error());
                     exit_loop = true;
                     break;
                 }
@@ -1209,44 +1209,44 @@ private:
 
                 auto& frames = *frames_result;
                 for (auto& frame : frames) {
-                    uint32_t stream_id = frame->streamId();
+                    uint32_t stream_id = frame->stream_id();
                     m_last_frame_recv_at = std::chrono::steady_clock::now();
 
 
-                    if (m_conn.isExpectingContinuation()) {
-                        if (!frame->isContinuation() || stream_id != m_conn.continuationStreamId()) {
-                            enqueueGoaway(Http2ErrorCode::ProtocolError);
+                    if (m_conn.is_expecting_continuation()) {
+                        if (!frame->is_continuation() || stream_id != m_conn.continuation_stream_id()) {
+                            enqueue_goaway(Http2ErrorCode::ProtocolError);
                             exit_loop = true;
                             break;
                         }
                     }
 
-                    if (frame->isSettings() || frame->isPing() || frame->isGoAway() ||
-                        (frame->isWindowUpdate() && stream_id == 0)) {
-                        handleConnectionFrame(std::move(frame));
+                    if (frame->is_settings() || frame->is_ping() || frame->is_go_away() ||
+                        (frame->is_window_update() && stream_id == 0)) {
+                        handle_connection_frame(std::move(frame));
                         continue;
                     }
 
-                    dispatchStreamFrame(std::move(frame));
+                    dispatch_stream_frame(std::move(frame));
                 }
 
                 had_ready_active_streams =
                     had_ready_active_streams || (m_active_conn_mode && !m_active_batch.empty());
-                processPendingActions();
-                drainRetiredStreams();
-                flushActiveStreams();
+                process_pending_actions();
+                drain_retired_streams();
+                flush_active_streams();
 
                 had_pending_spawns = had_pending_spawns || !m_pending_spawns.empty();
                 while (!m_pending_spawns.empty()) {
                     auto stream = m_pending_spawns.top();
                     m_pending_spawns.pop();
                     m_active_handlers.fetch_add(1, std::memory_order_acq_rel);
-                    if (!co_await startDetachedTask(runHandler(handler, stream))) {
+                    if (!co_await start_detached_task(run_handler(handler, stream))) {
                         if (stream) {
-                            stream->closeFrameQueue();
-                            enqueueRetireStream(stream->streamId());
+                            stream->close_frame_queue();
+                            enqueue_retire_stream(stream->stream_id());
                         }
-                        finishActiveHandlerSlot();
+                        finish_active_handler_slot();
                     }
                 }
             }
@@ -1256,14 +1256,14 @@ private:
             }
 
             if (!m_send_channel.empty()) {
-                drainRetiredStreams();
+                drain_retired_streams();
                 continue;
             }
 
             const bool hot_wait_outgoing =
-                shouldHotWaitForOutgoing(had_ready_active_streams, had_pending_spawns);
+                should_hot_wait_for_outgoing(had_ready_active_streams, had_pending_spawns);
             if (hot_wait_outgoing) {
-                auto hot_batch_result = co_await m_send_channel.recvBatch(kSslIoOwnerBatchSize)
+                auto hot_batch_result = co_await m_send_channel.recv_batch(kSslIoOwnerBatchSize)
                     .timeout(kSslIoOwnerHotWaitInterval);
                 if (hot_batch_result) {
                     outgoing_batch.clear();
@@ -1271,23 +1271,23 @@ private:
                     has_shutdown = false;
 
                     for (auto& item : *hot_batch_result) {
-                        collectOutgoingFrame(std::move(item), outgoing_batch, waiters, has_shutdown);
+                        collect_outgoing_frame(std::move(item), outgoing_batch, waiters, has_shutdown);
                         if (has_shutdown) {
                             break;
                         }
                     }
-                    drainOutgoingChannel(outgoing_batch, waiters, has_shutdown);
+                    drain_outgoing_channel(outgoing_batch, waiters, has_shutdown);
 
                     if (!outgoing_batch.empty()) {
-                        if (!co_await sendSslOutgoingBatch(outgoing_batch, waiters, coalesced_buffer)) {
+                        if (!co_await send_ssl_outgoing_batch(outgoing_batch, waiters, coalesced_buffer)) {
                             co_return;
                         }
                     }
-                    notifyWaiters(waiters);
+                    notify_waiters(waiters);
                     if (has_shutdown) {
                         break;
                     }
-                    drainRetiredStreams();
+                    drain_retired_streams();
                     continue;
                 }
                 if (hot_batch_result.error().code() != kTimeout) {
@@ -1300,11 +1300,11 @@ private:
 
             char* recv_buffer = nullptr;
             size_t recv_length = 0;
-            auto write_iovecs = borrowWriteIovecs(m_conn.ringBuffer());
-            const struct iovec* first_write_iov = IoVecWindow::firstNonEmpty(write_iovecs);
+            auto write_iovecs = borrow_write_iovecs(m_conn.ring_buffer());
+            const struct iovec* first_write_iov = IoVecWindow::first_non_empty(write_iovecs);
             if (first_write_iov == nullptr) {
-                m_conn.setLastReadError("RingBuffer is full");
-                enqueueGoaway(Http2ErrorCode::ProtocolError);
+                m_conn.set_last_read_error("RingBuffer is full");
+                enqueue_goaway(Http2ErrorCode::ProtocolError);
                 break;
             }
             size_t total_writable = 0;
@@ -1321,8 +1321,8 @@ private:
                 recv_length = first_write_iov->iov_len;
             }
             if (recv_length == 0) {
-                m_conn.setLastReadError("RingBuffer is full");
-                enqueueGoaway(Http2ErrorCode::ProtocolError);
+                m_conn.set_last_read_error("RingBuffer is full");
+                enqueue_goaway(Http2ErrorCode::ProtocolError);
                 break;
             }
 
@@ -1335,7 +1335,7 @@ private:
             auto recv_result = has_ssl_pending_plaintext
                 ? (co_await m_conn.socket().recv(recv_buffer, recv_length))
                 : (co_await m_conn.socket().recv(recv_buffer, recv_length)
-                    .timeout(sslIoOwnerPollInterval(hot_wait_outgoing)));
+                    .timeout(ssl_io_owner_poll_interval(hot_wait_outgoing)));
             if (!recv_result) {
                 const auto& error = recv_result.error();
 #ifdef GALAY_SSL_FEATURE_ENABLED
@@ -1343,45 +1343,45 @@ private:
                     continue;
                 }
                 if (error.code() == galay::ssl::SslErrorCode::kPeerClosed) {
-                    m_conn.markPeerClosed(error.message());
+                    m_conn.mark_peer_closed(error.message());
                     break;
                 }
 #endif
-                if (m_conn.isClosing()) {
-                    m_conn.setLastReadError(error.message());
+                if (m_conn.is_closing()) {
+                    m_conn.set_last_read_error(error.message());
                     break;
                 }
-                m_conn.setLastReadError(error.message());
-                enqueueGoaway(Http2ErrorCode::ProtocolError);
+                m_conn.set_last_read_error(error.message());
+                enqueue_goaway(Http2ErrorCode::ProtocolError);
                 break;
             }
 
             const size_t bytes_read = recv_result->size();
             if (bytes_read == 0) {
-                m_conn.markPeerClosed();
+                m_conn.mark_peer_closed();
                 break;
             }
 
-            m_conn.clearLastReadError();
+            m_conn.clear_last_read_error();
             if (staged_recv) {
-                m_conn.feedData(recv_scratch.data(), bytes_read);
+                m_conn.feed_data(recv_scratch.data(), bytes_read);
             } else {
-                m_conn.ringBuffer().produce(bytes_read);
+                m_conn.ring_buffer().produce(bytes_read);
             }
         }
 
-        m_conn.forEachStream([](uint32_t, Http2Stream::ptr& stream) {
-            stream->closeFrameQueue();
+        m_conn.for_each_stream([](uint32_t, Http2Stream::ptr& stream) {
+            stream->close_frame_queue();
         });
-        closeActiveStreamQueue();
-        drainRetiredStreams();
+        close_active_stream_queue();
+        drain_retired_streams();
         co_return;
     }
 
-    Task<void> runHandler(Http2StreamHandler handler, Http2Stream::ptr stream) {
+    Task<void> run_handler(Http2StreamHandler handler, Http2Stream::ptr stream) {
         co_await handler(stream);
         // Handler 可能在非 IO owner 线程恢复，流表回收统一回送给主循环串行处理。
-        enqueueRetireStream(stream ? stream->streamId() : 0);
+        enqueue_retire_stream(stream ? stream->stream_id() : 0);
         int remaining = m_active_handlers.fetch_sub(1, std::memory_order_acq_rel) - 1;
         if (remaining == 0 && m_draining_handlers.load(std::memory_order_acquire)) {
             m_handler_waiter.notify();
@@ -1389,10 +1389,10 @@ private:
         co_return;
     }
 
-    Task<void> runActiveHandler(Http2ActiveConnHandler handler, Http2ConnContext* ctx) {
+    Task<void> run_active_handler(Http2ActiveConnHandler handler, Http2ConnContext* ctx) {
         co_await handler(*ctx);
-        if (m_running && !m_conn.isClosing()) {
-            m_conn.initiateClose();
+        if (m_running && !m_conn.is_closing()) {
+            m_conn.initiate_close();
         }
         int remaining = m_active_handlers.fetch_sub(1, std::memory_order_acq_rel) - 1;
         if (remaining == 0 && m_draining_handlers.load(std::memory_order_acquire)) {
@@ -1401,7 +1401,7 @@ private:
         co_return;
     }
 
-    Task<void> monitorLoop() {
+    Task<void> monitor_loop() {
         while (m_running) {
             co_await galay::kernel::sleep(std::chrono::milliseconds(100));
             if (!m_running) {
@@ -1410,19 +1410,19 @@ private:
 
             auto now = std::chrono::steady_clock::now();
 
-            if (shouldEnforceSettingsAckTimeout(now)) {
-                enqueueGoaway(Http2ErrorCode::SettingsTimeout, "SETTINGS ACK timeout");
-                m_conn.initiateClose();
+            if (should_enforce_settings_ack_timeout(now)) {
+                enqueue_goaway(Http2ErrorCode::SettingsTimeout, "SETTINGS ACK timeout");
+                m_conn.initiate_close();
                 break;
             }
 
-            if (!m_conn.runtimeConfig().ping_enabled ||
-                m_conn.runtimeConfig().ping_interval.count() <= 0) {
+            if (!m_conn.runtime_config().ping_enabled ||
+                m_conn.runtime_config().ping_interval.count() <= 0) {
                 continue;
             }
 
             if (!m_waiting_ping_ack) {
-                if (now - m_last_frame_recv_at >= m_conn.runtimeConfig().ping_interval) {
+                if (now - m_last_frame_recv_at >= m_conn.runtime_config().ping_interval) {
                     Http2PingFrame ping;
                     m_last_ping_payload.fill(0);
                     auto nonce = static_cast<uint64_t>(
@@ -1431,15 +1431,15 @@ private:
                     for (int i = 0; i < 8; ++i) {
                         m_last_ping_payload[7 - i] = static_cast<uint8_t>((nonce >> (i * 8)) & 0xFF);
                     }
-                    ping.setOpaqueData(m_last_ping_payload.data());
-                    enqueueSendFrame(std::move(ping));
+                    ping.set_opaque_data(m_last_ping_payload.data());
+                    enqueue_send_frame(std::move(ping));
                     m_waiting_ping_ack = true;
                     m_last_ping_sent_at = now;
                 }
-            } else if (m_conn.runtimeConfig().ping_timeout.count() > 0 &&
-                       now - m_last_ping_sent_at > m_conn.runtimeConfig().ping_timeout) {
-                enqueueGoaway(Http2ErrorCode::ProtocolError, "PING ACK timeout");
-                m_conn.initiateClose();
+            } else if (m_conn.runtime_config().ping_timeout.count() > 0 &&
+                       now - m_last_ping_sent_at > m_conn.runtime_config().ping_timeout) {
+                enqueue_goaway(Http2ErrorCode::ProtocolError, "PING ACK timeout");
+                m_conn.initiate_close();
                 break;
             }
         }
@@ -1450,7 +1450,7 @@ private:
      * @brief Writer 协程：从 send channel 接收数据并写入 socket
      * @details 使用 writev 批量发送多个帧，减少系统调用和内存拷贝
      */
-    Task<void> writerLoop() {
+    Task<void> writer_loop() {
         // 预分配待发送包和 iovec 数组，避免每次循环分配
         std::vector<Http2OutgoingFrame> outgoing_batch;
         std::vector<std::string> flattened_buffers;
@@ -1479,7 +1479,7 @@ private:
 
             bool has_shutdown = false;
             auto collect_item = [&](Http2OutgoingFrame&& item) {
-                if (item.isEmpty()) {
+                if (item.is_empty()) {
                     // 收到关闭信号，先发送已有数据再退出
                     has_shutdown = true;
                     return;
@@ -1493,7 +1493,7 @@ private:
             collect_item(std::move(item_result.value()));
 
             while (!has_shutdown) {
-                auto next = m_send_channel.tryRecv();
+                auto next = m_send_channel.try_recv();
                 if (!next.has_value()) {
                     break;
                 }
@@ -1515,7 +1515,7 @@ private:
                     }
 
                     std::array<struct iovec, 2> iovecs{};
-                    const size_t count = item.exportIovecs(iovecs);
+                    const size_t count = item.export_iovecs(iovecs);
                     if (count == 0) {
                         continue;
                     }
@@ -1533,8 +1533,8 @@ private:
                         auto result = co_await m_conn.socket().writev(
                             std::span<const struct iovec>(write_state.data(), iovec_count));
                         if (!result) {
-                            if (m_conn.isClosing() || m_conn.isPeerClosed() ||
-                                m_conn.isGoawaySent() || m_conn.isGoawayReceived()) {
+                            if (m_conn.is_closing() || m_conn.is_peer_closed() ||
+                                m_conn.is_goaway_sent() || m_conn.is_goaway_received()) {
                             } else {
                             }
                             for (auto& waiter : waiters) {
@@ -1575,8 +1575,8 @@ private:
                         while (offset < buffer.size()) {
                             auto result = co_await m_conn.socket().send(buffer.data() + offset, buffer.size() - offset);
                             if (!result || result.value() == 0) {
-                                if (m_conn.isClosing() || m_conn.isPeerClosed() ||
-                                    m_conn.isGoawaySent() || m_conn.isGoawayReceived()) {
+                                if (m_conn.is_closing() || m_conn.is_peer_closed() ||
+                                    m_conn.is_goaway_sent() || m_conn.is_goaway_received()) {
                                 } else {
                                 }
                                 for (auto& waiter : waiters) {
@@ -1610,24 +1610,24 @@ private:
     /**
      * @brief 处理连接级帧（非协程，通过 channel 发送响应）
      */
-    void handleConnectionFrame(Http2Frame::uptr frame) {
+    void handle_connection_frame(Http2Frame::uptr frame) {
         switch (frame->type()) {
             case Http2FrameType::Settings: {
-                auto* settings = frame->asSettings();
-                auto err = Http2ConnImpl<SocketType, Strategy>::validateSettingsFrame(*settings);
+                auto* settings = frame->as_settings();
+                auto err = Http2ConnImpl<SocketType, Strategy>::validate_settings_frame(*settings);
                 if (err != Http2ErrorCode::NoError) {
-                    enqueueGoawayAction(err);
+                    enqueue_goaway_action(err);
                     return;
                 }
-                if (settings->isAck()) {
-                    m_conn.markSettingsAckReceived();
+                if (settings->is_ack()) {
+                    m_conn.mark_settings_ack_received();
                 } else {
-                    auto next_settings = m_conn.peerSettings();
+                    auto next_settings = m_conn.peer_settings();
                     const uint32_t old_initial_window =
-                        m_conn.peerSettings().initial_window_size;
-                    err = next_settings.applySettings(*settings);
+                        m_conn.peer_settings().initial_window_size;
+                    err = next_settings.apply_settings(*settings);
                     if (err != Http2ErrorCode::NoError) {
-                        enqueueGoawayAction(err);
+                        enqueue_goaway_action(err);
                         return;
                     }
                     const int64_t initial_window_delta =
@@ -1635,12 +1635,12 @@ private:
                         static_cast<int64_t>(old_initial_window);
                     bool stream_window_overflow = false;
                     if (initial_window_delta != 0) {
-                        m_conn.forEachStream([&](uint32_t, Http2Stream::ptr& stream) {
+                        m_conn.for_each_stream([&](uint32_t, Http2Stream::ptr& stream) {
                             if (!stream) {
                                 return;
                             }
                             const int64_t next_window =
-                                static_cast<int64_t>(stream->sendWindow()) +
+                                static_cast<int64_t>(stream->send_window()) +
                                 initial_window_delta;
                             if (next_window > kMaxStreamId ||
                                 next_window < std::numeric_limits<int32_t>::min()) {
@@ -1649,99 +1649,99 @@ private:
                         });
                     }
                     if (stream_window_overflow) {
-                        enqueueGoawayAction(Http2ErrorCode::FlowControlError);
+                        enqueue_goaway_action(Http2ErrorCode::FlowControlError);
                         return;
                     }
 
-                    err = m_conn.applyPeerSettings(*settings);
+                    err = m_conn.apply_peer_settings(*settings);
                     if (err != Http2ErrorCode::NoError) {
-                        enqueueGoawayAction(err);
+                        enqueue_goaway_action(err);
                         return;
                     }
-                    m_conn.forEachStream([&](uint32_t, Http2Stream::ptr& stream) {
+                    m_conn.for_each_stream([&](uint32_t, Http2Stream::ptr& stream) {
                         if (!stream) {
                             return;
                         }
                         if (initial_window_delta != 0) {
-                            stream->adjustSendWindow(static_cast<int32_t>(initial_window_delta));
+                            stream->adjust_send_window(static_cast<int32_t>(initial_window_delta));
                         }
-                        stream->m_max_frame_size = m_conn.peerSettings().max_frame_size;
+                        stream->m_max_frame_size = m_conn.peer_settings().max_frame_size;
                         stream->m_max_header_list_size =
-                            m_conn.peerSettings().max_header_list_size;
-                        const bool made_progress = stream->flushPendingData();
+                            m_conn.peer_settings().max_header_list_size;
+                        const bool made_progress = stream->flush_pending_data();
                         // made_progress only reports whether queued DATA was flushed now.
                     });
 
                     Http2SettingsFrame ack;
-                    ack.setAck(true);
-                    enqueueSendFrame(std::move(ack));
+                    ack.set_ack(true);
+                    enqueue_send_frame(std::move(ack));
                 }
                 break;
             }
 
             case Http2FrameType::Ping: {
-                auto* ping = frame->asPing();
-                if (frame->streamId() != 0) {
-                    enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+                auto* ping = frame->as_ping();
+                if (frame->stream_id() != 0) {
+                    enqueue_goaway_action(Http2ErrorCode::ProtocolError);
                     return;
                 }
-                if (!ping->isAck()) {
+                if (!ping->is_ack()) {
                     Http2PingFrame pong;
-                    pong.setOpaqueData(ping->opaqueData());
-                    pong.setAck(true);
-                    enqueueSendFrame(std::move(pong));
+                    pong.set_opaque_data(ping->opaque_data());
+                    pong.set_ack(true);
+                    enqueue_send_frame(std::move(pong));
                 } else if (m_waiting_ping_ack &&
-                           std::memcmp(ping->opaqueData(), m_last_ping_payload.data(), 8) == 0) {
+                           std::memcmp(ping->opaque_data(), m_last_ping_payload.data(), 8) == 0) {
                     m_waiting_ping_ack = false;
                 }
                 break;
             }
 
             case Http2FrameType::GoAway: {
-                auto* goaway = frame->asGoAway();
+                auto* goaway = frame->as_go_away();
                 m_reject_new_streams = true;
-                m_conn.markGoawayReceived(
-                    goaway->lastStreamId(), goaway->errorCode(), goaway->debugData());
+                m_conn.mark_goaway_received(
+                    goaway->last_stream_id(), goaway->error_code(), goaway->debug_data());
 
-                if (m_conn.isClient()) {
-                    const uint32_t last = goaway->lastStreamId();
-                    m_conn.forEachStream([&](uint32_t stream_id, Http2Stream::ptr& stream) {
+                if (m_conn.is_client()) {
+                    const uint32_t last = goaway->last_stream_id();
+                    m_conn.for_each_stream([&](uint32_t stream_id, Http2Stream::ptr& stream) {
                         if (!stream || stream_id <= last) {
                             return;
                         }
                         Http2GoAwayError err;
                         err.stream_id = stream_id;
                         err.last_stream_id = last;
-                        err.error_code = goaway->errorCode();
+                        err.error_code = goaway->error_code();
                         err.retryable = true;
-                        err.debug = goaway->debugData();
-                        stream->setGoAwayError(std::move(err));
-                        stream->closeFrameQueue();
+                        err.debug = goaway->debug_data();
+                        stream->set_go_away_error(std::move(err));
+                        stream->close_frame_queue();
                     });
                 }
                 break;
             }
 
             case Http2FrameType::WindowUpdate: {
-                auto* wu = frame->asWindowUpdate();
-                uint32_t increment = wu->windowSizeIncrement();
+                auto* wu = frame->as_window_update();
+                uint32_t increment = wu->window_size_increment();
                 if (increment == 0) {
-                    enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+                    enqueue_goaway_action(Http2ErrorCode::ProtocolError);
                     return;
                 }
-                if (static_cast<int64_t>(m_conn.connSendWindow()) + increment > kMaxStreamId) {
-                    enqueueGoawayAction(Http2ErrorCode::FlowControlError);
+                if (static_cast<int64_t>(m_conn.conn_send_window()) + increment > kMaxStreamId) {
+                    enqueue_goaway_action(Http2ErrorCode::FlowControlError);
                     return;
                 }
-                m_conn.adjustConnSendWindow(increment);
-                m_conn.forEachStream([this](uint32_t, Http2Stream::ptr& stream) {
+                m_conn.adjust_conn_send_window(increment);
+                m_conn.for_each_stream([this](uint32_t, Http2Stream::ptr& stream) {
                     if (!stream) {
                         return;
                     }
-                    stream->m_max_frame_size = m_conn.peerSettings().max_frame_size;
+                    stream->m_max_frame_size = m_conn.peer_settings().max_frame_size;
                     stream->m_max_header_list_size =
-                        m_conn.peerSettings().max_header_list_size;
-                    const bool made_progress = stream->flushPendingData();
+                        m_conn.peer_settings().max_header_list_size;
+                    const bool made_progress = stream->flush_pending_data();
                     // made_progress only reports whether queued DATA was flushed now.
                 });
                 break;
@@ -1755,86 +1755,86 @@ private:
     /**
      * @brief 分发流级帧到对应 Http2Stream 的帧队列
      */
-    void enqueueGoawayAction(Http2ErrorCode error) {
+    void enqueue_goaway_action(Http2ErrorCode error) {
         m_pending_actions.push_back({PendingAction::Type::SendGoaway, 0, error});
     }
 
-    void enqueueRstStreamAction(uint32_t stream_id, Http2ErrorCode error) {
+    void enqueue_rst_stream_action(uint32_t stream_id, Http2ErrorCode error) {
         m_pending_actions.push_back({PendingAction::Type::SendRstStream, stream_id, error});
     }
 
-    void enqueueWindowUpdateAction(uint32_t stream_id, uint32_t increment) {
+    void enqueue_window_update_action(uint32_t stream_id, uint32_t increment) {
         m_pending_actions.push_back({
             PendingAction::Type::SendWindowUpdate, stream_id, Http2ErrorCode::NoError, increment});
     }
 
-    void enqueueRetireStream(uint32_t stream_id) {
+    void enqueue_retire_stream(uint32_t stream_id) {
         if (stream_id == 0) {
             return;
         }
         if (!m_retire_stream_channel.send(stream_id)) {
-            m_conn.initiateClose();
+            m_conn.initiate_close();
         }
     }
 
-    void drainRetiredStreams() {
-        while (auto stream_id = m_retire_stream_channel.tryRecv()) {
-            clearHotStream(*stream_id);
-            m_conn.removeStream(*stream_id);
+    void drain_retired_streams() {
+        while (auto stream_id = m_retire_stream_channel.try_recv()) {
+            clear_hot_stream(*stream_id);
+            m_conn.remove_stream(*stream_id);
         }
     }
 
-    Http2Stream::ptr findAttachedStream(uint32_t stream_id) {
-        if (m_hot_stream && m_hot_stream->streamId() == stream_id) {
+    Http2Stream::ptr find_attached_stream(uint32_t stream_id) {
+        if (m_hot_stream && m_hot_stream->stream_id() == stream_id) {
             return m_hot_stream;
         }
-        auto stream = m_conn.getStream(stream_id);
-        attachStreamIO(stream);
-        rememberHotStream(stream);
+        auto stream = m_conn.get_stream(stream_id);
+        attach_stream_io(stream);
+        remember_hot_stream(stream);
         return stream;
     }
 
-    Http2Stream::ptr findOrCreateHeadersStream(uint32_t stream_id) {
-        auto stream = findAttachedStream(stream_id);
+    Http2Stream::ptr find_or_create_headers_stream(uint32_t stream_id) {
+        auto stream = find_attached_stream(stream_id);
         if (stream) {
             return stream;
         }
 
-        if (m_conn.isClient()) {
-            enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+        if (m_conn.is_client()) {
+            enqueue_goaway_action(Http2ErrorCode::ProtocolError);
             return nullptr;
         }
 
         if (m_reject_new_streams ||
-            (m_conn.isGoawaySent() && m_conn.goawayLastStreamId() != kMaxStreamId)) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::RefusedStream);
+            (m_conn.is_goaway_sent() && m_conn.goaway_last_stream_id() != kMaxStreamId)) {
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::RefusedStream);
             return nullptr;
         }
-        if (stream_id <= m_conn.lastPeerStreamId()) {
-            enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+        if (stream_id <= m_conn.last_peer_stream_id()) {
+            enqueue_goaway_action(Http2ErrorCode::ProtocolError);
             return nullptr;
         }
-        if (m_conn.streamCount() >= m_conn.localSettings().max_concurrent_streams) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::RefusedStream);
+        if (m_conn.stream_count() >= m_conn.local_settings().max_concurrent_streams) {
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::RefusedStream);
             return nullptr;
         }
 
-        stream = createStreamInternal(stream_id);
-        m_conn.setLastPeerStreamId(stream_id);
+        stream = create_stream_internal(stream_id);
+        m_conn.set_last_peer_stream_id(stream_id);
         return stream;
     }
 
-    void decodeBufferedHeaders(const Http2Stream::ptr& stream) {
-        auto fields = m_conn.decoder().decode(stream->headerBlock());
+    void decode_buffered_headers(const Http2Stream::ptr& stream) {
+        auto fields = m_conn.decoder().decode(stream->header_block());
         if (fields) {
-            stream->setDecodedHeaders(std::move(fields.value()));
+            stream->set_decoded_headers(std::move(fields.value()));
         }
-        stream->clearHeaderBlock();
-        m_conn.setExpectingContinuation(false);
+        stream->clear_header_block();
+        m_conn.set_expecting_continuation(false);
     }
 
-    const H2StaticRoute* findStaticRoute(std::string_view path) const {
-        const auto& routes = m_conn.runtimeConfig().static_routes;
+    const H2StaticRoute* find_static_route(std::string_view path) const {
+        const auto& routes = m_conn.runtime_config().static_routes;
         for (const auto& route : routes) {
             if (route.path == path) {
                 return &route;
@@ -1843,11 +1843,11 @@ private:
         return nullptr;
     }
 
-    const H2StaticRoute* findStaticRoute(const Http2Request& request) const {
-        return findStaticRoute(request.path);
+    const H2StaticRoute* find_static_route(const Http2Request& request) const {
+        return find_static_route(request.path);
     }
 
-    const H2StaticRoute* findStaticResponseRoute(std::string_view method,
+    const H2StaticRoute* find_static_response_route(std::string_view method,
                                                  std::string_view path) const {
         const bool is_get = method == "GET";
         const bool is_head = method == "HEAD";
@@ -1855,7 +1855,7 @@ private:
             return nullptr;
         }
 
-        const auto* route = findStaticRoute(path);
+        const auto* route = find_static_route(path);
         if (route == nullptr) {
             return nullptr;
         }
@@ -1865,11 +1865,11 @@ private:
         return route;
     }
 
-    bool isStaticFileMethod(std::string_view method) const {
+    bool is_static_file_method(std::string_view method) const {
         return method == "GET" || method == "HEAD";
     }
 
-    static bool pathStartsWithMount(std::string_view path, std::string_view prefix) {
+    static bool path_starts_with_mount(std::string_view path, std::string_view prefix) {
         if (prefix == "/") {
             return !path.empty() && path.front() == '/';
         }
@@ -1881,11 +1881,11 @@ private:
                path[prefix.size()] == '/';
     }
 
-    const H2StaticFileMount* findStaticFileMount(std::string_view path) const {
+    const H2StaticFileMount* find_static_file_mount(std::string_view path) const {
         const H2StaticFileMount* best = nullptr;
-        const auto& mounts = m_conn.runtimeConfig().static_file_mounts;
+        const auto& mounts = m_conn.runtime_config().static_file_mounts;
         for (const auto& mount : mounts) {
-            if (!pathStartsWithMount(path, mount.prefix)) {
+            if (!path_starts_with_mount(path, mount.prefix)) {
                 continue;
             }
             if (best == nullptr || mount.prefix.size() > best->prefix.size()) {
@@ -1895,7 +1895,7 @@ private:
         return best;
     }
 
-    static std::string mountedStaticFilePath(std::string_view path,
+    static std::string mounted_static_file_path(std::string_view path,
                                              const H2StaticFileMount& mount) {
         if (mount.prefix == "/") {
             return std::string(path);
@@ -1907,7 +1907,7 @@ private:
         return relative;
     }
 
-    static uintmax_t staticFileContentLength(const H2StaticFileLookup& lookup) {
+    static uintmax_t static_file_content_length(const H2StaticFileLookup& lookup) {
         for (const auto& header : lookup.headers) {
             if (header.name != "content-length") {
                 continue;
@@ -1932,7 +1932,7 @@ private:
     };
 
     static std::expected<std::vector<std::string>, H2StaticFileBodyReadError>
-    readStaticFileChunksBlocking(const std::string& path,
+    read_static_file_chunks_blocking(const std::string& path,
                                  uintmax_t offset,
                                  uintmax_t length,
                                  uint32_t max_frame_size) {
@@ -2001,17 +2001,17 @@ private:
         return chunks;
     }
 
-    bool canSendStaticFileBodyNow(uintmax_t length) const {
+    bool can_send_static_file_body_now(uintmax_t length) const {
         if (length == 0) {
             return true;
         }
         const auto max_body = std::min<int64_t>(
-            m_conn.connSendWindow(),
-            static_cast<int64_t>(m_conn.peerSettings().initial_window_size));
+            m_conn.conn_send_window(),
+            static_cast<int64_t>(m_conn.peer_settings().initial_window_size));
         return max_body >= 0 && length <= static_cast<uintmax_t>(max_body);
     }
 
-    void appendStaticFileDataFrames(uint32_t stream_id,
+    void append_static_file_data_frames(uint32_t stream_id,
                                     std::vector<std::string>&& chunks) {
         uintmax_t total = 0;
         for (size_t i = 0; i < chunks.size(); ++i) {
@@ -2019,52 +2019,52 @@ private:
             const bool end_stream = i + 1 == chunks.size();
             total += chunk.size();
             m_static_response_batch.push_back(
-                Http2OutgoingFrame{Http2FrameBuilder::dataBytes(
+                Http2OutgoingFrame{Http2FrameBuilder::data_bytes(
                     stream_id, chunk, end_stream)});
         }
         if (total > 0) {
-            m_conn.adjustConnSendWindow(-static_cast<int32_t>(total));
+            m_conn.adjust_conn_send_window(-static_cast<int32_t>(total));
         }
     }
 
-    void appendStaticFileSharedDataFrames(uint32_t stream_id,
+    void append_static_file_shared_data_frames(uint32_t stream_id,
                                           std::shared_ptr<const std::string> body) {
         if (!body || body->empty()) {
             return;
         }
 
         uintmax_t total = 0;
-        const auto frame_size = std::max<uint32_t>(m_conn.peerSettings().max_frame_size, 1);
+        const auto frame_size = std::max<uint32_t>(m_conn.peer_settings().max_frame_size, 1);
         size_t offset = 0;
         while (offset < body->size()) {
             const auto chunk_size = std::min<size_t>(body->size() - offset, frame_size);
             const bool end_stream = offset + chunk_size == body->size();
-            auto data_header = Http2FrameBuilder::dataHeaderBytes(
+            auto data_header = Http2FrameBuilder::data_header_bytes(
                 stream_id, chunk_size, end_stream);
             total += chunk_size;
             m_static_response_batch.push_back(
-                Http2OutgoingFrame::segmentedShared(
+                Http2OutgoingFrame::segmented_shared(
                     std::move(data_header), body, offset, chunk_size));
             offset += chunk_size;
         }
-        m_conn.adjustConnSendWindow(-static_cast<int32_t>(total));
+        m_conn.adjust_conn_send_window(-static_cast<int32_t>(total));
     }
 
-    static bool enqueueStaticFileReadFailure(galay::mpsc::UnboundedChannel<Http2OutgoingFrame>* send_channel,
+    static bool enqueue_static_file_read_failure(galay::mpsc::UnboundedChannel<Http2OutgoingFrame>* send_channel,
                                              uint32_t stream_id) {
         if (send_channel == nullptr) {
             return false;
         }
         auto rst = std::make_unique<Http2RstStreamFrame>();
         rst->header().stream_id = stream_id;
-        rst->setErrorCode(Http2ErrorCode::InternalError);
+        rst->set_error_code(Http2ErrorCode::InternalError);
         std::vector<Http2OutgoingFrame> frames;
         frames.reserve(1);
         frames.push_back(Http2OutgoingFrame{std::move(rst)});
-        return send_channel->sendBatch(std::move(frames));
+        return send_channel->send_batch(std::move(frames));
     }
 
-    bool scheduleStaticFileBodyRead(uint32_t stream_id,
+    bool schedule_static_file_body_read(uint32_t stream_id,
                                     std::shared_ptr<const std::string> header_block,
                                     std::shared_ptr<H2StaticFileBodyCacheSlot> body_cache_slot,
                                     std::string file_path,
@@ -2074,20 +2074,20 @@ private:
             length > static_cast<uintmax_t>(std::numeric_limits<int32_t>::max())) {
             return false;
         }
-        auto runtime = RuntimeHandle::tryCurrent();
+        auto runtime = RuntimeHandle::try_current();
         if (!runtime.has_value()) {
             return false;
         }
 
-        const uint32_t frame_size = std::max<uint32_t>(m_conn.peerSettings().max_frame_size, 1);
-        auto header_bytes = Http2FrameBuilder::headersHeaderBytes(
+        const uint32_t frame_size = std::max<uint32_t>(m_conn.peer_settings().max_frame_size, 1);
+        auto header_bytes = Http2FrameBuilder::headers_header_bytes(
             stream_id, header_block->size(), false, true);
         auto* send_channel = &m_send_channel;
 
         // Reserve flow-control credit on the IO owner before the worker thread reads.
         // The worker only touches its local buffers and the thread-safe send channel.
-        m_conn.adjustConnSendWindow(-static_cast<int32_t>(length));
-        auto blocking_task = runtime->spawnBlocking(
+        m_conn.adjust_conn_send_window(-static_cast<int32_t>(length));
+        auto blocking_task = runtime->spawn_blocking(
             [send_channel,
              stream_id,
              header_block = std::move(header_block),
@@ -2097,9 +2097,9 @@ private:
              offset,
              length,
              frame_size]() mutable {
-                auto chunks_result = readStaticFileChunksBlocking(file_path, offset, length, frame_size);
+                auto chunks_result = read_static_file_chunks_blocking(file_path, offset, length, frame_size);
                 if (!chunks_result.has_value()) {
-                    const bool sent = enqueueStaticFileReadFailure(send_channel, stream_id);
+                    const bool sent = enqueue_static_file_read_failure(send_channel, stream_id);
                     if (!sent) {
                         return;
                     }
@@ -2122,7 +2122,7 @@ private:
                     }
                     if (append_ok && body->size() == static_cast<size_t>(length)) {
                         cached_body = body;
-                        const bool stored = body_cache_slot->storeIfEmpty(cached_body);
+                        const bool stored = body_cache_slot->store_if_empty(cached_body);
                         if (!stored) {
                             cached_body = body_cache_slot->load();
                         }
@@ -2132,60 +2132,60 @@ private:
                 std::vector<Http2OutgoingFrame> frames;
                 frames.reserve(chunks.size() + 1);
                 frames.push_back(
-                    Http2OutgoingFrame::segmentedShared(std::move(header_bytes),
+                    Http2OutgoingFrame::segmented_shared(std::move(header_bytes),
                                                         std::move(header_block)));
                 if (cached_body) {
                     size_t body_offset = 0;
                     for (size_t i = 0; i < chunks.size(); ++i) {
                         const bool end_stream = i + 1 == chunks.size();
                         const size_t chunk_size = chunks[i].size();
-                        auto data_header = Http2FrameBuilder::dataHeaderBytes(
+                        auto data_header = Http2FrameBuilder::data_header_bytes(
                             stream_id, chunk_size, end_stream);
-                        frames.push_back(Http2OutgoingFrame::segmentedShared(
+                        frames.push_back(Http2OutgoingFrame::segmented_shared(
                             std::move(data_header), cached_body, body_offset, chunk_size));
                         body_offset += chunk_size;
                     }
                 } else {
                     for (size_t i = 0; i < chunks.size(); ++i) {
                         const bool end_stream = i + 1 == chunks.size();
-                        auto data_header = Http2FrameBuilder::dataHeaderBytes(
+                        auto data_header = Http2FrameBuilder::data_header_bytes(
                             stream_id, chunks[i].size(), end_stream);
                         frames.push_back(Http2OutgoingFrame::segmented(
                             std::move(data_header), std::move(chunks[i])));
                     }
                 }
-                const bool sent = send_channel->sendBatch(std::move(frames));
+                const bool sent = send_channel->send_batch(std::move(frames));
                 if (!sent) {
                     return;
                 }
             });
         if (!blocking_task.has_value()) {
-            m_conn.adjustConnSendWindow(static_cast<int32_t>(length));
+            m_conn.adjust_conn_send_window(static_cast<int32_t>(length));
             return false;
         }
-        if (!blocking_task->isValid()) {
-            m_conn.adjustConnSendWindow(static_cast<int32_t>(length));
+        if (!blocking_task->is_valid()) {
+            m_conn.adjust_conn_send_window(static_cast<int32_t>(length));
             return false;
         }
         return true;
     }
 
-    bool sendStaticFileLookup(uint32_t stream_id,
+    bool send_static_file_lookup(uint32_t stream_id,
                               std::string_view method,
                               const H2StaticFileLookup& lookup) {
         const bool is_head = method == "HEAD";
-        const uintmax_t length = staticFileContentLength(lookup);
+        const uintmax_t length = static_file_content_length(lookup);
         const bool has_body = !is_head && length > 0 &&
             lookup.status != 304 && lookup.status != 416;
-        if (has_body && !canSendStaticFileBodyNow(length)) {
+        if (has_body && !can_send_static_file_body_now(length)) {
             return false;
         }
         auto header_block = lookup.encoded_headers
             ? lookup.encoded_headers
-            : encodeH2StaticFileHeaders(lookup.status, lookup.headers);
+            : encode_h2_static_file_headers(lookup.status, lookup.headers);
         if (has_body && !lookup.body) {
             const uintmax_t body_offset = lookup.status == 206 ? lookup.range_start : 0;
-            return scheduleStaticFileBodyRead(stream_id,
+            return schedule_static_file_body_read(stream_id,
                                               std::move(header_block),
                                               lookup.body_cacheable ? lookup.body_cache_slot : nullptr,
                                               lookup.file_path.string(),
@@ -2194,21 +2194,21 @@ private:
         }
 
         const bool headers_end_stream = !has_body;
-        auto header_bytes = Http2FrameBuilder::headersHeaderBytes(
+        auto header_bytes = Http2FrameBuilder::headers_header_bytes(
             stream_id, header_block->size(), headers_end_stream, true);
         m_static_response_batch.push_back(
-            Http2OutgoingFrame::segmentedShared(std::move(header_bytes), std::move(header_block)));
+            Http2OutgoingFrame::segmented_shared(std::move(header_bytes), std::move(header_block)));
         if (!has_body) {
             return true;
         }
 
         if (lookup.body) {
-            appendStaticFileSharedDataFrames(stream_id, lookup.body);
+            append_static_file_shared_data_frames(stream_id, lookup.body);
         }
         return true;
     }
 
-    bool sendStaticFileFastLookup(uint32_t stream_id,
+    bool send_static_file_fast_lookup(uint32_t stream_id,
                                   std::string_view method,
                                   const H2StaticFileFastLookup& lookup) {
         if (!lookup.encoded_headers) {
@@ -2218,12 +2218,12 @@ private:
         const bool is_head = method == "HEAD";
         const uintmax_t length = lookup.content_length;
         const bool has_body = !is_head && length > 0;
-        if (has_body && !canSendStaticFileBodyNow(length)) {
+        if (has_body && !can_send_static_file_body_now(length)) {
             return false;
         }
 
         if (has_body && !lookup.body) {
-            return scheduleStaticFileBodyRead(stream_id,
+            return schedule_static_file_body_read(stream_id,
                                               lookup.encoded_headers,
                                               lookup.body_cacheable ? lookup.body_cache_slot : nullptr,
                                               lookup.file_path.string(),
@@ -2231,39 +2231,39 @@ private:
                                               length);
         }
 
-        auto header_bytes = Http2FrameBuilder::headersHeaderBytes(
+        auto header_bytes = Http2FrameBuilder::headers_header_bytes(
             stream_id, lookup.encoded_headers->size(), !has_body, true);
         m_static_response_batch.push_back(
-            Http2OutgoingFrame::segmentedShared(
+            Http2OutgoingFrame::segmented_shared(
                 std::move(header_bytes), lookup.encoded_headers));
         if (!has_body) {
             return true;
         }
 
         if (lookup.body) {
-            appendStaticFileSharedDataFrames(stream_id, lookup.body);
+            append_static_file_shared_data_frames(stream_id, lookup.body);
         }
         return true;
     }
 
-    bool trySendStaticFile(uint32_t stream_id,
+    bool try_send_static_file(uint32_t stream_id,
                            std::string_view method,
                            std::string_view path,
                            std::string_view if_none_match,
                            std::string_view range) {
-        if (!isStaticFileMethod(method)) {
+        if (!is_static_file_method(method)) {
             return false;
         }
-        const auto* mount = findStaticFileMount(path);
+        const auto* mount = find_static_file_mount(path);
         if (mount == nullptr || !mount->cache) {
             return false;
         }
 
-        auto mounted_path = mountedStaticFilePath(path, *mount);
+        auto mounted_path = mounted_static_file_path(path, *mount);
         if (if_none_match.empty() && range.empty()) {
-            auto fast_lookup = mount->cache->lookupFast200(mounted_path);
+            auto fast_lookup = mount->cache->lookup_fast200(mounted_path);
             if (fast_lookup.has_value()) {
-                return sendStaticFileFastLookup(stream_id, method, *fast_lookup);
+                return send_static_file_fast_lookup(stream_id, method, *fast_lookup);
             }
         }
 
@@ -2272,10 +2272,10 @@ private:
             .if_none_match = std::string(if_none_match),
             .range = std::string(range),
         });
-        return sendStaticFileLookup(stream_id, method, lookup);
+        return send_static_file_lookup(stream_id, method, lookup);
     }
 
-    bool trySendStaticFile(uint32_t stream_id,
+    bool try_send_static_file(uint32_t stream_id,
                            const std::vector<Http2HeaderField>& fields) {
         std::string_view method;
         std::string_view path;
@@ -2295,63 +2295,63 @@ private:
         if (method.empty() || path.empty()) {
             return false;
         }
-        return trySendStaticFile(stream_id, method, path, if_none_match, range);
+        return try_send_static_file(stream_id, method, path, if_none_match, range);
     }
 
-    bool trySendStaticFile(const Http2Stream::ptr& stream) {
-        if (m_conn.isClient() || !stream || !stream->isRequestCompleted()) {
+    bool try_send_static_file(const Http2Stream::ptr& stream) {
+        if (m_conn.is_client() || !stream || !stream->is_request_completed()) {
             return false;
         }
         const auto& request = stream->request();
-        return trySendStaticFile(stream->streamId(),
+        return try_send_static_file(stream->stream_id(),
                                  request.method,
                                  request.path,
-                                 request.getHeader("if-none-match"),
-                                 request.getHeader("range"));
+                                 request.get_header("if-none-match"),
+                                 request.get_header("range"));
     }
 
-    bool canSendStaticBodyNow(const H2StaticResponse& response) const {
+    bool can_send_static_body_now(const H2StaticResponse& response) const {
         if (response.body.empty()) {
             return true;
         }
-        return response.body.size() <= m_conn.peerSettings().max_frame_size &&
-               response.body.size() <= m_conn.peerSettings().initial_window_size;
+        return response.body.size() <= m_conn.peer_settings().max_frame_size &&
+               response.body.size() <= m_conn.peer_settings().initial_window_size;
     }
 
-    bool trySendStaticResponse(uint32_t stream_id,
+    bool try_send_static_response(uint32_t stream_id,
                                std::string_view method,
                                std::string_view path) {
-        const auto* route = findStaticResponseRoute(method, path);
+        const auto* route = find_static_response_route(method, path);
         if (route == nullptr) {
             return false;
         }
-        if (!canSendStaticBodyNow(route->response)) {
+        if (!can_send_static_body_now(route->response)) {
             return false;
         }
 
         auto payload = route->encoded_headers
             ? route->encoded_headers
-            : encodeH2StaticResponseHeaders(route->response);
+            : encode_h2_static_response_headers(route->response);
         const bool is_head = method == "HEAD";
         const bool headers_end_stream = is_head || route->response.body.empty();
-        auto header_bytes = Http2FrameBuilder::headersHeaderBytes(
+        auto header_bytes = Http2FrameBuilder::headers_header_bytes(
             stream_id, payload->size(), headers_end_stream, true);
         m_static_response_batch.push_back(
-            Http2OutgoingFrame::segmentedShared(std::move(header_bytes), std::move(payload)));
+            Http2OutgoingFrame::segmented_shared(std::move(header_bytes), std::move(payload)));
         if (!headers_end_stream) {
             auto body = route->shared_body
                 ? route->shared_body
                 : std::make_shared<const std::string>(route->response.body);
-            auto data_header = Http2FrameBuilder::dataHeaderBytes(
+            auto data_header = Http2FrameBuilder::data_header_bytes(
                 stream_id, body->size(), true);
             m_static_response_batch.push_back(
-                Http2OutgoingFrame::segmentedShared(
+                Http2OutgoingFrame::segmented_shared(
                     std::move(data_header), std::move(body)));
         }
         return true;
     }
 
-    bool trySendStaticResponse(uint32_t stream_id,
+    bool try_send_static_response(uint32_t stream_id,
                                const std::vector<Http2HeaderField>& fields) {
         std::string_view method;
         std::string_view path;
@@ -2365,179 +2365,179 @@ private:
         if (method.empty() || path.empty()) {
             return false;
         }
-        return trySendStaticResponse(stream_id, method, path);
+        return try_send_static_response(stream_id, method, path);
     }
 
-    bool trySendStaticResponse(const Http2Stream::ptr& stream) {
-        if (m_conn.isClient() || !stream || !stream->isRequestCompleted()) {
+    bool try_send_static_response(const Http2Stream::ptr& stream) {
+        if (m_conn.is_client() || !stream || !stream->is_request_completed()) {
             return false;
         }
 
         const auto& request = stream->request();
-        const auto* route = findStaticResponseRoute(request.method, request.path);
+        const auto* route = find_static_response_route(request.method, request.path);
         if (route == nullptr) {
             return false;
         }
-        if (!canSendStaticBodyNow(route->response)) {
+        if (!can_send_static_body_now(route->response)) {
             return false;
         }
 
         auto header_block = route->encoded_headers
             ? route->encoded_headers
-            : encodeH2StaticResponseHeaders(route->response);
+            : encode_h2_static_response_headers(route->response);
         const bool headers_end_stream =
             request.method == "HEAD" || route->response.body.empty();
         if (headers_end_stream) {
-            stream->sendEncodedHeaders(std::move(header_block), true, true);
+            stream->send_encoded_headers(std::move(header_block), true, true);
         } else {
-            stream->sendEncodedHeadersAndData(
+            stream->send_encoded_headers_and_data(
                 std::move(header_block), route->response.body, true);
         }
         return true;
     }
 
-    void completeDecodedHeaders(const Http2Stream::ptr& stream, bool end_stream) {
-        if (m_conn.isClient()) {
-            stream->consumeDecodedHeadersAsResponse();
+    void complete_decoded_headers(const Http2Stream::ptr& stream, bool end_stream) {
+        if (m_conn.is_client()) {
+            stream->consume_decoded_headers_as_response();
             auto events = Http2StreamEvent::HeadersReady;
             if (end_stream) {
-                stream->markResponseCompleted();
+                stream->mark_response_completed();
                 events |= Http2StreamEvent::ResponseComplete;
             }
-            markStreamActive(stream, events);
+            mark_stream_active(stream, events);
             return;
         }
 
-        stream->consumeDecodedHeadersAsRequest();
+        stream->consume_decoded_headers_as_request();
         auto events = Http2StreamEvent::HeadersReady;
         if (end_stream) {
-            stream->markRequestCompleted();
+            stream->mark_request_completed();
             events |= Http2StreamEvent::RequestComplete;
         }
-        if (trySendStaticResponse(stream)) {
+        if (try_send_static_response(stream)) {
             return;
         }
-        if (trySendStaticFile(stream)) {
+        if (try_send_static_file(stream)) {
             return;
         }
         if (m_active_conn_mode) {
-            if (shouldDeferHeadersOnlyActiveDelivery(stream, end_stream)) {
+            if (should_defer_headers_only_active_delivery(stream, end_stream)) {
                 stream->m_pending_events |= events;
                 return;
             }
-            markStreamActive(stream, events);
+            mark_stream_active(stream, events);
         } else {
-            queueStreamHandler(stream);
+            queue_stream_handler(stream);
         }
     }
 
-    void completeReceivedHeaders(const Http2Stream::ptr& stream, bool end_stream) {
-        decodeBufferedHeaders(stream);
-        completeDecodedHeaders(stream, end_stream);
+    void complete_received_headers(const Http2Stream::ptr& stream, bool end_stream) {
+        decode_buffered_headers(stream);
+        complete_decoded_headers(stream, end_stream);
     }
 
-    void applyRecvWindowUpdate(const Http2Stream::ptr& stream, uint32_t stream_id, size_t data_size) {
-        auto update = m_conn.evaluateRecvWindowUpdate(stream->recvWindow(), data_size);
+    void apply_recv_window_update(const Http2Stream::ptr& stream, uint32_t stream_id, size_t data_size) {
+        auto update = m_conn.evaluate_recv_window_update(stream->recv_window(), data_size);
         if (update.conn_increment > 0) {
-            enqueueWindowUpdateAction(0, update.conn_increment);
-            m_conn.adjustConnRecvWindow(static_cast<int32_t>(update.conn_increment));
+            enqueue_window_update_action(0, update.conn_increment);
+            m_conn.adjust_conn_recv_window(static_cast<int32_t>(update.conn_increment));
         }
         if (update.stream_increment > 0) {
-            enqueueWindowUpdateAction(stream_id, update.stream_increment);
-            stream->adjustRecvWindow(static_cast<int32_t>(update.stream_increment));
+            enqueue_window_update_action(stream_id, update.stream_increment);
+            stream->adjust_recv_window(static_cast<int32_t>(update.stream_increment));
         }
     }
 
-    void appendStreamDataAndMarkEvents(const Http2Stream::ptr& stream, Http2DataFrame* data) {
+    void append_stream_data_and_mark_events(const Http2Stream::ptr& stream, Http2DataFrame* data) {
         auto events = Http2StreamEvent::DataArrived;
-        if (m_conn.isClient()) {
-            stream->appendResponseData(data->data());
-            if (data->isEndStream()) {
-                stream->markResponseCompleted();
+        if (m_conn.is_client()) {
+            stream->append_response_data(data->data());
+            if (data->is_end_stream()) {
+                stream->mark_response_completed();
                 events |= Http2StreamEvent::ResponseComplete;
             }
         } else {
             if (m_active_conn_mode) {
-                stream->appendRequestData(std::move(data->data()));
+                stream->append_request_data(std::move(data->data()));
             } else {
-                stream->appendRequestData(data->data());
+                stream->append_request_data(data->data());
             }
-            if (data->isEndStream()) {
-                stream->markRequestCompleted();
+            if (data->is_end_stream()) {
+                stream->mark_request_completed();
                 events |= Http2StreamEvent::RequestComplete;
             }
         }
-        markStreamActive(stream, events);
+        mark_stream_active(stream, events);
     }
 
-    void appendStreamDataAndMarkEvents(const Http2Stream::ptr& stream,
+    void append_stream_data_and_mark_events(const Http2Stream::ptr& stream,
                                        std::string_view data,
                                        bool end_stream) {
         auto events = Http2StreamEvent::DataArrived;
-        if (m_conn.isClient()) {
-            stream->appendResponseData(std::string(data));
+        if (m_conn.is_client()) {
+            stream->append_response_data(std::string(data));
             if (end_stream) {
-                stream->markResponseCompleted();
+                stream->mark_response_completed();
                 events |= Http2StreamEvent::ResponseComplete;
             }
         } else {
-            stream->appendRequestData(data);
+            stream->append_request_data(data);
             if (end_stream) {
-                stream->markRequestCompleted();
+                stream->mark_request_completed();
                 events |= Http2StreamEvent::RequestComplete;
             }
         }
-        markStreamActive(stream, events);
+        mark_stream_active(stream, events);
     }
 
-    std::expected<Http2Frame::uptr, Http2ErrorCode> materializeFrameView(
+    std::expected<Http2Frame::uptr, Http2ErrorCode> materialize_frame_view(
         const Http2RawFrameView& frame_view) {
         auto bytes = frame_view.bytes();
-        return Http2FrameParser::parseFrame(
+        return Http2FrameParser::parse_frame(
             reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
     }
 
-    bool handleRawHeadersFrameView(const Http2RawFrameView& frame_view, uint32_t stream_id) {
+    bool handle_raw_headers_frame_view(const Http2RawFrameView& frame_view, uint32_t stream_id) {
         if ((frame_view.header.flags & Http2FrameFlags::kPadded) != 0 ||
             (frame_view.header.flags & Http2FrameFlags::kPriority) != 0) {
             return false;
         }
 
-        auto stream = findAttachedStream(stream_id);
+        auto stream = find_attached_stream(stream_id);
         if (!stream) {
             if (m_reject_new_streams ||
-                (m_conn.isGoawaySent() && m_conn.goawayLastStreamId() != kMaxStreamId)) {
-                enqueueRstStreamAction(stream_id, Http2ErrorCode::RefusedStream);
+                (m_conn.is_goaway_sent() && m_conn.goaway_last_stream_id() != kMaxStreamId)) {
+                enqueue_rst_stream_action(stream_id, Http2ErrorCode::RefusedStream);
                 return true;
             }
-            if (stream_id <= m_conn.lastPeerStreamId()) {
-                enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+            if (stream_id <= m_conn.last_peer_stream_id()) {
+                enqueue_goaway_action(Http2ErrorCode::ProtocolError);
                 return true;
             }
-            if (m_conn.streamCount() >= m_conn.localSettings().max_concurrent_streams) {
-                enqueueRstStreamAction(stream_id, Http2ErrorCode::RefusedStream);
+            if (m_conn.stream_count() >= m_conn.local_settings().max_concurrent_streams) {
+                enqueue_rst_stream_action(stream_id, Http2ErrorCode::RefusedStream);
                 return true;
             }
 
-            const bool end_headers = frame_view.endHeaders();
-            const bool end_stream = frame_view.endStream();
+            const bool end_headers = frame_view.end_headers();
+            const bool end_stream = frame_view.end_stream();
             if (end_headers) {
                 auto payload = frame_view.payload();
-                if (end_stream && !m_conn.runtimeConfig().static_file_mounts.empty()) {
+                if (end_stream && !m_conn.runtime_config().static_file_mounts.empty()) {
                     auto decoder_snapshot = m_conn.decoder().clone();
-                    auto target = m_conn.decoder().decodeRequestTarget(
+                    auto target = m_conn.decoder().decode_request_target(
                         reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
                     if (!target) {
-                        enqueueGoawayAction(target.error());
+                        enqueue_goaway_action(target.error());
                         return true;
                     }
-                    if (trySendStaticResponse(stream_id, target->method, target->path) ||
-                        trySendStaticFile(stream_id,
+                    if (try_send_static_response(stream_id, target->method, target->path) ||
+                        try_send_static_file(stream_id,
                                           target->method,
                                           target->path,
                                           target->if_none_match,
                                           target->range)) {
-                        m_conn.setLastPeerStreamId(stream_id);
+                        m_conn.set_last_peer_stream_id(stream_id);
                         return true;
                     }
                     m_conn.decoder() = std::move(decoder_snapshot);
@@ -2545,27 +2545,27 @@ private:
                     auto fields = m_conn.decoder().decode(
                         reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
                     if (!fields) {
-                        enqueueGoawayAction(fields.error());
+                        enqueue_goaway_action(fields.error());
                         return true;
                     }
-                    stream = createStreamInternal(stream_id);
-                    m_conn.setLastPeerStreamId(stream_id);
-                    stream->onHeadersReceived(end_stream);
-                    stream->setDecodedHeaders(std::move(*fields));
-                    completeDecodedHeaders(stream, end_stream);
-                    tryRetireClientStream(stream);
+                    stream = create_stream_internal(stream_id);
+                    m_conn.set_last_peer_stream_id(stream_id);
+                    stream->on_headers_received(end_stream);
+                    stream->set_decoded_headers(std::move(*fields));
+                    complete_decoded_headers(stream, end_stream);
+                    try_retire_client_stream(stream);
                     return true;
                 }
-                if (end_stream && !m_conn.runtimeConfig().static_routes.empty()) {
+                if (end_stream && !m_conn.runtime_config().static_routes.empty()) {
                     auto decoder_snapshot = m_conn.decoder().clone();
-                    auto target = m_conn.decoder().decodeRequestTarget(
+                    auto target = m_conn.decoder().decode_request_target(
                         reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
                     if (!target) {
-                        enqueueGoawayAction(target.error());
+                        enqueue_goaway_action(target.error());
                         return true;
                     }
-                    if (trySendStaticResponse(stream_id, target->method, target->path)) {
-                        m_conn.setLastPeerStreamId(stream_id);
+                    if (try_send_static_response(stream_id, target->method, target->path)) {
+                        m_conn.set_last_peer_stream_id(stream_id);
                         return true;
                     }
                     m_conn.decoder() = std::move(decoder_snapshot);
@@ -2574,414 +2574,414 @@ private:
                 auto fields = m_conn.decoder().decode(
                     reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
                 if (!fields) {
-                    enqueueGoawayAction(fields.error());
+                    enqueue_goaway_action(fields.error());
                     return true;
                 }
 
-                stream = createStreamInternal(stream_id);
-                m_conn.setLastPeerStreamId(stream_id);
-                stream->onHeadersReceived(end_stream);
-                stream->setDecodedHeaders(std::move(*fields));
-                completeDecodedHeaders(stream, end_stream);
-                tryRetireClientStream(stream);
+                stream = create_stream_internal(stream_id);
+                m_conn.set_last_peer_stream_id(stream_id);
+                stream->on_headers_received(end_stream);
+                stream->set_decoded_headers(std::move(*fields));
+                complete_decoded_headers(stream, end_stream);
+                try_retire_client_stream(stream);
                 return true;
             }
 
-            stream = createStreamInternal(stream_id);
-            m_conn.setLastPeerStreamId(stream_id);
+            stream = create_stream_internal(stream_id);
+            m_conn.set_last_peer_stream_id(stream_id);
         }
         if (!stream) {
             return true;
         }
 
-        if (!stream->canReceiveHeaders()) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::StreamClosed);
+        if (!stream->can_receive_headers()) {
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::StreamClosed);
             return true;
         }
 
-        const bool end_headers = frame_view.endHeaders();
-        const bool end_stream = frame_view.endStream();
-        stream->onHeadersReceived(end_stream);
-        stream->appendHeaderBlock(frame_view.payload());
+        const bool end_headers = frame_view.end_headers();
+        const bool end_stream = frame_view.end_stream();
+        stream->on_headers_received(end_stream);
+        stream->append_header_block(frame_view.payload());
 
         if (end_headers) {
-            completeReceivedHeaders(stream, end_stream);
+            complete_received_headers(stream, end_stream);
         } else {
-            m_conn.setExpectingContinuation(true, stream_id);
+            m_conn.set_expecting_continuation(true, stream_id);
         }
 
-        tryRetireClientStream(stream);
+        try_retire_client_stream(stream);
         return true;
     }
 
-    bool handleRawContinuationFrameView(const Http2RawFrameView& frame_view, uint32_t stream_id) {
-        auto stream = findAttachedStream(stream_id);
+    bool handle_raw_continuation_frame_view(const Http2RawFrameView& frame_view, uint32_t stream_id) {
+        auto stream = find_attached_stream(stream_id);
         if (!stream) {
-            enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+            enqueue_goaway_action(Http2ErrorCode::ProtocolError);
             return true;
         }
 
-        stream->appendHeaderBlock(frame_view.payload());
+        stream->append_header_block(frame_view.payload());
 
-        if (frame_view.endHeaders()) {
-            completeReceivedHeaders(stream, stream->isEndStreamReceived());
+        if (frame_view.end_headers()) {
+            complete_received_headers(stream, stream->is_end_stream_received());
         }
 
         return true;
     }
 
-    bool handleRawDataFrameView(const Http2RawFrameView& frame_view, uint32_t stream_id) {
+    bool handle_raw_data_frame_view(const Http2RawFrameView& frame_view, uint32_t stream_id) {
         if ((frame_view.header.flags & Http2FrameFlags::kPadded) != 0) {
             return false;
         }
 
         if (stream_id == 0) {
-            enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+            enqueue_goaway_action(Http2ErrorCode::ProtocolError);
             return true;
         }
 
-        auto stream = findAttachedStream(stream_id);
+        auto stream = find_attached_stream(stream_id);
         if (!stream) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::StreamClosed);
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::StreamClosed);
             return true;
         }
-        if (!stream->canReceiveData()) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::StreamClosed);
+        if (!stream->can_receive_data()) {
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::StreamClosed);
             return true;
         }
 
         const auto payload = frame_view.payload();
         const size_t data_size = payload.size();
-        if (data_size > static_cast<size_t>(std::max<int32_t>(m_conn.connRecvWindow(), 0))) {
-            enqueueGoawayAction(Http2ErrorCode::FlowControlError);
+        if (data_size > static_cast<size_t>(std::max<int32_t>(m_conn.conn_recv_window(), 0))) {
+            enqueue_goaway_action(Http2ErrorCode::FlowControlError);
             return true;
         }
-        if (data_size > static_cast<size_t>(std::max<int32_t>(stream->recvWindow(), 0))) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::FlowControlError);
+        if (data_size > static_cast<size_t>(std::max<int32_t>(stream->recv_window(), 0))) {
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::FlowControlError);
             return true;
         }
 
         const int32_t data_size_delta = static_cast<int32_t>(data_size);
-        stream->onDataReceived(frame_view.endStream());
+        stream->on_data_received(frame_view.end_stream());
 
-        m_conn.adjustConnRecvWindow(-data_size_delta);
-        stream->adjustRecvWindow(-data_size_delta);
-        applyRecvWindowUpdate(stream, stream_id, data_size);
-        appendStreamDataAndMarkEvents(stream, payload, frame_view.endStream());
+        m_conn.adjust_conn_recv_window(-data_size_delta);
+        stream->adjust_recv_window(-data_size_delta);
+        apply_recv_window_update(stream, stream_id, data_size);
+        append_stream_data_and_mark_events(stream, payload, frame_view.end_stream());
 
-        tryRetireClientStream(stream);
+        try_retire_client_stream(stream);
         return true;
     }
 
-    bool tryDispatchServerActiveFrameView(Http2RawFrameView&& frame_view) {
-        if (!m_active_conn_mode || m_conn.isClient()) {
+    bool try_dispatch_server_active_frame_view(Http2RawFrameView&& frame_view) {
+        if (!m_active_conn_mode || m_conn.is_client()) {
             return false;
         }
 
-        const uint32_t stream_id = frame_view.streamId();
+        const uint32_t stream_id = frame_view.stream_id();
 
-        if (frame_view.isHeaders()) {
-            return handleRawHeadersFrameView(frame_view, stream_id);
+        if (frame_view.is_headers()) {
+            return handle_raw_headers_frame_view(frame_view, stream_id);
         }
 
-        if (frame_view.isContinuation()) {
-            return handleRawContinuationFrameView(frame_view, stream_id);
+        if (frame_view.is_continuation()) {
+            return handle_raw_continuation_frame_view(frame_view, stream_id);
         }
 
-        if (frame_view.isData()) {
-            return handleRawDataFrameView(frame_view, stream_id);
+        if (frame_view.is_data()) {
+            return handle_raw_data_frame_view(frame_view, stream_id);
         }
 
         return false;
     }
 
-    void handleHeadersFrame(Http2Frame::uptr frame, uint32_t stream_id) {
-        auto stream = findOrCreateHeadersStream(stream_id);
+    void handle_headers_frame(Http2Frame::uptr frame, uint32_t stream_id) {
+        auto stream = find_or_create_headers_stream(stream_id);
         if (!stream) {
             return;
         }
 
-        if (!stream->canReceiveHeaders()) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::StreamClosed);
+        if (!stream->can_receive_headers()) {
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::StreamClosed);
             return;
         }
 
-        auto* hdrs = frame->asHeaders();
-        if (hdrs->hasPriority()) {
-            stream->setPriority(hdrs->exclusive(), hdrs->streamDependency(), hdrs->weight());
+        auto* hdrs = frame->as_headers();
+        if (hdrs->has_priority()) {
+            stream->set_priority(hdrs->exclusive(), hdrs->stream_dependency(), hdrs->weight());
         }
 
-        const bool end_headers = hdrs->isEndHeaders();
-        const bool end_stream = hdrs->isEndStream();
-        stream->onHeadersReceived(end_stream);
-        stream->appendHeaderBlock(hdrs->headerBlock());
+        const bool end_headers = hdrs->is_end_headers();
+        const bool end_stream = hdrs->is_end_stream();
+        stream->on_headers_received(end_stream);
+        stream->append_header_block(hdrs->header_block());
 
         if (end_headers) {
-            completeReceivedHeaders(stream, end_stream);
+            complete_received_headers(stream, end_stream);
         } else {
-            m_conn.setExpectingContinuation(true, stream_id);
+            m_conn.set_expecting_continuation(true, stream_id);
         }
 
-        pushStreamFrameIfNeeded(stream, std::move(frame));
-        tryRetireClientStream(stream);
+        push_stream_frame_if_needed(stream, std::move(frame));
+        try_retire_client_stream(stream);
     }
 
-    void handleContinuationFrame(Http2Frame::uptr frame, uint32_t stream_id) {
-        auto stream = findAttachedStream(stream_id);
+    void handle_continuation_frame(Http2Frame::uptr frame, uint32_t stream_id) {
+        auto stream = find_attached_stream(stream_id);
         if (!stream) {
-            enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+            enqueue_goaway_action(Http2ErrorCode::ProtocolError);
             return;
         }
 
-        auto* cont = frame->asContinuation();
-        stream->appendHeaderBlock(cont->headerBlock());
+        auto* cont = frame->as_continuation();
+        stream->append_header_block(cont->header_block());
 
-        if (cont->isEndHeaders()) {
-            completeReceivedHeaders(stream, stream->isEndStreamReceived());
+        if (cont->is_end_headers()) {
+            complete_received_headers(stream, stream->is_end_stream_received());
         }
 
-        pushStreamFrameIfNeeded(stream, std::move(frame));
+        push_stream_frame_if_needed(stream, std::move(frame));
     }
 
-    void handleDataFrame(Http2Frame::uptr frame, uint32_t stream_id) {
+    void handle_data_frame(Http2Frame::uptr frame, uint32_t stream_id) {
         if (stream_id == 0) {
-            enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+            enqueue_goaway_action(Http2ErrorCode::ProtocolError);
             return;
         }
 
-        auto stream = findAttachedStream(stream_id);
+        auto stream = find_attached_stream(stream_id);
         if (!stream) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::StreamClosed);
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::StreamClosed);
             return;
         }
-        if (!stream->canReceiveData()) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::StreamClosed);
+        if (!stream->can_receive_data()) {
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::StreamClosed);
             return;
         }
 
-        auto* data = frame->asData();
+        auto* data = frame->as_data();
         const size_t data_size = data->data().size();
-        if (data_size > static_cast<size_t>(std::max<int32_t>(m_conn.connRecvWindow(), 0))) {
-            enqueueGoawayAction(Http2ErrorCode::FlowControlError);
+        if (data_size > static_cast<size_t>(std::max<int32_t>(m_conn.conn_recv_window(), 0))) {
+            enqueue_goaway_action(Http2ErrorCode::FlowControlError);
             return;
         }
-        if (data_size > static_cast<size_t>(std::max<int32_t>(stream->recvWindow(), 0))) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::FlowControlError);
+        if (data_size > static_cast<size_t>(std::max<int32_t>(stream->recv_window(), 0))) {
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::FlowControlError);
             return;
         }
 
         const int32_t data_size_delta = static_cast<int32_t>(data_size);
-        stream->onDataReceived(data->isEndStream());
+        stream->on_data_received(data->is_end_stream());
 
-        m_conn.adjustConnRecvWindow(-data_size_delta);
-        stream->adjustRecvWindow(-data_size_delta);
-        applyRecvWindowUpdate(stream, stream_id, data_size);
-        appendStreamDataAndMarkEvents(stream, data);
+        m_conn.adjust_conn_recv_window(-data_size_delta);
+        stream->adjust_recv_window(-data_size_delta);
+        apply_recv_window_update(stream, stream_id, data_size);
+        append_stream_data_and_mark_events(stream, data);
 
-        pushStreamFrameIfNeeded(stream, std::move(frame));
-        tryRetireClientStream(stream);
+        push_stream_frame_if_needed(stream, std::move(frame));
+        try_retire_client_stream(stream);
     }
 
-    void handlePriorityFrame(Http2Frame::uptr frame, uint32_t stream_id) {
-        auto stream = findAttachedStream(stream_id);
+    void handle_priority_frame(Http2Frame::uptr frame, uint32_t stream_id) {
+        auto stream = find_attached_stream(stream_id);
         if (!stream) {
             return;
         }
 
-        auto* prio = frame->asPriority();
-        stream->setPriority(prio->exclusive(), prio->streamDependency(), prio->weight());
+        auto* prio = frame->as_priority();
+        stream->set_priority(prio->exclusive(), prio->stream_dependency(), prio->weight());
     }
 
-    void handleRstStreamFrame(Http2Frame::uptr frame, uint32_t stream_id) {
+    void handle_rst_stream_frame(Http2Frame::uptr frame, uint32_t stream_id) {
         if (stream_id == 0) {
-            enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+            enqueue_goaway_action(Http2ErrorCode::ProtocolError);
             return;
         }
 
-        auto stream = findAttachedStream(stream_id);
+        auto stream = find_attached_stream(stream_id);
         if (!stream) {
             return;
         }
 
-        stream->onRstStreamReceived();
-        markStreamActive(stream, Http2StreamEvent::Reset);
-        pushStreamFrameIfNeeded(stream, std::move(frame));
-        stream->markRequestCompleted();
-        stream->markResponseCompleted();
-        stream->closeFrameQueue();
-        tryRetireClientStream(stream);
+        stream->on_rst_stream_received();
+        mark_stream_active(stream, Http2StreamEvent::Reset);
+        push_stream_frame_if_needed(stream, std::move(frame));
+        stream->mark_request_completed();
+        stream->mark_response_completed();
+        stream->close_frame_queue();
+        try_retire_client_stream(stream);
     }
 
-    void handleWindowUpdateFrame(Http2Frame::uptr frame, uint32_t stream_id) {
-        auto stream = findAttachedStream(stream_id);
+    void handle_window_update_frame(Http2Frame::uptr frame, uint32_t stream_id) {
+        auto stream = find_attached_stream(stream_id);
         if (!stream) {
             return;
         }
 
-        auto* wu = frame->asWindowUpdate();
-        const uint32_t increment = wu->windowSizeIncrement();
+        auto* wu = frame->as_window_update();
+        const uint32_t increment = wu->window_size_increment();
         if (increment == 0) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::ProtocolError);
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::ProtocolError);
             return;
         }
-        if (static_cast<int64_t>(stream->sendWindow()) + increment > kMaxStreamId) {
-            enqueueRstStreamAction(stream_id, Http2ErrorCode::FlowControlError);
+        if (static_cast<int64_t>(stream->send_window()) + increment > kMaxStreamId) {
+            enqueue_rst_stream_action(stream_id, Http2ErrorCode::FlowControlError);
             return;
         }
 
-        stream->adjustSendWindow(increment);
-        stream->m_max_frame_size = m_conn.peerSettings().max_frame_size;
-        stream->m_max_header_list_size = m_conn.peerSettings().max_header_list_size;
-        const bool made_progress = stream->flushPendingData();
+        stream->adjust_send_window(increment);
+        stream->m_max_frame_size = m_conn.peer_settings().max_frame_size;
+        stream->m_max_header_list_size = m_conn.peer_settings().max_header_list_size;
+        const bool made_progress = stream->flush_pending_data();
         // made_progress only reports whether queued DATA was flushed now.
-        markStreamActive(stream, Http2StreamEvent::WindowUpdated);
-        pushStreamFrameIfNeeded(stream, std::move(frame));
+        mark_stream_active(stream, Http2StreamEvent::WindowUpdated);
+        push_stream_frame_if_needed(stream, std::move(frame));
     }
 
-    void handlePushPromiseFrame(Http2Frame::uptr frame, uint32_t stream_id) {
-        if (!m_conn.isClient()) {
-            enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+    void handle_push_promise_frame(Http2Frame::uptr frame, uint32_t stream_id) {
+        if (!m_conn.is_client()) {
+            enqueue_goaway_action(Http2ErrorCode::ProtocolError);
             return;
         }
 
-        auto* pp = frame->asPushPromise();
-        const uint32_t promised_id = pp->promisedStreamId();
-        auto promised_stream = findAttachedStream(promised_id);
+        auto* pp = frame->as_push_promise();
+        const uint32_t promised_id = pp->promised_stream_id();
+        auto promised_stream = find_attached_stream(promised_id);
         if (!promised_stream) {
-            promised_stream = createStreamInternal(promised_id);
-            promised_stream->setState(Http2StreamState::ReservedRemote);
+            promised_stream = create_stream_internal(promised_id);
+            promised_stream->set_state(Http2StreamState::ReservedRemote);
         }
 
-        pushStreamFrameIfNeeded(promised_stream, std::move(frame));
+        push_stream_frame_if_needed(promised_stream, std::move(frame));
         if (!m_active_conn_mode) {
-            queueStreamHandler(promised_stream);
+            queue_stream_handler(promised_stream);
         }
     }
 
-    void dispatchStreamFrame(Http2Frame::uptr frame) {
-        const uint32_t stream_id = frame->streamId();
+    void dispatch_stream_frame(Http2Frame::uptr frame) {
+        const uint32_t stream_id = frame->stream_id();
 
         if (stream_id == 0) {
             return;
         }
 
-        if (frame->isHeaders()) {
-            handleHeadersFrame(std::move(frame), stream_id);
+        if (frame->is_headers()) {
+            handle_headers_frame(std::move(frame), stream_id);
             return;
         }
 
-        if (frame->isContinuation()) {
-            handleContinuationFrame(std::move(frame), stream_id);
+        if (frame->is_continuation()) {
+            handle_continuation_frame(std::move(frame), stream_id);
             return;
         }
 
-        if (frame->isData()) {
-            handleDataFrame(std::move(frame), stream_id);
+        if (frame->is_data()) {
+            handle_data_frame(std::move(frame), stream_id);
             return;
         }
 
-        if (frame->isPriority()) {
-            handlePriorityFrame(std::move(frame), stream_id);
+        if (frame->is_priority()) {
+            handle_priority_frame(std::move(frame), stream_id);
             return;
         }
 
-        if (frame->isRstStream()) {
-            handleRstStreamFrame(std::move(frame), stream_id);
+        if (frame->is_rst_stream()) {
+            handle_rst_stream_frame(std::move(frame), stream_id);
             return;
         }
 
-        if (frame->isWindowUpdate()) {
-            handleWindowUpdateFrame(std::move(frame), stream_id);
+        if (frame->is_window_update()) {
+            handle_window_update_frame(std::move(frame), stream_id);
             return;
         }
 
-        if (frame->isPushPromise()) {
-            handlePushPromiseFrame(std::move(frame), stream_id);
+        if (frame->is_push_promise()) {
+            handle_push_promise_frame(std::move(frame), stream_id);
             return;
         }
 
     }
 
     /**
-     * @brief 处理 dispatchStreamFrame 中标记的待处理动作（通过 channel 发送）
+     * @brief 处理 dispatch_stream_frame 中标记的待处理动作（通过 channel 发送）
      */
-    void processPendingActions() {
+    void process_pending_actions() {
         while (!m_pending_actions.empty()) {
             auto action = m_pending_actions.front();
             m_pending_actions.pop_front();
 
             switch (action.type) {
                 case PendingAction::Type::SendGoaway: {
-                    enqueueGoaway(action.error_code);
+                    enqueue_goaway(action.error_code);
                     break;
                 }
                 case PendingAction::Type::SendRstStream: {
-                    auto bytes = Http2FrameBuilder::rstStreamBytes(action.stream_id, action.error_code);
-                    auto stream = m_conn.getStream(action.stream_id);
+                    auto bytes = Http2FrameBuilder::rst_stream_bytes(action.stream_id, action.error_code);
+                    auto stream = m_conn.get_stream(action.stream_id);
                     if (stream) {
-                        stream->onRstStreamSent();
+                        stream->on_rst_stream_sent();
                     }
-                    enqueueSendBytes(std::move(bytes));
+                    enqueue_send_bytes(std::move(bytes));
                     break;
                 }
                 case PendingAction::Type::SendWindowUpdate: {
                     Http2WindowUpdateFrame frame;
                     frame.header().stream_id = action.stream_id;
-                    frame.setWindowSizeIncrement(action.increment);
-                    enqueueSendFrame(std::move(frame));
+                    frame.set_window_size_increment(action.increment);
+                    enqueue_send_frame(std::move(frame));
                     break;
                 }
             }
         }
     }
 
-    void flushStaticResponseBatch() {
+    void flush_static_response_batch() {
         if (m_static_response_batch.empty()) {
             return;
         }
-        enqueueOutgoingBatch(std::move(m_static_response_batch));
+        enqueue_outgoing_batch(std::move(m_static_response_batch));
         m_static_response_batch.clear();
     }
 
     /**
      * @brief 入队 GOAWAY 帧
      */
-    void enqueueGoaway(Http2ErrorCode error,
+    void enqueue_goaway(Http2ErrorCode error,
                        const std::string& debug = "",
                        const Http2OutgoingFrame::WaiterPtr& waiter = nullptr,
                        std::optional<uint32_t> last_stream_id = std::nullopt) {
         Http2GoAwayFrame frame;
-        uint32_t last = last_stream_id.value_or(m_conn.lastPeerStreamId());
-        frame.setLastStreamId(last);
-        frame.setErrorCode(error);
+        uint32_t last = last_stream_id.value_or(m_conn.last_peer_stream_id());
+        frame.set_last_stream_id(last);
+        frame.set_error_code(error);
         if (!debug.empty()) {
-            frame.setDebugData(debug);
+            frame.set_debug_data(debug);
         }
-        m_conn.markGoawaySent(last, error, debug);
-        enqueueSendFrame(std::move(frame), waiter);
+        m_conn.mark_goaway_sent(last, error, debug);
+        enqueue_send_frame(std::move(frame), waiter);
     }
 
     /**
      * @brief 将新流加入待 spawn 队列
      */
-    void queueStreamHandler(Http2Stream::ptr stream) {
+    void queue_stream_handler(Http2Stream::ptr stream) {
         m_pending_spawns.push(stream);
     }
 
-    void markStreamActive(const Http2Stream::ptr& stream, Http2StreamEvent events) {
+    void mark_stream_active(const Http2Stream::ptr& stream, Http2StreamEvent events) {
         if (!m_active_conn_mode) {
             return;
         }
         m_active_batch.mark(stream, events);
     }
 
-    bool shouldDeferHeadersOnlyActiveDelivery(const Http2Stream::ptr& stream,
+    bool should_defer_headers_only_active_delivery(const Http2Stream::ptr& stream,
                                               bool end_stream) const {
-        if (!stream || !m_active_conn_mode || m_conn.isClient() || end_stream) {
+        if (!stream || !m_active_conn_mode || m_conn.is_client() || end_stream) {
             return false;
         }
 
-        const auto content_length = stream->request().getHeader("content-length");
+        const auto content_length = stream->request().get_header("content-length");
         if (content_length.empty()) {
             return false;
         }
@@ -2996,7 +2996,7 @@ private:
         return parsed > 0;
     }
 
-    void closeActiveStreamQueue() {
+    void close_active_stream_queue() {
         if (!m_active_conn_mode || m_active_stream_queue_closed) {
             return;
         }
@@ -3004,52 +3004,52 @@ private:
         m_active_stream_mailbox.close();
     }
 
-    void pushStreamFrameIfNeeded(const Http2Stream::ptr& stream, Http2Frame::uptr frame) {
+    void push_stream_frame_if_needed(const Http2Stream::ptr& stream, Http2Frame::uptr frame) {
         if (!stream) {
             return;
         }
         if (m_active_conn_mode) {
             return;
         }
-        stream->pushFrame(std::move(frame));
+        stream->push_frame(std::move(frame));
     }
 
-    void flushActiveStreams() {
+    void flush_active_streams() {
         if (!m_active_conn_mode || m_active_batch.empty()) {
             return;
         }
 
-        auto ready = m_active_batch.takeReady();
-        m_active_stream_mailbox.sendBatch(std::move(ready));
+        auto ready = m_active_batch.take_ready();
+        m_active_stream_mailbox.send_batch(std::move(ready));
     }
 
-    void tryRetireClientStream(const Http2Stream::ptr& stream) {
-        if (!stream || !m_conn.isClient()) {
+    void try_retire_client_stream(const Http2Stream::ptr& stream) {
+        if (!stream || !m_conn.is_client()) {
             return;
         }
-        if (!stream->isResponseCompleted()) {
+        if (!stream->is_response_completed()) {
             return;
         }
         if (stream->state() != Http2StreamState::Closed) {
             return;
         }
-        m_conn.removeStream(stream->streamId());
+        m_conn.remove_stream(stream->stream_id());
     }
 
-    Http2Stream::ptr createStreamInternal(uint32_t stream_id) {
-        drainRetiredStreams();
+    Http2Stream::ptr create_stream_internal(uint32_t stream_id) {
+        drain_retired_streams();
         Http2Stream::ptr stream;
-        if (m_active_conn_mode && !m_conn.isClient()) {
-            stream = m_conn.createStream(stream_id, m_stream_pool.acquire(stream_id));
+        if (m_active_conn_mode && !m_conn.is_client()) {
+            stream = m_conn.create_stream(stream_id, m_stream_pool.acquire(stream_id));
         } else {
-            stream = m_conn.createStream(stream_id);
+            stream = m_conn.create_stream(stream_id);
         }
-        attachStreamIO(stream);
-        rememberHotStream(stream);
+        attach_stream_io(stream);
+        remember_hot_stream(stream);
         return stream;
     }
 
-    void attachStreamIO(const Http2Stream::ptr& stream) {
+    void attach_stream_io(const Http2Stream::ptr& stream) {
         if (!stream) return;
         auto* encoder = &m_conn.encoder();
         auto* decoder = &m_conn.decoder();
@@ -3059,30 +3059,30 @@ private:
             stream->m_decoder == decoder) {
             return;
         }
-        stream->attachIO(&m_send_channel,
+        stream->attach_io(&m_send_channel,
                          encoder,
                          decoder,
                          &m_conn.m_conn_send_window,
-                         m_conn.peerSettings().max_frame_size,
-                         m_conn.peerSettings().max_header_list_size);
-        if (m_active_conn_mode && !m_conn.isClient()) {
-            stream->setRetireCallback([this](uint32_t stream_id) {
-                enqueueRetireStream(stream_id);
+                         m_conn.peer_settings().max_frame_size,
+                         m_conn.peer_settings().max_header_list_size);
+        if (m_active_conn_mode && !m_conn.is_client()) {
+            stream->set_retire_callback([this](uint32_t stream_id) {
+                enqueue_retire_stream(stream_id);
             });
         } else {
-            stream->setRetireCallback(nullptr);
+            stream->set_retire_callback(nullptr);
         }
     }
 
-    void rememberHotStream(const Http2Stream::ptr& stream) {
-        if (!stream || !m_active_conn_mode || m_conn.isClient()) {
+    void remember_hot_stream(const Http2Stream::ptr& stream) {
+        if (!stream || !m_active_conn_mode || m_conn.is_client()) {
             return;
         }
         m_hot_stream = stream;
     }
 
-    void clearHotStream(uint32_t stream_id) {
-        if (m_hot_stream && m_hot_stream->streamId() == stream_id) {
+    void clear_hot_stream(uint32_t stream_id) {
+        if (m_hot_stream && m_hot_stream->stream_id() == stream_id) {
             m_hot_stream.reset();
         }
     }

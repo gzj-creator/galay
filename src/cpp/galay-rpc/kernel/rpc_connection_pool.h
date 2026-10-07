@@ -112,7 +112,7 @@ public:
     /// @brief 租约是否仍可归还
     bool valid() const { return m_valid; }
     /// @brief 标记该连接不可复用
-    void markBroken() { m_broken = true; }
+    void mark_broken() { m_broken = true; }
     /// @brief 查询是否已标记broken
     bool broken() const { return m_broken; }
 
@@ -151,8 +151,8 @@ public:
      * @param endpoint 目标endpoint
      * @return 成功或参数/shutdown错误
      */
-    std::expected<void, RpcError> ensureEndpoint(const RpcEndpoint& endpoint) {
-        if (!isValidEndpoint(endpoint)) {
+    std::expected<void, RpcError> ensure_endpoint(const RpcEndpoint& endpoint) {
+        if (!is_valid_endpoint(endpoint)) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                             "RPC endpoint is invalid"));
         }
@@ -161,10 +161,10 @@ public:
                                             "RPC connection pool is shut down"));
         }
 
-        auto& bucket = bucketFor(endpoint);
+        auto& bucket = bucket_for(endpoint);
         while (bucket.total < m_config.min_connections_per_endpoint &&
                bucket.total < m_config.max_connections_per_endpoint) {
-            bucket.available.push_back(newConnection(endpoint));
+            bucket.available.push_back(new_connection(endpoint));
             ++bucket.total;
         }
         return {};
@@ -178,12 +178,12 @@ public:
      * @note 容量不足但waiter未满时挂起当前协程，等待release或shutdown唤醒。
      */
     Task<RpcPoolAcquireResult> acquire(const RpcEndpoint& endpoint) {
-        auto ready = tryAcquire(endpoint);
+        auto ready = try_acquire(endpoint);
         if (ready.has_value() || ready.error().code() != RpcErrorCode::RESOURCE_EXHAUSTED) {
             co_return std::move(ready);
         }
 
-        auto& bucket = bucketFor(endpoint);
+        auto& bucket = bucket_for(endpoint);
         if (bucket.waiters.size() >= m_config.max_waiters_per_endpoint) {
             co_return RpcPoolAcquireResult(std::unexpected(
                 RpcError(RpcErrorCode::RESOURCE_EXHAUSTED, "RPC connection pool waiters exhausted")));
@@ -212,7 +212,7 @@ public:
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                             "RPC pooled connection is invalid"));
         }
-        auto* bucket = findBucketMutable(connection.endpoint());
+        auto* bucket = find_bucket_mutable(connection.endpoint());
         if (bucket == nullptr) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                             "RPC pooled endpoint is unknown"));
@@ -233,11 +233,11 @@ public:
             if (bucket->total > 0) {
                 --bucket->total;
             }
-            wakeNextWaiter(*bucket);
+            wake_next_waiter(*bucket);
             return {};
         }
 
-        if (!bucket->waiters.empty() && wakeNextWaiter(*bucket, std::move(connection))) {
+        if (!bucket->waiters.empty() && wake_next_waiter(*bucket, std::move(connection))) {
             return {};
         }
 
@@ -268,26 +268,26 @@ public:
     }
 
     /// @brief 指定endpoint可复用连接数量
-    size_t availableCount(const RpcEndpoint& endpoint) const {
-        const auto* bucket = findBucket(endpoint);
+    size_t available_count(const RpcEndpoint& endpoint) const {
+        const auto* bucket = find_bucket(endpoint);
         return bucket == nullptr ? 0 : bucket->available.size();
     }
 
     /// @brief 指定endpoint当前租出数量
-    size_t inUseCount(const RpcEndpoint& endpoint) const {
-        const auto* bucket = findBucket(endpoint);
+    size_t in_use_count(const RpcEndpoint& endpoint) const {
+        const auto* bucket = find_bucket(endpoint);
         return bucket == nullptr ? 0 : bucket->in_use;
     }
 
     /// @brief 指定endpoint等待者数量
-    size_t waiterCount(const RpcEndpoint& endpoint) const {
-        const auto* bucket = findBucket(endpoint);
+    size_t waiter_count(const RpcEndpoint& endpoint) const {
+        const auto* bucket = find_bucket(endpoint);
         return bucket == nullptr ? 0 : bucket->waiters.size();
     }
 
     /// @brief 指定endpoint总跟踪逻辑连接数
-    size_t totalTrackedConnections(const RpcEndpoint& endpoint) const {
-        const auto* bucket = findBucket(endpoint);
+    size_t total_tracked_connections(const RpcEndpoint& endpoint) const {
+        const auto* bucket = find_bucket(endpoint);
         return bucket == nullptr ? 0 : bucket->total;
     }
 
@@ -324,15 +324,15 @@ private:
         return config;
     }
 
-    static bool isValidEndpoint(const RpcEndpoint& endpoint) {
+    static bool is_valid_endpoint(const RpcEndpoint& endpoint) {
         return !endpoint.host.empty() && endpoint.port != 0;
     }
 
-    RpcPooledConnection newConnection(const RpcEndpoint& endpoint) {
+    RpcPooledConnection new_connection(const RpcEndpoint& endpoint) {
         return RpcPooledConnection(endpoint, m_next_id++);
     }
 
-    EndpointBucket& bucketFor(const RpcEndpoint& endpoint) {
+    EndpointBucket& bucket_for(const RpcEndpoint& endpoint) {
         if (m_last_bucket != nullptr && m_last_bucket->endpoint == endpoint) {
             return *m_last_bucket;
         }
@@ -345,7 +345,7 @@ private:
         return it->second;
     }
 
-    const EndpointBucket* findBucket(const RpcEndpoint& endpoint) const {
+    const EndpointBucket* find_bucket(const RpcEndpoint& endpoint) const {
         if (m_last_bucket != nullptr && m_last_bucket->endpoint == endpoint) {
             return m_last_bucket;
         }
@@ -357,7 +357,7 @@ private:
         return &it->second;
     }
 
-    EndpointBucket* findBucketMutable(const RpcEndpoint& endpoint) {
+    EndpointBucket* find_bucket_mutable(const RpcEndpoint& endpoint) {
         if (m_last_bucket != nullptr && m_last_bucket->endpoint == endpoint) {
             return m_last_bucket;
         }
@@ -370,8 +370,8 @@ private:
         return &it->second;
     }
 
-    RpcPoolAcquireResult tryAcquire(const RpcEndpoint& endpoint) {
-        if (!isValidEndpoint(endpoint)) {
+    RpcPoolAcquireResult try_acquire(const RpcEndpoint& endpoint) {
+        if (!is_valid_endpoint(endpoint)) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                             "RPC endpoint is invalid"));
         }
@@ -380,7 +380,7 @@ private:
                                             "RPC connection pool is shut down"));
         }
 
-        auto& bucket = bucketFor(endpoint);
+        auto& bucket = bucket_for(endpoint);
         if (!bucket.available.empty()) {
             auto connection = std::move(bucket.available.front());
             bucket.available.pop_front();
@@ -390,13 +390,13 @@ private:
         if (bucket.total < m_config.max_connections_per_endpoint) {
             ++bucket.total;
             ++bucket.in_use;
-            return newConnection(endpoint);
+            return new_connection(endpoint);
         }
         return std::unexpected(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
                                         "RPC connection pool is exhausted"));
     }
 
-    bool wakeNextWaiter(EndpointBucket& bucket, RpcPooledConnection connection) {
+    bool wake_next_waiter(EndpointBucket& bucket, RpcPooledConnection connection) {
         while (!bucket.waiters.empty()) {
             auto waiter = std::move(bucket.waiters.front());
             bucket.waiters.pop_front();
@@ -407,7 +407,7 @@ private:
         return false;
     }
 
-    bool wakeNextWaiter(EndpointBucket& bucket) {
+    bool wake_next_waiter(EndpointBucket& bucket) {
         while (!bucket.waiters.empty()) {
             if (m_shutdown) {
                 return false;
@@ -416,7 +416,7 @@ private:
                 return false;
             }
             ++bucket.total;
-            auto replacement = newConnection(bucket.endpoint);
+            auto replacement = new_connection(bucket.endpoint);
             auto waiter = std::move(bucket.waiters.front());
             bucket.waiters.pop_front();
             ++bucket.in_use;

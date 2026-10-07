@@ -8,7 +8,7 @@
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -28,21 +28,21 @@ int main()
 
     const auto begin = std::chrono::steady_clock::now();
     for (int64_t i = 0; i < iterations; ++i) {
-        auto index = state.selectEndpoint();
+        auto index = state.select_endpoint();
         if (!index.has_value()) {
             std::cerr << "selectEndpoint failed\n";
             return 1;
         }
         if ((i % 7) == 0) {
-            state.markFailure(*index, galay::etcd::EtcdError(galay::etcd::EtcdErrorType::Connection, "bench"), true);
+            state.mark_failure(*index, galay::etcd::EtcdError(galay::etcd::EtcdErrorType::Connection, "bench"), true);
         } else {
-            state.markSuccess(*index);
+            state.mark_success(*index);
         }
     }
     const auto end = std::chrono::steady_clock::now();
     const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 
-    const auto stats = state.getStats();
+    const auto stats = state.get_stats();
     std::cout << "Iterations : " << iterations << '\n';
     std::cout << "Elapsed us : " << elapsed_us << '\n';
     std::cout << "Failures   : " << stats.request_failures << '\n';

@@ -40,11 +40,11 @@ std::atomic<int> g_event_count{0};
 
 // 测试1: 监控所有事件
 std::atomic<int> g_test1_events{0};
-Task<void> watchAllEventsTask([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
+Task<void> watch_all_events_task([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
 {
     AsyncFileWatcher watcher;
 
-    auto result = watcher.addWatch(path, FileWatchEvent::All);
+    auto result = watcher.add_watch(path, FileWatchEvent::All);
     if (!result) {
         LogError("[Test1] Failed to add watch: {}", result.error().message());
         co_return;
@@ -68,12 +68,12 @@ Task<void> watchAllEventsTask([[maybe_unused]] IOScheduler* scheduler, const std
 // 测试2: 只监控 Modify 事件
 std::atomic<int> g_test2_modify_events{0};
 std::atomic<int> g_test2_attrib_events{0};
-Task<void> watchModifyOnlyTask([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
+Task<void> watch_modify_only_task([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
 {
     AsyncFileWatcher watcher;
 
     // 只监控 Modify 事件
-    auto result = watcher.addWatch(path, FileWatchEvent::Modify);
+    auto result = watcher.add_watch(path, FileWatchEvent::Modify);
     if (!result) {
         LogError("[Test2] Failed to add watch: {}", result.error().message());
         co_return;
@@ -101,12 +101,12 @@ Task<void> watchModifyOnlyTask([[maybe_unused]] IOScheduler* scheduler, const st
 // 测试3: 只监控 Attrib 事件
 std::atomic<int> g_test3_modify_events{0};
 std::atomic<int> g_test3_attrib_events{0};
-Task<void> watchAttribOnlyTask([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
+Task<void> watch_attrib_only_task([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
 {
     AsyncFileWatcher watcher;
 
     // 只监控 Attrib 事件
-    auto result = watcher.addWatch(path, FileWatchEvent::Attrib);
+    auto result = watcher.add_watch(path, FileWatchEvent::Attrib);
     if (!result) {
         LogError("[Test3] Failed to add watch: {}", result.error().message());
         co_return;
@@ -132,7 +132,7 @@ Task<void> watchAttribOnlyTask([[maybe_unused]] IOScheduler* scheduler, const st
 }
 
 // 模拟文件操作
-void fileOperationThread(const std::string& path1, const std::string& path2, const std::string& path3)
+void file_operation_thread(const std::string& path1, const std::string& path2, const std::string& path3)
 {
     auto wait_ms = [](int ms) {
         auto start = std::chrono::steady_clock::now();
@@ -174,7 +174,7 @@ void fileOperationThread(const std::string& path1, const std::string& path2, con
     wait_ms(500);
 }
 
-void evaluateResults()
+void evaluate_results()
 {
     // Test1: 监控所有事件，应该收到事件
     g_total++;
@@ -246,17 +246,17 @@ int main()
     scheduler.start();
 
     // 启动文件操作线程
-    std::thread opThread(fileOperationThread, testFile1, testFile2, testFile3);
+    std::thread op_thread(file_operation_thread, testFile1, testFile2, testFile3);
 
     // 启动监控协程
-    scheduleTask(scheduler, watchAllEventsTask(&scheduler, testFile1));
-    scheduleTask(scheduler, watchModifyOnlyTask(&scheduler, testFile2));
-    scheduleTask(scheduler, watchAttribOnlyTask(&scheduler, testFile3));
+    schedule_task(scheduler, watch_all_events_task(&scheduler, testFile1));
+    schedule_task(scheduler, watch_modify_only_task(&scheduler, testFile2));
+    schedule_task(scheduler, watch_attrib_only_task(&scheduler, testFile3));
 
-    opThread.join();
+    op_thread.join();
 
     // 评估测试结果
-    evaluateResults();
+    evaluate_results();
 
     scheduler.stop();
     std::remove(testFile1.c_str());
@@ -266,15 +266,15 @@ int main()
     // 写入测试结果
     galay::test::TestResultWriter writer("test_file_watcher");
     for (int i = 0; i < g_total.load(); ++i) {
-        writer.addTest();
+        writer.add_test();
     }
     for (int i = 0; i < g_passed.load(); ++i) {
-        writer.addPassed();
+        writer.add_passed();
     }
     for (int i = 0; i < g_failed.load(); ++i) {
-        writer.addFailed();
+        writer.add_failed();
     }
-    writer.writeResult();
+    writer.write_result();
 
     LogInfo("========================================");
     LogInfo("Test Results: Total={}, Passed={}, Failed={}",

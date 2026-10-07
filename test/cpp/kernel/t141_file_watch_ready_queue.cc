@@ -15,7 +15,7 @@ using galay::kernel::IOController;
 
 namespace {
 
-bool expectReadyEvent(FileWatchAwaitable& awaitable,
+bool expect_ready_event(FileWatchAwaitable& awaitable,
                       const char* expected_name,
                       FileWatchEvent expected_event)
 {
@@ -58,7 +58,7 @@ int main()
 #else
     FileWatchAwaitable first(&controller, buffer, sizeof(buffer), &ready_events);
 #endif
-    if (!expectReadyEvent(first, "first.txt", FileWatchEvent::Create)) {
+    if (!expect_ready_event(first, "first.txt", FileWatchEvent::Create)) {
         return 1;
     }
     if (ready_events.size() != 1) {
@@ -75,7 +75,7 @@ int main()
 #else
     FileWatchAwaitable second(&controller, buffer, sizeof(buffer), &ready_events);
 #endif
-    if (!expectReadyEvent(second, "second.txt", FileWatchEvent::Delete)) {
+    if (!expect_ready_event(second, "second.txt", FileWatchEvent::Delete)) {
         return 1;
     }
     if (!ready_events.empty()) {

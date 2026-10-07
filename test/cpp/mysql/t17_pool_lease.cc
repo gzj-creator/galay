@@ -20,12 +20,12 @@ struct TestState {
     std::string error;
 };
 
-bool expectSelectOne(const MysqlResultSet& result)
+bool expect_select_one(const MysqlResultSet& result)
 {
-    return result.rowCount() == 1 && result.row(0).getString(0) == "1";
+    return result.row_count() == 1 && result.row(0).get_string(0) == "1";
 }
 
-Task<void> runPoolLeaseCase(IOScheduler* scheduler, TestState* state, mysql_test::DbTestConfig db_cfg)
+Task<void> run_pool_lease_case(IOScheduler* scheduler, TestState* state, mysql_test::DbTestConfig db_cfg)
 {
     MysqlConnectionPoolConfig pool_config;
     pool_config.mysql_config = MysqlConfig::create(db_cfg.host,
@@ -33,14 +33,14 @@ Task<void> runPoolLeaseCase(IOScheduler* scheduler, TestState* state, mysql_test
                                                    db_cfg.user,
                                                    db_cfg.password,
                                                    db_cfg.database);
-    pool_config.async_config = AsyncMysqlConfig::withTimeout(3s, 3s);
+    pool_config.async_config = AsyncMysqlConfig::with_timeout(3s, 3s);
     pool_config.min_connections = 0;
     pool_config.max_connections = 1;
 
     MysqlConnectionPool pool(scheduler, pool_config);
 
     {
-        auto first = co_await pool.acquireLease();
+        auto first = co_await pool.acquire_lease();
         if (!first) {
             state->error = "first lease acquire failed: " + first.error().message();
             co_return;
@@ -55,13 +55,13 @@ Task<void> runPoolLeaseCase(IOScheduler* scheduler, TestState* state, mysql_test
             state->error = "first query failed: " + result.error().message();
             co_return;
         }
-        if (!result->has_value() || !expectSelectOne(result->value())) {
+        if (!result->has_value() || !expect_select_one(result->value())) {
             state->error = "first query returned unexpected result";
             co_return;
         }
     }
 
-    auto second = co_await pool.acquireLease();
+    auto second = co_await pool.acquire_lease();
     if (!second) {
         state->error = "second lease acquire failed: " + second.error().message();
         co_return;
@@ -76,7 +76,7 @@ Task<void> runPoolLeaseCase(IOScheduler* scheduler, TestState* state, mysql_test
         state->error = "second query failed: " + result.error().message();
         co_return;
     }
-    if (!result->has_value() || !expectSelectOne(result->value())) {
+    if (!result->has_value() || !expect_select_one(result->value())) {
         state->error = "second query returned unexpected result";
         co_return;
     }
@@ -90,25 +90,25 @@ Task<void> runPoolLeaseCase(IOScheduler* scheduler, TestState* state, mysql_test
 int main()
 {
     std::cout << "=== T16: MySQL Pool Lease ===" << std::endl;
-    if (const int skip_code = mysql_test::requireIntegrationEnabledOrSkip("T16-MySQLPoolLease");
+    if (const int skip_code = mysql_test::require_integration_enabled_or_skip("T16-MySQLPoolLease");
         skip_code != 0) {
         return skip_code;
     }
 
-    const auto db_cfg = mysql_test::loadDbTestConfig();
-    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T16-MySQLPoolLease");
+    const auto db_cfg = mysql_test::load_db_test_config();
+    if (const int skip_code = mysql_test::require_db_test_config_or_skip(db_cfg, "T16-MySQLPoolLease");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printDbTestConfig(db_cfg);
+    mysql_test::print_db_test_config(db_cfg);
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         std::cerr << "failed to get IO scheduler" << std::endl;
@@ -116,7 +116,7 @@ int main()
     }
 
     TestState state;
-    auto runtime_result = runtime.blockOnIO(runPoolLeaseCase(scheduler, &state, db_cfg));
+    auto runtime_result = runtime.block_on_io(run_pool_lease_case(scheduler, &state, db_cfg));
     runtime.stop();
 
     if (!runtime_result) {

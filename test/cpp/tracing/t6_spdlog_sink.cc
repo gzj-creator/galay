@@ -18,15 +18,15 @@ int main() {
 
     galay::tracing::SpdlogSink sink(logger);
     const auto context = galay::tracing::TraceContext(
-        galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
-        galay::tracing::SpanId::fromHex("00f067aa0ba902b7"),
+        galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"),
+        galay::tracing::SpanId::from_hex("00f067aa0ba902b7"),
         0x01);
 
     sink.write(galay::tracing::LogRecord(
         galay::tracing::LogLevel::kInfo,
         "accepted",
         {"test.cc", 9, "main"},
-        galay::tracing::makeLogContext(context)));
+        galay::tracing::make_log_context(context)));
     logger->flush();
 
     const auto line = stream->str();

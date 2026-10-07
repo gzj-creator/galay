@@ -35,9 +35,9 @@ enum class TimerFlag : int {
 /**
  * @brief galay-kernel 中所有定时器的基类
  *
- * @details 存储相对延迟，并在首次调用 getExpireTime() 时延迟计算
+ * @details 存储相对延迟，并在首次调用 get_expire_time() 时延迟计算
  * 绝对过期时间（steady-clock 纳秒）。支持通过原子标志取消；
- * 派生类重写 handleTimeout() 以实现自定义过期行为。
+ * 派生类重写 handle_timeout() 以实现自定义过期行为。
  */
 class Timer
 {
@@ -49,14 +49,14 @@ public:
      * @tparam Duration 满足 ChronoDuration 的类型（如 std::chrono::milliseconds）
      * @param duration 到过期的时间
      *
-     * @note 绝对过期时间在首次 getExpireTime() 调用时延迟计算，
+     * @note 绝对过期时间在首次 get_expire_time() 调用时延迟计算，
      *       因此有效延迟从定时器首次被查询时开始，而非构造时。
      */
     template<concepts::ChronoDuration Duration>
     Timer(Duration duration) {
         // 存储相对时间间隔（纳秒）
         m_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
-        // 过期时间延迟到 getExpireTime() 时计算
+        // 过期时间延迟到 get_expire_time() 时计算
         m_expireTime = 0;
     }
 
@@ -66,7 +66,7 @@ public:
      * @details 通过 kDone 标志标记定时器为已完成。派生类
      * 应在执行自身工作后调用此基类实现。
      */
-    virtual void handleTimeout() {
+    virtual void handle_timeout() {
         m_flag.fetch_or(static_cast<int>(TimerFlag::kDone), std::memory_order_release);
     }
 
@@ -83,7 +83,7 @@ public:
      * @brief 取消定时器
      *
      * @details 原子地设置 kCancel 标志。定时器管理器在
-     * 调用 handleTimeout() 前检查此标志。
+     * 调用 handle_timeout() 前检查此标志。
      */
     void cancel() {
         m_flag.fetch_or(static_cast<int>(TimerFlag::kCancel), std::memory_order_release);
@@ -102,7 +102,7 @@ public:
      * @brief 获取相对延迟（纳秒）
      * @return 构造时提供的延迟值
      */
-    uint64_t getDelay() const { return m_delay; }
+    uint64_t get_delay() const { return m_delay; }
 
     /**
      * @brief 获取绝对过期时间（纳秒，steady-clock 纪元）
@@ -112,7 +112,7 @@ public:
      *
      * @return 绝对过期时间（纳秒）
      */
-    uint64_t getExpireTime() const {
+    uint64_t get_expire_time() const {
         if (m_expireTime == 0) {
             // 第一次调用时计算过期时间
             auto now = std::chrono::steady_clock::now();
@@ -151,11 +151,11 @@ public:
     /**
      * @brief 若未被取消/已完成则调用存储的回调，然后标记完成
      */
-    void handleTimeout() override {
+    void handle_timeout() override {
         if(!cancelled() && !done()) {
             m_callback();
         }
-        Timer::handleTimeout();
+        Timer::handle_timeout();
     }
 private:
     std::function<void()> m_callback;

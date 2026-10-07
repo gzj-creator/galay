@@ -14,7 +14,7 @@ using namespace galay::http;
 
 namespace {
 
-std::string resolveStaticDir() {
+std::string resolve_static_dir() {
     namespace fs = std::filesystem;
 
     const std::string candidates[] = {
@@ -43,19 +43,19 @@ galay::kernel::Task<void> test_handler(HttpConn& conn, HttpRequest req) {
     co_return;
 }
 
-galay::kernel::Task<void> userHandler(HttpConn& conn, HttpRequest req) {
+galay::kernel::Task<void> user_handler(HttpConn& conn, HttpRequest req) {
     co_return;
 }
 
-galay::kernel::Task<void> postHandler(HttpConn& conn, HttpRequest req) {
+galay::kernel::Task<void> post_handler(HttpConn& conn, HttpRequest req) {
     co_return;
 }
 
-galay::kernel::Task<void> staticHandler(HttpConn& conn, HttpRequest req) {
+galay::kernel::Task<void> static_handler(HttpConn& conn, HttpRequest req) {
     co_return;
 }
 
-galay::kernel::Task<void> filesHandler(HttpConn& conn, HttpRequest req) {
+galay::kernel::Task<void> files_handler(HttpConn& conn, HttpRequest req) {
     co_return;
 }
 
@@ -64,26 +64,26 @@ void test_exact_match() {
     HttpRouter router;
 
     // 添加精确匹配路由
-    router.addHandler<HttpMethod::GET>("/api/users", test_handler);
-    router.addHandler<HttpMethod::POST>("/api/users", postHandler);
-    router.addHandler<HttpMethod::GET>("/api/posts", test_handler);
+    router.add_handler<HttpMethod::GET>("/api/users", test_handler);
+    router.add_handler<HttpMethod::POST>("/api/users", post_handler);
+    router.add_handler<HttpMethod::GET>("/api/posts", test_handler);
 
     // 测试精确匹配
-    auto match1 = router.findHandler(HttpMethod::GET, "/api/users");
+    auto match1 = router.find_handler(HttpMethod::GET, "/api/users");
     assert(match1.handler != nullptr);
     assert(match1.params.empty());
 
-    auto match2 = router.findHandler(HttpMethod::POST, "/api/users");
+    auto match2 = router.find_handler(HttpMethod::POST, "/api/users");
     assert(match2.handler != nullptr);
 
-    auto match3 = router.findHandler(HttpMethod::GET, "/api/posts");
+    auto match3 = router.find_handler(HttpMethod::GET, "/api/posts");
     assert(match3.handler != nullptr);
 
     // 测试不匹配
-    auto match4 = router.findHandler(HttpMethod::GET, "/api/comments");
+    auto match4 = router.find_handler(HttpMethod::GET, "/api/comments");
     assert(match4.handler == nullptr);
 
-    auto match5 = router.findHandler(HttpMethod::DELETE, "/api/users");
+    auto match5 = router.find_handler(HttpMethod::DELETE, "/api/users");
     assert(match5.handler == nullptr);
 
 }
@@ -93,31 +93,31 @@ void test_path_parameters() {
     HttpRouter router;
 
     // 添加路径参数路由
-    router.addHandler<HttpMethod::GET>("/user/:id", userHandler);
-    router.addHandler<HttpMethod::GET>("/user/:id/posts/:postId", postHandler);
+    router.add_handler<HttpMethod::GET>("/user/:id", user_handler);
+    router.add_handler<HttpMethod::GET>("/user/:id/posts/:postId", post_handler);
 
     // 测试单个参数
-    auto match1 = router.findHandler(HttpMethod::GET, "/user/123");
+    auto match1 = router.find_handler(HttpMethod::GET, "/user/123");
     assert(match1.handler != nullptr);
     assert(match1.params.size() == 1);
     assert(match1.params["id"] == "123");
 
-    auto match2 = router.findHandler(HttpMethod::GET, "/user/abc");
+    auto match2 = router.find_handler(HttpMethod::GET, "/user/abc");
     assert(match2.handler != nullptr);
     assert(match2.params["id"] == "abc");
 
     // 测试多个参数
-    auto match3 = router.findHandler(HttpMethod::GET, "/user/456/posts/789");
+    auto match3 = router.find_handler(HttpMethod::GET, "/user/456/posts/789");
     assert(match3.handler != nullptr);
     assert(match3.params.size() == 2);
     assert(match3.params["id"] == "456");
     assert(match3.params["postId"] == "789");
 
     // 测试不匹配
-    auto match4 = router.findHandler(HttpMethod::GET, "/user");
+    auto match4 = router.find_handler(HttpMethod::GET, "/user");
     assert(match4.handler == nullptr);
 
-    auto match5 = router.findHandler(HttpMethod::GET, "/user/123/posts");
+    auto match5 = router.find_handler(HttpMethod::GET, "/user/123/posts");
     assert(match5.handler == nullptr);
 
 }
@@ -127,25 +127,25 @@ void test_wildcard() {
     HttpRouter router;
 
     // 添加通配符路由
-    router.addHandler<HttpMethod::GET>("/static/*", staticHandler);
-    router.addHandler<HttpMethod::GET>("/files/**", filesHandler);
+    router.add_handler<HttpMethod::GET>("/static/*", static_handler);
+    router.add_handler<HttpMethod::GET>("/files/**", files_handler);
 
     // 测试单段通配符
-    auto match1 = router.findHandler(HttpMethod::GET, "/static/css");
+    auto match1 = router.find_handler(HttpMethod::GET, "/static/css");
     assert(match1.handler != nullptr);
 
-    auto match2 = router.findHandler(HttpMethod::GET, "/static/js");
+    auto match2 = router.find_handler(HttpMethod::GET, "/static/js");
     assert(match2.handler != nullptr);
 
     // 单段通配符不应匹配多段
-    auto match3 = router.findHandler(HttpMethod::GET, "/static/css/style.css");
+    auto match3 = router.find_handler(HttpMethod::GET, "/static/css/style.css");
     assert(match3.handler == nullptr);
 
     // 测试贪婪通配符
-    auto match4 = router.findHandler(HttpMethod::GET, "/files/a");
+    auto match4 = router.find_handler(HttpMethod::GET, "/files/a");
     assert(match4.handler != nullptr);
 
-    auto match5 = router.findHandler(HttpMethod::GET, "/files/a/b/c");
+    auto match5 = router.find_handler(HttpMethod::GET, "/files/a/b/c");
     assert(match5.handler != nullptr);
 
 }
@@ -155,18 +155,18 @@ void test_multiple_methods() {
     HttpRouter router;
 
     // 为同一路径添加多个方法
-    router.addHandler<HttpMethod::GET, HttpMethod::POST, HttpMethod::PUT>("/api/resource", test_handler);
+    router.add_handler<HttpMethod::GET, HttpMethod::POST, HttpMethod::PUT>("/api/resource", test_handler);
 
-    auto match1 = router.findHandler(HttpMethod::GET, "/api/resource");
+    auto match1 = router.find_handler(HttpMethod::GET, "/api/resource");
     assert(match1.handler != nullptr);
 
-    auto match2 = router.findHandler(HttpMethod::POST, "/api/resource");
+    auto match2 = router.find_handler(HttpMethod::POST, "/api/resource");
     assert(match2.handler != nullptr);
 
-    auto match3 = router.findHandler(HttpMethod::PUT, "/api/resource");
+    auto match3 = router.find_handler(HttpMethod::PUT, "/api/resource");
     assert(match3.handler != nullptr);
 
-    auto match4 = router.findHandler(HttpMethod::DELETE, "/api/resource");
+    auto match4 = router.find_handler(HttpMethod::DELETE, "/api/resource");
     assert(match4.handler == nullptr);
 
 }
@@ -176,17 +176,17 @@ void test_priority_matching() {
     HttpRouter router;
 
     // 添加不同优先级的路由
-    router.addHandler<HttpMethod::GET>("/api/users", test_handler);      // 精确匹配
-    router.addHandler<HttpMethod::GET>("/api/:resource", userHandler);  // 参数匹配
-    router.addHandler<HttpMethod::GET>("/api/*", staticHandler);        // 通配符匹配
+    router.add_handler<HttpMethod::GET>("/api/users", test_handler);      // 精确匹配
+    router.add_handler<HttpMethod::GET>("/api/:resource", user_handler);  // 参数匹配
+    router.add_handler<HttpMethod::GET>("/api/*", static_handler);        // 通配符匹配
 
     // 精确匹配应该优先
-    auto match1 = router.findHandler(HttpMethod::GET, "/api/users");
+    auto match1 = router.find_handler(HttpMethod::GET, "/api/users");
     assert(match1.handler != nullptr);
     assert(match1.params.empty());
 
     // 参数匹配应该次之
-    auto match2 = router.findHandler(HttpMethod::GET, "/api/posts");
+    auto match2 = router.find_handler(HttpMethod::GET, "/api/posts");
     assert(match2.handler != nullptr);
     assert(match2.params.size() == 1);
     assert(match2.params["resource"] == "posts");
@@ -200,25 +200,25 @@ void test_router_operations() {
     // 测试 size
     assert(router.size() == 0);
 
-    router.addHandler<HttpMethod::GET>("/api/users", test_handler);
-    router.addHandler<HttpMethod::POST>("/api/users", postHandler);
-    router.addHandler<HttpMethod::GET>("/user/:id", userHandler);
+    router.add_handler<HttpMethod::GET>("/api/users", test_handler);
+    router.add_handler<HttpMethod::POST>("/api/users", post_handler);
+    router.add_handler<HttpMethod::GET>("/user/:id", user_handler);
 
     assert(router.size() == 3);
 
     // 测试 remove
-    bool removed = router.delHandler(HttpMethod::GET, "/api/users");
+    bool removed = router.del_handler(HttpMethod::GET, "/api/users");
     assert(removed);
     assert(router.size() == 2);
 
-    auto match = router.findHandler(HttpMethod::GET, "/api/users");
+    auto match = router.find_handler(HttpMethod::GET, "/api/users");
     assert(match.handler == nullptr);
 
     // 测试 clear
     router.clear();
     assert(router.size() == 0);
 
-    match = router.findHandler(HttpMethod::POST, "/api/users");
+    match = router.find_handler(HttpMethod::POST, "/api/users");
     assert(match.handler == nullptr);
 
 }
@@ -228,18 +228,18 @@ void test_edge_cases() {
     HttpRouter router;
 
     // 根路径
-    router.addHandler<HttpMethod::GET>("/", test_handler);
-    auto match1 = router.findHandler(HttpMethod::GET, "/");
+    router.add_handler<HttpMethod::GET>("/", test_handler);
+    auto match1 = router.find_handler(HttpMethod::GET, "/");
     assert(match1.handler != nullptr);
 
     // 带尾部斜杠的路径
-    router.addHandler<HttpMethod::GET>("/api/users/", userHandler);
-    auto match2 = router.findHandler(HttpMethod::GET, "/api/users/");
+    router.add_handler<HttpMethod::GET>("/api/users/", user_handler);
+    auto match2 = router.find_handler(HttpMethod::GET, "/api/users/");
     assert(match2.handler != nullptr);
 
     // 空段应该被忽略
-    auto match3 = router.findHandler(HttpMethod::GET, "//api//users//");
-    // 这取决于 splitPath 的实现，应该与 /api/users/ 相同
+    auto match3 = router.find_handler(HttpMethod::GET, "//api//users//");
+    // 这取决于 split_path 的实现，应该与 /api/users/ 相同
 
 }
 
@@ -249,21 +249,21 @@ void test_proxy_mounting() {
 
     router.proxy("/api", "127.0.0.1", 8080);
 
-    auto match1 = router.findHandler(HttpMethod::GET, "/api");
+    auto match1 = router.find_handler(HttpMethod::GET, "/api");
     assert(match1.handler != nullptr);
 
-    auto match2 = router.findHandler(HttpMethod::GET, "/api/users");
+    auto match2 = router.find_handler(HttpMethod::GET, "/api/users");
     assert(match2.handler != nullptr);
 
-    auto match3 = router.findHandler(HttpMethod::POST, "/api/orders");
+    auto match3 = router.find_handler(HttpMethod::POST, "/api/orders");
     assert(match3.handler != nullptr);
 
-    auto match4 = router.findHandler(HttpMethod::GET, "/other/path");
+    auto match4 = router.find_handler(HttpMethod::GET, "/other/path");
     assert(match4.handler == nullptr);
 
     HttpRouter root_proxy_router;
     root_proxy_router.proxy("/", "127.0.0.1", 8080);
-    auto match5 = root_proxy_router.findHandler(HttpMethod::GET, "/any/path");
+    auto match5 = root_proxy_router.find_handler(HttpMethod::GET, "/any/path");
     assert(match5.handler != nullptr);
 
 }
@@ -271,15 +271,15 @@ void test_proxy_mounting() {
 void test_try_files_mounting() {
 
     HttpRouter router;
-    router.tryFiles("/static", resolveStaticDir(), "127.0.0.1", 8080);
+    router.try_files("/static", resolve_static_dir(), "127.0.0.1", 8080);
 
-    auto match1 = router.findHandler(HttpMethod::GET, "/static/index.html");
+    auto match1 = router.find_handler(HttpMethod::GET, "/static/index.html");
     assert(match1.handler != nullptr);
 
-    auto match2 = router.findHandler(HttpMethod::HEAD, "/static/does-not-exist.txt");
+    auto match2 = router.find_handler(HttpMethod::HEAD, "/static/does-not-exist.txt");
     assert(match2.handler != nullptr);
 
-    auto match3 = router.findHandler(HttpMethod::GET, "/other/path");
+    auto match3 = router.find_handler(HttpMethod::GET, "/other/path");
     assert(match3.handler == nullptr);
 
 }
@@ -288,7 +288,7 @@ void test_fallback_proxy_config() {
 
     HttpRouter router;
     router.proxy("/", "127.0.0.1", 8080, ProxyMode::Http);
-    auto match = router.findHandler(HttpMethod::GET, "/any/path");
+    auto match = router.find_handler(HttpMethod::GET, "/any/path");
     assert(match.handler != nullptr);
 
 }

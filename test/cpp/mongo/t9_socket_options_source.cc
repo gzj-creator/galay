@@ -11,7 +11,7 @@
 namespace
 {
 
-std::string readFile(const std::filesystem::path& path)
+std::string read_file(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input) {
@@ -35,10 +35,10 @@ int main()
 {
     const std::filesystem::path source_root = GALAY_MONGO_SOURCE_DIR;
     const auto socket_options_path = source_root / "galay-mongo" / "base" / "socket_options.h";
-    const auto mongo_config = readFile(source_root / "galay-mongo" / "base" / "mongo_config.h");
-    const auto connection = readFile(source_root / "galay-mongo" / "protoc" / "connection.cc");
-    const auto connection_header = readFile(source_root / "galay-mongo" / "protoc" / "connection.h");
-    const auto async_client = readFile(source_root / "galay-mongo" / "async" / "client.cc");
+    const auto mongo_config = read_file(source_root / "galay-mongo" / "base" / "mongo_config.h");
+    const auto connection = read_file(source_root / "galay-mongo" / "protoc" / "connection.cc");
+    const auto connection_header = read_file(source_root / "galay-mongo" / "protoc" / "connection.h");
+    const auto async_client = read_file(source_root / "galay-mongo" / "async" / "client.cc");
 
     if (std::filesystem::exists(socket_options_path)) {
         std::cerr << "local socket_options.h wrapper must not exist\n";
@@ -70,7 +70,7 @@ int main()
 
     if (!contains(connection, "galay::kernel::HandleOption") ||
         !contains(connection, "::GHandle") ||
-        !contains(connection, "handleTcpNoDelay()")) {
+        !contains(connection, "handle_tcp_no_delay()")) {
         std::cerr << "sync TCP_NODELAY must use galay-kernel HandleOption directly\n";
         return 1;
     }
@@ -80,12 +80,12 @@ int main()
         return 1;
     }
 
-    if (!contains(async_client, "client.m_socket.option().handleTcpNoDelay()")) {
+    if (!contains(async_client, "client.m_socket.option().handle_tcp_no_delay()")) {
         std::cerr << "async TCP_NODELAY must use AsyncTcpSocket HandleOption directly\n";
         return 1;
     }
 
-    if (contains(async_client, "(void)client.m_socket.option().handleTcpNoDelay()")) {
+    if (contains(async_client, "(void)client.m_socket.option().handle_tcp_no_delay()")) {
         std::cerr << "async TCP_NODELAY must handle HandleOption errors\n";
         return 1;
     }

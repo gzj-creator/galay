@@ -33,11 +33,11 @@ int main()
 
     RpcGovernanceController controller(policy);
 
-    auto first = controller.tryAcquire();
+    auto first = controller.try_acquire();
     if (auto rc = expect(first.has_value(), "first limiter permit was rejected")) {
         return rc;
     }
-    auto limited = controller.tryAcquire();
+    auto limited = controller.try_acquire();
     if (auto rc = expect(!limited.has_value() &&
                              limited.error().code() == RpcErrorCode::RATE_LIMITED,
                          "limiter rejection did not return RATE_LIMITED")) {
@@ -45,36 +45,36 @@ int main()
     }
 
     controller.release();
-    auto after_release = controller.tryAcquire();
+    auto after_release = controller.try_acquire();
     if (auto rc = expect(after_release.has_value(), "released limiter permit was not reusable")) {
         return rc;
     }
 
-    controller.onFailure();
-    controller.onFailure();
+    controller.on_failure();
+    controller.on_failure();
     controller.release();
 
-    auto open = controller.tryAcquire();
+    auto open = controller.try_acquire();
     if (auto rc = expect(!open.has_value() &&
                              open.error().code() == RpcErrorCode::CIRCUIT_OPEN,
                          "open breaker did not return CIRCUIT_OPEN")) {
         return rc;
     }
 
-    auto probe = controller.tryAcquire();
+    auto probe = controller.try_acquire();
     if (auto rc = expect(probe.has_value(), "half-open probe was not allowed after reset timeout")) {
         return rc;
     }
-    auto second_probe = controller.tryAcquire();
+    auto second_probe = controller.try_acquire();
     if (auto rc = expect(!second_probe.has_value() &&
                              second_probe.error().code() == RpcErrorCode::CIRCUIT_OPEN,
                          "half-open allowed more than one probe")) {
         return rc;
     }
 
-    controller.onSuccess();
+    controller.on_success();
     controller.release();
-    auto recovered = controller.tryAcquire();
+    auto recovered = controller.try_acquire();
     if (auto rc = expect(recovered.has_value(), "successful half-open probe did not close breaker")) {
         return rc;
     }

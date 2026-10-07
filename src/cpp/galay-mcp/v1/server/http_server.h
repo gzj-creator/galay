@@ -27,7 +27,7 @@ namespace galay::mcp {
 /**
  * @brief 基于HTTP的MCP服务器
  *
- * @note 非线程安全：addTool/addResource/addPrompt 必须在 start() 之前调用，
+ * @note 非线程安全：add_tool/add_resource/add_prompt 必须在 start() 之前调用，
  *       服务器运行期间不支持动态添加工具、资源或提示。
  */
 class McpHttpServer {
@@ -60,14 +60,14 @@ public:
      * @param name 服务器名称
      * @param version 服务器版本
      */
-    void setServerInfo(const std::string& name, const std::string& version);
+    void set_server_info(const std::string& name, const std::string& version);
 
     /**
      * @brief 设置生产运行策略
      * @details 策略按值保存；应在 start() 前配置，运行中修改不保证并发可见性。
      * @param policy 传输限制、超时和会话策略
      */
-    void setProductionPolicy(McpProductionPolicy policy);
+    void set_production_policy(McpProductionPolicy policy);
 
     /**
      * @brief 注册工具
@@ -76,7 +76,7 @@ public:
      * @param inputSchema 输入参数的JSON Schema
      * @param handler 工具处理函数（协程）
      */
-    void addTool(std::string name,
+    void add_tool(std::string name,
                  std::string description,
                  std::string inputSchema,
                  ToolHandler handler);
@@ -89,7 +89,7 @@ public:
      * @param mimeType 资源MIME类型
      * @param reader 资源读取函数（协程）
      */
-    void addResource(std::string uri,
+    void add_resource(std::string uri,
                      std::string name,
                      std::string description,
                      std::string mimeType,
@@ -102,14 +102,14 @@ public:
      * @param arguments 参数定义列表
      * @param getter 提示获取函数（协程）
      */
-    void addPrompt(std::string name,
+    void add_prompt(std::string name,
                    std::string description,
                    std::vector<PromptArgument> arguments,
                    PromptGetter getter);
 
     void start(); ///< 启动服务器
     void stop(); ///< 停止服务器
-    bool isRunning() const; ///< 检查服务器是否正在运行
+    bool is_running() const; ///< 检查服务器是否正在运行
 
 private:
     /**
@@ -118,7 +118,7 @@ private:
      * @param responseJson 响应JSON字符串
      * @return 协程任务
      */
-    galay::kernel::Task<void> sendJsonResponse(http::HttpConn& conn, const std::string& responseJson);
+    galay::kernel::Task<void> send_json_response(http::HttpConn& conn, const std::string& responseJson);
 
     /**
      * @brief 处理JSON-RPC请求（协程）
@@ -127,7 +127,7 @@ private:
      * @param connectionInitialized [out] 连接初始化状态
      * @return 协程任务
      */
-    galay::kernel::Task<void> processRequest(const std::string& requestBody, std::string& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> process_request(const std::string& requestBody, std::string& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理initialize方法
@@ -135,7 +135,7 @@ private:
      * @param connectionInitialized [out] 连接初始化状态
      * @return 响应JSON字符串
      */
-    std::string handleInitialize(const JsonRpcRequestView& request, bool& connectionInitialized);
+    std::string handle_initialize(const JsonRpcRequestView& request, bool& connectionInitialized);
 
     /**
      * @brief 处理tools/list方法
@@ -143,7 +143,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 响应JSON字符串
      */
-    std::string handleToolsList(const JsonRpcRequestView& request, bool& connectionInitialized);
+    std::string handle_tools_list(const JsonRpcRequestView& request, bool& connectionInitialized);
 
     /**
      * @brief 处理tools/call方法（协程）
@@ -152,7 +152,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 协程任务
      */
-    galay::kernel::Task<void> handleToolsCall(const JsonRpcRequestView& request, std::string& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> handle_tools_call(const JsonRpcRequestView& request, std::string& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理resources/list方法
@@ -160,7 +160,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 响应JSON字符串
      */
-    std::string handleResourcesList(const JsonRpcRequestView& request, bool& connectionInitialized);
+    std::string handle_resources_list(const JsonRpcRequestView& request, bool& connectionInitialized);
 
     /**
      * @brief 处理resources/read方法（协程）
@@ -169,7 +169,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 协程任务
      */
-    galay::kernel::Task<void> handleResourcesRead(const JsonRpcRequestView& request, std::string& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> handle_resources_read(const JsonRpcRequestView& request, std::string& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理prompts/list方法
@@ -177,7 +177,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 响应JSON字符串
      */
-    std::string handlePromptsList(const JsonRpcRequestView& request, bool& connectionInitialized);
+    std::string handle_prompts_list(const JsonRpcRequestView& request, bool& connectionInitialized);
 
     /**
      * @brief 处理prompts/get方法（协程）
@@ -186,14 +186,14 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 协程任务
      */
-    galay::kernel::Task<void> handlePromptsGet(const JsonRpcRequestView& request, std::string& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> handle_prompts_get(const JsonRpcRequestView& request, std::string& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理ping方法
      * @param request 请求视图
      * @return 响应JSON字符串
      */
-    std::string handlePing(const JsonRpcRequestView& request);
+    std::string handle_ping(const JsonRpcRequestView& request);
 
     /**
      * @brief 创建错误响应JSON
@@ -203,25 +203,25 @@ private:
      * @param details 错误详情
      * @return 错误响应JSON字符串
      */
-    std::string createErrorResponse(int64_t id, int code, const std::string& message, const std::string& details = "");
+    std::string create_error_response(int64_t id, int code, const std::string& message, const std::string& details = "");
 
     /**
      * @brief 获取缓存的工具列表结果
      * @return 工具列表JSON字符串引用
      */
-    const std::string& getToolsListResult();
+    const std::string& get_tools_list_result();
 
     /**
      * @brief 获取缓存的资源列表结果
      * @return 资源列表JSON字符串引用
      */
-    const std::string& getResourcesListResult();
+    const std::string& get_resources_list_result();
 
     /**
      * @brief 获取缓存的提示列表结果
      * @return 提示列表JSON字符串引用
      */
-    const std::string& getPromptsListResult();
+    const std::string& get_prompts_list_result();
 
 private:
     std::string m_host; ///< 监听地址

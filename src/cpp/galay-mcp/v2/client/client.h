@@ -37,12 +37,12 @@ public:
     McpStdioClient(std::istream& input, std::ostream& output, ClientConfig config = {});
 
     std::expected<DiscoverResult, McpError> discover();
-    std::expected<std::vector<Tool>, McpError> listTools();
-    std::expected<std::string, McpError> callTool(std::string name, std::string arguments = "{}");
-    std::expected<std::vector<Resource>, McpError> listResources();
-    std::expected<std::string, McpError> readResource(std::string uri);
-    std::expected<std::vector<Prompt>, McpError> listPrompts();
-    std::expected<std::string, McpError> getPrompt(std::string name, std::string arguments = "{}");
+    std::expected<std::vector<Tool>, McpError> list_tools();
+    std::expected<std::string, McpError> call_tool(std::string name, std::string arguments = "{}");
+    std::expected<std::vector<Resource>, McpError> list_resources();
+    std::expected<std::string, McpError> read_resource(std::string uri);
+    std::expected<std::vector<Prompt>, McpError> list_prompts();
+    std::expected<std::string, McpError> get_prompt(std::string name, std::string arguments = "{}");
 
 private:
     std::expected<std::string, McpError> request(std::string_view method,
@@ -50,7 +50,7 @@ private:
     std::expected<void, McpError> write(std::string_view message);
     std::expected<std::string, McpError> read();
     RequestMeta meta() const;
-    std::int64_t nextId() noexcept;
+    std::int64_t next_id() noexcept;
 
     std::istream* m_input;
     std::ostream* m_output;
@@ -60,7 +60,7 @@ private:
 };
 
 /**
- * @brief HTTP client owned by runtime.getIOScheduler(0).
+ * @brief HTTP client owned by runtime.get_io_scheduler(0).
  * @details Start runtime before construction and keep it alive through all calls.
  *          Submit calls to owner(); foreign schedulers return InvalidParams.
  *          Overlapping requests return Overload. Lifecycle tasks must be created
@@ -87,14 +87,14 @@ public:
     std::expected<CloseAwaitable, McpError> close();
 
     kernel::Task<void> discover(std::expected<DiscoverResult, McpError>& result);
-    kernel::Task<void> listTools(std::expected<std::vector<Tool>, McpError>& result);
-    kernel::Task<void> callTool(std::string name, std::string arguments,
+    kernel::Task<void> list_tools(std::expected<std::vector<Tool>, McpError>& result);
+    kernel::Task<void> call_tool(std::string name, std::string arguments,
                                 std::expected<std::string, McpError>& result);
-    kernel::Task<void> listResources(std::expected<std::vector<Resource>, McpError>& result);
-    kernel::Task<void> readResource(std::string uri,
+    kernel::Task<void> list_resources(std::expected<std::vector<Resource>, McpError>& result);
+    kernel::Task<void> read_resource(std::string uri,
                                     std::expected<std::string, McpError>& result);
-    kernel::Task<void> listPrompts(std::expected<std::vector<Prompt>, McpError>& result);
-    kernel::Task<void> getPrompt(std::string name, std::string arguments,
+    kernel::Task<void> list_prompts(std::expected<std::vector<Prompt>, McpError>& result);
+    kernel::Task<void> get_prompt(std::string name, std::string arguments,
                                  std::expected<std::string, McpError>& result);
     /**
      * @brief 打开独立的长生命 SSE 订阅流。
@@ -110,8 +110,8 @@ private:
     kernel::Task<void> request(std::string method, std::string fields,
                                std::expected<std::string, McpError>& result);
     RequestMeta meta() const;
-    std::int64_t nextId() noexcept;
-    bool onOwner() const noexcept;
+    std::int64_t next_id() noexcept;
+    bool on_owner() const noexcept;
 
     http::HttpClient m_client;
     ClientConfig m_config;

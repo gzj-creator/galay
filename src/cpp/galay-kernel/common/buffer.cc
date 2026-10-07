@@ -22,7 +22,7 @@ namespace galay::kernel
      */
     Buffer::Buffer(size_t capacity)
     {
-        m_data = galay::utils::mallocBytes(capacity);
+        m_data = galay::utils::malloc_bytes(capacity);
     }
 
     /**
@@ -32,7 +32,7 @@ namespace galay::kernel
      */
     Buffer::Buffer(const void *data, size_t size)
     {
-        m_data = galay::utils::mallocBytes(size);
+        m_data = galay::utils::malloc_bytes(size);
         memcpy(m_data.data, data, size);
         m_data.size = size;
     }
@@ -43,7 +43,7 @@ namespace galay::kernel
      */
     Buffer::Buffer(const std::string &str)
     {
-        m_data = galay::utils::mallocBytes(str.size());
+        m_data = galay::utils::malloc_bytes(str.size());
         memcpy(m_data.data, str.data(), str.size());
         m_data.size = str.size();
     }
@@ -65,7 +65,7 @@ namespace galay::kernel
     Buffer Buffer::clone() const
     {
         Buffer copy;
-        copy.m_data = galay::utils::deepCopyBytes(m_data);
+        copy.m_data = galay::utils::deep_copy_bytes(m_data);
         return copy;
     }
 
@@ -74,7 +74,7 @@ namespace galay::kernel
      */
     void Buffer::clear()
     {
-        galay::utils::clearBytes(m_data);
+        galay::utils::clear_bytes(m_data);
     }
 
     /**
@@ -119,14 +119,14 @@ namespace galay::kernel
      */
     void Buffer::resize(size_t capacity)
     {
-        galay::utils::reallocBytes(m_data, capacity);
+        galay::utils::realloc_bytes(m_data, capacity);
     }
 
     /**
      * @brief 将缓冲区内容拷贝为 std::string
      * @return 包含缓冲区数据的新字符串
      */
-    std::string Buffer::toString() const
+    std::string Buffer::to_string() const
     {
         return std::string(reinterpret_cast<const char*>(m_data.data), m_data.size);
     }
@@ -135,7 +135,7 @@ namespace galay::kernel
      * @brief 获取缓冲区数据的零拷贝 string_view
      * @return 引用缓冲区内容的 string_view
      */
-    std::string_view Buffer::toStringView() const
+    std::string_view Buffer::to_string_view() const
     {
         return std::string_view(reinterpret_cast<const char*>(m_data.data), m_data.size);
     }
@@ -148,7 +148,7 @@ namespace galay::kernel
     Buffer &Buffer::operator=(Buffer &&other) noexcept
     {
         if(this != &other) {
-            galay::utils::freeBytes(m_data);
+            galay::utils::free_bytes(m_data);
             m_data = other.m_data;
             other.m_data = {};
         }
@@ -160,7 +160,7 @@ namespace galay::kernel
      */
     Buffer::~Buffer()
     {
-        galay::utils::freeBytes(m_data);
+        galay::utils::free_bytes(m_data);
     }
 
 }

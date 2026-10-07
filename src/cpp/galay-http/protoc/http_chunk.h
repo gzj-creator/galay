@@ -39,7 +39,7 @@ public:
      *          数据不完整时返回kIncomplete错误
      */
     static std::expected<std::pair<bool, size_t>, HttpError>
-    fromIOVec(const std::vector<iovec>& iovecs, std::string& chunk_data);
+    from_io_vec(const std::vector<iovec>& iovecs, std::string& chunk_data);
 
     /**
      * @brief 创建chunk编码的数据
@@ -49,7 +49,7 @@ public:
      * @details 格式：size(hex)\r\ndata\r\n
      *          最后一个chunk：0\r\n\r\n
      */
-    static std::string toChunk(const std::string& data, bool is_last = false);
+    static std::string to_chunk(const std::string& data, bool is_last = false);
 
     /**
      * @brief 创建chunk编码的数据（从buffer）
@@ -58,7 +58,7 @@ public:
      * @param is_last 是否是最后一个chunk
      * @return std::string chunk编码后的字符串
      */
-    static std::string toChunk(const char* data, size_t length, bool is_last = false);
+    static std::string to_chunk(const char* data, size_t length, bool is_last = false);
 
 private:
     /**
@@ -70,7 +70,7 @@ private:
      * @param consumed 输出消费的字节数
      * @return true找到\r\n，false未找到
      */
-    static bool findCRLF(const std::vector<iovec>& iovecs,
+    static bool find_crlf(const std::vector<iovec>& iovecs,
                         size_t start_iov,
                         size_t start_byte,
                         std::string& buffer,
@@ -85,7 +85,7 @@ private:
      * @param output 输出buffer
      * @return 实际读取的字节数
      */
-    static size_t readData(const std::vector<iovec>& iovecs,
+    static size_t read_data(const std::vector<iovec>& iovecs,
                           size_t start_iov,
                           size_t start_byte,
                           size_t length,
@@ -96,7 +96,7 @@ private:
      * @param value 数值
      * @return 十六进制字符串
      */
-    static std::string toHex(size_t value);
+    static std::string to_hex(size_t value);
 };
 
 /**
@@ -130,8 +130,8 @@ public:
           std::string& chunk_data,
           size_t max_body_size = 0);
 
-    size_t lastConsumed() const noexcept { return m_last_consumed; }
-    bool lastProducedChunk() const noexcept { return m_last_produced_chunk; }
+    size_t last_consumed() const noexcept { return m_last_consumed; }
+    bool last_produced_chunk() const noexcept { return m_last_produced_chunk; }
 
     /**
      * @brief 重置解析状态，用于新的 chunked body

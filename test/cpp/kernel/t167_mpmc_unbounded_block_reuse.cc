@@ -22,7 +22,7 @@ namespace galay::mpmc {
 struct UnboundedChannelTestAccess
 {
     template <UnboundedValue T>
-    static size_t blockCount(const UnboundedChannel<T>& channel) noexcept
+    static size_t block_count(const UnboundedChannel<T>& channel) noexcept
     {
         size_t count = 0;
         auto* block = channel.m_allBlocks;
@@ -76,8 +76,8 @@ concept HasUnboundedCopySend = requires(
     const std::vector<T>& values) {
     channel.send(value);
     channel.send(token, value);
-    channel.sendBatch(values);
-    channel.sendBatch(token, values);
+    channel.send_batch(values);
+    channel.send_batch(token, values);
 };
 
 static_assert(galay::mpmc::UnboundedValue<int>);
@@ -93,7 +93,7 @@ static_assert(galay::mpmc::UnboundedValue<ThrowingCopyValue>);
 static_assert(HasUnboundedCopySend<int>);
 static_assert(!HasUnboundedCopySend<ThrowingCopyValue>);
 
-bool waitFor(const std::atomic<int>& value, int expected)
+bool wait_for(const std::atomic<int>& value, int expected)
 {
     const auto deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -149,7 +149,7 @@ struct TrackedReadyValue
 
 static_assert(galay::mpmc::UnboundedValue<TrackedReadyValue>);
 
-bool checkReadyValueDestruction()
+bool check_ready_value_destruction()
 {
     constexpr int kReadyValues = 5'000;
     TrackedReadyValue::live.store(0, std::memory_order_relaxed);
@@ -178,7 +178,7 @@ bool checkReadyValueDestruction()
 }
 
 template <bool UseToken>
-bool checkBlockReuse()
+bool check_block_reuse()
 {
     constexpr int kProducerCount = 4;
     constexpr int kConsumerCount = 4;
@@ -207,7 +207,7 @@ bool checkBlockReuse()
         producers.emplace_back([&, producer]() {
             std::optional<typename Channel::ProducerToken> token;
             if constexpr (UseToken) {
-                token.emplace(channel.makeProducerToken());
+                token.emplace(channel.make_producer_token());
                 if (!token->valid()) {
                     failed.store(true, std::memory_order_release);
                 }
@@ -241,7 +241,7 @@ bool checkBlockReuse()
         consumers.emplace_back([&]() {
             std::optional<typename Channel::ConsumerToken> token;
             if constexpr (UseToken) {
-                token.emplace(channel.makeConsumerToken());
+                token.emplace(channel.make_consumer_token());
                 if (!token->valid()) {
                     failed.store(true, std::memory_order_release);
                 }
@@ -259,8 +259,8 @@ bool checkBlockReuse()
                        received[static_cast<size_t>(phase)].load(
                            std::memory_order_acquire) < kMessagesPerPhase) {
                     std::optional<int> value = UseToken
-                        ? channel.tryRecv(*token)
-                        : channel.tryRecv();
+                        ? channel.try_recv(*token)
+                        : channel.try_recv();
                     if (!value.has_value()) {
                         std::this_thread::yield();
                         continue;
@@ -281,19 +281,19 @@ bool checkBlockReuse()
         });
     }
 
-    bool ok = waitFor(producerReady, kProducerCount) &&
-        waitFor(consumerReady, kConsumerCount);
+    bool ok = wait_for(producerReady, kProducerCount) &&
+        wait_for(consumerReady, kConsumerCount);
     for (int phase = 0; ok && phase < kPhaseCount; ++phase) {
         producePhase.store(phase, std::memory_order_release);
-        ok = waitFor(producersDone, (phase + 1) * kProducerCount) &&
+        ok = wait_for(producersDone, (phase + 1) * kProducerCount) &&
             channel.size() == static_cast<size_t>(kMessagesPerPhase) &&
             !channel.empty();
         if (!ok) {
             break;
         }
         consumePhase.store(phase, std::memory_order_release);
-        ok = waitFor(received[static_cast<size_t>(phase)], kMessagesPerPhase) &&
-            waitFor(consumersDone, (phase + 1) * kConsumerCount) &&
+        ok = wait_for(received[static_cast<size_t>(phase)], kMessagesPerPhase) &&
+            wait_for(consumersDone, (phase + 1) * kConsumerCount) &&
             channel.empty() && channel.size() == 0;
     }
 
@@ -317,11 +317,11 @@ bool checkBlockReuse()
         }
     }
     channel.close();
-    return channel.isClosed() && channel.empty() && channel.size() == 0;
+    return channel.is_closed() && channel.empty() && channel.size() == 0;
 }
 
 template <bool UseToken>
-bool checkBatchReuse()
+bool check_batch_reuse()
 {
     constexpr int kPhaseCount = 2;
     constexpr int kMessagesPerPhase = 12'345;
@@ -329,8 +329,8 @@ bool checkBatchReuse()
     std::optional<typename Channel::ProducerToken> producerToken;
     std::optional<typename Channel::ConsumerToken> consumerToken;
     if constexpr (UseToken) {
-        producerToken.emplace(channel.makeProducerToken());
-        consumerToken.emplace(channel.makeConsumerToken());
+        producerToken.emplace(channel.make_producer_token());
+        consumerToken.emplace(channel.make_consumer_token());
         if (!producerToken->valid() || !consumerToken->valid()) {
             return false;
         }
@@ -342,13 +342,13 @@ bool checkBatchReuse()
         std::vector<int> values(static_cast<size_t>(kMessagesPerPhase));
         std::iota(values.begin(), values.end(), first);
         const bool sent = UseToken
-            ? channel.sendBatch(*producerToken, std::move(values))
-            : channel.sendBatch(std::move(values));
+            ? channel.send_batch(*producerToken, std::move(values))
+            : channel.send_batch(std::move(values));
         if (!sent || channel.size() != static_cast<size_t>(kMessagesPerPhase)) {
             return false;
         }
         const size_t currentBlocks =
-            galay::mpmc::UnboundedChannelTestAccess::blockCount(channel);
+            galay::mpmc::UnboundedChannelTestAccess::block_count(channel);
         if (phase == 0) {
             firstPhaseBlocks = currentBlocks;
         } else if (currentBlocks != firstPhaseBlocks) {
@@ -358,8 +358,8 @@ bool checkBatchReuse()
         int expected = first;
         while (expected < first + kMessagesPerPhase) {
             auto received = UseToken
-                ? channel.tryRecvBatch(*consumerToken, 5'000)
-                : channel.tryRecvBatch(5'000);
+                ? channel.try_recv_batch(*consumerToken, 5'000)
+                : channel.try_recv_batch(5'000);
             if (!received.has_value() || received->empty()) {
                 return false;
             }
@@ -376,16 +376,16 @@ bool checkBatchReuse()
     }
 
     channel.close();
-    return channel.isClosed() && channel.empty();
+    return channel.is_closed() && channel.empty();
 }
 
 } // namespace
 
 int main()
 {
-    if (!checkReadyValueDestruction() || !checkBlockReuse<false>() ||
-        !checkBlockReuse<true>() || !checkBatchReuse<false>() ||
-        !checkBatchReuse<true>()) {
+    if (!check_ready_value_destruction() || !check_block_reuse<false>() ||
+        !check_block_reuse<true>() || !check_batch_reuse<false>() ||
+        !check_batch_reuse<true>()) {
         std::cerr << "MPMC unbounded block reuse test failed\n";
         return 1;
     }

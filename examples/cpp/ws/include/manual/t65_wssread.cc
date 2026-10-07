@@ -20,14 +20,14 @@ int main() {
 
     galay::ssl::SslSocket ssl_socket(nullptr);
     WsReaderImpl<galay::ssl::SslSocket> wss_reader(ring, setting, ssl_socket, true, false);
-    if (!wss_reader.messageFastPathEnabled()) {
+    if (!wss_reader.message_fast_path_enabled()) {
         std::cerr << "[T65] WSS reader should keep message fast path enabled\n";
         return 1;
     }
 
     AsyncTcpSocket tcp_socket;
     WsReaderImpl<AsyncTcpSocket> ws_reader(ring, setting, tcp_socket, true, false);
-    if (!ws_reader.messageFastPathEnabled()) {
+    if (!ws_reader.message_fast_path_enabled()) {
         std::cerr << "[T65] WS reader should keep message fast path enabled\n";
         return 1;
     }

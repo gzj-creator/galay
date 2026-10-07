@@ -41,7 +41,7 @@ struct BenchResult
     bool ok = false;
 };
 
-bool parseSizeArg(std::string_view text, size_t* value) noexcept
+bool parse_size_arg(std::string_view text, size_t* value) noexcept
 {
     if (value == nullptr || text.empty()) {
         return false;
@@ -59,7 +59,7 @@ bool parseSizeArg(std::string_view text, size_t* value) noexcept
     return true;
 }
 
-std::string makeTextValue(size_t value_size)
+std::string make_text_value(size_t value_size)
 {
     std::string value(value_size, '\0');
     for (size_t index = 0; index < value_size; ++index) {
@@ -68,7 +68,7 @@ std::string makeTextValue(size_t value_size)
     return value;
 }
 
-std::optional<std::string_view> columnValue(size_t index, std::string_view text_value)
+std::optional<std::string_view> column_value(size_t index, std::string_view text_value)
 {
     switch (index % 8) {
     case 0:
@@ -90,19 +90,19 @@ std::optional<std::string_view> columnValue(size_t index, std::string_view text_
     }
 }
 
-bool makeRowFixture(size_t column_count, size_t value_size, RowFixture* fixture)
+bool make_row_fixture(size_t column_count, size_t value_size, RowFixture* fixture)
 {
     if (fixture == nullptr || value_size > kMaximumPayloadBytes) {
         return false;
     }
 
-    const std::string text_value = makeTextValue(value_size);
+    const std::string text_value = make_text_value(value_size);
     std::vector<std::optional<std::string_view>> values;
     values.reserve(column_count);
 
     size_t payload_size = 2;
     for (size_t index = 0; index < column_count; ++index) {
-        const auto value = columnValue(index, text_value);
+        const auto value = column_value(index, text_value);
         const size_t value_bytes = value.has_value() ? value->size() : 0;
         if (value_bytes > static_cast<size_t>(std::numeric_limits<std::int32_t>::max()) ||
             payload_size > kMaximumPayloadBytes - 4 ||
@@ -117,15 +117,15 @@ bool makeRowFixture(size_t column_count, size_t value_size, RowFixture* fixture)
     fixture->payload.reserve(payload_size);
     fixture->null_columns = 0;
     fixture->empty_columns = 0;
-    writeInt16(fixture->payload, static_cast<std::uint16_t>(column_count));
+    write_int16(fixture->payload, static_cast<std::uint16_t>(column_count));
     for (const auto& value : values) {
         if (!value.has_value()) {
-            writeInt32(fixture->payload, std::numeric_limits<std::uint32_t>::max());
+            write_int32(fixture->payload, std::numeric_limits<std::uint32_t>::max());
             ++fixture->null_columns;
             continue;
         }
 
-        writeInt32(fixture->payload, static_cast<std::uint32_t>(value->size()));
+        write_int32(fixture->payload, static_cast<std::uint32_t>(value->size()));
         fixture->payload.append(value->data(), value->size());
         if (value->empty()) {
             ++fixture->empty_columns;
@@ -134,35 +134,35 @@ bool makeRowFixture(size_t column_count, size_t value_size, RowFixture* fixture)
     return fixture->payload.size() == payload_size;
 }
 
-void hashValue(std::uint64_t* hash, std::uint64_t value) noexcept
+void hash_value(std::uint64_t* hash, std::uint64_t value) noexcept
 {
     *hash ^= value;
     *hash *= kHashPrime;
 }
 
 template <typename Values>
-std::uint64_t checksumValues(const Values& values) noexcept
+std::uint64_t checksum_values(const Values& values) noexcept
 {
     std::uint64_t hash = kHashOffset;
     size_t index = 0;
     for (const auto& value : values) {
-        hashValue(&hash, static_cast<std::uint64_t>(index++));
+        hash_value(&hash, static_cast<std::uint64_t>(index++));
         if (!value.has_value()) {
-            hashValue(&hash, std::numeric_limits<std::uint64_t>::max());
+            hash_value(&hash, std::numeric_limits<std::uint64_t>::max());
             continue;
         }
 
-        hashValue(&hash, static_cast<std::uint64_t>(value->size()));
+        hash_value(&hash, static_cast<std::uint64_t>(value->size()));
         if (!value->empty()) {
-            hashValue(&hash, static_cast<unsigned char>(value->front()));
-            hashValue(&hash, static_cast<unsigned char>((*value)[value->size() / 2]));
-            hashValue(&hash, static_cast<unsigned char>(value->back()));
+            hash_value(&hash, static_cast<unsigned char>(value->front()));
+            hash_value(&hash, static_cast<unsigned char>((*value)[value->size() / 2]));
+            hash_value(&hash, static_cast<unsigned char>(value->back()));
         }
     }
     return hash;
 }
 
-void doNotOptimize(std::uint64_t const& value) noexcept
+void do_not_optimize(std::uint64_t const& value) noexcept
 {
 #if defined(__GNUC__) || defined(__clang__)
     asm volatile("" : : "r,m"(value) : "memory");
@@ -172,21 +172,21 @@ void doNotOptimize(std::uint64_t const& value) noexcept
 #endif
 }
 
-BenchResult runOwned(std::string_view payload, size_t column_count, size_t iterations)
+BenchResult run_owned(std::string_view payload, size_t column_count, size_t iterations)
 {
     PostgresParser parser;
     std::uint64_t checksum = 0;
     const auto started = std::chrono::steady_clock::now();
     for (size_t iteration = 0; iteration < iterations; ++iteration) {
-        auto row = parser.parseDataRow(payload.data(), payload.size());
+        auto row = parser.parse_data_row(payload.data(), payload.size());
         if (!row || row->size() != column_count) {
             std::cerr << "owned DataRow parse failed at iteration " << iteration << '\n';
             return BenchResult{};
         }
-        checksum ^= checksumValues(row->values()) +
+        checksum ^= checksum_values(row->values()) +
                     kHashPrime * static_cast<std::uint64_t>(iteration + 1);
     }
-    doNotOptimize(checksum);
+    do_not_optimize(checksum);
     const auto finished = std::chrono::steady_clock::now();
     return BenchResult{
         std::chrono::duration<double>(finished - started).count(),
@@ -195,21 +195,21 @@ BenchResult runOwned(std::string_view payload, size_t column_count, size_t itera
     };
 }
 
-BenchResult runView(std::string_view payload, size_t column_count, size_t iterations)
+BenchResult run_view(std::string_view payload, size_t column_count, size_t iterations)
 {
     PostgresParser parser;
     std::uint64_t checksum = 0;
     const auto started = std::chrono::steady_clock::now();
     for (size_t iteration = 0; iteration < iterations; ++iteration) {
-        auto row = parser.parseDataRowView(payload.data(), payload.size());
+        auto row = parser.parse_data_row_view(payload.data(), payload.size());
         if (!row || row->size() != column_count) {
             std::cerr << "view DataRow parse failed at iteration " << iteration << '\n';
             return BenchResult{};
         }
-        checksum ^= checksumValues(*row) +
+        checksum ^= checksum_values(*row) +
                     kHashPrime * static_cast<std::uint64_t>(iteration + 1);
     }
-    doNotOptimize(checksum);
+    do_not_optimize(checksum);
     const auto finished = std::chrono::steady_clock::now();
     return BenchResult{
         std::chrono::duration<double>(finished - started).count(),
@@ -218,7 +218,7 @@ BenchResult runView(std::string_view payload, size_t column_count, size_t iterat
     };
 }
 
-void printResult(const char* label,
+void print_result(const char* label,
                  const BenchResult& result,
                  size_t iterations,
                  size_t payload_bytes)
@@ -241,7 +241,7 @@ void printResult(const char* label,
               << " checksum=" << result.checksum << '\n';
 }
 
-void printUsage(const char* program)
+void print_usage(const char* program)
 {
     std::cerr << "usage: " << program << " [iterations] [columns>=4] [text-value-bytes]\n";
 }
@@ -250,7 +250,7 @@ void printUsage(const char* program)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -259,20 +259,20 @@ int main(int argc, char** argv)
     size_t value_size = 64;
 
     if (argc > 4 ||
-        (argc > 1 && !parseSizeArg(argv[1], &iterations)) ||
-        (argc > 2 && !parseSizeArg(argv[2], &column_count)) ||
-        (argc > 3 && !parseSizeArg(argv[3], &value_size))) {
-        printUsage(argv[0]);
+        (argc > 1 && !parse_size_arg(argv[1], &iterations)) ||
+        (argc > 2 && !parse_size_arg(argv[2], &column_count)) ||
+        (argc > 3 && !parse_size_arg(argv[3], &value_size))) {
+        print_usage(argv[0]);
         return 2;
     }
     if (column_count < kMinimumColumnCount ||
         column_count > static_cast<size_t>(std::numeric_limits<std::int16_t>::max())) {
-        printUsage(argv[0]);
+        print_usage(argv[0]);
         return 2;
     }
 
     RowFixture fixture;
-    if (!makeRowFixture(column_count, value_size, &fixture)) {
+    if (!make_row_fixture(column_count, value_size, &fixture)) {
         std::cerr << "failed to build DataRow payload; keep the encoded payload below 256 MiB\n";
         return 2;
     }
@@ -283,17 +283,17 @@ int main(int argc, char** argv)
 
     const size_t warmup_iterations = std::min(iterations, kDefaultWarmupIterations);
     const BenchResult owned_warmup =
-        runOwned(fixture.payload, column_count, warmup_iterations);
+        run_owned(fixture.payload, column_count, warmup_iterations);
     const BenchResult view_warmup =
-        runView(fixture.payload, column_count, warmup_iterations);
+        run_view(fixture.payload, column_count, warmup_iterations);
     if (!owned_warmup.ok || !view_warmup.ok ||
         owned_warmup.checksum != view_warmup.checksum) {
         std::cerr << "DataRow warmup failed or produced inconsistent results\n";
         return 1;
     }
 
-    const BenchResult owned = runOwned(fixture.payload, column_count, iterations);
-    const BenchResult view = runView(fixture.payload, column_count, iterations);
+    const BenchResult owned = run_owned(fixture.payload, column_count, iterations);
+    const BenchResult view = run_view(fixture.payload, column_count, iterations);
     if (!owned.ok || !view.ok || owned.seconds <= 0.0 || view.seconds <= 0.0 ||
         owned.checksum != view.checksum) {
         std::cerr << "DataRow measurement failed or produced inconsistent results\n";
@@ -309,8 +309,8 @@ int main(int argc, char** argv)
               << " payload_bytes=" << fixture.payload.size()
               << " null_columns=" << fixture.null_columns
               << " empty_columns=" << fixture.empty_columns << '\n';
-    printResult("owned", owned, iterations, fixture.payload.size());
-    printResult("view", view, iterations, fixture.payload.size());
+    print_result("owned", owned, iterations, fixture.payload.size());
+    print_result("view", view, iterations, fixture.payload.size());
     std::cout << "view/owned throughput=" << owned.seconds / view.seconds << "x\n";
     return 0;
 }

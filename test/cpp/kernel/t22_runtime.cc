@@ -42,8 +42,8 @@ void test_concurrent_get_scheduler() {
     constexpr int THREAD_COUNT = 8;
     constexpr int ITERATIONS = 100000;
 
-    auto runtime = RuntimeBuilder().ioSchedulerCount(SCHEDULER_COUNT)
-        .parallelSchedulerCount(SCHEDULER_COUNT).build();
+    auto runtime = RuntimeBuilder().io_scheduler_count(SCHEDULER_COUNT)
+        .parallel_scheduler_count(SCHEDULER_COUNT).build();
     const auto started = runtime.start();
     if (!started) { return; }
 
@@ -60,18 +60,18 @@ void test_concurrent_get_scheduler() {
     for (int t = 0; t < THREAD_COUNT; ++t) {
         threads.emplace_back([&runtime, &io_counts, &parallel_counts]() {
             for (int i = 0; i < ITERATIONS; ++i) {
-                auto* io = runtime.getNextIOScheduler();
-                auto* parallel = runtime.getNextParallelScheduler();
+                auto* io = runtime.get_next_io_scheduler();
+                auto* parallel = runtime.get_next_parallel_scheduler();
 
                 // 找到对应的索引并计数
                 for (int j = 0; j < SCHEDULER_COUNT; ++j) {
-                    if (runtime.getIOScheduler(j) == io) {
+                    if (runtime.get_io_scheduler(j) == io) {
                         io_counts[j].fetch_add(1, std::memory_order_relaxed);
                         break;
                     }
                 }
                 for (int j = 0; j < SCHEDULER_COUNT; ++j) {
-                    if (runtime.getParallelScheduler(j) == parallel) {
+                    if (runtime.get_parallel_scheduler(j) == parallel) {
                         parallel_counts[j].fetch_add(1, std::memory_order_relaxed);
                         break;
                     }
@@ -126,7 +126,7 @@ void test_concurrent_get_scheduler() {
 // ============== 测试2: 高并发任务提交 ==============
 std::atomic<int> g_task_completed{0};
 
-Task<void> simpleTask() {
+Task<void> simple_task() {
     g_task_completed.fetch_add(1, std::memory_order_relaxed);
     co_return;
 }
@@ -141,8 +141,8 @@ void test_high_concurrency_spawn() {
 
     g_task_completed.store(0);
 
-    auto runtime = RuntimeBuilder().ioSchedulerCount(SCHEDULER_COUNT)
-        .parallelSchedulerCount(0).build();
+    auto runtime = RuntimeBuilder().io_scheduler_count(SCHEDULER_COUNT)
+        .parallel_scheduler_count(0).build();
     const auto started = runtime.start();
     if (!started) { return; }
 
@@ -153,8 +153,8 @@ void test_high_concurrency_spawn() {
     for (int t = 0; t < THREAD_COUNT; ++t) {
         threads.emplace_back([&runtime]() {
             for (int i = 0; i < TASKS_PER_THREAD; ++i) {
-                auto* scheduler = runtime.getNextIOScheduler();
-                scheduleTask(scheduler, simpleTask());
+                auto* scheduler = runtime.get_next_io_scheduler();
+                schedule_task(scheduler, simple_task());
             }
         });
     }
@@ -199,15 +199,15 @@ void test_index_overflow() {
     // 模拟大量调用，测试 uint32_t 溢出后的行为
     constexpr uint64_t ITERATIONS = 1000000;
 
-    auto runtime = RuntimeBuilder().ioSchedulerCount(SCHEDULER_COUNT)
-        .parallelSchedulerCount(0).build();
+    auto runtime = RuntimeBuilder().io_scheduler_count(SCHEDULER_COUNT)
+        .parallel_scheduler_count(0).build();
     const auto started = runtime.start();
     if (!started) { return; }
 
     // 快速调用大量次数
     std::map<IOScheduler*, int> distribution;
     for (uint64_t i = 0; i < ITERATIONS; ++i) {
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         distribution[scheduler]++;
     }
 
@@ -244,8 +244,8 @@ void test_empty_scheduler_list() {
     Runtime runtime;
     // 不添加任何调度器，也不启动
 
-    auto* io = runtime.getNextIOScheduler();
-    auto* compute = runtime.getNextParallelScheduler();
+    auto* io = runtime.get_next_io_scheduler();
+    auto* compute = runtime.get_next_parallel_scheduler();
 
     if (io != nullptr || compute != nullptr) {
         std::cout << "❌ 空列表应返回 nullptr" << std::endl;
@@ -264,15 +264,15 @@ void test_performance_benchmark() {
     constexpr int SCHEDULER_COUNT = 8;
     constexpr int ITERATIONS = 10000000;
 
-    auto runtime = RuntimeBuilder().ioSchedulerCount(SCHEDULER_COUNT)
-        .parallelSchedulerCount(0).build();
+    auto runtime = RuntimeBuilder().io_scheduler_count(SCHEDULER_COUNT)
+        .parallel_scheduler_count(0).build();
     const auto started = runtime.start();
     if (!started) { return; }
 
     auto start = std::chrono::steady_clock::now();
 
     for (int i = 0; i < ITERATIONS; ++i) {
-        volatile auto* scheduler = runtime.getNextIOScheduler();
+        volatile auto* scheduler = runtime.get_next_io_scheduler();
         (void)scheduler;
     }
 
@@ -316,15 +316,15 @@ int main() {
     // 写入测试结果
     galay::test::TestResultWriter writer("test_runtime_stress");
     for (int i = 0; i < g_total.load(); ++i) {
-        writer.addTest();
+        writer.add_test();
     }
     for (int i = 0; i < g_passed.load(); ++i) {
-        writer.addPassed();
+        writer.add_passed();
     }
     for (int i = 0; i < (g_total.load() - g_passed.load()); ++i) {
-        writer.addFailed();
+        writer.add_failed();
     }
-    writer.writeResult();
+    writer.write_result();
 
     return (g_passed.load() == g_total.load()) ? 0 : 1;
 }

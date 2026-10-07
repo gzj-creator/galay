@@ -70,7 +70,7 @@ namespace galay::redis
         }
 
         std::string ip;
-        switch (galay::utils::System::checkAddressType(host))
+        switch (galay::utils::System::check_address_type(host))
         {
         case galay::utils::System::AddressType::IPv4 :
             ip = host;
@@ -79,7 +79,7 @@ namespace galay::redis
             return std::unexpected(RedisError(RedisErrorType::REDIS_ERROR_TYPE_ADDRESS_TYPE_INVALID_ERROR, "IPv6 is not supported"));
         case galay::utils::System::AddressType::Domain:
         {
-            ip = galay::utils::System::resolveHostIPv4(host);
+            ip = galay::utils::System::resolve_host_ipv4(host);
             if (ip.empty()) {
                 REDIS_LOG_ERROR("[client]", "[Get domain's IPV4 failed]");
                 return std::unexpected(RedisError(RedisErrorType::REDIS_ERROR_TYPE_ADDRESS_TYPE_INVALID_ERROR));
@@ -134,9 +134,9 @@ namespace galay::redis
                 }
             }
 
-            auto auth_reply = redisCommand(m_encoder.encodeCommand(auth_cmd));
-            if (!auth_reply || auth_reply->isError()) {
-                std::string error_msg = auth_reply ? auth_reply->toError() : "Authentication failure";
+            auto auth_reply = redis_command(m_encoder.encode_command(auth_cmd));
+            if (!auth_reply || auth_reply->is_error()) {
+                std::string error_msg = auth_reply ? auth_reply->to_error() : "Authentication failure";
                 REDIS_LOG_ERROR("[client]", "[Authentication failure, error is {}]", error_msg);
                 disconnect();
                 return std::unexpected(RedisError(RedisErrorType::REDIS_ERROR_TYPE_AUTH_ERROR, error_msg));
@@ -146,12 +146,12 @@ namespace galay::redis
 
         // 选择数据库
         if (db_index != 0) {
-            auto select_reply = selectDB(db_index);
+            auto select_reply = select_db(db_index);
             if (!select_reply) {
                 auto error = select_reply.error();
                 return std::unexpected(std::move(error));
             }
-            if (select_reply->isNull() || !select_reply->isStatus()) {
+            if (select_reply->is_null() || !select_reply->is_status()) {
                 return std::unexpected(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_PARSE_ERROR,
                     "Unexpected SELECT response"));
@@ -170,133 +170,133 @@ namespace galay::redis
         return std::unexpected(RedisError(RedisErrorType::REDIS_ERROR_TYPE_FREE_REDISOBJ_ERROR, "Redis release connection failed"));
     }
 
-    std::expected<RedisValue, RedisError> RedisSession::selectDB(int32_t db_index)
+    std::expected<RedisValue, RedisError> RedisSession::select_db(int32_t db_index)
     {
-        std::string cmd = m_encoder.encodeCommand({"SELECT", std::to_string(db_index)});
-        return redisCommand(cmd);
+        std::string cmd = m_encoder.encode_command({"SELECT", std::to_string(db_index)});
+        return redis_command(cmd);
     }
 
-    std::expected<RedisValue, RedisError> RedisSession::flushDB()
+    std::expected<RedisValue, RedisError> RedisSession::flush_db()
     {
-        return redisCommand(m_encoder.encodeCommand({"FLUSHDB"}));
+        return redis_command(m_encoder.encode_command({"FLUSHDB"}));
     }
 
-    std::expected<RedisValue, RedisError> RedisSession::switchVersion(int version)
+    std::expected<RedisValue, RedisError> RedisSession::switch_version(int version)
     {
-        std::string cmd = m_encoder.encodeCommand({"HELLO", std::to_string(version)});
-        return redisCommand(cmd);
+        std::string cmd = m_encoder.encode_command({"HELLO", std::to_string(version)});
+        return redis_command(cmd);
     }
 
     std::expected<RedisValue, RedisError> RedisSession::exist(const std::string &key)
     {
-        return redisCommand(m_encoder.encodeCommand({"EXISTS", key}));
+        return redis_command(m_encoder.encode_command({"EXISTS", key}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::get(const std::string& key)
     {
-        return redisCommand(m_encoder.encodeCommand({"GET", key}));
+        return redis_command(m_encoder.encode_command({"GET", key}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::set(const std::string &key, const std::string &value)
     {
-        return redisCommand(m_encoder.encodeCommand({"SET", key, value}));
+        return redis_command(m_encoder.encode_command({"SET", key, value}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::del(const std::string &key)
     {
-        return redisCommand(m_encoder.encodeCommand({"DEL", key}));
+        return redis_command(m_encoder.encode_command({"DEL", key}));
     }
 
-    std::expected<RedisValue, RedisError> RedisSession::setEx(const std::string &key, int64_t seconds, const std::string &value)
+    std::expected<RedisValue, RedisError> RedisSession::set_ex(const std::string &key, int64_t seconds, const std::string &value)
     {
-        return redisCommand(m_encoder.encodeCommand({"SETEX", key, std::to_string(seconds), value}));
+        return redis_command(m_encoder.encode_command({"SETEX", key, std::to_string(seconds), value}));
     }
 
-    std::expected<RedisValue, RedisError> RedisSession::psetEx(const std::string &key, int64_t milliseconds, const std::string &value)
+    std::expected<RedisValue, RedisError> RedisSession::pset_ex(const std::string &key, int64_t milliseconds, const std::string &value)
     {
-        return redisCommand(m_encoder.encodeCommand({"PSETEX", key, std::to_string(milliseconds), value}));
+        return redis_command(m_encoder.encode_command({"PSETEX", key, std::to_string(milliseconds), value}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::incr(const std::string& key)
     {
-        return redisCommand(m_encoder.encodeCommand({"INCR", key}));
+        return redis_command(m_encoder.encode_command({"INCR", key}));
     }
 
-    std::expected<RedisValue, RedisError> RedisSession::incrBy(std::string key, int64_t value)
+    std::expected<RedisValue, RedisError> RedisSession::incr_by(std::string key, int64_t value)
     {
-        return redisCommand(m_encoder.encodeCommand({"INCRBY", key, std::to_string(value)}));
+        return redis_command(m_encoder.encode_command({"INCRBY", key, std::to_string(value)}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::decr(const std::string& key)
     {
-        return redisCommand(m_encoder.encodeCommand({"DECR", key}));
+        return redis_command(m_encoder.encode_command({"DECR", key}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::hget(const std::string& key, const std::string& field)
     {
-        return redisCommand(m_encoder.encodeCommand({"HGET", key, field}));
+        return redis_command(m_encoder.encode_command({"HGET", key, field}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::hset(const std::string &key, const std::string &field, const std::string &value)
     {
-        return redisCommand(m_encoder.encodeCommand({"HSET", key, field, value}));
+        return redis_command(m_encoder.encode_command({"HSET", key, field, value}));
     }
 
-    std::expected<RedisValue, RedisError> RedisSession::hgetAll(const std::string& key)
+    std::expected<RedisValue, RedisError> RedisSession::hget_all(const std::string& key)
     {
-        return redisCommand(m_encoder.encodeCommand({"HGETALL", key}));
+        return redis_command(m_encoder.encode_command({"HGETALL", key}));
     }
 
-    std::expected<RedisValue, RedisError> RedisSession::hincrBy(const std::string& key, std::string field, int64_t value)
+    std::expected<RedisValue, RedisError> RedisSession::hincr_by(const std::string& key, std::string field, int64_t value)
     {
-        return redisCommand(m_encoder.encodeCommand({"HINCRBY", key, field, std::to_string(value)}));
+        return redis_command(m_encoder.encode_command({"HINCRBY", key, field, std::to_string(value)}));
     }
 
-    std::expected<RedisValue, RedisError> RedisSession::lLen(const std::string& key)
+    std::expected<RedisValue, RedisError> RedisSession::l_len(const std::string& key)
     {
-        return redisCommand(m_encoder.encodeCommand({"LLEN", key}));
+        return redis_command(m_encoder.encode_command({"LLEN", key}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::lrange(const std::string &key, int64_t start, int64_t end)
     {
-        return redisCommand(m_encoder.encodeCommand({"LRANGE", key, std::to_string(start), std::to_string(end)}));
+        return redis_command(m_encoder.encode_command({"LRANGE", key, std::to_string(start), std::to_string(end)}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::lrem(const std::string &key, const std::string& value, int64_t count)
     {
-        return redisCommand(m_encoder.encodeCommand({"LREM", key, std::to_string(count), value}));
+        return redis_command(m_encoder.encode_command({"LREM", key, std::to_string(count), value}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::smembers(const std::string &key)
     {
-        return redisCommand(m_encoder.encodeCommand({"SMEMBERS", key}));
+        return redis_command(m_encoder.encode_command({"SMEMBERS", key}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::smove(const std::string &source, const std::string &destination, const std::string &member)
     {
-        return redisCommand(m_encoder.encodeCommand({"SMOVE", source, destination, member}));
+        return redis_command(m_encoder.encode_command({"SMOVE", source, destination, member}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::scard(const std::string &key)
     {
-        return redisCommand(m_encoder.encodeCommand({"SCARD", key}));
+        return redis_command(m_encoder.encode_command({"SCARD", key}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::zrange(const std::string& key, uint32_t beg, uint32_t end)
     {
-        return redisCommand(m_encoder.encodeCommand({"ZRANGE", key, std::to_string(beg), std::to_string(end)}));
+        return redis_command(m_encoder.encode_command({"ZRANGE", key, std::to_string(beg), std::to_string(end)}));
     }
 
     std::expected<RedisValue, RedisError> RedisSession::zscore(const std::string &key, const std::string &member)
     {
-        return redisCommand(m_encoder.encodeCommand({"ZSCORE", key, member}));
+        return redis_command(m_encoder.encode_command({"ZSCORE", key, member}));
     }
 
-    std::expected<RedisValue, RedisError> RedisSession::redisCommand(const std::string &encoded_cmd)
+    std::expected<RedisValue, RedisError> RedisSession::redis_command(const std::string &encoded_cmd)
     {
         REDIS_LOG_INFO("[client]", "[redisCommand]");
 
-        if (!m_connection || !m_connection->isConnected()) {
+        if (!m_connection || !m_connection->is_connected()) {
             REDIS_LOG_ERROR("[client]", "[redisCommand failed, not connected]");
             return std::unexpected(RedisError(RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR, "Not connected"));
         }

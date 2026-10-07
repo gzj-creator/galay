@@ -70,7 +70,7 @@ struct RuntimeConfig {
  * @details 当前只暴露 IO scheduler 的 work-stealing 计数。
  */
 struct RuntimeStats {
-    std::vector<IOSchedulerStealStats> io_schedulers;  ///< 与 getIOScheduler(i) 对齐的 stealing 统计
+    std::vector<IOSchedulerStealStats> io_schedulers;  ///< 与 get_io_scheduler(i) 对齐的 stealing 统计
 };
 
 /**
@@ -163,21 +163,21 @@ public:
 
     /** @brief 在 IO scheduler 上同步执行一个根任务并返回结果。 */
     template <typename T>
-    auto blockOnIO(Task<T> task) -> std::expected<T, RuntimeError>
+    auto block_on_io(Task<T> task) -> std::expected<T, RuntimeError>
     {
-        return blockOnOnScheduler(std::move(task), acquireIOScheduler());
+        return block_on_on_scheduler(std::move(task), acquire_io_scheduler());
     }
 
     /** @brief 在 parallel scheduler 上同步执行一个纯计算根任务并返回结果。 */
     template <typename T>
-    auto blockOnCpu(Task<T> task) -> std::expected<T, RuntimeError>
+    auto block_on_cpu(Task<T> task) -> std::expected<T, RuntimeError>
     {
-        return blockOnOnScheduler(std::move(task), acquireParallelScheduler());
+        return block_on_on_scheduler(std::move(task), acquire_parallel_scheduler());
     }
 
 private:
     template <typename T, typename SchedulerT>
-    auto blockOnOnScheduler(Task<T> task, std::expected<SchedulerT*, RuntimeError> scheduler)
+    auto block_on_on_scheduler(Task<T> task, std::expected<SchedulerT*, RuntimeError> scheduler)
         -> std::expected<T, RuntimeError>
     {
         if (!scheduler.has_value()) {
@@ -187,15 +187,15 @@ private:
             return std::unexpected(RuntimeError(RuntimeErrorCode::kNoSchedulerAvailable));
         }
 
-        const TaskRef& taskRef = detail::TaskAccess::taskRef(task);
-        bindTaskToRuntime(taskRef, *scheduler);
-        if (!(*scheduler)->schedule(taskRef)) {
+        const TaskRef& task_ref = detail::TaskAccess::task_ref(task);
+        bind_task_to_runtime(task_ref, *scheduler);
+        if (!(*scheduler)->schedule(task_ref)) {
             return std::unexpected(RuntimeError(RuntimeErrorCode::kSubmitFailed));
         }
 
-        auto result = detail::TaskAccess::tryTakeResult(task);
+        auto result = detail::TaskAccess::try_take_result(task);
         if (!result.has_value()) {
-            return std::unexpected(mapTaskResultError(result.error()));
+            return std::unexpected(map_task_result_error(result.error()));
         }
         if constexpr (std::is_void_v<T>) {
             return {};
@@ -211,9 +211,9 @@ public:
      * @return 成功时返回可 `join()` 的句柄；没有 IO scheduler 或提交失败时返回 RuntimeError
      */
     template <typename T>
-    auto spawnIO(Task<T> task) -> std::expected<JoinHandle<T>, RuntimeError>
+    auto spawn_io(Task<T> task) -> std::expected<JoinHandle<T>, RuntimeError>
     {
-        return spawnOnScheduler(std::move(task), acquireIOScheduler());
+        return spawn_on_scheduler(std::move(task), acquire_io_scheduler());
     }
 
     /**
@@ -222,14 +222,14 @@ public:
      * @return 成功时返回可 `join()` 的句柄；没有 parallel scheduler 或提交失败时返回 RuntimeError
      */
     template <typename T>
-    auto spawnCpu(Task<T> task) -> std::expected<JoinHandle<T>, RuntimeError>
+    auto spawn_cpu(Task<T> task) -> std::expected<JoinHandle<T>, RuntimeError>
     {
-        return spawnOnScheduler(std::move(task), acquireParallelScheduler());
+        return spawn_on_scheduler(std::move(task), acquire_parallel_scheduler());
     }
 
 private:
     template <typename T, typename SchedulerT>
-    auto spawnOnScheduler(Task<T> task, std::expected<SchedulerT*, RuntimeError> scheduler)
+    auto spawn_on_scheduler(Task<T> task, std::expected<SchedulerT*, RuntimeError> scheduler)
         -> std::expected<JoinHandle<T>, RuntimeError>
     {
         if (!scheduler.has_value()) {
@@ -239,12 +239,12 @@ private:
             return std::unexpected(RuntimeError(RuntimeErrorCode::kNoSchedulerAvailable));
         }
 
-        const TaskRef& taskRef = detail::TaskAccess::taskRef(task);
-        bindTaskToRuntime(taskRef, *scheduler);
-        if (!(*scheduler)->schedule(taskRef)) {
+        const TaskRef& task_ref = detail::TaskAccess::task_ref(task);
+        bind_task_to_runtime(task_ref, *scheduler);
+        if (!(*scheduler)->schedule(task_ref)) {
             return std::unexpected(RuntimeError(RuntimeErrorCode::kSubmitFailed));
         }
-        return JoinHandle<T>(detail::TaskAccess::detachTask(std::move(task)));
+        return JoinHandle<T>(detail::TaskAccess::detach_task(std::move(task)));
     }
 
 public:
@@ -255,27 +255,27 @@ public:
      *
      * @note
      * - 适合文件阻塞 IO、第三方同步库调用等不可协程化路径
-     * - callable 内部会继承当前 runtime 上下文，因此可安全调用 `RuntimeHandle::tryCurrent()`
+     * - callable 内部会继承当前 runtime 上下文，因此可安全调用 `RuntimeHandle::try_current()`
      * - callable 需要通过返回值表达业务失败；提交失败由 `RuntimeError` 返回
      */
     template <typename F>
-    auto spawnBlocking(F&& func) -> std::expected<JoinHandle<std::invoke_result_t<std::decay_t<F>&>>, RuntimeError>
+    auto spawn_blocking(F&& func) -> std::expected<JoinHandle<std::invoke_result_t<std::decay_t<F>&>>, RuntimeError>
     {
         using Fn = std::decay_t<F>;
         using Result = std::invoke_result_t<Fn&>;
 
         auto completion = std::make_shared<TaskCompletionState<Result>>();
         auto submitted = m_blockingExecutor.submit([runtime = this, completion, function = Fn(std::forward<F>(func))]() mutable {
-            detail::CurrentRuntimeScope runtimeScope(runtime);
+            detail::CurrentRuntimeScope runtime_scope(runtime);
             try {
                 if constexpr (std::is_void_v<Result>) {
                     std::invoke(function);
-                    completion->setValue();
+                    completion->set_value();
                 } else {
-                    completion->setValue(std::invoke(function));
+                    completion->set_value(std::invoke(function));
                 }
             } catch (...) {
-                completion->setError(detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));
+                completion->set_error(detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));
             }
         });
         if (!submitted.has_value()) {
@@ -291,25 +291,25 @@ public:
     RuntimeHandle handle() noexcept;
     RuntimeStats stats() const;  ///< 返回 Runtime 管理的 scheduler 统计；应在 stop() 后或外部同步下调用
 
-    bool isRunning() const { return m_running.load(std::memory_order_acquire); }  ///< Runtime 当前是否已启动
-    size_t getIOSchedulerCount() const { return m_io_schedulers.size(); }  ///< 返回当前受管 IO scheduler 数量
-    size_t getParallelSchedulerCount() const { return m_parallel_schedulers.size(); }  ///< 返回当前受管 parallel scheduler 数量
+    bool is_running() const { return m_running.load(std::memory_order_acquire); }  ///< Runtime 当前是否已启动
+    size_t get_io_scheduler_count() const { return m_io_schedulers.size(); }  ///< 返回当前受管 IO scheduler 数量
+    size_t get_parallel_scheduler_count() const { return m_parallel_schedulers.size(); }  ///< 返回当前受管 parallel scheduler 数量
 
-    IOScheduler* getIOScheduler(size_t index);  ///< 按索引返回 IO scheduler；越界时返回 nullptr
-    ParallelScheduler* getParallelScheduler(size_t index);  ///< 按索引返回 parallel scheduler；越界时返回 nullptr
-    IOScheduler* getNextIOScheduler();  ///< 以轮询方式返回下一个 IO scheduler；不存在时返回 nullptr
-    ParallelScheduler* getNextParallelScheduler();  ///< 以轮询方式返回下一个 parallel scheduler；不存在时返回 nullptr
+    IOScheduler* get_io_scheduler(size_t index);  ///< 按索引返回 IO scheduler；越界时返回 nullptr
+    ParallelScheduler* get_parallel_scheduler(size_t index);  ///< 按索引返回 parallel scheduler；越界时返回 nullptr
+    IOScheduler* get_next_io_scheduler();  ///< 以轮询方式返回下一个 IO scheduler；不存在时返回 nullptr
+    ParallelScheduler* get_next_parallel_scheduler();  ///< 以轮询方式返回下一个 parallel scheduler；不存在时返回 nullptr
 
 private:
-    void createDefaultSchedulers();  ///< 按配置或 CPU 数生成默认 scheduler 集合
-    void applyAffinityConfig();  ///< 把 RuntimeAffinityConfig 应用到所有已注册 scheduler
-    std::expected<void, RuntimeError> ensureStarted();  ///< 若 Runtime 尚未启动则触发一次启动
-    std::expected<IOScheduler*, RuntimeError> acquireIOScheduler();  ///< 保留 IO 根任务提交时的具体调度器类型
-    std::expected<ParallelScheduler*, RuntimeError> acquireParallelScheduler();  ///< 保留 CPU 根任务提交时的具体调度器类型
-    void bindTaskToRuntime(const TaskRef& task, Scheduler* scheduler);  ///< 给根任务绑定 Runtime 与目标调度器
-    static size_t getCPUCount();  ///< 返回当前机器可用 CPU 数量
-    static RuntimeError mapTaskResultError(const detail::TaskResultError& error) noexcept;  ///< 把任务消费错误映射为 RuntimeError
-    void configureIOSchedulerStealDomains();  ///< 为 Runtime 管理的 IO scheduler 下发 steal-domain 配置
+    void create_default_schedulers();  ///< 按配置或 CPU 数生成默认 scheduler 集合
+    void apply_affinity_config();  ///< 把 RuntimeAffinityConfig 应用到所有已注册 scheduler
+    std::expected<void, RuntimeError> ensure_started();  ///< 若 Runtime 尚未启动则触发一次启动
+    std::expected<IOScheduler*, RuntimeError> acquire_io_scheduler();  ///< 保留 IO 根任务提交时的具体调度器类型
+    std::expected<ParallelScheduler*, RuntimeError> acquire_parallel_scheduler();  ///< 保留 CPU 根任务提交时的具体调度器类型
+    void bind_task_to_runtime(const TaskRef& task, Scheduler* scheduler);  ///< 给根任务绑定 Runtime 与目标调度器
+    static size_t get_cpu_count();  ///< 返回当前机器可用 CPU 数量
+    static RuntimeError map_task_result_error(const detail::TaskResultError& error) noexcept;  ///< 把任务消费错误映射为 RuntimeError
+    void configure_io_scheduler_steal_domains();  ///< 为 Runtime 管理的 IO scheduler 下发 steal-domain 配置
 
     std::vector<std::unique_ptr<IOScheduler>> m_io_schedulers;  ///< Runtime 持有的 IO scheduler 集合
     std::vector<std::unique_ptr<ParallelScheduler>> m_parallel_schedulers;  ///< Runtime 持有的 parallel scheduler 集合
@@ -347,9 +347,9 @@ public:
      * @brief 尝试获取当前线程绑定的 runtime handle。
      * @return 当前 runtime 存在时返回值，否则返回 `std::nullopt`
      */
-    static std::optional<RuntimeHandle> tryCurrent();
+    static std::optional<RuntimeHandle> try_current();
 
-    bool isValid() const noexcept { return m_runtime != nullptr; }  ///< 当前是否绑定到有效 Runtime
+    bool is_valid() const noexcept { return m_runtime != nullptr; }  ///< 当前是否绑定到有效 Runtime
 
     /**
      * @brief 通过当前 runtime 在 IO scheduler 上提交任务。
@@ -357,13 +357,13 @@ public:
      * @return 成功时返回可 `join()` 的句柄；handle 无效、没有 IO scheduler 或提交失败时返回 RuntimeError
      */
     template <typename T>
-    auto spawnIO(Task<T> task) const -> std::expected<JoinHandle<T>, RuntimeError>
+    auto spawn_io(Task<T> task) const -> std::expected<JoinHandle<T>, RuntimeError>
     {
-        auto runtime = runtimeOrError();
+        auto runtime = runtime_or_error();
         if (!runtime.has_value()) {
             return std::unexpected(runtime.error());
         }
-        return (*runtime)->spawnIO(std::move(task));
+        return (*runtime)->spawn_io(std::move(task));
     }
 
     /**
@@ -372,27 +372,27 @@ public:
      * @return 成功时返回可 `join()` 的句柄；handle 无效、没有 parallel scheduler 或提交失败时返回 RuntimeError
      */
     template <typename T>
-    auto spawnCpu(Task<T> task) const -> std::expected<JoinHandle<T>, RuntimeError>
+    auto spawn_cpu(Task<T> task) const -> std::expected<JoinHandle<T>, RuntimeError>
     {
-        auto runtime = runtimeOrError();
+        auto runtime = runtime_or_error();
         if (!runtime.has_value()) {
             return std::unexpected(runtime.error());
         }
-        return (*runtime)->spawnCpu(std::move(task));
+        return (*runtime)->spawn_cpu(std::move(task));
     }
 
     template <typename F>
-    auto spawnBlocking(F&& func) const -> std::expected<JoinHandle<std::invoke_result_t<std::decay_t<F>&>>, RuntimeError>
+    auto spawn_blocking(F&& func) const -> std::expected<JoinHandle<std::invoke_result_t<std::decay_t<F>&>>, RuntimeError>
     {
-        auto runtime = runtimeOrError();
+        auto runtime = runtime_or_error();
         if (!runtime.has_value()) {
             return std::unexpected(runtime.error());
         }
-        return (*runtime)->spawnBlocking(std::forward<F>(func));
+        return (*runtime)->spawn_blocking(std::forward<F>(func));
     }
 
 private:
-    std::expected<Runtime*, RuntimeError> runtimeOrError() const noexcept  ///< 返回绑定的 Runtime；未绑定时返回 RuntimeError
+    std::expected<Runtime*, RuntimeError> runtime_or_error() const noexcept  ///< 返回绑定的 Runtime；未绑定时返回 RuntimeError
     {
         if (m_runtime == nullptr) {
             return std::unexpected(RuntimeError(RuntimeErrorCode::kInvalidHandle));
@@ -410,7 +410,7 @@ public:
      * @brief 设置 IO scheduler 数量。
      * @note 传 `GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 时由 runtime 按 CPU 数自动推导
      */
-    RuntimeBuilder& ioSchedulerCount(size_t n)
+    RuntimeBuilder& io_scheduler_count(size_t n)
     {
         m_config.io_scheduler_count = n;
         return *this;
@@ -420,7 +420,7 @@ public:
      * @brief 设置 parallel scheduler 数量。
      * @note 传 `GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 时由 runtime 按 CPU 数自动推导
      */
-    RuntimeBuilder& parallelSchedulerCount(size_t n)
+    RuntimeBuilder& parallel_scheduler_count(size_t n)
     {
         m_config.parallel_scheduler_count = n;
         return *this;
@@ -429,7 +429,7 @@ public:
     /**
      * @brief 对前 `ioCount` / `parallelCount` 个 scheduler 依次分配 CPU 亲和性。
      */
-    RuntimeBuilder& sequentialAffinity(size_t ioCount, size_t parallelCount)
+    RuntimeBuilder& sequential_affinity(size_t ioCount, size_t parallelCount)
     {
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Sequential;
         m_config.affinity.seq_io_count = ioCount;
@@ -441,7 +441,7 @@ public:
      * @brief 为每个 scheduler 指定显式 CPU 亲和性列表。
      * @return 列表长度与当前 scheduler 配置完全匹配时返回 `true`
      */
-    bool customAffinity(std::vector<uint32_t> ioCpus, std::vector<uint32_t> parallelCpus)
+    bool custom_affinity(std::vector<uint32_t> ioCpus, std::vector<uint32_t> parallelCpus)
     {
         if (ioCpus.size() != m_config.io_scheduler_count ||
             parallelCpus.size() != m_config.parallel_scheduler_count) {
@@ -456,7 +456,7 @@ public:
     /**
      * @brief 直接覆盖完整 affinity 配置。
      */
-    RuntimeBuilder& applyAffinity(const RuntimeAffinityConfig& affinity)
+    RuntimeBuilder& apply_affinity(const RuntimeAffinityConfig& affinity)
     {
         m_config.affinity = affinity;
         return *this;
@@ -470,7 +470,7 @@ public:
     /**
      * @brief 导出当前 builder 累积的配置快照。
      */
-    RuntimeConfig buildConfig() const { return m_config; }
+    RuntimeConfig build_config() const { return m_config; }
 
 private:
     RuntimeConfig m_config;

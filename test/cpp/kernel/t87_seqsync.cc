@@ -19,7 +19,7 @@ struct StubSequenceOwner final : SequenceAwaitableBase {
                                SequenceOwnerDomain domain = SequenceOwnerDomain::ReadWrite)
         : SequenceAwaitableBase(controller, domain) {}
 
-    void setActive(IOEventType type) {
+    void set_active(IOEventType type) {
         m_active = type;
         m_task.type = type;
         m_task.task = nullptr;
@@ -34,7 +34,7 @@ struct StubSequenceOwner final : SequenceAwaitableBase {
         return m_active == IOEventType::INVALID ? nullptr : &m_task;
     }
 
-    void popFront() override {
+    void pop_front() override {
         m_active = IOEventType::INVALID;
     }
 
@@ -43,19 +43,19 @@ struct StubSequenceOwner final : SequenceAwaitableBase {
     }
 
 #ifdef USE_IOURING
-    SequenceProgress prepareForSubmit() override {
+    SequenceProgress prepare_for_submit() override {
         return SequenceProgress::kNeedWait;
     }
 
-    SequenceProgress onActiveEvent(struct io_uring_cqe*, GHandle) override {
+    SequenceProgress on_active_event(struct io_uring_cqe*, GHandle) override {
         return SequenceProgress::kNeedWait;
     }
 #else
-    SequenceProgress prepareForSubmit(GHandle) override {
+    SequenceProgress prepare_for_submit(GHandle) override {
         return SequenceProgress::kNeedWait;
     }
 
-    SequenceProgress onActiveEvent(GHandle) override {
+    SequenceProgress on_active_event(GHandle) override {
         return SequenceProgress::kNeedWait;
     }
 #endif
@@ -64,30 +64,30 @@ struct StubSequenceOwner final : SequenceAwaitableBase {
     IOTask m_task{};
 };
 
-bool verifySingleOwnerInterestFollowsActiveTask() {
+bool verify_single_owner_interest_follows_active_task() {
     IOController controller(GHandle::invalid());
     StubSequenceOwner owner(&controller, SequenceOwnerDomain::ReadWrite);
     controller.m_sequence_owner[IOController::READ] = &owner;
     controller.m_sequence_owner[IOController::WRITE] = &owner;
 
-    owner.setActive(RECV);
-    const auto read_mask = detail::syncSequenceInterestMask(&controller);
-    if (read_mask != detail::sequenceSlotMask(IOController::READ) ||
+    owner.set_active(RECV);
+    const auto read_mask = detail::sync_sequence_interest_mask(&controller);
+    if (read_mask != detail::sequence_slot_mask(IOController::READ) ||
         controller.m_sequence_interest_mask != read_mask) {
         std::cerr << "[T87] read active task should produce read interest only\n";
         return false;
     }
 
-    owner.setActive(SEND);
-    const auto write_mask = detail::syncSequenceInterestMask(&controller);
-    if (write_mask != detail::sequenceSlotMask(IOController::WRITE) ||
+    owner.set_active(SEND);
+    const auto write_mask = detail::sync_sequence_interest_mask(&controller);
+    if (write_mask != detail::sequence_slot_mask(IOController::WRITE) ||
         controller.m_sequence_interest_mask != write_mask) {
         std::cerr << "[T87] write active task should produce write interest only\n";
         return false;
     }
 
-    owner.setActive(IOEventType::INVALID);
-    const auto empty_mask = detail::syncSequenceInterestMask(&controller);
+    owner.set_active(IOEventType::INVALID);
+    const auto empty_mask = detail::sync_sequence_interest_mask(&controller);
     if (empty_mask != 0 || controller.m_sequence_interest_mask != 0) {
         std::cerr << "[T87] invalid active task should clear controller interest\n";
         return false;
@@ -96,32 +96,32 @@ bool verifySingleOwnerInterestFollowsActiveTask() {
     return true;
 }
 
-bool verifySplitOwnersMergeReadAndWriteInterest() {
+bool verify_split_owners_merge_read_and_write_interest() {
     IOController controller(GHandle::invalid());
     StubSequenceOwner read_owner(&controller, SequenceOwnerDomain::Read);
     StubSequenceOwner write_owner(&controller, SequenceOwnerDomain::Write);
 
-    read_owner.setActive(RECV);
-    write_owner.setActive(WRITEV);
+    read_owner.set_active(RECV);
+    write_owner.set_active(WRITEV);
     controller.m_sequence_owner[IOController::READ] = &read_owner;
     controller.m_sequence_owner[IOController::WRITE] = &write_owner;
 
-    const auto mask = detail::collectSequenceInterestMask(&controller);
+    const auto mask = detail::collect_sequence_interest_mask(&controller);
     const auto expected = static_cast<uint8_t>(
-        detail::sequenceSlotMask(IOController::READ) |
-        detail::sequenceSlotMask(IOController::WRITE));
+        detail::sequence_slot_mask(IOController::READ) |
+        detail::sequence_slot_mask(IOController::WRITE));
     if (mask != expected) {
         std::cerr << "[T87] split owners should merge read and write interest\n";
         return false;
     }
 
-    if (detail::syncSequenceInterestMask(&controller) != expected ||
+    if (detail::sync_sequence_interest_mask(&controller) != expected ||
         controller.m_sequence_interest_mask != expected) {
         std::cerr << "[T87] sync should persist merged split-owner interest\n";
         return false;
     }
 
-    detail::clearSequenceInterestMask(&controller);
+    detail::clear_sequence_interest_mask(&controller);
     if (controller.m_sequence_interest_mask != 0 || controller.m_sequence_armed_mask != 0) {
         std::cerr << "[T87] clear helper should reset cached sequence state\n";
         return false;
@@ -133,11 +133,11 @@ bool verifySplitOwnersMergeReadAndWriteInterest() {
 }  // namespace
 
 int main() {
-    if (!verifySingleOwnerInterestFollowsActiveTask()) {
+    if (!verify_single_owner_interest_follows_active_task()) {
         return 1;
     }
 
-    if (!verifySplitOwnersMergeReadAndWriteInterest()) {
+    if (!verify_split_owners_merge_read_and_write_interest()) {
         return 1;
     }
 

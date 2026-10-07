@@ -19,7 +19,7 @@ using namespace galay::ssl;
 
 namespace {
 
-bool parseSize(const char* text, size_t min_value, size_t* value)
+bool parse_size(const char* text, size_t min_value, size_t* value)
 {
     size_t parsed = 0;
     const char* end = text + std::char_traits<char>::length(text);
@@ -31,7 +31,7 @@ bool parseSize(const char* text, size_t min_value, size_t* value)
     return true;
 }
 
-void printUsage(const char* program)
+void print_usage(const char* program)
 {
     std::cerr << "Usage: " << program << " [iterations>=1]\n";
 }
@@ -40,34 +40,34 @@ void printUsage(const char* program)
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
-        printUsage(argv[0]);
+        print_usage(argv[0]);
         return 0;
     }
 
     size_t iterations = 1000000;
-    if (argc >= 2 && !parseSize(argv[1], 1, &iterations)) {
-        printUsage(argv[0]);
+    if (argc >= 2 && !parse_size(argv[1], 1, &iterations)) {
+        print_usage(argv[0]);
         return 1;
     }
 
     SslContext ctx(SslMethod::TLS_Client);
-    if (!ctx.isValid()) {
+    if (!ctx.is_valid()) {
         std::cerr << "ssl context invalid\n";
         return 1;
     }
 
     SslEngine engine(&ctx);
-    if (!engine.isValid()) {
+    if (!engine.is_valid()) {
         std::cerr << "ssl engine invalid\n";
         return 1;
     }
 
-    const auto init = engine.initMemoryBIO();
+    const auto init = engine.init_memory_bio();
     if (!init) {
         std::cerr << "initMemoryBIO failed: " << init.error().message() << "\n";
         return 1;
@@ -80,14 +80,14 @@ int main(int argc, char* argv[])
 
     const auto start = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
-        const auto fed = engine.feedEncryptedInput(payload.data(), payload.size());
+        const auto fed = engine.feed_encrypted_input(payload.data(), payload.size());
         if (!fed) {
             ++failures;
             continue;
         }
         bytes_moved += *fed;
 
-        const auto oversized = engine.feedEncryptedInput(
+        const auto oversized = engine.feed_encrypted_input(
             payload.data(),
             static_cast<size_t>(std::numeric_limits<int>::max()) + 1U);
         if (oversized || oversized.error().code() != SslErrorCode::kBufferTooLarge) {

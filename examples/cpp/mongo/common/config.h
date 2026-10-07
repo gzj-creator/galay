@@ -11,13 +11,13 @@
 namespace mongo_example
 {
 
-inline std::string envOrDefault(const char* key, std::string fallback)
+inline std::string env_or_default(const char* key, std::string fallback)
 {
     const char* value = std::getenv(key);
     return value != nullptr ? std::string(value) : std::move(fallback);
 }
 
-inline uint16_t envPortOrDefault(const char* key, uint16_t fallback)
+inline uint16_t env_port_or_default(const char* key, uint16_t fallback)
 {
     const char* value = std::getenv(key);
     if (value == nullptr) {
@@ -35,17 +35,17 @@ inline uint16_t envPortOrDefault(const char* key, uint16_t fallback)
     }
 }
 
-inline galay::mongo::MongoConfig loadMongoConfigFromEnv()
+inline galay::mongo::MongoConfig load_mongo_config_from_env()
 {
     galay::mongo::MongoConfig cfg;
-    cfg.host = envOrDefault("GALAY_MONGO_HOST", cfg.host);
-    cfg.port = envPortOrDefault("GALAY_MONGO_PORT", cfg.port);
-    cfg.database = envOrDefault("GALAY_MONGO_DB", cfg.database);
-    cfg.username = envOrDefault("GALAY_MONGO_USER", "");
-    cfg.password = envOrDefault("GALAY_MONGO_PASSWORD", "");
-    cfg.auth_database = envOrDefault("GALAY_MONGO_AUTH_DB", cfg.auth_database);
-    cfg.hello_database = envOrDefault("GALAY_MONGO_HELLO_DB", cfg.hello_database);
-    cfg.tcp_nodelay = envOrDefault("GALAY_MONGO_TCP_NODELAY", "1") != "0";
+    cfg.host = env_or_default("GALAY_MONGO_HOST", cfg.host);
+    cfg.port = env_port_or_default("GALAY_MONGO_PORT", cfg.port);
+    cfg.database = env_or_default("GALAY_MONGO_DB", cfg.database);
+    cfg.username = env_or_default("GALAY_MONGO_USER", "");
+    cfg.password = env_or_default("GALAY_MONGO_PASSWORD", "");
+    cfg.auth_database = env_or_default("GALAY_MONGO_AUTH_DB", cfg.auth_database);
+    cfg.hello_database = env_or_default("GALAY_MONGO_HELLO_DB", cfg.hello_database);
+    cfg.tcp_nodelay = env_or_default("GALAY_MONGO_TCP_NODELAY", "1") != "0";
 
     const char* recv_buffer_env = std::getenv("GALAY_MONGO_RECV_BUFFER_SIZE");
     if (recv_buffer_env != nullptr) {
@@ -62,9 +62,9 @@ inline galay::mongo::MongoConfig loadMongoConfigFromEnv()
     return cfg;
 }
 
-inline galay::mongo::AsyncMongoConfig loadAsyncMongoConfigFromEnv()
+inline galay::mongo::AsyncMongoConfig load_async_mongo_config_from_env()
 {
-    galay::mongo::AsyncMongoConfig cfg = galay::mongo::AsyncMongoConfig::noTimeout();
+    galay::mongo::AsyncMongoConfig cfg = galay::mongo::AsyncMongoConfig::no_timeout();
 
     const char* send_timeout_env = std::getenv("GALAY_MONGO_ASYNC_SEND_TIMEOUT_MS");
     if (send_timeout_env != nullptr) {

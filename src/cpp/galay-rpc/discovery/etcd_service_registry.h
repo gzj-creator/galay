@@ -54,7 +54,7 @@ public:
     {
     }
 
-    std::expected<void, RpcError> registerEndpoint(const RpcEndpointInfo& endpoint) {
+    std::expected<void, RpcError> register_endpoint(const RpcEndpointInfo& endpoint) {
         auto& endpoints = m_services[endpoint.service];
         auto it = std::find_if(endpoints.begin(), endpoints.end(), [&](const RpcEndpointInfo& item) {
             return item.instance_id == endpoint.instance_id;
@@ -68,7 +68,7 @@ public:
         return {};
     }
 
-    std::expected<void, RpcError> deregisterEndpoint(const std::string& service,
+    std::expected<void, RpcError> deregister_endpoint(const std::string& service,
                                                      const std::string& instance_id) {
         auto& endpoints = m_services[service];
         std::erase_if(endpoints, [&](const RpcEndpointInfo& item) {
@@ -127,16 +127,16 @@ public:
     {
     }
 
-    std::expected<void, RpcError> integrationAvailable() const {
+    std::expected<void, RpcError> integration_available() const {
         if (m_config.endpoint.empty()) {
             return std::unexpected(RpcError(RpcErrorCode::UNAVAILABLE,
                                             "GALAY_ETCD_ENDPOINT is empty"));
         }
 #ifdef GALAY_RPC_HAS_ETCD
-        auto client = makeClient();
+        auto client = make_client();
         auto connected = client.connect();
         if (!connected.has_value()) {
-            return std::unexpected(fromEtcdError("etcd connect", connected.error()));
+            return std::unexpected(from_etcd_error("etcd connect", connected.error()));
         }
         if (!connected.value()) {
             return std::unexpected(RpcError(RpcErrorCode::UNAVAILABLE,
@@ -144,7 +144,7 @@ public:
         }
         return {};
 #else
-        return std::unexpected(noEtcdSupport());
+        return std::unexpected(no_etcd_support());
 #endif
     }
 
@@ -152,29 +152,29 @@ public:
      * @brief 注册或更新一个 endpoint 到 etcd。
      * @return 成功或 etcd/RPC 参数错误。
      */
-    std::expected<void, RpcError> registerEndpoint(const RpcEndpointInfo& endpoint) {
-        auto validated = validateEndpoint(endpoint);
+    std::expected<void, RpcError> register_endpoint(const RpcEndpointInfo& endpoint) {
+        auto validated = validate_endpoint(endpoint);
         if (!validated.has_value()) {
             return std::unexpected(validated.error());
         }
-        auto key = keyFor(endpoint.service, endpoint.instance_id);
+        auto key = key_for(endpoint.service, endpoint.instance_id);
         if (!key.has_value()) {
             return std::unexpected(key.error());
         }
 #ifdef GALAY_RPC_HAS_ETCD
-        auto client = makeClient();
+        auto client = make_client();
         auto connected = client.connect();
         if (!connected.has_value()) {
-            return std::unexpected(fromEtcdError("etcd connect", connected.error()));
+            return std::unexpected(from_etcd_error("etcd connect", connected.error()));
         }
-        auto stored = client.put(*key, encodeEndpoint(endpoint));
+        auto stored = client.put(*key, encode_endpoint(endpoint));
         if (!stored.has_value()) {
-            return std::unexpected(fromEtcdError("etcd put", stored.error()));
+            return std::unexpected(from_etcd_error("etcd put", stored.error()));
         }
         notify(endpoint.service, RpcEndpointEvent::update(endpoint));
         return {};
 #else
-        return std::unexpected(noEtcdSupport());
+        return std::unexpected(no_etcd_support());
 #endif
     }
 
@@ -182,26 +182,26 @@ public:
      * @brief 从 etcd 删除一个 endpoint。
      * @return 删除请求成功或 etcd/RPC 参数错误；不存在的 key 视为成功。
      */
-    std::expected<void, RpcError> deregisterEndpoint(const std::string& service,
+    std::expected<void, RpcError> deregister_endpoint(const std::string& service,
                                                      const std::string& instance_id) {
-        auto key = keyFor(service, instance_id);
+        auto key = key_for(service, instance_id);
         if (!key.has_value()) {
             return std::unexpected(key.error());
         }
 #ifdef GALAY_RPC_HAS_ETCD
-        auto client = makeClient();
+        auto client = make_client();
         auto connected = client.connect();
         if (!connected.has_value()) {
-            return std::unexpected(fromEtcdError("etcd connect", connected.error()));
+            return std::unexpected(from_etcd_error("etcd connect", connected.error()));
         }
         auto deleted = client.del(*key);
         if (!deleted.has_value()) {
-            return std::unexpected(fromEtcdError("etcd delete", deleted.error()));
+            return std::unexpected(from_etcd_error("etcd delete", deleted.error()));
         }
         notify(service, RpcEndpointEvent::remove(service, instance_id));
         return {};
 #else
-        return std::unexpected(noEtcdSupport());
+        return std::unexpected(no_etcd_support());
 #endif
     }
 
@@ -210,23 +210,23 @@ public:
      * @return 可解析的 endpoint 列表。单个脏值会被跳过，避免影响同服务健康实例。
      */
     std::expected<std::vector<RpcEndpointInfo>, RpcError> discover(const std::string& service) const {
-        auto prefix = servicePrefix(service);
+        auto prefix = service_prefix(service);
         if (!prefix.has_value()) {
             return std::unexpected(prefix.error());
         }
 #ifdef GALAY_RPC_HAS_ETCD
-        auto client = makeClient();
+        auto client = make_client();
         auto connected = client.connect();
         if (!connected.has_value()) {
-            return std::unexpected(fromEtcdError("etcd connect", connected.error()));
+            return std::unexpected(from_etcd_error("etcd connect", connected.error()));
         }
         auto values = client.get(*prefix, true);
         if (!values.has_value()) {
-            return std::unexpected(fromEtcdError("etcd get", values.error()));
+            return std::unexpected(from_etcd_error("etcd get", values.error()));
         }
         std::vector<RpcEndpointInfo> endpoints;
         for (const auto& item : *values) {
-            auto parsed = decodeEndpoint(item.value);
+            auto parsed = decode_endpoint(item.value);
             if (!parsed.has_value() || parsed->service != service) {
                 continue;
             }
@@ -234,7 +234,7 @@ public:
         }
         return endpoints;
 #else
-        return std::unexpected(noEtcdSupport());
+        return std::unexpected(no_etcd_support());
 #endif
     }
 
@@ -256,7 +256,7 @@ private:
         std::function<void()> callback;
     };
 
-    static std::expected<void, RpcError> validateEndpoint(const RpcEndpointInfo& endpoint) {
+    static std::expected<void, RpcError> validate_endpoint(const RpcEndpointInfo& endpoint) {
         if (endpoint.host.empty() || endpoint.port == 0 || endpoint.service.empty() ||
             endpoint.instance_id.empty()) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
@@ -265,30 +265,30 @@ private:
         return {};
     }
 
-    static bool isHex(char ch) {
+    static bool is_hex(char ch) {
         return std::isdigit(static_cast<unsigned char>(ch)) ||
                (ch >= 'a' && ch <= 'f') ||
                (ch >= 'A' && ch <= 'F');
     }
 
-    static int hexValue(char ch) {
+    static int hex_value(char ch) {
         if (ch >= '0' && ch <= '9') return ch - '0';
         if (ch >= 'a' && ch <= 'f') return 10 + ch - 'a';
         return 10 + ch - 'A';
     }
 
-    static char hexDigit(unsigned value) {
+    static char hex_digit(unsigned value) {
         return static_cast<char>(value < 10 ? '0' + value : 'A' + (value - 10));
     }
 
-    static std::string escapeValue(std::string_view value) {
+    static std::string escape_value(std::string_view value) {
         std::string escaped;
         escaped.reserve(value.size());
         for (unsigned char ch : value) {
             if (ch == '%' || ch == '\n' || ch == '\r' || ch == '=') {
                 escaped.push_back('%');
-                escaped.push_back(hexDigit((ch >> 4U) & 0xFU));
-                escaped.push_back(hexDigit(ch & 0xFU));
+                escaped.push_back(hex_digit((ch >> 4U) & 0xFU));
+                escaped.push_back(hex_digit(ch & 0xFU));
             } else {
                 escaped.push_back(static_cast<char>(ch));
             }
@@ -296,7 +296,7 @@ private:
         return escaped;
     }
 
-    static std::expected<std::string, RpcError> unescapeValue(std::string_view value) {
+    static std::expected<std::string, RpcError> unescape_value(std::string_view value) {
         std::string unescaped;
         unescaped.reserve(value.size());
         for (size_t i = 0; i < value.size(); ++i) {
@@ -304,26 +304,26 @@ private:
                 unescaped.push_back(value[i]);
                 continue;
             }
-            if (i + 2 >= value.size() || !isHex(value[i + 1]) || !isHex(value[i + 2])) {
+            if (i + 2 >= value.size() || !is_hex(value[i + 1]) || !is_hex(value[i + 2])) {
                 return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                                 "invalid escaped endpoint value"));
             }
-            const auto decoded = static_cast<char>((hexValue(value[i + 1]) << 4) |
-                                                   hexValue(value[i + 2]));
+            const auto decoded = static_cast<char>((hex_value(value[i + 1]) << 4) |
+                                                   hex_value(value[i + 2]));
             unescaped.push_back(decoded);
             i += 2;
         }
         return unescaped;
     }
 
-    static std::string escapeKeyComponent(std::string_view value) {
+    static std::string escape_key_component(std::string_view value) {
         std::string escaped;
         escaped.reserve(value.size());
         for (unsigned char ch : value) {
             if (ch == '/' || ch == '%' || std::iscntrl(ch)) {
                 escaped.push_back('%');
-                escaped.push_back(hexDigit((ch >> 4U) & 0xFU));
-                escaped.push_back(hexDigit(ch & 0xFU));
+                escaped.push_back(hex_digit((ch >> 4U) & 0xFU));
+                escaped.push_back(hex_digit(ch & 0xFU));
             } else {
                 escaped.push_back(static_cast<char>(ch));
             }
@@ -331,7 +331,7 @@ private:
         return escaped;
     }
 
-    static std::string statusName(RpcEndpointStatus status) {
+    static std::string status_name(RpcEndpointStatus status) {
         switch (status) {
             case RpcEndpointStatus::Serving:
                 return "Serving";
@@ -343,7 +343,7 @@ private:
         return "Unavailable";
     }
 
-    static std::expected<RpcEndpointStatus, RpcError> parseStatus(std::string_view value) {
+    static std::expected<RpcEndpointStatus, RpcError> parse_status(std::string_view value) {
         if (value == "Serving") return RpcEndpointStatus::Serving;
         if (value == "Draining") return RpcEndpointStatus::Draining;
         if (value == "Unavailable") return RpcEndpointStatus::Unavailable;
@@ -351,30 +351,30 @@ private:
                                         "invalid endpoint status"));
     }
 
-    static bool parseUnsigned(std::string_view value, uint64_t& out) {
+    static bool parse_unsigned(std::string_view value, uint64_t& out) {
         const char* begin = value.data();
         const char* end = begin + value.size();
         auto [ptr, ec] = std::from_chars(begin, end, out);
         return ec == std::errc() && ptr == end;
     }
 
-    static std::string encodeEndpoint(const RpcEndpointInfo& endpoint) {
+    static std::string encode_endpoint(const RpcEndpointInfo& endpoint) {
         std::string value;
-        value += "host=" + escapeValue(endpoint.host) + "\n";
+        value += "host=" + escape_value(endpoint.host) + "\n";
         value += "port=" + std::to_string(endpoint.port) + "\n";
-        value += "service=" + escapeValue(endpoint.service) + "\n";
-        value += "instance_id=" + escapeValue(endpoint.instance_id) + "\n";
+        value += "service=" + escape_value(endpoint.service) + "\n";
+        value += "instance_id=" + escape_value(endpoint.instance_id) + "\n";
         value += "weight=" + std::to_string(endpoint.weight) + "\n";
-        value += "status=" + statusName(endpoint.status) + "\n";
-        value += "version=" + escapeValue(endpoint.version) + "\n";
-        value += "zone=" + escapeValue(endpoint.zone) + "\n";
+        value += "status=" + status_name(endpoint.status) + "\n";
+        value += "version=" + escape_value(endpoint.version) + "\n";
+        value += "zone=" + escape_value(endpoint.zone) + "\n";
         for (const auto& [key, item] : endpoint.metadata) {
-            value += "metadata." + escapeValue(key) + "=" + escapeValue(item) + "\n";
+            value += "metadata." + escape_value(key) + "=" + escape_value(item) + "\n";
         }
         return value;
     }
 
-    static std::expected<RpcEndpointInfo, RpcError> decodeEndpoint(std::string_view value) {
+    static std::expected<RpcEndpointInfo, RpcError> decode_endpoint(std::string_view value) {
         RpcEndpointInfo endpoint;
         size_t cursor = 0;
         while (cursor <= value.size()) {
@@ -393,7 +393,7 @@ private:
                                                     "malformed endpoint value"));
                 }
                 const auto key = line.substr(0, equals);
-                auto decoded = unescapeValue(line.substr(equals + 1));
+                auto decoded = unescape_value(line.substr(equals + 1));
                 if (!decoded.has_value()) {
                     return std::unexpected(decoded.error());
                 }
@@ -401,7 +401,7 @@ private:
                     endpoint.host = std::move(*decoded);
                 } else if (key == "port") {
                     uint64_t parsed = 0;
-                    if (!parseUnsigned(*decoded, parsed) || parsed > 65535) {
+                    if (!parse_unsigned(*decoded, parsed) || parsed > 65535) {
                         return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                                         "invalid endpoint port"));
                     }
@@ -412,14 +412,14 @@ private:
                     endpoint.instance_id = std::move(*decoded);
                 } else if (key == "weight") {
                     uint64_t parsed = 0;
-                    if (!parseUnsigned(*decoded, parsed) ||
+                    if (!parse_unsigned(*decoded, parsed) ||
                         parsed > static_cast<uint64_t>(std::numeric_limits<uint32_t>::max())) {
                         return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                                         "invalid endpoint weight"));
                     }
                     endpoint.weight = static_cast<uint32_t>(parsed);
                 } else if (key == "status") {
-                    auto status = parseStatus(*decoded);
+                    auto status = parse_status(*decoded);
                     if (!status.has_value()) {
                         return std::unexpected(status.error());
                     }
@@ -429,7 +429,7 @@ private:
                 } else if (key == "zone") {
                     endpoint.zone = std::move(*decoded);
                 } else if (key.starts_with("metadata.")) {
-                    auto metadata_key = unescapeValue(key.substr(std::string_view("metadata.").size()));
+                    auto metadata_key = unescape_value(key.substr(std::string_view("metadata.").size()));
                     if (!metadata_key.has_value()) {
                         return std::unexpected(metadata_key.error());
                     }
@@ -441,14 +441,14 @@ private:
             }
             cursor = line_end + 1;
         }
-        auto validated = validateEndpoint(endpoint);
+        auto validated = validate_endpoint(endpoint);
         if (!validated.has_value()) {
             return std::unexpected(validated.error());
         }
         return endpoint;
     }
 
-    static void replaceAll(std::string& value, std::string_view from, std::string_view to) {
+    static void replace_all(std::string& value, std::string_view from, std::string_view to) {
         size_t pos = 0;
         while ((pos = value.find(from, pos)) != std::string::npos) {
             value.replace(pos, from.size(), to);
@@ -456,7 +456,7 @@ private:
         }
     }
 
-    static std::string normalizeKey(std::string key) {
+    static std::string normalize_key(std::string key) {
         std::string normalized;
         normalized.reserve(key.size() + 1);
         bool last_slash = false;
@@ -477,7 +477,7 @@ private:
         return normalized;
     }
 
-    static std::expected<void, RpcError> validateKeyTemplate(std::string_view key_template) {
+    static std::expected<void, RpcError> validate_key_template(std::string_view key_template) {
         if (key_template.find("{prefix}") == std::string_view::npos ||
             key_template.find("{service}") == std::string_view::npos ||
             key_template.find("{instance}") == std::string_view::npos) {
@@ -487,33 +487,33 @@ private:
         return {};
     }
 
-    std::expected<std::string, RpcError> keyFor(const std::string& service,
+    std::expected<std::string, RpcError> key_for(const std::string& service,
                                                 const std::string& instance_id) const {
-        auto valid = validateKeyTemplate(m_config.key_template);
+        auto valid = validate_key_template(m_config.key_template);
         if (!valid.has_value()) {
             return std::unexpected(valid.error());
         }
         std::string key = m_config.key_template;
-        replaceAll(key, "{prefix}", m_config.prefix);
-        replaceAll(key, "{service}", escapeKeyComponent(service));
-        replaceAll(key, "{instance}", escapeKeyComponent(instance_id));
-        return normalizeKey(std::move(key));
+        replace_all(key, "{prefix}", m_config.prefix);
+        replace_all(key, "{service}", escape_key_component(service));
+        replace_all(key, "{instance}", escape_key_component(instance_id));
+        return normalize_key(std::move(key));
     }
 
-    std::expected<std::string, RpcError> servicePrefix(const std::string& service) const {
-        auto valid = validateKeyTemplate(m_config.key_template);
+    std::expected<std::string, RpcError> service_prefix(const std::string& service) const {
+        auto valid = validate_key_template(m_config.key_template);
         if (!valid.has_value()) {
             return std::unexpected(valid.error());
         }
         const size_t instance_pos = m_config.key_template.find("{instance}");
         std::string prefix_template = m_config.key_template.substr(0, instance_pos);
-        replaceAll(prefix_template, "{prefix}", m_config.prefix);
-        replaceAll(prefix_template, "{service}", escapeKeyComponent(service));
-        return normalizeKey(std::move(prefix_template));
+        replace_all(prefix_template, "{prefix}", m_config.prefix);
+        replace_all(prefix_template, "{service}", escape_key_component(service));
+        return normalize_key(std::move(prefix_template));
     }
 
 #ifdef GALAY_RPC_HAS_ETCD
-    galay::etcd::EtcdClient makeClient() const {
+    galay::etcd::EtcdClient make_client() const {
         galay::etcd::EtcdConfig config;
         config.endpoint = m_config.endpoint;
         config.api_prefix = m_config.api_prefix;
@@ -521,13 +521,13 @@ private:
         return galay::etcd::EtcdClientBuilder().config(std::move(config)).build();
     }
 
-    static RpcError fromEtcdError(const char* operation, const galay::etcd::EtcdError& error) {
+    static RpcError from_etcd_error(const char* operation, const galay::etcd::EtcdError& error) {
         return RpcError(RpcErrorCode::UNAVAILABLE,
                         std::string(operation) + " failed: " + error.message());
     }
 #endif
 
-    static RpcError noEtcdSupport() {
+    static RpcError no_etcd_support() {
         return RpcError(RpcErrorCode::UNAVAILABLE,
                         "galay-rpc was built without galay-etcd support");
     }

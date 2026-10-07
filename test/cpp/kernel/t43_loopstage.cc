@@ -14,7 +14,7 @@ using namespace galay::kernel;
 
 namespace {
 
-const char* stageName(SchedulerCoreStage stage) {
+const char* stage_name(SchedulerCoreStage stage) {
     switch (stage) {
     case SchedulerCoreStage::CollectRemote:
         return "CollectRemote";
@@ -39,7 +39,7 @@ int main() {
     bool polled = false;
     bool completions_collected = false;
 
-    core.runLoopIteration(
+    core.run_loop_iteration(
         [&]() { completions_collected = true; },
         [&]() {
             polled = true;
@@ -57,7 +57,7 @@ int main() {
     if (stages != expected) {
         std::cerr << "[T43] unexpected stage order:";
         for (SchedulerCoreStage stage : stages) {
-            std::cerr << ' ' << stageName(stage);
+            std::cerr << ' ' << stage_name(stage);
         }
         std::cerr << "\n";
         return 1;

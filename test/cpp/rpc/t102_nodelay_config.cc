@@ -124,7 +124,7 @@ public:
 
     ~AcceptedTcpPair()
     {
-        closeClient();
+        close_client();
         if (m_server_fd >= 0 && ::close(m_server_fd) != 0) {
             std::cerr << "[T102] close server fd failed: " << std::strerror(errno) << "\n";
         }
@@ -133,17 +133,17 @@ public:
     AcceptedTcpPair(const AcceptedTcpPair&) = delete;
     AcceptedTcpPair& operator=(const AcceptedTcpPair&) = delete;
 
-    int clientFd() const { return m_client_fd; }
-    int serverFd() const { return m_server_fd; }
+    int client_fd() const { return m_client_fd; }
+    int server_fd() const { return m_server_fd; }
 
-    int releaseServerFd()
+    int release_server_fd()
     {
         int fd = m_server_fd;
         m_server_fd = -1;
         return fd;
     }
 
-    void closeClient()
+    void close_client()
     {
         if (m_client_fd >= 0) {
             if (::close(m_client_fd) != 0) {
@@ -158,7 +158,7 @@ private:
     int m_server_fd = -1;
 };
 
-int readTcpNoDelay(int fd)
+int read_tcp_no_delay(int fd)
 {
     int value = 0;
     socklen_t value_len = sizeof(value);
@@ -169,7 +169,7 @@ int readTcpNoDelay(int fd)
     return value;
 }
 
-void waitForNonBlock(int fd, const char* message)
+void wait_for_non_block(int fd, const char* message)
 {
     for (int i = 0; i < 100; ++i) {
         const int flags = ::fcntl(fd, F_GETFL, 0);
@@ -181,72 +181,72 @@ void waitForNonBlock(int fd, const char* message)
     fail(message);
 }
 
-int observeRpcClientTcpNoDelay(bool tcp_no_delay)
+int observe_rpc_client_tcp_no_delay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     LoopbackListener listener;
-    RpcClientConfig config = RpcClientBuilder().tcpNoDelay(tcp_no_delay).buildConfig();
+    RpcClientConfig config = RpcClientBuilder().tcp_no_delay(tcp_no_delay).build_config();
     RpcClient client(config);
 
-    auto connect_result = runtime.blockOnIO(client.connect("127.0.0.1", listener.port()));
+    auto connect_result = runtime.block_on_io(client.connect("127.0.0.1", listener.port()));
     require(connect_result.has_value(), "runtime should run RpcClient connect task");
     require(connect_result.value().has_value(), "RpcClient connect should succeed against loopback listener");
-    const int observed = readTcpNoDelay(client.socket().handle().fd);
+    const int observed = read_tcp_no_delay(client.socket().handle().fd);
 
-    auto close_result = runtime.blockOnIO(client.close());
+    auto close_result = runtime.block_on_io(client.close());
     require(close_result.has_value(), "runtime should run RpcClient close task");
     require(close_result.value().has_value(), "RpcClient close should succeed");
     runtime.stop();
     return observed;
 }
 
-int observeRpcServerAcceptedTcpNoDelay(bool tcp_no_delay)
+int observe_rpc_server_accepted_tcp_no_delay(bool tcp_no_delay)
 {
-    RpcServerConfig config = RpcServerBuilder().tcpNoDelay(tcp_no_delay).buildConfig();
+    RpcServerConfig config = RpcServerBuilder().tcp_no_delay(tcp_no_delay).build_config();
     RpcServer server(config);
     server.m_running.store(true, std::memory_order_release);
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto start_result = runtime.start();
     require(start_result.has_value(), "runtime should start for RpcServer handleConnection probe");
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     require(scheduler != nullptr, "runtime should provide an IO scheduler");
 
     AcceptedTcpPair pair;
-    const int server_fd = pair.releaseServerFd();
-    require(scheduleTask(scheduler, server.handleConnection(GHandle{server_fd})),
+    const int server_fd = pair.release_server_fd();
+    require(schedule_task(scheduler, server.handle_connection(GHandle{server_fd})),
             "RpcServer handleConnection probe should schedule");
 
-    waitForNonBlock(server_fd, "RpcServer handleConnection did not configure accepted socket");
-    const int observed = readTcpNoDelay(server_fd);
+    wait_for_non_block(server_fd, "RpcServer handleConnection did not configure accepted socket");
+    const int observed = read_tcp_no_delay(server_fd);
 
-    pair.closeClient();
+    pair.close_client();
     server.m_running.store(false, std::memory_order_release);
     runtime.stop();
     return observed;
 }
 
-int observeRpcStreamServerAcceptedTcpNoDelay(bool tcp_no_delay)
+int observe_rpc_stream_server_accepted_tcp_no_delay(bool tcp_no_delay)
 {
-    RpcStreamServerConfig config = RpcStreamServerBuilder().tcpNoDelay(tcp_no_delay).buildConfig();
+    RpcStreamServerConfig config = RpcStreamServerBuilder().tcp_no_delay(tcp_no_delay).build_config();
     RpcStreamServer server(config);
     server.m_running.store(true, std::memory_order_release);
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto start_result = runtime.start();
     require(start_result.has_value(), "runtime should start for RpcStreamServer handleConnection probe");
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     require(scheduler != nullptr, "runtime should provide an IO scheduler");
 
     AcceptedTcpPair pair;
-    const int server_fd = pair.releaseServerFd();
-    require(scheduleTask(scheduler, server.handleConnection(GHandle{server_fd})),
+    const int server_fd = pair.release_server_fd();
+    require(schedule_task(scheduler, server.handle_connection(GHandle{server_fd})),
             "RpcStreamServer handleConnection probe should schedule");
 
-    waitForNonBlock(server_fd, "RpcStreamServer handleConnection did not configure accepted socket");
-    const int observed = readTcpNoDelay(server_fd);
+    wait_for_non_block(server_fd, "RpcStreamServer handleConnection did not configure accepted socket");
+    const int observed = read_tcp_no_delay(server_fd);
 
-    pair.closeClient();
+    pair.close_client();
     server.m_running.store(false, std::memory_order_release);
     runtime.stop();
     return observed;
@@ -254,50 +254,50 @@ int observeRpcStreamServerAcceptedTcpNoDelay(bool tcp_no_delay)
 
 void test_builder_config_surface()
 {
-    auto default_server = RpcServerBuilder().buildConfig();
+    auto default_server = RpcServerBuilder().build_config();
     require(default_server.tcp_no_delay, "RpcServerConfig should enable TCP_NODELAY by default");
 
-    auto disabled_server = RpcServerBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_server = RpcServerBuilder().tcp_no_delay(false).build_config();
     require(!disabled_server.tcp_no_delay, "RpcServerBuilder should support disabling TCP_NODELAY");
 
-    auto default_stream_server = RpcStreamServerBuilder().buildConfig();
+    auto default_stream_server = RpcStreamServerBuilder().build_config();
     require(default_stream_server.tcp_no_delay, "RpcStreamServerConfig should enable TCP_NODELAY by default");
 
-    auto disabled_stream_server = RpcStreamServerBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_stream_server = RpcStreamServerBuilder().tcp_no_delay(false).build_config();
     require(!disabled_stream_server.tcp_no_delay,
             "RpcStreamServerBuilder should support disabling TCP_NODELAY");
 
-    auto default_client = RpcClientBuilder().buildConfig();
+    auto default_client = RpcClientBuilder().build_config();
     require(default_client.tcp_no_delay, "RpcClientConfig should enable TCP_NODELAY by default");
 
-    auto disabled_client = RpcClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_client = RpcClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_client.tcp_no_delay, "RpcClientBuilder should support disabling TCP_NODELAY");
 }
 
 void test_client_applies_config_to_connected_socket()
 {
-    const int default_nodelay = observeRpcClientTcpNoDelay(true);
+    const int default_nodelay = observe_rpc_client_tcp_no_delay(true);
     require(default_nodelay != 0, "default RpcClient socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeRpcClientTcpNoDelay(false);
+    const int disabled_nodelay = observe_rpc_client_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled RpcClient socket should leave TCP_NODELAY off");
 }
 
 void test_unary_server_applies_config_to_accepted_socket()
 {
-    const int default_nodelay = observeRpcServerAcceptedTcpNoDelay(true);
+    const int default_nodelay = observe_rpc_server_accepted_tcp_no_delay(true);
     require(default_nodelay != 0, "default RpcServer accepted socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeRpcServerAcceptedTcpNoDelay(false);
+    const int disabled_nodelay = observe_rpc_server_accepted_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled RpcServer accepted socket should leave TCP_NODELAY off");
 }
 
 void test_stream_server_applies_config_to_accepted_socket()
 {
-    const int default_nodelay = observeRpcStreamServerAcceptedTcpNoDelay(true);
+    const int default_nodelay = observe_rpc_stream_server_accepted_tcp_no_delay(true);
     require(default_nodelay != 0, "default RpcStreamServer accepted socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeRpcStreamServerAcceptedTcpNoDelay(false);
+    const int disabled_nodelay = observe_rpc_stream_server_accepted_tcp_no_delay(false);
     require(disabled_nodelay == 0,
             "disabled RpcStreamServer accepted socket should leave TCP_NODELAY off");
 }

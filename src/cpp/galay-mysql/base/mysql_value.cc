@@ -60,13 +60,13 @@ const std::optional<std::string>& MysqlRow::at(size_t index) const
     return m_values[index];
 }
 
-bool MysqlRow::isNull(size_t index) const
+bool MysqlRow::is_null(size_t index) const
 {
     if (index >= m_values.size()) return true;
     return !m_values[index].has_value();
 }
 
-std::string MysqlRow::getString(size_t index, const std::string& default_val) const
+std::string MysqlRow::get_string(size_t index, const std::string& default_val) const
 {
     if (index >= m_values.size() || !m_values[index].has_value()) {
         return default_val;
@@ -74,7 +74,7 @@ std::string MysqlRow::getString(size_t index, const std::string& default_val) co
     return m_values[index].value();
 }
 
-int64_t MysqlRow::getInt64(size_t index, int64_t default_val) const
+int64_t MysqlRow::get_int64(size_t index, int64_t default_val) const
 {
     if (index >= m_values.size() || !m_values[index].has_value()) {
         return default_val;
@@ -86,7 +86,7 @@ int64_t MysqlRow::getInt64(size_t index, int64_t default_val) const
     }
 }
 
-uint64_t MysqlRow::getUint64(size_t index, uint64_t default_val) const
+uint64_t MysqlRow::get_uint64(size_t index, uint64_t default_val) const
 {
     if (index >= m_values.size() || !m_values[index].has_value()) {
         return default_val;
@@ -98,7 +98,7 @@ uint64_t MysqlRow::getUint64(size_t index, uint64_t default_val) const
     }
 }
 
-double MysqlRow::getDouble(size_t index, double default_val) const
+double MysqlRow::get_double(size_t index, double default_val) const
 {
     if (index >= m_values.size() || !m_values[index].has_value()) {
         return default_val;
@@ -131,7 +131,7 @@ MysqlResultSet MysqlResultSet::clone() const
     return copy;
 }
 
-void MysqlResultSet::addField(MysqlField field)
+void MysqlResultSet::add_field(MysqlField field)
 {
     m_fields.push_back(std::move(field));
 }
@@ -141,7 +141,7 @@ const MysqlField& MysqlResultSet::field(size_t index) const
     return m_fields.at(index);
 }
 
-void MysqlResultSet::addRow(MysqlRow row)
+void MysqlResultSet::add_row(MysqlRow row)
 {
     m_rows.push_back(std::move(row));
 }
@@ -151,7 +151,7 @@ const MysqlRow& MysqlResultSet::row(size_t index) const
     return m_rows.at(index);
 }
 
-int MysqlResultSet::findField(const std::string& name) const
+int MysqlResultSet::find_field(const std::string& name) const
 {
     for (size_t i = 0; i < m_fields.size(); ++i) {
         if (m_fields[i].name() == name) {

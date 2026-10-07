@@ -2,7 +2,7 @@
  * @file t90_awready.cc
  * @brief 用途：验证 `AwaitableBuilder::ready(...)` 可立即返回。
  * 关键覆盖点：ready awaitable 的直接返回与 `.timeout(...)` 包装行为。
- * 通过条件：`Runtime::blockOnIO(...)` 返回预期值且测试返回 0。
+ * 通过条件：`Runtime::block_on_io(...)` 返回预期值且测试返回 0。
  */
 
 #include <galay/cpp/galay-kernel/core/awaitable.h>
@@ -18,13 +18,13 @@ using namespace std::chrono_literals;
 
 using ReadyResult = std::expected<int, IOError>;
 
-Task<ReadyResult> readyTask()
+Task<ReadyResult> ready_task()
 {
     auto result = co_await AwaitableBuilder<ReadyResult>::ready(ReadyResult{42});
     co_return result;
 }
 
-Task<ReadyResult> readyTimeoutTask()
+Task<ReadyResult> ready_timeout_task()
 {
     auto result = co_await AwaitableBuilder<ReadyResult>::ready(ReadyResult{77}).timeout(5ms);
     co_return result;
@@ -33,17 +33,17 @@ Task<ReadyResult> readyTimeoutTask()
 int main()
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
 
-    const auto direct = runtime.blockOnIO(readyTask());
+    const auto direct = runtime.block_on_io(ready_task());
     if (!direct || !direct->has_value() || **direct != 42) {
         std::cerr << "direct ready awaitable returned unexpected result\n";
         return 1;
     }
 
-    const auto timed = runtime.blockOnIO(readyTimeoutTask());
+    const auto timed = runtime.block_on_io(ready_timeout_task());
     if (!timed || !timed->has_value() || **timed != 77) {
         std::cerr << "timed ready awaitable returned unexpected result\n";
         return 1;

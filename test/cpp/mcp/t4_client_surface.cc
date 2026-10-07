@@ -19,20 +19,20 @@ using galay::mcp::Tool;
 
 static_assert(requires(McpClient& client) {
     { client.mode() } -> std::same_as<galay::mcp::McpClientMode>;
-    { client.isConnected() } -> std::same_as<bool>;
-    { client.isInitialized() } -> std::same_as<bool>;
+    { client.is_connected() } -> std::same_as<bool>;
+    { client.is_initialized() } -> std::same_as<bool>;
 });
 
 static_assert(!std::movable<McpClient>);
 
 static_assert(requires(McpClient& client, const std::string& s, const std::string& json) {
     { client.initialize(s, s) } -> std::same_as<std::expected<void, McpError>>;
-    { client.callTool(s, json) } -> std::same_as<std::expected<std::string, McpError>>;
-    { client.listTools() } -> std::same_as<std::expected<std::vector<Tool>, McpError>>;
-    { client.listResources() } -> std::same_as<std::expected<std::vector<Resource>, McpError>>;
-    { client.readResource(s) } -> std::same_as<std::expected<std::string, McpError>>;
-    { client.listPrompts() } -> std::same_as<std::expected<std::vector<Prompt>, McpError>>;
-    { client.getPrompt(s, json) } -> std::same_as<std::expected<std::string, McpError>>;
+    { client.call_tool(s, json) } -> std::same_as<std::expected<std::string, McpError>>;
+    { client.list_tools() } -> std::same_as<std::expected<std::vector<Tool>, McpError>>;
+    { client.list_resources() } -> std::same_as<std::expected<std::vector<Resource>, McpError>>;
+    { client.read_resource(s) } -> std::same_as<std::expected<std::string, McpError>>;
+    { client.list_prompts() } -> std::same_as<std::expected<std::vector<Prompt>, McpError>>;
+    { client.get_prompt(s, json) } -> std::same_as<std::expected<std::string, McpError>>;
     { client.ping() } -> std::same_as<std::expected<void, McpError>>;
 });
 
@@ -43,15 +43,15 @@ static_assert(requires(McpClient& client,
                        std::expected<std::string, McpError>& json_result,
                        std::expected<std::vector<Tool>, McpError>& tools_result) {
     client.initialize(std::move(s), std::move(s), void_result);
-    client.callTool(std::move(s), std::move(json), json_result);
-    client.listTools(tools_result);
+    client.call_tool(std::move(s), std::move(json), json_result);
+    client.list_tools(tools_result);
 });
 
 int main()
 {
     McpClient stdio_client(McpStdioClientConfig{});
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     McpClient http_client(runtime, McpHttpClientConfig{.url = "http://127.0.0.1:8080/mcp"});
 
     return stdio_client.mode() == galay::mcp::McpClientMode::Stdio &&

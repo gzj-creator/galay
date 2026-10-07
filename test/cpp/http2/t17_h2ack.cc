@@ -15,19 +15,19 @@ int main() {
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
-    conn.runtimeConfig().settings_ack_timeout = std::chrono::seconds(10);
-    conn.markSettingsSent();
+    conn.runtime_config().settings_ack_timeout = std::chrono::seconds(10);
+    conn.mark_settings_sent();
 
-    const auto sent_at = conn.settingsSentAt();
+    const auto sent_at = conn.settings_sent_at();
 
     manager.m_last_frame_recv_at = sent_at;
-    assert(manager.shouldEnforceSettingsAckTimeout(sent_at + std::chrono::seconds(11)));
+    assert(manager.should_enforce_settings_ack_timeout(sent_at + std::chrono::seconds(11)));
 
     manager.m_last_frame_recv_at = sent_at + std::chrono::milliseconds(1);
-    assert(!manager.shouldEnforceSettingsAckTimeout(sent_at + std::chrono::seconds(11)));
+    assert(!manager.should_enforce_settings_ack_timeout(sent_at + std::chrono::seconds(11)));
 
-    conn.markSettingsAckReceived();
-    assert(!manager.shouldEnforceSettingsAckTimeout(sent_at + std::chrono::seconds(11)));
+    conn.mark_settings_ack_received();
+    assert(!manager.should_enforce_settings_ack_timeout(sent_at + std::chrono::seconds(11)));
 
     std::cout << "T58-H2SettingsAckTimeout PASS\n";
     return 0;

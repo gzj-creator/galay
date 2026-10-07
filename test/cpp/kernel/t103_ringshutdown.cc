@@ -12,12 +12,12 @@ using namespace galay::kernel;
 
 namespace {
 
-Task<void> emptyTask() {
+Task<void> empty_task() {
     co_return;
 }
 
-bool runScenario() {
-    TaskRef queued = detail::TaskAccess::detachTask(emptyTask());
+bool run_scenario() {
+    TaskRef queued = detail::TaskAccess::detach_task(empty_task());
     TaskRef keeper = queued;
     auto* state = keeper.state();
     if (state == nullptr) {
@@ -47,7 +47,7 @@ bool runScenario() {
 }  // namespace
 
 int main() {
-    if (!runScenario()) {
+    if (!run_scenario()) {
         return 1;
     }
 

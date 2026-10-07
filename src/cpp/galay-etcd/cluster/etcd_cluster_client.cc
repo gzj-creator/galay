@@ -13,7 +13,7 @@ namespace galay::etcd
 namespace
 {
 
-size_t configuredEndpointCount(const EtcdConfig& config)
+size_t configured_endpoint_count(const EtcdConfig& config)
 {
     if (!config.production.endpoints.empty()) {
         return config.production.endpoints.size();
@@ -21,9 +21,9 @@ size_t configuredEndpointCount(const EtcdConfig& config)
     return config.endpoint.empty() ? 0 : 1;
 }
 
-size_t queueCapacityForConfig(const EtcdConfig& config)
+size_t queue_capacity_for_config(const EtcdConfig& config)
 {
-    const size_t endpoint_count = configuredEndpointCount(config);
+    const size_t endpoint_count = configured_endpoint_count(config);
     const size_t per_endpoint = config.production.connections_per_endpoint;
     if (endpoint_count == 0 || per_endpoint == 0 ||
         endpoint_count > std::numeric_limits<size_t>::max() / per_endpoint) {
@@ -42,14 +42,14 @@ EtcdClusterState::EtcdClusterState(EtcdProductionConfig production)
     }
 }
 
-std::optional<size_t> EtcdClusterState::selectEndpoint()
+std::optional<size_t> EtcdClusterState::select_endpoint()
 {
     if (m_snapshots.empty()) {
         return std::nullopt;
     }
 
     if (m_production.endpoint_policy == EtcdEndpointPolicy::StickyLeader) {
-        if (const auto leader = selectStickyLeaderEndpoint(); leader.has_value()) {
+        if (const auto leader = select_sticky_leader_endpoint(); leader.has_value()) {
             return leader;
         }
     }
@@ -75,17 +75,17 @@ std::optional<size_t> EtcdClusterState::selectEndpoint()
     return size_t{0};
 }
 
-void EtcdClusterState::recordRequest()
+void EtcdClusterState::record_request()
 {
     ++m_stats.requests;
 }
 
-void EtcdClusterState::recordRetry()
+void EtcdClusterState::record_retry()
 {
     ++m_stats.retries;
 }
 
-void EtcdClusterState::markSuccess(size_t index, std::chrono::system_clock::time_point when)
+void EtcdClusterState::mark_success(size_t index, std::chrono::system_clock::time_point when)
 {
     if (index >= m_snapshots.size()) {
         return;
@@ -102,7 +102,7 @@ void EtcdClusterState::markSuccess(size_t index, std::chrono::system_clock::time
     }
 }
 
-void EtcdClusterState::markFailure(
+void EtcdClusterState::mark_failure(
     size_t index,
     EtcdError error,
     bool endpoint_unhealthy,
@@ -122,7 +122,7 @@ void EtcdClusterState::markFailure(
         return;
     }
 
-    if (snapshot.state != EtcdEndpointHealthState::Unhealthy && hasAlternativeEndpoint(index)) {
+    if (snapshot.state != EtcdEndpointHealthState::Unhealthy && has_alternative_endpoint(index)) {
         ++m_stats.endpoint_switches;
     }
     snapshot.state = EtcdEndpointHealthState::Unhealthy;
@@ -131,7 +131,7 @@ void EtcdClusterState::markFailure(
     }
 }
 
-std::vector<size_t> EtcdClusterState::collectDueProbes(std::chrono::system_clock::time_point now)
+std::vector<size_t> EtcdClusterState::collect_due_probes(std::chrono::system_clock::time_point now)
 {
     std::vector<size_t> due;
     due.reserve(m_snapshots.size());
@@ -155,17 +155,17 @@ std::vector<size_t> EtcdClusterState::collectDueProbes(std::chrono::system_clock
     return due;
 }
 
-void EtcdClusterState::markProbeSuccess(size_t index, std::chrono::system_clock::time_point when)
+void EtcdClusterState::mark_probe_success(size_t index, std::chrono::system_clock::time_point when)
 {
     if (index >= m_snapshots.size()) {
         return;
     }
 
     m_snapshots[index].last_probe_time = when;
-    markSuccess(index, when);
+    mark_success(index, when);
 }
 
-void EtcdClusterState::markProbeFailure(
+void EtcdClusterState::mark_probe_failure(
     size_t index,
     EtcdError error,
     std::chrono::system_clock::time_point when)
@@ -185,9 +185,9 @@ void EtcdClusterState::markProbeFailure(
     }
 }
 
-EtcdRetryDecision EtcdClusterState::classifyRetry(const EtcdError& error, size_t attempt) const
+EtcdRetryDecision EtcdClusterState::classify_retry(const EtcdError& error, size_t attempt) const
 {
-    if (attempt + 1 >= maxAttempts()) {
+    if (attempt + 1 >= max_attempts()) {
         return EtcdRetryDecision::FailFast;
     }
 
@@ -212,7 +212,7 @@ EtcdRetryDecision EtcdClusterState::classifyRetry(const EtcdError& error, size_t
     return EtcdRetryDecision::FailFast;
 }
 
-std::chrono::milliseconds EtcdClusterState::backoffForAttempt(size_t attempt) const
+std::chrono::milliseconds EtcdClusterState::backoff_for_attempt(size_t attempt) const
 {
     auto backoff = m_production.retry.initial_backoff;
     for (size_t i = 0; i < attempt; ++i) {
@@ -224,22 +224,22 @@ std::chrono::milliseconds EtcdClusterState::backoffForAttempt(size_t attempt) co
     return std::min(backoff, m_production.retry.max_backoff);
 }
 
-const std::vector<EtcdEndpointHealthSnapshot>& EtcdClusterState::getEndpointSnapshots() const
+const std::vector<EtcdEndpointHealthSnapshot>& EtcdClusterState::get_endpoint_snapshots() const
 {
     return m_snapshots;
 }
 
-EtcdClientStats EtcdClusterState::getStats() const
+EtcdClientStats EtcdClusterState::get_stats() const
 {
     return m_stats;
 }
 
-size_t EtcdClusterState::maxAttempts() const
+size_t EtcdClusterState::max_attempts() const
 {
     return std::max<size_t>(1, m_production.retry.attempts);
 }
 
-std::optional<size_t> EtcdClusterState::selectStickyLeaderEndpoint() const
+std::optional<size_t> EtcdClusterState::select_sticky_leader_endpoint() const
 {
     if (m_leader_hint.has_value() && *m_leader_hint < m_snapshots.size() &&
         m_snapshots[*m_leader_hint].state != EtcdEndpointHealthState::Unhealthy) {
@@ -259,7 +259,7 @@ std::optional<size_t> EtcdClusterState::selectStickyLeaderEndpoint() const
     return size_t{0};
 }
 
-bool EtcdClusterState::hasAlternativeEndpoint(size_t excluded_index) const
+bool EtcdClusterState::has_alternative_endpoint(size_t excluded_index) const
 {
     for (size_t index = 0; index < m_snapshots.size(); ++index) {
         if (index == excluded_index) {
@@ -278,7 +278,7 @@ namespace details
 struct EtcdClientPoolState
 {
     explicit EtcdClientPoolState(EtcdConfig config)
-        : idle_clients(queueCapacityForConfig(config))
+        : idle_clients(queue_capacity_for_config(config))
     {
         std::vector<std::string> endpoints = config.production.endpoints;
         if (endpoints.empty() && !config.endpoint.empty()) {
@@ -415,19 +415,19 @@ EtcdClusterClientBuilder& EtcdClusterClientBuilder::endpoint(std::string endpoin
     return *this;
 }
 
-EtcdClusterClientBuilder& EtcdClusterClientBuilder::apiPrefix(std::string prefix)
+EtcdClusterClientBuilder& EtcdClusterClientBuilder::api_prefix(std::string prefix)
 {
     m_config.api_prefix = std::move(prefix);
     return *this;
 }
 
-EtcdClusterClientBuilder& EtcdClusterClientBuilder::requestTimeout(std::chrono::milliseconds timeout)
+EtcdClusterClientBuilder& EtcdClusterClientBuilder::request_timeout(std::chrono::milliseconds timeout)
 {
     m_config.request_timeout = timeout;
     return *this;
 }
 
-EtcdClusterClientBuilder& EtcdClusterClientBuilder::productionConfig(EtcdProductionConfig config)
+EtcdClusterClientBuilder& EtcdClusterClientBuilder::production_config(EtcdProductionConfig config)
 {
     if (!config.endpoints.empty()) {
         m_config.endpoint = config.endpoints.front();
@@ -436,7 +436,7 @@ EtcdClusterClientBuilder& EtcdClusterClientBuilder::productionConfig(EtcdProduct
     return *this;
 }
 
-EtcdClusterClientBuilder& EtcdClusterClientBuilder::connectionsPerEndpoint(size_t count)
+EtcdClusterClientBuilder& EtcdClusterClientBuilder::connections_per_endpoint(size_t count)
 {
     m_config.production.connections_per_endpoint = count;
     return *this;
@@ -453,7 +453,7 @@ EtcdClusterClient::EtcdClusterClient(EtcdConfig config)
 {
 }
 
-EtcdClientAcquireResult EtcdClusterClient::tryAcquire()
+EtcdClientAcquireResult EtcdClusterClient::try_acquire()
 {
     if (m_state == nullptr) {
         return std::unexpected(
@@ -477,9 +477,9 @@ EtcdClientAcquireResult EtcdClusterClient::tryAcquire()
     return EtcdClientLease(m_state, client);
 }
 
-EtcdClientAcquireResult EtcdClusterClient::acquireConnected()
+EtcdClientAcquireResult EtcdClusterClient::acquire_connected()
 {
-    auto lease = tryAcquire();
+    auto lease = try_acquire();
     if (!lease.has_value()) {
         return std::unexpected(lease.error());
     }
@@ -497,7 +497,7 @@ size_t EtcdClusterClient::size() const noexcept
     return m_state == nullptr ? 0 : m_state->clients.size();
 }
 
-size_t EtcdClusterClient::idleCount() const noexcept
+size_t EtcdClusterClient::idle_count() const noexcept
 {
     if (m_state == nullptr) {
         return 0;

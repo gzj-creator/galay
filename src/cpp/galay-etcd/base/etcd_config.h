@@ -73,7 +73,7 @@ struct EtcdCredentialConfig
      * @brief 返回脱敏后的配置字符串
      * @return 不包含明文 password / bearer token 的调试字符串
      */
-    [[nodiscard]] std::string redactedString() const
+    [[nodiscard]] std::string redacted_string() const
     {
         std::string out = "EtcdCredentialConfig{username=";
         out += username.empty() ? "<empty>" : username;
@@ -120,7 +120,7 @@ struct EtcdConfig : EtcdNetworkConfig
      * @param timeout 请求超时时间
      * @return 配置好超时时间的 EtcdConfig 实例
      */
-    static EtcdConfig withTimeout(std::chrono::milliseconds timeout)
+    static EtcdConfig with_timeout(std::chrono::milliseconds timeout)
     {
         EtcdConfig cfg;
         cfg.request_timeout = timeout;

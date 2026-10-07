@@ -44,7 +44,7 @@ struct ResumeTokenHeader
 
 /**
  * @brief Waker 内部使用的语言中立恢复 token。
- * @details C++ 分支保存 TaskRef 并复用 requestTaskResume() 的 queued 合并语义；
+ * @details C++ 分支保存 TaskRef 并复用 request_task_resume() 的 queued 合并语义；
  *          C 分支保存以 ResumeTokenHeader 开头的状态指针，通过 hook retain/release/request。
  */
 class ResumeToken
@@ -52,13 +52,13 @@ class ResumeToken
 public:
     ResumeToken() noexcept = default;
     explicit ResumeToken(TaskRef task) noexcept;
-    static ResumeToken fromCCoroutine(void* state) noexcept;
+    static ResumeToken from_c_coroutine(void* state) noexcept;
     /**
      * @brief 构造由调用栈拥有状态的单次 C 恢复 token。
      * @note request_resume 可立即恢复并销毁 state；请求返回后 token 不再解引用 state。
-     *       仅用于 reactor 在一次 wakeUp 调用期间持有的 direct C coroutine operation。
+     *       仅用于 reactor 在一次 wake_up 调用期间持有的 direct C coroutine operation。
      */
-    static ResumeToken fromNonOwningCCoroutine(void* state) noexcept;
+    static ResumeToken from_non_owning_c_coroutine(void* state) noexcept;
 
     ResumeToken(const ResumeToken& other) noexcept;
     ResumeToken(ResumeToken&& other) noexcept;
@@ -67,9 +67,9 @@ public:
     ResumeToken& operator=(const ResumeToken& other) noexcept;
     ResumeToken& operator=(ResumeToken&& other) noexcept;
 
-    bool isValid() const noexcept;
+    bool is_valid() const noexcept;
     Scheduler* scheduler() const noexcept;
-    bool requestResume() noexcept;
+    bool request_resume() noexcept;
 
 private:
     enum class Kind : uintptr_t {
@@ -80,11 +80,11 @@ private:
     };
     static constexpr uintptr_t kKindMask = 0x3U;
 
-    void copyFrom(const ResumeToken& other) noexcept;
+    void copy_from(const ResumeToken& other) noexcept;
     void release() noexcept;
     void* state() const noexcept;
     Kind kind() const noexcept;
-    const ResumeTokenHooks* coroHooks() const noexcept;
+    const ResumeTokenHooks* coro_hooks() const noexcept;
     static uintptr_t encode(Kind kind, void* state) noexcept;
 
     uintptr_t m_encoded = 0;
@@ -104,10 +104,10 @@ public:
     explicit Waker(detail::ResumeToken token) noexcept;  ///< 以语言中立恢复 token 构造唤醒器
     template <typename Promise>
     requires requires(const Promise& promise) {
-        { promise.taskRefView() } -> std::same_as<const TaskRef&>;
+        { promise.task_ref_view() } -> std::same_as<const TaskRef&>;
     }
     explicit Waker(std::coroutine_handle<Promise> handle) noexcept
-        : m_token(detail::ResumeToken(handle.promise().taskRefView()))
+        : m_token(detail::ResumeToken(handle.promise().task_ref_view()))
     {
     }
     Waker(const Waker& other) = default;  ///< 拷贝唤醒器，底层共享同一恢复 token
@@ -115,14 +115,14 @@ public:
     Waker& operator=(const Waker& other) = default;  ///< 拷贝赋值唤醒器
     Waker& operator=(Waker&& other) noexcept = default;  ///< 移动赋值唤醒器
 
-    Scheduler* getScheduler() noexcept;  ///< 返回关联任务的所属调度器；无任务时返回 nullptr
+    Scheduler* get_scheduler() noexcept;  ///< 返回关联任务的所属调度器；无任务时返回 nullptr
 
     /**
      * @brief 通过 owner scheduler 的无分配入口请求恢复关联任务。
      * @note 重复请求、无效 token 或已完成任务是安全 no-op。有效 waiter 要求其
      *       owner scheduler 仍在运行；停止 scheduler 前必须先结束所有异步等待。
      */
-    void wakeUp() noexcept;
+    void wake_up() noexcept;
 
 private:
     detail::ResumeToken m_token;  ///< 被唤醒的目标 token

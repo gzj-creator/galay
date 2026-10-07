@@ -40,7 +40,7 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     if (ping_result && ping_result.value()) {
         auto& values = ping_result.value().value();
         if (!values.empty()) {
-            std::cout << "   [PASSED] PING response: " << values[0].toString() << std::endl;
+            std::cout << "   [PASSED] PING response: " << values[0].to_string() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] PING failed" << std::endl;
@@ -51,8 +51,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto echo_result = co_await client.command(command_builder.echo("Hello Redis!"));
     if (echo_result && echo_result.value()) {
         auto& values = echo_result.value().value();
-        if (!values.empty() && values[0].isString()) {
-            std::cout << "   [PASSED] ECHO response: " << values[0].toString() << std::endl;
+        if (!values.empty() && values[0].is_string()) {
+            std::cout << "   [PASSED] ECHO response: " << values[0].to_string() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] ECHO failed" << std::endl;
@@ -75,8 +75,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto get_result = co_await client.command(command_builder.get("test_string_key"));
     if (get_result && get_result.value()) {
         auto& values = get_result.value().value();
-        if (!values.empty() && values[0].isString()) {
-            std::string value = values[0].toString();
+        if (!values.empty() && values[0].is_string()) {
+            std::string value = values[0].to_string();
             if (value == "test_value") {
                 std::cout << "   [PASSED] GET returned: " << value << std::endl;
             } else {
@@ -92,8 +92,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto exists_result = co_await client.command(command_builder.exists("test_string_key"));
     if (exists_result && exists_result.value()) {
         auto& values = exists_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            int64_t exists = values[0].toInteger();
+        if (!values.empty() && values[0].is_integer()) {
+            int64_t exists = values[0].to_integer();
             if (exists == 1) {
                 std::cout << "   [PASSED] EXISTS returned: " << exists << std::endl;
             } else {
@@ -118,8 +118,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto incr_result = co_await client.command(command_builder.incr("test_counter"));
     if (incr_result && incr_result.value()) {
         auto& values = incr_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] INCR returned: " << values[0].toInteger() << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] INCR returned: " << values[0].to_integer() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] INCR failed" << std::endl;
@@ -130,8 +130,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto decr_result = co_await client.command(command_builder.decr("test_counter"));
     if (decr_result && decr_result.value()) {
         auto& values = decr_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] DECR returned: " << values[0].toInteger() << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] DECR returned: " << values[0].to_integer() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] DECR failed" << std::endl;
@@ -142,8 +142,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto del_result = co_await client.command(command_builder.del("test_string_key"));
     if (del_result && del_result.value()) {
         auto& values = del_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] DEL deleted " << values[0].toInteger() << " key(s)" << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] DEL deleted " << values[0].to_integer() << " key(s)" << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] DEL failed" << std::endl;
@@ -157,8 +157,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto hset_result = co_await client.command(command_builder.hset("test_hash", "field1", "value1"));
     if (hset_result && hset_result.value()) {
         auto& values = hset_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] HSET added " << values[0].toInteger() << " field(s)" << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] HSET added " << values[0].to_integer() << " field(s)" << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] HSET failed" << std::endl;
@@ -172,8 +172,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto hget_result = co_await client.command(command_builder.hget("test_hash", "field1"));
     if (hget_result && hget_result.value()) {
         auto& values = hget_result.value().value();
-        if (!values.empty() && values[0].isString()) {
-            std::string value = values[0].toString();
+        if (!values.empty() && values[0].is_string()) {
+            std::string value = values[0].to_string();
             if (value == "value1") {
                 std::cout << "   [PASSED] HGET returned: " << value << std::endl;
             } else {
@@ -186,15 +186,15 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
 
     // 测试HGETALL
     std::cout << "13. Testing HGETALL..." << std::endl;
-    auto hgetall_result = co_await client.command(command_builder.hgetAll("test_hash"));
+    auto hgetall_result = co_await client.command(command_builder.hget_all("test_hash"));
     if (hgetall_result && hgetall_result.value()) {
         auto& values = hgetall_result.value().value();
-        if (!values.empty() && values[0].isArray()) {
-            auto arr = values[0].toArray();
+        if (!values.empty() && values[0].is_array()) {
+            auto arr = values[0].to_array();
             std::cout << "   [PASSED] HGETALL returned " << arr.size() << " items:" << std::endl;
             for (size_t i = 0; i < arr.size(); i += 2) {
                 if (i + 1 < arr.size()) {
-                    std::cout << "      " << arr[i].toString() << " => " << arr[i+1].toString() << std::endl;
+                    std::cout << "      " << arr[i].to_string() << " => " << arr[i+1].to_string() << std::endl;
                 }
             }
         }
@@ -207,8 +207,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto hdel_result = co_await client.command(command_builder.hdel("test_hash", "field1"));
     if (hdel_result && hdel_result.value()) {
         auto& values = hdel_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] HDEL deleted " << values[0].toInteger() << " field(s)" << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] HDEL deleted " << values[0].to_integer() << " field(s)" << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] HDEL failed" << std::endl;
@@ -222,8 +222,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto lpush_result = co_await client.command(command_builder.lpush("test_list", "item1"));
     if (lpush_result && lpush_result.value()) {
         auto& values = lpush_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] LPUSH, list length: " << values[0].toInteger() << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] LPUSH, list length: " << values[0].to_integer() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] LPUSH failed" << std::endl;
@@ -234,8 +234,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto rpush_result = co_await client.command(command_builder.rpush("test_list", "item2"));
     if (rpush_result && rpush_result.value()) {
         auto& values = rpush_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] RPUSH, list length: " << values[0].toInteger() << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] RPUSH, list length: " << values[0].to_integer() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] RPUSH failed" << std::endl;
@@ -250,8 +250,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto llen_result = co_await client.command(command_builder.llen("test_list"));
     if (llen_result && llen_result.value()) {
         auto& values = llen_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] LLEN returned: " << values[0].toInteger() << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] LLEN returned: " << values[0].to_integer() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] LLEN failed" << std::endl;
@@ -262,11 +262,11 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto lrange_result = co_await client.command(command_builder.lrange("test_list", 0, -1));
     if (lrange_result && lrange_result.value()) {
         auto& values = lrange_result.value().value();
-        if (!values.empty() && values[0].isArray()) {
-            auto arr = values[0].toArray();
+        if (!values.empty() && values[0].is_array()) {
+            auto arr = values[0].to_array();
             std::cout << "   [PASSED] LRANGE returned " << arr.size() << " items: ";
             for (auto& item : arr) {
-                std::cout << item.toString() << " ";
+                std::cout << item.to_string() << " ";
             }
             std::cout << std::endl;
         }
@@ -279,8 +279,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto lpop_result = co_await client.command(command_builder.lpop("test_list"));
     if (lpop_result && lpop_result.value()) {
         auto& values = lpop_result.value().value();
-        if (!values.empty() && values[0].isString()) {
-            std::cout << "   [PASSED] LPOP returned: " << values[0].toString() << std::endl;
+        if (!values.empty() && values[0].is_string()) {
+            std::cout << "   [PASSED] LPOP returned: " << values[0].to_string() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] LPOP failed" << std::endl;
@@ -291,8 +291,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto rpop_result = co_await client.command(command_builder.rpop("test_list"));
     if (rpop_result && rpop_result.value()) {
         auto& values = rpop_result.value().value();
-        if (!values.empty() && values[0].isString()) {
-            std::cout << "   [PASSED] RPOP returned: " << values[0].toString() << std::endl;
+        if (!values.empty() && values[0].is_string()) {
+            std::cout << "   [PASSED] RPOP returned: " << values[0].to_string() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] RPOP failed" << std::endl;
@@ -306,8 +306,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto sadd_result = co_await client.command(command_builder.sadd("test_set", "member1"));
     if (sadd_result && sadd_result.value()) {
         auto& values = sadd_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] SADD added " << values[0].toInteger() << " member(s)" << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] SADD added " << values[0].to_integer() << " member(s)" << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] SADD failed" << std::endl;
@@ -322,8 +322,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto scard_result = co_await client.command(command_builder.scard("test_set"));
     if (scard_result && scard_result.value()) {
         auto& values = scard_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] SCARD returned: " << values[0].toInteger() << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] SCARD returned: " << values[0].to_integer() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] SCARD failed" << std::endl;
@@ -334,11 +334,11 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto smembers_result = co_await client.command(command_builder.smembers("test_set"));
     if (smembers_result && smembers_result.value()) {
         auto& values = smembers_result.value().value();
-        if (!values.empty() && values[0].isArray()) {
-            auto arr = values[0].toArray();
+        if (!values.empty() && values[0].is_array()) {
+            auto arr = values[0].to_array();
             std::cout << "   [PASSED] SMEMBERS returned " << arr.size() << " members: ";
             for (auto& member : arr) {
-                std::cout << member.toString() << " ";
+                std::cout << member.to_string() << " ";
             }
             std::cout << std::endl;
         }
@@ -351,8 +351,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto srem_result = co_await client.command(command_builder.srem("test_set", "member1"));
     if (srem_result && srem_result.value()) {
         auto& values = srem_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] SREM removed " << values[0].toInteger() << " member(s)" << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] SREM removed " << values[0].to_integer() << " member(s)" << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] SREM failed" << std::endl;
@@ -366,8 +366,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto zadd_result = co_await client.command(command_builder.zadd("test_zset", 1.0, "member1"));
     if (zadd_result && zadd_result.value()) {
         auto& values = zadd_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] ZADD added " << values[0].toInteger() << " member(s)" << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] ZADD added " << values[0].to_integer() << " member(s)" << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] ZADD failed" << std::endl;
@@ -383,8 +383,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto zscore_result = co_await client.command(command_builder.zscore("test_zset", "member2"));
     if (zscore_result && zscore_result.value()) {
         auto& values = zscore_result.value().value();
-        if (!values.empty() && values[0].isString()) {
-            std::cout << "   [PASSED] ZSCORE returned: " << values[0].toString() << std::endl;
+        if (!values.empty() && values[0].is_string()) {
+            std::cout << "   [PASSED] ZSCORE returned: " << values[0].to_string() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] ZSCORE failed" << std::endl;
@@ -395,11 +395,11 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto zrange_result = co_await client.command(command_builder.zrange("test_zset", 0, -1));
     if (zrange_result && zrange_result.value()) {
         auto& values = zrange_result.value().value();
-        if (!values.empty() && values[0].isArray()) {
-            auto arr = values[0].toArray();
+        if (!values.empty() && values[0].is_array()) {
+            auto arr = values[0].to_array();
             std::cout << "   [PASSED] ZRANGE returned " << arr.size() << " members: ";
             for (auto& member : arr) {
-                std::cout << member.toString() << " ";
+                std::cout << member.to_string() << " ";
             }
             std::cout << std::endl;
         }
@@ -412,8 +412,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
     auto zrem_result = co_await client.command(command_builder.zrem("test_zset", "member1"));
     if (zrem_result && zrem_result.value()) {
         auto& values = zrem_result.value().value();
-        if (!values.empty() && values[0].isInteger()) {
-            std::cout << "   [PASSED] ZREM removed " << values[0].toInteger() << " member(s)" << std::endl;
+        if (!values.empty() && values[0].is_integer()) {
+            std::cout << "   [PASSED] ZREM removed " << values[0].to_integer() << " member(s)" << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] ZREM failed" << std::endl;
@@ -441,10 +441,10 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
         std::cout << "   [PASSED] PIPELINE executed " << values.size() << " commands:" << std::endl;
         for (size_t i = 0; i < values.size(); ++i) {
             std::cout << "      Response " << i << ": ";
-            if (values[i].isString()) {
-                std::cout << values[i].toString();
-            } else if (values[i].isInteger()) {
-                std::cout << values[i].toInteger();
+            if (values[i].is_string()) {
+                std::cout << values[i].to_string();
+            } else if (values[i].is_integer()) {
+                std::cout << values[i].to_integer();
             } else {
                 std::cout << "(other type)";
             }
@@ -501,11 +501,11 @@ Task<void> test_execute_command(IOScheduler* scheduler)
     auto mget_result = co_await client.command(command_builder.command("MGET", {"key1", "key2"}));
     if (mget_result && mget_result.value()) {
         auto& values = mget_result.value().value();
-        if (!values.empty() && values[0].isArray()) {
-            auto arr = values[0].toArray();
+        if (!values.empty() && values[0].is_array()) {
+            auto arr = values[0].to_array();
             std::cout << "   [PASSED] EXECUTE MGET returned: ";
             for (auto& val : arr) {
-                std::cout << val.toString() << " ";
+                std::cout << val.to_string() << " ";
             }
             std::cout << std::endl;
         }
@@ -529,17 +529,17 @@ int main()
         Runtime runtime;
         runtime.start();
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             std::cerr << "Failed to get IO scheduler" << std::endl;
             return 1;
         }
 
         // 运行所有命令测试
-        scheduleTask(scheduler, test_all_redis_commands(scheduler));
+        schedule_task(scheduler, test_all_redis_commands(scheduler));
 
         // 运行通用execute命令测试
-        scheduleTask(scheduler, test_execute_command(scheduler));
+        schedule_task(scheduler, test_execute_command(scheduler));
 
         // 等待测试完成
         std::this_thread::sleep_for(std::chrono::seconds(15));

@@ -15,7 +15,7 @@ enum class ReadError {
     kClose,
 };
 
-std::expected<std::string, ReadError> readFile(const std::string& path)
+std::expected<std::string, ReadError> read_file(const std::string& path)
 {
     const int fd = ::open(path.c_str(), O_RDONLY);
     if (fd < 0) {
@@ -53,7 +53,7 @@ std::expected<std::string, ReadError> readFile(const std::string& path)
     return content;
 }
 
-std::expected<std::string, ReadError> channelSourcePath()
+std::expected<std::string, ReadError> channel_source_path()
 {
     std::string path(__FILE__);
     const std::string marker = "/test/cpp/rpc/";
@@ -69,7 +69,7 @@ std::expected<std::string, ReadError> channelSourcePath()
     return path;
 }
 
-int requireContains(std::string_view haystack, std::string_view needle, const char* message)
+int require_contains(std::string_view haystack, std::string_view needle, const char* message)
 {
     const size_t found = haystack.find(needle);
     if (found == std::string_view::npos) {
@@ -79,7 +79,7 @@ int requireContains(std::string_view haystack, std::string_view needle, const ch
     return 0;
 }
 
-int requireNotContains(std::string_view haystack, std::string_view needle, const char* message)
+int require_not_contains(std::string_view haystack, std::string_view needle, const char* message)
 {
     const size_t found = haystack.find(needle);
     if (found != std::string_view::npos) {
@@ -93,45 +93,45 @@ int requireNotContains(std::string_view haystack, std::string_view needle, const
 
 int main()
 {
-    auto channel_path = channelSourcePath();
+    auto channel_path = channel_source_path();
     if (!channel_path.has_value()) {
         std::cerr << "failed to resolve rpc_channel.h source path\n";
         return 1;
     }
 
-    auto source = readFile(*channel_path);
+    auto source = read_file(*channel_path);
     if (!source.has_value()) {
         std::cerr << "failed to read " << *channel_path << "\n";
         return 1;
     }
 
-    if (const int rc = requireContains(*source,
-                                       "registerCallback",
+    if (const int rc = require_contains(*source,
+                                       "register_callback",
                                        "RPC cancellation token must notify pending calls without polling")) {
         return rc;
     }
-    if (const int rc = requireContains(*source,
+    if (const int rc = require_contains(*source,
                                        "cancellation_registration",
                                        "RPC caller coroutine must own its cancellation registration")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*source,
-                                          "cancelWatchLoop",
+    if (const int rc = require_not_contains(*source,
+                                          "cancel_watch_loop",
                                           "RPC channel must not keep per-call cancellation watcher coroutine")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*source,
-                                          "cancelSweepLoop",
+    if (const int rc = require_not_contains(*source,
+                                          "cancel_sweep_loop",
                                           "RPC channel must not poll cancellation from a sweep coroutine")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*source,
-                                          "failCancelledPending",
+    if (const int rc = require_not_contains(*source,
+                                          "fail_cancelled_pending",
                                           "RPC channel must not scan the pending map for cancellation")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*source,
-                                          "scheduleTask(scheduler_for_cancel",
+    if (const int rc = require_not_contains(*source,
+                                          "schedule_task(scheduler_for_cancel",
                                           "RPC channel must not schedule one cancel watcher per call")) {
         return rc;
     }

@@ -19,14 +19,14 @@ struct HeaderAnnotation {
 };
 
 std::expected<std::vector<HeaderAnnotation>, McpError>
-toolHeaderAnnotations(const Tool& tool);
+tool_header_annotations(const Tool& tool);
 
 std::expected<std::optional<std::string>, McpError>
-argumentHeaderValue(const json::Json& arguments, const HeaderAnnotation& annotation);
+argument_header_value(const json::Json& arguments, const HeaderAnnotation& annotation);
 
-bool safeHeaderValue(std::string_view value) noexcept;
-std::string encodeHeaderValue(std::string_view value);
-std::expected<std::string, McpError> decodeHeaderValue(std::string_view value);
+bool safe_header_value(std::string_view value) noexcept;
+std::string encode_header_value(std::string_view value);
+std::expected<std::string, McpError> decode_header_value(std::string_view value);
 
 } // namespace galay::mcp::v2
 

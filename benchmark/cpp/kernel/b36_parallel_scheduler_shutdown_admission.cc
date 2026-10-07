@@ -23,20 +23,20 @@ struct Counters {
     std::atomic<std::size_t> executed{0};
 };
 
-void runWork(void* context, std::size_t) noexcept
+void run_work(void* context, std::size_t) noexcept
 {
     static_cast<Counters*>(context)->executed.fetch_add(
         1, std::memory_order_relaxed);
 }
 
-void releaseWork(void*) noexcept {}
+void release_work(void*) noexcept {}
 
 struct Blocker {
     std::atomic<bool> started{false};
     std::atomic<bool> release{false};
 };
 
-void runBlocker(void* context, std::size_t) noexcept
+void run_blocker(void* context, std::size_t) noexcept
 {
     auto* blocker = static_cast<Blocker*>(context);
     blocker->started.store(true, std::memory_order_release);
@@ -45,9 +45,9 @@ void runBlocker(void* context, std::size_t) noexcept
     }
 }
 
-void releaseBlocker(void*) noexcept {}
+void release_blocker(void*) noexcept {}
 
-bool runRound(std::size_t producer_count,
+bool run_round(std::size_t producer_count,
               std::size_t attempts_per_producer,
               std::size_t& accepted,
               std::size_t& executed)
@@ -58,8 +58,8 @@ bool runRound(std::size_t producer_count,
     }
 
     Blocker blocker;
-    if (!scheduler.scheduleWork(
-            ParallelWorkItem(&blocker, 0, &runBlocker, &releaseBlocker))) {
+    if (!scheduler.schedule_work(
+            ParallelWorkItem(&blocker, 0, &run_blocker, &release_blocker))) {
         scheduler.stop();
         return false;
     }
@@ -78,8 +78,8 @@ bool runRound(std::size_t producer_count,
                  attempt < attempts_per_producer &&
                  producing.load(std::memory_order_acquire);
                  ++attempt) {
-                if (scheduler.scheduleWork(
-                        ParallelWorkItem(&counters, attempt, &runWork, &releaseWork))) {
+                if (scheduler.schedule_work(
+                        ParallelWorkItem(&counters, attempt, &run_work, &release_work))) {
                     round_accepted.fetch_add(1, std::memory_order_relaxed);
                 }
             }
@@ -88,7 +88,7 @@ bool runRound(std::size_t producer_count,
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     std::thread stopper([&]() { scheduler.stop(); });
-    while (scheduler.isRunning()) {
+    while (scheduler.is_running()) {
         std::this_thread::yield();
     }
     producing.store(false, std::memory_order_release);
@@ -108,7 +108,7 @@ bool runRound(std::size_t producer_count,
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -120,7 +120,7 @@ int main()
     std::size_t executed = 0;
     const auto begin = std::chrono::steady_clock::now();
     for (std::size_t round = 0; round < kRounds; ++round) {
-        if (!runRound(kProducerCount,
+        if (!run_round(kProducerCount,
                       kAttemptsPerProducer,
                       accepted,
                       executed)) {

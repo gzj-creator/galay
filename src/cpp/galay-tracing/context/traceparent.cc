@@ -24,18 +24,18 @@ constexpr std::size_t kTraceparentLength = 55;
 constexpr char kSeparator = '-';
 constexpr char kHexDigits[] = "0123456789abcdef";
 
-[[nodiscard]] bool hasExpectedSeparators(std::string_view value) noexcept {
+[[nodiscard]] bool has_expected_separators(std::string_view value) noexcept {
     return value.size() == kTraceparentLength && value[2] == kSeparator && value[35] == kSeparator
         && value[52] == kSeparator;
 }
 
-[[nodiscard]] bool parseFlags(std::string_view value, std::uint8_t& flags) noexcept {
+[[nodiscard]] bool parse_flags(std::string_view value, std::uint8_t& flags) noexcept {
     if (value.size() != 2) {
         return false;
     }
 
-    const int high = detail::hexValue(value[0]);
-    const int low = detail::hexValue(value[1]);
+    const int high = detail::hex_value(value[0]);
+    const int low = detail::hex_value(value[1]);
     if (high < 0 || low < 0) {
         return false;
     }
@@ -46,8 +46,8 @@ constexpr char kHexDigits[] = "0123456789abcdef";
 
 } // namespace
 
-std::expected<TraceContext, TraceparentError> extractTraceparent(std::string_view value, std::string_view tracestate) {
-    if (!hasExpectedSeparators(value)) {
+std::expected<TraceContext, TraceparentError> extract_traceparent(std::string_view value, std::string_view tracestate) {
+    if (!has_expected_separators(value)) {
         return std::unexpected(TraceparentError::kMalformed);
     }
 
@@ -55,26 +55,26 @@ std::expected<TraceContext, TraceparentError> extractTraceparent(std::string_vie
         return std::unexpected(TraceparentError::kUnsupportedVersion);
     }
 
-    auto traceId = TraceId::fromHex(value.substr(3, TraceId::kHexLength));
-    if (!traceId.isValid()) {
+    auto traceId = TraceId::from_hex(value.substr(3, TraceId::kHexLength));
+    if (!traceId.is_valid()) {
         return std::unexpected(TraceparentError::kInvalidTraceId);
     }
 
-    auto spanId = SpanId::fromHex(value.substr(36, SpanId::kHexLength));
-    if (!spanId.isValid()) {
+    auto spanId = SpanId::from_hex(value.substr(36, SpanId::kHexLength));
+    if (!spanId.is_valid()) {
         return std::unexpected(TraceparentError::kInvalidSpanId);
     }
 
     std::uint8_t flags = 0;
-    if (!parseFlags(value.substr(53, 2), flags)) {
+    if (!parse_flags(value.substr(53, 2), flags)) {
         return std::unexpected(TraceparentError::kInvalidFlags);
     }
 
     return TraceContext(traceId, spanId, flags, std::string(tracestate));
 }
 
-std::string injectTraceparent(const TraceContext& context) {
-    if (!context.isValid()) {
+std::string inject_traceparent(const TraceContext& context) {
+    if (!context.is_valid()) {
         return {};
     }
 
@@ -82,20 +82,20 @@ std::string injectTraceparent(const TraceContext& context) {
     value[0] = '0';
     value[1] = '0';
     value[2] = kSeparator;
-    if (!context.traceId().toHex(value.data() + 3, TraceId::kHexLength)) {
+    if (!context.trace_id().to_hex(value.data() + 3, TraceId::kHexLength)) {
         return {};
     }
     value[35] = kSeparator;
-    if (!context.spanId().toHex(value.data() + 36, SpanId::kHexLength)) {
+    if (!context.span_id().to_hex(value.data() + 36, SpanId::kHexLength)) {
         return {};
     }
     value[52] = kSeparator;
-    value[53] = kHexDigits[context.traceFlags() >> 4U];
-    value[54] = kHexDigits[context.traceFlags() & 0x0fU];
+    value[53] = kHexDigits[context.trace_flags() >> 4U];
+    value[54] = kHexDigits[context.trace_flags() & 0x0fU];
     return std::string(value.data(), value.size());
 }
 
-std::string injectTracestate(const TraceContext& context) {
+std::string inject_tracestate(const TraceContext& context) {
     return context.tracestate();
 }
 

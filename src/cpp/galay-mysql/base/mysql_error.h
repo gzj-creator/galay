@@ -82,7 +82,7 @@ public:
      * @brief 获取服务器错误码
      * @return 服务器错误码，非服务器错误时返回0
      */
-    uint16_t serverErrno() const;
+    uint16_t server_errno() const;
 
 private:
     std::string m_extra_msg;        ///< 附加错误消息

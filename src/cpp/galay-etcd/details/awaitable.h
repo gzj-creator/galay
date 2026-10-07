@@ -18,7 +18,7 @@ using ConnectIoAwaitable =
         std::declval<const galay::kernel::Host&>()));
 using CloseIoAwaitable = decltype(std::declval<galay::async::AsyncTcpSocket&>().close());
 using HttpSerializedRequestAwaitable =
-    decltype(std::declval<galay::http::HttpSession&>().sendSerializedRequest(
+    decltype(std::declval<galay::http::HttpSession&>().send_serialized_request(
         std::declval<std::string>()));
 
 /**
@@ -34,18 +34,18 @@ protected:
     {
     }
 
-    void startIo(AwaitableType&& awaitable)
+    void start_io(AwaitableType&& awaitable)
     {
         m_awaitable.emplace(std::move(awaitable));
     }
 
-    bool awaitReady() const noexcept
+    bool await_ready() const noexcept
     {
         return !m_awaitable.has_value();
     }
 
     template <typename Promise>
-    bool awaitSuspend(std::coroutine_handle<Promise> handle)
+    bool await_suspend(std::coroutine_handle<Promise> handle)
     {
         return m_awaitable->await_suspend(handle);
     }
@@ -113,9 +113,9 @@ private:
         explicit Machine(std::shared_ptr<SharedState> state);
 
         galay::kernel::MachineAction<result_type> advance();
-        void onConnect(std::expected<void, galay::kernel::IOError> result);
-        void onRead(std::expected<size_t, galay::kernel::IOError>);
-        void onWrite(std::expected<size_t, galay::kernel::IOError>);
+        void on_connect(std::expected<void, galay::kernel::IOError> result);
+        void on_read(std::expected<size_t, galay::kernel::IOError>);
+        void on_write(std::expected<size_t, galay::kernel::IOError>);
 
     private:
         std::shared_ptr<SharedState> m_state;
@@ -145,7 +145,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return awaitSuspend(handle);
+        return await_suspend(handle);
     }
     EtcdBoolResult await_resume();
 };
@@ -197,16 +197,16 @@ class JsonOpAwaitableBase
 protected:
     explicit JsonOpAwaitableBase(AsyncEtcdClient& client);
 
-    void startPost(std::string api_path,
+    void start_post(std::string api_path,
                    std::string body,
                    std::optional<std::chrono::milliseconds> force_timeout = std::nullopt);
-    bool awaitReady() const noexcept;
+    bool await_ready() const noexcept;
     template <typename Promise>
-    bool awaitSuspend(std::coroutine_handle<Promise> handle)
+    bool await_suspend(std::coroutine_handle<Promise> handle)
     {
         return m_post_awaitable->await_suspend(handle);
     }
-    std::expected<std::string, EtcdError> resumePost();
+    std::expected<std::string, EtcdError> resume_post();
 
     std::optional<PostJsonAwaitable> m_post_awaitable;
     AsyncEtcdClient* m_client = nullptr;
@@ -233,7 +233,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return awaitSuspend(handle);
+        return await_suspend(handle);
     }
     EtcdBoolResult await_resume();
 };
@@ -259,7 +259,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return awaitSuspend(handle);
+        return await_suspend(handle);
     }
     EtcdGetResult await_resume();
 };
@@ -284,7 +284,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return awaitSuspend(handle);
+        return await_suspend(handle);
     }
     EtcdDeleteResult await_resume();
 };
@@ -307,7 +307,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return awaitSuspend(handle);
+        return await_suspend(handle);
     }
     EtcdLeaseGrantResult await_resume();
 };
@@ -330,7 +330,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return awaitSuspend(handle);
+        return await_suspend(handle);
     }
     EtcdLeaseGrantResult await_resume();
 
@@ -357,7 +357,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return awaitSuspend(handle);
+        return await_suspend(handle);
     }
     EtcdPipelineResult await_resume();
 

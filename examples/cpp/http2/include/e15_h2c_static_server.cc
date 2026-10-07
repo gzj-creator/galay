@@ -28,25 +28,25 @@ namespace {
 
 std::atomic<bool> g_running{true};
 
-void signalHandler(int)
+void signal_handler(int)
 {
     g_running = false;
 }
 
-Task<void> fallbackActiveHandler(Http2ConnContext& ctx)
+Task<void> fallback_active_handler(Http2ConnContext& ctx)
 {
     while (true) {
-        auto streams = co_await ctx.getActiveStreams(16);
+        auto streams = co_await ctx.get_active_streams(16);
         if (!streams) {
             break;
         }
         for (auto& stream : *streams) {
-            auto events = stream->takeEvents();
-            if (!hasHttp2StreamEvent(events, Http2StreamEvent::RequestComplete)) {
+            auto events = stream->take_events();
+            if (!has_http2_stream_event(events, Http2StreamEvent::RequestComplete)) {
                 continue;
             }
-            stream->sendHeaders(
-                Http2Headers().status(404).contentType("text/plain").contentLength(0),
+            stream->send_headers(
+                Http2Headers().status(404).content_type("text/plain").content_length(0),
                 true,
                 true);
         }
@@ -54,7 +54,7 @@ Task<void> fallbackActiveHandler(Http2ConnContext& ctx)
     co_return;
 }
 
-void ensureExampleFiles(const std::filesystem::path& root)
+void ensure_example_files(const std::filesystem::path& root)
 {
     std::filesystem::create_directories(root);
     const auto index = root / "index.txt";
@@ -76,9 +76,9 @@ int main(int argc, char* argv[])
         static_root = argv[2];
     }
 
-    ensureExampleFiles(static_root);
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    ensure_example_files(static_root);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     std::cout << "========================================\n";
     std::cout << "H2c Static Server Example\n";
@@ -92,15 +92,15 @@ int main(int argc, char* argv[])
     H2cServer server(H2cServerBuilder()
         .host("0.0.0.0")
         .port(port)
-        .ioSchedulerCount(2)
-        .parallelSchedulerCount(0)
-        .staticResponse("/healthz", H2StaticResponse{
+        .io_scheduler_count(2)
+        .parallel_scheduler_count(0)
+        .static_response("/healthz", H2StaticResponse{
             .status = 200,
             .content_type = "text/plain",
             .body = "ok",
         })
-        .staticFiles("/files", H2StaticFileConfig{.root = static_root})
-        .activeConnHandler(fallbackActiveHandler)
+        .static_files("/files", H2StaticFileConfig{.root = static_root})
+        .active_conn_handler(fallback_active_handler)
         .build());
 
     server.start();

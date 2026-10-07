@@ -25,7 +25,7 @@ struct BenchResult {
 };
 
 template<typename Fn>
-BenchResult runTimed(size_t iterations, Fn&& fn)
+BenchResult run_timed(size_t iterations, Fn&& fn)
 {
     size_t checksum = 0;
     auto start = std::chrono::steady_clock::now();
@@ -41,16 +41,16 @@ BenchResult runTimed(size_t iterations, Fn&& fn)
     return BenchResult{.ns_per_op = ns_per_op, .checksum = checksum};
 }
 
-Http2HeadersFrame makeHeadersFrame()
+Http2HeadersFrame make_headers_frame()
 {
     Http2HeadersFrame frame;
     frame.header().stream_id = 1;
-    frame.setEndHeaders(true);
-    frame.setHeaderBlock(std::string(512, 'h'));
+    frame.set_end_headers(true);
+    frame.set_header_block(std::string(512, 'h'));
     return frame;
 }
 
-Http2ChunkedBody makeBody()
+Http2ChunkedBody make_body()
 {
     Http2ChunkedBody body;
     body.append(std::string(256, 'a'));
@@ -59,7 +59,7 @@ Http2ChunkedBody makeBody()
     return body;
 }
 
-HpackDynamicTable makeDynamicTable()
+HpackDynamicTable make_dynamic_table()
 {
     HpackDynamicTable table;
     table.add({"x-alpha", std::string(64, 'a')});
@@ -68,21 +68,21 @@ HpackDynamicTable makeDynamicTable()
     return table;
 }
 
-HpackEncoder makeEncoder()
+HpackEncoder make_encoder()
 {
     HpackEncoder encoder;
-    encoder.dynamicTable().add({"x-alpha", std::string(64, 'a')});
-    encoder.dynamicTable().add({"x-beta", std::string(128, 'b')});
-    encoder.setMaxTableSize(1024);
+    encoder.dynamic_table().add({"x-alpha", std::string(64, 'a')});
+    encoder.dynamic_table().add({"x-beta", std::string(128, 'b')});
+    encoder.set_max_table_size(1024);
     return encoder;
 }
 
-HpackDecoder makeDecoder()
+HpackDecoder make_decoder()
 {
     HpackDecoder decoder;
-    decoder.dynamicTable().add({"x-alpha", std::string(64, 'a')});
-    decoder.dynamicTable().add({"x-beta", std::string(128, 'b')});
-    decoder.setMaxHeaderListSize(4096);
+    decoder.dynamic_table().add({"x-alpha", std::string(64, 'a')});
+    decoder.dynamic_table().add({"x-beta", std::string(128, 'b')});
+    decoder.set_max_header_list_size(4096);
     return decoder;
 }
 
@@ -90,7 +90,7 @@ HpackDecoder makeDecoder()
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -102,23 +102,23 @@ int main(int argc, char* argv[])
         }
     }
 
-    const auto frame_seed = makeHeadersFrame();
-    const auto frame_clone = runTimed(iterations, [&](size_t i) {
+    const auto frame_seed = make_headers_frame();
+    const auto frame_clone = run_timed(iterations, [&](size_t i) {
         auto cloned = frame_seed.clone();
-        return cloned.headerBlock().size() + cloned.streamId() + i % 7;
+        return cloned.header_block().size() + cloned.stream_id() + i % 7;
     });
 
-    const auto body_seed = makeBody();
-    const auto body_clone_move = runTimed(iterations, [&](size_t i) {
+    const auto body_seed = make_body();
+    const auto body_clone_move = run_timed(iterations, [&](size_t i) {
         auto cloned = body_seed.clone();
         Http2ChunkedBody moved = std::move(cloned);
-        return moved.size() + moved.chunkCount() + i % 5;
+        return moved.size() + moved.chunk_count() + i % 5;
     });
 
-    const auto table_seed = makeDynamicTable();
-    const auto encoder_seed = makeEncoder();
-    const auto decoder_seed = makeDecoder();
-    const auto hpack_clone_construct = runTimed(iterations, [&](size_t i) {
+    const auto table_seed = make_dynamic_table();
+    const auto encoder_seed = make_encoder();
+    const auto decoder_seed = make_decoder();
+    const auto hpack_clone_construct = run_timed(iterations, [&](size_t i) {
         auto table_copy = table_seed.clone();
         auto encoder_copy = encoder_seed.clone();
         auto decoder_copy = decoder_seed.clone();
@@ -126,11 +126,11 @@ int main(int argc, char* argv[])
         HpackEncoder fresh_encoder;
         HpackDecoder fresh_decoder;
         return table_copy.count()
-            + encoder_copy.dynamicTable().count()
-            + decoder_copy.dynamicTable().count()
+            + encoder_copy.dynamic_table().count()
+            + decoder_copy.dynamic_table().count()
             + fresh_table.count()
-            + fresh_encoder.dynamicTable().count()
-            + fresh_decoder.dynamicTable().count()
+            + fresh_encoder.dynamic_table().count()
+            + fresh_decoder.dynamic_table().count()
             + i % 3;
     });
 

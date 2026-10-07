@@ -51,23 +51,23 @@ Task<void> pending(FrameLifetime lifetime)
     co_return;
 }
 
-void verifyTaskRefOwnership()
+void verify_task_ref_ownership()
 {
     int destroyed = 0;
-    TaskRef owner = detail::TaskAccess::detachTask(pending(FrameLifetime(destroyed)));
+    TaskRef owner = detail::TaskAccess::detach_task(pending(FrameLifetime(destroyed)));
     auto* state = owner.state();
     assert(state && state->m_refs.load() == 1);
     TaskRef moved(std::move(owner));
-    assert(!owner.isValid() && moved.state() == state && state->m_refs.load() == 1);
+    assert(!owner.is_valid() && moved.state() == state && state->m_refs.load() == 1);
     TaskRef copy(moved);
     assert(state->m_refs.load() == 2);
     owner = std::move(copy);
-    assert(!copy.isValid() && state->m_refs.load() == 2);
+    assert(!copy.is_valid() && state->m_refs.load() == 2);
     owner = TaskRef{};
     assert(state->m_refs.load() == 1 && destroyed == 0);
 
     auto handle = std::coroutine_handle<TaskPromise<void>>::from_address(state->m_handle.address());
-    const TaskRef& borrowed = handle.promise().taskRefView();
+    const TaskRef& borrowed = handle.promise().task_ref_view();
     {
         TaskRef retained(borrowed);
         assert(retained.state() == state && state->m_refs.load() == 2);
@@ -77,7 +77,7 @@ void verifyTaskRefOwnership()
     // Moving the mutable promise view onto its sole owner must not destroy
     // the coroutine frame containing the source reference.
     moved = std::move(const_cast<TaskRef&>(borrowed));
-    assert(!borrowed.isValid() && moved.state() == state && state->m_refs.load() == 1);
+    assert(!borrowed.is_valid() && moved.state() == state && state->m_refs.load() == 1);
     TaskRef& alias = moved;
     moved = std::move(alias);
     moved = alias;
@@ -88,36 +88,36 @@ void verifyTaskRefOwnership()
     TaskRef empty;
     TaskRef empty_copy(empty);
     TaskRef empty_move(std::move(empty));
-    assert(!empty_copy.isValid() && !empty_move.isValid());
-    TaskRef first = detail::TaskAccess::detachTask(pending(FrameLifetime(destroyed)));
-    TaskRef second = detail::TaskAccess::detachTask(pending(FrameLifetime(destroyed)));
+    assert(!empty_copy.is_valid() && !empty_move.is_valid());
+    TaskRef first = detail::TaskAccess::detach_task(pending(FrameLifetime(destroyed)));
+    TaskRef second = detail::TaskAccess::detach_task(pending(FrameLifetime(destroyed)));
     first = std::move(second);
-    assert(!second.isValid() && destroyed == 2);
+    assert(!second.is_valid() && destroyed == 2);
     first = TaskRef{};
     assert(destroyed == 3);
 }
 
 template <typename SchedulerT>
-void verifyRejectedTasks(SchedulerT& scheduler, Scheduler* other)
+void verify_rejected_tasks(SchedulerT& scheduler, Scheduler* other)
 {
     assert(!scheduler.schedule(TaskRef{}));
-    assert(!scheduler.scheduleResume(TaskRef{}));
-    assert(!scheduler.scheduleDeferred(TaskRef{}));
-    assert(!scheduler.scheduleImmediately(TaskRef{}));
-    TaskRef task = detail::TaskAccess::detachTask(answer());
-    detail::setTaskScheduler(task, other);
+    assert(!scheduler.schedule_resume(TaskRef{}));
+    assert(!scheduler.schedule_deferred(TaskRef{}));
+    assert(!scheduler.schedule_immediately(TaskRef{}));
+    TaskRef task = detail::TaskAccess::detach_task(answer());
+    detail::set_task_scheduler(task, other);
     assert(!scheduler.schedule(task));
-    assert(!scheduler.scheduleResume(task));
-    assert(!scheduler.scheduleDeferred(task));
-    assert(!scheduler.scheduleImmediately(task));
-    assert(task.belongScheduler() == other && task.state()->m_refs.load() == 1);
+    assert(!scheduler.schedule_resume(task));
+    assert(!scheduler.schedule_deferred(task));
+    assert(!scheduler.schedule_immediately(task));
+    assert(task.belong_scheduler() == other && task.state()->m_refs.load() == 1);
 }
 
-void verifyMissingSchedulers()
+void verify_missing_schedulers()
 {
-    auto runtime = RuntimeBuilder().ioSchedulerCount(0).parallelSchedulerCount(0).build();
-    const auto io = runtime.blockOnIO(answer());
-    const auto cpu = runtime.spawnCpu(answer());
+    auto runtime = RuntimeBuilder().io_scheduler_count(0).parallel_scheduler_count(0).build();
+    const auto io = runtime.block_on_io(answer());
+    const auto cpu = runtime.spawn_cpu(answer());
     assert(!io && io.error().code() == RuntimeErrorCode::kNoSchedulerAvailable);
     assert(!cpu && cpu.error().code() == RuntimeErrorCode::kNoSchedulerAvailable);
 }
@@ -126,36 +126,36 @@ void verifyMissingSchedulers()
 
 int main()
 {
-    verifyTaskRefOwnership();
-    verifyMissingSchedulers();
-    auto runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    verify_task_ref_ownership();
+    verify_missing_schedulers();
+    auto runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     const auto started = runtime.start();
     assert(started);
-    Scheduler* io = runtime.getIOScheduler(0);
-    Scheduler* compute = runtime.getParallelScheduler(0);
+    Scheduler* io = runtime.get_io_scheduler(0);
+    Scheduler* compute = runtime.get_parallel_scheduler(0);
     assert(io && compute && io->type() == kIOScheduler && compute->type() == kParallelScheduler);
     assert(!io->schedule(TaskRef{}));
-    assert(!compute->scheduleResume(TaskRef{}));
+    assert(!compute->schedule_resume(TaskRef{}));
     detail::ReadyEntry empty;
-    assert(!compute->scheduleReadyEntry(empty));
-    const auto result = runtime.blockOnIO(answer());
+    assert(!compute->schedule_ready_entry(empty));
+    const auto result = runtime.block_on_io(answer());
     assert(result && *result == 42);
-    const auto computed = runtime.blockOnCpu(answer());
+    const auto computed = runtime.block_on_cpu(answer());
     assert(computed && *computed == 42);
-    verifyRejectedTasks(*runtime.getIOScheduler(0), compute);
-    verifyRejectedTasks(*runtime.getParallelScheduler(0), io);
-    verifyRejectedTasks(*io, compute);
-    verifyRejectedTasks(*compute, io);
-    auto spawned_io = runtime.spawnIO(answer());
-    auto spawned_cpu = runtime.spawnCpu(answer());
+    verify_rejected_tasks(*runtime.get_io_scheduler(0), compute);
+    verify_rejected_tasks(*runtime.get_parallel_scheduler(0), io);
+    verify_rejected_tasks(*io, compute);
+    verify_rejected_tasks(*compute, io);
+    auto spawned_io = runtime.spawn_io(answer());
+    auto spawned_cpu = runtime.spawn_cpu(answer());
     assert(spawned_io && spawned_cpu);
     const auto joined_io = spawned_io->join();
     const auto joined_cpu = spawned_cpu->join();
     assert(joined_io && *joined_io == 42 && joined_cpu && *joined_cpu == 42);
-    const auto invalid = runtime.spawnCpu(Task<int>{});
+    const auto invalid = runtime.spawn_cpu(Task<int>{});
     assert(!invalid && invalid.error().code() == RuntimeErrorCode::kSubmitFailed);
     runtime.stop();
-    const auto after_restart = runtime.blockOnCpu(answer());
+    const auto after_restart = runtime.block_on_cpu(answer());
     assert(after_restart && *after_restart == 42);
     runtime.stop();
 

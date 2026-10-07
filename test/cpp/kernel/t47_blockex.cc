@@ -12,7 +12,7 @@
 
 using namespace galay::kernel;
 
-Task<int> explodeTask()
+Task<int> explode_task()
 {
     throw std::runtime_error("boom");
     co_return 0;
@@ -21,11 +21,11 @@ Task<int> explodeTask()
 int main()
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
 
-    auto result = runtime.blockOnIO(explodeTask());
+    auto result = runtime.block_on_io(explode_task());
     assert(!result.has_value());
     assert(result.error().code() == RuntimeErrorCode::kTaskException);
 

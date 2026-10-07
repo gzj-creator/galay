@@ -19,15 +19,15 @@ constexpr std::string_view kSpanName = "batch-processor-benchmark-span";
 
 class CountingExporter final : public galay::tracing::SpanExporter {
 public:
-    galay::tracing::ExportResult exportSpans(std::span<const galay::tracing::Span> spans) override {
+    galay::tracing::ExportResult export_spans(std::span<const galay::tracing::Span> spans) override {
         std::size_t observed = 0;
         for (const auto& span : spans) {
             observed += span.name().size();
             observed += span.tracestate().size();
             observed += span.attributes().size();
             observed += span.status().message.size();
-            observed += span.spanContext().traceId().bytes().size();
-            observed += span.spanContext().spanId().bytes().size();
+            observed += span.span_context().trace_id().bytes().size();
+            observed += span.span_context().span_id().bytes().size();
         }
         observed_weight.fetch_add(observed, std::memory_order_relaxed);
         exported_spans.fetch_add(spans.size(), std::memory_order_relaxed);
@@ -35,7 +35,7 @@ public:
         return galay::tracing::ExportResult::kSuccess;
     }
 
-    bool forceFlush(std::chrono::milliseconds) override {
+    bool force_flush(std::chrono::milliseconds) override {
         return true;
     }
 
@@ -46,7 +46,7 @@ public:
 
 class BlockingFirstExporter final : public galay::tracing::SpanExporter {
 public:
-    galay::tracing::ExportResult exportSpans(std::span<const galay::tracing::Span>) override {
+    galay::tracing::ExportResult export_spans(std::span<const galay::tracing::Span>) override {
         const auto call = export_calls.fetch_add(1, std::memory_order_acq_rel) + 1;
         if (call == 1) {
             export_started.store(true, std::memory_order_release);
@@ -62,7 +62,7 @@ public:
     std::atomic<bool> release_first{false};
 };
 
-[[nodiscard]] const char* buildType() {
+[[nodiscard]] const char* build_type() {
 #ifdef NDEBUG
     return "Release";
 #else
@@ -70,7 +70,7 @@ public:
 #endif
 }
 
-[[nodiscard]] const char* modeName(galay::tracing::BatchSpanScheduleMode mode) {
+[[nodiscard]] const char* mode_name(galay::tracing::BatchSpanScheduleMode mode) {
     switch (mode) {
     case galay::tracing::BatchSpanScheduleMode::kTimed:
         return "timed";
@@ -82,17 +82,17 @@ public:
     return "unknown";
 }
 
-[[nodiscard]] galay::tracing::TraceContext makeContext() {
+[[nodiscard]] galay::tracing::TraceContext make_context() {
     return galay::tracing::TraceContext(
-        galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
-        galay::tracing::SpanId::fromHex("00f067aa0ba902b7"),
+        galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"),
+        galay::tracing::SpanId::from_hex("00f067aa0ba902b7"),
         0x01);
 }
 
-std::vector<galay::tracing::Span> makeSpans(std::size_t count) {
+std::vector<galay::tracing::Span> make_spans(std::size_t count) {
     std::vector<galay::tracing::Span> spans;
     spans.reserve(count);
-    const auto context = makeContext();
+    const auto context = make_context();
     for (std::size_t i = 0; i < count; ++i) {
         galay::tracing::Span span(std::string(kSpanName), context);
         span.end();
@@ -107,10 +107,10 @@ struct ScheduleResult {
     double ns_per_e2e;
 };
 
-ScheduleResult runScheduleOnce(galay::tracing::BatchSpanScheduleMode mode) {
+ScheduleResult run_schedule_once(galay::tracing::BatchSpanScheduleMode mode) {
     constexpr std::size_t kIterations = 100000;
     constexpr std::size_t kBatchSize = 512;
-    auto spans = makeSpans(kIterations);
+    auto spans = make_spans(kIterations);
     auto exporter = std::make_unique<CountingExporter>();
     auto* rawExporter = exporter.get();
     galay::tracing::BatchSpanProcessor processor(std::move(exporter), {
@@ -122,10 +122,10 @@ ScheduleResult runScheduleOnce(galay::tracing::BatchSpanScheduleMode mode) {
 
     const auto start = std::chrono::steady_clock::now();
     for (auto& span : spans) {
-        processor.onEnd(std::move(span));
+        processor.on_end(std::move(span));
     }
     const auto afterOnEnd = std::chrono::steady_clock::now();
-    const bool flushed = processor.forceFlush(std::chrono::seconds(30));
+    const bool flushed = processor.force_flush(std::chrono::seconds(30));
     const auto afterFlush = std::chrono::steady_clock::now();
     const bool shutdown = processor.shutdown(std::chrono::seconds(30));
 
@@ -135,13 +135,13 @@ ScheduleResult runScheduleOnce(galay::tracing::BatchSpanScheduleMode mode) {
     const auto exported = rawExporter->exported_spans.load(std::memory_order_relaxed);
     const auto exportCalls = rawExporter->export_calls.load(std::memory_order_relaxed);
     const auto observedWeight = rawExporter->observed_weight.load(std::memory_order_relaxed);
-    const auto dropped = processor.droppedSpanCount();
+    const auto dropped = processor.dropped_span_count();
     const bool ok = flushed && shutdown && exported == kIterations && dropped == 0;
 
     if (!ok) {
         std::cout << "B7-BatchProcessorSchedule workload=" << kIterations
-                  << " build=" << buildType()
-                  << " mode=" << modeName(mode)
+                  << " build=" << build_type()
+                  << " mode=" << mode_name(mode)
                   << " ok=0 export_calls=" << exportCalls
                   << " exported=" << exported
                   << " observed_weight=" << observedWeight
@@ -154,13 +154,13 @@ ScheduleResult runScheduleOnce(galay::tracing::BatchSpanScheduleMode mode) {
     };
 }
 
-void runSchedule(galay::tracing::BatchSpanScheduleMode mode) {
+void run_schedule(galay::tracing::BatchSpanScheduleMode mode) {
     constexpr std::size_t kIterations = 100000;
     constexpr std::size_t kBatchSize = 512;
     constexpr std::size_t kRounds = 7;
     std::array<ScheduleResult, kRounds> results{};
     for (auto& result : results) {
-        result = runScheduleOnce(mode);
+        result = run_schedule_once(mode);
     }
 
     auto best = [](std::array<ScheduleResult, kRounds> values, auto member) {
@@ -172,8 +172,8 @@ void runSchedule(galay::tracing::BatchSpanScheduleMode mode) {
     };
 
     std::cout << "B7-BatchProcessorSchedule workload=" << kIterations
-              << " build=" << buildType()
-              << " mode=" << modeName(mode)
+              << " build=" << build_type()
+              << " mode=" << mode_name(mode)
               << " rounds=" << kRounds
               << " batch_size=" << kBatchSize
               << " queue_capacity=" << kIterations
@@ -187,7 +187,7 @@ void runSchedule(galay::tracing::BatchSpanScheduleMode mode) {
               << '\n';
 }
 
-void runShutdownTimeoutPressure() {
+void run_shutdown_timeout_pressure() {
     constexpr std::size_t kQueuedAfterBlockedExport = 64;
     auto exporter = std::make_unique<BlockingFirstExporter>();
     auto* rawExporter = exporter.get();
@@ -198,15 +198,15 @@ void runShutdownTimeoutPressure() {
         .schedule_mode = galay::tracing::BatchSpanScheduleMode::kBatchSize,
     });
 
-    auto firstSpan = makeSpans(1);
-    processor.onEnd(std::move(firstSpan.front()));
+    auto firstSpan = make_spans(1);
+    processor.on_end(std::move(firstSpan.front()));
     while (!rawExporter->export_started.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
 
-    auto queued = makeSpans(kQueuedAfterBlockedExport);
+    auto queued = make_spans(kQueuedAfterBlockedExport);
     for (auto& span : queued) {
-        processor.onEnd(std::move(span));
+        processor.on_end(std::move(span));
     }
 
     const auto start = std::chrono::steady_clock::now();
@@ -232,12 +232,12 @@ void runShutdownTimeoutPressure() {
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    runSchedule(galay::tracing::BatchSpanScheduleMode::kTimed);
-    runSchedule(galay::tracing::BatchSpanScheduleMode::kOnEnd);
-    runSchedule(galay::tracing::BatchSpanScheduleMode::kBatchSize);
-    runShutdownTimeoutPressure();
+    run_schedule(galay::tracing::BatchSpanScheduleMode::kTimed);
+    run_schedule(galay::tracing::BatchSpanScheduleMode::kOnEnd);
+    run_schedule(galay::tracing::BatchSpanScheduleMode::kBatchSize);
+    run_shutdown_timeout_pressure();
 }

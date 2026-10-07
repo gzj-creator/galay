@@ -49,18 +49,18 @@ std::atomic<uint64_t> g_send_fail{0};
 std::atomic<uint64_t> g_recv_fail{0};
 std::atomic<uint64_t> g_peer_closed{0};
 
-bool configureBenchmarkTlsContext(SslContext& ctx) {
-    ctx.disableSessionCache();
-    ctx.setSessionTimeout(0);
-    ctx.disableSessionTickets();
-    return ctx.setCiphersuites("TLS_AES_128_GCM_SHA256").has_value();
+bool configure_benchmark_tls_context(SslContext& ctx) {
+    ctx.disable_session_cache();
+    ctx.set_session_timeout(0);
+    ctx.disable_session_tickets();
+    return ctx.set_ciphersuites("TLS_AES_128_GCM_SHA256").has_value();
 }
 
-std::string benchmarkCertPath(const char* name) {
+std::string benchmark_cert_path(const char* name) {
     return std::string(GALAY_SSL_BENCHMARK_CERT_DIR) + "/" + name;
 }
 
-bool parseInt(const char* text, int minValue, int* value) {
+bool parse_int(const char* text, int minValue, int* value) {
     int parsed = 0;
     const char* end = text + std::char_traits<char>::length(text);
     auto result = std::from_chars(text, end, parsed);
@@ -71,16 +71,16 @@ bool parseInt(const char* text, int minValue, int* value) {
     return true;
 }
 
-bool parsePort(const char* text, uint16_t* value) {
+bool parse_port(const char* text, uint16_t* value) {
     int parsed = 0;
-    if (!parseInt(text, 1, &parsed) || parsed > std::numeric_limits<uint16_t>::max()) {
+    if (!parse_int(text, 1, &parsed) || parsed > std::numeric_limits<uint16_t>::max()) {
         return false;
     }
     *value = static_cast<uint16_t>(parsed);
     return true;
 }
 
-bool parseSize(const char* text, size_t* value) {
+bool parse_size(const char* text, size_t* value) {
     size_t parsed = 0;
     const char* end = text + std::char_traits<char>::length(text);
     auto result = std::from_chars(text, end, parsed);
@@ -91,7 +91,7 @@ bool parseSize(const char* text, size_t* value) {
     return true;
 }
 
-void printUsage(const char* program) {
+void print_usage(const char* program) {
     std::cerr << "Usage: " << program
               << " <host> <port> <connections> <requests_per_conn> [payload_bytes] [threads] [connect_retries]\n";
     std::cerr << "Requires a running benchmark_ssl_tls_server_throughput endpoint.\n";
@@ -112,7 +112,7 @@ struct ThreadMetrics {
     uint64_t peer_closed = 0;
 };
 
-void mergeThreadMetrics(const ThreadMetrics& m) {
+void merge_thread_metrics(const ThreadMetrics& m) {
     g_requests.fetch_add(m.requests, std::memory_order_relaxed);
     g_bytes_sent.fetch_add(m.bytes_sent, std::memory_order_relaxed);
     g_bytes_recv.fetch_add(m.bytes_recv, std::memory_order_relaxed);
@@ -125,11 +125,11 @@ void mergeThreadMetrics(const ThreadMetrics& m) {
     g_peer_closed.fetch_add(m.peer_closed, std::memory_order_relaxed);
 }
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
-Task<void> sslClient(SslContext* ctx,
+Task<void> ssl_client(SslContext* ctx,
                     const std::string& host, uint16_t port,
                     const std::string& message, int requestCount,
                     int connectRetries,
@@ -138,7 +138,7 @@ Task<void> sslClient(SslContext* ctx,
                     bool statsEnabled) {
     SslSocket socket(ctx);
 
-    if (!socket.isValid()) {
+    if (!socket.is_valid()) {
         metrics->errors += 1;
         metrics->connections_done += 1;
         if (thread_done) {
@@ -147,10 +147,10 @@ Task<void> sslClient(SslContext* ctx,
         co_return;
     }
 
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     // 设置 SNI
-    socket.setHostname(host);
+    socket.set_hostname(host);
 
     // 连接（轻量重试，缓解高并发瞬时接入抖动）
     bool connected = false;
@@ -167,11 +167,11 @@ Task<void> sslClient(SslContext* ctx,
 
         co_await socket.close();
         socket = SslSocket(ctx);
-        if (!socket.isValid()) {
+        if (!socket.is_valid()) {
             break;
         }
-        socket.option().handleNonBlock();
-        socket.setHostname(host);
+        socket.option().handle_non_block();
+        socket.set_hostname(host);
     }
 
     if (!connected) {
@@ -209,7 +209,7 @@ Task<void> sslClient(SslContext* ctx,
         }
         metrics->bytes_sent += sendResult.value();
         if (statsEnabled) {
-            bench::sslStatsAddSend(sendResult.value());
+            bench::ssl_stats_add_send(sendResult.value());
         }
 
         // 接收 - echo 是字节流，可能被拆包；按发送长度累计读满
@@ -234,7 +234,7 @@ Task<void> sslClient(SslContext* ctx,
             const size_t received = recvResult.value().size();
             metrics->bytes_recv += received;
             if (statsEnabled) {
-                bench::sslStatsAddRecv(received);
+                bench::ssl_stats_add_recv(received);
             }
             remaining -= received;
         }
@@ -253,7 +253,7 @@ Task<void> sslClient(SslContext* ctx,
     }
 }
 
-void runClientThread(const std::string& host, uint16_t port,
+void run_client_thread(const std::string& host, uint16_t port,
                      int connections, int requestsPerConn,
                      size_t payloadBytes, bool statsEnabled,
                      int connectRetries) {
@@ -261,31 +261,31 @@ void runClientThread(const std::string& host, uint16_t port,
 
     // 创建 SSL 上下文
     SslContext ctx(SslMethod::TLS_1_3_Client);
-    if (!ctx.isValid()) {
+    if (!ctx.is_valid()) {
         metrics.errors += static_cast<uint64_t>(connections);
         metrics.connections_done += static_cast<uint64_t>(connections);
-        mergeThreadMetrics(metrics);
+        merge_thread_metrics(metrics);
         return;
     }
 
-    if (!configureBenchmarkTlsContext(ctx)) {
+    if (!configure_benchmark_tls_context(ctx)) {
         metrics.errors += static_cast<uint64_t>(connections);
         metrics.connections_done += static_cast<uint64_t>(connections);
-        mergeThreadMetrics(metrics);
+        merge_thread_metrics(metrics);
         return;
     }
 
     // 加载CA证书，即使不验证（用于建立信任链）
-    auto caResult = ctx.loadCACertificate(benchmarkCertPath("ca.crt"));
+    auto caResult = ctx.load_ca_certificate(benchmark_cert_path("ca.crt"));
     if (!caResult) {
         metrics.errors += static_cast<uint64_t>(connections);
         metrics.connections_done += static_cast<uint64_t>(connections);
-        mergeThreadMetrics(metrics);
+        merge_thread_metrics(metrics);
         return;
     }
 
     // 不验证服务器证书（测试用）
-    ctx.setVerifyMode(SslVerifyMode::None);
+    ctx.set_verify_mode(SslVerifyMode::None);
 
     // 创建调度器
     TestScheduler scheduler;
@@ -297,7 +297,7 @@ void runClientThread(const std::string& host, uint16_t port,
 
     // 启动客户端连接
     for (int i = 0; i < connections; i++) {
-        scheduleTask(scheduler, sslClient(&ctx, host, port, message, requestsPerConn,
+        schedule_task(scheduler, ssl_client(&ctx, host, port, message, requestsPerConn,
                                           connectRetries, &thread_done, &metrics, statsEnabled));
     }
 
@@ -307,20 +307,20 @@ void runClientThread(const std::string& host, uint16_t port,
     }
 
     scheduler.stop();
-    mergeThreadMetrics(metrics);
+    merge_thread_metrics(metrics);
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
-        printUsage(argv[0]);
+        print_usage(argv[0]);
         return 0;
     }
     if (argc < 5) {
-        printUsage(argv[0]);
+        print_usage(argv[0]);
         return 1;
     }
 
@@ -328,43 +328,43 @@ int main(int argc, char* argv[]) {
     uint16_t port = 0;
     int connections = 0;
     int requestsPerConn = 0;
-    if (!parsePort(argv[2], &port) ||
-        !parseInt(argv[3], 1, &connections) ||
-        !parseInt(argv[4], 1, &requestsPerConn)) {
-        printUsage(argv[0]);
+    if (!parse_port(argv[2], &port) ||
+        !parse_int(argv[3], 1, &connections) ||
+        !parse_int(argv[4], 1, &requestsPerConn)) {
+        print_usage(argv[0]);
         return 1;
     }
     // 保持默认与历史压测一致（47 字节），大包场景用第 5 个参数显式指定。
     size_t payloadBytes = 47;
     if (argc >= 6) {
-        if (!parseSize(argv[5], &payloadBytes)) {
-            printUsage(argv[0]);
+        if (!parse_size(argv[5], &payloadBytes)) {
+            print_usage(argv[0]);
             return 1;
         }
     }
     int threads = 1;
     if (argc >= 7) {
-        if (!parseInt(argv[6], 1, &threads)) {
-            printUsage(argv[0]);
+        if (!parse_int(argv[6], 1, &threads)) {
+            print_usage(argv[0]);
             return 1;
         }
     }
     int connectRetries = 3;
     if (argc >= 8) {
-        if (!parseInt(argv[7], 1, &connectRetries)) {
-            printUsage(argv[0]);
+        if (!parse_int(argv[7], 1, &connectRetries)) {
+            print_usage(argv[0]);
             return 1;
         }
     }
 
     // 设置信号处理
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
     signal(SIGPIPE, SIG_IGN);
 
     const char* statsEnv = std::getenv("GALAY_SSL_STATS");
     const bool statsEnabled = statsEnv != nullptr && statsEnv[0] != '\0' && std::string(statsEnv) != "0";
-    bench::sslStatsSetEnabled(statsEnabled);
+    bench::ssl_stats_set_enabled(statsEnabled);
 
     auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -378,7 +378,7 @@ int main(int argc, char* argv[]) {
         if (conns == 0) {
             continue;
         }
-        workers.emplace_back(runClientThread, host, port, conns, requestsPerConn,
+        workers.emplace_back(run_client_thread, host, port, conns, requestsPerConn,
                              payloadBytes, statsEnabled, connectRetries);
     }
 
@@ -424,7 +424,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (statsEnabled) {
-        auto stats = bench::sslStatsSnapshot();
+        auto stats = bench::ssl_stats_snapshot();
         std::cout << "\nSSL IO Stats (Benchmark-side):" << std::endl;
         std::cout << "Send ops: " << stats.send_ops
                   << ", send plain bytes: " << stats.send_plain_bytes << std::endl;

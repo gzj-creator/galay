@@ -31,7 +31,7 @@ enum class LogLevel {
  * @param level 日志级别
  * @return 级别名称的字符串视图（如 "TRACE"、"DEBUG" 等）
  */
-[[nodiscard]] constexpr std::string_view logLevelName(LogLevel level) noexcept {
+[[nodiscard]] constexpr std::string_view log_level_name(LogLevel level) noexcept {
     switch (level) {
     case LogLevel::kTrace:
         return "TRACE";

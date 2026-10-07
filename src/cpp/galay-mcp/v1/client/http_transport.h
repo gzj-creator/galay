@@ -20,34 +20,34 @@ public:
 
     ConnectAwaitable connect();
     ConnectAwaitable connect(std::string url);
-    CloseAwaitable disconnectAsync();
+    CloseAwaitable disconnect_async();
 
     galay::kernel::Task<void> initialize(std::string clientName,
                          std::string clientVersion,
                          std::expected<void, McpError>& result);
-    galay::kernel::Task<void> callTool(std::string toolName,
+    galay::kernel::Task<void> call_tool(std::string toolName,
                        std::string arguments,
                        std::expected<std::string, McpError>& result);
-    galay::kernel::Task<void> listTools(std::expected<std::vector<Tool>, McpError>& result);
-    galay::kernel::Task<void> listResources(std::expected<std::vector<Resource>, McpError>& result);
-    galay::kernel::Task<void> readResource(std::string uri,
+    galay::kernel::Task<void> list_tools(std::expected<std::vector<Tool>, McpError>& result);
+    galay::kernel::Task<void> list_resources(std::expected<std::vector<Resource>, McpError>& result);
+    galay::kernel::Task<void> read_resource(std::string uri,
                            std::expected<std::string, McpError>& result);
-    galay::kernel::Task<void> listPrompts(std::expected<std::vector<Prompt>, McpError>& result);
-    galay::kernel::Task<void> getPrompt(std::string name,
+    galay::kernel::Task<void> list_prompts(std::expected<std::vector<Prompt>, McpError>& result);
+    galay::kernel::Task<void> get_prompt(std::string name,
                         std::string arguments,
                         std::expected<std::string, McpError>& result);
     galay::kernel::Task<void> ping(std::expected<void, McpError>& result);
 
-    bool isConnected() const;
-    bool isInitialized() const;
-    const ServerInfo& getServerInfo() const;
-    const ServerCapabilities& getServerCapabilities() const;
+    bool is_connected() const;
+    bool is_initialized() const;
+    const ServerInfo& get_server_info() const;
+    const ServerCapabilities& get_server_capabilities() const;
 
 private:
-    galay::kernel::Task<void> sendRequest(std::string_view method,
+    galay::kernel::Task<void> send_request(std::string_view method,
                           std::optional<std::string> params,
                           std::expected<std::string, McpError>& result);
-    int64_t generateRequestId();
+    int64_t generate_request_id();
 
 private:
     kernel::Runtime* m_runtime;

@@ -52,7 +52,7 @@ void fail(std::string message)
     g_done.store(true, std::memory_order_release);
 }
 
-uint16_t socketPort(int fd)
+uint16_t socket_port(int fd)
 {
     sockaddr_in address{};
     socklen_t length = sizeof(address);
@@ -62,16 +62,16 @@ uint16_t socketPort(int fd)
     return ntohs(address.sin_port);
 }
 
-bool matchesSource(const Host& source, uint16_t expected_port)
+bool matches_source(const Host& source, uint16_t expected_port)
 {
-    const auto* address = reinterpret_cast<const sockaddr_in*>(source.sockAddr());
+    const auto* address = reinterpret_cast<const sockaddr_in*>(source.sock_addr());
     return address != nullptr &&
            address->sin_family == AF_INET &&
            ntohs(address->sin_port) == expected_port;
 }
 
 #ifdef USE_IOURING
-bool hostShouldSupportRecvmsgMultishot()
+bool host_should_support_recvmsg_multishot()
 {
 #if IO_URING_VERSION_MAJOR > 2 || \
     (IO_URING_VERSION_MAJOR == 2 && IO_URING_VERSION_MINOR >= 2)
@@ -92,15 +92,15 @@ bool hostShouldSupportRecvmsgMultishot()
 #endif
 
 #ifdef USE_IOURING
-Task<void> receiveBurst()
+Task<void> receive_burst()
 {
     AsyncUdpSocket socket;
-    auto option = socket.option().handleReuseAddr();
+    auto option = socket.option().handle_reuse_addr();
     if (!option) {
         fail("reuse addr failed: " + option.error().message());
         co_return;
     }
-    option = socket.option().handleNonBlock();
+    option = socket.option().handle_non_block();
     if (!option) {
         fail("non-block failed: " + option.error().message());
         co_return;
@@ -112,7 +112,7 @@ Task<void> receiveBurst()
         fail("bind failed: " + bind_result.error().message());
         co_return;
     }
-    const uint16_t port = socketPort(socket.handle().fd);
+    const uint16_t port = socket_port(socket.handle().fd);
     if (port == 0) {
         fail("server getsockname returned port 0");
         co_return;
@@ -125,7 +125,7 @@ Task<void> receiveBurst()
     auto first_result = co_await socket.recvfrom(first, sizeof(first), &first_source);
     if (!first_result || first_result.value() != sizeof(first) ||
         std::string_view(first, sizeof(first)) != kFirstPayload.substr(0, sizeof(first)) ||
-        !matchesSource(first_source, g_first_client_port.load(std::memory_order_acquire))) {
+        !matches_source(first_source, g_first_client_port.load(std::memory_order_acquire))) {
         fail("first truncated datagram or source address mismatch");
         co_return;
     }
@@ -136,7 +136,7 @@ Task<void> receiveBurst()
     auto second_result = co_await socket.recvfrom(second, sizeof(second), &second_source);
     if (!second_result || second_result.value() != kSecondPayload.size() ||
         std::string_view(second, second_result ? second_result.value() : 0) != kSecondPayload ||
-        !matchesSource(second_source, g_second_client_port.load(std::memory_order_acquire))) {
+        !matches_source(second_source, g_second_client_port.load(std::memory_order_acquire))) {
         fail("second recvfrom did not preserve the next datagram boundary");
         co_return;
     }
@@ -146,12 +146,12 @@ Task<void> receiveBurst()
     auto third_result = co_await socket.recvfrom(third, sizeof(third), &third_source);
     if (!third_result || third_result.value() != kThirdPayload.size() ||
         std::string_view(third, third_result ? third_result.value() : 0) != kThirdPayload ||
-        !matchesSource(third_source, g_first_client_port.load(std::memory_order_acquire))) {
+        !matches_source(third_source, g_first_client_port.load(std::memory_order_acquire))) {
         fail("third recvfrom payload or source address mismatch");
         co_return;
     }
 
-    if (hostShouldSupportRecvmsgMultishot() &&
+    if (host_should_support_recvmsg_multishot() &&
         !socket.controller()->m_recvfrom_multishot_armed) {
         fail("Linux io_uring test host did not keep UDP multishot recvmsg armed");
         co_return;
@@ -167,7 +167,7 @@ Task<void> receiveBurst()
 }
 #endif
 
-bool sendDatagram(int fd, const sockaddr_in& target, std::string_view payload)
+bool send_datagram(int fd, const sockaddr_in& target, std::string_view payload)
 {
     const ssize_t sent = ::sendto(fd,
                                   payload.data(),
@@ -178,7 +178,7 @@ bool sendDatagram(int fd, const sockaddr_in& target, std::string_view payload)
     return sent == static_cast<ssize_t>(payload.size());
 }
 
-bool closeSocket(int fd, const char* label)
+bool close_socket(int fd, const char* label)
 {
     if (::close(fd) == 0) {
         return true;
@@ -201,7 +201,7 @@ int main()
         LogError("io_uring scheduler start failed: {}", start_result.error().message());
         return 1;
     }
-    if (!scheduleTask(scheduler, receiveBurst())) {
+    if (!schedule_task(scheduler, receive_burst())) {
         scheduler.stop();
         LogError("failed to schedule UDP receiver");
         return 1;
@@ -224,10 +224,10 @@ int main()
     if (first_client_fd < 0 || second_client_fd < 0) {
         bool cleanup_ok = true;
         if (first_client_fd >= 0) {
-            cleanup_ok = closeSocket(first_client_fd, "first client") && cleanup_ok;
+            cleanup_ok = close_socket(first_client_fd, "first client") && cleanup_ok;
         }
         if (second_client_fd >= 0) {
-            cleanup_ok = closeSocket(second_client_fd, "second client") && cleanup_ok;
+            cleanup_ok = close_socket(second_client_fd, "second client") && cleanup_ok;
         }
         scheduler.stop();
         LogError("failed to create UDP client sockets");
@@ -244,30 +244,30 @@ int main()
         ::bind(second_client_fd,
                reinterpret_cast<const sockaddr*>(&second_client_address),
                sizeof(second_client_address)) != 0) {
-        const bool first_closed = closeSocket(first_client_fd, "first client");
-        const bool second_closed = closeSocket(second_client_fd, "second client");
+        const bool first_closed = close_socket(first_client_fd, "first client");
+        const bool second_closed = close_socket(second_client_fd, "second client");
         scheduler.stop();
         LogError("failed to bind UDP client sockets");
         return first_closed && second_closed ? 1 : 2;
     }
-    g_first_client_port.store(socketPort(first_client_fd), std::memory_order_release);
-    g_second_client_port.store(socketPort(second_client_fd), std::memory_order_release);
+    g_first_client_port.store(socket_port(first_client_fd), std::memory_order_release);
+    g_second_client_port.store(socket_port(second_client_fd), std::memory_order_release);
 
     sockaddr_in server_address{};
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(server_port);
     server_address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-    bool sent = sendDatagram(first_client_fd, server_address, kFirstPayload);
+    bool sent = send_datagram(first_client_fd, server_address, kFirstPayload);
     while (sent && !g_first_received.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() < deadline) {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     sent = sent && g_first_received.load(std::memory_order_acquire) &&
-           sendDatagram(second_client_fd, server_address, kSecondPayload) &&
-           sendDatagram(first_client_fd, server_address, kThirdPayload);
-    const bool first_closed = closeSocket(first_client_fd, "first client");
-    const bool second_closed = closeSocket(second_client_fd, "second client");
+           send_datagram(second_client_fd, server_address, kSecondPayload) &&
+           send_datagram(first_client_fd, server_address, kThirdPayload);
+    const bool first_closed = close_socket(first_client_fd, "first client");
+    const bool second_closed = close_socket(second_client_fd, "second client");
     sent = sent && first_closed && second_closed;
     if (!sent) {
         scheduler.stop();

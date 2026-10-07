@@ -11,7 +11,7 @@ using namespace galay::mongo;
 namespace
 {
 
-int64_t makeUniqueId()
+int64_t make_unique_id()
 {
     return static_cast<int64_t>(
         std::chrono::duration_cast<std::chrono::microseconds>(
@@ -24,14 +24,14 @@ int main()
 {
     std::cout << "=== T4: Sync Mongo Functional Tests ===" << std::endl;
 
-    const auto test_cfg = mongo_test::loadMongoTestConfig();
-    mongo_test::printMongoTestConfig(test_cfg);
+    const auto test_cfg = mongo_test::load_mongo_test_config();
+    mongo_test::print_mongo_test_config(test_cfg);
 
     const std::string collection = "galay_mongo_sync_functional";
-    const int64_t doc_id = makeUniqueId();
+    const int64_t doc_id = make_unique_id();
 
     MongoClient session;
-    const auto cfg = mongo_test::toMongoConfig(test_cfg);
+    const auto cfg = mongo_test::to_mongo_config(test_cfg);
 
     auto fail = [&](const std::string& message) -> int {
         std::cerr << "FAIL: " << message << std::endl;
@@ -72,7 +72,7 @@ int main()
     doc.append("counter", int32_t(1));
     doc.append("stage", "created");
 
-    auto inserted = session.insertOne(test_cfg.database, collection, doc);
+    auto inserted = session.insert_one(test_cfg.database, collection, doc);
     if (!inserted) {
         return fail("insertOne failed: " + inserted.error().message());
     }
@@ -80,12 +80,12 @@ int main()
     MongoDocument filter;
     filter.append("_id", doc_id);
 
-    auto found1 = session.findOne(test_cfg.database, collection, filter);
+    auto found1 = session.find_one(test_cfg.database, collection, filter);
     if (!found1) {
         return fail("findOne(after insert) failed: " + found1.error().message());
     }
 
-    const auto first_batch_size_1 = mongo_test::firstBatchSize(*found1);
+    const auto first_batch_size_1 = mongo_test::first_batch_size(*found1);
     if (!first_batch_size_1) {
         return fail("findOne(after insert) parse failed: " + first_batch_size_1.error());
     }
@@ -93,12 +93,12 @@ int main()
         return fail("findOne(after insert) expected firstBatch size=1");
     }
 
-    const auto first_doc_1 = mongo_test::firstBatchFrontDocument(*found1);
+    const auto first_doc_1 = mongo_test::first_batch_front_document(*found1);
     if (!first_doc_1) {
         return fail("findOne(after insert) first document parse failed: " + first_doc_1.error());
     }
-    if (first_doc_1->getInt32("counter", -1) != 1 ||
-        first_doc_1->getString("stage") != "created") {
+    if (first_doc_1->get_int32("counter", -1) != 1 ||
+        first_doc_1->get_string("stage") != "created") {
         return fail("findOne(after insert) content mismatch");
     }
 
@@ -109,7 +109,7 @@ int main()
     MongoDocument update_doc;
     update_doc.append("$set", std::move(set_doc));
 
-    auto updated = session.updateOne(test_cfg.database,
+    auto updated = session.update_one(test_cfg.database,
                                      collection,
                                      filter,
                                      update_doc,
@@ -118,31 +118,31 @@ int main()
         return fail("updateOne failed: " + updated.error().message());
     }
 
-    auto found2 = session.findOne(test_cfg.database, collection, filter);
+    auto found2 = session.find_one(test_cfg.database, collection, filter);
     if (!found2) {
         return fail("findOne(after update) failed: " + found2.error().message());
     }
 
-    const auto first_doc_2 = mongo_test::firstBatchFrontDocument(*found2);
+    const auto first_doc_2 = mongo_test::first_batch_front_document(*found2);
     if (!first_doc_2) {
         return fail("findOne(after update) first document parse failed: " + first_doc_2.error());
     }
-    if (first_doc_2->getInt32("counter", -1) != 2 ||
-        first_doc_2->getString("stage") != "updated") {
+    if (first_doc_2->get_int32("counter", -1) != 2 ||
+        first_doc_2->get_string("stage") != "updated") {
         return fail("findOne(after update) content mismatch");
     }
 
-    auto deleted = session.deleteOne(test_cfg.database, collection, filter);
+    auto deleted = session.delete_one(test_cfg.database, collection, filter);
     if (!deleted) {
         return fail("deleteOne failed: " + deleted.error().message());
     }
 
-    auto found3 = session.findOne(test_cfg.database, collection, filter);
+    auto found3 = session.find_one(test_cfg.database, collection, filter);
     if (!found3) {
         return fail("findOne(after delete) failed: " + found3.error().message());
     }
 
-    const auto first_batch_size_3 = mongo_test::firstBatchSize(*found3);
+    const auto first_batch_size_3 = mongo_test::first_batch_size(*found3);
     if (!first_batch_size_3) {
         return fail("findOne(after delete) parse failed: " + first_batch_size_3.error());
     }

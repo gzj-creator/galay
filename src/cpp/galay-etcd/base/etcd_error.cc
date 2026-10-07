@@ -51,7 +51,7 @@ std::string EtcdError::message() const
     return base;
 }
 
-bool EtcdError::isOk() const
+bool EtcdError::is_ok() const
 {
     return m_type == EtcdErrorType::Success;
 }

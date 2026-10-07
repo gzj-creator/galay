@@ -31,8 +31,8 @@ public:
      * @param context 要设置的追踪上下文，可为空以清除当前上下文
      */
     explicit KernelTraceContextScope(std::optional<TraceContext> context)
-        : m_previous(currentContext()) {
-        setCurrentContext(std::move(context));
+        : m_previous(current_context()) {
+        set_current_context(std::move(context));
     }
 
     /**
@@ -40,9 +40,9 @@ public:
      */
     ~KernelTraceContextScope() noexcept {
         try {
-            setCurrentContext(std::move(m_previous));
+            set_current_context(std::move(m_previous));
         } catch (...) {
-            clearCurrentContext();
+            clear_current_context();
         }
     }
 
@@ -59,8 +59,8 @@ private:
  * 协程任务应将返回值作为参数传递，并使用 *_CTX 系列日志 API。
  * @return 当前线程的活跃追踪上下文，若无则返回空
  */
-[[nodiscard]] inline std::optional<TraceContext> captureTraceContext() noexcept {
-    return currentContext();
+[[nodiscard]] inline std::optional<TraceContext> capture_trace_context() noexcept {
+    return current_context();
 }
 
 } // namespace galay::tracing

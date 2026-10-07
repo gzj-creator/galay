@@ -43,66 +43,66 @@ public:
     IOUringReactor& operator=(const IOUringReactor&) = delete;
 
     void notify();  ///< 从其他线程唤醒阻塞中的 io_uring wait
-    GHandle getHandle() const;  ///< 返回测试可见的 eventfd 读端句柄
+    GHandle get_handle() const;  ///< 返回测试可见的 eventfd 读端句柄
     std::expected<void, IOError> start();  ///< 显式初始化 eventfd、io_uring ring 和 recv buffer ring
 
-    int addAccept(IOController* controller);  ///< 注册 accept 请求；1=立即完成，0=已提交，<0=错误
+    int add_accept(IOController* controller);  ///< 注册 accept 请求；1=立即完成，0=已提交，<0=错误
     /** @brief owner 发布单次 accept；false 表示同步完成且不发出恢复回调。 */
-    bool submitAccept(AcceptAwaitable& awaitable, Waker&& waker);
+    bool submit_accept(AcceptAwaitable& awaitable, Waker&& waker);
     /** @brief owner timer 竞争同一 completion；只解绑 frame，不取消资源 multishot。 */
-    void timeoutAccept(AcceptAwaitable& awaitable);
-    int addConnect(IOController* controller);  ///< 注册 connect 请求；1=立即完成，0=已提交，<0=错误
-    int addRecv(IOController* controller);  ///< 注册 recv 请求；1=立即完成，0=已提交，<0=错误
-    int addSend(IOController* controller);  ///< 注册 send 请求；1=立即完成，0=已提交，<0=错误
-    int addReadv(IOController* controller);  ///< 注册 readv 请求；1=立即完成，0=已提交，<0=错误
-    int addWritev(IOController* controller);  ///< 注册 writev 请求；1=立即完成，0=已提交，<0=错误
-    int addClose(IOController* controller);  ///< 注册 close 请求；0=成功，<0=错误
-    int addFileRead(IOController* controller);  ///< 注册文件读取请求；1=立即完成，0=已提交，<0=错误
-    int addFileWrite(IOController* controller);  ///< 注册文件写入请求；1=立即完成，0=已提交，<0=错误
-    int addRecvFrom(IOController* controller);  ///< 注册 recvfrom 请求；1=立即完成，0=已提交，<0=错误
-    int addSendTo(IOController* controller);  ///< 注册 sendto 请求；1=立即完成，0=已提交，<0=错误
-    int addFileWatch(IOController* controller);  ///< 注册文件监控请求；1=立即完成，0=已提交，<0=错误
-    int addSendFile(IOController* controller);  ///< 注册 sendfile 请求；1=立即完成，0=已提交，<0=错误
-    int addSequence(IOController* controller);  ///< 注册组合式序列请求；0=已提交或已唤醒立即完成 owner，<0=错误
+    void timeout_accept(AcceptAwaitable& awaitable);
+    int add_connect(IOController* controller);  ///< 注册 connect 请求；1=立即完成，0=已提交，<0=错误
+    int add_recv(IOController* controller);  ///< 注册 recv 请求；1=立即完成，0=已提交，<0=错误
+    int add_send(IOController* controller);  ///< 注册 send 请求；1=立即完成，0=已提交，<0=错误
+    int add_readv(IOController* controller);  ///< 注册 readv 请求；1=立即完成，0=已提交，<0=错误
+    int add_writev(IOController* controller);  ///< 注册 writev 请求；1=立即完成，0=已提交，<0=错误
+    int add_close(IOController* controller);  ///< 注册 close 请求；0=成功，<0=错误
+    int add_file_read(IOController* controller);  ///< 注册文件读取请求；1=立即完成，0=已提交，<0=错误
+    int add_file_write(IOController* controller);  ///< 注册文件写入请求；1=立即完成，0=已提交，<0=错误
+    int add_recv_from(IOController* controller);  ///< 注册 recvfrom 请求；1=立即完成，0=已提交，<0=错误
+    int add_send_to(IOController* controller);  ///< 注册 sendto 请求；1=立即完成，0=已提交，<0=错误
+    int add_file_watch(IOController* controller);  ///< 注册文件监控请求；1=立即完成，0=已提交，<0=错误
+    int add_send_file(IOController* controller);  ///< 注册 sendfile 请求；1=立即完成，0=已提交，<0=错误
+    int add_sequence(IOController* controller);  ///< 注册组合式序列请求；0=已提交或已唤醒立即完成 owner，<0=错误
     int remove(IOController* controller);  ///< 使控制器关联的未完成请求失效或移除
-    void stopAccepts();  ///< owner 停机入口：完成已登记 accept 的逻辑等待；物理 CQE drain 仍由后续门禁负责
+    void stop_accepts();  ///< owner 停机入口：完成已登记 accept 的逻辑等待；物理 CQE drain 仍由后续门禁负责
 
     void poll(uint64_t timeout_ns, WakeCoordinator& wake_coordinator);  ///< 等待完成事件并通过 wake coordinator 分发唤醒
 
 private:
     friend struct IOUringReactorTestAccess;  ///< 确定性 CQE 注入；不增加生产对象状态或回调。
     /** @brief 清除当前 frame 的 slot/timer 引用，再取唯一恢复权；持久请求不计入 frame refs。 */
-    std::expected<ResumeCapability, OperationError> detachAccept(AcceptAwaitable& awaitable);
-    int submitMultishotAccept(IOController* controller);  ///< 为 listener 提交持久 multishot accept SQE
-    int submitMultishotRecv(IOController* controller);  ///< 为 socket 提交持久 multishot recv SQE
-    int submitMultishotRecvFrom(IOController* controller);  ///< 为 UDP socket 提交持久 multishot recvmsg SQE
-    std::expected<void, IOError> initializeRecvFromBufferPool();  ///< 首次 UDP recvfrom 时惰性初始化 provided-buffer ring
-    int addRecvFromOneShot(IOController* controller,
+    std::expected<ResumeCapability, OperationError> detach_accept(AcceptAwaitable& awaitable);
+    int submit_multishot_accept(IOController* controller);  ///< 为 listener 提交持久 multishot accept SQE
+    int submit_multishot_recv(IOController* controller);  ///< 为 socket 提交持久 multishot recv SQE
+    int submit_multishot_recv_from(IOController* controller);  ///< 为 UDP socket 提交持久 multishot recvmsg SQE
+    std::expected<void, IOError> initialize_recv_from_buffer_pool();  ///< 首次 UDP recvfrom 时惰性初始化 provided-buffer ring
+    int add_recv_from_one_shot(IOController* controller,
                            RecvFromAwaitable* awaitable);  ///< 能力不足时提交兼容 one-shot recvmsg SQE
-    bool shouldUseSendZc(size_t length) const noexcept;  ///< 当前 send 请求是否应走 send_zc 路径
-    void prepareSendSqe(struct io_uring_sqe* sqe,
+    bool should_use_send_zc(size_t length) const noexcept;  ///< 当前 send 请求是否应走 send_zc 路径
+    void prepare_send_sqe(struct io_uring_sqe* sqe,
                         SqeRequestHandle* handle,
                         int fd,
                         const void* buffer,
                         size_t length,
                         int flags);  ///< 按能力/长度门控填充 send 或 send_zc SQE
-    int submitSequenceSqe(IOController::Index slot,
+    int submit_sequence_sqe(IOController::Index slot,
                           IOEventType type,
                           IOContextBase* ctx,
                           IOController* controller,
                           SequenceAwaitableBase* owner);  ///< 为 sequence awaitable 提交指定槽位的 SQE
-    void processAcceptCompletion(IOController* controller,
+    void process_accept_completion(IOController* controller,
                                  AcceptAwaitable* awaitable,
                                  struct io_uring_cqe* cqe);  ///< 处理 multishot accept CQE 并交付/缓存 accepted fd
-    void processRecvCompletion(IOController* controller,
+    void process_recv_completion(IOController* controller,
                                RecvAwaitable* awaitable,
                                struct io_uring_cqe* cqe);  ///< 处理 multishot recv CQE 并交付/缓存 ready recv 数据
-    void processRecvFromCompletion(IOController* controller,
+    void process_recv_from_completion(IOController* controller,
                                    RecvFromAwaitable* awaitable,
                                    SqeRequestHandle* handle,
                                    struct io_uring_cqe* cqe);  ///< 解析 multishot recvmsg CQE 并按数据报交付 payload/源地址
-    void processCompletion(struct io_uring_cqe* cqe);  ///< 消费单个 CQE 并唤醒对应 awaitable
-    void ensureWakeReadArmed();  ///< 确保 eventfd 的唤醒读请求已提交到 ring
+    void process_completion(struct io_uring_cqe* cqe);  ///< 消费单个 CQE 并唤醒对应 awaitable
+    void ensure_wake_read_armed();  ///< 确保 eventfd 的唤醒读请求已提交到 ring
 
     static constexpr uint16_t kRecvBufferGroup = 0;  ///< provided buffer ring 使用的固定 buffer group id
     static constexpr uint16_t kRecvBufferCount = 256;  ///< provided buffer ring 中预留的 buffer 数量

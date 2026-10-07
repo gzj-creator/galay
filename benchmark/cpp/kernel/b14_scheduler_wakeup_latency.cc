@@ -51,14 +51,14 @@ struct BenchState {
     galay::benchmark::CompletionLatch* completion_latch = nullptr;
 };
 
-void addCounter(std::atomic<int64_t>& counter, int64_t value = 1) noexcept {
+void add_counter(std::atomic<int64_t>& counter, int64_t value = 1) noexcept {
     const int64_t previous = counter.fetch_add(value, std::memory_order_relaxed);
     if (value > 0 && previous > std::numeric_limits<int64_t>::max() - value) {
         counter.store(std::numeric_limits<int64_t>::max(), std::memory_order_relaxed);
     }
 }
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 2000ms,
                std::chrono::milliseconds step = 1ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -71,28 +71,28 @@ bool waitUntil(auto&& predicate,
     return predicate();
 }
 
-void burnFor(std::chrono::microseconds duration) {
+void burn_for(std::chrono::microseconds duration) {
     const auto deadline = std::chrono::steady_clock::now() + duration;
     while (std::chrono::steady_clock::now() < deadline) {
         std::this_thread::yield();
     }
 }
 
-Task<void> throughputTask(BenchState* state) {
-    addCounter(state->completed);
+Task<void> throughput_task(BenchState* state) {
+    add_counter(state->completed);
     if (state->completion_latch) {
         state->completion_latch->arrive();
     }
     co_return;
 }
 
-Task<void> latencyTask(BenchState* state,
+Task<void> latency_task(BenchState* state,
                        std::chrono::steady_clock::time_point submitted_at) {
     const auto now = std::chrono::steady_clock::now();
     const auto latency_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(now - submitted_at).count();
-    addCounter(state->latency_sum_ns, latency_ns);
-    addCounter(state->completed);
+    add_counter(state->latency_sum_ns, latency_ns);
+    add_counter(state->completed);
     if (state->completion_latch) {
         state->completion_latch->arrive();
     }
@@ -116,16 +116,16 @@ struct ScalingBenchResult {
     bool valid = false;
 };
 
-Task<void> scalingRuntimeTask(ScalingBenchState* state) {
+Task<void> scaling_runtime_task(ScalingBenchState* state) {
     const auto tid = std::this_thread::get_id();
-    if (state->first && tid == state->first->threadId()) {
-        addCounter(state->ran_on_first);
-    } else if (state->second && tid == state->second->threadId()) {
-        addCounter(state->ran_on_second);
+    if (state->first && tid == state->first->thread_id()) {
+        add_counter(state->ran_on_first);
+    } else if (state->second && tid == state->second->thread_id()) {
+        add_counter(state->ran_on_second);
     }
 
-    burnFor(kScalingTaskWork);
-    addCounter(state->completed);
+    burn_for(kScalingTaskWork);
+    add_counter(state->completed);
     if (state->completion_latch) {
         state->completion_latch->arrive();
     }
@@ -133,7 +133,7 @@ Task<void> scalingRuntimeTask(ScalingBenchState* state) {
 }
 
 template <typename SchedulerT>
-bool runThroughputBenchmark() {
+bool run_throughput_benchmark() {
     SchedulerT scheduler;
     BenchState state;
     const int64_t total_tasks = static_cast<int64_t>(kProducerCount) * kTasksPerProducer;
@@ -153,8 +153,8 @@ bool runThroughputBenchmark() {
     for (int producer = 0; producer < kProducerCount; ++producer) {
         producers.emplace_back([&scheduler, &state, &completion_latch, &submit_failures]() {
             for (int i = 0; i < kTasksPerProducer; ++i) {
-                if (!scheduleTask(scheduler, throughputTask(&state))) {
-                    addCounter(submit_failures);
+                if (!schedule_task(scheduler, throughput_task(&state))) {
+                    add_counter(submit_failures);
                     completion_latch.arrive();
                 }
             }
@@ -189,7 +189,7 @@ bool runThroughputBenchmark() {
 }
 
 template <typename SchedulerT>
-bool runLatencyBenchmark() {
+bool run_latency_benchmark() {
     SchedulerT scheduler;
     const auto started = scheduler.start();
     if (!started) {
@@ -201,7 +201,7 @@ bool runLatencyBenchmark() {
         BenchState warmup_state;
         galay::benchmark::CompletionLatch warmup_latch(1);
         warmup_state.completion_latch = &warmup_latch;
-        if (!scheduleTask(scheduler, throughputTask(&warmup_state))) {
+        if (!schedule_task(scheduler, throughput_task(&warmup_state))) {
             scheduler.stop();
             LogError("Injected latency warmup submit failed at sample={}", i);
             return false;
@@ -215,7 +215,7 @@ bool runLatencyBenchmark() {
         BenchState state;
         galay::benchmark::CompletionLatch completion_latch(1);
         state.completion_latch = &completion_latch;
-        if (!scheduleTask(scheduler, latencyTask(&state, std::chrono::steady_clock::now()))) {
+        if (!schedule_task(scheduler, latency_task(&state, std::chrono::steady_clock::now()))) {
             scheduler.stop();
             LogError("Injected latency submit failed at sample={}", i);
             return false;
@@ -241,20 +241,20 @@ bool runLatencyBenchmark() {
 }
 
 template <typename SchedulerT>
-ScalingBenchResult runSingleSchedulerBaseline() {
+ScalingBenchResult run_single_scheduler_baseline() {
     SchedulerT scheduler;
     ScalingBenchState state;
     galay::benchmark::CompletionLatch completion_latch(static_cast<std::size_t>(kScalingTaskCount));
     state.completion_latch = &completion_latch;
 
-    scheduler.replaceTimerManager(TimingWheelTimerManager(1'000'000ULL));
+    scheduler.replace_timer_manager(TimingWheelTimerManager(1'000'000ULL));
     const auto started = scheduler.start();
     if (!started) {
         LogError("Single scheduler baseline failed to start: {}", started.error().message());
         return {};
     }
-    const bool ready = waitUntil([&]() {
-        return scheduler.threadId() != std::thread::id{};
+    const bool ready = wait_until([&]() {
+        return scheduler.thread_id() != std::thread::id{};
     });
     if (!ready) {
         scheduler.stop();
@@ -266,7 +266,7 @@ ScalingBenchResult runSingleSchedulerBaseline() {
     const auto start = std::chrono::steady_clock::now();
     bool submitted = true;
     for (int i = 0; i < kScalingTaskCount; ++i) {
-        if (!scheduleTask(scheduler, scalingRuntimeTask(&state))) {
+        if (!schedule_task(scheduler, scaling_runtime_task(&state))) {
             completion_latch.arrive(static_cast<std::size_t>(kScalingTaskCount - i));
             submitted = false;
             break;
@@ -289,24 +289,24 @@ ScalingBenchResult runSingleSchedulerBaseline() {
     };
 }
 
-ScalingBenchResult runTwoSchedulerRoundRobinBenchmark() {
-    auto runtime = RuntimeBuilder().ioSchedulerCount(2).parallelSchedulerCount(0).build();
+ScalingBenchResult run_two_scheduler_round_robin_benchmark() {
+    auto runtime = RuntimeBuilder().io_scheduler_count(2).parallel_scheduler_count(0).build();
     const auto initialized = runtime.start();
     if (!initialized) { return {}; }
     runtime.stop();
-    auto* first_ptr = runtime.getIOScheduler(0);
-    auto* second_ptr = runtime.getIOScheduler(1);
-    first_ptr->replaceTimerManager(TimingWheelTimerManager(1'000'000ULL));
-    second_ptr->replaceTimerManager(TimingWheelTimerManager(1'000'000ULL));
+    auto* first_ptr = runtime.get_io_scheduler(0);
+    auto* second_ptr = runtime.get_io_scheduler(1);
+    first_ptr->replace_timer_manager(TimingWheelTimerManager(1'000'000ULL));
+    second_ptr->replace_timer_manager(TimingWheelTimerManager(1'000'000ULL));
     const auto started = runtime.start();
     if (!started) {
         LogError("Two scheduler runtime failed to start: {}", started.error().message());
         return {};
     }
 
-    const bool ready = waitUntil([&]() {
-        return first_ptr->threadId() != std::thread::id{} &&
-               second_ptr->threadId() != std::thread::id{};
+    const bool ready = wait_until([&]() {
+        return first_ptr->thread_id() != std::thread::id{} &&
+               second_ptr->thread_id() != std::thread::id{};
     });
     if (!ready) {
         runtime.stop();
@@ -323,8 +323,8 @@ ScalingBenchResult runTwoSchedulerRoundRobinBenchmark() {
     const auto start = std::chrono::steady_clock::now();
     bool submitted = true;
     for (int i = 0; i < kScalingTaskCount; ++i) {
-        IOScheduler* const scheduler = runtime.getNextIOScheduler();
-        if (scheduler == nullptr || !scheduleTask(*scheduler, scalingRuntimeTask(&state))) {
+        IOScheduler* const scheduler = runtime.get_next_io_scheduler();
+        if (scheduler == nullptr || !schedule_task(*scheduler, scaling_runtime_task(&state))) {
             completion_latch.arrive(static_cast<std::size_t>(kScalingTaskCount - i));
             submitted = false;
             break;
@@ -350,7 +350,7 @@ ScalingBenchResult runTwoSchedulerRoundRobinBenchmark() {
 }  // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -371,17 +371,17 @@ int main() {
     LogInfo("Scheduler injected wakeup benchmark, backend={}", backend);
     (void)scheduler;
 
-    if (!runThroughputBenchmark<std::decay_t<decltype(scheduler)>>()) {
+    if (!run_throughput_benchmark<std::decay_t<decltype(scheduler)>>()) {
         return 1;
     }
     std::this_thread::sleep_for(50ms);
-    if (!runLatencyBenchmark<std::decay_t<decltype(scheduler)>>()) {
+    if (!run_latency_benchmark<std::decay_t<decltype(scheduler)>>()) {
         return 1;
     }
 
     LogInfo("[IOSchedulerAffinity] stealing=disabled, load_balance=runtime-round-robin, reason=reactor-owner-affinity");
-    const auto baseline = runSingleSchedulerBaseline<std::decay_t<decltype(scheduler)>>();
-    const auto balanced = runTwoSchedulerRoundRobinBenchmark();
+    const auto baseline = run_single_scheduler_baseline<std::decay_t<decltype(scheduler)>>();
+    const auto balanced = run_two_scheduler_round_robin_benchmark();
     if (!baseline.valid || !balanced.valid) {
         return 1;
     }

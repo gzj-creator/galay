@@ -199,15 +199,15 @@ kernel::Task<void> send_resource(http::HttpConn& connection, http::HttpRequest r
     http::HttpResponse response;
     response.header().version() = http::HttpVersion::HttpVersion_1_1;
     response.header().code() = http::HttpStatusCode::OK_200;
-    const bool keep_alive = request.header().isKeepAlive() && !request.header().isConnectionClose();
-    auto& headers = response.header().headerPairs();
+    const bool keep_alive = request.header().is_keep_alive() && !request.header().is_connection_close();
+    auto& headers = response.header().header_pairs();
     const std::array<std::pair<std::string, std::string>, 4> fields{{
         {"Content-Type", resource->content_type},
         {"X-Content-Type-Options", "nosniff"},
         {"Cache-Control", "no-store"},
         {"Connection", keep_alive ? "keep-alive" : "close"}}};
     for (const auto& [name, value] : fields) {
-        const auto added = headers.addHeaderPair(name, value);
+        const auto added = headers.add_header_pair(name, value);
         if (added != http::kNoError) {
             HTTP_LOG_ERROR("[api-docs] [header-fail]", "path={} header={} code={}",
                            request.header().uri(), name, static_cast<int>(added));
@@ -219,9 +219,9 @@ kernel::Task<void> send_resource(http::HttpConn& connection, http::HttpRequest r
             co_return;
         }
     }
-    response.setBodyStr(std::string(*resource->bytes));
-    auto writer = connection.getWriter();
-    const auto sent = co_await writer.sendResponse(std::move(response));
+    response.set_body_str(std::string(*resource->bytes));
+    auto writer = connection.get_writer();
+    const auto sent = co_await writer.send_response(std::move(response));
     if (!sent || !*sent) {
         HTTP_LOG_ERROR("[api-docs] [send-fail]", "path={} error={}",
                        request.header().uri(), sent ? "HTTP writer returned false" : sent.error().message());
@@ -306,14 +306,14 @@ ApiResult<void> install_resources(PreparedApi& api, const DocsConfig& config,
             http::HttpMethod::OPTIONS, http::HttpMethod::CONNECT, http::HttpMethod::PATCH,
             http::HttpMethod::PRI, http::HttpMethod::UNKNOWN};
         for (const auto method : methods) {
-            if (api.router.findHandler(method, path).handler != nullptr) {
+            if (api.router.find_handler(method, path).handler != nullptr) {
                 return std::unexpected(ApiError{ApiErrorCode::kRouteConflict,
                     "docs path conflicts with an existing router handler: " + path, 409});
             }
         }
     }
     for (const auto& route : routes) {
-        api.router.addHandler<http::HttpMethod::GET>(route.path,
+        api.router.add_handler<http::HttpMethod::GET>(route.path,
             [resource = route.resource](http::HttpConn& connection, http::HttpRequest request) {
                 return send_resource(connection, std::move(request), resource);
             });

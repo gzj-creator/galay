@@ -29,7 +29,7 @@ inline std::atomic<SpanProcessor*> g_currentSpanProcessor{nullptr};
  * @details 不获取所有权。传入 nullptr 表示不提交结束的 Span。
  * @param processor SpanProcessor 指针，调用方负责保证生命周期
  */
-inline void setSpanProcessor(SpanProcessor* processor) noexcept {
+inline void set_span_processor(SpanProcessor* processor) noexcept {
     detail::g_currentSpanProcessor.store(processor, std::memory_order_release);
 }
 
@@ -37,7 +37,7 @@ inline void setSpanProcessor(SpanProcessor* processor) noexcept {
  * @brief 获取当前进程级 SpanProcessor
  * @return 当前 SpanProcessor 指针；未配置时返回 nullptr
  */
-[[nodiscard]] inline SpanProcessor* currentSpanProcessor() noexcept {
+[[nodiscard]] inline SpanProcessor* current_span_processor() noexcept {
     return detail::g_currentSpanProcessor.load(std::memory_order_acquire);
 }
 
@@ -53,15 +53,15 @@ public:
      * @param processor 新的 SpanProcessor 指针，nullptr 表示清空
      */
     explicit SpanProcessorScope(SpanProcessor* processor) noexcept
-        : m_previous(currentSpanProcessor()) {
-        setSpanProcessor(processor);
+        : m_previous(current_span_processor()) {
+        set_span_processor(processor);
     }
 
     /**
      * @brief 析构时恢复进入作用域前的处理器
      */
     ~SpanProcessorScope() {
-        setSpanProcessor(m_previous);
+        set_span_processor(m_previous);
     }
 
     SpanProcessorScope(const SpanProcessorScope&) = delete;

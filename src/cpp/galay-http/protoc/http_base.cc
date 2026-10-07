@@ -17,7 +17,7 @@ namespace galay::http
         "Unknown"
     };
 
-    std::string httpVersionToString(HttpVersion version)
+    std::string http_version_to_string(HttpVersion version)
     {
         int idx = static_cast<int>(version);
         if (idx < 0 || idx >= static_cast<int>(g_HttpVersion.size())) {
@@ -26,7 +26,7 @@ namespace galay::http
         return g_HttpVersion[idx];
     }
 
-    HttpVersion stringToHttpVersion(std::string_view str)
+    HttpVersion string_to_http_version(std::string_view str)
     {
         for (int i = 0; i < g_HttpVersion.size(); ++i) {
             if (str == g_HttpVersion[i]) {
@@ -36,7 +36,7 @@ namespace galay::http
         return HttpVersion::HttpVersion_Unknown;
     }
 
-    std::string httpMethodToString(HttpMethod method)
+    std::string http_method_to_string(HttpMethod method)
     {
         int idx = static_cast<int>(method);
         if (idx < 0 || idx >= static_cast<int>(g_HttpMethods.size())) {
@@ -45,7 +45,7 @@ namespace galay::http
         return g_HttpMethods[idx];
     }
 
-    HttpMethod stringToHttpMethod(std::string_view str)
+    HttpMethod string_to_http_method(std::string_view str)
     {
         for (int i = 0; i < g_HttpMethods.size(); ++i) {
             if (str == g_HttpMethods[i]) {
@@ -55,7 +55,7 @@ namespace galay::http
         return HttpMethod::UNKNOWN;
     }
 
-    std::string httpStatusCodeToString(HttpStatusCode code)
+    std::string http_status_code_to_string(HttpStatusCode code)
     {
         switch (code)
         {
@@ -362,7 +362,7 @@ namespace galay::http
     };
 
 
-    std::string MimeType::convertToMimeType(const std::string &type)
+    std::string MimeType::convert_to_mime_type(const std::string &type)
     {
         auto it = mimeTypeMap.find(type);
         if( it == mimeTypeMap.end() ) {

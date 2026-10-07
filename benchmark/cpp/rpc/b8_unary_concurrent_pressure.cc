@@ -9,7 +9,7 @@ using namespace galay::rpc;
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -20,12 +20,12 @@ int main(int argc, char** argv)
     const auto start = std::chrono::steady_clock::now();
     size_t errors = 0;
     for (size_t i = 0; i < requests; ++i) {
-        auto pending = state.registerPending(static_cast<uint32_t>(i + 1));
+        auto pending = state.register_pending(static_cast<uint32_t>(i + 1));
         if (!pending.has_value()) {
             ++errors;
             continue;
         }
-        state.failPending(static_cast<uint32_t>(i + 1), RpcError(RpcErrorCode::CANCELLED, "done"));
+        state.fail_pending(static_cast<uint32_t>(i + 1), RpcError(RpcErrorCode::CANCELLED, "done"));
     }
     const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     std::cout << "RPC unary concurrent pressure\nrequests=" << requests

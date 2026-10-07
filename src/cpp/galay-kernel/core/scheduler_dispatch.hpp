@@ -50,65 +50,65 @@ inline bool Scheduler::schedule(TaskRef task) noexcept
         static_cast<ParallelScheduler*>(this), std::move(task));
 }
 
-inline bool Scheduler::scheduleResume(TaskRef task) noexcept
+inline bool Scheduler::schedule_resume(TaskRef task) noexcept
 {
 #ifdef GALAY_KERNEL_TEST_SCHEDULER
-    if (m_test_hooks) { return m_test_hooks->scheduleResume(this, std::move(task)); }
+    if (m_test_hooks) { return m_test_hooks->schedule_resume(this, std::move(task)); }
 #endif
     if (m_type == kIOScheduler) {
-        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::scheduleResume(
+        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::schedule_resume(
             static_cast<IOSchedulerBackend*>(this), std::move(task));
     }
-    return SchedulerBase<ParallelScheduler, kParallelScheduler>::scheduleResume(
+    return SchedulerBase<ParallelScheduler, kParallelScheduler>::schedule_resume(
         static_cast<ParallelScheduler*>(this), std::move(task));
 }
 
-inline bool Scheduler::scheduleDeferred(TaskRef task) noexcept
+inline bool Scheduler::schedule_deferred(TaskRef task) noexcept
 {
 #ifdef GALAY_KERNEL_TEST_SCHEDULER
-    if (m_test_hooks) { return m_test_hooks->scheduleDeferred(this, std::move(task)); }
+    if (m_test_hooks) { return m_test_hooks->schedule_deferred(this, std::move(task)); }
 #endif
     if (m_type == kIOScheduler) {
-        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::scheduleDeferred(
+        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::schedule_deferred(
             static_cast<IOSchedulerBackend*>(this), std::move(task));
     }
-    return SchedulerBase<ParallelScheduler, kParallelScheduler>::scheduleDeferred(
+    return SchedulerBase<ParallelScheduler, kParallelScheduler>::schedule_deferred(
         static_cast<ParallelScheduler*>(this), std::move(task));
 }
 
-inline bool Scheduler::scheduleImmediately(TaskRef task) noexcept
+inline bool Scheduler::schedule_immediately(TaskRef task) noexcept
 {
 #ifdef GALAY_KERNEL_TEST_SCHEDULER
-    if (m_test_hooks) { return m_test_hooks->scheduleImmediately(this, std::move(task)); }
+    if (m_test_hooks) { return m_test_hooks->schedule_immediately(this, std::move(task)); }
 #endif
     if (m_type == kIOScheduler) {
-        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::scheduleImmediately(
+        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::schedule_immediately(
             static_cast<IOSchedulerBackend*>(this), std::move(task));
     }
-    return SchedulerBase<ParallelScheduler, kParallelScheduler>::scheduleImmediately(
+    return SchedulerBase<ParallelScheduler, kParallelScheduler>::schedule_immediately(
         static_cast<ParallelScheduler*>(this), std::move(task));
 }
 
-inline bool Scheduler::scheduleReadyEntry(detail::ReadyEntry& entry) noexcept
+inline bool Scheduler::schedule_ready_entry(detail::ReadyEntry& entry) noexcept
 {
 #ifdef GALAY_KERNEL_TEST_SCHEDULER
     if (m_test_hooks) { return false; }
 #endif
     if (m_type != kIOScheduler) { return false; }
-    return SchedulerBase<IOSchedulerBackend, kIOScheduler>::scheduleReadyEntry(
+    return SchedulerBase<IOSchedulerBackend, kIOScheduler>::schedule_ready_entry(
         static_cast<IOSchedulerBackend*>(this), entry);
 }
 
-inline bool Scheduler::addTimer(Timer::ptr timer)
+inline bool Scheduler::add_timer(Timer::ptr timer)
 {
 #ifdef GALAY_KERNEL_TEST_SCHEDULER
-    if (m_test_hooks) { return m_test_hooks->addTimer(this, std::move(timer)); }
+    if (m_test_hooks) { return m_test_hooks->add_timer(this, std::move(timer)); }
 #endif
     if (m_type == kIOScheduler) {
-        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::addTimer(
+        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::add_timer(
             static_cast<IOSchedulerBackend*>(this), std::move(timer));
     }
-    return SchedulerBase<ParallelScheduler, kParallelScheduler>::addTimer(
+    return SchedulerBase<ParallelScheduler, kParallelScheduler>::add_timer(
         static_cast<ParallelScheduler*>(this), std::move(timer));
 }
 

@@ -21,7 +21,7 @@ int main() {
     first.latency_count = 2;
     first.latency_min_us = 10;
     first.latency_max_us = 20;
-    first.mergeInto(global);
+    first.merge_into(global);
 
     WssClientStatsBatch second;
     second.total_connections = 1;
@@ -34,7 +34,7 @@ int main() {
     second.latency_count = 2;
     second.latency_min_us = 30;
     second.latency_max_us = 50;
-    second.mergeInto(global);
+    second.merge_into(global);
 
     if (global.total_connections.load() != 2 ||
         global.successful_connections.load() != 1 ||

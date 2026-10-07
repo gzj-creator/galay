@@ -37,18 +37,18 @@ std::string_view linearize(std::span<const struct iovec> iovecs, std::string& sc
     return scratch;
 }
 
-PostgresError systemError(PostgresErrorType type, std::string_view prefix, int error_number)
+PostgresError system_error(PostgresErrorType type, std::string_view prefix, int error_number)
 {
     return PostgresError(type,
                          std::string(prefix) + ": " + std::string(std::strerror(error_number)));
 }
 
-PostgresError protocolError(std::string_view message)
+PostgresError protocol_error(std::string_view message)
 {
     return PostgresError(POSTGRES_ERROR_PROTOCOL, std::string(message));
 }
 
-PostgresError serverError(protocol::ErrorFields fields, PostgresErrorType type)
+PostgresError server_error(protocol::ErrorFields fields, PostgresErrorType type)
 {
     std::string message = std::move(fields.message);
     if (!fields.detail.empty()) {
@@ -64,11 +64,11 @@ PostgresError serverError(protocol::ErrorFields fields, PostgresErrorType type)
 }
 
 std::expected<protocol::ErrorFields, PostgresError>
-parseServerError(const protocol::PostgresParser& parser, std::string_view payload)
+parse_server_error(const protocol::PostgresParser& parser, std::string_view payload)
 {
-    auto parsed = parser.parseErrorResponse(payload.data(), payload.size());
+    auto parsed = parser.parse_error_response(payload.data(), payload.size());
     if (!parsed) {
-        return std::unexpected(protocolError("Malformed PostgreSQL ErrorResponse"));
+        return std::unexpected(protocol_error("Malformed PostgreSQL ErrorResponse"));
     }
     return std::move(*parsed);
 }
@@ -129,15 +129,15 @@ PostgresClient& PostgresClient::operator=(PostgresClient&& other) noexcept
     return *this;
 }
 
-PostgresVoidResult PostgresClient::connectSocket(const std::string& host,
+PostgresVoidResult PostgresClient::connect_socket(const std::string& host,
                                                  uint16_t port,
                                                  uint32_t timeout_ms,
                                                  bool tcp_no_delay)
 {
-    closeSocket();
+    close_socket();
     m_socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (m_socket_fd < 0) {
-        return std::unexpected(systemError(POSTGRES_ERROR_CONNECTION,
+        return std::unexpected(system_error(POSTGRES_ERROR_CONNECTION,
                                            "Failed to create PostgreSQL socket",
                                            errno));
     }
@@ -145,8 +145,8 @@ PostgresVoidResult PostgresClient::connectSocket(const std::string& host,
     const int original_flags = ::fcntl(m_socket_fd, F_GETFL, 0);
     if (original_flags < 0 || ::fcntl(m_socket_fd, F_SETFL, original_flags | O_NONBLOCK) != 0) {
         const int saved_errno = errno;
-        closeSocket();
-        return std::unexpected(systemError(POSTGRES_ERROR_CONNECTION,
+        close_socket();
+        return std::unexpected(system_error(POSTGRES_ERROR_CONNECTION,
                                            "Failed to configure non-blocking connect",
                                            saved_errno));
     }
@@ -164,7 +164,7 @@ PostgresVoidResult PostgresClient::connectSocket(const std::string& host,
             if (addresses != nullptr) {
                 ::freeaddrinfo(addresses);
             }
-            closeSocket();
+            close_socket();
             return std::unexpected(PostgresError(POSTGRES_ERROR_CONNECTION,
                                                   "Failed to resolve host " + host));
         }
@@ -177,8 +177,8 @@ PostgresVoidResult PostgresClient::connectSocket(const std::string& host,
                               sizeof(address));
     if (connected != 0 && errno != EINPROGRESS) {
         const int saved_errno = errno;
-        closeSocket();
-        return std::unexpected(systemError(POSTGRES_ERROR_CONNECTION,
+        close_socket();
+        return std::unexpected(system_error(POSTGRES_ERROR_CONNECTION,
                                            "PostgreSQL connect failed",
                                            saved_errno));
     }
@@ -193,14 +193,14 @@ PostgresVoidResult PostgresClient::connectSocket(const std::string& host,
                                      : static_cast<int>(timeout_ms));
         } while (poll_result < 0 && errno == EINTR);
         if (poll_result == 0) {
-            closeSocket();
+            close_socket();
             return std::unexpected(PostgresError(POSTGRES_ERROR_TIMEOUT,
                                                   "PostgreSQL connection timed out"));
         }
         if (poll_result < 0) {
             const int saved_errno = errno;
-            closeSocket();
-            return std::unexpected(systemError(POSTGRES_ERROR_CONNECTION,
+            close_socket();
+            return std::unexpected(system_error(POSTGRES_ERROR_CONNECTION,
                                                "Polling PostgreSQL connection failed",
                                                saved_errno));
         }
@@ -213,8 +213,8 @@ PostgresVoidResult PostgresClient::connectSocket(const std::string& host,
                          &socket_error,
                          &error_length) != 0 || socket_error != 0) {
             const int saved_errno = socket_error != 0 ? socket_error : errno;
-            closeSocket();
-            return std::unexpected(systemError(POSTGRES_ERROR_CONNECTION,
+            close_socket();
+            return std::unexpected(system_error(POSTGRES_ERROR_CONNECTION,
                                                "PostgreSQL connect failed",
                                                saved_errno));
         }
@@ -222,8 +222,8 @@ PostgresVoidResult PostgresClient::connectSocket(const std::string& host,
 
     if (::fcntl(m_socket_fd, F_SETFL, original_flags) != 0) {
         const int saved_errno = errno;
-        closeSocket();
-        return std::unexpected(systemError(POSTGRES_ERROR_CONNECTION,
+        close_socket();
+        return std::unexpected(system_error(POSTGRES_ERROR_CONNECTION,
                                            "Failed to restore socket flags",
                                            saved_errno));
     }
@@ -235,8 +235,8 @@ PostgresVoidResult PostgresClient::connectSocket(const std::string& host,
                          &enabled,
                          sizeof(enabled)) != 0) {
             const int saved_errno = errno;
-            closeSocket();
-            return std::unexpected(systemError(POSTGRES_ERROR_CONNECTION,
+            close_socket();
+            return std::unexpected(system_error(POSTGRES_ERROR_CONNECTION,
                                                "Failed to enable TCP_NODELAY",
                                                saved_errno));
         }
@@ -248,7 +248,7 @@ PostgresVoidResult PostgresClient::connectSocket(const std::string& host,
     return {};
 }
 
-void PostgresClient::closeSocket() noexcept
+void PostgresClient::close_socket() noexcept
 {
     if (m_socket_fd >= 0) {
         // close() has no useful recovery path in this noexcept cleanup boundary.
@@ -270,7 +270,7 @@ PostgresVoidResult PostgresClient::connect(const PostgresConfig& config)
         return std::unexpected(PostgresError(POSTGRES_ERROR_INVALID_PARAM,
                                               "Host, username, and port are required"));
     }
-    auto socket_result = connectSocket(config.host,
+    auto socket_result = connect_socket(config.host,
                                        config.port,
                                        config.connect_timeout_ms,
                                        config.tcp_no_delay);
@@ -278,15 +278,15 @@ PostgresVoidResult PostgresClient::connect(const PostgresConfig& config)
         return std::unexpected(socket_result.error());
     }
 
-    const std::string startup = m_encoder.encodeStartupMessage(config);
+    const std::string startup = m_encoder.encode_startup_message(config);
     if (startup.empty()) {
-        closeSocket();
+        close_socket();
         return std::unexpected(PostgresError(POSTGRES_ERROR_INVALID_PARAM,
                                               "Invalid PostgreSQL startup parameters"));
     }
-    auto sent = sendAll(startup);
+    auto sent = send_all(startup);
     if (!sent) {
-        closeSocket();
+        close_socket();
         return std::unexpected(sent.error());
     }
 
@@ -295,18 +295,18 @@ PostgresVoidResult PostgresClient::connect(const PostgresConfig& config)
     bool scram_verified = false;
     bool authentication_ok = false;
     while (true) {
-        auto message_result = recvMessage();
+        auto message_result = recv_message();
         if (!message_result) {
-            closeSocket();
+            close_socket();
             return std::unexpected(message_result.error());
         }
         Message message = std::move(*message_result);
         if (message.type == protocol::kMsgAuthentication) {
-            auto auth = m_parser.parseAuthenticationRequest(message.payload.data(),
+            auto auth = m_parser.parse_authentication_request(message.payload.data(),
                                                             message.payload.size());
             if (!auth) {
-                closeSocket();
-                return std::unexpected(protocolError("Malformed AuthenticationRequest"));
+                close_socket();
+                return std::unexpected(protocol_error("Malformed AuthenticationRequest"));
             }
             switch (auth->kind) {
             case protocol::AuthRequestKind::Ok:
@@ -316,23 +316,23 @@ PostgresVoidResult PostgresClient::connect(const PostgresConfig& config)
                 if (std::find(auth->mechanisms.begin(),
                               auth->mechanisms.end(),
                               "SCRAM-SHA-256") == auth->mechanisms.end()) {
-                    closeSocket();
+                    close_socket();
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH,
                                                           "Server does not offer SCRAM-SHA-256"));
                 }
-                auto nonce = protocol::ScramSha256::generateNonce();
-                auto first = nonce ? scram.clientFirstMessage({}, *nonce)
+                auto nonce = protocol::ScramSha256::generate_nonce();
+                auto first = nonce ? scram.client_first_message({}, *nonce)
                                    : std::expected<std::string, std::string>(
                                          std::unexpected(nonce.error()));
                 if (!first) {
-                    closeSocket();
+                    close_socket();
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH, first.error()));
                 }
                 const std::string response =
-                    m_encoder.encodeSASLInitialResponse("SCRAM-SHA-256", *first);
-                auto response_result = sendAll(response);
+                    m_encoder.encode_sasl_initial_response("SCRAM-SHA-256", *first);
+                auto response_result = send_all(response);
                 if (!response_result) {
-                    closeSocket();
+                    close_socket();
                     return std::unexpected(response_result.error());
                 }
                 scram_started = true;
@@ -340,30 +340,30 @@ PostgresVoidResult PostgresClient::connect(const PostgresConfig& config)
             }
             case protocol::AuthRequestKind::SaslContinue: {
                 if (!scram_started) {
-                    closeSocket();
+                    close_socket();
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH,
                                                           "Unexpected SCRAM continuation"));
                 }
-                auto parsed = scram.parseServerFirst(auth->data);
-                auto final_message = parsed ? scram.clientFinalMessage(config.password)
+                auto parsed = scram.parse_server_first(auth->data);
+                auto final_message = parsed ? scram.client_final_message(config.password)
                                             : std::expected<std::string, std::string>(
                                                   std::unexpected(parsed.error()));
                 if (!final_message) {
-                    closeSocket();
+                    close_socket();
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH,
                                                           final_message.error()));
                 }
-                auto response_result = sendAll(m_encoder.encodeSASLResponse(*final_message));
+                auto response_result = send_all(m_encoder.encode_sasl_response(*final_message));
                 if (!response_result) {
-                    closeSocket();
+                    close_socket();
                     return std::unexpected(response_result.error());
                 }
                 break;
             }
             case protocol::AuthRequestKind::SaslFinal: {
-                auto verified = scram.verifyServerFinal(auth->data);
+                auto verified = scram.verify_server_final(auth->data);
                 if (!verified) {
-                    closeSocket();
+                    close_socket();
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH,
                                                           verified.error()));
                 }
@@ -372,48 +372,48 @@ PostgresVoidResult PostgresClient::connect(const PostgresConfig& config)
             }
             case protocol::AuthRequestKind::Md5Password: {
                 if (auth->data.size() != 4) {
-                    closeSocket();
-                    return std::unexpected(protocolError("Malformed MD5 authentication salt"));
+                    close_socket();
+                    return std::unexpected(protocol_error("Malformed MD5 authentication salt"));
                 }
                 std::array<uint8_t, 4> salt{};
                 std::copy_n(reinterpret_cast<const uint8_t*>(auth->data.data()), 4, salt.begin());
-                auto response_result = sendAll(m_encoder.encodePasswordMessage(
-                    protocol::md5Password(config.username, config.password, salt)));
+                auto response_result = send_all(m_encoder.encode_password_message(
+                    protocol::md5_password(config.username, config.password, salt)));
                 if (!response_result) {
-                    closeSocket();
+                    close_socket();
                     return std::unexpected(response_result.error());
                 }
                 break;
             }
             case protocol::AuthRequestKind::CleartextPassword: {
-                auto response_result = sendAll(m_encoder.encodePasswordMessage(config.password));
+                auto response_result = send_all(m_encoder.encode_password_message(config.password));
                 if (!response_result) {
-                    closeSocket();
+                    close_socket();
                     return std::unexpected(response_result.error());
                 }
                 break;
             }
             default:
-                closeSocket();
+                close_socket();
                 return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH,
                                                       "Unsupported PostgreSQL authentication method"));
             }
             continue;
         }
         if (message.type == protocol::kMsgParameterStatus) {
-            auto status = m_parser.parseParameterStatus(message.payload.data(), message.payload.size());
+            auto status = m_parser.parse_parameter_status(message.payload.data(), message.payload.size());
             if (!status) {
-                closeSocket();
-                return std::unexpected(protocolError("Malformed ParameterStatus"));
+                close_socket();
+                return std::unexpected(protocol_error("Malformed ParameterStatus"));
             }
             m_server_parameters.insert_or_assign(std::move(status->name), std::move(status->value));
             continue;
         }
         if (message.type == protocol::kMsgBackendKeyData) {
-            auto key = m_parser.parseBackendKeyData(message.payload.data(), message.payload.size());
+            auto key = m_parser.parse_backend_key_data(message.payload.data(), message.payload.size());
             if (!key) {
-                closeSocket();
-                return std::unexpected(protocolError("Malformed BackendKeyData"));
+                close_socket();
+                return std::unexpected(protocol_error("Malformed BackendKeyData"));
             }
             m_backend_key_data = *key;
             continue;
@@ -422,24 +422,24 @@ PostgresVoidResult PostgresClient::connect(const PostgresConfig& config)
             continue;
         }
         if (message.type == protocol::kMsgErrorResponse) {
-            auto fields = parseServerError(m_parser, message.payload);
-            closeSocket();
+            auto fields = parse_server_error(m_parser, message.payload);
+            close_socket();
             return fields
-                ? std::unexpected(serverError(std::move(*fields), POSTGRES_ERROR_AUTH))
+                ? std::unexpected(server_error(std::move(*fields), POSTGRES_ERROR_AUTH))
                 : std::unexpected(fields.error());
         }
         if (message.type == protocol::kMsgReadyForQuery) {
-            auto ready = m_parser.parseReadyForQuery(message.payload.data(), message.payload.size());
+            auto ready = m_parser.parse_ready_for_query(message.payload.data(), message.payload.size());
             if (!ready || !authentication_ok || (scram_started && !scram_verified)) {
-                closeSocket();
+                close_socket();
                 return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH,
                                                       "Authentication did not complete before ReadyForQuery"));
             }
             m_transaction_status = ready->transaction_status;
             return {};
         }
-        closeSocket();
-        return std::unexpected(protocolError("Unexpected message during PostgreSQL startup"));
+        close_socket();
+        return std::unexpected(protocol_error("Unexpected message during PostgreSQL startup"));
     }
 }
 
@@ -452,7 +452,7 @@ PostgresVoidResult PostgresClient::connect(const std::string& host,
     return connect(PostgresConfig::create(host, port, user, password, database));
 }
 
-PostgresVoidResult PostgresClient::sendAll(std::string_view data)
+PostgresVoidResult PostgresClient::send_all(std::string_view data)
 {
     if (!m_connected) {
         return std::unexpected(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
@@ -470,7 +470,7 @@ PostgresVoidResult PostgresClient::sendAll(std::string_view data)
         if (count < 0) {
             const int saved_errno = errno;
             m_connected = false;
-            return std::unexpected(systemError(POSTGRES_ERROR_SEND,
+            return std::unexpected(system_error(POSTGRES_ERROR_SEND,
                                                "PostgreSQL send failed",
                                                saved_errno));
         }
@@ -484,7 +484,7 @@ PostgresVoidResult PostgresClient::sendAll(std::string_view data)
     return {};
 }
 
-PostgresVoidResult PostgresClient::sendAllv(std::span<const struct iovec> iovecs)
+PostgresVoidResult PostgresClient::send_allv(std::span<const struct iovec> iovecs)
 {
     if (!m_connected) {
         return std::unexpected(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
@@ -520,7 +520,7 @@ PostgresVoidResult PostgresClient::sendAllv(std::span<const struct iovec> iovecs
         if (count <= 0) {
             const int saved_errno = count < 0 ? errno : ECONNRESET;
             m_connected = false;
-            return std::unexpected(systemError(POSTGRES_ERROR_SEND,
+            return std::unexpected(system_error(POSTGRES_ERROR_SEND,
                                                "PostgreSQL writev failed",
                                                saved_errno));
         }
@@ -545,14 +545,14 @@ PostgresVoidResult PostgresClient::sendAllv(std::span<const struct iovec> iovecs
     return {};
 }
 
-PostgresVoidResult PostgresClient::recvIntoRingBuffer()
+PostgresVoidResult PostgresClient::recv_into_ring_buffer()
 {
     if (!m_connected) {
         return std::unexpected(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
                                               "PostgreSQL connection is closed"));
     }
     std::array<struct iovec, 2> iovecs{};
-    const size_t count = m_recv_ring_buffer.getWriteIovecs(iovecs);
+    const size_t count = m_recv_ring_buffer.get_write_iovecs(iovecs);
     if (count == 0) {
         return std::unexpected(PostgresError(POSTGRES_ERROR_BUFFER_OVERFLOW,
                                               "PostgreSQL response exceeds receive buffer capacity"));
@@ -564,7 +564,7 @@ PostgresVoidResult PostgresClient::recvIntoRingBuffer()
     if (received < 0) {
         const int saved_errno = errno;
         m_connected = false;
-        return std::unexpected(systemError(POSTGRES_ERROR_RECV,
+        return std::unexpected(system_error(POSTGRES_ERROR_RECV,
                                            "PostgreSQL readv failed",
                                            saved_errno));
     }
@@ -578,21 +578,21 @@ PostgresVoidResult PostgresClient::recvIntoRingBuffer()
 }
 
 std::expected<std::optional<PostgresClient::Message>, PostgresError>
-PostgresClient::tryExtractMessage()
+PostgresClient::try_extract_message()
 {
     std::array<struct iovec, 2> iovecs{};
-    const size_t count = m_recv_ring_buffer.getReadIovecs(iovecs);
+    const size_t count = m_recv_ring_buffer.get_read_iovecs(iovecs);
     if (count == 0) {
         return std::optional<Message>{};
     }
     const std::string_view bytes = linearize(std::span<const struct iovec>(iovecs.data(), count),
                                              m_parse_scratch);
-    auto view = m_parser.extractMessage(bytes.data(), bytes.size());
+    auto view = m_parser.extract_message(bytes.data(), bytes.size());
     if (!view) {
         if (view.error() == protocol::ParseError::Incomplete) {
             return std::optional<Message>{};
         }
-        return std::unexpected(protocolError("Malformed PostgreSQL message frame"));
+        return std::unexpected(protocol_error("Malformed PostgreSQL message frame"));
     }
     Message message{.type = view->type,
                     .payload = std::string(view->payload, view->payload_len)};
@@ -600,42 +600,42 @@ PostgresClient::tryExtractMessage()
     return std::optional<Message>(std::move(message));
 }
 
-std::expected<PostgresClient::Message, PostgresError> PostgresClient::recvMessage()
+std::expected<PostgresClient::Message, PostgresError> PostgresClient::recv_message()
 {
     while (true) {
-        auto parsed = tryExtractMessage();
+        auto parsed = try_extract_message();
         if (!parsed) {
             return std::unexpected(parsed.error());
         }
         if (parsed->has_value()) {
             return std::move(parsed->value());
         }
-        auto received = recvIntoRingBuffer();
+        auto received = recv_into_ring_buffer();
         if (!received) {
             return std::unexpected(received.error());
         }
     }
 }
 
-PostgresResult PostgresClient::receiveResultUntilReady()
+PostgresResult PostgresClient::receive_result_until_ready()
 {
     PostgresResultSet result;
     std::optional<PostgresError> pending_error;
     while (true) {
-        auto received = recvMessage();
+        auto received = recv_message();
         if (!received) {
             return std::unexpected(received.error());
         }
         Message message = std::move(*received);
         switch (message.type) {
         case protocol::kMsgRowDescription: {
-            auto fields = m_parser.parseRowDescription(message.payload.data(), message.payload.size());
+            auto fields = m_parser.parse_row_description(message.payload.data(), message.payload.size());
             if (!fields) {
-                return std::unexpected(protocolError("Malformed RowDescription"));
+                return std::unexpected(protocol_error("Malformed RowDescription"));
             }
-            result.reserveFields(fields->size());
+            result.reserve_fields(fields->size());
             for (auto& field : *fields) {
-                result.addField(PostgresField(std::move(field.name),
+                result.add_field(PostgresField(std::move(field.name),
                                               field.table_oid,
                                               field.column_index,
                                               field.type_oid,
@@ -646,21 +646,21 @@ PostgresResult PostgresClient::receiveResultUntilReady()
             break;
         }
         case protocol::kMsgDataRow: {
-            auto row = m_parser.parseDataRow(message.payload.data(), message.payload.size());
-            if (!row || (!result.fields().empty() && row->size() != result.fieldCount())) {
-                return std::unexpected(protocolError("Malformed DataRow"));
+            auto row = m_parser.parse_data_row(message.payload.data(), message.payload.size());
+            if (!row || (!result.fields().empty() && row->size() != result.field_count())) {
+                return std::unexpected(protocol_error("Malformed DataRow"));
             }
-            result.addRow(std::move(*row));
+            result.add_row(std::move(*row));
             break;
         }
         case protocol::kMsgCommandComplete: {
-            auto complete = m_parser.parseCommandComplete(message.payload.data(),
+            auto complete = m_parser.parse_command_complete(message.payload.data(),
                                                           message.payload.size());
             if (!complete) {
-                return std::unexpected(protocolError("Malformed CommandComplete"));
+                return std::unexpected(protocol_error("Malformed CommandComplete"));
             }
-            result.setCommandTag(std::move(complete->tag));
-            result.setAffectedRows(complete->affected_rows);
+            result.set_command_tag(std::move(complete->tag));
+            result.set_affected_rows(complete->affected_rows);
             break;
         }
         case protocol::kMsgEmptyQueryResponse:
@@ -672,27 +672,27 @@ PostgresResult PostgresClient::receiveResultUntilReady()
         case protocol::kMsgNoticeResponse:
             break;
         case protocol::kMsgParameterStatus: {
-            auto status = m_parser.parseParameterStatus(message.payload.data(), message.payload.size());
+            auto status = m_parser.parse_parameter_status(message.payload.data(), message.payload.size());
             if (!status) {
-                return std::unexpected(protocolError("Malformed ParameterStatus"));
+                return std::unexpected(protocol_error("Malformed ParameterStatus"));
             }
             m_server_parameters.insert_or_assign(std::move(status->name), std::move(status->value));
             break;
         }
         case protocol::kMsgErrorResponse: {
-            auto fields = parseServerError(m_parser, message.payload);
+            auto fields = parse_server_error(m_parser, message.payload);
             if (!fields) {
                 return std::unexpected(fields.error());
             }
             if (!pending_error) {
-                pending_error = serverError(std::move(*fields), POSTGRES_ERROR_SERVER);
+                pending_error = server_error(std::move(*fields), POSTGRES_ERROR_SERVER);
             }
             break;
         }
         case protocol::kMsgReadyForQuery: {
-            auto ready = m_parser.parseReadyForQuery(message.payload.data(), message.payload.size());
+            auto ready = m_parser.parse_ready_for_query(message.payload.data(), message.payload.size());
             if (!ready) {
-                return std::unexpected(protocolError("Malformed ReadyForQuery"));
+                return std::unexpected(protocol_error("Malformed ReadyForQuery"));
             }
             m_transaction_status = ready->transaction_status;
             if (pending_error) {
@@ -701,23 +701,23 @@ PostgresResult PostgresClient::receiveResultUntilReady()
             return result;
         }
         default:
-            return std::unexpected(protocolError("Unexpected PostgreSQL result message"));
+            return std::unexpected(protocol_error("Unexpected PostgreSQL result message"));
         }
     }
 }
 
 PostgresResult PostgresClient::query(std::string_view sql)
 {
-    const std::string command = m_encoder.encodeQuery(sql);
+    const std::string command = m_encoder.encode_query(sql);
     if (command.empty()) {
         return std::unexpected(PostgresError(POSTGRES_ERROR_INVALID_PARAM,
                                               "Invalid PostgreSQL query"));
     }
-    auto sent = sendAll(command);
+    auto sent = send_all(command);
     if (!sent) {
         return std::unexpected(sent.error());
     }
-    return receiveResultUntilReady();
+    return receive_result_until_ready();
 }
 
 PostgresBatchResult PostgresClient::batch(std::span<const protocol::PostgresCommandView> commands)
@@ -745,7 +745,7 @@ PostgresBatchResult PostgresClient::batch(std::span<const protocol::PostgresComm
             POSTGRES_ERROR_INVALID_PARAM,
             "Batch must contain a Query or Sync ReadyForQuery boundary"));
     }
-    auto sent = sendAllv(iovecs);
+    auto sent = send_allv(iovecs);
     if (!sent) {
         return std::unexpected(sent.error());
     }
@@ -754,7 +754,7 @@ PostgresBatchResult PostgresClient::batch(std::span<const protocol::PostgresComm
     results.reserve(expected_ready);
     std::optional<PostgresError> first_error;
     for (size_t index = 0; index < expected_ready; ++index) {
-        auto result = receiveResultUntilReady();
+        auto result = receive_result_until_ready();
         if (result) {
             results.push_back(std::move(*result));
         } else if (!first_error) {
@@ -772,7 +772,7 @@ PostgresBatchResult PostgresClient::pipeline(std::span<const std::string_view> s
     protocol::PostgresCommandBuilder builder;
     builder.reserve(sqls.size(), 0);
     for (std::string_view sql : sqls) {
-        builder.appendQuery(sql);
+        builder.append_query(sql);
     }
     return batch(builder.commands());
 }
@@ -782,9 +782,9 @@ PostgresClient::prepare(std::string_view name,
                         std::string_view sql,
                         std::span<const uint32_t> parameter_types)
 {
-    std::string parse = m_encoder.encodeParse(name, sql, parameter_types);
-    std::string describe = m_encoder.encodeDescribeStatement(name);
-    std::string sync = m_encoder.encodeSync();
+    std::string parse = m_encoder.encode_parse(name, sql, parameter_types);
+    std::string describe = m_encoder.encode_describe_statement(name);
+    std::string sync = m_encoder.encode_sync();
     if (parse.empty() || describe.empty() || sync.empty()) {
         return std::unexpected(PostgresError(POSTGRES_ERROR_INVALID_PARAM,
                                               "Invalid prepared statement"));
@@ -792,7 +792,7 @@ PostgresClient::prepare(std::string_view name,
     parse += describe;
     parse += sync;
     std::string command = std::move(parse);
-    auto sent = sendAll(command);
+    auto sent = send_all(command);
     if (!sent) {
         return std::unexpected(sent.error());
     }
@@ -801,7 +801,7 @@ PostgresClient::prepare(std::string_view name,
     result.statement_name.assign(name);
     std::optional<PostgresError> pending_error;
     while (true) {
-        auto received = recvMessage();
+        auto received = recv_message();
         if (!received) {
             return std::unexpected(received.error());
         }
@@ -812,18 +812,18 @@ PostgresClient::prepare(std::string_view name,
         case protocol::kMsgNoticeResponse:
             break;
         case protocol::kMsgParameterDescription: {
-            auto parameters = m_parser.parseParameterDescription(message.payload.data(),
+            auto parameters = m_parser.parse_parameter_description(message.payload.data(),
                                                                   message.payload.size());
             if (!parameters) {
-                return std::unexpected(protocolError("Malformed ParameterDescription"));
+                return std::unexpected(protocol_error("Malformed ParameterDescription"));
             }
             result.parameter_types = std::move(*parameters);
             break;
         }
         case protocol::kMsgRowDescription: {
-            auto fields = m_parser.parseRowDescription(message.payload.data(), message.payload.size());
+            auto fields = m_parser.parse_row_description(message.payload.data(), message.payload.size());
             if (!fields) {
-                return std::unexpected(protocolError("Malformed prepared RowDescription"));
+                return std::unexpected(protocol_error("Malformed prepared RowDescription"));
             }
             result.fields.reserve(fields->size());
             for (auto& field : *fields) {
@@ -838,19 +838,19 @@ PostgresClient::prepare(std::string_view name,
             break;
         }
         case protocol::kMsgErrorResponse: {
-            auto fields = parseServerError(m_parser, message.payload);
+            auto fields = parse_server_error(m_parser, message.payload);
             if (!fields) {
                 return std::unexpected(fields.error());
             }
             if (!pending_error) {
-                pending_error = serverError(std::move(*fields), POSTGRES_ERROR_PREPARED_STMT);
+                pending_error = server_error(std::move(*fields), POSTGRES_ERROR_PREPARED_STMT);
             }
             break;
         }
         case protocol::kMsgReadyForQuery: {
-            auto ready = m_parser.parseReadyForQuery(message.payload.data(), message.payload.size());
+            auto ready = m_parser.parse_ready_for_query(message.payload.data(), message.payload.size());
             if (!ready) {
-                return std::unexpected(protocolError("Malformed ReadyForQuery"));
+                return std::unexpected(protocol_error("Malformed ReadyForQuery"));
             }
             m_transaction_status = ready->transaction_status;
             if (pending_error) {
@@ -859,7 +859,7 @@ PostgresClient::prepare(std::string_view name,
             return result;
         }
         default:
-            return std::unexpected(protocolError("Unexpected prepared statement response"));
+            return std::unexpected(protocol_error("Unexpected prepared statement response"));
         }
     }
 }
@@ -868,10 +868,10 @@ PostgresResult PostgresClient::execute(
     std::string_view name,
     const std::vector<std::optional<std::string>>& params)
 {
-    std::string bind = m_encoder.encodeBind({}, name, params);
-    std::string describe = m_encoder.encodeDescribePortal({});
-    std::string execute = m_encoder.encodeExecute({});
-    std::string sync = m_encoder.encodeSync();
+    std::string bind = m_encoder.encode_bind({}, name, params);
+    std::string describe = m_encoder.encode_describe_portal({});
+    std::string execute = m_encoder.encode_execute({});
+    std::string sync = m_encoder.encode_sync();
     if (bind.empty() || describe.empty() || execute.empty() || sync.empty()) {
         return std::unexpected(PostgresError(POSTGRES_ERROR_INVALID_PARAM,
                                               "Invalid prepared statement execution"));
@@ -880,35 +880,35 @@ PostgresResult PostgresClient::execute(
     bind += execute;
     bind += sync;
     std::string command = std::move(bind);
-    auto sent = sendAll(command);
+    auto sent = send_all(command);
     if (!sent) {
         return std::unexpected(sent.error());
     }
-    return receiveResultUntilReady();
+    return receive_result_until_ready();
 }
 
-PostgresVoidResult PostgresClient::closePrepared(std::string_view name)
+PostgresVoidResult PostgresClient::close_prepared(std::string_view name)
 {
-    std::string close = m_encoder.encodeCloseStatement(name);
-    std::string sync = m_encoder.encodeSync();
+    std::string close = m_encoder.encode_close_statement(name);
+    std::string sync = m_encoder.encode_sync();
     if (close.empty() || sync.empty()) {
         return std::unexpected(PostgresError(POSTGRES_ERROR_INVALID_PARAM,
                                               "Invalid prepared statement name"));
     }
     close += sync;
     std::string command = std::move(close);
-    auto sent = sendAll(command);
+    auto sent = send_all(command);
     if (!sent) {
         return std::unexpected(sent.error());
     }
-    auto result = receiveResultUntilReady();
+    auto result = receive_result_until_ready();
     if (!result) {
         return std::unexpected(result.error());
     }
     return {};
 }
 
-PostgresVoidResult PostgresClient::runSimpleStatement(std::string_view sql)
+PostgresVoidResult PostgresClient::run_simple_statement(std::string_view sql)
 {
     auto result = query(sql);
     if (!result) {
@@ -917,20 +917,20 @@ PostgresVoidResult PostgresClient::runSimpleStatement(std::string_view sql)
     return {};
 }
 
-PostgresVoidResult PostgresClient::beginTransaction() { return runSimpleStatement("BEGIN"); }
-PostgresVoidResult PostgresClient::commit() { return runSimpleStatement("COMMIT"); }
-PostgresVoidResult PostgresClient::rollback() { return runSimpleStatement("ROLLBACK"); }
-PostgresVoidResult PostgresClient::ping() { return runSimpleStatement("SELECT 1"); }
+PostgresVoidResult PostgresClient::begin_transaction() { return run_simple_statement("BEGIN"); }
+PostgresVoidResult PostgresClient::commit() { return run_simple_statement("COMMIT"); }
+PostgresVoidResult PostgresClient::rollback() { return run_simple_statement("ROLLBACK"); }
+PostgresVoidResult PostgresClient::ping() { return run_simple_statement("SELECT 1"); }
 
 void PostgresClient::close() noexcept
 {
     if (m_connected) {
-        const std::string terminate = m_encoder.encodeTerminate();
+        const std::string terminate = m_encoder.encode_terminate();
         // Terminate is best-effort because the public cleanup boundary is noexcept.
-        const auto ignored = sendAll(terminate);
+        const auto ignored = send_all(terminate);
         (void)ignored;
     }
-    closeSocket();
+    close_socket();
 }
 
 } // namespace galay::postgres

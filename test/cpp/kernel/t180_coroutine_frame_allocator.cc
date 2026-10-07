@@ -23,13 +23,13 @@ using galay::kernel::Task;
 using galay::kernel::TaskPromise;
 using galay::kernel::TaskRef;
 using galay::kernel::JoinHandle;
-using galay::kernel::detail::allocateFrameStorage;
-using galay::kernel::detail::destroyTaskFrame;
-using galay::kernel::detail::frameFreeListSizeForTesting;
-using galay::kernel::detail::releaseFrameStorage;
-using galay::kernel::detail::setFrameAllocationFailureForTesting;
-using galay::kernel::detail::setFrameRecyclerEnabledForTesting;
-using galay::kernel::detail::setTaskStateAllocationFailureForTesting;
+using galay::kernel::detail::allocate_frame_storage;
+using galay::kernel::detail::destroy_task_frame;
+using galay::kernel::detail::frame_free_list_size_for_testing;
+using galay::kernel::detail::release_frame_storage;
+using galay::kernel::detail::set_frame_allocation_failure_for_testing;
+using galay::kernel::detail::set_frame_recycler_enabled_for_testing;
+using galay::kernel::detail::set_task_state_allocation_failure_for_testing;
 
 namespace {
 
@@ -45,20 +45,20 @@ bool require(bool condition, const char* message) {
     return true;
 }
 
-Task<int> completedIntTask() {
+Task<int> completed_int_task() {
     co_return 7;
 }
 
-Task<void> completedVoidTask() {
+Task<void> completed_void_task() {
     co_return;
 }
 
-Task<int> nestedChildTask() {
+Task<int> nested_child_task() {
     co_return 5;
 }
 
-Task<int> nestedParentTask() {
-    auto result = co_await nestedChildTask();
+Task<int> nested_parent_task() {
+    auto result = co_await nested_child_task();
     if (!result.has_value()) {
         std::cerr << "[T180] nested child error="
                   << static_cast<int>(result.error().code()) << '\n';
@@ -67,7 +67,7 @@ Task<int> nestedParentTask() {
     co_return *result + 1;
 }
 
-Task<int> unhandledExceptionTask() {
+Task<int> unhandled_exception_task() {
     throw 42;
     co_return 0;
 }
@@ -94,55 +94,55 @@ struct FrameProbe {
     }
 };
 
-Task<void> initiallySuspendedTask(FrameProbe probe) {
+Task<void> initially_suspended_task(FrameProbe probe) {
     co_await std::suspend_always{};
 }
 
-bool verifySmallAndOverflowInputs() {
-    releaseFrameStorage(nullptr, 0, 0);
+bool verify_small_and_overflow_inputs() {
+    release_frame_storage(nullptr, 0, 0);
 
-    void* zero = allocateFrameStorage(0, 0);
+    void* zero = allocate_frame_storage(0, 0);
     if (!require(zero != nullptr, "zero-sized frame allocation failed")) {
         return false;
     }
-    releaseFrameStorage(zero, 0, 0);
+    release_frame_storage(zero, 0, 0);
 
-    void* one = allocateFrameStorage(1, 1);
+    void* one = allocate_frame_storage(1, 1);
     if (!require(one != nullptr,
                  "one-byte frame allocation failed after unsized release")) {
         if (one != nullptr) {
-            releaseFrameStorage(one, 1, 1);
+            release_frame_storage(one, 1, 1);
         }
         return false;
     }
-    releaseFrameStorage(one, 1, 1);
+    release_frame_storage(one, 1, 1);
 
     const auto max = std::numeric_limits<std::size_t>::max();
-    if (!require(allocateFrameStorage(max, kDefaultAlignment) == nullptr,
+    if (!require(allocate_frame_storage(max, kDefaultAlignment) == nullptr,
                  "overflow-sized frame must fail without allocation")) {
         return false;
     }
-    if (!require(allocateFrameStorage(128, max) == nullptr,
+    if (!require(allocate_frame_storage(128, max) == nullptr,
                  "overflow alignment must fail without allocation")) {
         return false;
     }
 
     for (const std::size_t alignment : {0UL, 1UL, 2UL, 8UL, kDefaultAlignment}) {
-        void* frame = allocateFrameStorage(64, alignment);
+        void* frame = allocate_frame_storage(64, alignment);
         if (!require(frame != nullptr, "small alignment allocation failed")) {
             return false;
         }
         if (!require(reinterpret_cast<std::uintptr_t>(frame) % kDefaultAlignment == 0,
                      "small alignment must preserve max_align_t alignment")) {
-            releaseFrameStorage(frame, 64, alignment);
+            release_frame_storage(frame, 64, alignment);
             return false;
         }
-        releaseFrameStorage(frame, 64, alignment);
+        release_frame_storage(frame, 64, alignment);
     }
     return true;
 }
 
-bool verifyBoundaryReuse() {
+bool verify_boundary_reuse() {
     constexpr std::array<std::pair<std::size_t, std::size_t>, 5> boundaries{{
         {127, 128},
         {255, 256},
@@ -152,109 +152,109 @@ bool verifyBoundaryReuse() {
     }};
 
     for (const auto [lower, upper] : boundaries) {
-        void* first = allocateFrameStorage(lower, kDefaultAlignment);
+        void* first = allocate_frame_storage(lower, kDefaultAlignment);
         if (!require(first != nullptr, "boundary allocation failed")) {
             return false;
         }
-        releaseFrameStorage(first, lower, kDefaultAlignment);
+        release_frame_storage(first, lower, kDefaultAlignment);
 
-        void* sameBucket = allocateFrameStorage(upper, kDefaultAlignment);
+        void* sameBucket = allocate_frame_storage(upper, kDefaultAlignment);
         if (!require(sameBucket == first,
                      "adjacent sizes should reuse one frame bucket")) {
             if (sameBucket != nullptr) {
-                releaseFrameStorage(sameBucket, upper, kDefaultAlignment);
+                release_frame_storage(sameBucket, upper, kDefaultAlignment);
             }
             return false;
         }
-        releaseFrameStorage(sameBucket, upper, kDefaultAlignment);
+        release_frame_storage(sameBucket, upper, kDefaultAlignment);
 
-        void* nextBucket = allocateFrameStorage(upper + 1, kDefaultAlignment);
+        void* nextBucket = allocate_frame_storage(upper + 1, kDefaultAlignment);
         if (!require(nextBucket != nullptr && nextBucket != first,
                      "next frame bucket should not reuse a smaller block")) {
             if (nextBucket != nullptr) {
-                releaseFrameStorage(nextBucket, upper + 1, kDefaultAlignment);
+                release_frame_storage(nextBucket, upper + 1, kDefaultAlignment);
             }
             return false;
         }
-        releaseFrameStorage(nextBucket, upper + 1, kDefaultAlignment);
+        release_frame_storage(nextBucket, upper + 1, kDefaultAlignment);
     }
     return true;
 }
 
-bool verifyCapacityAndFallback() {
+bool verify_capacity_and_fallback() {
     // 先清空 128 字节缓存桶，使容量断言不受前面边界检查分配结果的影响。
-    const auto cached = frameFreeListSizeForTesting(128, kDefaultAlignment);
+    const auto cached = frame_free_list_size_for_testing(128, kDefaultAlignment);
     std::array<void*, kFrameCacheLimit> drained{};
     for (std::size_t i = 0; i < cached; ++i) {
-        drained[i] = allocateFrameStorage(128, kDefaultAlignment);
+        drained[i] = allocate_frame_storage(128, kDefaultAlignment);
         if (!require(drained[i] != nullptr, "failed to drain frame bucket")) {
             return false;
         }
     }
-    setFrameRecyclerEnabledForTesting(false);
+    set_frame_recycler_enabled_for_testing(false);
     for (std::size_t i = 0; i < cached; ++i) {
-        releaseFrameStorage(drained[i], 128, kDefaultAlignment);
+        release_frame_storage(drained[i], 128, kDefaultAlignment);
     }
-    setFrameRecyclerEnabledForTesting(true);
+    set_frame_recycler_enabled_for_testing(true);
 
     std::array<void*, kFrameCachePressureCount> nodes{};
     for (void*& node : nodes) {
-        node = allocateFrameStorage(128, kDefaultAlignment);
+        node = allocate_frame_storage(128, kDefaultAlignment);
         if (!require(node != nullptr, "capacity test allocation failed")) {
             return false;
         }
     }
     for (void* node : nodes) {
-        releaseFrameStorage(node, 128, kDefaultAlignment);
+        release_frame_storage(node, 128, kDefaultAlignment);
     }
-    if (!require(frameFreeListSizeForTesting(128, kDefaultAlignment) == kFrameCacheLimit,
+    if (!require(frame_free_list_size_for_testing(128, kDefaultAlignment) == kFrameCacheLimit,
                  "frame bucket must cap at 256 nodes")) {
         return false;
     }
 
     // 过期的编译器 sized-delete 参数不能把内存块放入更大的缓存桶。
     // 分配头才是判断真实来源的依据。
-    void* small = allocateFrameStorage(128, kDefaultAlignment);
+    void* small = allocate_frame_storage(128, kDefaultAlignment);
     if (!require(small != nullptr, "wrong-size provenance allocation failed")) {
         return false;
     }
-    releaseFrameStorage(small, 200, kDefaultAlignment);
-    void* reused = allocateFrameStorage(128, kDefaultAlignment);
+    release_frame_storage(small, 200, kDefaultAlignment);
+    void* reused = allocate_frame_storage(128, kDefaultAlignment);
     if (!require(reused == small,
                  "mismatched release size must preserve the original bucket")) {
         if (reused != nullptr) {
-            releaseFrameStorage(reused, 128, kDefaultAlignment);
+            release_frame_storage(reused, 128, kDefaultAlignment);
         }
         return false;
     }
-    releaseFrameStorage(reused, 128, kDefaultAlignment);
+    release_frame_storage(reused, 128, kDefaultAlignment);
 
     const auto cachedBeforeLarge =
-        frameFreeListSizeForTesting(2048, kDefaultAlignment);
-    void* large = allocateFrameStorage(2049, kDefaultAlignment);
+        frame_free_list_size_for_testing(2048, kDefaultAlignment);
+    void* large = allocate_frame_storage(2049, kDefaultAlignment);
     if (!require(large != nullptr, "large frame fallback allocation failed")) {
         return false;
     }
-    releaseFrameStorage(large, 2049, kDefaultAlignment);
-    if (!require(frameFreeListSizeForTesting(2048, kDefaultAlignment) ==
+    release_frame_storage(large, 2049, kDefaultAlignment);
+    if (!require(frame_free_list_size_for_testing(2048, kDefaultAlignment) ==
                      cachedBeforeLarge,
                  "large frames must bypass TLS buckets")) {
         return false;
     }
 
     constexpr std::size_t kOverAlignment = kDefaultAlignment * 2;
-    void* overAligned = allocateFrameStorage(128, kOverAlignment);
+    void* overAligned = allocate_frame_storage(128, kOverAlignment);
     if (!require(overAligned != nullptr,
                  "over-aligned frame fallback allocation failed")) {
         return false;
     }
     if (!require(reinterpret_cast<std::uintptr_t>(overAligned) % kOverAlignment == 0,
                  "over-aligned frame has incorrect alignment")) {
-        releaseFrameStorage(overAligned, 128, kOverAlignment);
+        release_frame_storage(overAligned, 128, kOverAlignment);
         return false;
     }
-    releaseFrameStorage(overAligned, 128, kOverAlignment);
-    if (!require(frameFreeListSizeForTesting(128, kDefaultAlignment) ==
+    release_frame_storage(overAligned, 128, kOverAlignment);
+    if (!require(frame_free_list_size_for_testing(128, kDefaultAlignment) ==
                      kFrameCacheLimit,
                  "over-aligned frames must bypass ordinary buckets")) {
         return false;
@@ -262,7 +262,7 @@ bool verifyCapacityAndFallback() {
     return true;
 }
 
-bool verifyDeleteCombinations() {
+bool verify_delete_combinations() {
     static_assert(noexcept(TaskPromise<int>::operator new(std::size_t{})));
     static_assert(noexcept(TaskPromise<void>::operator new(
         std::size_t{}, std::align_val_t{})));
@@ -323,37 +323,37 @@ bool verifyDeleteCombinations() {
     return true;
 }
 
-bool verifyAllocationFailureContract() {
-    if (!require(!TaskPromise<int>::get_return_object_on_allocation_failure().isValid(),
+bool verify_allocation_failure_contract() {
+    if (!require(!TaskPromise<int>::get_return_object_on_allocation_failure().is_valid(),
                  "Task<int> allocation failure must return an invalid task")) {
         return false;
     }
-    if (!require(!TaskPromise<void>::get_return_object_on_allocation_failure().isValid(),
+    if (!require(!TaskPromise<void>::get_return_object_on_allocation_failure().is_valid(),
                  "Task<void> allocation failure must return an invalid task")) {
         return false;
     }
 
-    setFrameAllocationFailureForTesting(true);
-    auto noFrame = completedIntTask();
-    setFrameAllocationFailureForTesting(false);
-    if (!require(!noFrame.isValid(),
+    set_frame_allocation_failure_for_testing(true);
+    auto noFrame = completed_int_task();
+    set_frame_allocation_failure_for_testing(false);
+    if (!require(!noFrame.is_valid(),
                  "frame allocation failure must return an invalid Task")) {
         return false;
     }
 
-    setTaskStateAllocationFailureForTesting(true);
-    auto noState = completedIntTask();
-    setTaskStateAllocationFailureForTesting(false);
-    if (!require(!noState.isValid(),
+    set_task_state_allocation_failure_for_testing(true);
+    auto noState = completed_int_task();
+    set_task_state_allocation_failure_for_testing(false);
+    if (!require(!noState.is_valid(),
                  "TaskState allocation failure must return an invalid Task")) {
         return false;
     }
 
     std::atomic<int> destroyed{0};
-    setTaskStateAllocationFailureForTesting(true);
-    auto noStateFrame = initiallySuspendedTask(FrameProbe(&destroyed));
-    setTaskStateAllocationFailureForTesting(false);
-    if (!require(!noStateFrame.isValid(),
+    set_task_state_allocation_failure_for_testing(true);
+    auto noStateFrame = initially_suspended_task(FrameProbe(&destroyed));
+    set_task_state_allocation_failure_for_testing(false);
+    if (!require(!noStateFrame.is_valid(),
                  "initial suspend must return an invalid Task when state allocation fails") ||
         !require(destroyed.load(std::memory_order_acquire) == 1,
                  "initial suspend must destroy its frame after state allocation failure")) {
@@ -363,7 +363,7 @@ bool verifyAllocationFailureContract() {
     return true;
 }
 
-bool verifyConcurrentTaskStateChurn() {
+bool verify_concurrent_task_state_churn() {
     constexpr std::size_t kWorkers = 4;
     constexpr std::size_t kIterations = 20'000;
     std::atomic<std::size_t> failures{0};
@@ -389,7 +389,7 @@ bool verifyConcurrentTaskStateChurn() {
                    "concurrent TaskState allocation must not fail");
 }
 
-bool verifyConcurrentRawFrameChurn() {
+bool verify_concurrent_raw_frame_churn() {
     constexpr std::size_t kWorkers = 4;
     constexpr std::size_t kIterations = 25'000;
     std::atomic<std::size_t> failures{0};
@@ -401,7 +401,7 @@ bool verifyConcurrentRawFrameChurn() {
             for (std::size_t i = 0; i < kIterations; ++i) {
                 const std::size_t size =
                     (i % 2 == 0) ? 256 : ((i % 3 == 0) ? 512 : 2048);
-                void* frame = allocateFrameStorage(size, kDefaultAlignment);
+                void* frame = allocate_frame_storage(size, kDefaultAlignment);
                 if (frame == nullptr) {
                     failures.fetch_add(1, std::memory_order_relaxed);
                     continue;
@@ -409,7 +409,7 @@ bool verifyConcurrentRawFrameChurn() {
                 if (reinterpret_cast<std::uintptr_t>(frame) % kDefaultAlignment != 0) {
                     badAlignment.fetch_add(1, std::memory_order_relaxed);
                 }
-                releaseFrameStorage(frame, size, kDefaultAlignment);
+                release_frame_storage(frame, size, kDefaultAlignment);
             }
         });
     }
@@ -423,32 +423,32 @@ bool verifyConcurrentRawFrameChurn() {
                 "concurrent frame churn returned an invalid alignment");
 }
 
-bool verifyCrossThreadRawFrameRelease() {
+bool verify_cross_thread_raw_frame_release() {
     constexpr std::size_t kFrames = 1024;
     std::array<void*, kFrames> frames{};
     std::thread producer([&]() {
         for (void*& frame : frames) {
-            frame = allocateFrameStorage(256, kDefaultAlignment);
+            frame = allocate_frame_storage(256, kDefaultAlignment);
         }
     });
     producer.join();
 
     std::thread consumer([&]() {
         for (void* frame : frames) {
-            releaseFrameStorage(frame, 256, kDefaultAlignment);
+            release_frame_storage(frame, 256, kDefaultAlignment);
         }
     });
     consumer.join();
     return true;
 }
 
-bool verifyBasicTaskLifetimes() {
+bool verify_basic_task_lifetimes() {
     {
-        auto task = completedIntTask();
-        if (!require(task.isValid(), "Task<int> should be valid after creation")) {
+        auto task = completed_int_task();
+        if (!require(task.is_valid(), "Task<int> should be valid after creation")) {
             return false;
         }
-        TaskRef keeper = galay::kernel::detail::TaskAccess::taskRef(task);
+        TaskRef keeper = galay::kernel::detail::TaskAccess::task_ref(task);
         auto* state = keeper.state();
         if (!require(state != nullptr && state->m_handle != nullptr,
                      "Task<int> should expose a coroutine handle")) {
@@ -459,39 +459,39 @@ bool verifyBasicTaskLifetimes() {
                      "Task<int> should be complete after resume")) {
             return false;
         }
-        auto result = galay::kernel::detail::TaskAccess::takeResult(task);
+        auto result = galay::kernel::detail::TaskAccess::take_result(task);
         if (!require(result.has_value() && *result == 7,
                      "Task<int> result should be consumable once")) {
             return false;
         }
-        auto consumedAgain = galay::kernel::detail::TaskAccess::takeResult(task);
+        auto consumedAgain = galay::kernel::detail::TaskAccess::take_result(task);
         if (!require(!consumedAgain.has_value() &&
                          consumedAgain.error().code() ==
                              galay::kernel::detail::TaskResultErrorCode::kAlreadyConsumed,
                      "Task<int> second result consumption must fail explicitly")) {
             return false;
         }
-        if (!require(keeper.isValid() && keeper.state() == state,
+        if (!require(keeper.is_valid() && keeper.state() == state,
                      "TaskState must outlive its coroutine frame")) {
             return false;
         }
     }
 
-    auto voidTask = completedVoidTask();
-    if (!require(voidTask.isValid(), "Task<void> should be valid after creation")) {
+    auto voidTask = completed_void_task();
+    if (!require(voidTask.is_valid(), "Task<void> should be valid after creation")) {
         return false;
     }
-    auto* voidState = galay::kernel::detail::TaskAccess::taskRef(voidTask).state();
+    auto* voidState = galay::kernel::detail::TaskAccess::task_ref(voidTask).state();
     voidState->m_handle.resume();
-    auto voidResult = galay::kernel::detail::TaskAccess::takeResult(voidTask);
+    auto voidResult = galay::kernel::detail::TaskAccess::take_result(voidTask);
     return require(voidResult.has_value(), "Task<void> should complete normally");
 }
 
-bool verifyUnsubmittedAndCrossThreadDestroy() {
+bool verify_unsubmitted_and_cross_thread_destroy() {
     std::atomic<int> destroyed{0};
     {
-        auto task = initiallySuspendedTask(FrameProbe(&destroyed));
-        if (!require(task.isValid(), "initially suspended task should be valid")) {
+        auto task = initially_suspended_task(FrameProbe(&destroyed));
+        if (!require(task.is_valid(), "initially suspended task should be valid")) {
             return false;
         }
     }
@@ -502,7 +502,7 @@ bool verifyUnsubmittedAndCrossThreadDestroy() {
 
     destroyed.store(0, std::memory_order_release);
     {
-        auto task = initiallySuspendedTask(FrameProbe(&destroyed));
+        auto task = initially_suspended_task(FrameProbe(&destroyed));
         std::thread releaser([task = std::move(task)]() mutable {
             (void)task;
         });
@@ -512,16 +512,16 @@ bool verifyUnsubmittedAndCrossThreadDestroy() {
                    "cross-thread frame release must destroy exactly once");
 }
 
-bool verifyExplicitDestroyGuard() {
+bool verify_explicit_destroy_guard() {
     std::atomic<int> destroyed{0};
-    auto task = initiallySuspendedTask(FrameProbe(&destroyed));
-    TaskRef keeper = galay::kernel::detail::TaskAccess::taskRef(task);
+    auto task = initially_suspended_task(FrameProbe(&destroyed));
+    TaskRef keeper = galay::kernel::detail::TaskAccess::task_ref(task);
     auto* state = keeper.state();
     task = Task<void>{};
-    if (!require(destroyTaskFrame(state), "first explicit frame destroy should succeed")) {
+    if (!require(destroy_task_frame(state), "first explicit frame destroy should succeed")) {
         return false;
     }
-    if (!require(!destroyTaskFrame(state), "repeated frame destroy should be ignored")) {
+    if (!require(!destroy_task_frame(state), "repeated frame destroy should be ignored")) {
         return false;
     }
     keeper = TaskRef{};
@@ -529,10 +529,10 @@ bool verifyExplicitDestroyGuard() {
                    "explicit frame destruction should run its destructor once");
 }
 
-bool verifyDirectHandleDestroyGuard() {
+bool verify_direct_handle_destroy_guard() {
     std::atomic<int> destroyed{0};
-    auto task = initiallySuspendedTask(FrameProbe(&destroyed));
-    TaskRef keeper = galay::kernel::detail::TaskAccess::taskRef(task);
+    auto task = initially_suspended_task(FrameProbe(&destroyed));
+    TaskRef keeper = galay::kernel::detail::TaskAccess::task_ref(task);
     auto* state = keeper.state();
     task = Task<void>{};
 
@@ -548,10 +548,10 @@ bool verifyDirectHandleDestroyGuard() {
                    "direct frame destroy must not be repeated by TaskState");
 }
 
-bool verifyStateRetentionHandles() {
+bool verify_state_retention_handles() {
     {
-        auto task = completedIntTask();
-        TaskRef taskRef = galay::kernel::detail::TaskAccess::taskRef(task);
+        auto task = completed_int_task();
+        TaskRef taskRef = galay::kernel::detail::TaskAccess::task_ref(task);
         auto* state = taskRef.state();
         JoinHandle<int> join(taskRef);
         state->m_handle.resume();
@@ -573,9 +573,9 @@ bool verifyStateRetentionHandles() {
 
     std::atomic<int> destroyed{0};
     {
-        auto root = completedVoidTask();
-        auto next = initiallySuspendedTask(FrameProbe(&destroyed));
-        auto* rootState = galay::kernel::detail::TaskAccess::taskRef(root).state();
+        auto root = completed_void_task();
+        auto next = initially_suspended_task(FrameProbe(&destroyed));
+        auto* rootState = galay::kernel::detail::TaskAccess::task_ref(root).state();
         root.then(std::move(next));
         rootState->m_handle.resume();
         root = Task<void>{};
@@ -584,13 +584,13 @@ bool verifyStateRetentionHandles() {
                    "continuation must retain and then release its child frame once");
 }
 
-bool verifyNestedAndExceptionTasks() {
+bool verify_nested_and_exception_tasks() {
     {
-        auto child = nestedChildTask();
-        auto childRef = galay::kernel::detail::TaskAccess::taskRef(child);
+        auto child = nested_child_task();
+        auto childRef = galay::kernel::detail::TaskAccess::task_ref(child);
         auto* childState = childRef.state();
         childState->m_handle.resume();
-        auto childResult = galay::kernel::detail::TaskAccess::takeResult(child);
+        auto childResult = galay::kernel::detail::TaskAccess::take_result(child);
         if (!require(childResult.has_value() && *childResult == 5,
                      "direct child task should produce a result")) {
             return false;
@@ -602,7 +602,7 @@ bool verifyNestedAndExceptionTasks() {
     config.parallel_scheduler_count = 1;
     Runtime runtime(config);
 
-    auto nested = runtime.blockOnCpu(nestedParentTask());
+    auto nested = runtime.block_on_cpu(nested_parent_task());
     if (!require(nested.has_value() && *nested == 6,
                  "nested co_await should preserve result and lifetime")) {
         if (nested.has_value()) {
@@ -615,7 +615,7 @@ bool verifyNestedAndExceptionTasks() {
         return false;
     }
 
-    auto exception = runtime.blockOnCpu(unhandledExceptionTask());
+    auto exception = runtime.block_on_cpu(unhandled_exception_task());
     if (!require(!exception.has_value(),
                  "unhandled_exception should produce a failed root task")) {
         runtime.stop();
@@ -627,15 +627,15 @@ bool verifyNestedAndExceptionTasks() {
                     "unhandled_exception should preserve its error category");
 }
 
-bool verifyFreshThreadCacheLifecycle() {
+bool verify_fresh_thread_cache_lifecycle() {
     constexpr std::array<std::size_t, 5> sizes{{128, 256, 512, 1024, 2048}};
     for (size_t round = 0; round < 32; ++round) {
         std::array<void*, sizes.size()> frames{};
         for (size_t i = 0; i < sizes.size(); ++i) {
-            frames[i] = allocateFrameStorage(sizes[i], kDefaultAlignment);
+            frames[i] = allocate_frame_storage(sizes[i], kDefaultAlignment);
             if (frames[i] == nullptr) {
                 for (size_t j = 0; j < i; ++j) {
-                    releaseFrameStorage(frames[j], sizes[j], kDefaultAlignment);
+                    release_frame_storage(frames[j], sizes[j], kDefaultAlignment);
                 }
                 return false;
             }
@@ -644,11 +644,11 @@ bool verifyFreshThreadCacheLifecycle() {
         // First allocator operation on this fresh thread is a remote release.
         std::thread consumer([&]() {
             for (size_t i = 0; i < sizes.size(); ++i) {
-                releaseFrameStorage(frames[i], sizes[i], kDefaultAlignment);
-                void* reused = allocateFrameStorage(sizes[i], kDefaultAlignment);
+                release_frame_storage(frames[i], sizes[i], kDefaultAlignment);
+                void* reused = allocate_frame_storage(sizes[i], kDefaultAlignment);
                 if (reused != frames[i]) { valid = false; }
-                releaseFrameStorage(reused, sizes[i], kDefaultAlignment);
-                if (frameFreeListSizeForTesting(sizes[i], kDefaultAlignment) != 1) {
+                release_frame_storage(reused, sizes[i], kDefaultAlignment);
+                if (frame_free_list_size_for_testing(sizes[i], kDefaultAlignment) != 1) {
                     valid = false;
                 }
             }
@@ -665,21 +665,21 @@ bool verifyFreshThreadCacheLifecycle() {
 }  // namespace
 
 int main() {
-    if (!verifyFreshThreadCacheLifecycle() ||
-        !verifySmallAndOverflowInputs() ||
-        !verifyBoundaryReuse() ||
-        !verifyCapacityAndFallback() ||
-        !verifyDeleteCombinations() ||
-        !verifyAllocationFailureContract() ||
-        !verifyConcurrentRawFrameChurn() ||
-        !verifyCrossThreadRawFrameRelease() ||
-        !verifyBasicTaskLifetimes() ||
-        !verifyUnsubmittedAndCrossThreadDestroy() ||
-        !verifyExplicitDestroyGuard() ||
-        !verifyDirectHandleDestroyGuard() ||
-        !verifyStateRetentionHandles() ||
-        !verifyConcurrentTaskStateChurn() ||
-        !verifyNestedAndExceptionTasks()) {
+    if (!verify_fresh_thread_cache_lifecycle() ||
+        !verify_small_and_overflow_inputs() ||
+        !verify_boundary_reuse() ||
+        !verify_capacity_and_fallback() ||
+        !verify_delete_combinations() ||
+        !verify_allocation_failure_contract() ||
+        !verify_concurrent_raw_frame_churn() ||
+        !verify_cross_thread_raw_frame_release() ||
+        !verify_basic_task_lifetimes() ||
+        !verify_unsubmitted_and_cross_thread_destroy() ||
+        !verify_explicit_destroy_guard() ||
+        !verify_direct_handle_destroy_guard() ||
+        !verify_state_retention_handles() ||
+        !verify_concurrent_task_state_churn() ||
+        !verify_nested_and_exception_tasks()) {
         return 1;
     }
 

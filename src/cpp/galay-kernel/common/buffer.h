@@ -109,13 +109,13 @@ namespace galay::kernel
          * @brief 将缓冲区内容拷贝为 std::string
          * @return 包含缓冲区数据的新字符串
          */
-        std::string toString() const;
+        std::string to_string() const;
 
         /**
          * @brief 获取数据的零拷贝 string_view
          * @return 引用缓冲区内容的 string_view
          */
-        std::string_view toStringView() const;
+        std::string_view to_string_view() const;
 
         /**
          * @brief 移动赋值运算符

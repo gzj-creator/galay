@@ -19,11 +19,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -31,11 +31,11 @@ std::string readAll(const std::filesystem::path& path) {
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
-bool containsText(const std::string& haystack, const std::string& needle) {
+bool contains_text(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
-std::string extractFunction(const std::string& content, const std::string& marker) {
+std::string extract_function(const std::string& content, const std::string& marker) {
     const auto begin_pos = content.find(marker);
     if (begin_pos == std::string::npos) {
         return {};
@@ -66,52 +66,52 @@ std::string extractFunction(const std::string& content, const std::string& marke
     return {};
 }
 
-void requireContains(std::vector<std::string>& failures,
+void require_contains(std::vector<std::string>& failures,
                      const std::filesystem::path& path,
                      const std::string& content,
                      const std::string& needle,
                      const std::string& message) {
-    if (!containsText(content, needle)) {
+    if (!contains_text(content, needle)) {
         failures.push_back(path.string() + ": " + message);
     }
 }
 
-void requireNotContains(std::vector<std::string>& failures,
+void require_not_contains(std::vector<std::string>& failures,
                         const std::filesystem::path& path,
                         const std::string& content,
                         const std::string& needle,
                         const std::string& message) {
-    if (containsText(content, needle)) {
+    if (contains_text(content, needle)) {
         failures.push_back(path.string() + ": " + message);
     }
 }
 
-void checkMpscAwaitSuspend(std::vector<std::string>& failures,
+void check_mpsc_await_suspend(std::vector<std::string>& failures,
                            const std::filesystem::path& path,
                            const std::string& content,
                            const std::string& marker,
                            const std::string& label,
                            const std::string& retry_call) {
-    const std::string section = extractFunction(content, marker);
+    const std::string section = extract_function(content, marker);
     if (section.empty()) {
         failures.push_back(path.string() + ": failed to locate " + label);
         return;
     }
 
-    requireContains(failures,
+    require_contains(failures,
                     path,
                     section,
-                    "beginWaiterRegistration()",
+                    "begin_waiter_registration()",
                     label + " should enter the non-wakeable arming phase before the final retry");
     const std::string publish_call =
-        "return channel->publishWaiter(waiterState, std::move(timeoutTimer));";
-    requireContains(failures,
+        "return channel->publish_waiter(waiterState, std::move(timeoutTimer));";
+    require_contains(failures,
                     path,
                     section,
                     publish_call,
                     label + " should make waiter publication the final frame-touching operation");
 
-    const auto begin_pos = section.find("beginWaiterRegistration()");
+    const auto begin_pos = section.find("begin_waiter_registration()");
     const auto retry_pos = section.find(retry_call, begin_pos);
     const auto publish_pos = section.find(publish_call);
     if (begin_pos == std::string::npos || retry_pos == std::string::npos ||
@@ -122,32 +122,32 @@ void checkMpscAwaitSuspend(std::vector<std::string>& failures,
     }
     const std::string after_publish = section.substr(
         publish_pos + publish_call.size());
-    requireNotContains(failures,
+    require_not_contains(failures,
                        path,
                        after_publish,
-                       "tryReceiveNow()",
-                       label + " must not call tryReceiveNow() after publishing the waiter");
+                       "try_receive_now()",
+                       label + " must not call try_receive_now() after publishing the waiter");
 }
 
-void checkWithTimeoutAwaitSuspend(std::vector<std::string>& failures,
+void check_with_timeout_await_suspend(std::vector<std::string>& failures,
                                   const std::filesystem::path& path,
                                   const std::string& content) {
-    const std::string section = extractFunction(
+    const std::string section = extract_function(
         content, "bool await_suspend(std::coroutine_handle<Promise> handle)");
     if (section.empty()) {
         failures.push_back(path.string() + ": failed to locate WithTimeout::await_suspend");
         return;
     }
 
-    requireContains(failures,
+    require_contains(failures,
                     path,
                     section,
                     "auto timer = m_timer;",
                     "WithTimeout must retain the timer before inner waiter publication");
-    requireContains(failures,
+    require_contains(failures,
                     path,
                     section,
-                    "Scheduler* scheduler = waker.getScheduler();",
+                    "Scheduler* scheduler = waker.get_scheduler();",
                     "WithTimeout must copy the scheduler before inner waiter publication");
 
     const auto publish_pos = section.find("m_inner.await_suspend(handle)");
@@ -158,32 +158,32 @@ void checkWithTimeoutAwaitSuspend(std::vector<std::string>& failures,
     const std::string publish_call = "m_inner.await_suspend(handle)";
     const std::string after_publish = section.substr(
         publish_pos + publish_call.size());
-    requireNotContains(failures,
+    require_not_contains(failures,
                        path,
                        after_publish,
                        "m_inner",
                        "WithTimeout must not access inner storage after waiter publication");
-    requireNotContains(failures,
+    require_not_contains(failures,
                        path,
                        after_publish,
                        "m_timer",
                        "WithTimeout must not access timer member after waiter publication");
-    requireNotContains(failures,
+    require_not_contains(failures,
                        path,
                        after_publish,
                        "m_scheduler",
                        "WithTimeout must not access scheduler member after waiter publication");
-    requireContains(failures,
+    require_contains(failures,
                     path,
                     after_publish,
-                    "scheduler->addTimer(timer)",
+                    "scheduler->add_timer(timer)",
                     "WithTimeout must register the retained local timer after suspension");
 }
 
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto mpsc_path =
         root / "galay-kernel" / "concurrency" / "mpsc" / "unbounded_channel.h";
     const auto waiter_path = root / "galay-kernel" / "async" / "async_waiter.h";
@@ -191,52 +191,52 @@ int main() {
     const auto timeout_path = root / "galay-kernel" / "core" / "timeout.hpp";
     std::vector<std::string> failures;
 
-    const std::string mpsc = readAll(mpsc_path);
+    const std::string mpsc = read_all(mpsc_path);
     if (mpsc.empty()) {
         failures.push_back(mpsc_path.string() + ": failed to read mpsc/unbounded_channel.h");
     } else {
-        checkMpscAwaitSuspend(
+        check_mpsc_await_suspend(
             failures,
             mpsc_path,
             mpsc,
             "inline bool UnboundedRecvAwaitable<T>::await_suspend",
             "mpsc::UnboundedRecvAwaitable::await_suspend",
-            "hasPublishedValueForWaiter()");
-        checkMpscAwaitSuspend(
+            "has_published_value_for_waiter()");
+        check_mpsc_await_suspend(
             failures,
             mpsc_path,
             mpsc,
             "inline bool UnboundedRecvBatchAwaitable<T>::await_suspend",
             "mpsc::UnboundedRecvBatchAwaitable::await_suspend",
-            "hasPublishedValueForWaiter()");
+            "has_published_value_for_waiter()");
     }
 
-    const std::string timeout = readAll(timeout_path);
+    const std::string timeout = read_all(timeout_path);
     if (timeout.empty()) {
         failures.push_back(timeout_path.string() + ": failed to read timeout.hpp");
     } else {
-        checkWithTimeoutAwaitSuspend(failures, timeout_path, timeout);
+        check_with_timeout_await_suspend(failures, timeout_path, timeout);
     }
 
-    const std::string waiter = readAll(waiter_path);
+    const std::string waiter = read_all(waiter_path);
     if (waiter.empty()) {
         failures.push_back(waiter_path.string() + ": failed to read async_waiter.h");
     } else {
         const std::string typed_wait =
-            extractFunction(waiter, "bool AsyncWaiterAwaitable<T>::await_suspend");
+            extract_function(waiter, "bool AsyncWaiterAwaitable<T>::await_suspend");
         const std::string void_wait =
-            extractFunction(waiter, "inline bool AsyncWaiterAwaitable<void>::await_suspend");
+            extract_function(waiter, "inline bool AsyncWaiterAwaitable<void>::await_suspend");
         if (typed_wait.empty()) {
             failures.push_back(waiter_path.string() + ": failed to locate typed AsyncWaiter await_suspend");
         } else {
-            requireContains(failures,
+            require_contains(failures,
                             waiter_path,
                             typed_wait,
                             "AsyncWaiterState::kWaiting",
                             "typed AsyncWaiter must publish a waiting state as the final suspend decision");
             const auto publish_pos = typed_wait.find("AsyncWaiterState::kWaiting");
             if (publish_pos != std::string::npos) {
-                requireNotContains(failures,
+                require_not_contains(failures,
                                    waiter_path,
                                    typed_wait.substr(publish_pos),
                                    "m_ready.load",
@@ -246,14 +246,14 @@ int main() {
         if (void_wait.empty()) {
             failures.push_back(waiter_path.string() + ": failed to locate void AsyncWaiter await_suspend");
         } else {
-            requireContains(failures,
+            require_contains(failures,
                             waiter_path,
                             void_wait,
                             "AsyncWaiterState::kWaiting",
                             "void AsyncWaiter must publish a waiting state as the final suspend decision");
             const auto publish_pos = void_wait.find("AsyncWaiterState::kWaiting");
             if (publish_pos != std::string::npos) {
-                requireNotContains(failures,
+                require_not_contains(failures,
                                    waiter_path,
                                    void_wait.substr(publish_pos),
                                    "m_ready.load",
@@ -262,21 +262,21 @@ int main() {
         }
     }
 
-    const std::string mutex = readAll(mutex_path);
+    const std::string mutex = read_all(mutex_path);
     if (mutex.empty()) {
         failures.push_back(mutex_path.string() + ": failed to read async_mutex.h");
     } else {
         const std::string mutex_wait =
-            extractFunction(mutex, "inline bool AsyncMutexAwaitable::await_suspend");
+            extract_function(mutex, "inline bool AsyncMutexAwaitable::await_suspend");
         if (mutex_wait.empty()) {
             failures.push_back(mutex_path.string() + ": failed to locate AsyncMutex await_suspend");
         } else {
-            requireContains(failures,
+            require_contains(failures,
                             mutex_path,
                             mutex_wait,
                             "auto* mutex = m_mutex;",
                             "AsyncMutex await_suspend should copy m_mutex before publishing waiter");
-            requireContains(failures,
+            require_contains(failures,
                             mutex_path,
                             mutex_wait,
                             "auto waiter = m_waiter;",
@@ -286,12 +286,12 @@ int main() {
 
     const auto c_waiter_path = std::filesystem::path(GALAY_PROJECT_ROOT) /
         "src" / "c" / "galay-kernel-c" / "async-c" / "async_waiter.c";
-    const std::string c_waiter = readAll(c_waiter_path);
+    const std::string c_waiter = read_all(c_waiter_path);
     if (c_waiter.empty()) {
         failures.push_back(c_waiter_path.string() + ": failed to read async_waiter.c");
     } else {
         const std::string wait_fn =
-            extractFunction(c_waiter, "C_IOResult galay_c_async_waiter_wait");
+            extract_function(c_waiter, "C_IOResult galay_c_async_waiter_wait");
         if (wait_fn.empty()) {
             failures.push_back(c_waiter_path.string() +
                                ": failed to locate galay_c_async_waiter_wait");
@@ -303,12 +303,12 @@ int main() {
                 failures.push_back(c_waiter_path.string() +
                                    ": failed to locate publish/park boundary in galay_c_async_waiter_wait");
             } else {
-                requireContains(failures,
+                require_contains(failures,
                                 c_waiter_path,
                                 wait_fn.substr(publish_pos, park_pos - publish_pos),
                                 "impl->ready",
                                 "C async waiter must re-check ready after publishing the task slot");
-                requireContains(failures,
+                require_contains(failures,
                                 c_waiter_path,
                                 wait_fn.substr(park_pos),
                                 "impl->ready",
@@ -317,7 +317,7 @@ int main() {
         }
 
         const std::string notify_fn =
-            extractFunction(c_waiter,
+            extract_function(c_waiter,
                             "C_AsyncWaiterResultCode galay_c_async_waiter_notify");
         if (notify_fn.empty()) {
             failures.push_back(c_waiter_path.string() +

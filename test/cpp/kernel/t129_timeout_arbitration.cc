@@ -18,39 +18,39 @@ using namespace std::chrono_literals;
 
 namespace {
 
-auto makeTimedRecv(IOController& controller, char* buffer)
+auto make_timed_recv(IOController& controller, char* buffer)
 {
     return RecvAwaitable(&controller, buffer, 1).timeout(1ms);
 }
 
-void completionWinsWhenRegistrationWasRemoved()
+void completion_wins_when_registration_was_removed()
 {
     char buffer = 0;
     IOController controller(GHandle{.fd = -1});
-    auto awaitable = makeTimedRecv(controller, &buffer);
-    awaitable.ensureTimer();
+    auto awaitable = make_timed_recv(controller, &buffer);
+    awaitable.ensure_timer();
 
-    assert(controller.fillAwaitable(RECV, &awaitable.m_inner));
+    assert(controller.fill_awaitable(RECV, &awaitable.m_inner));
     awaitable.m_inner.m_result = size_t{1};
-    controller.removeAwaitable(RECV);
+    controller.remove_awaitable(RECV);
 
-    awaitable.m_timer->handleTimeout();
+    awaitable.m_timer->handle_timeout();
     auto result = awaitable.await_resume();
 
     assert(result.has_value());
     assert(*result == 1);
 }
 
-void timeoutWinsWhileRegistrationIsStillActive()
+void timeout_wins_while_registration_is_still_active()
 {
     char buffer = 0;
     IOController controller(GHandle{.fd = -1});
-    auto awaitable = makeTimedRecv(controller, &buffer);
-    awaitable.ensureTimer();
+    auto awaitable = make_timed_recv(controller, &buffer);
+    awaitable.ensure_timer();
 
-    assert(controller.fillAwaitable(RECV, &awaitable.m_inner));
+    assert(controller.fill_awaitable(RECV, &awaitable.m_inner));
 
-    awaitable.m_timer->handleTimeout();
+    awaitable.m_timer->handle_timeout();
     auto result = awaitable.await_resume();
 
     assert(!result.has_value());
@@ -61,8 +61,8 @@ void timeoutWinsWhileRegistrationIsStillActive()
 
 int main()
 {
-    completionWinsWhenRegistrationWasRemoved();
-    timeoutWinsWhileRegistrationIsStillActive();
+    completion_wins_when_registration_was_removed();
+    timeout_wins_while_registration_is_still_active();
 
     std::cout << "T129-TimeoutArbitration PASS\n";
     return 0;

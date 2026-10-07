@@ -15,7 +15,7 @@ using namespace galay::rpc;
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -35,7 +35,7 @@ int main(int argc, char** argv)
             continue;
         }
         auto decoded = RpcRequest{};
-        if (!decoded.deserializeBody(wire.data() + RPC_HEADER_SIZE, wire.size() - RPC_HEADER_SIZE)) {
+        if (!decoded.deserialize_body(wire.data() + RPC_HEADER_SIZE, wire.size() - RPC_HEADER_SIZE)) {
             ++errors;
         }
         bytes += wire.size();
@@ -55,31 +55,31 @@ int main(int argc, char** argv)
         }
 
         RpcRequest request(static_cast<uint32_t>(i + 1), "BenchService", "echo");
-        request.payloadView(RpcPayloadView{"x", RPC_MAX_BODY_SIZE, "y", 1});
+        request.payload_view(RpcPayloadView{"x", RPC_MAX_BODY_SIZE, "y", 1});
         galay::rpc::detail::RpcRequestWriteState request_state(request);
-        if (!request_state.takeResult().has_value()) {
+        if (!request_state.take_result().has_value()) {
             ++rejected_boundaries;
         } else {
             ++errors;
         }
 
         RpcRequest overflow_request(static_cast<uint32_t>(i + 1), "BenchService", "echo");
-        overflow_request.payloadView(RpcPayloadView{
+        overflow_request.payload_view(RpcPayloadView{
             "x",
             std::numeric_limits<size_t>::max(),
             "y",
             1});
         galay::rpc::detail::RpcRequestWriteState overflow_request_state(overflow_request);
-        if (!overflow_request_state.takeResult().has_value()) {
+        if (!overflow_request_state.take_result().has_value()) {
             ++rejected_boundaries;
         } else {
             ++errors;
         }
 
         RpcResponse response(static_cast<uint32_t>(i + 1), RpcErrorCode::OK);
-        response.payloadView(RpcPayloadView{"x", RPC_MAX_BODY_SIZE - 1, "y", 1});
+        response.payload_view(RpcPayloadView{"x", RPC_MAX_BODY_SIZE - 1, "y", 1});
         galay::rpc::detail::RpcResponseWriteState response_state(response);
-        if (!response_state.takeResult().has_value()) {
+        if (!response_state.take_result().has_value()) {
             ++rejected_boundaries;
         } else {
             ++errors;
@@ -88,7 +88,7 @@ int main(int argc, char** argv)
         galay::rpc::detail::StreamFrameWriteState stream_state(
             static_cast<uint32_t>(i + 1),
             RpcPayloadView{"x", RPC_MAX_BODY_SIZE, "y", 1});
-        if (!stream_state.takeResult().has_value()) {
+        if (!stream_state.take_result().has_value()) {
             ++rejected_boundaries;
         } else {
             ++errors;

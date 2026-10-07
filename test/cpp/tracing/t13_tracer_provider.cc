@@ -13,7 +13,7 @@ namespace {
 
 class RecordingProcessor final : public galay::tracing::SpanProcessor {
 public:
-    void onEnd(galay::tracing::Span&& span) override {
+    void on_end(galay::tracing::Span&& span) override {
         ++calls;
         if (throw_on_end) {
             throw std::runtime_error("processor failure");
@@ -21,7 +21,7 @@ public:
         spans.push_back(std::move(span));
     }
 
-    bool forceFlush(std::chrono::milliseconds) override {
+    bool force_flush(std::chrono::milliseconds) override {
         return true;
     }
 
@@ -37,32 +37,32 @@ public:
 class SamplerScope {
 public:
     explicit SamplerScope(const galay::tracing::Sampler* sampler) noexcept {
-        galay::tracing::setSampler(sampler);
+        galay::tracing::set_sampler(sampler);
     }
 
     ~SamplerScope() {
-        galay::tracing::setSampler(nullptr);
+        galay::tracing::set_sampler(nullptr);
     }
 };
 
-void noProcessorIsConfiguredByDefault() {
+void no_processor_is_configured_by_default() {
     galay::tracing::SpanProcessorScope processor_scope(nullptr);
-    assert(galay::tracing::currentSpanProcessor() == nullptr);
+    assert(galay::tracing::current_span_processor() == nullptr);
 
     {
-        auto guard = galay::tracing::startSpan("default-noop");
-        assert(guard.span().spanContext().sampled());
+        auto guard = galay::tracing::start_span("default-noop");
+        assert(guard.span().span_context().sampled());
     }
 
-    assert(!galay::tracing::currentContext().has_value());
+    assert(!galay::tracing::current_context().has_value());
 }
 
-void sampledGuardDestructionEnqueuesOnce() {
+void sampled_guard_destruction_enqueues_once() {
     RecordingProcessor processor;
     galay::tracing::SpanProcessorScope processor_scope(&processor);
 
     {
-        auto guard = galay::tracing::startSpan("sampled");
+        auto guard = galay::tracing::start_span("sampled");
         assert(processor.calls == 0);
     }
 
@@ -70,15 +70,15 @@ void sampledGuardDestructionEnqueuesOnce() {
     assert(processor.spans.size() == 1);
     assert(processor.spans[0].name() == "sampled");
     assert(processor.spans[0].ended());
-    assert(processor.spans[0].spanContext().sampled());
+    assert(processor.spans[0].span_context().sampled());
 }
 
-void explicitEndIsIdempotentAndDestructionEnqueuesOnce() {
+void explicit_end_is_idempotent_and_destruction_enqueues_once() {
     RecordingProcessor processor;
     galay::tracing::SpanProcessorScope processor_scope(&processor);
 
     {
-        auto guard = galay::tracing::startSpan("manual-end");
+        auto guard = galay::tracing::start_span("manual-end");
         guard.end();
         guard.end();
         assert(guard.span().ended());
@@ -90,14 +90,14 @@ void explicitEndIsIdempotentAndDestructionEnqueuesOnce() {
     assert(processor.spans[0].name() == "manual-end");
 }
 
-void movedGuardEnqueuesOnlyFromActiveOwner() {
+void moved_guard_enqueues_only_from_active_owner() {
     RecordingProcessor processor;
     galay::tracing::SpanProcessorScope processor_scope(&processor);
 
     {
         galay::tracing::SpanGuard moved;
         {
-            auto guard = galay::tracing::startSpan("moved");
+            auto guard = galay::tracing::start_span("moved");
             moved = std::move(guard);
         }
         assert(processor.calls == 0);
@@ -108,29 +108,29 @@ void movedGuardEnqueuesOnlyFromActiveOwner() {
     assert(processor.spans[0].name() == "moved");
 }
 
-void unsampledSpansDoNotEnqueue() {
+void unsampled_spans_do_not_enqueue() {
     galay::tracing::AlwaysOffSampler off;
     SamplerScope sampler_scope(&off);
     RecordingProcessor processor;
     galay::tracing::SpanProcessorScope processor_scope(&processor);
 
     {
-        auto guard = galay::tracing::startSpan("unsampled");
-        assert(!guard.span().spanContext().sampled());
+        auto guard = galay::tracing::start_span("unsampled");
+        assert(!guard.span().span_context().sampled());
     }
 
     assert(processor.calls == 0);
     assert(processor.spans.empty());
 }
 
-void processorExceptionsDoNotEscapeDestructors() {
+void processor_exceptions_do_not_escape_destructors() {
     RecordingProcessor processor;
     processor.throw_on_end = true;
     galay::tracing::SpanProcessorScope processor_scope(&processor);
 
     {
-        auto guard = galay::tracing::startSpan("throwing-processor");
-        assert(guard.span().spanContext().sampled());
+        auto guard = galay::tracing::start_span("throwing-processor");
+        assert(guard.span().span_context().sampled());
     }
 
     assert(processor.calls == 1);
@@ -139,10 +139,10 @@ void processorExceptionsDoNotEscapeDestructors() {
 } // namespace
 
 int main() {
-    noProcessorIsConfiguredByDefault();
-    sampledGuardDestructionEnqueuesOnce();
-    explicitEndIsIdempotentAndDestructionEnqueuesOnce();
-    movedGuardEnqueuesOnlyFromActiveOwner();
-    unsampledSpansDoNotEnqueue();
-    processorExceptionsDoNotEscapeDestructors();
+    no_processor_is_configured_by_default();
+    sampled_guard_destruction_enqueues_once();
+    explicit_end_is_idempotent_and_destruction_enqueues_once();
+    moved_guard_enqueues_only_from_active_owner();
+    unsampled_spans_do_not_enqueue();
+    processor_exceptions_do_not_escape_destructors();
 }

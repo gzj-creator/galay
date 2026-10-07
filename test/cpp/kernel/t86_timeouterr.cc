@@ -45,10 +45,10 @@ struct DomainMachine {
         if (m_result.has_value()) {
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
-        return MachineAction<result_type>::waitRead(&m_byte, 1);
+        return MachineAction<result_type>::wait_read(&m_byte, 1);
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
             if (IOError::contains(result.error().code(), kTimeout)) {
                 m_result = std::unexpected(DomainError{DomainErrorCode::kTimeout});
@@ -60,7 +60,7 @@ struct DomainMachine {
         m_result = result.value();
     }
 
-    void onWrite(std::expected<size_t, IOError>) {}
+    void on_write(std::expected<size_t, IOError>) {}
 
     char m_byte = 0;
     std::optional<DomainResult> m_result;
@@ -73,22 +73,22 @@ struct TestState {
     std::atomic<int> builder_error{0};
 };
 
-Task<void> directTimeoutTask(TestState* state, int fd) {
+Task<void> direct_timeout_task(TestState* state, int fd) {
     IOController controller(GHandle{.fd = fd});
     auto result = co_await StateMachineAwaitable<DomainMachine>(&controller, DomainMachine{}).timeout(50ms);
     state->direct_error.store(result ? 0 : static_cast<int>(result.error().code), std::memory_order_release);
     state->direct_done.store(true, std::memory_order_release);
 }
 
-Task<void> builderTimeoutTask(TestState* state, int fd) {
+Task<void> builder_timeout_task(TestState* state, int fd) {
     IOController controller(GHandle{.fd = fd});
-    auto awaitable = AwaitableBuilder<DomainResult>::fromStateMachine(&controller, DomainMachine{}).build();
+    auto awaitable = AwaitableBuilder<DomainResult>::from_state_machine(&controller, DomainMachine{}).build();
     auto result = co_await awaitable.timeout(50ms);
     state->builder_error.store(result ? 0 : static_cast<int>(result.error().code), std::memory_order_release);
     state->builder_done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -101,7 +101,7 @@ bool waitUntil(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-bool setNonBlocking(int fd) {
+bool set_non_blocking(int fd) {
     const int flags = fcntl(fd, F_GETFL, 0);
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
@@ -121,8 +121,8 @@ int main() {
         close(direct_fds[1]);
         return 1;
     }
-    if (!setNonBlocking(direct_fds[0]) || !setNonBlocking(direct_fds[1]) ||
-        !setNonBlocking(builder_fds[0]) || !setNonBlocking(builder_fds[1])) {
+    if (!set_non_blocking(direct_fds[0]) || !set_non_blocking(direct_fds[1]) ||
+        !set_non_blocking(builder_fds[0]) || !set_non_blocking(builder_fds[1])) {
         std::cerr << "[T86] failed to set non-blocking mode\n";
         close(direct_fds[0]);
         close(direct_fds[1]);
@@ -135,11 +135,11 @@ int main() {
     scheduler.start();
 
     TestState state;
-    scheduleTask(scheduler, directTimeoutTask(&state, direct_fds[0]));
-    scheduleTask(scheduler, builderTimeoutTask(&state, builder_fds[0]));
+    schedule_task(scheduler, direct_timeout_task(&state, direct_fds[0]));
+    schedule_task(scheduler, builder_timeout_task(&state, builder_fds[0]));
 
-    const bool direct_completed = waitUntil(state.direct_done);
-    const bool builder_completed = waitUntil(state.builder_done);
+    const bool direct_completed = wait_until(state.direct_done);
+    const bool builder_completed = wait_until(state.builder_done);
 
     scheduler.stop();
     close(direct_fds[0]);

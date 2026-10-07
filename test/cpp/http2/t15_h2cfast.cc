@@ -18,8 +18,8 @@ using namespace galay::http2;
 
 template<typename T>
 concept HasReadFrameViewsBatch = requires(T& conn) {
-    { conn.readFrameViewsBatch() };
-    { conn.readFrameViewsBatch(8) };
+    { conn.read_frame_views_batch() };
+    { conn.read_frame_views_batch(8) };
 };
 
 template<typename T>
@@ -27,15 +27,15 @@ concept HasRawFrameViewSurface = requires(const T& view) {
     { view.header };
     { view.bytes() } -> std::same_as<std::string_view>;
     { view.payload() } -> std::same_as<std::string_view>;
-    { view.streamId() } -> std::same_as<uint32_t>;
-    { view.isHeaders() } -> std::same_as<bool>;
-    { view.isData() } -> std::same_as<bool>;
-    { view.isContinuation() } -> std::same_as<bool>;
+    { view.stream_id() } -> std::same_as<uint32_t>;
+    { view.is_headers() } -> std::same_as<bool>;
+    { view.is_data() } -> std::same_as<bool>;
+    { view.is_continuation() } -> std::same_as<bool>;
 };
 
 template<typename T>
 concept HasFastDispatchHelper = requires(T* mgr, Http2RawFrameView view) {
-    { mgr->tryDispatchServerActiveFrameView(std::move(view)) } -> std::same_as<bool>;
+    { mgr->try_dispatch_server_active_frame_view(std::move(view)) } -> std::same_as<bool>;
 };
 
 int main() {
@@ -51,13 +51,13 @@ int main() {
     galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
 
-    const auto headers = Http2FrameBuilder::headersBytes(1, "abc", false, true);
-    const auto data = Http2FrameBuilder::dataBytes(1, "body", true);
+    const auto headers = Http2FrameBuilder::headers_bytes(1, "abc", false, true);
+    const auto data = Http2FrameBuilder::data_bytes(1, "body", true);
 
-    conn.feedData(headers.data(), headers.size());
-    conn.feedData(data.data(), data.size());
+    conn.feed_data(headers.data(), headers.size());
+    conn.feed_data(data.data(), data.size());
 
-    auto awaitable = conn.readFrameViewsBatch(8);
+    auto awaitable = conn.read_frame_views_batch(8);
     assert(awaitable.await_ready() && "Buffered raw frame views should be ready immediately");
 
     auto result = awaitable.await_resume();
@@ -65,16 +65,16 @@ int main() {
     assert(result->size() == 2 && "Expected HEADERS + DATA views");
 
     const auto& header_view = result->at(0);
-    assert(header_view.isHeaders());
-    assert(!header_view.isData());
-    assert(header_view.streamId() == 1);
+    assert(header_view.is_headers());
+    assert(!header_view.is_data());
+    assert(header_view.stream_id() == 1);
     assert(header_view.payload() == "abc");
     assert(header_view.bytes() == headers);
 
     const auto& data_view = result->at(1);
-    assert(data_view.isData());
-    assert(!data_view.isHeaders());
-    assert(data_view.streamId() == 1);
+    assert(data_view.is_data());
+    assert(!data_view.is_headers());
+    assert(data_view.stream_id() == 1);
     assert(data_view.payload() == "body");
     assert(data_view.bytes() == data);
 

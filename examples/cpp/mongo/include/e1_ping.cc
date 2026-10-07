@@ -7,7 +7,7 @@ using namespace galay::mongo;
 
 int main()
 {
-    const auto cfg = mongo_example::loadMongoConfigFromEnv();
+    const auto cfg = mongo_example::load_mongo_config_from_env();
 
     MongoClient session;
     auto connected = session.connect(cfg);

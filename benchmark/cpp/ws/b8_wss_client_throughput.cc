@@ -38,7 +38,7 @@ private:
     std::atomic<int>* m_counter;
 };
 
-static uint32_t toLatencyUs(std::chrono::steady_clock::duration duration) {
+static uint32_t to_latency_us(std::chrono::steady_clock::duration duration) {
     auto us = std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
     if (us < 0) return 0;
     return static_cast<uint32_t>(us);
@@ -47,7 +47,7 @@ static uint32_t toLatencyUs(std::chrono::steady_clock::duration duration) {
 /**
  * @brief 单个 WSS 客户端压测协程
  */
-Task<void> benchmarkWssClient(
+Task<void> benchmark_wss_client(
     int client_id,
     const std::string& url,
     const std::string& message_payload,
@@ -61,7 +61,7 @@ Task<void> benchmarkWssClient(
         galay::benchmark::WssBenchGlobalStats& global;
 
         ~StatsGuard() {
-            batch.mergeInto(global);
+            batch.merge_into(global);
         }
     } stats_guard{local_stats, g_stats};
     constexpr auto kOpTimeout = std::chrono::milliseconds(3000);
@@ -69,7 +69,7 @@ Task<void> benchmarkWssClient(
     try {
         // 1. 创建 WssClient
         WssClient client(WssClientBuilder()
-            .verifyPeer(false)  // 跳过证书验证（用于自签名证书）
+            .verify_peer(false)  // 跳过证书验证（用于自签名证书）
             .build());
 
         // 2. TCP 连接
@@ -88,7 +88,7 @@ Task<void> benchmarkWssClient(
         }
 
         // 4. 获取 Session 并升级 WebSocket
-        auto session_result = client.getSession(WsWriterSetting::byClient());
+        auto session_result = client.get_session(WsWriterSetting::by_client());
         if (!session_result) {
             local_stats.failed_connections = 1;
             co_await client.close();
@@ -114,13 +114,13 @@ Task<void> benchmarkWssClient(
         std::string welcome_msg;
         WsOpcode welcome_opcode;
         while (true) {
-            auto recv_result = co_await session.getMessage(welcome_msg, welcome_opcode).timeout(kOpTimeout);
+            auto recv_result = co_await session.get_message(welcome_msg, welcome_opcode).timeout(kOpTimeout);
             if (!recv_result) {
                 co_await client.close();
                 co_return;
             }
             if (recv_result.value()) {
-                local_stats.noteMessageReceived(welcome_msg.size());
+                local_stats.note_message_received(welcome_msg.size());
                 break;
             }
         }
@@ -133,25 +133,25 @@ Task<void> benchmarkWssClient(
             auto round_start = std::chrono::steady_clock::now();
 
             // 发送消息
-            auto send_result = co_await session.sendText(message_payload);
+            auto send_result = co_await session.send_text(message_payload);
             if (!send_result) {
                 goto cleanup;
             }
-            local_stats.noteMessageSent(message_payload.size());
+            local_stats.note_message_sent(message_payload.size());
 
             // 接收回显消息
             echo_msg.clear();
             while (true) {
-                auto recv_result = co_await session.getMessage(echo_msg, echo_opcode);
+                auto recv_result = co_await session.get_message(echo_msg, echo_opcode);
                 if (!recv_result) {
                     goto cleanup;
                 }
                 if (recv_result.value()) {
-                    local_stats.noteMessageReceived(echo_msg.size());
+                    local_stats.note_message_received(echo_msg.size());
 
                     // 记录延迟统计
-                    uint32_t latency_us = toLatencyUs(std::chrono::steady_clock::now() - round_start);
-                    local_stats.noteLatency(latency_us);
+                    uint32_t latency_us = to_latency_us(std::chrono::steady_clock::now() - round_start);
+                    local_stats.note_latency(latency_us);
 
                     break;
                 }
@@ -160,7 +160,7 @@ Task<void> benchmarkWssClient(
 
 cleanup:
         // 7. 发送关闭帧
-        auto result = co_await session.sendClose(WsCloseCode::Normal);
+        auto result = co_await session.send_close(WsCloseCode::Normal);
         if (!result) {
         }
 
@@ -175,7 +175,7 @@ cleanup:
 /**
  * @brief 打印统计信息
  */
-void printStats(const std::chrono::steady_clock::time_point& start_time,
+void print_stats(const std::chrono::steady_clock::time_point& start_time,
                 const std::chrono::steady_clock::time_point& end_time) {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
     double duration_sec = duration / 1000.0;
@@ -221,12 +221,12 @@ void printStats(const std::chrono::steady_clock::time_point& start_time,
     std::cout << "========================================\n";
 }
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_stop = true;
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -252,11 +252,11 @@ int main(int argc, char* argv[]) {
     std::cout << "Message size:       " << message_size << " bytes\n";
     std::cout << "========================================\n\n";
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(4).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(4).parallel_scheduler_count(0).build();
         runtime.start();
 
         // 生成测试消息
@@ -270,12 +270,12 @@ int main(int argc, char* argv[]) {
         // 启动所有客户端
         std::cout << "Starting " << num_clients << " clients...\n";
         for (int i = 0; i < num_clients; i++) {
-            auto* scheduler = runtime.getNextIOScheduler();
+            auto* scheduler = runtime.get_next_io_scheduler();
             if (!scheduler) {
                 std::cerr << "Failed to get IO scheduler for client " << i << "\n";
                 return 1;
             }
-            scheduleTask(scheduler, benchmarkWssClient(i, url, message_payload, end_time));
+            schedule_task(scheduler, benchmark_wss_client(i, url, message_payload, end_time));
         }
 
         std::cout << "Running for " << duration_sec << " seconds...\n";
@@ -299,7 +299,7 @@ int main(int argc, char* argv[]) {
         runtime.stop();
 
         // 打印统计信息
-        printStats(start_time, stop_time);
+        print_stats(start_time, stop_time);
 
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
@@ -312,7 +312,7 @@ int main(int argc, char* argv[]) {
 #else
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 

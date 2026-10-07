@@ -121,22 +121,22 @@ struct Http2RawFrameView
         return view.substr(payload_offset, payload_size);
     }
 
-    uint32_t streamId() const { return header.stream_id; }
-    bool isHeaders() const { return header.type == Http2FrameType::Headers; }
-    bool isData() const { return header.type == Http2FrameType::Data; }
-    bool isContinuation() const { return header.type == Http2FrameType::Continuation; }
-    bool isPriority() const { return header.type == Http2FrameType::Priority; }
-    bool isWindowUpdate() const { return header.type == Http2FrameType::WindowUpdate; }
-    bool isRstStream() const { return header.type == Http2FrameType::RstStream; }
-    bool isConnectionFrame() const {
+    uint32_t stream_id() const { return header.stream_id; }
+    bool is_headers() const { return header.type == Http2FrameType::Headers; }
+    bool is_data() const { return header.type == Http2FrameType::Data; }
+    bool is_continuation() const { return header.type == Http2FrameType::Continuation; }
+    bool is_priority() const { return header.type == Http2FrameType::Priority; }
+    bool is_window_update() const { return header.type == Http2FrameType::WindowUpdate; }
+    bool is_rst_stream() const { return header.type == Http2FrameType::RstStream; }
+    bool is_connection_frame() const {
         return header.stream_id == 0 &&
                (header.type == Http2FrameType::Settings ||
                 header.type == Http2FrameType::Ping ||
                 header.type == Http2FrameType::GoAway ||
                 header.type == Http2FrameType::WindowUpdate);
     }
-    bool endStream() const { return (header.flags & Http2FrameFlags::kEndStream) != 0; }
-    bool endHeaders() const { return (header.flags & Http2FrameFlags::kEndHeaders) != 0; }
+    bool end_stream() const { return (header.flags & Http2FrameFlags::kEndStream) != 0; }
+    bool end_headers() const { return (header.flags & Http2FrameFlags::kEndHeaders) != 0; }
 };
 
 /**
@@ -151,7 +151,7 @@ struct Http2Settings
     uint32_t max_frame_size = kDefaultMaxFrameSize;
     uint32_t max_header_list_size = kDefaultMaxHeaderListSize;
     
-    Http2ErrorCode applySettings(const Http2SettingsFrame& frame) {
+    Http2ErrorCode apply_settings(const Http2SettingsFrame& frame) {
         for (const auto& setting : frame.settings()) {
             switch (setting.id) {
                 case Http2SettingsId::HeaderTableSize:
@@ -200,14 +200,14 @@ struct Http2Settings
             max_header_list_size = config.max_header_list_size;
     }
 
-    Http2SettingsFrame toFrame() const {
+    Http2SettingsFrame to_frame() const {
         Http2SettingsFrame frame;
-        frame.addSetting(Http2SettingsId::HeaderTableSize, header_table_size);
-        frame.addSetting(Http2SettingsId::EnablePush, enable_push);
-        frame.addSetting(Http2SettingsId::MaxConcurrentStreams, max_concurrent_streams);
-        frame.addSetting(Http2SettingsId::InitialWindowSize, initial_window_size);
-        frame.addSetting(Http2SettingsId::MaxFrameSize, max_frame_size);
-        frame.addSetting(Http2SettingsId::MaxHeaderListSize, max_header_list_size);
+        frame.add_setting(Http2SettingsId::HeaderTableSize, header_table_size);
+        frame.add_setting(Http2SettingsId::EnablePush, enable_push);
+        frame.add_setting(Http2SettingsId::MaxConcurrentStreams, max_concurrent_streams);
+        frame.add_setting(Http2SettingsId::InitialWindowSize, initial_window_size);
+        frame.add_setting(Http2SettingsId::MaxFrameSize, max_frame_size);
+        frame.add_setting(Http2SettingsId::MaxHeaderListSize, max_header_list_size);
         return frame;
     }
 };
@@ -266,7 +266,7 @@ struct Http2RuntimeConfig
         if constexpr (requires { config.static_routes; }) {
             static_routes = config.static_routes;
             for (auto& route : static_routes) {
-                prepareH2StaticRoute(route);
+                prepare_h2_static_route(route);
             }
         }
         if constexpr (requires { config.static_file_mounts; }) {
@@ -308,7 +308,7 @@ template<typename ResultT>
 using Http2SslResultT = typename Http2SslResult<ResultT>::type;
 
 template<typename ResultT>
-Http2SslResultT<ResultT> toSslHttp2Result(ResultT result) {
+Http2SslResultT<ResultT> to_ssl_http2_result(ResultT result) {
     using ValueT = typename ExpectedTraits<ResultT>::value_type;
 
     if (!result) {
@@ -323,7 +323,7 @@ Http2SslResultT<ResultT> toSslHttp2Result(ResultT result) {
 #endif
 
 template<typename ResultT, typename InnerResultT>
-ResultT toOuterHttp2Result(InnerResultT result) {
+ResultT to_outer_http2_result(InnerResultT result) {
     using ValueT = typename ExpectedTraits<ResultT>::value_type;
     using OuterErrorT = typename ExpectedTraits<ResultT>::error_type;
     using InnerErrorT = typename ExpectedTraits<InnerResultT>::error_type;
@@ -350,14 +350,14 @@ struct Http2BufferedFrameStatus {
     std::optional<Http2ErrorCode> error;
 };
 
-inline bool decodeFrameHeader(const struct iovec* iovecs,
+inline bool decode_frame_header(const struct iovec* iovecs,
                               size_t iov_count,
                               Http2FrameHeader& header) {
     if (iovecs == nullptr || iov_count == 0) {
         return false;
     }
 
-    const auto* first_segment = IoVecWindow::firstNonEmpty(iovecs, iov_count);
+    const auto* first_segment = IoVecWindow::first_non_empty(iovecs, iov_count);
     if (first_segment == nullptr) {
         return false;
     }
@@ -369,7 +369,7 @@ inline bool decodeFrameHeader(const struct iovec* iovecs,
     }
 
     uint8_t header_buf[kHttp2FrameHeaderLength];
-    if (IoVecBytes::copyPrefix(iovecs, iov_count, header_buf, kHttp2FrameHeaderLength)
+    if (IoVecBytes::copy_prefix(iovecs, iov_count, header_buf, kHttp2FrameHeaderLength)
         < kHttp2FrameHeaderLength) {
         return false;
     }
@@ -378,7 +378,7 @@ inline bool decodeFrameHeader(const struct iovec* iovecs,
     return true;
 }
 
-inline bool isKnownHttp2FrameType(Http2FrameType type) {
+inline bool is_known_http2_frame_type(Http2FrameType type) {
     switch (type) {
         case Http2FrameType::Data:
         case Http2FrameType::Headers:
@@ -397,19 +397,19 @@ inline bool isKnownHttp2FrameType(Http2FrameType type) {
 }
 
 template<RingBufferBackendStrategy Strategy>
-inline Http2BufferedFrameStatus inspectBufferedFrame(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
+inline Http2BufferedFrameStatus inspect_buffered_frame(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                                                      uint32_t max_frame_size) {
     Http2BufferedFrameStatus status;
     if (ring_buffer.readable() < kHttp2FrameHeaderLength) {
         return status;
     }
 
-    const auto read_iovecs = borrowReadIovecs(ring_buffer);
+    const auto read_iovecs = borrow_read_iovecs(ring_buffer);
     if (read_iovecs.empty()) {
         return status;
     }
 
-    if (!decodeFrameHeader(read_iovecs.data(), read_iovecs.size(), status.header)) {
+    if (!decode_frame_header(read_iovecs.data(), read_iovecs.size(), status.header)) {
         return status;
     }
 
@@ -425,41 +425,41 @@ inline Http2BufferedFrameStatus inspectBufferedFrame(RingBuffer<Strategy, std::d
 
 template<RingBufferBackendStrategy Strategy>
 inline std::expected<Http2Frame::uptr, Http2ErrorCode>
-parseSingleBufferedFrame(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
+parse_single_buffered_frame(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                          uint32_t max_frame_size,
                          std::vector<uint8_t>& scratch) {
     while (true) {
-        const auto status = inspectBufferedFrame(ring_buffer, max_frame_size);
+        const auto status = inspect_buffered_frame(ring_buffer, max_frame_size);
         if (status.error.has_value()) {
             return std::unexpected(*status.error);
         }
         if (!status.complete) {
             return std::unexpected(Http2ErrorCode::NoError);
         }
-        if (!isKnownHttp2FrameType(status.header.type)) {
+        if (!is_known_http2_frame_type(status.header.type)) {
             ring_buffer.consume(status.total_frame_size);
             continue;
         }
 
-        const auto read_iovecs = borrowReadIovecs(ring_buffer);
-        const auto* first_segment = IoVecWindow::firstNonEmpty(read_iovecs);
+        const auto read_iovecs = borrow_read_iovecs(ring_buffer);
+        const auto* first_segment = IoVecWindow::first_non_empty(read_iovecs);
 
         std::expected<Http2Frame::uptr, Http2ErrorCode> frame_result;
         if (first_segment != nullptr && first_segment->iov_len >= status.total_frame_size) {
-            frame_result = Http2FrameParser::parseFrame(
+            frame_result = Http2FrameParser::parse_frame(
                 static_cast<const uint8_t*>(first_segment->iov_base),
                 status.total_frame_size);
         } else {
             if (scratch.size() < status.total_frame_size) {
                 scratch.resize(status.total_frame_size);
             }
-            if (IoVecBytes::copyPrefix(read_iovecs.data(),
+            if (IoVecBytes::copy_prefix(read_iovecs.data(),
                                        read_iovecs.size(),
                                        scratch.data(),
                                        status.total_frame_size) < status.total_frame_size) {
                 return std::unexpected(Http2ErrorCode::ProtocolError);
             }
-            frame_result = Http2FrameParser::parseFrame(scratch.data(), status.total_frame_size);
+            frame_result = Http2FrameParser::parse_frame(scratch.data(), status.total_frame_size);
         }
 
         if (!frame_result.has_value()) {
@@ -473,7 +473,7 @@ parseSingleBufferedFrame(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
 
 template<RingBufferBackendStrategy Strategy>
 inline std::expected<std::vector<Http2Frame::uptr>, Http2ErrorCode>
-parseBufferedFrameBatch(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
+parse_buffered_frame_batch(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                         uint32_t max_frame_size,
                         size_t max_frames,
                         std::vector<uint8_t>& scratch) {
@@ -485,37 +485,37 @@ parseBufferedFrameBatch(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
     frames.reserve(reserve_hint);
 
     while (frames.size() < max_frames) {
-        const auto status = inspectBufferedFrame(ring_buffer, max_frame_size);
+        const auto status = inspect_buffered_frame(ring_buffer, max_frame_size);
         if (status.error.has_value()) {
             return std::unexpected(*status.error);
         }
         if (!status.complete) {
             break;
         }
-        if (!isKnownHttp2FrameType(status.header.type)) {
+        if (!is_known_http2_frame_type(status.header.type)) {
             ring_buffer.consume(status.total_frame_size);
             continue;
         }
 
-        const auto read_iovecs = borrowReadIovecs(ring_buffer);
-        const auto* first_segment = IoVecWindow::firstNonEmpty(read_iovecs);
+        const auto read_iovecs = borrow_read_iovecs(ring_buffer);
+        const auto* first_segment = IoVecWindow::first_non_empty(read_iovecs);
 
         std::expected<Http2Frame::uptr, Http2ErrorCode> frame_result;
         if (first_segment != nullptr && first_segment->iov_len >= status.total_frame_size) {
-            frame_result = Http2FrameParser::parseFrame(
+            frame_result = Http2FrameParser::parse_frame(
                 static_cast<const uint8_t*>(first_segment->iov_base),
                 status.total_frame_size);
         } else {
             if (scratch.size() < status.total_frame_size) {
                 scratch.resize(status.total_frame_size);
             }
-            if (IoVecBytes::copyPrefix(read_iovecs.data(),
+            if (IoVecBytes::copy_prefix(read_iovecs.data(),
                                        read_iovecs.size(),
                                        scratch.data(),
                                        status.total_frame_size) < status.total_frame_size) {
                 return std::unexpected(Http2ErrorCode::ProtocolError);
             }
-            frame_result = Http2FrameParser::parseFrame(scratch.data(), status.total_frame_size);
+            frame_result = Http2FrameParser::parse_frame(scratch.data(), status.total_frame_size);
         }
 
         if (!frame_result.has_value()) {
@@ -531,7 +531,7 @@ parseBufferedFrameBatch(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
 
 template<RingBufferBackendStrategy Strategy>
 inline std::expected<std::vector<Http2RawFrameView>, Http2ErrorCode>
-parseBufferedFrameViewBatch(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
+parse_buffered_frame_view_batch(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                             uint32_t max_frame_size,
                             size_t max_frames) {
     std::vector<Http2RawFrameView> frames;
@@ -542,20 +542,20 @@ parseBufferedFrameViewBatch(RingBuffer<Strategy, std::dynamic_extent>& ring_buff
     frames.reserve(reserve_hint);
 
     while (frames.size() < max_frames) {
-        const auto status = inspectBufferedFrame(ring_buffer, max_frame_size);
+        const auto status = inspect_buffered_frame(ring_buffer, max_frame_size);
         if (status.error.has_value()) {
             return std::unexpected(*status.error);
         }
         if (!status.complete) {
             break;
         }
-        if (!isKnownHttp2FrameType(status.header.type)) {
+        if (!is_known_http2_frame_type(status.header.type)) {
             ring_buffer.consume(status.total_frame_size);
             continue;
         }
 
-        const auto read_iovecs = borrowReadIovecs(ring_buffer);
-        const auto* first_segment = IoVecWindow::firstNonEmpty(read_iovecs);
+        const auto read_iovecs = borrow_read_iovecs(ring_buffer);
+        const auto* first_segment = IoVecWindow::first_non_empty(read_iovecs);
         if (first_segment != nullptr && first_segment->iov_len >= status.total_frame_size) {
             frames.emplace_back(status.header,
                                 static_cast<const char*>(first_segment->iov_base),
@@ -565,7 +565,7 @@ parseBufferedFrameViewBatch(RingBuffer<Strategy, std::dynamic_extent>& ring_buff
         } else {
             std::string frame_bytes;
             frame_bytes.resize(status.total_frame_size);
-            if (IoVecBytes::copyPrefix(read_iovecs.data(),
+            if (IoVecBytes::copy_prefix(read_iovecs.data(),
                                        read_iovecs.size(),
                                        reinterpret_cast<uint8_t*>(frame_bytes.data()),
                                        status.total_frame_size) < status.total_frame_size) {
@@ -598,81 +598,81 @@ struct Http2ReadStateBase {
         , m_last_error_msg(last_error_msg)
         , m_closing(closing) {}
 
-    bool hasResult() const { return m_result.has_value(); }
+    bool has_result() const { return m_result.has_value(); }
 
-    ResultType takeResult() { return std::move(*m_result); }
+    ResultType take_result() { return std::move(*m_result); }
 
-    bool completeIfClosing() {
+    bool complete_if_closing() {
         if (!(m_closing != nullptr && *m_closing)) {
             return false;
         }
 
-        const auto status = inspectBufferedFrame(*m_ring_buffer, m_peer_settings->max_frame_size);
+        const auto status = inspect_buffered_frame(*m_ring_buffer, m_peer_settings->max_frame_size);
         if (status.error.has_value()) {
-            setProtocolError(*status.error, "frame too large");
+            set_protocol_error(*status.error, "frame too large");
             return true;
         }
         if (status.complete) {
             return false;
         }
 
-        setProtocolError(Http2ErrorCode::ProtocolError, "Connection closing");
+        set_protocol_error(Http2ErrorCode::ProtocolError, "Connection closing");
         return true;
     }
 
-    bool prepareRecvWindow() {
-        m_write_iovecs.captureWrite(*m_ring_buffer);
+    bool prepare_recv_window() {
+        m_write_iovecs.capture_write(*m_ring_buffer);
         const size_t compact_count =
-            compactIovecs(m_write_iovecs.storage(), m_write_iovecs.size());
-        m_write_iovecs.setCount(compact_count);
+            compact_iovecs(m_write_iovecs.storage(), m_write_iovecs.size());
+        m_write_iovecs.set_count(compact_count);
         if (m_write_iovecs.empty()) {
-            setProtocolError(Http2ErrorCode::ProtocolError, "RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> is full");
+            set_protocol_error(Http2ErrorCode::ProtocolError, "RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> is full");
             return false;
         }
         return true;
     }
 
-    bool prepareRecvWindow(char*& buffer, size_t& length) {
-        if (!prepareRecvWindow()) {
+    bool prepare_recv_window(char*& buffer, size_t& length) {
+        if (!prepare_recv_window()) {
             buffer = nullptr;
             length = 0;
             return false;
         }
-        if (!IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
-            setProtocolError(Http2ErrorCode::ProtocolError, "RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> is full");
+        if (!IoVecWindow::bind_first_non_empty(m_write_iovecs, buffer, length)) {
+            set_protocol_error(Http2ErrorCode::ProtocolError, "RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> is full");
             return false;
         }
         return true;
     }
 
-    const struct iovec* recvIovecsData() const { return m_write_iovecs.data(); }
-    size_t recvIovecsCount() const { return m_write_iovecs.size(); }
+    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); }
+    size_t recv_iovecs_count() const { return m_write_iovecs.size(); }
 
-    void onBytesReceived(size_t recv_bytes) {
+    void on_bytes_received(size_t recv_bytes) {
         m_ring_buffer->produce(recv_bytes);
-        clearLastReadError();
+        clear_last_read_error();
     }
 
-    void setRecvError(const IOError& io_error) {
+    void set_recv_error(const IOError& io_error) {
         if (IOError::contains(io_error.code(), kDisconnectError) && m_peer_closed) {
             *m_peer_closed = true;
         }
-        assignLastReadError(io_error.message());
+        assign_last_read_error(io_error.message());
         m_result.emplace(std::unexpected(Http2ErrorCode::ProtocolError));
     }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    void setSslRecvError(const galay::ssl::SslError& error) {
+    void set_ssl_recv_error(const galay::ssl::SslError& error) {
         const Http2Error http2_error(error);
-        setProtocolError(http2_error.code(), http2_error.message());
+        set_protocol_error(http2_error.code(), http2_error.message());
     }
 #endif
 
-    void setProtocolError(Http2ErrorCode code, std::string_view msg) {
+    void set_protocol_error(Http2ErrorCode code, std::string_view msg) {
         if (code == Http2ErrorCode::ProtocolError && msg == "peer closed" && m_peer_closed) {
             *m_peer_closed = true;
         }
-        assignLastReadError(msg);
+        assign_last_read_error(msg);
         m_result.emplace(std::unexpected(code));
     }
 
@@ -681,13 +681,13 @@ protected:
         m_result.emplace(std::move(result));
     }
 
-    void assignLastReadError(std::string_view msg) {
+    void assign_last_read_error(std::string_view msg) {
         if (m_last_error_msg) {
             m_last_error_msg->assign(msg.data(), msg.size());
         }
     }
 
-    void clearLastReadError() {
+    void clear_last_read_error() {
         if (m_last_error_msg) {
             m_last_error_msg->clear();
         }
@@ -708,8 +708,8 @@ struct Http2SingleFrameReadState : Http2ReadStateBase<Http2Frame::uptr, Strategy
     using Base = Http2ReadStateBase<Http2Frame::uptr, Strategy>;
     using Base::Base;
 
-    bool parseFromRingBuffer() {
-        auto frame_result = parseSingleBufferedFrame(
+    bool parse_from_ring_buffer() {
+        auto frame_result = parse_single_buffered_frame(
             *this->m_ring_buffer,
             this->m_peer_settings->max_frame_size,
             this->m_scratch);
@@ -739,8 +739,8 @@ struct Http2FrameBatchReadState : Http2ReadStateBase<std::vector<Http2Frame::upt
         : Base(ring_buffer, peer_settings, peer_closed, last_error_msg, closing)
         , m_max_frames(max_frames) {}
 
-    bool parseFromRingBuffer() {
-        auto frames_result = parseBufferedFrameBatch(
+    bool parse_from_ring_buffer() {
+        auto frames_result = parse_buffered_frame_batch(
             *this->m_ring_buffer,
             this->m_peer_settings->max_frame_size,
             m_max_frames,
@@ -773,8 +773,8 @@ struct Http2FrameViewBatchReadState : Http2ReadStateBase<std::vector<Http2RawFra
         : Base(ring_buffer, peer_settings, peer_closed, last_error_msg, closing)
         , m_max_frames(max_frames) {}
 
-    bool parseFromRingBuffer() {
-        auto frames_result = parseBufferedFrameViewBatch(
+    bool parse_from_ring_buffer() {
+        auto frames_result = parse_buffered_frame_view_batch(
             *this->m_ring_buffer,
             this->m_peer_settings->max_frame_size,
             m_max_frames);
@@ -802,38 +802,38 @@ struct Http2TcpReadMachine {
         : m_state(std::move(state)) {}
 
     MachineAction<result_type> advance() {
-        if (m_state.hasResult()) {
-            return MachineAction<result_type>::complete(m_state.takeResult());
+        if (m_state.has_result()) {
+            return MachineAction<result_type>::complete(m_state.take_result());
         }
-        if (m_state.parseFromRingBuffer()) {
-            return MachineAction<result_type>::complete(m_state.takeResult());
+        if (m_state.parse_from_ring_buffer()) {
+            return MachineAction<result_type>::complete(m_state.take_result());
         }
-        if (m_state.completeIfClosing()) {
-            return MachineAction<result_type>::complete(m_state.takeResult());
+        if (m_state.complete_if_closing()) {
+            return MachineAction<result_type>::complete(m_state.take_result());
         }
-        if (!m_state.prepareRecvWindow()) {
-            return MachineAction<result_type>::complete(m_state.takeResult());
+        if (!m_state.prepare_recv_window()) {
+            return MachineAction<result_type>::complete(m_state.take_result());
         }
 
-        return MachineAction<result_type>::waitReadv(
-            m_state.recvIovecsData(),
-            m_state.recvIovecsCount());
+        return MachineAction<result_type>::wait_readv(
+            m_state.recv_iovecs_data(),
+            m_state.recv_iovecs_count());
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
-            m_state.setRecvError(result.error());
+            m_state.set_recv_error(result.error());
             return;
         }
         if (result.value() == 0) {
-            m_state.setProtocolError(Http2ErrorCode::ProtocolError, "peer closed");
+            m_state.set_protocol_error(Http2ErrorCode::ProtocolError, "peer closed");
             return;
         }
 
-        m_state.onBytesReceived(result.value());
+        m_state.on_bytes_received(result.value());
     }
 
-    void onWrite(std::expected<size_t, IOError>) {}
+    void on_write(std::expected<size_t, IOError>) {}
 
     StateT m_state;
 };
@@ -849,49 +849,49 @@ struct Http2SslReadMachine {
         : m_state(std::move(state)) {}
 
     galay::ssl::SslMachineAction<result_type> advance() {
-        if (m_state.hasResult()) {
+        if (m_state.has_result()) {
             return galay::ssl::SslMachineAction<result_type>::complete(
-                toSslHttp2Result(m_state.takeResult()));
+                to_ssl_http2_result(m_state.take_result()));
         }
-        if (m_state.parseFromRingBuffer()) {
+        if (m_state.parse_from_ring_buffer()) {
             return galay::ssl::SslMachineAction<result_type>::complete(
-                toSslHttp2Result(m_state.takeResult()));
+                to_ssl_http2_result(m_state.take_result()));
         }
-        if (m_state.completeIfClosing()) {
+        if (m_state.complete_if_closing()) {
             return galay::ssl::SslMachineAction<result_type>::complete(
-                toSslHttp2Result(m_state.takeResult()));
+                to_ssl_http2_result(m_state.take_result()));
         }
 
         char* recv_buffer = nullptr;
         size_t recv_length = 0;
-        if (!m_state.prepareRecvWindow(recv_buffer, recv_length)) {
+        if (!m_state.prepare_recv_window(recv_buffer, recv_length)) {
             return galay::ssl::SslMachineAction<result_type>::complete(
-                toSslHttp2Result(m_state.takeResult()));
+                to_ssl_http2_result(m_state.take_result()));
         }
 
         return galay::ssl::SslMachineAction<result_type>::recv(recv_buffer, recv_length);
     }
 
-    void onHandshake(std::expected<void, galay::ssl::SslError>) {}
+    void on_handshake(std::expected<void, galay::ssl::SslError>) {}
 
-    void onRecv(std::expected<Bytes, galay::ssl::SslError> result) {
+    void on_recv(std::expected<Bytes, galay::ssl::SslError> result) {
         if (!result) {
-            m_state.setSslRecvError(result.error());
+            m_state.set_ssl_recv_error(result.error());
             return;
         }
 
         const size_t recv_bytes = result.value().size();
         if (recv_bytes == 0) {
-            m_state.setProtocolError(Http2ErrorCode::ProtocolError, "peer closed");
+            m_state.set_protocol_error(Http2ErrorCode::ProtocolError, "peer closed");
             return;
         }
 
-        m_state.onBytesReceived(recv_bytes);
+        m_state.on_bytes_received(recv_bytes);
     }
 
-    void onSend(std::expected<size_t, galay::ssl::SslError>) {}
+    void on_send(std::expected<size_t, galay::ssl::SslError>) {}
 
-    void onShutdown(std::expected<void, galay::ssl::SslError>) {}
+    void on_shutdown(std::expected<void, galay::ssl::SslError>) {}
 
     StateT m_state;
 };
@@ -919,20 +919,20 @@ public:
     template<typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
         if (m_ready_result.has_value()) {
-            cancelBoundTimeoutTimer();
+            cancel_bound_timeout_timer();
             return false;
         }
         if (!m_inner_operation.has_value()) {
-            cancelBoundTimeoutTimer();
+            cancel_bound_timeout_timer();
             return false;
         }
-        forwardBoundTimeoutTimer(*m_inner_operation);
+        forward_bound_timeout_timer(*m_inner_operation);
         return m_inner_operation->await_suspend(handle);
     }
 
     /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
-    void bindTimeoutTimer(TimeoutTimer* timer) noexcept {
-        SequenceAwaitableBase::bindTimeoutTimer(timer);
+    void bind_timeout_timer(TimeoutTimer* timer) noexcept {
+        SequenceAwaitableBase::bind_timeout_timer(timer);
     }
 
     ResultT await_resume() {
@@ -943,7 +943,7 @@ public:
         if constexpr (std::is_same_v<std::remove_cvref_t<decltype(inner_result)>, ResultT>) {
             return inner_result;
         } else {
-            return toOuterHttp2Result<ResultT>(std::move(inner_result));
+            return to_outer_http2_result<ResultT>(std::move(inner_result));
         }
     }
 
@@ -955,9 +955,9 @@ public:
         return m_inner_operation.has_value() ? m_inner_operation->front() : nullptr;
     }
 
-    void popFront() override {
+    void pop_front() override {
         if (m_inner_operation.has_value()) {
-            m_inner_operation->popFront();
+            m_inner_operation->pop_front();
         }
     }
 
@@ -966,27 +966,27 @@ public:
     }
 
 #ifdef USE_IOURING
-    SequenceProgress prepareForSubmit() override {
+    SequenceProgress prepare_for_submit() override {
         return m_inner_operation.has_value()
-            ? m_inner_operation->prepareForSubmit()
+            ? m_inner_operation->prepare_for_submit()
             : SequenceProgress::kCompleted;
     }
 
-    SequenceProgress onActiveEvent(struct io_uring_cqe* cqe, GHandle handle) override {
+    SequenceProgress on_active_event(struct io_uring_cqe* cqe, GHandle handle) override {
         return m_inner_operation.has_value()
-            ? m_inner_operation->onActiveEvent(cqe, handle)
+            ? m_inner_operation->on_active_event(cqe, handle)
             : SequenceProgress::kCompleted;
     }
 #else
-    SequenceProgress prepareForSubmit(GHandle handle) override {
+    SequenceProgress prepare_for_submit(GHandle handle) override {
         return m_inner_operation.has_value()
-            ? m_inner_operation->prepareForSubmit(handle)
+            ? m_inner_operation->prepare_for_submit(handle)
             : SequenceProgress::kCompleted;
     }
 
-    SequenceProgress onActiveEvent(GHandle handle) override {
+    SequenceProgress on_active_event(GHandle handle) override {
         return m_inner_operation.has_value()
-            ? m_inner_operation->onActiveEvent(handle)
+            ? m_inner_operation->on_active_event(handle)
             : SequenceProgress::kCompleted;
     }
 #endif
@@ -1006,11 +1006,11 @@ struct Http2WriteState {
         }
     }
 
-    bool hasResult() const { return m_result.has_value(); }
+    bool has_result() const { return m_result.has_value(); }
 
-    ResultType takeResult() { return std::move(*m_result); }
+    ResultType take_result() { return std::move(*m_result); }
 
-    const char* bufferData() const {
+    const char* buffer_data() const {
         return remaining() == 0 ? nullptr : m_data.data() + m_offset;
     }
 
@@ -1018,7 +1018,7 @@ struct Http2WriteState {
         return m_offset >= m_data.size() ? 0 : m_data.size() - m_offset;
     }
 
-    void onBytesSent(size_t sent) {
+    void on_bytes_sent(size_t sent) {
         const size_t left = remaining();
         if (sent > left) {
             m_result = std::unexpected(Http2ErrorCode::InternalError);
@@ -1031,12 +1031,12 @@ struct Http2WriteState {
         }
     }
 
-    void setSendError(const IOError& io_error) {
+    void set_send_error(const IOError& io_error) {
         m_result = std::unexpected(Http2ErrorCode::InternalError);
     }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    void setSslSendError(const galay::ssl::SslError& error) {
+    void set_ssl_send_error(const galay::ssl::SslError& error) {
         const Http2Error http2_error(error);
         m_result = std::unexpected(http2_error.code());
     }
@@ -1055,20 +1055,20 @@ struct Http2TcpWriteMachine {
         : m_state(std::move(state)) {}
 
     MachineAction<result_type> advance() {
-        if (m_state.hasResult()) {
-            return MachineAction<result_type>::complete(m_state.takeResult());
+        if (m_state.has_result()) {
+            return MachineAction<result_type>::complete(m_state.take_result());
         }
-        return MachineAction<result_type>::waitWrite(m_state.bufferData(), m_state.remaining());
+        return MachineAction<result_type>::wait_write(m_state.buffer_data(), m_state.remaining());
     }
 
-    void onRead(std::expected<size_t, IOError>) {}
+    void on_read(std::expected<size_t, IOError>) {}
 
-    void onWrite(std::expected<size_t, IOError> result) {
+    void on_write(std::expected<size_t, IOError> result) {
         if (!result) {
-            m_state.setSendError(result.error());
+            m_state.set_send_error(result.error());
             return;
         }
-        m_state.onBytesSent(result.value());
+        m_state.on_bytes_sent(result.value());
     }
 
     Http2WriteState m_state;
@@ -1084,40 +1084,40 @@ struct Http2SslWriteMachine {
         : m_state(std::move(state)) {}
 
     galay::ssl::SslMachineAction<result_type> advance() {
-        if (m_state.hasResult()) {
+        if (m_state.has_result()) {
             return galay::ssl::SslMachineAction<result_type>::complete(
-                toSslHttp2Result(m_state.takeResult()));
+                to_ssl_http2_result(m_state.take_result()));
         }
         return galay::ssl::SslMachineAction<result_type>::send(
-            m_state.bufferData(),
+            m_state.buffer_data(),
             m_state.remaining());
     }
 
-    void onHandshake(std::expected<void, galay::ssl::SslError>) {}
+    void on_handshake(std::expected<void, galay::ssl::SslError>) {}
 
-    void onRecv(std::expected<Bytes, galay::ssl::SslError>) {}
+    void on_recv(std::expected<Bytes, galay::ssl::SslError>) {}
 
-    void onSend(std::expected<size_t, galay::ssl::SslError> result) {
+    void on_send(std::expected<size_t, galay::ssl::SslError> result) {
         if (!result) {
-            m_state.setSslSendError(result.error());
+            m_state.set_ssl_send_error(result.error());
             return;
         }
-        m_state.onBytesSent(result.value());
+        m_state.on_bytes_sent(result.value());
     }
 
-    void onShutdown(std::expected<void, galay::ssl::SslError>) {}
+    void on_shutdown(std::expected<void, galay::ssl::SslError>) {}
 
     Http2WriteState m_state;
 };
 #endif
 
 template<typename SocketType, typename StateT>
-auto buildStateMachineReadOperation(SocketType& socket, StateT state) {
+auto build_state_machine_read_operation(SocketType& socket, StateT state) {
     using ResultType = typename StateT::ResultType;
     if constexpr (is_ssl_socket_v<SocketType>) {
 #ifdef GALAY_SSL_FEATURE_ENABLED
         using SslResultType = Http2SslResultT<ResultType>;
-        return galay::ssl::SslAwaitableBuilder<SslResultType>::fromStateMachine(
+        return galay::ssl::SslAwaitableBuilder<SslResultType>::from_state_machine(
                    socket.controller(),
                    &socket,
                    Http2SslReadMachine<StateT>(std::move(state)))
@@ -1126,7 +1126,7 @@ auto buildStateMachineReadOperation(SocketType& socket, StateT state) {
         static_assert(!sizeof(SocketType), "SSL support is disabled");
 #endif
     } else {
-        return AwaitableBuilder<ResultType>::fromStateMachine(
+        return AwaitableBuilder<ResultType>::from_state_machine(
                    socket.controller(),
                    Http2TcpReadMachine<StateT>(std::move(state)))
             .build();
@@ -1135,30 +1135,30 @@ auto buildStateMachineReadOperation(SocketType& socket, StateT state) {
 
 template<typename SocketType, typename StateT>
 using Http2ReadInnerOperationType =
-    decltype(buildStateMachineReadOperation(std::declval<SocketType&>(), std::declval<StateT>()));
+    decltype(build_state_machine_read_operation(std::declval<SocketType&>(), std::declval<StateT>()));
 
 template<typename SocketType, typename StateT>
-auto buildReadOperation(SocketType& socket, StateT state) {
+auto build_read_operation(SocketType& socket, StateT state) {
     using ResultType = typename StateT::ResultType;
     using InnerOperationT = Http2ReadInnerOperationType<SocketType, StateT>;
 
-    if (state.parseFromRingBuffer() || state.completeIfClosing()) {
+    if (state.parse_from_ring_buffer() || state.complete_if_closing()) {
         return BufferedFastPathOperation<ResultType, InnerOperationT>(
             socket.controller(),
-            state.takeResult());
+            state.take_result());
     }
 
     return BufferedFastPathOperation<ResultType, InnerOperationT>(
-        buildStateMachineReadOperation(socket, std::move(state)));
+        build_state_machine_read_operation(socket, std::move(state)));
 }
 
 template<typename SocketType>
-auto buildWriteStateOperation(SocketType& socket, Http2WriteState state) {
+auto build_write_state_operation(SocketType& socket, Http2WriteState state) {
     using ResultType = Http2WriteState::ResultType;
     if constexpr (is_ssl_socket_v<SocketType>) {
 #ifdef GALAY_SSL_FEATURE_ENABLED
         using SslResultType = Http2SslResultT<ResultType>;
-        return galay::ssl::SslAwaitableBuilder<SslResultType>::fromStateMachine(
+        return galay::ssl::SslAwaitableBuilder<SslResultType>::from_state_machine(
                    socket.controller(),
                    &socket,
                    Http2SslWriteMachine(std::move(state)))
@@ -1167,7 +1167,7 @@ auto buildWriteStateOperation(SocketType& socket, Http2WriteState state) {
         static_assert(!sizeof(SocketType), "SSL support is disabled");
 #endif
     } else {
-        return AwaitableBuilder<ResultType>::fromStateMachine(
+        return AwaitableBuilder<ResultType>::from_state_machine(
                    socket.controller(),
                    Http2TcpWriteMachine(std::move(state)))
             .build();
@@ -1176,27 +1176,27 @@ auto buildWriteStateOperation(SocketType& socket, Http2WriteState state) {
 
 template<typename SocketType>
 using Http2WriteInnerOperationType =
-    decltype(buildWriteStateOperation(
+    decltype(build_write_state_operation(
         std::declval<SocketType&>(),
         Http2WriteState(std::string{})));
 
 template<typename SocketType>
-auto buildWriteOperation(SocketType& socket, std::string data) {
+auto build_write_operation(SocketType& socket, std::string data) {
     using ResultType = Http2WriteState::ResultType;
     using InnerOperationT = Http2WriteInnerOperationType<SocketType>;
 
     Http2WriteState state(std::move(data));
-    if (state.hasResult()) {
+    if (state.has_result()) {
         return BufferedFastPathOperation<ResultType, InnerOperationT>(
             socket.controller(),
-            state.takeResult());
+            state.take_result());
     }
     return BufferedFastPathOperation<ResultType, InnerOperationT>(
-        buildWriteStateOperation(socket, std::move(state)));
+        build_write_state_operation(socket, std::move(state)));
 }
 
 template<typename SocketType>
-auto buildWriteFailureOperation(SocketType& socket, Http2ErrorCode error) {
+auto build_write_failure_operation(SocketType& socket, Http2ErrorCode error) {
     using ResultType = Http2WriteState::ResultType;
     using InnerOperationT = Http2WriteInnerOperationType<SocketType>;
 
@@ -1207,7 +1207,7 @@ auto buildWriteFailureOperation(SocketType& socket, Http2ErrorCode error) {
 
 template<typename SocketType>
 using Http2WriteOperationType =
-    decltype(buildWriteOperation(std::declval<SocketType&>(), std::string{}));
+    decltype(build_write_operation(std::declval<SocketType&>(), std::string{}));
 
 } // namespace detail
 
@@ -1263,12 +1263,12 @@ public:
             // 保留已有数据，扩展容量
             RingBuffer<Strategy, std::dynamic_extent> new_buffer(65536);
             // 复制已有数据到新 buffer
-            auto read_iovecs = borrowReadIovecs(m_ring_buffer);
+            auto read_iovecs = borrow_read_iovecs(m_ring_buffer);
             for (const auto& iov : read_iovecs) {
                 size_t remaining = iov.iov_len;
                 const char* src = static_cast<const char*>(iov.iov_base);
                 while (remaining > 0) {
-                    auto write_iovecs = borrowWriteIovecs(new_buffer);
+                    auto write_iovecs = borrow_write_iovecs(new_buffer);
                     if (write_iovecs.empty()) break;
                     for (const auto& wv : write_iovecs) {
                         if (remaining == 0) break;
@@ -1318,21 +1318,21 @@ public:
     SocketType& socket() { return m_socket; }
     
     // 获取本地/对端设置
-    Http2Settings& localSettings() { return m_local_settings; }
-    Http2Settings& peerSettings() { return m_peer_settings; }
-    Http2RuntimeConfig& runtimeConfig() { return m_runtime_config; }
-    const Http2RuntimeConfig& runtimeConfig() const { return m_runtime_config; }
+    Http2Settings& local_settings() { return m_local_settings; }
+    Http2Settings& peer_settings() { return m_peer_settings; }
+    Http2RuntimeConfig& runtime_config() { return m_runtime_config; }
+    const Http2RuntimeConfig& runtime_config() const { return m_runtime_config; }
 
     /**
      * @brief 校验 SETTINGS 帧的连接级约束。
      * @param frame 待处理的 SETTINGS 帧，必须位于 stream 0。
      * @return 非 0 stream 返回 ProtocolError；ACK 携带负载返回 FrameSizeError。
      */
-    static Http2ErrorCode validateSettingsFrame(const Http2SettingsFrame& frame) {
-        if (frame.streamId() != 0) {
+    static Http2ErrorCode validate_settings_frame(const Http2SettingsFrame& frame) {
+        if (frame.stream_id() != 0) {
             return Http2ErrorCode::ProtocolError;
         }
-        if (frame.isAck() && !frame.settings().empty()) {
+        if (frame.is_ack() && !frame.settings().empty()) {
             return Http2ErrorCode::FrameSizeError;
         }
         return Http2ErrorCode::NoError;
@@ -1344,7 +1344,7 @@ public:
      * @return 满足 HTTP/2 SETTINGS 取值范围的配置副本。
      */
     template<typename Config>
-    static Config normalizeSettingsConfig(Config config) {
+    static Config normalize_settings_config(Config config) {
         if constexpr (requires { config.initial_window_size; }) {
             if (config.initial_window_size > 2147483647u) {
                 config.initial_window_size = 2147483647u;
@@ -1367,16 +1367,16 @@ public:
      * @return 可直接发送或应用的 SETTINGS 帧。
      */
     template<typename Config>
-    static Http2SettingsFrame makeSettingsFrameFromConfig(
+    static Http2SettingsFrame make_settings_frame_from_config(
         Config config,
         std::optional<uint32_t> enable_push_override = std::nullopt) {
-        auto normalized = normalizeSettingsConfig(std::move(config));
+        auto normalized = normalize_settings_config(std::move(config));
         Http2Settings settings;
         settings.from(normalized);
         if (enable_push_override.has_value()) {
             settings.enable_push = *enable_push_override;
         }
-        return settings.toFrame();
+        return settings.to_frame();
     }
 
     /**
@@ -1385,7 +1385,7 @@ public:
      * @return 成功时返回 SETTINGS 帧，失败时返回对应 HTTP/2 错误码。
      */
     static std::expected<Http2SettingsFrame, Http2ErrorCode>
-    decodeH2cUpgradeSettingsHeader(std::string_view header_value) {
+    decode_h2c_upgrade_settings_header(std::string_view header_value) {
         std::string base64_value(header_value);
         for (char& ch : base64_value) {
             if (ch == '-') {
@@ -1407,10 +1407,10 @@ public:
                 return std::unexpected(Http2ErrorCode::ProtocolError);
         }
 
-        if (!galay::utils::Base64Util::Base64CanDecode(base64_value)) {
+        if (!galay::utils::Base64Util::base64_can_decode(base64_value)) {
             return std::unexpected(Http2ErrorCode::ProtocolError);
         }
-        std::string payload = galay::utils::Base64Util::Base64Decode(base64_value);
+        std::string payload = galay::utils::Base64Util::base64_decode(base64_value);
         if (payload.size() % 6 != 0) {
             return std::unexpected(Http2ErrorCode::ProtocolError);
         }
@@ -1428,11 +1428,11 @@ public:
                 (static_cast<uint32_t>(bytes[3]) << 16) |
                 (static_cast<uint32_t>(bytes[4]) << 8) |
                 static_cast<uint32_t>(bytes[5]);
-            frame.addSetting(id, value);
+            frame.add_setting(id, value);
         }
 
         Http2Settings validator;
-        auto error = validator.applySettings(frame);
+        auto error = validator.apply_settings(frame);
         if (error != Http2ErrorCode::NoError) {
             return std::unexpected(error);
         }
@@ -1444,21 +1444,21 @@ public:
      * @param frame 本端公布的 SETTINGS 帧；ACK 帧为无副作用成功。
      * @return SETTINGS 值非法时返回对应 HTTP/2 错误码。
      */
-    Http2ErrorCode applyLocalSettings(const Http2SettingsFrame& frame) {
-        auto frame_error = validateSettingsFrame(frame);
+    Http2ErrorCode apply_local_settings(const Http2SettingsFrame& frame) {
+        auto frame_error = validate_settings_frame(frame);
         if (frame_error != Http2ErrorCode::NoError) {
             return frame_error;
         }
-        if (frame.isAck()) {
+        if (frame.is_ack()) {
             return Http2ErrorCode::NoError;
         }
 
-        auto settings_error = m_local_settings.applySettings(frame);
+        auto settings_error = m_local_settings.apply_settings(frame);
         if (settings_error != Http2ErrorCode::NoError) {
             return settings_error;
         }
-        m_decoder.setMaxTableSize(m_local_settings.header_table_size);
-        m_decoder.setMaxHeaderListSize(m_local_settings.max_header_list_size);
+        m_decoder.set_max_table_size(m_local_settings.header_table_size);
+        m_decoder.set_max_header_list_size(m_local_settings.max_header_list_size);
         return Http2ErrorCode::NoError;
     }
 
@@ -1467,20 +1467,20 @@ public:
      * @param frame 对端发送的 SETTINGS 帧；ACK 帧为无副作用成功。
      * @return SETTINGS 值非法时返回对应 HTTP/2 错误码。
      */
-    Http2ErrorCode applyPeerSettings(const Http2SettingsFrame& frame) {
-        auto frame_error = validateSettingsFrame(frame);
+    Http2ErrorCode apply_peer_settings(const Http2SettingsFrame& frame) {
+        auto frame_error = validate_settings_frame(frame);
         if (frame_error != Http2ErrorCode::NoError) {
             return frame_error;
         }
-        if (frame.isAck()) {
+        if (frame.is_ack()) {
             return Http2ErrorCode::NoError;
         }
 
-        auto settings_error = m_peer_settings.applySettings(frame);
+        auto settings_error = m_peer_settings.apply_settings(frame);
         if (settings_error != Http2ErrorCode::NoError) {
             return settings_error;
         }
-        m_encoder.setMaxTableSize(m_peer_settings.header_table_size);
+        m_encoder.set_max_table_size(m_peer_settings.header_table_size);
         return Http2ErrorCode::NoError;
     }
     
@@ -1489,12 +1489,12 @@ public:
     HpackDecoder& decoder() { return m_decoder; }
     
     // 流管理
-    Http2Stream::ptr getStream(uint32_t stream_id) {
+    Http2Stream::ptr get_stream(uint32_t stream_id) {
         auto it = m_streams.find(stream_id);
         return it != m_streams.end() ? it->second : nullptr;
     }
     
-    Http2Stream::ptr createStream(uint32_t stream_id, Http2Stream::ptr stream = nullptr) {
+    Http2Stream::ptr create_stream(uint32_t stream_id, Http2Stream::ptr stream = nullptr) {
         auto [it, inserted] = m_streams.try_emplace(stream_id);
         if (inserted || !it->second) {
             it->second = stream ? std::move(stream) : Http2Stream::create(stream_id);
@@ -1502,11 +1502,11 @@ public:
         return it->second;
     }
     
-    void removeStream(uint32_t stream_id) {
+    void remove_stream(uint32_t stream_id) {
         m_streams.erase(stream_id);
     }
 
-    void reserveStreams(size_t capacity) {
+    void reserve_streams(size_t capacity) {
         if (capacity == 0) {
             return;
         }
@@ -1515,18 +1515,18 @@ public:
         }
     }
     
-    size_t streamCount() const { return m_streams.size(); }
+    size_t stream_count() const { return m_streams.size(); }
 
     // 遍历所有流
     template<typename Func>
-    void forEachStream(Func&& func) {
+    void for_each_stream(Func&& func) {
         for (auto& [id, stream] : m_streams) {
             func(id, stream);
         }
     }
 
     // 获取下一个本地流 ID（服务器使用偶数）
-    uint32_t nextLocalStreamId() {
+    uint32_t next_local_stream_id() {
         if (m_last_local_stream_id == 0) {
             m_last_local_stream_id = 2;
         } else {
@@ -1536,11 +1536,11 @@ public:
     }
     
     // 连接级流量控制
-    int32_t connSendWindow() const { return m_conn_send_window; }
-    int32_t connRecvWindow() const { return m_conn_recv_window; }
-    void adjustConnSendWindow(int32_t delta) { m_conn_send_window += delta; }
-    void adjustConnRecvWindow(int32_t delta) { m_conn_recv_window += delta; }
-    Http2FlowControlUpdate evaluateRecvWindowUpdate(int32_t stream_recv_window, size_t data_size) const {
+    int32_t conn_send_window() const { return m_conn_send_window; }
+    int32_t conn_recv_window() const { return m_conn_recv_window; }
+    void adjust_conn_send_window(int32_t delta) { m_conn_send_window += delta; }
+    void adjust_conn_recv_window(int32_t delta) { m_conn_recv_window += delta; }
+    Http2FlowControlUpdate evaluate_recv_window_update(int32_t stream_recv_window, size_t data_size) const {
         uint32_t conn_target = m_runtime_config.flow_control_target_window == 0
             ? m_local_settings.initial_window_size
             : m_runtime_config.flow_control_target_window;
@@ -1569,15 +1569,15 @@ public:
     }
     
     // 客户端/服务端模式
-    bool isClient() const { return m_is_client; }
-    void setIsClient(bool is_client) { m_is_client = is_client; }
+    bool is_client() const { return m_is_client; }
+    void set_is_client(bool is_client) { m_is_client = is_client; }
 
     // GOAWAY 状态
-    bool isGoawaySent() const { return m_goaway_sent; }
-    bool isGoawayReceived() const { return m_goaway_received; }
-    void setGoawaySent() { m_goaway_sent = true; }
-    void setGoawayReceived() { m_goaway_received = true; }
-    void markGoawayReceived(uint32_t last_stream_id,
+    bool is_goaway_sent() const { return m_goaway_sent; }
+    bool is_goaway_received() const { return m_goaway_received; }
+    void set_goaway_sent() { m_goaway_sent = true; }
+    void set_goaway_received() { m_goaway_received = true; }
+    void mark_goaway_received(uint32_t last_stream_id,
                             Http2ErrorCode error_code,
                             std::string debug = "") {
         m_goaway_received = true;
@@ -1586,7 +1586,7 @@ public:
         m_goaway_error_code = error_code;
         m_goaway_debug_data = std::move(debug);
     }
-    void markGoawaySent(uint32_t last_stream_id,
+    void mark_goaway_sent(uint32_t last_stream_id,
                         Http2ErrorCode error_code,
                         std::string debug = "") {
         m_goaway_sent = true;
@@ -1595,38 +1595,38 @@ public:
         m_goaway_error_code = error_code;
         m_goaway_debug_data = std::move(debug);
     }
-    bool isDraining() const { return m_draining; }
-    void setDraining(bool draining) { m_draining = draining; }
-    uint32_t goawayLastStreamId() const { return m_goaway_last_stream_id; }
-    Http2ErrorCode goawayErrorCode() const { return m_goaway_error_code; }
-    const std::string& goawayDebugData() const { return m_goaway_debug_data; }
+    bool is_draining() const { return m_draining; }
+    void set_draining(bool draining) { m_draining = draining; }
+    uint32_t goaway_last_stream_id() const { return m_goaway_last_stream_id; }
+    Http2ErrorCode goaway_error_code() const { return m_goaway_error_code; }
+    const std::string& goaway_debug_data() const { return m_goaway_debug_data; }
 
-    void markSettingsSent() {
+    void mark_settings_sent() {
         m_settings_ack_pending = true;
         m_settings_sent_at = std::chrono::steady_clock::now();
     }
-    void markSettingsAckReceived() { m_settings_ack_pending = false; }
-    bool isSettingsAckPending() const { return m_settings_ack_pending; }
-    std::chrono::steady_clock::time_point settingsSentAt() const { return m_settings_sent_at; }
+    void mark_settings_ack_received() { m_settings_ack_pending = false; }
+    bool is_settings_ack_pending() const { return m_settings_ack_pending; }
+    std::chrono::steady_clock::time_point settings_sent_at() const { return m_settings_sent_at; }
 
-    bool isPeerClosed() const { return m_peer_closed; }
-    bool isClosing() const { return m_closing; }
-    const std::string& lastReadError() const { return m_last_read_error; }
-    void clearLastReadError() { m_last_read_error.clear(); }
-    void setLastReadError(std::string message) { m_last_read_error = std::move(message); }
-    void markPeerClosed(std::string message = "peer closed") {
+    bool is_peer_closed() const { return m_peer_closed; }
+    bool is_closing() const { return m_closing; }
+    const std::string& last_read_error() const { return m_last_read_error; }
+    void clear_last_read_error() { m_last_read_error.clear(); }
+    void set_last_read_error(std::string message) { m_last_read_error = std::move(message); }
+    void mark_peer_closed(std::string message = "peer closed") {
         m_peer_closed = true;
         m_last_read_error = std::move(message);
     }
     
     // 最后处理的流 ID
-    uint32_t lastPeerStreamId() const { return m_last_peer_stream_id; }
-    void setLastPeerStreamId(uint32_t id) { m_last_peer_stream_id = id; }
+    uint32_t last_peer_stream_id() const { return m_last_peer_stream_id; }
+    void set_last_peer_stream_id(uint32_t id) { m_last_peer_stream_id = id; }
     
     // CONTINUATION 状态
-    bool isExpectingContinuation() const { return m_expecting_continuation; }
-    uint32_t continuationStreamId() const { return m_continuation_stream_id; }
-    void setExpectingContinuation(bool expecting, uint32_t stream_id = 0) {
+    bool is_expecting_continuation() const { return m_expecting_continuation; }
+    uint32_t continuation_stream_id() const { return m_continuation_stream_id; }
+    void set_expecting_continuation(bool expecting, uint32_t stream_id = 0) {
         m_expecting_continuation = expecting;
         m_continuation_stream_id = stream_id;
     }
@@ -1635,7 +1635,7 @@ public:
     // 只负责传输层 teardown；协议级清理由 StreamManager 负责。
     auto close() {
         m_closing = true;
-        // shutdown(fd) 触发读事件（readv 返回 0），让 readerLoop 退出阻塞读取。
+        // shutdown(fd) 触发读事件（readv 返回 0），让 reader_loop 退出阻塞读取。
         const int fd = m_socket.handle().fd;
         if (fd >= 0) {
             ::shutdown(fd, SHUT_RDWR);
@@ -1644,8 +1644,8 @@ public:
     }
 
     // 非 co_await 关闭：仅设置 closing 标志并触发 TCP shutdown，
-    // 用于唤醒 readerLoop；不执行协议级收尾。
-    void initiateClose() {
+    // 用于唤醒 reader_loop；不执行协议级收尾。
+    void initiate_close() {
         m_closing = true;
         const int fd = m_socket.handle().fd;
         if (fd >= 0) {
@@ -1654,15 +1654,15 @@ public:
     }
 
     // StreamManager 访问（需要 include stream_manager.h 后才能使用）
-    Http2StreamManagerImpl<SocketType, Strategy>* streamManager() { return m_stream_manager.get(); }
-    void initStreamManager() {
+    Http2StreamManagerImpl<SocketType, Strategy>* stream_manager() { return m_stream_manager.get(); }
+    void init_stream_manager() {
         if (!m_stream_manager) {
             m_stream_manager = std::make_unique<Http2StreamManagerImpl<SocketType, Strategy>>(*this);
         }
     }
 
-    Http2ConnectionCore* connectionCore() { return m_connection_core.get(); }
-    Http2ConnectionCore& ensureConnectionCore() {
+    Http2ConnectionCore* connection_core() { return m_connection_core.get(); }
+    Http2ConnectionCore& ensure_connection_core() {
         if (!m_connection_core) {
             m_connection_core = std::make_unique<Http2ConnectionCore>();
         }
@@ -1672,15 +1672,15 @@ public:
     /**
      * @brief 获取接收缓冲区引用
      */
-    RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return m_ring_buffer; }
+    RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return m_ring_buffer; }
 
     /**
      * @brief 将数据放入接收缓冲区
      * @param data 数据指针
      * @param len 数据长度
      */
-    void feedData(const char* data, size_t len) {
-        auto write_iovecs = borrowWriteIovecs(m_ring_buffer);
+    void feed_data(const char* data, size_t len) {
+        auto write_iovecs = borrow_write_iovecs(m_ring_buffer);
         size_t copied = 0;
         for (const auto& iov : write_iovecs) {
             size_t to_copy = std::min(iov.iov_len, len - copied);
@@ -1698,11 +1698,11 @@ public:
      * @details
      * - 仅解析已缓冲的完整帧，不执行任何 socket recv
      * - 遇到不完整的尾部帧时停止（不报错）
-     * - 验证帧头 length <= localSettings().max_frame_size
+     * - 验证帧头 length <= local_settings().max_frame_size
      * - 返回 FrameSizeError 如果帧过大
      */
     std::expected<std::vector<Http2Frame::uptr>, Http2ErrorCode>
-    parseBufferedFrames(size_t max_count = std::numeric_limits<size_t>::max()) {
+    parse_buffered_frames(size_t max_count = std::numeric_limits<size_t>::max()) {
         std::vector<Http2Frame::uptr> frames;
 
         while (frames.size() < max_count) {
@@ -1711,7 +1711,7 @@ public:
                 break;  // 不完整的帧头，停止解析
             }
 
-            auto read_iovecs = borrowReadIovecs(m_ring_buffer);
+            auto read_iovecs = borrow_read_iovecs(m_ring_buffer);
             if (read_iovecs.empty()) {
                 break;
             }
@@ -1748,7 +1748,7 @@ public:
 
             // RFC 9113: unknown extension frames are ignored, but their
             // payload bytes must still be consumed to keep the stream aligned.
-            if (!detail::isKnownHttp2FrameType(header.type)) {
+            if (!detail::is_known_http2_frame_type(header.type)) {
                 m_ring_buffer.consume(total_frame_size);
                 continue;
             }
@@ -1758,7 +1758,7 @@ public:
 
             if (read_iovecs[0].iov_len >= total_frame_size) {
                 // 帧在单个 iovec 中，直接解析
-                frame_result = Http2FrameParser::parseFrame(
+                frame_result = Http2FrameParser::parse_frame(
                     static_cast<const uint8_t*>(read_iovecs[0].iov_base), total_frame_size);
             } else {
                 // 帧跨越多个 iovec，需要拷贝到临时缓冲区
@@ -1772,7 +1772,7 @@ public:
                     copied += to_copy;
                     if (copied >= total_frame_size) break;
                 }
-                frame_result = Http2FrameParser::parseFrame(m_parse_buffer.data(), total_frame_size);
+                frame_result = Http2FrameParser::parse_frame(m_parse_buffer.data(), total_frame_size);
             }
 
             if (!frame_result) {
@@ -1792,8 +1792,8 @@ public:
     /**
      * @brief 获取帧读取 operation
      */
-    auto readFrame() {
-        return detail::buildReadOperation(
+    auto read_frame() {
+        return detail::build_read_operation(
             m_socket,
             detail::Http2SingleFrameReadState(
                 m_ring_buffer,
@@ -1806,8 +1806,8 @@ public:
     /**
      * @brief 获取批量帧读取 operation
      */
-    auto readFramesBatch(size_t max_frames = std::numeric_limits<size_t>::max()) {
-        return detail::buildReadOperation(
+    auto read_frames_batch(size_t max_frames = std::numeric_limits<size_t>::max()) {
+        return detail::build_read_operation(
             m_socket,
             detail::Http2FrameBatchReadState(
                 m_ring_buffer,
@@ -1820,8 +1820,8 @@ public:
 
     template<typename S = SocketType>
     requires (!is_ssl_socket_v<S>)
-    auto readFrameViewsBatch(size_t max_frames = std::numeric_limits<size_t>::max()) {
-        return detail::buildReadOperation(
+    auto read_frame_views_batch(size_t max_frames = std::numeric_limits<size_t>::max()) {
+        return detail::build_read_operation(
             m_socket,
             detail::Http2FrameViewBatchReadState(
                 m_ring_buffer,
@@ -1835,15 +1835,15 @@ public:
     /**
      * @brief 获取帧写入 operation
      */
-    auto writeFrame(const Http2Frame& frame) {
-        return detail::buildWriteOperation(m_socket, frame.serialize());
+    auto write_frame(const Http2Frame& frame) {
+        return detail::build_write_operation(m_socket, frame.serialize());
     }
     
     /**
      * @brief 获取原始数据写入 operation
      */
-    auto writeRaw(std::string data) {
-        return detail::buildWriteOperation(m_socket, std::move(data));
+    auto write_raw(std::string data) {
+        return detail::build_write_operation(m_socket, std::move(data));
     }
 
     // ==================== 便捷方法 ====================
@@ -1851,130 +1851,130 @@ public:
     /**
      * @brief 发送 SETTINGS 帧
      */
-    auto sendSettings() {
-        auto frame = m_local_settings.toFrame();
-        markSettingsSent();
-        return writeFrame(frame);
+    auto send_settings() {
+        auto frame = m_local_settings.to_frame();
+        mark_settings_sent();
+        return write_frame(frame);
     }
     
     /**
      * @brief 发送 SETTINGS ACK
      */
-    auto sendSettingsAck() {
+    auto send_settings_ack() {
         Http2SettingsFrame frame;
-        frame.setAck(true);
-        return writeFrame(frame);
+        frame.set_ack(true);
+        return write_frame(frame);
     }
     
     /**
      * @brief 发送 PING
      */
-    auto sendPing(const uint8_t* data, bool ack = false) {
+    auto send_ping(const uint8_t* data, bool ack = false) {
         Http2PingFrame frame;
-        frame.setOpaqueData(data);
-        frame.setAck(ack);
-        return writeFrame(frame);
+        frame.set_opaque_data(data);
+        frame.set_ack(ack);
+        return write_frame(frame);
     }
     
     /**
      * @brief 发送 GOAWAY
      */
-    auto sendGoaway(Http2ErrorCode error,
+    auto send_goaway(Http2ErrorCode error,
                     const std::string& debug = "",
                     std::optional<uint32_t> last_stream_id = std::nullopt) {
         Http2GoAwayFrame frame;
         uint32_t last = last_stream_id.value_or(m_last_peer_stream_id);
-        frame.setLastStreamId(last);
-        frame.setErrorCode(error);
-        frame.setDebugData(debug);
-        markGoawaySent(last, error, debug);
-        return writeFrame(frame);
+        frame.set_last_stream_id(last);
+        frame.set_error_code(error);
+        frame.set_debug_data(debug);
+        mark_goaway_sent(last, error, debug);
+        return write_frame(frame);
     }
     
     /**
      * @brief 发送 RST_STREAM
      */
-    auto sendRstStream(uint32_t stream_id, Http2ErrorCode error) {
-        auto bytes = Http2FrameBuilder::rstStreamBytes(stream_id, error);
+    auto send_rst_stream(uint32_t stream_id, Http2ErrorCode error) {
+        auto bytes = Http2FrameBuilder::rst_stream_bytes(stream_id, error);
         
-        auto stream = getStream(stream_id);
+        auto stream = get_stream(stream_id);
         if (stream) {
-            stream->onRstStreamSent();
+            stream->on_rst_stream_sent();
         }
         
-        return writeRaw(std::move(bytes));
+        return write_raw(std::move(bytes));
     }
     
     /**
      * @brief 发送 WINDOW_UPDATE
      */
-    auto sendWindowUpdate(uint32_t stream_id, uint32_t increment) {
+    auto send_window_update(uint32_t stream_id, uint32_t increment) {
         Http2WindowUpdateFrame frame;
         frame.header().stream_id = stream_id;
-        frame.setWindowSizeIncrement(increment);
-        return writeFrame(frame);
+        frame.set_window_size_increment(increment);
+        return write_frame(frame);
     }
     
     /**
      * @brief 发送 HEADERS 帧
      */
-    auto sendHeaders(
+    auto send_headers(
         uint32_t stream_id, 
         const std::vector<Http2HeaderField>& headers,
         bool end_stream = false,
         bool end_headers = true)
     {
         std::string header_block = m_encoder.encode(headers);
-        auto bytes = Http2FrameBuilder::headersBytes(stream_id,
+        auto bytes = Http2FrameBuilder::headers_bytes(stream_id,
                                                      header_block,
                                                      end_stream,
                                                      end_headers);
         
-        auto stream = getStream(stream_id);
+        auto stream = get_stream(stream_id);
         if (stream) {
-            stream->onHeadersSent(end_stream);
+            stream->on_headers_sent(end_stream);
         }
         
-        return writeRaw(std::move(bytes));
+        return write_raw(std::move(bytes));
     }
     
     /**
      * @brief 发送 DATA 帧（单帧）
      * @details 发送窗口不足时返回立即就绪的 FlowControlError，不挂起也不占用 WRITE 槽位。
      */
-    auto sendDataFrame(
+    auto send_data_frame(
         uint32_t stream_id,
         const std::string& data,
         bool end_stream = false)
     {
-        auto stream = getStream(stream_id);
+        auto stream = get_stream(stream_id);
         const size_t data_size = data.size();
         if (data_size > 0) {
             if (!stream ||
                 data_size > static_cast<size_t>(std::max<int32_t>(m_conn_send_window, 0)) ||
-                data_size > static_cast<size_t>(std::max<int32_t>(stream->sendWindow(), 0))) {
-                return detail::buildWriteFailureOperation(
+                data_size > static_cast<size_t>(std::max<int32_t>(stream->send_window(), 0))) {
+                return detail::build_write_failure_operation(
                     m_socket, Http2ErrorCode::FlowControlError);
             }
         }
 
-        auto bytes = Http2FrameBuilder::dataBytes(stream_id, data, end_stream);
+        auto bytes = Http2FrameBuilder::data_bytes(stream_id, data, end_stream);
         if (stream) {
             const auto delta = static_cast<int32_t>(data_size);
             m_conn_send_window -= delta;
-            stream->adjustSendWindow(-delta);
+            stream->adjust_send_window(-delta);
             if (end_stream) {
-                stream->onDataSent(true);
+                stream->on_data_sent(true);
             }
         }
         
-        return writeRaw(std::move(bytes));
+        return write_raw(std::move(bytes));
     }
     
     /**
      * @brief 发送 PUSH_PROMISE 帧
      */
-    auto sendPushPromise(
+    auto send_push_promise(
         uint32_t stream_id,
         uint32_t promised_stream_id,
         const std::vector<Http2HeaderField>& headers)
@@ -1983,11 +1983,11 @@ public:
         
         Http2PushPromiseFrame frame;
         frame.header().stream_id = stream_id;
-        frame.setPromisedStreamId(promised_stream_id);
-        frame.setHeaderBlock(std::move(header_block));
-        frame.setEndHeaders(true);
+        frame.set_promised_stream_id(promised_stream_id);
+        frame.set_header_block(std::move(header_block));
+        frame.set_end_headers(true);
         
-        return writeFrame(frame);
+        return write_frame(frame);
     }
 
     struct PushPromisePrepareResult {
@@ -1999,7 +1999,7 @@ public:
      * @brief 创建推送流并准备 PUSH_PROMISE
      * @return 推送准备结果；如果推送被禁用返回 nullopt
      */
-    std::optional<PushPromisePrepareResult> preparePushPromise(
+    std::optional<PushPromisePrepareResult> prepare_push_promise(
         uint32_t stream_id,
         const std::string& method,
         const std::string& path,
@@ -2010,7 +2010,7 @@ public:
             return std::nullopt;
         }
         
-        uint32_t promised_stream_id = nextLocalStreamId();
+        uint32_t promised_stream_id = next_local_stream_id();
         
         std::vector<Http2HeaderField> headers;
         headers.push_back({":method", method});
@@ -2019,12 +2019,12 @@ public:
         headers.push_back({":scheme", scheme});
         
         // 创建推送流
-        auto push_stream = createStream(promised_stream_id);
-        push_stream->setState(Http2StreamState::ReservedLocal);
+        auto push_stream = create_stream(promised_stream_id);
+        push_stream->set_state(Http2StreamState::ReservedLocal);
         
         return PushPromisePrepareResult{
             promised_stream_id,
-            sendPushPromise(stream_id, promised_stream_id, headers)
+            send_push_promise(stream_id, promised_stream_id, headers)
         };
     }
 

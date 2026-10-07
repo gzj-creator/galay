@@ -36,11 +36,11 @@ namespace {
 using QueueResult = std::expected<size_t, IOError>;
 
 struct QueueFlow {
-    void onRecv(SequenceOps<QueueResult, 4>& ops, RecvIOContext&);
-    void onFinish(SequenceOps<QueueResult, 4>& ops);
-    void onExtra(SequenceOps<QueueResult, 4>& ops);
+    void on_recv(SequenceOps<QueueResult, 4>& ops, RecvIOContext&);
+    void on_finish(SequenceOps<QueueResult, 4>& ops);
+    void on_extra(SequenceOps<QueueResult, 4>& ops);
 
-    using ExtraStep = LocalSequenceStep<QueueResult, 4, QueueFlow, &QueueFlow::onExtra>;
+    using ExtraStep = LocalSequenceStep<QueueResult, 4, QueueFlow, &QueueFlow::on_extra>;
 
     std::array<char, 1> scratch{};
     ExtraStep extra{this};
@@ -49,17 +49,17 @@ struct QueueFlow {
     bool finish_called = false;
 };
 
-inline void QueueFlow::onRecv(SequenceOps<QueueResult, 4>& ops, RecvIOContext&) {
+inline void QueueFlow::on_recv(SequenceOps<QueueResult, 4>& ops, RecvIOContext&) {
     ops.queue(extra);
     queued = true;
 }
 
-inline void QueueFlow::onFinish(SequenceOps<QueueResult, 4>& ops) {
+inline void QueueFlow::on_finish(SequenceOps<QueueResult, 4>& ops) {
     finish_called = true;
     ops.complete(1u);
 }
 
-inline void QueueFlow::onExtra(SequenceOps<QueueResult, 4>& ops) {
+inline void QueueFlow::on_extra(SequenceOps<QueueResult, 4>& ops) {
     extra_called = true;
     ops.complete(2u);
 }
@@ -69,7 +69,7 @@ struct TestState {
     std::atomic<bool> success{false};
 };
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -82,12 +82,12 @@ bool waitUntil(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-Task<void> queueRejectedTask(TestState* state, int fd) {
+Task<void> queue_rejected_task(TestState* state, int fd) {
     IOController controller(GHandle{.fd = fd});
     QueueFlow flow;
     auto awaitable = AwaitableBuilder<QueueResult, 4, QueueFlow>(&controller, flow)
-        .recv<&QueueFlow::onRecv>(flow.scratch.data(), flow.scratch.size())
-        .finish<&QueueFlow::onFinish>()
+        .recv<&QueueFlow::on_recv>(flow.scratch.data(), flow.scratch.size())
+        .finish<&QueueFlow::on_finish>()
         .build();
 
     auto result = co_await awaitable;
@@ -115,11 +115,11 @@ int main() {
     scheduler.start();
 
     TestState state;
-    scheduleTask(scheduler, queueRejectedTask(&state, fds[0]));
+    schedule_task(scheduler, queue_rejected_task(&state, fds[0]));
     constexpr char payload[] = "x";
     ::send(fds[1], payload, sizeof(payload) - 1, 0);
 
-    const bool completed = waitUntil(state.done);
+    const bool completed = wait_until(state.done);
     scheduler.stop();
     close(fds[0]);
     close(fds[1]);

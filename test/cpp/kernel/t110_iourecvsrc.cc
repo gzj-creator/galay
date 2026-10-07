@@ -12,11 +12,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -25,61 +25,61 @@ std::string readAll(const std::filesystem::path& path) {
                        std::istreambuf_iterator<char>());
 }
 
-bool containsText(const std::string& haystack, const std::string& needle) {
+bool contains_text(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto iocontroller = root / "galay-kernel" / "core" / "io_controller.hpp";
     const auto iouring_h = root / "galay-kernel" / "core" / "uring_reactor.h";
     const auto iouring_cc = root / "galay-kernel" / "core" / "uring_reactor.cc";
 
-    const std::string iocontroller_text = readAll(iocontroller);
-    const std::string iouring_h_text = readAll(iouring_h);
-    const std::string iouring_cc_text = readAll(iouring_cc);
+    const std::string iocontroller_text = read_all(iocontroller);
+    const std::string iouring_h_text = read_all(iouring_h);
+    const std::string iouring_cc_text = read_all(iouring_cc);
     if (iocontroller_text.empty() || iouring_h_text.empty() || iouring_cc_text.empty()) {
         std::cerr << "[T110] failed to read source files\n";
         return 1;
     }
 
-    if (!containsText(iocontroller_text, "m_ready_recvs")) {
+    if (!contains_text(iocontroller_text, "m_ready_recvs")) {
         std::cerr << "[T110] expected IOController to keep queued ready recv payloads\n";
         return 1;
     }
-    if (!containsText(iocontroller_text, "m_recv_multishot_armed")) {
+    if (!contains_text(iocontroller_text, "m_recv_multishot_armed")) {
         std::cerr << "[T110] expected IOController to track multishot recv armed state\n";
         return 1;
     }
-    if (!containsText(iocontroller_text, "m_recv_multishot_handle")) {
+    if (!contains_text(iocontroller_text, "m_recv_multishot_handle")) {
         std::cerr << "[T110] expected IOController to track active multishot recv handle\n";
         return 1;
     }
 
-    if (!containsText(iouring_h_text, "processRecvCompletion")) {
-        std::cerr << "[T110] expected IOUringReactor to define processRecvCompletion helper\n";
+    if (!contains_text(iouring_h_text, "process_recv_completion")) {
+        std::cerr << "[T110] expected IOUringReactor to define process_recv_completion helper\n";
         return 1;
     }
-    if (!containsText(iouring_cc_text, "io_uring_setup_buf_ring(")) {
+    if (!contains_text(iouring_cc_text, "io_uring_setup_buf_ring(")) {
         std::cerr << "[T110] expected IOUringReactor to allocate a provided buffer ring\n";
         return 1;
     }
-    if (!containsText(iouring_cc_text, "io_uring_prep_recv_multishot(")) {
+    if (!contains_text(iouring_cc_text, "io_uring_prep_recv_multishot(")) {
         std::cerr << "[T110] expected IOUringReactor recv path to use multishot recv submission\n";
         return 1;
     }
-    if (!containsText(iouring_cc_text, "IOSQE_BUFFER_SELECT")) {
+    if (!contains_text(iouring_cc_text, "IOSQE_BUFFER_SELECT")) {
         std::cerr << "[T110] expected IOUringReactor recv SQE to enable IOSQE_BUFFER_SELECT\n";
         return 1;
     }
-    if (!containsText(iouring_cc_text, "IORING_CQE_F_BUFFER")) {
+    if (!contains_text(iouring_cc_text, "IORING_CQE_F_BUFFER")) {
         std::cerr << "[T110] expected recv completion path to inspect IORING_CQE_F_BUFFER\n";
         return 1;
     }
-    if (!containsText(iouring_cc_text, "io_uring_buf_ring_add(") ||
-        !containsText(iouring_cc_text, "io_uring_buf_ring_advance(")) {
+    if (!contains_text(iouring_cc_text, "io_uring_buf_ring_add(") ||
+        !contains_text(iouring_cc_text, "io_uring_buf_ring_advance(")) {
         std::cerr << "[T110] expected IOUringReactor to return consumed buffers back to buf ring\n";
         return 1;
     }

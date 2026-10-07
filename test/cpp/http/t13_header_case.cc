@@ -40,13 +40,13 @@ void test_client_normalizes_to_canonical_case()
 
     HeaderPair headers(HeaderPair::Mode::ClientSide);
 
-    headers.addHeaderPair("Content-Type", "application/json");
-    headers.addHeaderPair("X-Custom-Header", "value");
-    headers.addHeaderPair("Authorization", "Bearer token");
+    headers.add_header_pair("Content-Type", "application/json");
+    headers.add_header_pair("X-Custom-Header", "value");
+    headers.add_header_pair("Authorization", "Bearer token");
 
     // 验证规范化为 Title-Case
     std::vector<std::pair<std::string, std::string>> result;
-    headers.forEachHeader([&](std::string_view k, std::string_view v) {
+    headers.for_each_header([&](std::string_view k, std::string_view v) {
         result.emplace_back(k, v);
     });
 
@@ -86,19 +86,19 @@ void test_client_no_fast_path_used()
     HeaderPair headers(HeaderPair::Mode::ClientSide);
 
     // Client 端不应该使用 fast-path
-    headers.addHeaderPair("Host", "example.com");
-    headers.addHeaderPair("Content-Length", "100");
+    headers.add_header_pair("Host", "example.com");
+    headers.add_header_pair("Content-Length", "100");
 
     // 验证存储在 map 中，不在 common headers 中
-    TEST_ASSERT(!headers.hasCommonHeader(CommonHeaderIndex::Host),
+    TEST_ASSERT(!headers.has_common_header(CommonHeaderIndex::Host),
                 "Host should not be in common headers for ClientSide");
-    TEST_ASSERT(!headers.hasCommonHeader(CommonHeaderIndex::ContentLength),
+    TEST_ASSERT(!headers.has_common_header(CommonHeaderIndex::ContentLength),
                 "Content-Length should not be in common headers for ClientSide");
 
-    // 但可以通过 getValue 查询到
-    TEST_ASSERT(headers.getValue("Host") == "example.com",
+    // 但可以通过 get_value 查询到
+    TEST_ASSERT(headers.get_value("Host") == "example.com",
                 "Should find Host via getValue");
-    TEST_ASSERT(headers.getValue("Content-Length") == "100",
+    TEST_ASSERT(headers.get_value("Content-Length") == "100",
                 "Should find Content-Length via getValue");
 
     TEST_PASS("Client does not use fast-path");
@@ -111,14 +111,14 @@ void test_client_normalizes_mixed_case_input()
     HeaderPair headers(HeaderPair::Mode::ClientSide);
 
     // 添加各种大小写的 headers，应该都被规范化为 Title-Case
-    headers.addHeaderPair("content-type", "text/html");
-    headers.addHeaderPair("CONTENT-LENGTH", "200");
-    headers.addHeaderPair("Accept-Encoding", "gzip, deflate");
-    headers.addHeaderPair("x-api-key", "secret123");
+    headers.add_header_pair("content-type", "text/html");
+    headers.add_header_pair("CONTENT-LENGTH", "200");
+    headers.add_header_pair("Accept-Encoding", "gzip, deflate");
+    headers.add_header_pair("x-api-key", "secret123");
 
     // 验证所有 headers 都被规范化为 Title-Case
     std::vector<std::pair<std::string, std::string>> result;
-    headers.forEachHeader([&](std::string_view k, std::string_view v) {
+    headers.for_each_header([&](std::string_view k, std::string_view v) {
         result.emplace_back(k, v);
     });
 

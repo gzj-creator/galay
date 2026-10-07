@@ -83,7 +83,7 @@ public:
     /**
      * @brief Split string by character, respecting quoted sections
      */
-    static std::vector<std::string> splitRespectQuotes(std::string_view str, char delimiter, char quote = '"') {
+    static std::vector<std::string> split_respect_quotes(std::string_view str, char delimiter, char quote = '"') {
         std::vector<std::string> result;
         std::string current;
         bool inQuotes = false;
@@ -143,7 +143,7 @@ public:
     /**
      * @brief Trim whitespace from left
      */
-    static std::string trimLeft(std::string_view str) {
+    static std::string trim_left(std::string_view str) {
         size_t start = 0;
         while (start < str.length() && std::isspace(static_cast<unsigned char>(str[start]))) {
             ++start;
@@ -154,7 +154,7 @@ public:
     /**
      * @brief Trim whitespace from right
      */
-    static std::string trimRight(std::string_view str) {
+    static std::string trim_right(std::string_view str) {
         size_t end = str.length();
         while (end > 0 && std::isspace(static_cast<unsigned char>(str[end - 1]))) {
             --end;
@@ -165,7 +165,7 @@ public:
     /**
      * @brief Convert string to lowercase
      */
-    static std::string toLower(std::string_view str) {
+    static std::string to_lower(std::string_view str) {
         std::string result(str);
         std::transform(result.begin(), result.end(), result.begin(),
                        [](unsigned char c) { return std::tolower(c); });
@@ -175,7 +175,7 @@ public:
     /**
      * @brief Convert string to uppercase
      */
-    static std::string toUpper(std::string_view str) {
+    static std::string to_upper(std::string_view str) {
         std::string result(str);
         std::transform(result.begin(), result.end(), result.begin(),
                        [](unsigned char c) { return std::toupper(c); });
@@ -185,7 +185,7 @@ public:
     /**
      * @brief Check if string starts with prefix
      */
-    static bool startsWith(std::string_view str, std::string_view prefix) {
+    static bool starts_with(std::string_view str, std::string_view prefix) {
         if (prefix.length() > str.length()) return false;
         return str.substr(0, prefix.length()) == prefix;
     }
@@ -193,7 +193,7 @@ public:
     /**
      * @brief Check if string ends with suffix
      */
-    static bool endsWith(std::string_view str, std::string_view suffix) {
+    static bool ends_with(std::string_view str, std::string_view suffix) {
         if (suffix.length() > str.length()) return false;
         return str.substr(str.length() - suffix.length()) == suffix;
     }
@@ -231,7 +231,7 @@ public:
     /**
      * @brief Replace first occurrence of a substring
      */
-    static std::string replaceFirst(std::string_view str, std::string_view from, std::string_view to) {
+    static std::string replace_first(std::string_view str, std::string_view from, std::string_view to) {
         if (from.empty()) return std::string(str);
 
         size_t pos = str.find(from);
@@ -274,7 +274,7 @@ public:
     /**
      * @brief Convert bytes to hex string
      */
-    static std::string toHex(const uint8_t* data, size_t len, bool uppercase = false) {
+    static std::string to_hex(const uint8_t* data, size_t len, bool uppercase = false) {
         if (data == nullptr) {
             return {};
         }
@@ -297,7 +297,7 @@ public:
     /**
      * @brief Convert hex string to bytes
      */
-    static std::vector<uint8_t> fromHex(std::string_view hex) {
+    static std::vector<uint8_t> from_hex(std::string_view hex) {
         if (hex.empty() || (hex.length() % 2) != 0) {
             return {};
         }
@@ -305,7 +305,7 @@ public:
         std::vector<uint8_t> result;
         result.reserve(hex.length() / 2);
 
-        auto hexCharToValue = [](char c) -> int {
+        auto hex_char_to_value = [](char c) -> int {
             if (c >= '0' && c <= '9') return c - '0';
             if (c >= 'a' && c <= 'f') return c - 'a' + 10;
             if (c >= 'A' && c <= 'F') return c - 'A' + 10;
@@ -313,8 +313,8 @@ public:
         };
 
         for (size_t i = 0; i + 1 < hex.length(); i += 2) {
-            int high = hexCharToValue(hex[i]);
-            int low = hexCharToValue(hex[i + 1]);
+            int high = hex_char_to_value(hex[i]);
+            int low = hex_char_to_value(hex[i + 1]);
             if (high < 0 || low < 0) {
                 return {};
             }
@@ -327,7 +327,7 @@ public:
     /**
      * @brief Convert bytes to visible hex string (with spaces)
      */
-    static std::string toVisibleHex(const uint8_t* data, size_t len) {
+    static std::string to_visible_hex(const uint8_t* data, size_t len) {
         if (data == nullptr) {
             return {};
         }
@@ -349,7 +349,7 @@ public:
     /**
      * @brief Check if string is a valid integer
      */
-    static bool isInteger(std::string_view str) {
+    static bool is_integer(std::string_view str) {
         if (str.empty()) return false;
 
         size_t start = 0;
@@ -370,7 +370,7 @@ public:
     /**
      * @brief Check if string is a valid floating point number
      */
-    static bool isFloat(std::string_view str) {
+    static bool is_float(std::string_view str) {
         if (str.empty()) return false;
 
         size_t start = 0;
@@ -409,7 +409,7 @@ public:
     /**
      * @brief Check if string is empty or contains only whitespace
      */
-    static bool isBlank(std::string_view str) {
+    static bool is_blank(std::string_view str) {
         for (char c : str) {
             if (!std::isspace(static_cast<unsigned char>(c))) {
                 return false;
@@ -481,7 +481,7 @@ public:
      * @brief Convert value to string
      */
     template<typename T>
-    static std::string toString(const T& value) {
+    static std::string to_string(const T& value) {
         std::ostringstream oss;
         oss << value;
         return oss.str();

@@ -13,12 +13,12 @@
 
 namespace {
 
-std::filesystem::path projectRoot()
+std::filesystem::path project_root()
 {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-bool fileContainsPattern(const std::filesystem::path& path, const std::string& pattern)
+bool file_contains_pattern(const std::filesystem::path& path, const std::string& pattern)
 {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -38,7 +38,7 @@ bool fileContainsPattern(const std::filesystem::path& path, const std::string& p
 
 int main()
 {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const std::vector<std::filesystem::path> public_headers = {
         root / "galay-kernel" / "async" / "async_tcp.h",
         root / "galay-kernel" / "async" / "async_udp.h",
@@ -64,7 +64,7 @@ int main()
             missing_headers.push_back(header.lexically_relative(root));
             continue;
         }
-        if (fileContainsPattern(header, "using namespace galay::kernel;")) {
+        if (file_contains_pattern(header, "using namespace galay::kernel;")) {
             polluted_headers.push_back(header.lexically_relative(root));
         }
     }

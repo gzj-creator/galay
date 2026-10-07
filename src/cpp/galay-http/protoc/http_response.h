@@ -54,31 +54,31 @@ public:
      * @return 解析后的 Body 对象
      */
     template<HttpBodyType T>
-    T getBody();
+    T get_body();
 
     /**
      * @brief 获取响应体原始字符串（破坏性操作，会清空 body）
      * @return Body 字符串
      */
-    std::string getBodyStr();
+    std::string get_body_str();
 
     /**
      * @brief 获取响应体的常量引用（非破坏性，推荐用于读取）
      * @return Body 字符串的常量引用
      */
-    const std::string& bodyStr() const;
+    const std::string& body_str() const;
 
     /**
      * @brief 设置响应头（移动语义）
      * @param header 响应头
      */
-    void setHeader(HttpResponseHeader&& header);
+    void set_header(HttpResponseHeader&& header);
 
     /**
      * @brief 设置响应头（左值引用）
      * @param header 响应头
      */
-    void setHeader(HttpResponseHeader& header);
+    void set_header(HttpResponseHeader& header);
 
     /**
      * @brief 设置响应体（模板版，移动语义）
@@ -86,26 +86,26 @@ public:
      * @param body Body 对象
      */
     template<HttpBodyType T>
-    void setBody(T&& body);
+    void set_body(T&& body);
 
     /**
      * @brief 设置响应体原始字符串
      * @param body Body 数据（移动语义）
      */
-    void setBodyStr(std::string&& body);
+    void set_body_str(std::string&& body);
 
     /**
      * @brief 将响应序列化为字符串
      * @return 完整的 HTTP 响应报文字符串
      */
-    std::string toString();
+    std::string to_string();
 
     /**
      * @brief 从 iovec 数组增量解析响应
      * @param iovecs 离散缓冲区数组
      * @return pair.first 为错误码，pair.second 为消耗的字节数（-1 错误，0 不完整）
      */
-    std::pair<HttpErrorCode, ssize_t> fromIOVec(const std::vector<iovec>& iovecs);
+    std::pair<HttpErrorCode, ssize_t> from_io_vec(const std::vector<iovec>& iovecs);
 
     /**
      * @brief 从 iovec 数组增量解析响应，并检查 body 大小限制
@@ -113,14 +113,14 @@ public:
      * @param max_body_size 最大 body 字节数，0 表示不限制
      * @return pair.first 为错误码，pair.second 为消耗的字节数（-1 错误，0 不完整）
      */
-    std::pair<HttpErrorCode, ssize_t> fromIOVec(const std::vector<iovec>& iovecs,
+    std::pair<HttpErrorCode, ssize_t> from_io_vec(const std::vector<iovec>& iovecs,
                                                 size_t max_body_size);
 
     /**
      * @brief 检查响应是否解析完成（header + body）
      * @return 解析完成返回 true
      */
-    bool isComplete() const;
+    bool is_complete() const;
 
     void reset(); ///< 重置解析状态
 

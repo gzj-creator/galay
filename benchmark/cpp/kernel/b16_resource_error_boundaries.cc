@@ -32,14 +32,14 @@ volatile std::size_t g_sink = 0;
 using SequenceBoundaryResult = std::expected<int, galay::kernel::IOError>;
 
 struct SequenceBoundaryFlow {
-    void onLocal(galay::kernel::SequenceOps<SequenceBoundaryResult, 1>&) {}
+    void on_local(galay::kernel::SequenceOps<SequenceBoundaryResult, 1>&) {}
 };
 
 using SequenceBoundaryStep = galay::kernel::LocalSequenceStep<
     SequenceBoundaryResult,
     1,
     SequenceBoundaryFlow,
-    &SequenceBoundaryFlow::onLocal>;
+    &SequenceBoundaryFlow::on_local>;
 
 template <typename Fn>
 void measure(const std::string& name, std::size_t iterations, Fn&& fn)
@@ -63,7 +63,7 @@ void measure(const std::string& name, std::size_t iterations, Fn&& fn)
 }
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
-std::filesystem::path makeTempFile()
+std::filesystem::path make_temp_file()
 {
     auto path = std::filesystem::temp_directory_path() / "galay_b16_async_file_raii.tmp";
     std::ofstream out(path);
@@ -76,7 +76,7 @@ std::filesystem::path makeTempFile()
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -122,7 +122,7 @@ int main()
     });
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
-    const auto path = makeTempFile();
+    const auto path = make_temp_file();
     measure("async_file open+destruct", iterations, [&](std::size_t i) {
         galay::async::AsyncFile file;
         auto opened = file.open(path.string(), galay::async::FileOpenMode::Read);

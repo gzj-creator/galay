@@ -44,7 +44,7 @@ public:
      * @param extension 文件扩展名（含前导点，如 `.toml`）
      * @param creator 解析器工厂函数
      */
-    void registerParser(const std::string& extension, Creator creator) {
+    void register_parser(const std::string& extension, Creator creator) {
         m_creators[extension] = std::move(creator);
     }
 
@@ -53,7 +53,7 @@ public:
      * @param path 文件路径或文件名
      * @return 解析器实例，未知扩展名返回 nullptr
      */
-    std::unique_ptr<ParserBase> createParser(const std::string& path) {
+    std::unique_ptr<ParserBase> create_parser(const std::string& path) {
         auto dot_pos = path.rfind('.');
         if (dot_pos == std::string::npos) {
             return nullptr;
@@ -70,10 +70,10 @@ public:
 
 private:
     ParserManager() {
-        registerParser(".conf", []() { return std::make_unique<ConfigParser>(); });
-        registerParser(".ini", []() { return std::make_unique<IniParser>(); });
-        registerParser(".env", []() { return std::make_unique<EnvParser>(); });
-        registerParser(".toml", []() { return std::make_unique<TomlParser>(); });
+        register_parser(".conf", []() { return std::make_unique<ConfigParser>(); });
+        register_parser(".ini", []() { return std::make_unique<IniParser>(); });
+        register_parser(".env", []() { return std::make_unique<EnvParser>(); });
+        register_parser(".toml", []() { return std::make_unique<TomlParser>(); });
     }
 
     std::unordered_map<std::string, Creator> m_creators;

@@ -45,38 +45,38 @@ concept TraceHeaderSetter = requires(Setter setter, std::string_view name, std::
 
 /**
  * @brief Extract W3C trace context from framework-specific HTTP headers.
- * @param getHeader Callable matching TraceHeaderGetter.
+ * @param get_header Callable matching TraceHeaderGetter.
  * @return Parsed TraceContext, or TraceparentError when traceparent is missing
  * or malformed.
  */
 template <TraceHeaderGetter Getter>
-[[nodiscard]] std::expected<TraceContext, TraceparentError> extractTraceContextFromHeaders(Getter&& getHeader) {
-    const auto traceparent = getHeader("traceparent");
+[[nodiscard]] std::expected<TraceContext, TraceparentError> extract_trace_context_from_headers(Getter&& get_header) {
+    const auto traceparent = get_header("traceparent");
     if (!traceparent.has_value()) {
         return std::unexpected(TraceparentError::kMalformed);
     }
 
-    const auto tracestate = getHeader("tracestate").value_or(std::string_view{});
-    return extractTraceparent(*traceparent, tracestate);
+    const auto tracestate = get_header("tracestate").value_or(std::string_view{});
+    return extract_traceparent(*traceparent, tracestate);
 }
 
 /**
  * @brief Inject W3C trace context into framework-specific HTTP headers.
  * @param context Context to propagate.
- * @param setHeader Callable matching TraceHeaderSetter.
+ * @param set_header Callable matching TraceHeaderSetter.
  * @return true when a valid traceparent was written; false for invalid context.
  */
 template <TraceHeaderSetter Setter>
-[[nodiscard]] bool injectTraceContextToHeaders(const TraceContext& context, Setter&& setHeader) {
-    auto traceparent = injectTraceparent(context);
+[[nodiscard]] bool inject_trace_context_to_headers(const TraceContext& context, Setter&& set_header) {
+    auto traceparent = inject_traceparent(context);
     if (traceparent.empty()) {
         return false;
     }
 
-    setHeader("traceparent", std::move(traceparent));
-    auto tracestate = injectTracestate(context);
+    set_header("traceparent", std::move(traceparent));
+    auto tracestate = inject_tracestate(context);
     if (!tracestate.empty()) {
-        setHeader("tracestate", std::move(tracestate));
+        set_header("tracestate", std::move(tracestate));
     }
     return true;
 }

@@ -15,9 +15,9 @@ using galay::mcp::McpStdioClientConfig;
 
 int main()
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     McpClient http_client(runtime, McpHttpClientConfig{.url = "http://127.0.0.1:8080/mcp"});
-    auto wrong_sync = http_client.listTools();
+    auto wrong_sync = http_client.list_tools();
     if (wrong_sync || wrong_sync.error().code() != McpErrorCode::InvalidTransportMode) {
         std::cerr << "HTTP client accepted stdio sync API\n";
         return 1;
@@ -31,7 +31,7 @@ int main()
     McpClient stdio_client(McpStdioClientConfig{});
     runtime.start();
     std::expected<void, galay::mcp::McpError> wrong_async_result;
-    auto join = runtime.spawnIO(stdio_client.ping(wrong_async_result));
+    auto join = runtime.spawn_io(stdio_client.ping(wrong_async_result));
     if (!join) {
         runtime.stop();
         std::cerr << "failed to spawn wrong-mode async task\n";

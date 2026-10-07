@@ -31,16 +31,16 @@ bool expect(bool condition, const char* message)
 int main()
 {
     SslContext ctx(SslMethod::TLS_Client);
-    if (!expect(ctx.isValid(), "ssl context invalid")) {
+    if (!expect(ctx.is_valid(), "ssl context invalid")) {
         return 1;
     }
 
     SslEngine engine(&ctx);
-    if (!expect(engine.isValid(), "ssl engine invalid")) {
+    if (!expect(engine.is_valid(), "ssl engine invalid")) {
         return 1;
     }
 
-    std::expected<size_t, SslError> uninitialized_feed = engine.feedEncryptedInput("x", 1);
+    std::expected<size_t, SslError> uninitialized_feed = engine.feed_encrypted_input("x", 1);
     if (!expect(!uninitialized_feed, "feed without rbio should fail")) {
         return 1;
     }
@@ -50,7 +50,7 @@ int main()
     }
 
     char out = '\0';
-    std::expected<size_t, SslError> uninitialized_extract = engine.extractEncryptedOutput(&out, 1);
+    std::expected<size_t, SslError> uninitialized_extract = engine.extract_encrypted_output(&out, 1);
     if (!expect(!uninitialized_extract, "extract without wbio should fail")) {
         return 1;
     }
@@ -59,12 +59,12 @@ int main()
         return 1;
     }
 
-    if (!expect(engine.initMemoryBIO().has_value(), "initMemoryBIO failed")) {
+    if (!expect(engine.init_memory_bio().has_value(), "initMemoryBIO failed")) {
         return 1;
     }
 
     std::expected<size_t, SslError> oversized_feed =
-        engine.feedEncryptedInput("x", static_cast<size_t>(INT_MAX) + 1U);
+        engine.feed_encrypted_input("x", static_cast<size_t>(INT_MAX) + 1U);
     if (!expect(!oversized_feed, "oversized feed should fail")) {
         return 1;
     }
@@ -74,7 +74,7 @@ int main()
     }
 
     std::expected<size_t, SslError> oversized_extract =
-        engine.extractEncryptedOutput(&out, static_cast<size_t>(INT_MAX) + 1U);
+        engine.extract_encrypted_output(&out, static_cast<size_t>(INT_MAX) + 1U);
     if (!expect(!oversized_extract, "oversized extract should fail")) {
         return 1;
     }

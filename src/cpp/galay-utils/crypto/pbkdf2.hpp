@@ -27,7 +27,7 @@ public:
      * @param output_len Requested derived-key length in bytes.
      * @return Derived key bytes. Empty when iterations or output_len is zero.
      */
-    static std::vector<uint8_t> hmacSha256(const uint8_t* password,
+    static std::vector<uint8_t> hmac_sha256(const uint8_t* password,
                                            size_t password_len,
                                            const uint8_t* salt,
                                            size_t salt_len,
@@ -37,13 +37,13 @@ public:
     /**
      * @brief Derive key bytes with PBKDF2-HMAC-SHA256 using string password and byte salt.
      */
-    static std::vector<uint8_t> hmacSha256(const std::string& password,
+    static std::vector<uint8_t> hmac_sha256(const std::string& password,
                                            const std::vector<uint8_t>& salt,
                                            uint32_t iterations,
                                            size_t output_len);
 };
 
-inline std::vector<uint8_t> PBKDF2::hmacSha256(const uint8_t* password,
+inline std::vector<uint8_t> PBKDF2::hmac_sha256(const uint8_t* password,
                                                size_t password_len,
                                                const uint8_t* salt,
                                                size_t salt_len,
@@ -70,11 +70,11 @@ inline std::vector<uint8_t> PBKDF2::hmacSha256(const uint8_t* password,
         block_input[salt_len + 2] = static_cast<uint8_t>((block_index >> 8) & 0xff);
         block_input[salt_len + 3] = static_cast<uint8_t>(block_index & 0xff);
 
-        auto u = HMAC::hmacSha256(password, password_len, block_input.data(), block_input.size());
+        auto u = HMAC::hmac_sha256(password, password_len, block_input.data(), block_input.size());
         std::array<uint8_t, kDigestSize> t = u;
 
         for (uint32_t iteration = 1; iteration < iterations; ++iteration) {
-            u = HMAC::hmacSha256(password, password_len, u.data(), u.size());
+            u = HMAC::hmac_sha256(password, password_len, u.data(), u.size());
             for (size_t i = 0; i < kDigestSize; ++i) {
                 t[i] ^= u[i];
             }
@@ -87,12 +87,12 @@ inline std::vector<uint8_t> PBKDF2::hmacSha256(const uint8_t* password,
     return output;
 }
 
-inline std::vector<uint8_t> PBKDF2::hmacSha256(const std::string& password,
+inline std::vector<uint8_t> PBKDF2::hmac_sha256(const std::string& password,
                                                const std::vector<uint8_t>& salt,
                                                uint32_t iterations,
                                                size_t output_len)
 {
-    return hmacSha256(reinterpret_cast<const uint8_t*>(password.data()),
+    return hmac_sha256(reinterpret_cast<const uint8_t*>(password.data()),
                       password.size(),
                       salt.data(),
                       salt.size(),

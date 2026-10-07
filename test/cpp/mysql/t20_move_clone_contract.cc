@@ -31,7 +31,7 @@ concept HasClone = requires(const T& value) {
 };
 
 template <typename T>
-consteval bool isMoveOnlyCloneable()
+consteval bool is_move_only_cloneable()
 {
     return !std::is_copy_constructible_v<T> &&
            !std::is_copy_assignable_v<T> &&
@@ -42,38 +42,38 @@ consteval bool isMoveOnlyCloneable()
 
 using DefaultPrepareResult = MysqlPrepareAwaitable<>::PrepareResult;
 
-static_assert(isMoveOnlyCloneable<MysqlEncodedBatch>());
-static_assert(isMoveOnlyCloneable<MysqlField>());
-static_assert(isMoveOnlyCloneable<MysqlRow>());
-static_assert(isMoveOnlyCloneable<MysqlResultSet>());
-static_assert(isMoveOnlyCloneable<DefaultPrepareResult>());
-static_assert(isMoveOnlyCloneable<MysqlCommandBuilder>());
+static_assert(is_move_only_cloneable<MysqlEncodedBatch>());
+static_assert(is_move_only_cloneable<MysqlField>());
+static_assert(is_move_only_cloneable<MysqlRow>());
+static_assert(is_move_only_cloneable<MysqlResultSet>());
+static_assert(is_move_only_cloneable<DefaultPrepareResult>());
+static_assert(is_move_only_cloneable<MysqlCommandBuilder>());
 static_assert(std::is_nothrow_move_constructible_v<MysqlCommandBuilder>);
 static_assert(std::is_nothrow_move_assignable_v<MysqlCommandBuilder>);
 
-std::string longValue(char fill)
+std::string long_value(char fill)
 {
     return std::string(128, fill);
 }
 
-MysqlField makeField(std::string name)
+MysqlField make_field(std::string name)
 {
     MysqlField field(std::move(name), MysqlFieldType::VAR_STRING, NOT_NULL_FLAG, 255, 0);
-    field.setCatalog(longValue('c'));
-    field.setSchema(longValue('s'));
-    field.setTable(longValue('t'));
-    field.setOrgTable(longValue('o'));
-    field.setOrgName(longValue('n'));
-    field.setCharacterSet(45);
+    field.set_catalog(long_value('c'));
+    field.set_schema(long_value('s'));
+    field.set_table(long_value('t'));
+    field.set_org_table(long_value('o'));
+    field.set_org_name(long_value('n'));
+    field.set_character_set(45);
     return field;
 }
 
-void testCommandBuilderCloneRebuildsViews()
+void test_command_builder_clone_rebuilds_views()
 {
     MysqlCommandBuilder builder;
     builder.reserve(2, 128);
-    builder.appendQuery("SELECT 1");
-    builder.appendPing(3);
+    builder.append_query("SELECT 1");
+    builder.append_ping(3);
 
     const auto original_views = builder.commands();
     require(original_views.size() == 2, "original builder should expose two commands");
@@ -101,18 +101,18 @@ void testCommandBuilderCloneRebuildsViews()
             "cloned builder cached view should remain bound to clone");
 }
 
-void testFieldCloneDeepCopiesStrings()
+void test_field_clone_deep_copies_strings()
 {
-    MysqlField field = makeField(longValue('f'));
+    MysqlField field = make_field(long_value('f'));
     MysqlField cloned = field.clone();
 
     require(cloned.name() == field.name(), "field clone should preserve name");
     require(cloned.catalog() == field.catalog(), "field clone should preserve catalog");
     require(cloned.schema() == field.schema(), "field clone should preserve schema");
     require(cloned.table() == field.table(), "field clone should preserve table");
-    require(cloned.orgTable() == field.orgTable(), "field clone should preserve org table");
-    require(cloned.orgName() == field.orgName(), "field clone should preserve org name");
-    require(cloned.characterSet() == field.characterSet(),
+    require(cloned.org_table() == field.org_table(), "field clone should preserve org table");
+    require(cloned.org_name() == field.org_name(), "field clone should preserve org name");
+    require(cloned.character_set() == field.character_set(),
             "field clone should preserve character set");
     require(cloned.name().data() != field.name().data(),
             "field clone should own a separate name buffer");
@@ -120,49 +120,49 @@ void testFieldCloneDeepCopiesStrings()
             "field clone should own a separate catalog buffer");
 }
 
-void testRowCloneDeepCopiesValues()
+void test_row_clone_deep_copies_values()
 {
     std::vector<std::optional<std::string>> values;
-    values.emplace_back(longValue('a'));
+    values.emplace_back(long_value('a'));
     values.emplace_back(std::nullopt);
-    values.emplace_back(longValue('b'));
+    values.emplace_back(long_value('b'));
     MysqlRow row(std::move(values));
 
     MysqlRow cloned = row.clone();
     require(cloned.size() == row.size(), "row clone should preserve column count");
-    require(cloned.getString(0) == row.getString(0), "row clone should preserve first value");
-    require(cloned.isNull(1), "row clone should preserve null value");
-    require(cloned.getString(2) == row.getString(2), "row clone should preserve last value");
+    require(cloned.get_string(0) == row.get_string(0), "row clone should preserve first value");
+    require(cloned.is_null(1), "row clone should preserve null value");
+    require(cloned.get_string(2) == row.get_string(2), "row clone should preserve last value");
     require(cloned.values()[0]->data() != row.values()[0]->data(),
             "row clone should own separate first value buffer");
     require(cloned.values()[2]->data() != row.values()[2]->data(),
             "row clone should own separate last value buffer");
 }
 
-void testResultSetCloneDeepCopiesFieldsAndRows()
+void test_result_set_clone_deep_copies_fields_and_rows()
 {
     MysqlResultSet result;
-    result.addField(makeField(longValue('r')));
+    result.add_field(make_field(long_value('r')));
     std::vector<std::optional<std::string>> values;
-    values.emplace_back(longValue('v'));
-    result.addRow(MysqlRow(std::move(values)));
-    result.setAffectedRows(7);
-    result.setLastInsertId(9);
-    result.setWarnings(2);
-    result.setStatusFlags(3);
-    result.setInfo(longValue('i'));
+    values.emplace_back(long_value('v'));
+    result.add_row(MysqlRow(std::move(values)));
+    result.set_affected_rows(7);
+    result.set_last_insert_id(9);
+    result.set_warnings(2);
+    result.set_status_flags(3);
+    result.set_info(long_value('i'));
 
     MysqlResultSet cloned = result.clone();
-    require(cloned.fieldCount() == 1, "result clone should preserve fields");
-    require(cloned.rowCount() == 1, "result clone should preserve rows");
+    require(cloned.field_count() == 1, "result clone should preserve fields");
+    require(cloned.row_count() == 1, "result clone should preserve rows");
     require(cloned.field(0).name() == result.field(0).name(),
             "result clone should preserve field data");
-    require(cloned.row(0).getString(0) == result.row(0).getString(0),
+    require(cloned.row(0).get_string(0) == result.row(0).get_string(0),
             "result clone should preserve row data");
-    require(cloned.affectedRows() == 7, "result clone should preserve affected rows");
-    require(cloned.lastInsertId() == 9, "result clone should preserve insert id");
+    require(cloned.affected_rows() == 7, "result clone should preserve affected rows");
+    require(cloned.last_insert_id() == 9, "result clone should preserve insert id");
     require(cloned.warnings() == 2, "result clone should preserve warnings");
-    require(cloned.statusFlags() == 3, "result clone should preserve status flags");
+    require(cloned.status_flags() == 3, "result clone should preserve status flags");
     require(cloned.info() == result.info(), "result clone should preserve info");
     require(cloned.field(0).name().data() != result.field(0).name().data(),
             "result clone should deep-copy field buffers");
@@ -172,14 +172,14 @@ void testResultSetCloneDeepCopiesFieldsAndRows()
             "result clone should deep-copy info buffer");
 }
 
-void testPrepareResultCloneDeepCopiesFields()
+void test_prepare_result_clone_deep_copies_fields()
 {
     DefaultPrepareResult result;
     result.statement_id = 42;
     result.num_params = 1;
     result.num_columns = 1;
-    result.param_fields.push_back(makeField(longValue('p')));
-    result.column_fields.push_back(makeField(longValue('q')));
+    result.param_fields.push_back(make_field(long_value('p')));
+    result.column_fields.push_back(make_field(long_value('q')));
 
     DefaultPrepareResult cloned = result.clone();
     require(cloned.statement_id == 42, "prepare clone should preserve statement id");
@@ -197,11 +197,11 @@ void testPrepareResultCloneDeepCopiesFields()
 
 int main()
 {
-    testCommandBuilderCloneRebuildsViews();
-    testFieldCloneDeepCopiesStrings();
-    testRowCloneDeepCopiesValues();
-    testResultSetCloneDeepCopiesFieldsAndRows();
-    testPrepareResultCloneDeepCopiesFields();
+    test_command_builder_clone_rebuilds_views();
+    test_field_clone_deep_copies_strings();
+    test_row_clone_deep_copies_values();
+    test_result_set_clone_deep_copies_fields_and_rows();
+    test_prepare_result_clone_deep_copies_fields();
     std::cout << "move/clone contract PASSED" << std::endl;
     return 0;
 }

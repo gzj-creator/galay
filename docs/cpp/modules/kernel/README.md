@@ -1,5 +1,9 @@
 # kernel 文档
 
+## 重构复核
+
+- [优化取舍、API 命名迁移及验证记录](21-重构评估.md)
+
 ## 当前基线
 
 - 真相优先级：公开头文件 > 实现 > `examples/` > `test/` > `benchmark/` > Markdown

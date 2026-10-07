@@ -112,7 +112,7 @@ static_assert(std::is_copy_assignable_v<RpcEndpoint>);
 static_assert(std::is_copy_constructible_v<RpcEndpointInfo>);
 static_assert(std::is_copy_assignable_v<RpcEndpointInfo>);
 
-bool viewEquals(RpcPayloadView view, std::string_view expected)
+bool view_equals(RpcPayloadView view, std::string_view expected)
 {
     if (view.size() != expected.size()) {
         return false;
@@ -130,158 +130,158 @@ bool viewEquals(RpcPayloadView view, std::string_view expected)
     return true;
 }
 
-bool requestOwnedCloneDeepCopies()
+bool request_owned_clone_deep_copies()
 {
     std::string payload = "request-owned-payload";
     RpcRequest request(7, "OwnerService", "echo");
-    request.callMode(RpcCallMode::CLIENT_STREAMING);
-    request.endOfStream(false);
+    request.call_mode(RpcCallMode::CLIENT_STREAMING);
+    request.end_of_stream(false);
     request.payload(payload.data(), payload.size());
     if (!request.metadata().insert("traceparent", "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01").has_value()) {
         return false;
     }
 
-    RpcPayloadView before = request.payloadView();
+    RpcPayloadView before = request.payload_view();
     RpcRequest moved(std::move(request));
-    RpcPayloadView moved_view = moved.payloadView();
+    RpcPayloadView moved_view = moved.payload_view();
     if (moved_view.segment1 != moved.payload().data() ||
-        !viewEquals(moved_view, payload) ||
-        moved.requestId() != 7 ||
-        moved.callMode() != RpcCallMode::CLIENT_STREAMING ||
-        moved.endOfStream()) {
+        !view_equals(moved_view, payload) ||
+        moved.request_id() != 7 ||
+        moved.call_mode() != RpcCallMode::CLIENT_STREAMING ||
+        moved.end_of_stream()) {
         return false;
     }
 
     RpcRequest cloned = moved.clone();
-    RpcPayloadView cloned_view = cloned.payloadView();
+    RpcPayloadView cloned_view = cloned.payload_view();
     return cloned_view.segment1 != before.segment1 &&
            cloned_view.segment1 != moved_view.segment1 &&
            cloned_view.segment1 == cloned.payload().data() &&
-           viewEquals(cloned_view, payload) &&
-           cloned.requestId() == moved.requestId() &&
-           cloned.serviceName() == moved.serviceName() &&
-           cloned.methodName() == moved.methodName() &&
-           cloned.callMode() == moved.callMode() &&
-           cloned.endOfStream() == moved.endOfStream() &&
+           view_equals(cloned_view, payload) &&
+           cloned.request_id() == moved.request_id() &&
+           cloned.service_name() == moved.service_name() &&
+           cloned.method_name() == moved.method_name() &&
+           cloned.call_mode() == moved.call_mode() &&
+           cloned.end_of_stream() == moved.end_of_stream() &&
            cloned.metadata().get("traceparent").has_value();
 }
 
-bool requestBorrowedCloneDeepCopies()
+bool request_borrowed_clone_deep_copies()
 {
     const std::string first = "request-";
     const std::string second = "borrowed";
     RpcRequest request(8, "BorrowService", "echo");
-    request.payloadView(RpcPayloadView{first.data(), first.size(), second.data(), second.size()});
+    request.payload_view(RpcPayloadView{first.data(), first.size(), second.data(), second.size()});
 
     RpcRequest cloned = request.clone();
-    RpcPayloadView source_view = request.payloadView();
-    RpcPayloadView cloned_view = cloned.payloadView();
+    RpcPayloadView source_view = request.payload_view();
+    RpcPayloadView cloned_view = cloned.payload_view();
     return source_view.segment1 == first.data() &&
            source_view.segment2 == second.data() &&
            cloned_view.segment1 != first.data() &&
            cloned_view.segment1 != second.data() &&
            cloned_view.segment2 == nullptr &&
            cloned_view.segment1 == cloned.payload().data() &&
-           viewEquals(cloned_view, first + second);
+           view_equals(cloned_view, first + second);
 }
 
-bool responseOwnedCloneDeepCopies()
+bool response_owned_clone_deep_copies()
 {
     std::string payload = "response-owned-payload";
     RpcResponse response(9, RpcErrorCode::OK);
-    response.callMode(RpcCallMode::SERVER_STREAMING);
-    response.endOfStream(false);
+    response.call_mode(RpcCallMode::SERVER_STREAMING);
+    response.end_of_stream(false);
     response.payload(payload.data(), payload.size());
 
-    RpcPayloadView before = response.payloadView();
+    RpcPayloadView before = response.payload_view();
     RpcResponse moved(std::move(response));
-    RpcPayloadView moved_view = moved.payloadView();
+    RpcPayloadView moved_view = moved.payload_view();
     if (moved_view.segment1 != moved.payload().data() ||
-        !viewEquals(moved_view, payload) ||
-        moved.requestId() != 9 ||
-        moved.callMode() != RpcCallMode::SERVER_STREAMING ||
-        moved.endOfStream()) {
+        !view_equals(moved_view, payload) ||
+        moved.request_id() != 9 ||
+        moved.call_mode() != RpcCallMode::SERVER_STREAMING ||
+        moved.end_of_stream()) {
         return false;
     }
 
     RpcResponse cloned = moved.clone();
-    RpcPayloadView cloned_view = cloned.payloadView();
+    RpcPayloadView cloned_view = cloned.payload_view();
     return cloned_view.segment1 != before.segment1 &&
            cloned_view.segment1 != moved_view.segment1 &&
            cloned_view.segment1 == cloned.payload().data() &&
-           viewEquals(cloned_view, payload) &&
-           cloned.requestId() == moved.requestId() &&
-           cloned.errorCode() == moved.errorCode() &&
-           cloned.callMode() == moved.callMode() &&
-           cloned.endOfStream() == moved.endOfStream();
+           view_equals(cloned_view, payload) &&
+           cloned.request_id() == moved.request_id() &&
+           cloned.error_code() == moved.error_code() &&
+           cloned.call_mode() == moved.call_mode() &&
+           cloned.end_of_stream() == moved.end_of_stream();
 }
 
-bool responseBorrowedCloneDeepCopies()
+bool response_borrowed_clone_deep_copies()
 {
     const std::string first = "response-";
     const std::string second = "borrowed";
     RpcResponse response(10, RpcErrorCode::OK);
-    response.payloadView(RpcPayloadView{first.data(), first.size(), second.data(), second.size()});
+    response.payload_view(RpcPayloadView{first.data(), first.size(), second.data(), second.size()});
 
     RpcResponse cloned = response.clone();
-    RpcPayloadView source_view = response.payloadView();
-    RpcPayloadView cloned_view = cloned.payloadView();
+    RpcPayloadView source_view = response.payload_view();
+    RpcPayloadView cloned_view = cloned.payload_view();
     return source_view.segment1 == first.data() &&
            source_view.segment2 == second.data() &&
            cloned_view.segment1 != first.data() &&
            cloned_view.segment1 != second.data() &&
            cloned_view.segment2 == nullptr &&
            cloned_view.segment1 == cloned.payload().data() &&
-           viewEquals(cloned_view, first + second);
+           view_equals(cloned_view, first + second);
 }
 
-bool streamMessageOwnedCloneDeepCopies()
+bool stream_message_owned_clone_deep_copies()
 {
     std::string payload = "stream-owned-payload";
     StreamMessage message(11, payload.data(), payload.size());
-    message.setEnd(true);
-    message.messageType(RpcMessageType::STREAM_DATA);
+    message.set_end(true);
+    message.message_type(RpcMessageType::STREAM_DATA);
 
-    RpcPayloadView before = message.payloadView();
+    RpcPayloadView before = message.payload_view();
     StreamMessage moved(std::move(message));
-    RpcPayloadView moved_view = moved.payloadView();
+    RpcPayloadView moved_view = moved.payload_view();
     if (moved_view.segment1 != moved.payload().data() ||
-        !viewEquals(moved_view, payload) ||
-        moved.streamId() != 11 ||
-        !moved.isEnd() ||
-        moved.messageType() != RpcMessageType::STREAM_DATA) {
+        !view_equals(moved_view, payload) ||
+        moved.stream_id() != 11 ||
+        !moved.is_end() ||
+        moved.message_type() != RpcMessageType::STREAM_DATA) {
         return false;
     }
 
     StreamMessage cloned = moved.clone();
-    RpcPayloadView cloned_view = cloned.payloadView();
+    RpcPayloadView cloned_view = cloned.payload_view();
     return cloned_view.segment1 != before.segment1 &&
            cloned_view.segment1 != moved_view.segment1 &&
            cloned_view.segment1 == cloned.payload().data() &&
-           viewEquals(cloned_view, payload) &&
-           cloned.streamId() == moved.streamId() &&
-           cloned.isEnd() == moved.isEnd() &&
-           cloned.messageType() == moved.messageType();
+           view_equals(cloned_view, payload) &&
+           cloned.stream_id() == moved.stream_id() &&
+           cloned.is_end() == moved.is_end() &&
+           cloned.message_type() == moved.message_type();
 }
 
-bool streamMessageBorrowedCloneDeepCopies()
+bool stream_message_borrowed_clone_deep_copies()
 {
     const std::string first = "stream-";
     const std::string second = "borrowed";
     StreamMessage message;
-    message.streamId(12);
-    message.payloadView(RpcPayloadView{first.data(), first.size(), second.data(), second.size()});
+    message.stream_id(12);
+    message.payload_view(RpcPayloadView{first.data(), first.size(), second.data(), second.size()});
 
     StreamMessage cloned = message.clone();
-    RpcPayloadView source_view = message.payloadView();
-    RpcPayloadView cloned_view = cloned.payloadView();
+    RpcPayloadView source_view = message.payload_view();
+    RpcPayloadView cloned_view = cloned.payload_view();
     return source_view.segment1 == first.data() &&
            source_view.segment2 == second.data() &&
            cloned_view.segment1 != first.data() &&
            cloned_view.segment1 != second.data() &&
            cloned_view.segment2 == nullptr &&
            cloned_view.segment1 == cloned.payload().data() &&
-           viewEquals(cloned_view, first + second);
+           view_equals(cloned_view, first + second);
 }
 
 } // namespace
@@ -292,14 +292,14 @@ int main()
 
     std::cout << "Running RPC Ownership Surface Tests...\n";
 
-    writer.writeTestCase("RpcRequest owned clone deep copies payload", requestOwnedCloneDeepCopies());
-    writer.writeTestCase("RpcRequest borrowed clone deep copies payload", requestBorrowedCloneDeepCopies());
-    writer.writeTestCase("RpcResponse owned clone deep copies payload", responseOwnedCloneDeepCopies());
-    writer.writeTestCase("RpcResponse borrowed clone deep copies payload", responseBorrowedCloneDeepCopies());
-    writer.writeTestCase("StreamMessage owned clone deep copies payload", streamMessageOwnedCloneDeepCopies());
-    writer.writeTestCase("StreamMessage borrowed clone deep copies payload", streamMessageBorrowedCloneDeepCopies());
+    writer.write_test_case("RpcRequest owned clone deep copies payload", request_owned_clone_deep_copies());
+    writer.write_test_case("RpcRequest borrowed clone deep copies payload", request_borrowed_clone_deep_copies());
+    writer.write_test_case("RpcResponse owned clone deep copies payload", response_owned_clone_deep_copies());
+    writer.write_test_case("RpcResponse borrowed clone deep copies payload", response_borrowed_clone_deep_copies());
+    writer.write_test_case("StreamMessage owned clone deep copies payload", stream_message_owned_clone_deep_copies());
+    writer.write_test_case("StreamMessage borrowed clone deep copies payload", stream_message_borrowed_clone_deep_copies());
 
-    writer.writeSummary();
+    writer.write_summary();
 
     std::cout << "Tests completed. Passed: " << writer.passed()
               << ", Failed: " << writer.failed() << "\n";

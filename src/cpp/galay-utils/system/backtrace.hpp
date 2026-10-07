@@ -39,7 +39,7 @@ public:
      * @param skipFrames 跳过的栈帧数（默认 1）
      * @return 堆栈字符串向量
      */
-    static std::vector<std::string> getStackTrace(int maxFrames = 64, int skipFrames = 1) {
+    static std::vector<std::string> get_stack_trace(int maxFrames = 64, int skipFrames = 1) {
         std::vector<std::string> result;
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -63,7 +63,7 @@ public:
             size_t end = frame.find(" + ");
             if (start != std::string::npos && end != std::string::npos) {
                 std::string mangledName = frame.substr(start + 1, end - start - 1);
-                std::string demangled = demangleSymbol(mangledName.c_str());
+                std::string demangled = demangle_symbol(mangledName.c_str());
                 if (demangled != mangledName) {
                     frame = frame.substr(0, start + 1) + demangled + frame.substr(end);
                 }
@@ -73,7 +73,7 @@ public:
             size_t end = frame.find('+');
             if (start != std::string::npos && end != std::string::npos && end > start) {
                 std::string mangledName = frame.substr(start + 1, end - start - 1);
-                std::string demangled = demangleSymbol(mangledName.c_str());
+                std::string demangled = demangle_symbol(mangledName.c_str());
                 if (demangled != mangledName) {
                     frame = frame.substr(0, start + 1) + demangled + frame.substr(end);
                 }
@@ -94,8 +94,8 @@ public:
      * @param maxFrames 最大栈帧数（默认 64）
      * @param skipFrames 跳过的栈帧数（默认 1）
      */
-    static void printStackTrace(int maxFrames = 64, int skipFrames = 1) {
-        auto frames = getStackTrace(maxFrames, skipFrames + 1);
+    static void print_stack_trace(int maxFrames = 64, int skipFrames = 1) {
+        auto frames = get_stack_trace(maxFrames, skipFrames + 1);
 
         std::cerr << "Stack trace (" << frames.size() << " frames):" << std::endl;
         for (size_t i = 0; i < frames.size(); ++i) {
@@ -109,8 +109,8 @@ public:
      * @param skipFrames 跳过的栈帧数（默认 1）
      * @return 格式化的堆栈跟踪字符串
      */
-    static std::string getStackTraceString(int maxFrames = 64, int skipFrames = 1) {
-        auto frames = getStackTrace(maxFrames, skipFrames + 1);
+    static std::string get_stack_trace_string(int maxFrames = 64, int skipFrames = 1) {
+        auto frames = get_stack_trace(maxFrames, skipFrames + 1);
 
         std::ostringstream oss;
         oss << "Stack trace (" << frames.size() << " frames):\n";
@@ -124,18 +124,18 @@ public:
     /**
      * @brief 安装崩溃信号处理器（SIGSEGV、SIGABRT、SIGFPE、SIGILL、SIGBUS）
      */
-    static void installCrashHandlers() {
-        std::signal(SIGSEGV, crashSignalHandler);
-        std::signal(SIGABRT, crashSignalHandler);
-        std::signal(SIGFPE, crashSignalHandler);
-        std::signal(SIGILL, crashSignalHandler);
+    static void install_crash_handlers() {
+        std::signal(SIGSEGV, crash_signal_handler);
+        std::signal(SIGABRT, crash_signal_handler);
+        std::signal(SIGFPE, crash_signal_handler);
+        std::signal(SIGILL, crash_signal_handler);
 #if defined(SIGBUS)
-        std::signal(SIGBUS, crashSignalHandler);
+        std::signal(SIGBUS, crash_signal_handler);
 #endif
     }
 
 private:
-    static void crashSignalHandler(int signal) {
+    static void crash_signal_handler(int signal) {
         const char* signalName = "Unknown";
         switch (signal) {
             case SIGSEGV: signalName = "SIGSEGV (Segmentation fault)"; break;
@@ -150,7 +150,7 @@ private:
 
         std::cerr << "\n=== CRASH DETECTED ===" << std::endl;
         std::cerr << "Signal: " << signalName << " (" << signal << ")" << std::endl;
-        printStackTrace(64, 2);
+        print_stack_trace(64, 2);
         std::cerr << "======================" << std::endl;
 
         std::signal(signal, SIG_DFL);

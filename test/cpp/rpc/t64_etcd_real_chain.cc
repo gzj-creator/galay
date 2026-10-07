@@ -27,12 +27,12 @@ public:
     EtcdEchoService()
         : RpcService("EtcdEcho")
     {
-        registerMethod("echo", &EtcdEchoService::echo);
+        register_method("echo", &EtcdEchoService::echo);
     }
 
     Task<void> echo(RpcContext& ctx)
     {
-        ctx.setPayload(ctx.request().payloadView());
+        ctx.set_payload(ctx.request().payload_view());
         co_return;
     }
 };
@@ -43,7 +43,7 @@ struct TestState {
     std::string error;
 };
 
-bool integrationEnabled()
+bool integration_enabled()
 {
     const char* value = std::getenv("GALAY_IT_ENABLE");
     if (value == nullptr || value[0] == '\0') {
@@ -55,7 +55,7 @@ bool integrationEnabled()
            enabled == "ON";
 }
 
-std::string etcdEndpoint()
+std::string etcd_endpoint()
 {
     const char* value = std::getenv("GALAY_ETCD_ENDPOINT");
     if (value == nullptr || value[0] == '\0') {
@@ -71,7 +71,7 @@ std::string suffix()
            std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(now).count());
 }
 
-uint16_t loopbackPort()
+uint16_t loopback_port()
 {
     return static_cast<uint16_t>(43000 + (::getpid() % 8000));
 }
@@ -88,16 +88,16 @@ void fail(TestState* state, std::string message)
     state->error = std::move(message);
 }
 
-bool payloadEquals(const auto& result, const std::string& expected)
+bool payload_equals(const auto& result, const std::string& expected)
 {
     if (!result.has_value() || !result->has_value() || !result->value().has_value()) {
         return false;
     }
     const auto& payload = result->value()->payload();
-    return result->value()->isOk() && std::string(payload.begin(), payload.end()) == expected;
+    return result->value()->is_ok() && std::string(payload.begin(), payload.end()) == expected;
 }
 
-std::vector<RpcEndpoint> toManagedEndpoints(const std::vector<RpcEndpointInfo>& infos)
+std::vector<RpcEndpoint> to_managed_endpoints(const std::vector<RpcEndpointInfo>& infos)
 {
     std::vector<RpcEndpoint> endpoints;
     for (const auto& info : infos) {
@@ -108,7 +108,7 @@ std::vector<RpcEndpoint> toManagedEndpoints(const std::vector<RpcEndpointInfo>& 
     return endpoints;
 }
 
-Task<void> runManagedCall(RpcStaticDiscovery* discovery, TestState* state)
+Task<void> run_managed_call(RpcStaticDiscovery* discovery, TestState* state)
 {
     RpcManagedClientConfig config;
     config.pool.max_connections_per_endpoint = 1;
@@ -118,7 +118,7 @@ Task<void> runManagedCall(RpcStaticDiscovery* discovery, TestState* state)
     bool connected = false;
     for (int attempt = 0; attempt < 100; ++attempt) {
         auto result = co_await client.call("EtcdEcho", "echo", "etcd-real");
-        if (payloadEquals(result, "etcd-real")) {
+        if (payload_equals(result, "etcd-real")) {
             connected = true;
             break;
         }
@@ -140,18 +140,18 @@ Task<void> runManagedCall(RpcStaticDiscovery* discovery, TestState* state)
 
 int main()
 {
-    if (!integrationEnabled()) {
+    if (!integration_enabled()) {
         std::cout << "[SKIP] set GALAY_IT_ENABLE=1 to run RPC etcd real chain integration test\n";
         return kSkip;
     }
 
-    const std::string endpoint = etcdEndpoint();
+    const std::string endpoint = etcd_endpoint();
     const std::string run_id = suffix();
     const std::string prefix = "/galay/rpc/it/" + run_id;
     const std::string instance_id = "instance-" + run_id;
     const std::string key_template = "{prefix}/custom/{service}/by/{instance}";
     const std::string expected_key = prefix + "/custom/EtcdEcho/by/" + instance_id;
-    const uint16_t port = loopbackPort();
+    const uint16_t port = loopback_port();
 
     RpcEtcdRegistryConfig registry_config;
     registry_config.endpoint = endpoint;
@@ -162,11 +162,11 @@ int main()
     auto server = RpcServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     EtcdEchoService service;
-    auto service_registered = server.registerService(service);
+    auto service_registered = server.register_service(service);
     if (!service_registered.has_value()) {
         std::cerr << "failed to register etcd echo service: "
                   << service_registered.error().message() << "\n";
@@ -190,11 +190,11 @@ int main()
     info.zone = "local";
 
     auto cleanup = [&] {
-        (void)registry.deregisterEndpoint("EtcdEcho", instance_id);
+        (void)registry.deregister_endpoint("EtcdEcho", instance_id);
         server.stop();
     };
 
-    auto endpoint_registered = registry.registerEndpoint(info);
+    auto endpoint_registered = registry.register_endpoint(info);
     if (!endpoint_registered.has_value()) {
         cleanup();
         return fail("register endpoint failed: " + endpoint_registered.error().message());
@@ -231,9 +231,9 @@ int main()
     }
 
     RpcStaticDiscovery discovery;
-    discovery.set("EtcdEcho", toManagedEndpoints(*discovered));
+    discovery.set("EtcdEcho", to_managed_endpoints(*discovered));
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         cleanup();
@@ -242,7 +242,7 @@ int main()
     }
 
     TestState state;
-    auto scheduled = runtime.spawnIO(runManagedCall(&discovery, &state));
+    auto scheduled = runtime.spawn_io(run_managed_call(&discovery, &state));
     if (!scheduled.has_value()) {
         runtime.stop();
         cleanup();
@@ -263,7 +263,7 @@ int main()
         return fail(state.error);
     }
 
-    auto deregistered = registry.deregisterEndpoint("EtcdEcho", instance_id);
+    auto deregistered = registry.deregister_endpoint("EtcdEcho", instance_id);
     if (!deregistered.has_value()) {
         cleanup();
         return fail("deregister endpoint failed: " + deregistered.error().message());

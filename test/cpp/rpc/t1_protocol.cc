@@ -24,7 +24,7 @@ void test_rpc_header(test::TestResultWriter& writer) {
     RpcHeader parsed;
     bool success = parsed.deserialize(buffer);
 
-    writer.writeTestCase("RpcHeader serialize/deserialize",
+    writer.write_test_case("RpcHeader serialize/deserialize",
         success &&
         parsed.m_magic == RPC_MAGIC &&
         parsed.m_version == RPC_VERSION &&
@@ -40,13 +40,13 @@ void test_rpc_request(test::TestResultWriter& writer) {
 
     auto serialized = request.serialize();
 
-    auto result = RpcCodec::decodeRequest(serialized.data(), serialized.size());
+    auto result = RpcCodec::decode_request(serialized.data(), serialized.size());
 
-    writer.writeTestCase("RpcRequest serialize/deserialize",
+    writer.write_test_case("RpcRequest serialize/deserialize",
         result.has_value() &&
-        result->requestId() == 1001 &&
-        result->serviceName() == "TestService" &&
-        result->methodName() == "testMethod" &&
+        result->request_id() == 1001 &&
+        result->service_name() == "TestService" &&
+        result->method_name() == "testMethod" &&
         std::string(result->payload().data(), result->payload().size()) == payload);
 }
 
@@ -57,12 +57,12 @@ void test_rpc_response(test::TestResultWriter& writer) {
 
     auto serialized = response.serialize();
 
-    auto result = RpcCodec::decodeResponse(serialized.data(), serialized.size());
+    auto result = RpcCodec::decode_response(serialized.data(), serialized.size());
 
-    writer.writeTestCase("RpcResponse serialize/deserialize",
+    writer.write_test_case("RpcResponse serialize/deserialize",
         result.has_value() &&
-        result->requestId() == 2001 &&
-        result->errorCode() == RpcErrorCode::OK &&
+        result->request_id() == 2001 &&
+        result->error_code() == RpcErrorCode::OK &&
         std::string(result->payload().data(), result->payload().size()) == payload);
 }
 
@@ -70,31 +70,31 @@ void test_rpc_response_error(test::TestResultWriter& writer) {
     RpcResponse response(3001, RpcErrorCode::SERVICE_NOT_FOUND);
 
     auto serialized = response.serialize();
-    auto result = RpcCodec::decodeResponse(serialized.data(), serialized.size());
+    auto result = RpcCodec::decode_response(serialized.data(), serialized.size());
 
-    writer.writeTestCase("RpcResponse error code",
+    writer.write_test_case("RpcResponse error code",
         result.has_value() &&
-        result->requestId() == 3001 &&
-        result->errorCode() == RpcErrorCode::SERVICE_NOT_FOUND &&
-        !result->isOk());
+        result->request_id() == 3001 &&
+        result->error_code() == RpcErrorCode::SERVICE_NOT_FOUND &&
+        !result->is_ok());
 }
 
 void test_message_length(test::TestResultWriter& writer) {
     RpcRequest request(100, "Svc", "Method");
     auto serialized = request.serialize();
 
-    size_t len = RpcCodec::messageLength(serialized.data(), serialized.size());
+    size_t len = RpcCodec::message_length(serialized.data(), serialized.size());
 
-    writer.writeTestCase("RpcCodec messageLength",
+    writer.write_test_case("RpcCodec messageLength",
         len == serialized.size());
 }
 
 void test_message_length_rejects_bad_header(test::TestResultWriter& writer) {
     char invalid_data[RPC_HEADER_SIZE] = {0};
 
-    const size_t len = RpcCodec::messageLength(invalid_data, sizeof(invalid_data));
+    const size_t len = RpcCodec::message_length(invalid_data, sizeof(invalid_data));
 
-    writer.writeTestCase("RpcCodec messageLength rejects bad header", len == 0);
+    writer.write_test_case("RpcCodec messageLength rejects bad header", len == 0);
 }
 
 void test_invalid_header(test::TestResultWriter& writer) {
@@ -103,7 +103,7 @@ void test_invalid_header(test::TestResultWriter& writer) {
     RpcHeader header;
     bool success = header.deserialize(invalid_data);
 
-    writer.writeTestCase("Invalid header detection", !success);
+    writer.write_test_case("Invalid header detection", !success);
 }
 
 void test_header_rejects_wrong_version(test::TestResultWriter& writer) {
@@ -118,21 +118,21 @@ void test_header_rejects_wrong_version(test::TestResultWriter& writer) {
 
     RpcHeader parsed;
     const bool header_ok = parsed.deserialize(serialized);
-    const auto decoded = RpcCodec::decodeRequest(serialized, sizeof(serialized));
+    const auto decoded = RpcCodec::decode_request(serialized, sizeof(serialized));
 
-    writer.writeTestCase("RpcHeader rejects wrong protocol version",
+    writer.write_test_case("RpcHeader rejects wrong protocol version",
         !header_ok &&
         !decoded.has_value() &&
-        RpcCodec::messageLength(serialized, sizeof(serialized)) == 0);
+        RpcCodec::message_length(serialized, sizeof(serialized)) == 0);
 }
 
 void test_incomplete_data(test::TestResultWriter& writer) {
     char partial_data[8] = {0};
 
     RpcHeader header;
-    auto result = RpcCodec::decodeHeader(partial_data, 8, header);
+    auto result = RpcCodec::decode_header(partial_data, 8, header);
 
-    writer.writeTestCase("Incomplete data detection",
+    writer.write_test_case("Incomplete data detection",
         result == DecodeResult::INCOMPLETE);
 }
 
@@ -144,9 +144,9 @@ void test_decode_rejects_truncated_request_body(test::TestResultWriter& writer) 
     auto serialized = request.serialize();
     serialized.pop_back();
 
-    auto result = RpcCodec::decodeRequest(serialized.data(), serialized.size());
+    auto result = RpcCodec::decode_request(serialized.data(), serialized.size());
 
-    writer.writeTestCase("RpcCodec decodeRequest rejects truncated body",
+    writer.write_test_case("RpcCodec decodeRequest rejects truncated body",
         !result.has_value());
 }
 
@@ -160,9 +160,9 @@ void test_decode_rejects_too_short_response_body(test::TestResultWriter& writer)
     header.serialize(serialized.data());
     serialized[RPC_HEADER_SIZE] = 0;
 
-    auto result = RpcCodec::decodeResponse(serialized.data(), serialized.size());
+    auto result = RpcCodec::decode_response(serialized.data(), serialized.size());
 
-    writer.writeTestCase("RpcCodec decodeResponse rejects too short body",
+    writer.write_test_case("RpcCodec decodeResponse rejects too short body",
         !result.has_value());
 }
 
@@ -175,9 +175,9 @@ void test_decode_rejects_oversized_header_body(test::TestResultWriter& writer) {
     header.m_body_length = RPC_MAX_BODY_SIZE + 1;
     header.serialize(serialized);
 
-    auto result = RpcCodec::decodeRequest(serialized, sizeof(serialized));
+    auto result = RpcCodec::decode_request(serialized, sizeof(serialized));
 
-    writer.writeTestCase("RpcCodec decodeRequest rejects oversized body",
+    writer.write_test_case("RpcCodec decodeRequest rejects oversized body",
         !result.has_value());
 }
 
@@ -185,9 +185,9 @@ void test_empty_payload(test::TestResultWriter& writer) {
     RpcRequest request(500, "EmptyService", "emptyMethod");
     auto serialized = request.serialize();
 
-    auto result = RpcCodec::decodeRequest(serialized.data(), serialized.size());
+    auto result = RpcCodec::decode_request(serialized.data(), serialized.size());
 
-    writer.writeTestCase("Empty payload request",
+    writer.write_test_case("Empty payload request",
         result.has_value() &&
         result->payload().empty());
 }
@@ -198,9 +198,9 @@ void test_large_payload(test::TestResultWriter& writer) {
     request.payload(large_payload.data(), large_payload.size());
 
     auto serialized = request.serialize();
-    auto result = RpcCodec::decodeRequest(serialized.data(), serialized.size());
+    auto result = RpcCodec::decode_request(serialized.data(), serialized.size());
 
-    writer.writeTestCase("Large payload (1MB)",
+    writer.write_test_case("Large payload (1MB)",
         result.has_value() &&
         result->payload().size() == large_payload.size());
 }
@@ -209,41 +209,41 @@ void test_rpc_call_mode_flags(test::TestResultWriter& writer) {
     const std::string payload = "stream-frame";
 
     RpcRequest request(700, "StreamService", "upload");
-    request.callMode(RpcCallMode::CLIENT_STREAMING);
-    request.endOfStream(false);
+    request.call_mode(RpcCallMode::CLIENT_STREAMING);
+    request.end_of_stream(false);
     request.payload(payload.data(), payload.size());
 
     auto request_serialized = request.serialize();
     RpcHeader req_header;
     const bool req_header_ok = req_header.deserialize(request_serialized.data());
-    auto request_decoded = RpcCodec::decodeRequest(request_serialized.data(), request_serialized.size());
+    auto request_decoded = RpcCodec::decode_request(request_serialized.data(), request_serialized.size());
 
-    writer.writeTestCase("RpcRequest call mode flags",
+    writer.write_test_case("RpcRequest call mode flags",
         req_header_ok &&
-        rpcDecodeCallMode(req_header.m_flags) == RpcCallMode::CLIENT_STREAMING &&
-        !rpcIsEndStream(req_header.m_flags) &&
+        rpc_decode_call_mode(req_header.m_flags) == RpcCallMode::CLIENT_STREAMING &&
+        !rpc_is_end_stream(req_header.m_flags) &&
         request_decoded.has_value() &&
-        request_decoded->callMode() == RpcCallMode::CLIENT_STREAMING &&
-        !request_decoded->endOfStream() &&
+        request_decoded->call_mode() == RpcCallMode::CLIENT_STREAMING &&
+        !request_decoded->end_of_stream() &&
         std::string(request_decoded->payload().data(), request_decoded->payload().size()) == payload);
 
     RpcResponse response(700, RpcErrorCode::OK);
-    response.callMode(RpcCallMode::SERVER_STREAMING);
-    response.endOfStream(false);
+    response.call_mode(RpcCallMode::SERVER_STREAMING);
+    response.end_of_stream(false);
     response.payload(payload.data(), payload.size());
 
     auto response_serialized = response.serialize();
     RpcHeader resp_header;
     const bool resp_header_ok = resp_header.deserialize(response_serialized.data());
-    auto response_decoded = RpcCodec::decodeResponse(response_serialized.data(), response_serialized.size());
+    auto response_decoded = RpcCodec::decode_response(response_serialized.data(), response_serialized.size());
 
-    writer.writeTestCase("RpcResponse call mode flags",
+    writer.write_test_case("RpcResponse call mode flags",
         resp_header_ok &&
-        rpcDecodeCallMode(resp_header.m_flags) == RpcCallMode::SERVER_STREAMING &&
-        !rpcIsEndStream(resp_header.m_flags) &&
+        rpc_decode_call_mode(resp_header.m_flags) == RpcCallMode::SERVER_STREAMING &&
+        !rpc_is_end_stream(resp_header.m_flags) &&
         response_decoded.has_value() &&
-        response_decoded->callMode() == RpcCallMode::SERVER_STREAMING &&
-        !response_decoded->endOfStream() &&
+        response_decoded->call_mode() == RpcCallMode::SERVER_STREAMING &&
+        !response_decoded->end_of_stream() &&
         std::string(response_decoded->payload().data(), response_decoded->payload().size()) == payload);
 }
 
@@ -252,18 +252,18 @@ void test_stream_message_borrowed_payload(test::TestResultWriter& writer) {
     static const char segment2[] = "world";
 
     StreamMessage message;
-    message.streamId(900);
-    message.payloadView(RpcPayloadView{
+    message.stream_id(900);
+    message.payload_view(RpcPayloadView{
         segment1,
         sizeof(segment1) - 1,
         segment2,
         sizeof(segment2) - 1
     });
 
-    const auto view = message.payloadView();
-    writer.writeTestCase("StreamMessage borrowed payload view",
-        message.streamId() == 900 &&
-        message.payloadSize() == 10 &&
+    const auto view = message.payload_view();
+    writer.write_test_case("StreamMessage borrowed payload view",
+        message.stream_id() == 900 &&
+        message.payload_size() == 10 &&
         view.segment1_len == 5 &&
         view.segment2_len == 5 &&
         std::string(message.payload().data(), message.payload().size()) == "helloworld");
@@ -274,8 +274,8 @@ void test_stream_message_borrowed_payload_serialize(test::TestResultWriter& writ
     static const char segment2[] = "world";
 
     StreamMessage message;
-    message.streamId(902);
-    message.payloadView(RpcPayloadView{
+    message.stream_id(902);
+    message.payload_view(RpcPayloadView{
         segment1,
         sizeof(segment1) - 1,
         segment2,
@@ -294,7 +294,7 @@ void test_stream_message_borrowed_payload_serialize(test::TestResultWriter& writ
         header.m_body_length == 10 &&
         body == "helloworld";
 
-    writer.writeTestCase("StreamMessage borrowed payload serialize",
+    writer.write_test_case("StreamMessage borrowed payload serialize",
         passed,
         passed ? "" :
             ("type=" + std::to_string(static_cast<int>(header.m_type)) +
@@ -308,7 +308,7 @@ void test_rpc_request_borrowed_payload_serialize(test::TestResultWriter& writer)
     static const char segment2[] = "rpc";
 
     RpcRequest request(820, "BorrowedService", "request");
-    request.payloadView(RpcPayloadView{
+    request.payload_view(RpcPayloadView{
         segment1,
         sizeof(segment1) - 1,
         segment2,
@@ -316,15 +316,15 @@ void test_rpc_request_borrowed_payload_serialize(test::TestResultWriter& writer)
     });
 
     const auto serialized = request.serialize();
-    auto decoded = RpcCodec::decodeRequest(serialized.data(), serialized.size());
+    auto decoded = RpcCodec::decode_request(serialized.data(), serialized.size());
     const bool passed =
         decoded.has_value() &&
-        decoded->requestId() == 820 &&
-        decoded->serviceName() == "BorrowedService" &&
-        decoded->methodName() == "request" &&
+        decoded->request_id() == 820 &&
+        decoded->service_name() == "BorrowedService" &&
+        decoded->method_name() == "request" &&
         std::string(decoded->payload().data(), decoded->payload().size()) == "hellorpc";
 
-    writer.writeTestCase("RpcRequest borrowed payload serialize", passed);
+    writer.write_test_case("RpcRequest borrowed payload serialize", passed);
 }
 
 void test_rpc_request_metadata_round_trip(test::TestResultWriter& writer) {
@@ -335,21 +335,21 @@ void test_rpc_request_metadata_round_trip(test::TestResultWriter& writer) {
     auto inserted_trace = request.metadata().insert("traceparent", "00-abc-def-01");
 
     const auto serialized = request.serialize();
-    auto decoded = RpcCodec::decodeRequest(serialized.data(), serialized.size());
+    auto decoded = RpcCodec::decode_request(serialized.data(), serialized.size());
     auto auth = decoded.has_value() ? decoded->metadata().get("authorization") : std::nullopt;
     auto trace = decoded.has_value() ? decoded->metadata().get("traceparent") : std::nullopt;
     const bool passed =
         inserted_auth.has_value() &&
         inserted_trace.has_value() &&
         decoded.has_value() &&
-        decoded->requestId() == 830 &&
-        decoded->serviceName() == "MetaService" &&
-        decoded->methodName() == "echo" &&
+        decoded->request_id() == 830 &&
+        decoded->service_name() == "MetaService" &&
+        decoded->method_name() == "echo" &&
         auth.has_value() && *auth == "token" &&
         trace.has_value() && *trace == "00-abc-def-01" &&
         std::string(decoded->payload().data(), decoded->payload().size()) == payload;
 
-    writer.writeTestCase("RpcRequest metadata round trip", passed);
+    writer.write_test_case("RpcRequest metadata round trip", passed);
 }
 
 void test_rpc_request_rejects_truncated_metadata(test::TestResultWriter& writer) {
@@ -358,8 +358,8 @@ void test_rpc_request_rejects_truncated_metadata(test::TestResultWriter& writer)
     auto serialized = request.serialize();
     serialized.resize(serialized.size() - 5);
 
-    auto decoded = RpcCodec::decodeRequest(serialized.data(), serialized.size());
-    writer.writeTestCase("RpcRequest rejects truncated metadata",
+    auto decoded = RpcCodec::decode_request(serialized.data(), serialized.size());
+    writer.write_test_case("RpcRequest rejects truncated metadata",
         inserted.has_value() && !decoded.has_value());
 }
 
@@ -368,7 +368,7 @@ void test_rpc_response_borrowed_payload_serialize(test::TestResultWriter& writer
     static const char segment2[] = "rpc";
 
     RpcResponse response(821, RpcErrorCode::OK);
-    response.payloadView(RpcPayloadView{
+    response.payload_view(RpcPayloadView{
         segment1,
         sizeof(segment1) - 1,
         segment2,
@@ -376,24 +376,24 @@ void test_rpc_response_borrowed_payload_serialize(test::TestResultWriter& writer
     });
 
     const auto serialized = response.serialize();
-    auto decoded = RpcCodec::decodeResponse(serialized.data(), serialized.size());
+    auto decoded = RpcCodec::decode_response(serialized.data(), serialized.size());
     const bool passed =
         decoded.has_value() &&
-        decoded->requestId() == 821 &&
-        decoded->errorCode() == RpcErrorCode::OK &&
+        decoded->request_id() == 821 &&
+        decoded->error_code() == RpcErrorCode::OK &&
         std::string(decoded->payload().data(), decoded->payload().size()) == "hellorpc";
 
-    writer.writeTestCase("RpcResponse borrowed payload serialize", passed);
+    writer.write_test_case("RpcResponse borrowed payload serialize", passed);
 }
 
 void test_stream_message_ctor_owns_payload(test::TestResultWriter& writer) {
     const std::string payload = "ctor-payload";
     StreamMessage message(901, payload.data(), payload.size());
 
-    writer.writeTestCase("StreamMessage constructor stores payload",
-        message.streamId() == 901 &&
-        message.payloadSize() == payload.size() &&
-        message.payloadStr() == payload);
+    writer.write_test_case("StreamMessage constructor stores payload",
+        message.stream_id() == 901 &&
+        message.payload_size() == payload.size() &&
+        message.payload_str() == payload);
 }
 
 int main() {
@@ -424,7 +424,7 @@ int main() {
     test_rpc_response_borrowed_payload_serialize(writer);
     test_stream_message_ctor_owns_payload(writer);
 
-    writer.writeSummary();
+    writer.write_summary();
 
     std::cout << "Tests completed. Passed: " << writer.passed()
               << ", Failed: " << writer.failed() << "\n";

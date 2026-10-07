@@ -44,7 +44,7 @@ struct QueueResult {
     double ns_per_e2e;
 };
 
-[[nodiscard]] const char* buildType() {
+[[nodiscard]] const char* build_type() {
 #ifdef NDEBUG
     return "Release";
 #else
@@ -52,7 +52,7 @@ struct QueueResult {
 #endif
 }
 
-[[nodiscard]] std::vector<SpanPayload> makePayloads() {
+[[nodiscard]] std::vector<SpanPayload> make_payloads() {
     std::vector<SpanPayload> payloads;
     payloads.reserve(kIterations);
     for (std::size_t i = 0; i < kIterations; ++i) {
@@ -69,7 +69,7 @@ struct QueueResult {
     return payloads;
 }
 
-[[nodiscard]] std::size_t spanWeight(const SpanPayload& span) noexcept {
+[[nodiscard]] std::size_t span_weight(const SpanPayload& span) noexcept {
     return span.trace_id.size() +
            span.span_id.size() +
            span.name.size() +
@@ -83,7 +83,7 @@ public:
     MoodycamelBatchQueue()
         : m_queue(kIterations),
           m_consumer(m_queue),
-          m_worker(&MoodycamelBatchQueue::workerLoop, this) {
+          m_worker(&MoodycamelBatchQueue::worker_loop, this) {
     }
 
     ~MoodycamelBatchQueue() {
@@ -93,7 +93,7 @@ public:
     MoodycamelBatchQueue(const MoodycamelBatchQueue&) = delete;
     MoodycamelBatchQueue& operator=(const MoodycamelBatchQueue&) = delete;
 
-    bool onEnd(SpanPayload span) {
+    bool on_end(SpanPayload span) {
         if (!span.sampled) {
             return true;
         }
@@ -113,9 +113,9 @@ public:
         return true;
     }
 
-    void forceFlush() {
+    void force_flush() {
         m_flushRequested.store(true, std::memory_order_release);
-        forceNotify();
+        force_notify();
         m_flushDone.acquire();
     }
 
@@ -123,7 +123,7 @@ public:
         if (m_shutdown.exchange(true, std::memory_order_acq_rel)) {
             return;
         }
-        forceNotify();
+        force_notify();
         if (m_worker.joinable()) {
             m_worker.join();
         }
@@ -133,7 +133,7 @@ public:
         return m_exported.load(std::memory_order_relaxed);
     }
 
-    [[nodiscard]] std::size_t observedWeight() const noexcept {
+    [[nodiscard]] std::size_t observed_weight() const noexcept {
         return m_observedWeight.load(std::memory_order_relaxed);
     }
 
@@ -144,12 +144,12 @@ private:
         }
     }
 
-    void forceNotify() noexcept {
+    void force_notify() noexcept {
         m_signalPending.store(true, std::memory_order_release);
         m_signal.release();
     }
 
-    void workerLoop() {
+    void worker_loop() {
         std::vector<SpanPayload> batch(kBatchSize);
         while (true) {
             m_signal.acquire();
@@ -176,14 +176,14 @@ private:
                 break;
             }
             m_queued.fetch_sub(count, std::memory_order_relaxed);
-            exportBatch(std::span<const SpanPayload>(batch.data(), count));
+            export_batch(std::span<const SpanPayload>(batch.data(), count));
         }
     }
 
-    void exportBatch(std::span<const SpanPayload> batch) {
+    void export_batch(std::span<const SpanPayload> batch) {
         std::size_t observed = 0;
         for (const auto& span : batch) {
-            observed += spanWeight(span);
+            observed += span_weight(span);
         }
         m_observedWeight.fetch_add(observed, std::memory_order_relaxed);
         m_exported.fetch_add(batch.size(), std::memory_order_relaxed);
@@ -202,29 +202,29 @@ private:
     std::thread m_worker;
 };
 
-QueueResult runOnce() {
-    auto payloads = makePayloads();
+QueueResult run_once() {
+    auto payloads = make_payloads();
     MoodycamelBatchQueue queue;
 
     const auto start = std::chrono::steady_clock::now();
     bool accepted = true;
     for (auto& payload : payloads) {
-        accepted = queue.onEnd(std::move(payload)) && accepted;
+        accepted = queue.on_end(std::move(payload)) && accepted;
     }
     const auto afterSend = std::chrono::steady_clock::now();
-    queue.forceFlush();
+    queue.force_flush();
     const auto afterFlush = std::chrono::steady_clock::now();
     queue.shutdown();
 
     const auto sendNs = std::chrono::duration_cast<std::chrono::nanoseconds>(afterSend - start).count();
     const auto flushNs = std::chrono::duration_cast<std::chrono::nanoseconds>(afterFlush - afterSend).count();
     const auto totalNs = std::chrono::duration_cast<std::chrono::nanoseconds>(afterFlush - start).count();
-    const bool ok = accepted && queue.exported() == kIterations && queue.observedWeight() != 0;
+    const bool ok = accepted && queue.exported() == kIterations && queue.observed_weight() != 0;
     if (!ok) {
         std::cout << "B8-MoodycamelBatchQueue workload=" << kIterations
-                  << " build=" << buildType()
+                  << " build=" << build_type()
                   << " ok=0 exported=" << queue.exported()
-                  << " observed_weight=" << queue.observedWeight() << '\n';
+                  << " observed_weight=" << queue.observed_weight() << '\n';
     }
 
     return {
@@ -234,10 +234,10 @@ QueueResult runOnce() {
     };
 }
 
-void runBenchmark() {
+void run_benchmark() {
     std::array<QueueResult, kRounds> results{};
     for (auto& result : results) {
-        result = runOnce();
+        result = run_once();
     }
 
     auto best = [](std::array<QueueResult, kRounds> values, auto member) {
@@ -249,7 +249,7 @@ void runBenchmark() {
     };
 
     std::cout << "B8-MoodycamelBatchQueue workload=" << kIterations
-              << " build=" << buildType()
+              << " build=" << build_type()
               << " library=moodycamel"
               << " payload=span_like_owned"
               << " rounds=" << kRounds
@@ -268,9 +268,9 @@ void runBenchmark() {
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    runBenchmark();
+    run_benchmark();
 }

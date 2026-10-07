@@ -31,7 +31,7 @@ void fail(TestState* state, std::shared_ptr<AsyncWaiter<void>> done, std::string
     done->notify();
 }
 
-Task<void> waitingAcquireTask(MysqlConnectionPool* pool,
+Task<void> waiting_acquire_task(MysqlConnectionPool* pool,
                               TestState* state,
                               std::shared_ptr<AsyncWaiter<void>> done)
 {
@@ -51,7 +51,7 @@ Task<void> waitingAcquireTask(MysqlConnectionPool* pool,
     done->notify();
 }
 
-Task<void> runPoolWaiterCase(IOScheduler* scheduler,
+Task<void> run_pool_waiter_case(IOScheduler* scheduler,
                              TestState* state,
                              std::shared_ptr<AsyncWaiter<void>> done,
                              mysql_test::DbTestConfig db_cfg)
@@ -62,7 +62,7 @@ Task<void> runPoolWaiterCase(IOScheduler* scheduler,
                                                    db_cfg.user,
                                                    db_cfg.password,
                                                    db_cfg.database);
-    pool_config.async_config = AsyncMysqlConfig::withTimeout(3s, 3s);
+    pool_config.async_config = AsyncMysqlConfig::with_timeout(3s, 3s);
     pool_config.min_connections = 0;
     pool_config.max_connections = 1;
 
@@ -78,7 +78,7 @@ Task<void> runPoolWaiterCase(IOScheduler* scheduler,
         co_return;
     }
 
-    if (!scheduleTask(scheduler, waitingAcquireTask(&pool, state, done))) {
+    if (!schedule_task(scheduler, waiting_acquire_task(&pool, state, done))) {
         fail(state, done, "failed to schedule waiter task");
         co_return;
     }
@@ -105,25 +105,25 @@ Task<void> runPoolWaiterCase(IOScheduler* scheduler,
 int main()
 {
     std::cout << "=== T14: MySQL Pool Waiter Coroutine Test ===" << std::endl;
-    if (const int skip_code = mysql_test::requireIntegrationEnabledOrSkip("T14-MySQLPoolWaiter");
+    if (const int skip_code = mysql_test::require_integration_enabled_or_skip("T14-MySQLPoolWaiter");
         skip_code != 0) {
         return skip_code;
     }
 
-    const auto db_cfg = mysql_test::loadDbTestConfig();
-    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T14-MySQLPoolWaiter");
+    const auto db_cfg = mysql_test::load_db_test_config();
+    if (const int skip_code = mysql_test::require_db_test_config_or_skip(db_cfg, "T14-MySQLPoolWaiter");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printDbTestConfig(db_cfg);
+    mysql_test::print_db_test_config(db_cfg);
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         std::cerr << "failed to get IO scheduler" << std::endl;
@@ -132,7 +132,7 @@ int main()
 
     TestState state;
     auto done = std::make_shared<AsyncWaiter<void>>();
-    auto result = runtime.blockOnIO(runPoolWaiterCase(scheduler, &state, done, db_cfg));
+    auto result = runtime.block_on_io(run_pool_waiter_case(scheduler, &state, done, db_cfg));
     runtime.stop();
 
     if (!result) {

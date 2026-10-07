@@ -1,6 +1,6 @@
 /**
  * @file t178_tcp_exact.cc
- * @brief 验证 AsyncTcpSocket 的 readExact/writeAll 组合式流操作。
+ * @brief 验证 AsyncTcpSocket 的 read_exact/write_all 组合式流操作。
  */
 
 #include <galay/cpp/galay-kernel/async/async_tcp.h>
@@ -37,9 +37,9 @@ struct State {
     std::atomic<int> result{-2};
 };
 
-Task<void> readTask(State* state)
+Task<void> read_task(State* state)
 {
-    auto result = co_await state->socket.readExact(
+    auto result = co_await state->socket.read_exact(
         state->buffer.data(), state->buffer.size());
     state->result.store(result ? static_cast<int>(result.value())
                                : -static_cast<int>(result.error().code()),
@@ -47,23 +47,23 @@ Task<void> readTask(State* state)
     state->done.store(true, std::memory_order_release);
 }
 
-Task<void> writeTask(State* state)
+Task<void> write_task(State* state)
 {
     constexpr char payload[] = "world";
-    auto result = co_await state->socket.writeAll(payload, sizeof(payload) - 1);
+    auto result = co_await state->socket.write_all(payload, sizeof(payload) - 1);
     state->result.store(result ? static_cast<int>(result.value())
                                : -static_cast<int>(result.error().code()),
                         std::memory_order_release);
     state->done.store(true, std::memory_order_release);
 }
 
-bool setNonBlocking(int fd)
+bool set_non_blocking(int fd)
 {
     const int flags = ::fcntl(fd, F_GETFL, 0);
     return flags >= 0 && ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool waitFor(const std::atomic<bool>& done,
+bool wait_for(const std::atomic<bool>& done,
              std::chrono::milliseconds timeout = 1s)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -87,7 +87,7 @@ int main()
 #else
     int fds[2] = {-1, -1};
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) != 0 ||
-        !setNonBlocking(fds[0]) || !setNonBlocking(fds[1])) {
+        !set_non_blocking(fds[0]) || !set_non_blocking(fds[1])) {
         std::cerr << "[T178] failed to create non-blocking socketpair\n";
         if (fds[0] >= 0) ::close(fds[0]);
         if (fds[1] >= 0) ::close(fds[1]);
@@ -103,7 +103,7 @@ int main()
     }
 
     State state(fds[0]);
-    if (!scheduleTask(scheduler, readTask(&state))) {
+    if (!schedule_task(scheduler, read_task(&state))) {
         std::cerr << "[T178] failed to schedule read task\n";
         scheduler.stop();
         ::close(fds[1]);
@@ -126,7 +126,7 @@ int main()
         return 1;
     }
     if (::send(fds[1], second, sizeof(second) - 1, 0) != 3 ||
-        !waitFor(state.done)) {
+        !wait_for(state.done)) {
         std::cerr << "[T178] readExact did not complete after the remaining bytes\n";
         scheduler.stop();
         ::close(fds[1]);
@@ -143,7 +143,7 @@ int main()
 
     state.done.store(false, std::memory_order_release);
     state.result.store(-2, std::memory_order_release);
-    if (!scheduleTask(scheduler, writeTask(&state)) || !waitFor(state.done)) {
+    if (!schedule_task(scheduler, write_task(&state)) || !wait_for(state.done)) {
         std::cerr << "[T178] writeAll did not complete\n";
         scheduler.stop();
         return 1;

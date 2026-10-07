@@ -20,7 +20,7 @@ using namespace galay::kernel;
 namespace
 {
 
-void updatePeak(std::atomic<int>& peak, int active)
+void update_peak(std::atomic<int>& peak, int active)
 {
     int observed = peak.load(std::memory_order_relaxed);
     while (observed < active &&
@@ -45,7 +45,7 @@ int main()
     for (int i = 0; i < 3; ++i) {
         executor.submit([&]() {
             const int current = active.fetch_add(1, std::memory_order_relaxed) + 1;
-            updatePeak(peak, current);
+            update_peak(peak, current);
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 

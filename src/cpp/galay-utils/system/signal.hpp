@@ -43,17 +43,17 @@ public:
      * @param handler 处理回调函数
      * @return 设置成功返回 true
      */
-    bool setHandler(int signal, Handler handler) {
+    bool set_handler(int signal, Handler handler) {
         std::lock_guard<std::mutex> lock(m_mutex);
 
         m_handlers[signal] = std::move(handler);
 
 #if defined(_WIN32)
-        auto result = std::signal(signal, &SignalHandler::signalCallback);
+        auto result = std::signal(signal, &SignalHandler::signal_callback);
         return result != SIG_ERR;
 #else
         struct sigaction sa{};
-        sa.sa_handler = &SignalHandler::signalCallback;
+        sa.sa_handler = &SignalHandler::signal_callback;
         sa.sa_flags = SA_RESTART;
         sigemptyset(&sa.sa_mask);
         return sigaction(signal, &sa, nullptr) == 0;
@@ -67,9 +67,9 @@ public:
      * @return 所有信号均设置成功返回 true
      */
     template<int... Signals>
-    bool setHandler(Handler handler) {
+    bool set_handler(Handler handler) {
         bool success = true;
-        ((success &= setHandler(Signals, handler)), ...);
+        ((success &= set_handler(Signals, handler)), ...);
         return success;
     }
 
@@ -78,7 +78,7 @@ public:
      * @param signal 信号编号
      * @return 移除成功返回 true
      */
-    bool removeHandler(int signal) {
+    bool remove_handler(int signal) {
         std::lock_guard<std::mutex> lock(m_mutex);
 
         m_handlers.erase(signal);
@@ -99,8 +99,8 @@ public:
      * @param signal 信号编号
      * @return 恢复成功返回 true
      */
-    bool restoreDefault(int signal) {
-        return removeHandler(signal);
+    bool restore_default(int signal) {
+        return remove_handler(signal);
     }
 
     /**
@@ -108,7 +108,7 @@ public:
      * @param signal 信号编号
      * @return 设置成功返回 true
      */
-    bool ignoreSignal(int signal) {
+    bool ignore_signal(int signal) {
         std::lock_guard<std::mutex> lock(m_mutex);
 
         m_handlers.erase(signal);
@@ -129,7 +129,7 @@ public:
      * @param signal 信号编号
      * @return 阻塞成功返回 true（Windows 不支持，返回 false）
      */
-    bool blockSignal(int signal) {
+    bool block_signal(int signal) {
 #if defined(_WIN32)
         return false;
 #else
@@ -145,7 +145,7 @@ public:
      * @param signal 信号编号
      * @return 取消成功返回 true（Windows 不支持，返回 false）
      */
-    bool unblockSignal(int signal) {
+    bool unblock_signal(int signal) {
 #if defined(_WIN32)
         return false;
 #else
@@ -161,7 +161,7 @@ public:
      * @param signal 信号编号
      * @return 已注册返回 true
      */
-    bool hasHandler(int signal) const {
+    bool has_handler(int signal) const {
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_handlers.find(signal) != m_handlers.end();
     }
@@ -173,7 +173,7 @@ private:
     SignalHandler(const SignalHandler&) = delete;
     SignalHandler& operator=(const SignalHandler&) = delete;
 
-    static void signalCallback(int signal) {
+    static void signal_callback(int signal) {
         auto& self = instance();
         std::lock_guard<std::mutex> lock(self.m_mutex);
 

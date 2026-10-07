@@ -52,27 +52,27 @@ Measurement measure()
         for (std::size_t i = 0; i < Batch; ++i) {
             auto& op = operations[i].emplace(
                 OperationKey{static_cast<uint32_t>(i), static_cast<uint32_t>(base + 1)},
-                Waker(detail::ResumeToken::fromNonOwningCCoroutine(&probe)));
-            result.errors += !op.markSubmitted();
-            result.errors += !op.addPhysicalReference();
+                Waker(detail::ResumeToken::from_non_owning_c_coroutine(&probe)));
+            result.errors += !op.mark_submitted();
+            result.errors += !op.add_physical_reference();
         }
         asm volatile("" : : "g"(operations.data()) : "memory");
         for (std::size_t i = 0; i < Batch; ++i) {
             auto& op = *operations[i];
-            result.errors += !op.tryComplete(CompletionReason::kReady, base + i + 1);
-            result.errors += op.tryComplete(CompletionReason::kTimedOut, 0);
+            result.errors += !op.try_complete(CompletionReason::kReady, base + i + 1);
+            result.errors += op.try_complete(CompletionReason::kTimedOut, 0);
         }
         asm volatile("" : : "g"(operations.data()) : "memory");
         for (auto& op : operations) {
-            auto released = op->releasePhysicalReference();
+            auto released = op->release_physical_reference();
             result.errors += !released || !*released;
-            auto resume = op->takeResume();
+            auto resume = op->take_resume();
             if (resume) {
                 std::move(*resume).resume();
             } else {
                 ++result.errors;
             }
-            auto value = op->takeResult();
+            auto value = op->take_result();
             if (value) {
                 result.checksum += *value;
             } else {
@@ -107,7 +107,7 @@ bool run()
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 

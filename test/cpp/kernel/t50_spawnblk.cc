@@ -1,6 +1,6 @@
 /**
  * @file t50_spawnblk.cc
- * @brief 用途：验证 `Runtime::spawnBlocking` 可在线程池中执行阻塞任务。
+ * @brief 用途：验证 `Runtime::spawn_blocking` 可在线程池中执行阻塞任务。
  * 关键覆盖点：阻塞 callable 提交、异步等待结果、与运行时线程分离执行。
  * 通过条件：阻塞任务结果正确返回，测试返回 0。
  */
@@ -19,20 +19,20 @@ using namespace galay::kernel;
 
 namespace {
 
-Runtime makeBlockingRuntime()
+Runtime make_blocking_runtime()
 {
     return RuntimeBuilder()
-        .ioSchedulerCount(0)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(0)
+        .parallel_scheduler_count(1)
         .build();
 }
 
-int runThrowingIntCallableCase()
+int run_throwing_int_callable_case()
 {
-    Runtime runtime = makeBlockingRuntime();
+    Runtime runtime = make_blocking_runtime();
     runtime.start();
 
-    auto handle = runtime.spawnBlocking([]() -> int {
+    auto handle = runtime.spawn_blocking([]() -> int {
         throw std::runtime_error("blocking int callable failed");
     });
     assert(handle.has_value());
@@ -45,12 +45,12 @@ int runThrowingIntCallableCase()
     return 0;
 }
 
-int runThrowingVoidCallableCase()
+int run_throwing_void_callable_case()
 {
-    Runtime runtime = makeBlockingRuntime();
+    Runtime runtime = make_blocking_runtime();
     runtime.start();
 
-    auto handle = runtime.spawnBlocking([]() -> void {
+    auto handle = runtime.spawn_blocking([]() -> void {
         throw std::runtime_error("blocking void callable failed");
     });
     assert(handle.has_value());
@@ -63,7 +63,7 @@ int runThrowingVoidCallableCase()
     return 0;
 }
 
-bool childCasePasses(const char* self, const char* case_name)
+bool child_case_passes(const char* self, const char* case_name)
 {
     pid_t child = fork();
     if (child < 0) {
@@ -101,22 +101,22 @@ bool childCasePasses(const char* self, const char* case_name)
 int main(int argc, char* argv[])
 {
     if (argc == 2 && std::strcmp(argv[1], "--throwing-int") == 0) {
-        return runThrowingIntCallableCase();
+        return run_throwing_int_callable_case();
     }
     if (argc == 2 && std::strcmp(argv[1], "--throwing-void") == 0) {
-        return runThrowingVoidCallableCase();
+        return run_throwing_void_callable_case();
     }
 
-    Runtime runtime = makeBlockingRuntime();
+    Runtime runtime = make_blocking_runtime();
     runtime.start();
 
     auto start = std::chrono::steady_clock::now();
 
-    auto first = runtime.spawnBlocking([]() {
+    auto first = runtime.spawn_blocking([]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         return 11;
     });
-    auto second = runtime.spawnBlocking([]() {
+    auto second = runtime.spawn_blocking([]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         return 31;
     });
@@ -136,8 +136,8 @@ int main(int argc, char* argv[])
 
     runtime.stop();
 
-    assert(childCasePasses(argv[0], "--throwing-int"));
-    assert(childCasePasses(argv[0], "--throwing-void"));
+    assert(child_case_passes(argv[0], "--throwing-int"));
+    assert(child_case_passes(argv[0], "--throwing-void"));
 
     std::cout << "T50-RuntimeSpawnBlocking PASS\n";
     return 0;

@@ -28,10 +28,10 @@ public:
     /**
      * @brief 判断是否应该采样给定的 Span
      * @param parent 父 Span 的上下文，无父 Span 时为 nullptr
-     * @param traceId 待采样 Span 的 TraceId
+     * @param trace_id 待采样 Span 的 TraceId
      * @return 应该采样返回 true，否则返回 false
      */
-    [[nodiscard]] virtual bool shouldSample(const SpanContext* parent, const TraceId& traceId) const noexcept = 0;
+    [[nodiscard]] virtual bool should_sample(const SpanContext* parent, const TraceId& trace_id) const noexcept = 0;
 };
 
 /**
@@ -43,7 +43,7 @@ public:
     /**
      * @brief 始终返回 true
      */
-    [[nodiscard]] bool shouldSample(const SpanContext* parent, const TraceId& traceId) const noexcept override;
+    [[nodiscard]] bool should_sample(const SpanContext* parent, const TraceId& trace_id) const noexcept override;
 };
 
 /**
@@ -55,7 +55,7 @@ public:
     /**
      * @brief 始终返回 false
      */
-    [[nodiscard]] bool shouldSample(const SpanContext* parent, const TraceId& traceId) const noexcept override;
+    [[nodiscard]] bool should_sample(const SpanContext* parent, const TraceId& trace_id) const noexcept override;
 };
 
 /**
@@ -74,7 +74,7 @@ public:
     /**
      * @brief 根据父 Span 采样决策或根采样器决定是否采样
      */
-    [[nodiscard]] bool shouldSample(const SpanContext* parent, const TraceId& traceId) const noexcept override;
+    [[nodiscard]] bool should_sample(const SpanContext* parent, const TraceId& trace_id) const noexcept override;
 
 private:
     const Sampler* m_rootSampler; ///< 根采样器指针（不拥有所有权）
@@ -104,7 +104,7 @@ public:
     /**
      * @brief 根据 TraceId 数值和比例决定是否采样
      */
-    [[nodiscard]] bool shouldSample(const SpanContext* parent, const TraceId& traceId) const noexcept override;
+    [[nodiscard]] bool should_sample(const SpanContext* parent, const TraceId& trace_id) const noexcept override;
 
 private:
     double m_ratio{1.0}; ///< 采样比例
@@ -116,12 +116,12 @@ private:
  * （使用始终采样作为根决策）。
  * @param sampler 采样器指针（不拥有所有权）
  */
-void setSampler(const Sampler* sampler) noexcept;
+void set_sampler(const Sampler* sampler) noexcept;
 
 /**
  * @brief 获取当前进程级全局采样器
  * @return 当前采样器的常量引用
  */
-[[nodiscard]] const Sampler& currentSampler() noexcept;
+[[nodiscard]] const Sampler& current_sampler() noexcept;
 
 } // namespace galay::tracing

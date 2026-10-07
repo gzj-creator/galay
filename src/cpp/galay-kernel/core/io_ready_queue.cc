@@ -10,12 +10,12 @@
 
 namespace galay::kernel {
 
-bool IOReadyQueue::trySteal() {
-    if (!stealing_enabled || hasLocalWork() || hasPendingInjected() || siblings.size() <= 1) {
+bool IOReadyQueue::try_steal() {
+    if (!stealing_enabled || has_local_work() || has_pending_injected() || siblings.size() <= 1) {
         return false;
     }
 
-    const size_t local_capacity = local_ring.remainingCapacity();
+    const size_t local_capacity = local_ring.remaining_capacity();
     if (local_capacity == 0) {
         return false;
     }
@@ -35,7 +35,7 @@ bool IOReadyQueue::trySteal() {
             continue;
         }
 
-        IOReadyQueue* const victim = victim_scheduler->stealWorkerState();
+        IOReadyQueue* const victim = victim_scheduler->steal_worker_state();
         if (victim == nullptr) {
             continue;
         }
@@ -47,17 +47,17 @@ bool IOReadyQueue::trySteal() {
                 std::min(local_capacity, std::max<size_t>(1, victim_size / 2));
             for (; stolen < steal_target; ++stolen) {
                 detail::ReadyEntry entry;
-                if (!victim->stealFront(entry)) {
+                if (!victim->steal_front(entry)) {
                     break;
                 }
                 if (!local_ring.push_back(entry)) {
-                    if (!detail::scheduleReadyEntry(entry) && entry.isValid()) {
-                        victim->fallbackToInject(entry);
+                    if (!detail::schedule_ready_entry(entry) && entry.is_valid()) {
+                        victim->fallback_to_inject(entry);
                     }
                     break;
                 }
             }
-        } else if (victim->hasOwnerDrainedInjected() && victim->hasPendingInjected()) {
+        } else if (victim->has_owner_drained_injected() && victim->has_pending_injected()) {
             size_t attempts = 0;
             while (stolen < local_capacity && attempts < local_capacity) {
                 ++attempts;
@@ -66,18 +66,18 @@ bool IOReadyQueue::trySteal() {
                     break;
                 }
                 victim->injected_outstanding.fetch_sub(1, std::memory_order_acq_rel);
-                if (!entry.isValid()) {
+                if (!entry.is_valid()) {
                     continue;
                 }
-                if (detail::readyEntryResumeOwnerOnly(entry)) {
-                    if (!detail::scheduleReadyEntry(entry) && entry.isValid()) {
-                        victim->fallbackToInject(entry);
+                if (detail::ready_entry_resume_owner_only(entry)) {
+                    if (!detail::schedule_ready_entry(entry) && entry.is_valid()) {
+                        victim->fallback_to_inject(entry);
                     }
                     continue;
                 }
                 if (!local_ring.push_back(entry)) {
-                    if (!detail::scheduleReadyEntry(entry) && entry.isValid()) {
-                        victim->fallbackToInject(entry);
+                    if (!detail::schedule_ready_entry(entry) && entry.is_valid()) {
+                        victim->fallback_to_inject(entry);
                     }
                     break;
                 }

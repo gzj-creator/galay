@@ -213,7 +213,7 @@ PreparedApi prepared(std::shared_ptr<fixture::Lifetime> lifetime) {
             lifetime->calls.fetch_add(1);
             co_yield true;
             co_yield true;
-            require(context.request.bodyStr().empty(), "request survives async handler");
+            require(context.request.body_str().empty(), "request survives async handler");
             require(lifetime->label == "kept-alive" && input.id > 0, "closure/input survive async handler");
             lifetime->completed.fetch_add(1);
             co_return fixture::Output{input.id, lifetime->label, input.verbose.value_or(false)};
@@ -242,16 +242,16 @@ PreparedApi prepared(std::shared_ptr<fixture::Lifetime> lifetime) {
         "/schedule-error/:id", [](ApiContext& context, fixture::GetInput input) {
             auto task = get(context, std::move(input));
             // Inject the awaiter's typed scheduling failure without changing a live scheduler.
-            const auto& ref = galay::kernel::detail::TaskAccess::taskRef(task);
-            galay::kernel::detail::storeTaskError(ref,
+            const auto& ref = galay::kernel::detail::TaskAccess::task_ref(task);
+            galay::kernel::detail::store_task_error(ref,
                 galay::kernel::detail::TaskResultError(galay::kernel::detail::TaskResultErrorCode::kScheduleFailed));
-            galay::kernel::detail::completeTaskState(ref);
+            galay::kernel::detail::complete_task_state(ref);
             return task;
         }, Operation{.id = "scheduleError"}, get_binding).has_value(), "typed scheduling error boundary");
     require(builder.add<HttpMethod::POST, fixture::PostInput, std::string_view>(
         "/borrowed/:id", [](ApiContext& context, fixture::PostInput) -> Task<ApiResult<std::string_view>> {
             co_yield true;
-            co_return std::string_view(context.request.bodyStr());
+            co_return std::string_view(context.request.body_str());
         }, Operation{.id = "borrowedRequest"}, post_binding).has_value(), "request body borrow through suspension");
     require(builder.add<HttpMethod::GET, NoInput, fixture::Number>(
         "/encoding-error", [](ApiContext&, NoInput) -> Task<ApiResult<fixture::Number>> {
@@ -310,9 +310,9 @@ void test_loopback() {
 
     const auto port = free_port();
     HttpServer server(HttpServerBuilder().host("127.0.0.1").port(port)
-        .ioSchedulerCount(1).parallelSchedulerCount(1).build());
+        .io_scheduler_count(1).parallel_scheduler_count(1).build());
     server.start(std::move(api.router));
-    require(server.isRunning(), "HTTP route server starts");
+    require(server.is_running(), "HTTP route server starts");
 
     auto response = call(port, "GET", "/users/7");
     auto output = json::deserialize<fixture::Output>(response.body);

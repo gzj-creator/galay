@@ -17,7 +17,7 @@
 
 namespace galay::utils::detail {
 
-inline std::string_view trimSystemText(std::string_view text)
+inline std::string_view trim_system_text(std::string_view text)
 {
     constexpr std::string_view whitespace = " \t\n\r\f\v";
     const auto first = text.find_first_not_of(whitespace);
@@ -30,9 +30,9 @@ inline std::string_view trimSystemText(std::string_view text)
 // Linux cpulist/nodelist syntax; limit is an exclusive ID bound, never a count
 // of online CPUs/nodes. Empty cpulists are valid for CPU-less NUMA nodes.
 [[nodiscard]] inline std::expected<std::vector<unsigned>, std::error_code>
-parseSystemIds(std::string_view text, unsigned limit, bool allowEmpty = false)
+parse_system_ids(std::string_view text, unsigned limit, bool allowEmpty = false)
 {
-    text = trimSystemText(text);
+    text = trim_system_text(text);
     std::vector<unsigned> ids;
     if (text.empty()) {
         if (allowEmpty) {
@@ -42,9 +42,9 @@ parseSystemIds(std::string_view text, unsigned limit, bool allowEmpty = false)
     }
     while (!text.empty()) {
         const auto comma = text.find(',');
-        const auto item = trimSystemText(text.substr(0, comma));
+        const auto item = trim_system_text(text.substr(0, comma));
         const auto dash = item.find('-');
-        const auto begin = trimSystemText(item.substr(0, dash));
+        const auto begin = trim_system_text(item.substr(0, dash));
         if (begin.empty()) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
         }
@@ -58,7 +58,7 @@ parseSystemIds(std::string_view text, unsigned limit, bool allowEmpty = false)
         }
         unsigned last = first;
         if (dash != std::string_view::npos) {
-            const auto end = trimSystemText(item.substr(dash + 1));
+            const auto end = trim_system_text(item.substr(dash + 1));
             if (end.empty()) {
                 return std::unexpected(std::make_error_code(std::errc::invalid_argument));
             }
@@ -82,7 +82,7 @@ parseSystemIds(std::string_view text, unsigned limit, bool allowEmpty = false)
         if (comma == std::string_view::npos) {
             break;
         }
-        text = trimSystemText(text.substr(comma + 1));
+        text = trim_system_text(text.substr(comma + 1));
         if (text.empty()) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
         }
@@ -95,7 +95,7 @@ parseSystemIds(std::string_view text, unsigned limit, bool allowEmpty = false)
 
 #if defined(__linux__)
 [[nodiscard]] inline std::expected<std::string, std::error_code>
-readSystemText(const std::string& path)
+read_system_text(const std::string& path)
 {
     const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
@@ -130,13 +130,13 @@ readSystemText(const std::string& path)
 }
 
 [[nodiscard]] inline std::expected<std::vector<unsigned>, std::error_code>
-readSystemIds(const std::string& path, unsigned limit, bool allowEmpty = false)
+read_system_ids(const std::string& path, unsigned limit, bool allowEmpty = false)
 {
-    const auto text = readSystemText(path);
+    const auto text = read_system_text(path);
     if (!text) {
         return std::unexpected(text.error());
     }
-    return parseSystemIds(*text, limit, allowEmpty);
+    return parse_system_ids(*text, limit, allowEmpty);
 }
 #endif
 

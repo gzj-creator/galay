@@ -20,7 +20,7 @@ using galay::kernel::Task;
 namespace
 {
 
-std::string nowSuffix()
+std::string now_suffix()
 {
     const auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
     return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(now).count());
@@ -32,7 +32,7 @@ int fail(const std::string& message)
     return 1;
 }
 
-Task<void> runPipelineCase(IOScheduler* scheduler,
+Task<void> run_pipeline_case(IOScheduler* scheduler,
                            std::string endpoint,
                            std::atomic<bool>* done,
                            int* exit_code)
@@ -52,7 +52,7 @@ Task<void> runPipelineCase(IOScheduler* scheduler,
         co_return;
     }
 
-    const std::string base = "/galay-etcd/async-pipeline/" + nowSuffix();
+    const std::string base = "/galay-etcd/async-pipeline/" + now_suffix();
     const std::string k1 = base + "/k1";
     const std::string k2 = base + "/k2";
     const std::string v1 = "seed";
@@ -65,9 +65,9 @@ Task<void> runPipelineCase(IOScheduler* scheduler,
     }
 
     std::vector<AsyncEtcdClient::PipelineOp> ops;
-    ops.push_back(AsyncEtcdClient::PipelineOp::Get(k1));
-    ops.push_back(AsyncEtcdClient::PipelineOp::Put(k2, v2));
-    ops.push_back(AsyncEtcdClient::PipelineOp::Del(k1));
+    ops.push_back(AsyncEtcdClient::PipelineOp::get(k1));
+    ops.push_back(AsyncEtcdClient::PipelineOp::put(k2, v2));
+    ops.push_back(AsyncEtcdClient::PipelineOp::del(k1));
 
     auto pipeline = co_await client.pipeline(std::move(ops));
     if (!pipeline.has_value()) {
@@ -124,17 +124,17 @@ Task<void> runPipelineCase(IOScheduler* scheduler,
 
 int main(int argc, char** argv)
 {
-    if (const int skip_code = etcd_test::requireIntegrationEnabledOrSkip("etcd.pipe");
+    if (const int skip_code = etcd_test::require_integration_enabled_or_skip("etcd.pipe");
         skip_code != 0) {
         return skip_code;
     }
 
     const std::string endpoint = argc > 1 ? argv[1] : "http://127.0.0.1:2379";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         return fail("failed to get io scheduler");
@@ -142,7 +142,7 @@ int main(int argc, char** argv)
 
     std::atomic<bool> done{false};
     int exit_code = 1;
-    if (!galay::kernel::scheduleTask(scheduler, runPipelineCase(scheduler, endpoint, &done, &exit_code))) {
+    if (!galay::kernel::schedule_task(scheduler, run_pipeline_case(scheduler, endpoint, &done, &exit_code))) {
         runtime.stop();
         return fail("failed to schedule async pipeline task");
     }

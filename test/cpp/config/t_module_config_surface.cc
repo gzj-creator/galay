@@ -36,26 +36,26 @@ int main()
     galay::mysql::MysqlConfig mysql =
         galay::mysql::MysqlConfig::create("127.0.0.1", 3306, "user", "password", "db");
     galay::mysql::AsyncMysqlConfig mysql_io =
-        galay::mysql::AsyncMysqlConfig::withTimeout(std::chrono::seconds(1), std::chrono::seconds(2));
+        galay::mysql::AsyncMysqlConfig::with_timeout(std::chrono::seconds(1), std::chrono::seconds(2));
 
     galay::mongo::MongoConfig mongo =
         galay::mongo::MongoConfig::create("127.0.0.1", 27017, "admin");
     galay::mongo::AsyncMongoConfig mongo_io =
-        galay::mongo::AsyncMongoConfig::withTimeout(std::chrono::seconds(1), std::chrono::seconds(2));
+        galay::mongo::AsyncMongoConfig::with_timeout(std::chrono::seconds(1), std::chrono::seconds(2));
 
     galay::redis::RedisSessionConfig redis_session;
     redis_session.host = "127.0.0.1";
     redis_session.port = 6379;
     redis_session.connect_timeout_ms = 5000;
     galay::redis::AsyncRedisConfig redis_io =
-        galay::redis::AsyncRedisConfig::withRecvTimeout(std::chrono::seconds(2));
+        galay::redis::AsyncRedisConfig::with_recv_timeout(std::chrono::seconds(2));
 
     return mysql.port == 3306 &&
-           mysql_io.isRecvTimeoutEnabled() &&
+           mysql_io.is_recv_timeout_enabled() &&
            mongo.port == 27017 &&
-           mongo_io.isSendTimeoutEnabled() &&
+           mongo_io.is_send_timeout_enabled() &&
            redis_session.port == 6379 &&
-           redis_io.isRecvTimeoutEnabled()
+           redis_io.is_recv_timeout_enabled()
         ? 0
         : 1;
 }

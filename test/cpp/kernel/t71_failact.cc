@@ -42,8 +42,8 @@ struct ContinueThenFailMachine {
         return MachineAction<result_type>::fail(IOError(kParamInvalid, 0));
     }
 
-    void onRead(std::expected<size_t, IOError>) {}
-    void onWrite(std::expected<size_t, IOError>) {}
+    void on_read(std::expected<size_t, IOError>) {}
+    void on_write(std::expected<size_t, IOError>) {}
 
 private:
     bool m_continued = false;
@@ -54,7 +54,7 @@ struct TestState {
     std::atomic<bool> success{false};
 };
 
-Task<void> failTask(TestState* state) {
+Task<void> fail_task(TestState* state) {
     IOController controller(GHandle::invalid());
     StateMachineAwaitable<ContinueThenFailMachine> awaitable(
         &controller,
@@ -69,7 +69,7 @@ Task<void> failTask(TestState* state) {
     state->done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -89,9 +89,9 @@ int main() {
     scheduler.start();
 
     TestState state;
-    scheduleTask(scheduler, failTask(&state));
+    schedule_task(scheduler, fail_task(&state));
 
-    const bool completed = waitUntil(state.done);
+    const bool completed = wait_until(state.done);
     scheduler.stop();
 
     if (!completed) {

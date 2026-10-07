@@ -22,11 +22,11 @@ thread_local detail::CurrentContextState t_currentContext;
 
 namespace detail {
 
-CurrentContextState currentContextState() {
+CurrentContextState current_context_state() {
     return t_currentContext;
 }
 
-void setCurrentContextState(CurrentContextState state) {
+void set_current_context_state(CurrentContextState state) {
     if (!state.spanContext.has_value()) {
         state.tracestate.clear();
     }
@@ -35,16 +35,16 @@ void setCurrentContextState(CurrentContextState state) {
 
 } // namespace detail
 
-std::optional<TraceContext> currentContext() noexcept {
+std::optional<TraceContext> current_context() noexcept {
     if (!t_currentContext.spanContext.has_value()) {
         return std::nullopt;
     }
-    return t_currentContext.spanContext->toTraceContext(t_currentContext.tracestate);
+    return t_currentContext.spanContext->to_trace_context(t_currentContext.tracestate);
 }
 
-void setCurrentContext(std::optional<TraceContext> context) {
+void set_current_context(std::optional<TraceContext> context) {
     if (!context.has_value()) {
-        clearCurrentContext();
+        clear_current_context();
         return;
     }
     t_currentContext = detail::CurrentContextState{
@@ -53,7 +53,7 @@ void setCurrentContext(std::optional<TraceContext> context) {
     };
 }
 
-void clearCurrentContext() noexcept {
+void clear_current_context() noexcept {
     t_currentContext.spanContext.reset();
     t_currentContext.tracestate.clear();
 }

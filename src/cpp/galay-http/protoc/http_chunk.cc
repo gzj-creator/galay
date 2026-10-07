@@ -18,7 +18,7 @@ namespace {
 
 constexpr size_t kMaxChunkLineSize = 1024;
 
-std::expected<size_t, HttpError> parseChunkSizeLine(const std::string& size_buffer)
+std::expected<size_t, HttpError> parse_chunk_size_line(const std::string& size_buffer)
 {
     const size_t extension_pos = size_buffer.find(';');
     std::string_view size_text(size_buffer.data(),
@@ -40,7 +40,7 @@ std::expected<size_t, HttpError> parseChunkSizeLine(const std::string& size_buff
     return parsed_size;
 }
 
-bool wouldExceedBodyLimit(size_t body_size, size_t append_size, size_t max_body_size)
+bool would_exceed_body_limit(size_t body_size, size_t append_size, size_t max_body_size)
 {
     if (max_body_size == 0) {
         return false;
@@ -54,7 +54,7 @@ bool wouldExceedBodyLimit(size_t body_size, size_t append_size, size_t max_body_
 } // namespace
 
 std::expected<std::pair<bool, size_t>, HttpError>
-Chunk::fromIOVec(const std::vector<iovec>& iovecs, std::string& chunk_data)
+Chunk::from_io_vec(const std::vector<iovec>& iovecs, std::string& chunk_data)
 {
     size_t total_consumed = 0;
     size_t iov_idx = 0;
@@ -67,7 +67,7 @@ Chunk::fromIOVec(const std::vector<iovec>& iovecs, std::string& chunk_data)
         std::string size_buffer;
         size_t consumed = 0;
 
-        if (!findCRLF(iovecs, iov_idx, byte_idx, size_buffer, consumed)) {
+        if (!find_crlf(iovecs, iov_idx, byte_idx, size_buffer, consumed)) {
             // 没有找到完整的size行，数据不完整
             if (has_parsed_chunk) {
                 // 已经解析了至少一个chunk，返回已消费的字节数
@@ -93,7 +93,7 @@ Chunk::fromIOVec(const std::vector<iovec>& iovecs, std::string& chunk_data)
 
         // 解析chunk size（十六进制）
         size_t chunk_size = 0;
-        auto parsed_chunk_size = parseChunkSizeLine(size_buffer);
+        auto parsed_chunk_size = parse_chunk_size_line(size_buffer);
         if (!parsed_chunk_size) {
             return std::unexpected(parsed_chunk_size.error());
         }
@@ -104,7 +104,7 @@ Chunk::fromIOVec(const std::vector<iovec>& iovecs, std::string& chunk_data)
             // 最后一个chunk，需要消费trailing \r\n
             std::string trailing_buffer;
             size_t trailing_consumed = 0;
-            if (!findCRLF(iovecs, iov_idx, byte_idx, trailing_buffer, trailing_consumed)) {
+            if (!find_crlf(iovecs, iov_idx, byte_idx, trailing_buffer, trailing_consumed)) {
                 // trailing CRLF不完整
                 if (has_parsed_chunk) {
                     return std::pair<bool, size_t>{false, total_consumed};
@@ -144,7 +144,7 @@ Chunk::fromIOVec(const std::vector<iovec>& iovecs, std::string& chunk_data)
         }
 
         // 读取chunk data
-        size_t read_bytes = readData(iovecs, iov_idx, byte_idx, chunk_size, chunk_data);
+        size_t read_bytes = read_data(iovecs, iov_idx, byte_idx, chunk_size, chunk_data);
         if (read_bytes != chunk_size) {
             return std::unexpected(HttpError(kInvalidChunkFormat));
         }
@@ -235,7 +235,7 @@ ChunkParser::parse(const std::vector<iovec>& iovecs,
                         return std::unexpected(HttpError(kInvalidChunkFormat));
                     }
 
-                    auto parsed_chunk_size = parseChunkSizeLine(m_line_buffer);
+                    auto parsed_chunk_size = parse_chunk_size_line(m_line_buffer);
                     if (!parsed_chunk_size) {
                         return std::unexpected(parsed_chunk_size.error());
                     }
@@ -247,7 +247,7 @@ ChunkParser::parse(const std::vector<iovec>& iovecs,
                     if (m_current_chunk_size == 0) {
                         m_phase = Phase::kLastTrailerLine;
                     } else {
-                        if (wouldExceedBodyLimit(chunk_data.size(), m_current_chunk_size, max_body_size)) {
+                        if (would_exceed_body_limit(chunk_data.size(), m_current_chunk_size, max_body_size)) {
                             return std::unexpected(HttpError(
                                 kRequestEntityTooLarge,
                                 "chunked body exceeds max body size"));
@@ -372,12 +372,12 @@ void ChunkParser::reset()
     m_last_produced_chunk = false;
 }
 
-std::string Chunk::toChunk(const std::string& data, bool is_last)
+std::string Chunk::to_chunk(const std::string& data, bool is_last)
 {
-    return toChunk(data.data(), data.size(), is_last);
+    return to_chunk(data.data(), data.size(), is_last);
 }
 
-std::string Chunk::toChunk(const char* data, size_t length, bool is_last)
+std::string Chunk::to_chunk(const char* data, size_t length, bool is_last)
 {
     if (is_last) {
         return "0\r\n\r\n";
@@ -391,7 +391,7 @@ std::string Chunk::toChunk(const char* data, size_t length, bool is_last)
     return result;
 }
 
-bool Chunk::findCRLF(const std::vector<iovec>& iovecs,
+bool Chunk::find_crlf(const std::vector<iovec>& iovecs,
                      size_t start_iov,
                      size_t start_byte,
                      std::string& buffer,
@@ -491,7 +491,7 @@ bool Chunk::findCRLF(const std::vector<iovec>& iovecs,
     return false;
 }
 
-size_t Chunk::readData(const std::vector<iovec>& iovecs,
+size_t Chunk::read_data(const std::vector<iovec>& iovecs,
                        size_t start_iov,
                        size_t start_byte,
                        size_t length,

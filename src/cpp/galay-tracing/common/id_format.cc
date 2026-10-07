@@ -27,7 +27,7 @@ namespace {
 
 constexpr char kHexDigits[] = "0123456789abcdef";
 
-std::uint64_t fallbackWord() noexcept {
+std::uint64_t fallback_word() noexcept {
     static std::atomic<std::uint64_t> counter{0};
     const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
     auto value = static_cast<std::uint64_t>(now) ^
@@ -38,7 +38,7 @@ std::uint64_t fallbackWord() noexcept {
     return value;
 }
 
-bool fillWithCsprng(std::byte* data, std::size_t size) noexcept {
+bool fill_with_csprng(std::byte* data, std::size_t size) noexcept {
     if (data == nullptr || size == 0) {
         return false;
     }
@@ -46,8 +46,8 @@ bool fillWithCsprng(std::byte* data, std::size_t size) noexcept {
 }
 
 template <std::size_t N>
-void fillRandomBytes(std::array<std::byte, N>& bytes) noexcept {
-    if (fillWithCsprng(bytes.data(), bytes.size())) {
+void fill_random_bytes(std::array<std::byte, N>& bytes) noexcept {
+    if (fill_with_csprng(bytes.data(), bytes.size())) {
         return;
     }
 
@@ -55,7 +55,7 @@ void fillRandomBytes(std::array<std::byte, N>& bytes) noexcept {
     int remaining = 0;
     for (auto& byte : bytes) {
         if (remaining == 0) {
-            chunk = fallbackWord();
+            chunk = fallback_word();
             remaining = 8;
         }
         byte = static_cast<std::byte>(chunk & 0xffU);
@@ -66,14 +66,14 @@ void fillRandomBytes(std::array<std::byte, N>& bytes) noexcept {
 
 } // namespace
 
-bool parseHex(std::string_view hex, std::byte* out, std::size_t len) noexcept {
+bool parse_hex(std::string_view hex, std::byte* out, std::size_t len) noexcept {
     if (out == nullptr || hex.size() != len * 2) {
         return false;
     }
 
     for (std::size_t i = 0; i < len; ++i) {
-        const int high = hexValue(hex[i * 2]);
-        const int low = hexValue(hex[i * 2 + 1]);
+        const int high = hex_value(hex[i * 2]);
+        const int low = hex_value(hex[i * 2 + 1]);
         if (high < 0 || low < 0) {
             return false;
         }
@@ -82,7 +82,7 @@ bool parseHex(std::string_view hex, std::byte* out, std::size_t len) noexcept {
     return true;
 }
 
-bool formatHex(const std::byte* bytes, std::size_t byteLen, char* out, std::size_t outLen) noexcept {
+bool format_hex(const std::byte* bytes, std::size_t byteLen, char* out, std::size_t outLen) noexcept {
     if (bytes == nullptr || out == nullptr || outLen < byteLen * 2) {
         return false;
     }
@@ -95,19 +95,19 @@ bool formatHex(const std::byte* bytes, std::size_t byteLen, char* out, std::size
     return true;
 }
 
-TraceId makeRandomTraceId() noexcept {
+TraceId make_random_trace_id() noexcept {
     TraceId::Bytes bytes{};
     do {
-        fillRandomBytes(bytes);
-    } while (!hasNonZeroByte(bytes.data(), bytes.size()));
+        fill_random_bytes(bytes);
+    } while (!has_non_zero_byte(bytes.data(), bytes.size()));
     return TraceId(bytes);
 }
 
-SpanId makeRandomSpanId() noexcept {
+SpanId make_random_span_id() noexcept {
     SpanId::Bytes bytes{};
     do {
-        fillRandomBytes(bytes);
-    } while (!hasNonZeroByte(bytes.data(), bytes.size()));
+        fill_random_bytes(bytes);
+    } while (!has_non_zero_byte(bytes.data(), bytes.size()));
     return SpanId(bytes);
 }
 
@@ -116,11 +116,11 @@ SpanId makeRandomSpanId() noexcept {
 namespace galay::tracing {
 
 TraceId TraceId::random() noexcept {
-    return detail::makeRandomTraceId();
+    return detail::make_random_trace_id();
 }
 
 SpanId SpanId::random() noexcept {
-    return detail::makeRandomSpanId();
+    return detail::make_random_span_id();
 }
 
 } // namespace galay::tracing

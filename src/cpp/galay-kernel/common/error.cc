@@ -56,7 +56,7 @@ bool IOError::contains(uint64_t error, IOErrorCode code)
  * @param system_code 平台错误（POSIX 为 errno，Windows 为 WSAGetLastError）
  */
 IOError::IOError(IOErrorCode io_error_code, uint32_t system_code)
-    : m_code(makeErrorCode(io_error_code, system_code))
+    : m_code(make_error_code(io_error_code, system_code))
 {
 }
 
@@ -101,7 +101,7 @@ void IOError::reset()
  * @param system_code 高 32 位
  * @return 打包的 64 位错误码
  */
-uint64_t IOError::makeErrorCode(IOErrorCode io_error_code, uint32_t system_code)
+uint64_t IOError::make_error_code(IOErrorCode io_error_code, uint32_t system_code)
 {
     uint64_t ret = system_code;
     ret = ret << 32;

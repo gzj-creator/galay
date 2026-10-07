@@ -84,7 +84,7 @@ public:
             return -1;
         }
 
-        moveToFront(&node);
+        move_to_front(&node);
         return node.value;
     }
 
@@ -92,12 +92,12 @@ public:
         auto& node = m_nodes[static_cast<std::size_t>(key)];
         if (node.used) {
             node.value = value;
-            moveToFront(&node);
+            move_to_front(&node);
             return;
         }
 
         if (m_size == m_capacity) {
-            evictLru();
+            evict_lru();
         } else {
             ++m_size;
         }
@@ -105,7 +105,7 @@ public:
         node.used = true;
         node.key = key;
         node.value = value;
-        addToFront(&node);
+        add_to_front(&node);
     }
 
 private:
@@ -124,22 +124,22 @@ private:
         node->next = nullptr;
     }
 
-    void addToFront(Node* node) {
+    void add_to_front(Node* node) {
         node->prev = &m_head;
         node->next = m_head.next;
         m_head.next->prev = node;
         m_head.next = node;
     }
 
-    void moveToFront(Node* node) {
+    void move_to_front(Node* node) {
         if (node->prev == &m_head) {
             return;
         }
         remove(node);
-        addToFront(node);
+        add_to_front(node);
     }
 
-    void evictLru() {
+    void evict_lru() {
         auto* node = m_tail.prev;
         remove(node);
         node->used = false;
@@ -153,7 +153,7 @@ private:
     Node m_tail;
 };
 
-std::vector<Operation> makeOperations(std::size_t count,
+std::vector<Operation> make_operations(std::size_t count,
                                       int keySpace,
                                       int putPercent,
                                       std::uint32_t seed) {
@@ -194,7 +194,7 @@ Result measure(std::string name, const std::vector<Operation>& ops, Fn&& fn) {
     return Result{std::move(name), checksum, nsPerOp, mopsPerSec};
 }
 
-void printResult(const Result& baseline, const Result& result) {
+void print_result(const Result& baseline, const Result& result) {
     const double relative = result.nsPerOp / baseline.nsPerOp;
     std::cout << std::left << std::setw(28) << result.name
               << std::right << std::setw(12) << std::fixed << std::setprecision(2) << result.nsPerOp
@@ -204,7 +204,7 @@ void printResult(const Result& baseline, const Result& result) {
 }
 
 template<typename BuildFn>
-Result bestOf(std::string name,
+Result best_of(std::string name,
               int repeats,
               const std::vector<Operation>& ops,
               BuildFn&& build) {
@@ -220,7 +220,7 @@ Result bestOf(std::string name,
     return best;
 }
 
-void runScenario(const std::string& scenario,
+void run_scenario(const std::string& scenario,
                  const std::vector<Operation>& ops,
                  int capacity,
                  int maxKey) {
@@ -234,7 +234,7 @@ void runScenario(const std::string& scenario,
               << std::setw(12) << "Mops/s"
               << std::setw(13) << "vs fastest" << '\n';
 
-    auto fastest = bestOf("LeetCode array-index LRU", repeats, ops,
+    auto fastest = best_of("LeetCode array-index LRU", repeats, ops,
         [capacity, maxKey](std::string name, const std::vector<Operation>& scenarioOps) {
             LeetCodeArrayLru cache(capacity, maxKey);
             for (int key = 0; key < capacity; ++key) {
@@ -251,7 +251,7 @@ void runScenario(const std::string& scenario,
             });
         });
 
-    auto stl = bestOf("LeetCode list+hash LRU", repeats, ops,
+    auto stl = best_of("LeetCode list+hash LRU", repeats, ops,
         [capacity](std::string name, const std::vector<Operation>& scenarioOps) {
             LeetCodeListLru cache(capacity);
             for (int key = 0; key < capacity; ++key) {
@@ -268,7 +268,7 @@ void runScenario(const std::string& scenario,
             });
         });
 
-    auto galayCapacity = bestOf("galay LruCache capacity", repeats, ops,
+    auto galayCapacity = best_of("galay LruCache capacity", repeats, ops,
         [capacity](std::string name, const std::vector<Operation>& scenarioOps) {
             galay::utils::LruCache<int, int> cache(static_cast<std::size_t>(capacity));
             for (int key = 0; key < capacity; ++key) {
@@ -286,7 +286,7 @@ void runScenario(const std::string& scenario,
             });
         });
 
-    auto galayCapacityStats = bestOf("galay LruCache stats on", repeats, ops,
+    auto galayCapacityStats = best_of("galay LruCache stats on", repeats, ops,
         [capacity](std::string name, const std::vector<Operation>& scenarioOps) {
             using Cache = galay::utils::LruCache<int,
                                                  int,
@@ -316,7 +316,7 @@ void runScenario(const std::string& scenario,
             return result;
         });
 
-    auto galayTtl = bestOf("galay LruCache TTL", repeats, ops,
+    auto galayTtl = best_of("galay LruCache TTL", repeats, ops,
         [capacity](std::string name, const std::vector<Operation>& scenarioOps) {
             using namespace std::chrono_literals;
             using Cache = galay::utils::LruCache<int, int>;
@@ -337,34 +337,34 @@ void runScenario(const std::string& scenario,
             });
         });
 
-    printResult(fastest, fastest);
-    printResult(fastest, stl);
-    printResult(fastest, galayCapacity);
-    printResult(fastest, galayCapacityStats);
-    printResult(fastest, galayTtl);
+    print_result(fastest, fastest);
+    print_result(fastest, stl);
+    print_result(fastest, galayCapacity);
+    print_result(fastest, galayCapacityStats);
+    print_result(fastest, galayTtl);
 }
 
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     constexpr std::size_t opCount = 5'000'000;
     constexpr int capacity = 8192;
 
-    const auto readHeavy = makeOperations(opCount, capacity, 10, 0xC0FFEE);
-    const auto mixedEviction = makeOperations(opCount, capacity * 8, 50, 0xBADC0DE);
-    const auto writeHeavy = makeOperations(opCount, capacity * 8, 90, 0xDEADBEEF);
+    const auto readHeavy = make_operations(opCount, capacity, 10, 0xC0FFEE);
+    const auto mixedEviction = make_operations(opCount, capacity * 8, 50, 0xBADC0DE);
+    const auto writeHeavy = make_operations(opCount, capacity * 8, 90, 0xDEADBEEF);
 
     std::cout << "LRU cache benchmark\n";
     std::cout << "Build with -O3 -DNDEBUG. Best result of 5 runs per implementation.\n";
     std::cout << "LeetCode array-index LRU is a specialized int-key baseline using fixed key range.\n";
 
-    runScenario("read-heavy hot set (10% put / 90% get)", readHeavy, capacity, capacity - 1);
-    runScenario("mixed eviction (50% put / 50% get)", mixedEviction, capacity, capacity * 8 - 1);
-    runScenario("write-heavy eviction (90% put / 10% get)", writeHeavy, capacity, capacity * 8 - 1);
+    run_scenario("read-heavy hot set (10% put / 90% get)", readHeavy, capacity, capacity - 1);
+    run_scenario("mixed eviction (50% put / 50% get)", mixedEviction, capacity, capacity * 8 - 1);
+    run_scenario("write-heavy eviction (90% put / 10% get)", writeHeavy, capacity, capacity * 8 - 1);
 
     return static_cast<int>(g_sink == 0xFFFFFFFFFFFFFFFFull);
 }

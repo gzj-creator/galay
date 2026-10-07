@@ -36,7 +36,7 @@ void fail(TestState* state, std::string message)
     state->error = std::move(message);
 }
 
-std::optional<bool> parseBoolEnv(const char* value)
+std::optional<bool> parse_bool_env(const char* value)
 {
     if (value == nullptr) {
         return std::nullopt;
@@ -51,7 +51,7 @@ std::optional<bool> parseBoolEnv(const char* value)
     return std::nullopt;
 }
 
-bool parsePort(std::string_view text, int32_t* out_port)
+bool parse_port(std::string_view text, int32_t* out_port)
 {
     if (text.empty() || out_port == nullptr) {
         return false;
@@ -67,7 +67,7 @@ bool parsePort(std::string_view text, int32_t* out_port)
     return true;
 }
 
-std::optional<ParsedRedissUrl> parseRedissUrl(std::string_view url)
+std::optional<ParsedRedissUrl> parse_rediss_url(std::string_view url)
 {
     constexpr std::string_view prefix = "rediss://";
     if (!url.starts_with(prefix)) {
@@ -98,7 +98,7 @@ std::optional<ParsedRedissUrl> parseRedissUrl(std::string_view url)
             if (rest[close + 1] != ':') {
                 return std::nullopt;
             }
-            if (!parsePort(rest.substr(close + 2), &parsed.port)) {
+            if (!parse_port(rest.substr(close + 2), &parsed.port)) {
                 return std::nullopt;
             }
         }
@@ -111,7 +111,7 @@ std::optional<ParsedRedissUrl> parseRedissUrl(std::string_view url)
             return std::nullopt;
         }
         parsed.host = std::string(rest.substr(0, colon));
-        if (parsed.host.empty() || !parsePort(rest.substr(colon + 1), &parsed.port)) {
+        if (parsed.host.empty() || !parse_port(rest.substr(colon + 1), &parsed.port)) {
             return std::nullopt;
         }
         return parsed;
@@ -121,13 +121,13 @@ std::optional<ParsedRedissUrl> parseRedissUrl(std::string_view url)
     return parsed.host.empty() ? std::nullopt : std::optional<ParsedRedissUrl>(std::move(parsed));
 }
 
-RedissClientConfig tlsConfigFromEnv()
+RedissClientConfig tls_config_from_env()
 {
     RedissClientConfig tls_config;
     if (const char* ca_path = std::getenv("GALAY_REDIS_TLS_CA")) {
         tls_config.ca_path = ca_path;
     }
-    if (const auto verify_peer = parseBoolEnv(std::getenv("GALAY_REDIS_TLS_VERIFY_PEER"))) {
+    if (const auto verify_peer = parse_bool_env(std::getenv("GALAY_REDIS_TLS_VERIFY_PEER"))) {
         tls_config.verify_peer = *verify_peer;
     }
     if (const char* server_name = std::getenv("GALAY_REDIS_TLS_SERVER_NAME")) {
@@ -136,7 +136,7 @@ RedissClientConfig tlsConfigFromEnv()
     return tls_config;
 }
 
-Task<bool> runClosedPortLeakCase(IOScheduler* scheduler, TestState* state)
+Task<bool> run_closed_port_leak_case(IOScheduler* scheduler, TestState* state)
 {
     RedissConnectionPoolConfig config = RedissConnectionPoolConfig::create("127.0.0.1", 1, 0, 1);
     config.initial_connections = 0;
@@ -159,7 +159,7 @@ Task<bool> runClosedPortLeakCase(IOScheduler* scheduler, TestState* state)
         co_return false;
     }
 
-    const auto stats = pool.getStats();
+    const auto stats = pool.get_stats();
     if (stats.total_connections != 0 ||
         stats.available_connections != 0 ||
         stats.active_connections != 0 ||
@@ -173,7 +173,7 @@ Task<bool> runClosedPortLeakCase(IOScheduler* scheduler, TestState* state)
     co_return true;
 }
 
-Task<bool> runLiveAcquireConnectedCase(IOScheduler* scheduler, TestState* state)
+Task<bool> run_live_acquire_connected_case(IOScheduler* scheduler, TestState* state)
 {
     const char* url_value = std::getenv("GALAY_REDIS_TLS_URL");
     if (url_value == nullptr || std::string_view(url_value).empty()) {
@@ -181,7 +181,7 @@ Task<bool> runLiveAcquireConnectedCase(IOScheduler* scheduler, TestState* state)
         co_return true;
     }
 
-    auto parsed = parseRedissUrl(url_value);
+    auto parsed = parse_rediss_url(url_value);
     if (!parsed.has_value()) {
         fail(state, "invalid GALAY_REDIS_TLS_URL");
         co_return false;
@@ -191,7 +191,7 @@ Task<bool> runLiveAcquireConnectedCase(IOScheduler* scheduler, TestState* state)
     config.initial_connections = 0;
     config.connect_timeout = 5s;
     config.acquire_timeout = 5s;
-    config.tls_config = tlsConfigFromEnv();
+    config.tls_config = tls_config_from_env();
 
     RedissConnectionPool pool(scheduler, config);
     auto init = co_await pool.initialize().timeout(5s);
@@ -222,13 +222,13 @@ Task<bool> runLiveAcquireConnectedCase(IOScheduler* scheduler, TestState* state)
     co_return true;
 }
 
-Task<void> runRedissPoolAcquireConnected(IOScheduler* scheduler, TestState* state)
+Task<void> run_rediss_pool_acquire_connected(IOScheduler* scheduler, TestState* state)
 {
-    if (!co_await runClosedPortLeakCase(scheduler, state)) {
+    if (!co_await run_closed_port_leak_case(scheduler, state)) {
         state->done.store(true, std::memory_order_release);
         co_return;
     }
-    if (!co_await runLiveAcquireConnectedCase(scheduler, state)) {
+    if (!co_await run_live_acquire_connected_case(scheduler, state)) {
         state->done.store(true, std::memory_order_release);
         co_return;
     }
@@ -239,10 +239,10 @@ Task<void> runRedissPoolAcquireConnected(IOScheduler* scheduler, TestState* stat
 
 int main()
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         std::cerr << "Failed to get IO scheduler\n";
@@ -250,7 +250,7 @@ int main()
     }
 
     TestState state;
-    if (!scheduleTask(scheduler, runRedissPoolAcquireConnected(scheduler, &state))) {
+    if (!schedule_task(scheduler, run_rediss_pool_acquire_connected(scheduler, &state))) {
         runtime.stop();
         std::cerr << "failed to schedule Rediss pool acquire test\n";
         return 1;

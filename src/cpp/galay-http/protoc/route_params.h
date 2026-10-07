@@ -25,7 +25,7 @@ namespace galay::http
  * @brief 路由参数小容器
  * @details 常见路由参数数量很少，前 8 个参数保存在对象内联数组中；
  *          超出后才使用 overflow vector。该类型拥有参数名和值，不保存外部
- *          path 的 string_view，因而可安全从 HttpRouter::findHandler 返回。
+ *          path 的 string_view，因而可安全从 HttpRouter::find_handler 返回。
  * @note 该类型不是线程安全容器；应只在单个请求处理路径内移动和读取。
  */
 class RouteParams
@@ -102,22 +102,22 @@ public:
      */
     bool emplace(std::string_view name, std::string_view value)
     {
-        if (Entry* existing = findMutable(name); existing != nullptr) {
-            assignString(existing->second, value);
+        if (Entry* existing = find_mutable(name); existing != nullptr) {
+            assign_string(existing->second, value);
             return true;
         }
 
         if (m_inline_size < kInlineCapacity) {
             Entry& entry = m_inline[m_inline_size];
-            assignString(entry.first, name);
-            assignString(entry.second, value);
+            assign_string(entry.first, name);
+            assign_string(entry.second, value);
             ++m_inline_size;
             return true;
         }
 
         Entry next;
-        assignString(next.first, name);
-        assignString(next.second, value);
+        assign_string(next.first, name);
+        assign_string(next.second, value);
         Entry& inserted = m_overflow.emplace_back(std::move(next));
         return inserted.first.size() == name.size();
     }
@@ -159,36 +159,36 @@ public:
      */
     std::string& operator[](std::string_view name)
     {
-        if (Entry* existing = findMutable(name); existing != nullptr) {
+        if (Entry* existing = find_mutable(name); existing != nullptr) {
             return existing->second;
         }
 
         if (m_inline_size < kInlineCapacity) {
             Entry& entry = m_inline[m_inline_size];
-            assignString(entry.first, name);
+            assign_string(entry.first, name);
             entry.second.clear();
             ++m_inline_size;
             return entry.second;
         }
 
         Entry next;
-        assignString(next.first, name);
+        assign_string(next.first, name);
         Entry& inserted = m_overflow.emplace_back(std::move(next));
         return inserted.second;
     }
 
     /**
-     * @brief 物化为 std::map，兼容旧 routeParams() API。
+     * @brief 物化为 std::map，兼容旧 route_params() API。
      * @return 参数 map 副本
      */
-    std::map<std::string, std::string> toMap() const
+    std::map<std::string, std::string> to_map() const
     {
         std::map<std::string, std::string> params;
         for (size_t i = 0; i < m_inline_size; ++i) {
-            upsertMap(params, m_inline[i]);
+            upsert_map(params, m_inline[i]);
         }
         for (const auto& entry : m_overflow) {
-            upsertMap(params, entry);
+            upsert_map(params, entry);
         }
         return params;
     }
@@ -197,13 +197,13 @@ private:
     RouteParams(const RouteParams&) = delete;
     RouteParams& operator=(const RouteParams&) = delete;
 
-    static void assignString(std::string& target, std::string_view value)
+    static void assign_string(std::string& target, std::string_view value)
     {
         std::string next(value);
         target.swap(next);
     }
 
-    static void upsertMap(std::map<std::string, std::string>& params, const Entry& entry)
+    static void upsert_map(std::map<std::string, std::string>& params, const Entry& entry)
     {
         auto [it, inserted] = params.emplace(entry.first, entry.second);
         if (!inserted) {
@@ -212,7 +212,7 @@ private:
         }
     }
 
-    Entry* findMutable(std::string_view name) noexcept
+    Entry* find_mutable(std::string_view name) noexcept
     {
         for (size_t i = 0; i < m_inline_size; ++i) {
             if (m_inline[i].first == name) {

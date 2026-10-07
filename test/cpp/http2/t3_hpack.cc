@@ -27,19 +27,19 @@ int main() {
     assert(decoded.value() == headers);
 
     HpackDecoder target_decoder;
-    auto target = target_decoder.decodeRequestTarget(block);
+    auto target = target_decoder.decode_request_target(block);
     assert(target.has_value());
     assert(target->method == "GET");
     assert(target->path == "/");
 
-    auto conditional_block = encoder.encodeStateless({
+    auto conditional_block = encoder.encode_stateless({
         {":method", "GET"},
         {":path", "/files/small.txt"},
         {"if-none-match", "\"etag-1\""},
         {"range", "bytes=0-99"},
     });
     HpackDecoder conditional_decoder;
-    auto conditional_target = conditional_decoder.decodeRequestTarget(conditional_block);
+    auto conditional_target = conditional_decoder.decode_request_target(conditional_block);
     assert(conditional_target.has_value());
     assert(conditional_target->method == "GET");
     assert(conditional_target->path == "/files/small.txt");
@@ -47,21 +47,21 @@ int main() {
     assert(conditional_target->range == "bytes=0-99");
 
     // 2) Dynamic table size update contract
-    encoder.setMaxTableSize(128);
+    encoder.set_max_table_size(128);
     std::vector<Http2HeaderField> headers2 = {
         {"x-custom", "value"}
     };
     auto block2 = encoder.encode(headers2);
     auto decoded2 = decoder.decode(block2);
     assert(decoded2.has_value());
-    assert(decoder.dynamicTable().maxSize() == 128);
-    auto target2 = target_decoder.decodeRequestTarget(block2);
+    assert(decoder.dynamic_table().max_size() == 128);
+    auto target2 = target_decoder.decode_request_target(block2);
     assert(target2.has_value());
-    assert(target_decoder.dynamicTable().maxSize() == 128);
+    assert(target_decoder.dynamic_table().max_size() == 128);
 
     // 3) Header-list-size limit contract
     HpackDecoder limited_decoder;
-    limited_decoder.setMaxHeaderListSize(48);
+    limited_decoder.set_max_header_list_size(48);
     auto too_large = encoder.encode({
         {"x-long-header-name", "123456789012345678901234567890"}
     });

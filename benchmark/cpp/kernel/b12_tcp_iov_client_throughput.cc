@@ -33,7 +33,7 @@ using namespace galay::kernel;
 
 namespace {
 
-constexpr const char* benchmarkBackend() {
+constexpr const char* benchmark_backend() {
 #if defined(USE_KQUEUE)
     return "kqueue";
 #elif defined(USE_IOURING)
@@ -45,7 +45,7 @@ constexpr const char* benchmarkBackend() {
 #endif
 }
 
-constexpr const char* benchmarkBuildMode() {
+constexpr const char* benchmark_build_mode() {
 #ifdef NDEBUG
     return "release-like";
 #else
@@ -56,7 +56,7 @@ constexpr const char* benchmarkBuildMode() {
 constexpr size_t kPrefixBytes = 64;
 constexpr size_t kBodyBytes = 8192;
 
-size_t fillMessageIovecs(std::array<struct iovec, 2>& iovecs, std::string_view message) {
+size_t fill_message_iovecs(std::array<struct iovec, 2>& iovecs, std::string_view message) {
     const size_t prefixLen = std::min(message.size(), kPrefixBytes);
     const size_t bodyLen = message.size() > prefixLen ? message.size() - prefixLen : 0;
 
@@ -71,7 +71,7 @@ size_t fillMessageIovecs(std::array<struct iovec, 2>& iovecs, std::string_view m
     return 2;
 }
 
-size_t fillResponseIovecs(std::array<struct iovec, 2>& iovecs,
+size_t fill_response_iovecs(std::array<struct iovec, 2>& iovecs,
                           char* prefix,
                           size_t prefixLen,
                           char* body,
@@ -102,9 +102,9 @@ struct BenchConfig {
 };
 
 // 单个客户端连接的压测协程 - 使用用户自管双段 iovec
-Task<void> benchClient(const BenchConfig& config, [[maybe_unused]] int clientId) {
+Task<void> bench_client(const BenchConfig& config, [[maybe_unused]] int clientId) {
     AsyncTcpSocket client;
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     Host serverHost(IPType::IPV4, config.host, config.port);
     auto connectResult = co_await client.connect(serverHost);
@@ -130,8 +130,8 @@ Task<void> benchClient(const BenchConfig& config, [[maybe_unused]] int clientId)
 
     // 准备测试数据
     std::string message(config.messageSize, 'X');
-    const size_t writeCount = fillMessageIovecs(writeIovecs, message);
-    const size_t readCount = fillResponseIovecs(readIovecs,
+    const size_t writeCount = fill_message_iovecs(writeIovecs, message);
+    const size_t readCount = fill_response_iovecs(readIovecs,
                                                 respPrefix.data(),
                                                 respPrefix.size(),
                                                 respBody.data(),
@@ -167,8 +167,8 @@ Task<void> benchClient(const BenchConfig& config, [[maybe_unused]] int clientId)
 }
 
 // 统计打印线程
-void statsThread(const BenchConfig& config) {
-    if (g_connected_latch && !g_connected_latch->waitFor(std::chrono::seconds(5))) {
+void stats_thread(const BenchConfig& config) {
+    if (g_connected_latch && !g_connected_latch->wait_for(std::chrono::seconds(5))) {
         std::cout << "[warmup] connection gate timed out, starting with available clients" << std::endl;
     }
     if (g_start_gate) {
@@ -214,7 +214,7 @@ void statsThread(const BenchConfig& config) {
     }
 }
 
-void printUsage(const char* program) {
+void print_usage(const char* program) {
     std::cout << "Usage: " << program << " [options]\n"
               << "Options:\n"
               << "  -h <host>        Server host (default: 127.0.0.1)\n"
@@ -226,7 +226,7 @@ void printUsage(const char* program) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -245,7 +245,7 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
             config.duration = std::atoi(argv[++i]);
         } else if (strcmp(argv[i], "--help") == 0) {
-            printUsage(argv[0]);
+            print_usage(argv[0]);
             return 0;
         }
     }
@@ -255,8 +255,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Connections: " << config.connections << std::endl;
     std::cout << "Message Size: " << config.messageSize << " bytes" << std::endl;
     std::cout << "Duration: " << config.duration << " seconds" << std::endl;
-    std::cout << "Meta: backend=" << benchmarkBackend()
-              << " | build=" << benchmarkBuildMode()
+    std::cout << "Meta: backend=" << benchmark_backend()
+              << " | build=" << benchmark_build_mode()
               << " | role=client"
               << " | io_mode=iov-2seg"
               << " | scenario=tcp-echo"
@@ -283,11 +283,11 @@ int main(int argc, char* argv[]) {
     g_connected_latch = &connected_latch;
     g_start_gate = &start_gate;
 
-    std::thread stats(statsThread, std::ref(config));
+    std::thread stats(stats_thread, std::ref(config));
 
     std::cout << "Starting " << config.connections << " connections..." << std::endl;
     for (int i = 0; i < config.connections; i++) {
-        scheduleTask(scheduler, benchClient(config, i));
+        schedule_task(scheduler, bench_client(config, i));
     }
 
     stats.join();

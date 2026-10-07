@@ -35,7 +35,7 @@ HandleOption::HandleOption(GHandle handle)
  * @details POSIX 上使用 fcntl 清除 O_NONBLOCK，Windows 上使用 ioctlsocket
  * @return 成功返回 void，失败返回 IOError
  */
-std::expected<void, IOError> HandleOption::handleBlock()
+std::expected<void, IOError> HandleOption::handle_block()
 {
 #if defined(_WIN32) || defined(_WIN64)
     u_long mode = 0;
@@ -59,7 +59,7 @@ std::expected<void, IOError> HandleOption::handleBlock()
  * @details POSIX 上使用 fcntl 设置 O_NONBLOCK，Windows 上使用 ioctlsocket
  * @return 成功返回 void，失败返回 IOError
  */
-std::expected<void, IOError> HandleOption::handleNonBlock()
+std::expected<void, IOError> HandleOption::handle_non_block()
 {
 #if defined(_WIN32) || defined(_WIN64)
     u_long mode = 1;
@@ -82,7 +82,7 @@ std::expected<void, IOError> HandleOption::handleNonBlock()
  * @brief 启用 SO_REUSEADDR 以允许在 TIME_WAIT 期间重新绑定
  * @return 成功返回 void，失败返回 IOError
  */
-std::expected<void, IOError> HandleOption::handleReuseAddr()
+std::expected<void, IOError> HandleOption::handle_reuse_addr()
 {
     int opt = 1;
 #if defined(_WIN32) || defined(_WIN64)
@@ -103,11 +103,11 @@ std::expected<void, IOError> HandleOption::handleReuseAddr()
  * @details Windows 上回退到 SO_REUSEADDR
  * @return 成功返回 void，失败返回 IOError
  */
-std::expected<void, IOError> HandleOption::handleReusePort()
+std::expected<void, IOError> HandleOption::handle_reuse_port()
 {
 #if defined(_WIN32) || defined(_WIN64)
     // Windows 没有 SO_REUSEPORT，改用 SO_REUSEADDR
-    return handleReuseAddr();
+    return handle_reuse_addr();
 #else
     int opt = 1;
     if (setsockopt(m_handle.fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) != 0) {
@@ -122,7 +122,7 @@ std::expected<void, IOError> HandleOption::handleReusePort()
  * @param enabled true 表示仅 IPv6；false 表示允许系统支持的 dual-stack
  * @return 成功返回 void，失败返回 IOError
  */
-std::expected<void, IOError> HandleOption::handleIPv6Only(bool enabled)
+std::expected<void, IOError> HandleOption::handle_ipv6_only(bool enabled)
 {
     if (m_handle.fd < 0) {
         return std::unexpected(IOError(kParamInvalid, 0));
@@ -151,7 +151,7 @@ std::expected<void, IOError> HandleOption::handleIPv6Only(bool enabled)
  * @brief 通过 TCP_NODELAY 禁用 Nagle 算法
  * @return 成功返回 void，句柄无效时返回 IOError（kParamInvalid）
  */
-std::expected<void, IOError> HandleOption::handleTcpNoDelay()
+std::expected<void, IOError> HandleOption::handle_tcp_no_delay()
 {
     if (m_handle.fd < 0) {
         return std::unexpected(IOError(kParamInvalid, 0));
@@ -176,7 +176,7 @@ std::expected<void, IOError> HandleOption::handleTcpNoDelay()
  * @brief 在支持的平台上启用 SO_NOSIGPIPE
  * @return 成功返回 void，失败返回 IOError；不支持该选项的平台为空操作
  */
-std::expected<void, IOError> HandleOption::handleNoSigPipe()
+std::expected<void, IOError> HandleOption::handle_no_sig_pipe()
 {
     if (m_handle.fd < 0) {
         return std::unexpected(IOError(kParamInvalid, 0));
@@ -197,7 +197,7 @@ std::expected<void, IOError> HandleOption::handleNoSigPipe()
  * @param seconds accept 返回前等待第一个数据包的最大时间
  * @return 成功返回 void，句柄无效或 seconds <= 0 时返回 IOError
  */
-std::expected<void, IOError> HandleOption::handleTcpDeferAccept(int seconds)
+std::expected<void, IOError> HandleOption::handle_tcp_defer_accept(int seconds)
 {
     if (m_handle.fd < 0) {
         return std::unexpected(IOError(kParamInvalid, 0));

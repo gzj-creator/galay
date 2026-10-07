@@ -119,7 +119,7 @@ struct BenchmarkState {
     Snapshot settled;
 };
 
-bool parsePositive(const char* text, std::size_t& value) noexcept
+bool parse_positive(const char* text, std::size_t& value) noexcept
 {
     if (text == nullptr || *text == '\0') return false;
     char* end = nullptr;
@@ -129,15 +129,15 @@ bool parsePositive(const char* text, std::size_t& value) noexcept
     return true;
 }
 
-bool parseSeconds(const char* text, std::chrono::seconds& value) noexcept
+bool parse_seconds(const char* text, std::chrono::seconds& value) noexcept
 {
     std::size_t parsed = 0;
-    if (!parsePositive(text, parsed)) return false;
+    if (!parse_positive(text, parsed)) return false;
     value = std::chrono::seconds(parsed);
     return true;
 }
 
-bool parseConfig(int argc, char** argv, Config& config) noexcept
+bool parse_config(int argc, char** argv, Config& config) noexcept
 {
     for (int index = 1; index < argc; ++index) {
         const std::string_view option(argv[index]);
@@ -146,16 +146,16 @@ bool parseConfig(int argc, char** argv, Config& config) noexcept
             if (index + 1 >= argc) return false;
             const char* value = argv[++index];
             if (option == "--clients") {
-                if (!parsePositive(value, config.clients)) return false;
+                if (!parse_positive(value, config.clients)) return false;
             } else if (option == "--workers") {
-                if (!parsePositive(value, config.workers)) return false;
+                if (!parse_positive(value, config.workers)) return false;
             } else if (option == "--size") {
-                if (!parsePositive(value, config.payload_bytes) ||
+                if (!parse_positive(value, config.payload_bytes) ||
                     config.payload_bytes > kMaxPayloadBytes) return false;
             } else if (option == "--warmup") {
-                if (!parseSeconds(value, config.warmup)) return false;
+                if (!parse_seconds(value, config.warmup)) return false;
             } else if (option == "--duration") {
-                if (!parseSeconds(value, config.duration)) return false;
+                if (!parse_seconds(value, config.duration)) return false;
             }
         } else {
             return false;
@@ -164,19 +164,19 @@ bool parseConfig(int argc, char** argv, Config& config) noexcept
     return config.clients > 0 && config.workers > 0 && config.payload_bytes > 0;
 }
 
-void printUsage(const char* program)
+void print_usage(const char* program)
 {
     std::cout << "Usage: " << program
               << " [--clients N] [--workers N] [--size BYTES]"
                  " [--warmup SECONDS] [--duration SECONDS]\n";
 }
 
-bool countTraffic(Phase phase) noexcept
+bool count_traffic(Phase phase) noexcept
 {
     return phase == Phase::measured || phase == Phase::drain;
 }
 
-void addCounter(std::atomic<std::uint64_t>& counter, std::uint64_t value = 1) noexcept
+void add_counter(std::atomic<std::uint64_t>& counter, std::uint64_t value = 1) noexcept
 {
     const std::uint64_t previous = counter.fetch_add(value, std::memory_order_relaxed);
     if (previous > std::numeric_limits<std::uint64_t>::max() - value) {
@@ -184,7 +184,7 @@ void addCounter(std::atomic<std::uint64_t>& counter, std::uint64_t value = 1) no
     }
 }
 
-void recordError(BenchmarkState& state,
+void record_error(BenchmarkState& state,
                  const boost::system::error_code& error) noexcept
 {
     if (!error) return;
@@ -216,7 +216,7 @@ Snapshot snapshot(const BenchmarkState& state) noexcept
 // A measured-window snapshot can end with replies in flight.  Only the
 // post-drain snapshot is eligible for the success gate, and all four packet
 // counters plus byte counters must reconcile there.
-bool settledCountersMatch(const Snapshot& values) noexcept
+bool settled_counters_match(const Snapshot& values) noexcept
 {
     return values.client_sent == values.client_received &&
            values.client_received == values.server_received &&
@@ -226,7 +226,7 @@ bool settledCountersMatch(const Snapshot& values) noexcept
            values.server_bytes_received == values.server_bytes_sent;
 }
 
-void resetMeasurementCounters(BenchmarkState& state) noexcept
+void reset_measurement_counters(BenchmarkState& state) noexcept
 {
     state.counters.client_sent.store(0, std::memory_order_relaxed);
     state.counters.client_received.store(0, std::memory_order_relaxed);
@@ -240,7 +240,7 @@ void resetMeasurementCounters(BenchmarkState& state) noexcept
     state.counters.shutdown_errors.store(0, std::memory_order_relaxed);
 }
 
-bool enableReusePort(udp::socket& socket) noexcept
+bool enable_reuse_port(udp::socket& socket) noexcept
 {
 #if defined(SO_REUSEPORT)
     int enabled = 1;
@@ -252,7 +252,7 @@ bool enableReusePort(udp::socket& socket) noexcept
 #endif
 }
 
-bool setSocketBuffer(udp::socket& socket, int option, int bytes) noexcept
+bool set_socket_buffer(udp::socket& socket, int option, int bytes) noexcept
 {
 #if defined(SO_RCVBUF) && defined(SO_SNDBUF)
     return ::setsockopt(socket.native_handle(), SOL_SOCKET, option,
@@ -265,7 +265,7 @@ bool setSocketBuffer(udp::socket& socket, int option, int bytes) noexcept
 #endif
 }
 
-awaitable<ReceiveResult> receiveWithTimeout(
+awaitable<ReceiveResult> receive_with_timeout(
     udp::socket& socket,
     asio::mutable_buffer buffer,
     std::chrono::milliseconds timeout)
@@ -294,38 +294,38 @@ awaitable<ReceiveResult> receiveWithTimeout(
     };
 }
 
-void stopSockets(BenchmarkState& state) noexcept
+void stop_sockets(BenchmarkState& state) noexcept
 {
     for (auto& socket : state.server_sockets) {
         boost::system::error_code close_error;
         socket.close(close_error);
-        recordError(state, close_error);
+        record_error(state, close_error);
     }
 }
 
-void finishClient(BenchmarkState& state) noexcept
+void finish_client(BenchmarkState& state) noexcept
 {
     state.counters.clients_done.fetch_add(1, std::memory_order_release);
 }
 
-void finishServer(BenchmarkState& state) noexcept
+void finish_server(BenchmarkState& state) noexcept
 {
     state.counters.servers_done.fetch_add(1, std::memory_order_release);
 }
 
-awaitable<void> serverWorker(BenchmarkState& state,
+awaitable<void> server_worker(BenchmarkState& state,
                              udp::socket& socket)
 {
     std::vector<char> buffer(state.config.payload_bytes);
     for (;;) {
-        const ReceiveResult result = co_await receiveWithTimeout(
+        const ReceiveResult result = co_await receive_with_timeout(
             socket, asio::buffer(buffer.data(), state.config.payload_bytes),
             kServerReceiveTimeout);
         if (result.timed_out) {
             continue;
         }
         if (result.error) {
-            recordError(state, result.error);
+            record_error(state, result.error);
             break;
         }
         const std::size_t received = result.bytes;
@@ -334,9 +334,9 @@ awaitable<void> serverWorker(BenchmarkState& state,
             continue;
         }
         const bool measured_packet = buffer[0] == kMeasuredMarker;
-        if (measured_packet && countTraffic(state.phase.load(std::memory_order_acquire))) {
-            addCounter(state.counters.server_received);
-            addCounter(state.counters.server_bytes_received, received);
+        if (measured_packet && count_traffic(state.phase.load(std::memory_order_acquire))) {
+            add_counter(state.counters.server_received);
+            add_counter(state.counters.server_bytes_received, received);
         }
 
         boost::system::error_code send_error;
@@ -344,16 +344,16 @@ awaitable<void> serverWorker(BenchmarkState& state,
             asio::buffer(buffer.data(), received), result.peer,
             redirect_error(use_awaitable, send_error));
         if (send_error || sent != received) {
-            if (send_error) recordError(state, send_error);
+            if (send_error) record_error(state, send_error);
             else state.counters.runtime_errors.fetch_add(1, std::memory_order_relaxed);
             continue;
         }
-        if (measured_packet && countTraffic(state.phase.load(std::memory_order_acquire))) {
-            addCounter(state.counters.server_sent);
-            addCounter(state.counters.server_bytes_sent, sent);
+        if (measured_packet && count_traffic(state.phase.load(std::memory_order_acquire))) {
+            add_counter(state.counters.server_sent);
+            add_counter(state.counters.server_bytes_sent, sent);
         }
     }
-    finishServer(state);
+    finish_server(state);
     co_return;
 }
 
@@ -363,18 +363,18 @@ awaitable<void> client(BenchmarkState& state, std::size_t client_id)
     boost::system::error_code error;
     socket.open(udp::v4(), error);
     if (error) {
-        recordError(state, error);
+        record_error(state, error);
         state.counters.clients_failed.fetch_add(1, std::memory_order_release);
-        finishClient(state);
+        finish_client(state);
         co_return;
     }
-    if (!setSocketBuffer(socket, SO_SNDBUF, kClientSendBufferBytes)) {
+    if (!set_socket_buffer(socket, SO_SNDBUF, kClientSendBufferBytes)) {
         state.counters.runtime_errors.fetch_add(1, std::memory_order_relaxed);
         state.counters.clients_failed.fetch_add(1, std::memory_order_release);
         boost::system::error_code close_error;
         socket.close(close_error);
-        recordError(state, close_error);
-        finishClient(state);
+        record_error(state, close_error);
+        finish_client(state);
         co_return;
     }
     std::vector<char> payload(state.config.payload_bytes);
@@ -391,20 +391,20 @@ awaitable<void> client(BenchmarkState& state, std::size_t client_id)
         const Phase phase = state.phase.load(std::memory_order_acquire);
         if (phase == Phase::drain) {
             if (measured_received >= measured_sent) break;
-            const ReceiveResult result = co_await receiveWithTimeout(
+            const ReceiveResult result = co_await receive_with_timeout(
                 socket, asio::buffer(response.data(), state.config.payload_bytes),
                 kClientReceiveTimeout);
             if (result.timed_out) continue;
             if (result.error) {
-                recordError(state, result.error);
+                record_error(state, result.error);
                 continue;
             }
             if (result.bytes == state.config.payload_bytes &&
                 response[0] == kMeasuredMarker &&
-                countTraffic(state.phase.load(std::memory_order_acquire))) {
+                count_traffic(state.phase.load(std::memory_order_acquire))) {
                 ++measured_received;
-                addCounter(state.counters.client_received);
-                addCounter(state.counters.client_bytes_received, result.bytes);
+                add_counter(state.counters.client_received);
+                add_counter(state.counters.client_bytes_received, result.bytes);
             }
             continue;
         }
@@ -417,7 +417,7 @@ awaitable<void> client(BenchmarkState& state, std::size_t client_id)
                 state.endpoint,
                 redirect_error(use_awaitable, send_error));
             if (send_error || sent != state.config.payload_bytes) {
-                if (send_error) recordError(state, send_error);
+                if (send_error) record_error(state, send_error);
                 else state.counters.runtime_errors.fetch_add(1, std::memory_order_relaxed);
                 failed = state.phase.load(std::memory_order_acquire) < Phase::drain;
                 break;
@@ -425,11 +425,11 @@ awaitable<void> client(BenchmarkState& state, std::size_t client_id)
             const bool measured_send = phase == Phase::measured;
             if (measured_send) {
                 ++measured_sent;
-                addCounter(state.counters.client_sent);
-                addCounter(state.counters.client_bytes_sent, sent);
+                add_counter(state.counters.client_sent);
+                add_counter(state.counters.client_bytes_sent, sent);
             }
 
-            const ReceiveResult result = co_await receiveWithTimeout(
+            const ReceiveResult result = co_await receive_with_timeout(
                 socket, asio::buffer(response.data(), state.config.payload_bytes),
                 kClientReceiveTimeout);
             // parallel_group cancels the receive when its timer wins. That
@@ -439,17 +439,17 @@ awaitable<void> client(BenchmarkState& state, std::size_t client_id)
                 continue;
             }
             if (result.error || result.bytes != state.config.payload_bytes) {
-                if (result.error) recordError(state, result.error);
+                if (result.error) record_error(state, result.error);
                 else state.counters.runtime_errors.fetch_add(1, std::memory_order_relaxed);
                 failed = !result.timed_out &&
                          state.phase.load(std::memory_order_acquire) < Phase::drain;
                 break;
             }
             if (measured_send && response[0] == kMeasuredMarker &&
-                countTraffic(state.phase.load(std::memory_order_acquire))) {
+                count_traffic(state.phase.load(std::memory_order_acquire))) {
                 ++measured_received;
-                addCounter(state.counters.client_received);
-                addCounter(state.counters.client_bytes_received, result.bytes);
+                add_counter(state.counters.client_received);
+                add_counter(state.counters.client_bytes_received, result.bytes);
             }
         }
         if (failed) break;
@@ -460,12 +460,12 @@ awaitable<void> client(BenchmarkState& state, std::size_t client_id)
     }
     boost::system::error_code close_error;
     socket.close(close_error);
-    recordError(state, close_error);
-    finishClient(state);
+    record_error(state, close_error);
+    finish_client(state);
     co_return;
 }
 
-awaitable<bool> waitForClientsReady(BenchmarkState& state)
+awaitable<bool> wait_for_clients_ready(BenchmarkState& state)
 {
     asio::steady_timer timer(state.context);
     for (;;) {
@@ -479,7 +479,7 @@ awaitable<bool> waitForClientsReady(BenchmarkState& state)
     }
 }
 
-awaitable<void> waitForCompletion(BenchmarkState& state)
+awaitable<void> wait_for_completion(BenchmarkState& state)
 {
     asio::steady_timer timer(state.context);
     for (;;) {
@@ -501,10 +501,10 @@ awaitable<void> controller(BenchmarkState& state)
         co_spawn(state.context, client(state, index), detached);
     }
 
-    if (!co_await waitForClientsReady(state)) {
+    if (!co_await wait_for_clients_ready(state)) {
         state.phase.store(Phase::stopped, std::memory_order_release);
-        stopSockets(state);
-        co_await waitForCompletion(state);
+        stop_sockets(state);
+        co_await wait_for_completion(state);
         co_return;
     }
 
@@ -517,12 +517,12 @@ awaitable<void> controller(BenchmarkState& state)
     if (state.counters.clients_done.load(std::memory_order_acquire) != 0 ||
         state.counters.servers_done.load(std::memory_order_acquire) != 0) {
         state.phase.store(Phase::stopped, std::memory_order_release);
-        stopSockets(state);
-        co_await waitForCompletion(state);
+        stop_sockets(state);
+        co_await wait_for_completion(state);
         co_return;
     }
 
-    resetMeasurementCounters(state);
+    reset_measurement_counters(state);
     state.phase.store(Phase::measured, std::memory_order_release);
     state.measured_started = std::chrono::steady_clock::now();
     timer.expires_after(state.config.duration);
@@ -536,13 +536,13 @@ awaitable<void> controller(BenchmarkState& state)
     co_await timer.async_wait(redirect_error(use_awaitable, timer_error));
 
     state.phase.store(Phase::stopped, std::memory_order_release);
-    stopSockets(state);
-    co_await waitForCompletion(state);
+    stop_sockets(state);
+    co_await wait_for_completion(state);
     state.settled = snapshot(state);
     co_return;
 }
 
-bool prepareServers(BenchmarkState& state)
+bool prepare_servers(BenchmarkState& state)
 {
     boost::system::error_code error;
     const auto loopback_address = asio::ip::make_address("127.0.0.1", error);
@@ -560,11 +560,11 @@ bool prepareServers(BenchmarkState& state)
             return false;
         }
         socket.set_option(udp::socket::reuse_address(true), error);
-        if (error || !setSocketBuffer(socket, SO_RCVBUF, kServerReceiveBufferBytes)) {
+        if (error || !set_socket_buffer(socket, SO_RCVBUF, kServerReceiveBufferBytes)) {
             std::cerr << "server socket options failed\n";
             return false;
         }
-        if (!enableReusePort(socket)) {
+        if (!enable_reuse_port(socket)) {
             std::cerr << "reuse_port: errno=" << errno << '\n';
             return false;
         }
@@ -592,7 +592,7 @@ double rate(std::uint64_t packets, std::chrono::steady_clock::duration duration)
     return seconds > 0.0 ? static_cast<double>(packets) / seconds : 0.0;
 }
 
-double lossPercent(const Snapshot& values) noexcept
+double loss_percent(const Snapshot& values) noexcept
 {
     if (values.client_sent == 0) return 100.0;
     const double loss = (1.0 - static_cast<double>(values.client_received) /
@@ -600,7 +600,7 @@ double lossPercent(const Snapshot& values) noexcept
     return loss > 0.0 ? loss : 0.0;
 }
 
-std::string boostVersion()
+std::string boost_version()
 {
     const unsigned version = BOOST_VERSION;
     return std::to_string(version / 100000) + "." +
@@ -612,24 +612,24 @@ std::string boostVersion()
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     Config config;
-    if (!parseConfig(argc, argv, config)) {
-        printUsage(argv[0]);
+    if (!parse_config(argc, argv, config)) {
+        print_usage(argv[0]);
         return 2;
     }
 
     asio::io_context context;
     BenchmarkState state{context, config};
-    if (!prepareServers(state)) {
+    if (!prepare_servers(state)) {
         std::cerr << "boost_asio_coro_udp: failed to prepare SO_REUSEPORT sockets\n";
         return 1;
     }
     for (auto& socket : state.server_sockets) {
-        co_spawn(context, serverWorker(state, socket), detached);
+        co_spawn(context, server_worker(state, socket), detached);
     }
     co_spawn(context, controller(state), detached);
 
@@ -649,9 +649,9 @@ int main(int argc, char** argv)
                              state.measured.runtime_errors == 0 &&
                              state.settled.runtime_errors == 0 &&
                              state.settled.shutdown_errors == 0 &&
-                             settledCountersMatch(state.settled);
+                             settled_counters_match(state.settled);
 
-    std::cout << "meta implementation=boost.asio version=" << boostVersion()
+    std::cout << "meta implementation=boost.asio version=" << boost_version()
               << " coroutine=co_spawn/awaitable scenario=udp-echo"
               << " backend=single-io-context"
               << " clients=" << config.clients
@@ -675,7 +675,7 @@ int main(int argc, char** argv)
               << std::chrono::duration_cast<std::chrono::milliseconds>(measured_duration).count()
               << " client_pkt_s=" << measured_client_rate
               << " server_pkt_s=" << measured_server_rate
-              << " client_loss_pct=" << lossPercent(state.measured)
+              << " client_loss_pct=" << loss_percent(state.measured)
               << " runtime_errors=" << state.measured.runtime_errors
               << " shutdown_errors=" << state.measured.shutdown_errors << '\n';
     std::cout << "settled client_sent=" << state.settled.client_sent
@@ -688,8 +688,8 @@ int main(int argc, char** argv)
               << " server_bytes_sent=" << state.settled.server_bytes_sent
               << " elapsed_ms="
               << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()
-              << " client_loss_pct=" << lossPercent(state.settled)
-              << " settled_loss_pct=" << lossPercent(state.settled)
+              << " client_loss_pct=" << loss_percent(state.settled)
+              << " settled_loss_pct=" << loss_percent(state.settled)
               << " runtime_errors=" << state.settled.runtime_errors
               << " shutdown_errors=" << state.settled.shutdown_errors << '\n';
     std::cout << "status=" << (measured_ok ? "ok" : "fail") << '\n';

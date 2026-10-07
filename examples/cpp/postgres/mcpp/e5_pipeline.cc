@@ -7,7 +7,7 @@ import galay.postgres;
 
 int main()
 {
-    const auto config = postgres_example::loadConfig();
+    const auto config = postgres_example::load_config();
     galay::postgres::PostgresClient client;
     auto connected = client.connect(config.host, config.port, config.user,
                                     config.password, config.database);

@@ -27,7 +27,7 @@ using namespace galay::kernel;
 static volatile bool g_running = true;
 static std::string g_file_path;
 
-void signalHandler(int) { g_running = false; }
+void signal_handler(int) { g_running = false; }
 
 // Real per-request static-file work: stat + open + read (page-cached) + close.
 static bool read_file(std::string& out) {
@@ -53,10 +53,10 @@ static bool read_file(std::string& out) {
     return true;
 }
 
-Task<void> handleStaticRequest(HttpConn conn) {
-    auto reader = conn.getReader();
-    auto writer = conn.getWriter();
-    // Stable buffers that outlive each co_await sendView (sendView holds a raw pointer).
+Task<void> handle_static_request(HttpConn conn) {
+    auto reader = conn.get_reader();
+    auto writer = conn.get_writer();
+    // Stable buffers that outlive each co_await send_view (send_view holds a raw pointer).
     std::string body;
     std::string response;
     static const std::string not_found =
@@ -65,13 +65,13 @@ Task<void> handleStaticRequest(HttpConn conn) {
     while (true) {
         HttpRequest request;
         while (true) {
-            auto read_result = co_await reader.getRequest(request);
+            auto read_result = co_await reader.get_request(request);
             if (!read_result) co_return;
             if (read_result.value()) break;
         }
 
         if (!read_file(body)) {
-            auto r = co_await writer.sendView(not_found);
+            auto r = co_await writer.send_view(not_found);
             if (!r) co_return;
             continue;
         }
@@ -84,14 +84,14 @@ Task<void> handleStaticRequest(HttpConn conn) {
         response.append("\r\nConnection: keep-alive\r\n\r\n");
         response.append(body);
 
-        auto result = co_await writer.sendView(response);
+        auto result = co_await writer.send_view(response);
         if (!result) co_return;
     }
     co_return;
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -102,17 +102,17 @@ int main(int argc, char* argv[]) {
     if (argc > 2) io_threads = std::atoi(argv[2]);
     if (argc > 3) g_file_path = argv[3];
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
         HttpServer server(HttpServerBuilder()
             .host("0.0.0.0")
             .port(port)
-            .ioSchedulerCount(static_cast<size_t>(io_threads))
-            .parallelSchedulerCount(0)
+            .io_scheduler_count(static_cast<size_t>(io_threads))
+            .parallel_scheduler_count(0)
             .build());
-        server.start(handleStaticRequest);
+        server.start(handle_static_request);
 
         std::cout << "========================================\n"
                   << "HTTP Static-File Server Benchmark\n"

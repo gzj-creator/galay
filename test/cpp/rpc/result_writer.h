@@ -16,7 +16,7 @@ public:
         : m_file(filename, std::ios::out | std::ios::trunc) {
         if (m_file.is_open()) {
             m_file << "# Test Results\n";
-            m_file << "# Generated at: " << currentTime() << "\n\n";
+            m_file << "# Generated at: " << current_time() << "\n\n";
         }
     }
 
@@ -26,7 +26,7 @@ public:
         }
     }
 
-    void writeTestCase(const std::string& name, bool passed, const std::string& message = "") {
+    void write_test_case(const std::string& name, bool passed, const std::string& message = "") {
         if (m_file.is_open()) {
             m_file << "[" << (passed ? "PASS" : "FAIL") << "] " << name;
             if (!message.empty()) {
@@ -43,7 +43,7 @@ public:
         }
     }
 
-    void writeSummary() {
+    void write_summary() {
         if (m_file.is_open()) {
             m_file << "\n# Summary\n";
             m_file << "Total: " << (m_passed + m_failed) << "\n";
@@ -57,7 +57,7 @@ public:
     int failed() const { return m_failed; }
 
 private:
-    std::string currentTime() {
+    std::string current_time() {
         auto now = std::chrono::system_clock::now();
         auto time = std::chrono::system_clock::to_time_t(now);
         std::stringstream ss;

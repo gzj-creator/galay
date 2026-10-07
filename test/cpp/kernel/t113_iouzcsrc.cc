@@ -12,11 +12,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -25,52 +25,52 @@ std::string readAll(const std::filesystem::path& path) {
                        std::istreambuf_iterator<char>());
 }
 
-bool containsText(const std::string& haystack, const std::string& needle) {
+bool contains_text(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto controller = root / "galay-kernel" / "core" / "io_controller.hpp";
     const auto reactor_h = root / "galay-kernel" / "core" / "uring_reactor.h";
     const auto reactor_cc = root / "galay-kernel" / "core" / "uring_reactor.cc";
 
-    const std::string controller_text = readAll(controller);
-    const std::string reactor_h_text = readAll(reactor_h);
-    const std::string reactor_cc_text = readAll(reactor_cc);
+    const std::string controller_text = read_all(controller);
+    const std::string reactor_h_text = read_all(reactor_h);
+    const std::string reactor_cc_text = read_all(reactor_cc);
     if (controller_text.empty() || reactor_h_text.empty() || reactor_cc_text.empty()) {
         std::cerr << "[T113] failed to read source files\n";
         return 1;
     }
 
-    if (!containsText(controller_text, "notify_expected = false;")) {
+    if (!contains_text(controller_text, "notify_expected = false;")) {
         std::cerr << "[T113] expected SqeRequestHandle to track zero-copy notification state\n";
         return 1;
     }
-    if (!containsText(reactor_h_text, "kSendZcThreshold")) {
+    if (!contains_text(reactor_h_text, "kSendZcThreshold")) {
         std::cerr << "[T113] expected IOUringReactor to define a send_zc size threshold\n";
         return 1;
     }
-    if (!containsText(reactor_h_text, "m_send_zc_supported")) {
+    if (!contains_text(reactor_h_text, "m_send_zc_supported")) {
         std::cerr << "[T113] expected IOUringReactor to cache send_zc capability\n";
         return 1;
     }
-    if (!containsText(reactor_cc_text, "io_uring_get_probe_ring(") ||
-        !containsText(reactor_cc_text, "io_uring_opcode_supported(")) {
+    if (!contains_text(reactor_cc_text, "io_uring_get_probe_ring(") ||
+        !contains_text(reactor_cc_text, "io_uring_opcode_supported(")) {
         std::cerr << "[T113] expected IOUringReactor to probe send_zc opcode support\n";
         return 1;
     }
-    if (!containsText(reactor_cc_text, "io_uring_prep_send_zc(")) {
+    if (!contains_text(reactor_cc_text, "io_uring_prep_send_zc(")) {
         std::cerr << "[T113] expected IOUringReactor send path to submit io_uring_prep_send_zc\n";
         return 1;
     }
-    if (!containsText(reactor_cc_text, "IORING_SEND_ZC_REPORT_USAGE")) {
+    if (!contains_text(reactor_cc_text, "IORING_SEND_ZC_REPORT_USAGE")) {
         std::cerr << "[T113] expected send_zc submissions to request usage reporting\n";
         return 1;
     }
-    if (!containsText(reactor_cc_text, "IORING_CQE_F_NOTIF")) {
+    if (!contains_text(reactor_cc_text, "IORING_CQE_F_NOTIF")) {
         std::cerr << "[T113] expected completion path to filter notification CQEs\n";
         return 1;
     }

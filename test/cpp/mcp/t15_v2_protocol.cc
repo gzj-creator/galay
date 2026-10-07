@@ -41,9 +41,9 @@ int main()
     v2::JsonRpcRequest discover;
     discover.id = 7;
     discover.method = v2::Methods::SERVER_DISCOVER;
-    discover.params = v2::makeRequestParams(meta);
+    discover.params = v2::make_request_params(meta);
 
-    auto parsed = v2::parseRequest(discover.toJson());
+    auto parsed = v2::parse_request(discover.to_json());
     if (!require(parsed.has_value(), "valid v2 discover request was rejected")) {
         return 1;
     }
@@ -57,39 +57,39 @@ int main()
     }
 
     discover.id = std::string("discover-8");
-    auto stringId = v2::parseRequest(discover.toJson());
+    auto stringId = v2::parse_request(discover.to_json());
     if (!require(stringId.has_value() &&
                      std::get<std::string>(stringId->request.id) == "discover-8",
                  "string request id was not preserved")) {
         return 1;
     }
 
-    auto missingMeta = v2::parseRequest(
+    auto missingMeta = v2::parse_request(
         R"({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}})");
     if (!require(!missingMeta.has_value(), "request without required v2 _meta was accepted")) {
         return 1;
     }
 
-    auto malformedCapabilities = v2::parseRequest(
+    auto malformedCapabilities = v2::parse_request(
         R"({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":[]}}})");
     if (!require(!malformedCapabilities.has_value(),
                  "non-object per-request client capabilities were accepted")) {
         return 1;
     }
 
-    auto mergedParams = v2::makeRequestParams(meta, R"({"name":"echo","arguments":{"text":"hi"}})");
+    auto mergedParams = v2::make_request_params(meta, R"({"name":"echo","arguments":{"text":"hi"}})");
     if (!require(mergedParams.has_value() &&
                      mergedParams->find("\"name\":\"echo\"") != std::string::npos &&
                      mergedParams->find("\"_meta\"") != std::string::npos,
                  "business request fields were not merged with v2 _meta")) {
         return 1;
     }
-    if (!require(!v2::makeRequestParams(meta, "[]").has_value(),
+    if (!require(!v2::make_request_params(meta, "[]").has_value(),
                  "non-object business request fields were accepted")) {
         return 1;
     }
 
-    auto unsupported = v2::makeUnsupportedProtocolVersionResponse(
+    auto unsupported = v2::make_unsupported_protocol_version_response(
         9, "1900-01-01", {v2::MCP_VERSION});
     if (!require(unsupported.find("\"code\":-32022") != std::string::npos &&
                      unsupported.find("\"supported\":[\"2026-07-28\"]") != std::string::npos,
@@ -105,7 +105,7 @@ int main()
     discovery.cacheScope = v2::CacheScope::Public;
     discovery.serverInfo = v2::Implementation{.name = "test-server", .version = "2.0.0"};
 
-    const auto discoveryJson = discovery.toJson();
+    const auto discoveryJson = discovery.to_json();
     if (!require(discoveryJson.find("\"resultType\":\"complete\"") != std::string::npos &&
                      discoveryJson.find("\"ttlMs\":30000") != std::string::npos &&
                      discoveryJson.find("\"cacheScope\":\"public\"") != std::string::npos &&
@@ -118,7 +118,7 @@ int main()
     if (!require(discoveryDocument.has_value(), "discover result JSON was malformed")) {
         return 1;
     }
-    auto parsedDiscovery = v2::DiscoverResult::fromJson(discoveryDocument->root());
+    auto parsedDiscovery = v2::DiscoverResult::from_json(discoveryDocument->root());
     if (!require(parsedDiscovery.has_value() && parsedDiscovery->capabilities.tools &&
                      parsedDiscovery->capabilities.resources &&
                      parsedDiscovery->cacheScope == v2::CacheScope::Public &&
@@ -133,9 +133,9 @@ int main()
     tool.description = "Echo text";
     tool.inputSchema = R"({"type":"object","properties":{"text":{"type":"string"}}})";
     tool.outputSchema = R"({"type":"object"})";
-    auto toolDocument = JsonDocument::parse(tool.toJson());
+    auto toolDocument = JsonDocument::parse(tool.to_json());
     auto parsedTool = toolDocument
-        ? v2::Tool::fromJson(toolDocument->root())
+        ? v2::Tool::from_json(toolDocument->root())
         : std::expected<v2::Tool, McpError>(std::unexpected(toolDocument.error()));
     if (!require(parsedTool.has_value() && parsedTool->name == "echo" &&
                      parsedTool->outputSchema.has_value(),
@@ -146,7 +146,7 @@ int main()
     auto invalidToolDocument = JsonDocument::parse(
         R"({"name":"bad","inputSchema":{"type":"string"}})");
     if (!require(invalidToolDocument.has_value() &&
-                     !v2::Tool::fromJson(invalidToolDocument->root()).has_value(),
+                     !v2::Tool::from_json(invalidToolDocument->root()).has_value(),
                  "tool inputSchema without object root was accepted")) {
         return 1;
     }
@@ -156,9 +156,9 @@ int main()
     resource.name = "hello";
     resource.mimeType = "text/plain";
     resource.size = 5;
-    auto resourceDocument = JsonDocument::parse(resource.toJson());
+    auto resourceDocument = JsonDocument::parse(resource.to_json());
     auto parsedResource = resourceDocument
-        ? v2::Resource::fromJson(resourceDocument->root())
+        ? v2::Resource::from_json(resourceDocument->root())
         : std::expected<v2::Resource, McpError>(std::unexpected(resourceDocument.error()));
     if (!require(parsedResource.has_value() && parsedResource->size == 5,
                  "v2 resource metadata did not round trip")) {
@@ -169,9 +169,9 @@ int main()
     prompt.name = "review";
     prompt.arguments.push_back(v2::PromptArgument{
         .name = "code", .description = "Code to review", .required = true});
-    auto promptDocument = JsonDocument::parse(prompt.toJson());
+    auto promptDocument = JsonDocument::parse(prompt.to_json());
     auto parsedPrompt = promptDocument
-        ? v2::Prompt::fromJson(promptDocument->root())
+        ? v2::Prompt::from_json(promptDocument->root())
         : std::expected<v2::Prompt, McpError>(std::unexpected(promptDocument.error()));
     if (!require(parsedPrompt.has_value() && parsedPrompt->arguments.size() == 1 &&
                      parsedPrompt->arguments.front().required,
@@ -184,9 +184,9 @@ int main()
     filter.promptsListChanged = true;
     filter.resourcesListChanged = true;
     filter.resourceSubscriptions = {"mem://hello", "mem://config"};
-    auto filterDocument = JsonDocument::parse(filter.toJson());
+    auto filterDocument = JsonDocument::parse(filter.to_json());
     auto parsedFilter = filterDocument
-        ? v2::SubscriptionFilter::fromJson(filterDocument->root())
+        ? v2::SubscriptionFilter::from_json(filterDocument->root())
         : std::expected<v2::SubscriptionFilter, McpError>(
               std::unexpected(filterDocument.error()));
     if (!require(parsedFilter.has_value() && parsedFilter->toolsListChanged &&
@@ -199,11 +199,11 @@ int main()
     auto malformedFilter = JsonDocument::parse(
         R"({"toolsListChanged":"yes","resourceSubscriptions":[7]})");
     if (!require(malformedFilter.has_value() &&
-                     !v2::SubscriptionFilter::fromJson(malformedFilter->root()).has_value(),
+                     !v2::SubscriptionFilter::from_json(malformedFilter->root()).has_value(),
                  "malformed subscription filter was accepted")) {
         return 1;
     }
-    const auto acknowledged = v2::makeSubscriptionAcknowledgedNotification(
+    const auto acknowledged = v2::make_subscription_acknowledged_notification(
         std::string("listen-1"), filter);
     if (!require(acknowledged.find(
                      "\"method\":\"notifications/subscriptions/acknowledged\"") !=
@@ -215,7 +215,7 @@ int main()
                  "subscription acknowledgement is missing its filter or id")) {
         return 1;
     }
-    const auto resourceUpdated = v2::makeSubscriptionNotification(
+    const auto resourceUpdated = v2::make_subscription_notification(
         v2::NotificationMethods::RESOURCES_UPDATED,
         int64_t{7},
         std::optional<std::string_view>("mem://hello"));
@@ -227,7 +227,7 @@ int main()
                  "resource update notification is missing its uri or subscription id")) {
         return 1;
     }
-    const auto listenComplete = v2::makeSubscriptionCompleteResponse(
+    const auto listenComplete = v2::make_subscription_complete_response(
         std::string("listen-1"));
     if (!require(listenComplete.find("\"resultType\":\"complete\"") !=
                          std::string::npos &&
@@ -237,9 +237,9 @@ int main()
                  "subscription completion response is missing its id")) {
         return 1;
     }
-    const auto sseEvent = v2::encodeSseEvent(acknowledged);
-    const auto parsedSse = v2::parseSseEvent(sseEvent);
-    const auto parsedComment = v2::parseSseEvent(": keep-alive\n\n");
+    const auto sseEvent = v2::encode_sse_event(acknowledged);
+    const auto parsedSse = v2::parse_sse_event(sseEvent);
+    const auto parsedComment = v2::parse_sse_event(": keep-alive\n\n");
     if (!require(sseEvent.starts_with("data: ") && sseEvent.ends_with("\n\n") &&
                      parsedSse.has_value() && parsedSse->has_value() &&
                      parsedSse->value() == acknowledged && parsedComment.has_value() &&
@@ -253,17 +253,17 @@ int main()
     list.items = {R"({"name":"echo","inputSchema":{"type":"object"}})"};
     list.ttlMs = 1000;
     list.cacheScope = v2::CacheScope::Private;
-    const auto listJson = list.toJson();
+    const auto listJson = list.to_json();
     if (!require(listJson.find("\"resultType\":\"complete\"") != std::string::npos &&
                      listJson.find("\"cacheScope\":\"private\"") != std::string::npos,
                  "cacheable list result is missing required v2 fields")) {
         return 1;
     }
 
-    auto complete = v2::parseResult(R"({"resultType":"complete","content":[]})");
-    auto inputRequired = v2::parseResult(
+    auto complete = v2::parse_result(R"({"resultType":"complete","content":[]})");
+    auto inputRequired = v2::parse_result(
         R"({"resultType":"input_required","requestState":"opaque"})");
-    auto missingResultType = v2::parseResult(R"({"content":[]})");
+    auto missingResultType = v2::parse_result(R"({"content":[]})");
     if (!require(complete.has_value() && complete->result.type == v2::ResultType::Complete,
                  "complete result was not parsed")) {
         return 1;
@@ -280,8 +280,8 @@ int main()
 
     auto callResult = v2::ToolCallResult::text("hello");
     callResult.structuredContent = R"({"echo":"hello"})";
-    const auto callResponse = v2::makeResultResponse(std::string("call-1"), callResult.toJson());
-    auto parsedCallResponse = v2::parseResponse(callResponse);
+    const auto callResponse = v2::make_result_response(std::string("call-1"), callResult.to_json());
+    auto parsedCallResponse = v2::parse_response(callResponse);
     if (!require(parsedCallResponse.has_value() && parsedCallResponse->response.hasResult &&
                      !parsedCallResponse->response.hasError &&
                      std::get<std::string>(parsedCallResponse->response.id) == "call-1",
@@ -289,15 +289,15 @@ int main()
         return 1;
     }
 
-    auto parsedErrorResponse = v2::parseResponse(
-        v2::makeErrorResponse(int64_t{3}, v2::ErrorCodes::INVALID_PARAMS, "bad params"));
+    auto parsedErrorResponse = v2::parse_response(
+        v2::make_error_response(int64_t{3}, v2::ErrorCodes::INVALID_PARAMS, "bad params"));
     if (!require(parsedErrorResponse.has_value() &&
                      !parsedErrorResponse->response.hasResult &&
                      parsedErrorResponse->response.hasError,
                  "v2 error response was not parsed")) {
         return 1;
     }
-    if (!require(!v2::parseResponse(
+    if (!require(!v2::parse_response(
                       R"({"jsonrpc":"2.0","id":1,"result":{"content":[]}})")
                       .has_value(),
                  "successful v2 response without resultType was accepted")) {
@@ -307,7 +307,7 @@ int main()
     v2::Tool headerTool;
     headerTool.name = "header-tool";
     headerTool.inputSchema = R"({"type":"object","properties":{"region":{"type":"string","x-mcp-header":"Region"},"count":{"type":"integer","x-mcp-header":"Count"},"enabled":{"type":"boolean","x-mcp-header":"Enabled"}}})";
-    auto annotations = v2::toolHeaderAnnotations(headerTool);
+    auto annotations = v2::tool_header_annotations(headerTool);
     if (!require(annotations.has_value() && annotations->size() == 3,
                  "valid x-mcp-header annotations were rejected")) {
         return 1;
@@ -318,7 +318,7 @@ int main()
         return 1;
     }
     for (const auto& annotation : annotations.value()) {
-        auto value = v2::argumentHeaderValue(argumentsDocument->root(), annotation);
+        auto value = v2::argument_header_value(argumentsDocument->root(), annotation);
         if (!require(value.has_value() && value->has_value(),
                      "annotated argument was not extracted")) {
             return 1;
@@ -336,8 +336,8 @@ int main()
             return 1;
         }
     }
-    const std::string encoded = v2::encodeHeaderValue(" leading value ");
-    auto decoded = v2::decodeHeaderValue(encoded);
+    const std::string encoded = v2::encode_header_value(" leading value ");
+    auto decoded = v2::decode_header_value(encoded);
     if (!require(decoded.has_value() && decoded.value() == " leading value ",
                  "mirrored header value encoding did not round trip")) {
         return 1;
@@ -345,13 +345,13 @@ int main()
     v2::Tool invalidHeaderTool;
     invalidHeaderTool.name = "invalid-header-tool";
     invalidHeaderTool.inputSchema = R"({"type":"object","properties":{"items":{"type":"array","items":{"type":"string","x-mcp-header":"Bad"}}}})";
-    if (!require(!v2::toolHeaderAnnotations(invalidHeaderTool).has_value(),
+    if (!require(!v2::tool_header_annotations(invalidHeaderTool).has_value(),
                  "array-reachable x-mcp-header annotation was accepted")) {
         return 1;
     }
 
     const auto readResult = v2::ReadResourceResult::text("mem://hello", "hello", "text/plain");
-    const auto readJson = readResult.toJson();
+    const auto readJson = readResult.to_json();
     if (!require(readJson.find("\"resultType\":\"complete\"") != std::string::npos &&
                      readJson.find("\"uri\":\"mem://hello\"") != std::string::npos &&
                      readJson.find("\"text\":\"hello\"") != std::string::npos,
@@ -359,9 +359,9 @@ int main()
         return 1;
     }
 
-    v2::GetPromptResult promptResult;
-    promptResult.messages = {R"({"role":"user","content":{"type":"text","text":"Review"}})"};
-    if (!require(promptResult.toJson().find("\"resultType\":\"complete\"") !=
+    v2::GetPromptResult prompt_result;
+    prompt_result.messages = {R"({"role":"user","content":{"type":"text","text":"Review"}})"};
+    if (!require(prompt_result.to_json().find("\"resultType\":\"complete\"") !=
                      std::string::npos,
                  "v2 prompt result is missing resultType")) {
         return 1;

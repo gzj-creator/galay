@@ -90,19 +90,19 @@ public:
     McpErrorCode code() const { return m_code; } ///< 获取错误码
     const std::string& message() const { return m_message; } ///< 获取错误消息
     const std::string& details() const { return m_details; } ///< 获取错误详情
-    bool isSuccess() const { return m_code == McpErrorCode::Success; } ///< 判断是否成功
+    bool is_success() const { return m_code == McpErrorCode::Success; } ///< 判断是否成功
 
     /**
      * @brief 转换为可读字符串
      * @return 包含错误码和消息的字符串
      */
-    std::string toString() const;
+    std::string to_string() const;
 
     /**
      * @brief 转换为JSON-RPC标准错误码
      * @return JSON-RPC错误码整数
      */
-    int toJsonRpcErrorCode() const;
+    int to_json_rpc_error_code() const;
 
     /**
      * @brief 创建成功错误对象
@@ -117,7 +117,7 @@ public:
      * @param details 错误详情
      * @return 连接失败的McpError
      */
-    static McpError connectionFailed(const std::string& details = "") {
+    static McpError connection_failed(const std::string& details = "") {
         return McpError(McpErrorCode::ConnectionFailed, "Connection failed", details);
     }
 
@@ -126,7 +126,7 @@ public:
      * @param details 错误详情
      * @return 连接关闭的McpError
      */
-    static McpError connectionClosed(const std::string& details = "") {
+    static McpError connection_closed(const std::string& details = "") {
         return McpError(McpErrorCode::ConnectionClosed, "Connection closed", details);
     }
 
@@ -135,7 +135,7 @@ public:
      * @param details 错误详情
      * @return 连接错误的McpError
      */
-    static McpError connectionError(const std::string& details = "") {
+    static McpError connection_error(const std::string& details = "") {
         return McpError(McpErrorCode::ConnectionFailed, "Connection error", details);
     }
 
@@ -144,7 +144,7 @@ public:
      * @param details 错误详情
      * @return 协议错误的McpError
      */
-    static McpError protocolError(const std::string& details = "") {
+    static McpError protocol_error(const std::string& details = "") {
         return McpError(McpErrorCode::ProtocolError, "Protocol error", details);
     }
 
@@ -153,7 +153,7 @@ public:
      * @param details 错误详情
      * @return 无效消息的McpError
      */
-    static McpError invalidMessage(const std::string& details = "") {
+    static McpError invalid_message(const std::string& details = "") {
         return McpError(McpErrorCode::InvalidMessage, "Invalid message", details);
     }
 
@@ -162,7 +162,7 @@ public:
      * @param method 无效的方法名
      * @return 无效方法的McpError
      */
-    static McpError invalidMethod(const std::string& method) {
+    static McpError invalid_method(const std::string& method) {
         return McpError(McpErrorCode::InvalidMethod, "Invalid method", method);
     }
 
@@ -171,7 +171,7 @@ public:
      * @param details 错误详情
      * @return 无效参数的McpError
      */
-    static McpError invalidParams(const std::string& details = "") {
+    static McpError invalid_params(const std::string& details = "") {
         return McpError(McpErrorCode::InvalidParams, "Invalid parameters", details);
     }
 
@@ -180,7 +180,7 @@ public:
      * @param details 错误详情
      * @return 无效传输模式的McpError
      */
-    static McpError invalidTransportMode(const std::string& details = "") {
+    static McpError invalid_transport_mode(const std::string& details = "") {
         return McpError(McpErrorCode::InvalidTransportMode, "Invalid transport mode", details);
     }
 
@@ -225,7 +225,7 @@ public:
      * @param details 错误详情
      * @return 负载过大的McpError
      */
-    static McpError payloadTooLarge(const std::string& details = "") {
+    static McpError payload_too_large(const std::string& details = "") {
         return McpError(McpErrorCode::PayloadTooLarge, "Payload too large", details);
     }
 
@@ -234,7 +234,7 @@ public:
      * @param details 错误详情
      * @return 解析错误的McpError
      */
-    static McpError parseError(const std::string& details = "") {
+    static McpError parse_error(const std::string& details = "") {
         return McpError(McpErrorCode::ParseError, "Parse error", details);
     }
 
@@ -243,7 +243,7 @@ public:
      * @param details 错误详情
      * @return 无效请求的McpError
      */
-    static McpError invalidRequest(const std::string& details = "") {
+    static McpError invalid_request(const std::string& details = "") {
         return McpError(McpErrorCode::InvalidRequest, "Invalid request", details);
     }
 
@@ -252,7 +252,7 @@ public:
      * @param method 未找到的方法名
      * @return 方法未找到的McpError
      */
-    static McpError methodNotFound(const std::string& method) {
+    static McpError method_not_found(const std::string& method) {
         return McpError(McpErrorCode::MethodNotFound, "Method not found", method);
     }
 
@@ -261,7 +261,7 @@ public:
      * @param details 错误详情
      * @return 内部错误的McpError
      */
-    static McpError internalError(const std::string& details = "") {
+    static McpError internal_error(const std::string& details = "") {
         return McpError(McpErrorCode::InternalError, "Internal error", details);
     }
 
@@ -270,7 +270,7 @@ public:
      * @param toolName 未找到的工具名称
      * @return 工具未找到的McpError
      */
-    static McpError toolNotFound(const std::string& toolName) {
+    static McpError tool_not_found(const std::string& toolName) {
         return McpError(McpErrorCode::ToolNotFound, "Tool not found", toolName);
     }
 
@@ -279,7 +279,7 @@ public:
      * @param details 错误详情
      * @return 工具执行失败的McpError
      */
-    static McpError toolExecutionFailed(const std::string& details = "") {
+    static McpError tool_execution_failed(const std::string& details = "") {
         return McpError(McpErrorCode::ToolExecutionFailed, "Tool execution failed", details);
     }
 
@@ -288,7 +288,7 @@ public:
      * @param details 错误详情
      * @return 工具错误的McpError
      */
-    static McpError toolError(const std::string& details = "") {
+    static McpError tool_error(const std::string& details = "") {
         return McpError(McpErrorCode::ToolExecutionFailed, "Tool error", details);
     }
 
@@ -297,7 +297,7 @@ public:
      * @param uri 未找到的资源URI
      * @return 资源未找到的McpError
      */
-    static McpError resourceNotFound(const std::string& uri) {
+    static McpError resource_not_found(const std::string& uri) {
         return McpError(McpErrorCode::ResourceNotFound, "Resource not found", uri);
     }
 
@@ -306,7 +306,7 @@ public:
      * @param name 未找到的提示名称
      * @return 提示未找到的McpError
      */
-    static McpError promptNotFound(const std::string& name) {
+    static McpError prompt_not_found(const std::string& name) {
         return McpError(McpErrorCode::PromptNotFound, "Prompt not found", name);
     }
 
@@ -315,7 +315,7 @@ public:
      * @param details 错误详情
      * @return 初始化失败的McpError
      */
-    static McpError initializationFailed(const std::string& details = "") {
+    static McpError initialization_failed(const std::string& details = "") {
         return McpError(McpErrorCode::InitializationFailed, "Initialization failed", details);
     }
 
@@ -323,7 +323,7 @@ public:
      * @brief 创建已初始化错误
      * @return 已初始化的McpError
      */
-    static McpError alreadyInitialized() {
+    static McpError already_initialized() {
         return McpError(McpErrorCode::AlreadyInitialized, "Already initialized", "");
     }
 
@@ -331,7 +331,7 @@ public:
      * @brief 创建未初始化错误
      * @return 未初始化的McpError
      */
-    static McpError notInitialized() {
+    static McpError not_initialized() {
         return McpError(McpErrorCode::NotInitialized, "Not initialized", "");
     }
 
@@ -340,7 +340,7 @@ public:
      * @param details 错误详情
      * @return 读取错误的McpError
      */
-    static McpError readError(const std::string& details = "") {
+    static McpError read_error(const std::string& details = "") {
         return McpError(McpErrorCode::ReadError, "Read error", details);
     }
 
@@ -349,7 +349,7 @@ public:
      * @param details 错误详情
      * @return 写入错误的McpError
      */
-    static McpError writeError(const std::string& details = "") {
+    static McpError write_error(const std::string& details = "") {
         return McpError(McpErrorCode::WriteError, "Write error", details);
     }
 
@@ -367,7 +367,7 @@ public:
      * @param details 错误详情
      * @return 无效响应的McpError
      */
-    static McpError invalidResponse(const std::string& details = "") {
+    static McpError invalid_response(const std::string& details = "") {
         return McpError(McpErrorCode::InvalidMessage, "Invalid response", details);
     }
 
@@ -378,7 +378,7 @@ public:
      * @param details 错误详情
      * @return 映射后的McpError
      */
-    static McpError fromJsonRpcError(int code, const std::string& message, const std::string& details = "") {
+    static McpError from_json_rpc_error(int code, const std::string& message, const std::string& details = "") {
         McpErrorCode mcpCode;
         if (code == -32700) {
             mcpCode = McpErrorCode::ParseError;

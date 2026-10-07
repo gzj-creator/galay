@@ -37,9 +37,9 @@ using namespace galay::async;
 std::atomic<int> g_request_count{0};
 
 // 处理客户端连接
-Task<void> handleClient(AsyncTcpSocket client, Host clientHost) {
+Task<void> handle_client(AsyncTcpSocket client, Host clientHost) {
 
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     // 创建RingBuffer和HttpReader/Writer
     RingBuffer ringBuffer(8192);
@@ -53,7 +53,7 @@ Task<void> handleClient(AsyncTcpSocket client, Host clientHost) {
     bool requestHeaderComplete = false;
 
     while (!requestHeaderComplete) {
-        auto result = co_await reader.getRequest(request);
+        auto result = co_await reader.get_request(request);
 
         if (!result) {
             auto& error = result.error();
@@ -69,47 +69,47 @@ Task<void> handleClient(AsyncTcpSocket client, Host clientHost) {
 
     g_request_count++;
 
-    const std::string& requestBody = request.bodyStr();
+    const std::string& requestBody = request.body_str();
 
     if (!requestBody.empty()) {
 
-        // `getRequest()` 当前会在 chunked 请求完成时把 body 聚合完毕，
+        // `get_request()` 当前会在 chunked 请求完成时把 body 聚合完毕，
         // 因此这里直接基于聚合后的正文回发 chunked 响应。
         HttpResponseHeader respHeader;
         respHeader.version() = HttpVersion::HttpVersion_1_1;
         respHeader.code() = HttpStatusCode::OK_200;
-        respHeader.headerPairs().addHeaderPair("Content-Type", "text/plain");
-        respHeader.headerPairs().addHeaderPair("Transfer-Encoding", "chunked");
-        respHeader.headerPairs().addHeaderPair("Server", "galay-http-chunked-test/1.0");
+        respHeader.header_pairs().add_header_pair("Content-Type", "text/plain");
+        respHeader.header_pairs().add_header_pair("Transfer-Encoding", "chunked");
+        respHeader.header_pairs().add_header_pair("Server", "galay-http-chunked-test/1.0");
 
-        auto headerResult = co_await writer.sendHeader(std::move(respHeader));
+        auto headerResult = co_await writer.send_header(std::move(respHeader));
         if (!headerResult) {
             co_await client.close();
             co_return;
         }
 
         std::string chunk1 = "Decoded body bytes: " + std::to_string(requestBody.size()) + "\n";
-        auto chunk1Result = co_await writer.sendChunk(chunk1, false);
+        auto chunk1Result = co_await writer.send_chunk(chunk1, false);
         if (!chunk1Result) {
             co_await client.close();
             co_return;
         }
 
         std::string chunk2 = "Echo: ";
-        auto chunk2Result = co_await writer.sendChunk(chunk2, false);
+        auto chunk2Result = co_await writer.send_chunk(chunk2, false);
         if (!chunk2Result) {
             co_await client.close();
             co_return;
         }
 
-        auto chunk3Result = co_await writer.sendChunk(requestBody, false);
+        auto chunk3Result = co_await writer.send_chunk(requestBody, false);
         if (!chunk3Result) {
             co_await client.close();
             co_return;
         }
 
         std::string emptyChunk;
-        auto lastChunkResult = co_await writer.sendChunk(emptyChunk, true);
+        auto lastChunkResult = co_await writer.send_chunk(emptyChunk, true);
         if (!lastChunkResult) {
             co_await client.close();
             co_return;
@@ -124,9 +124,9 @@ Task<void> handleClient(AsyncTcpSocket client, Host clientHost) {
             .header("Content-Type", "text/plain")
             .header("Server", "galay-http-chunked-test/1.0")
             .body("Non-chunked request received\n")
-            .buildMove();
+            .build_move();
 
-        auto sendResult = co_await writer.sendResponse(response);
+        auto sendResult = co_await writer.send_response(response);
         if (!sendResult) {
         } else {
         }
@@ -136,17 +136,17 @@ Task<void> handleClient(AsyncTcpSocket client, Host clientHost) {
 }
 
 // Chunk测试服务器
-Task<void> chunkedTestServer() {
+Task<void> chunked_test_server() {
 
     AsyncTcpSocket listener;
 
     // 设置选项
-    auto optResult = listener.option().handleReuseAddr();
+    auto optResult = listener.option().handle_reuse_addr();
     if (!optResult) {
         co_return;
     }
 
-    optResult = listener.option().handleNonBlock();
+    optResult = listener.option().handle_non_block();
     if (!optResult) {
         co_return;
     }
@@ -176,7 +176,7 @@ Task<void> chunkedTestServer() {
 
         // 创建客户端socket
         AsyncTcpSocket client(acceptResult.value());
-        client.option().handleNonBlock();
+        client.option().handle_non_block();
 
         // 创建RingBuffer和HttpReader/Writer
         RingBuffer ringBuffer(8192);
@@ -190,7 +190,7 @@ Task<void> chunkedTestServer() {
         bool requestHeaderComplete = false;
 
         while (!requestHeaderComplete) {
-            auto result = co_await reader.getRequest(request);
+            auto result = co_await reader.get_request(request);
 
             if (!result) {
                 auto& error = result.error();
@@ -211,45 +211,45 @@ Task<void> chunkedTestServer() {
 
         g_request_count++;
 
-        const std::string& requestBody = request.bodyStr();
+        const std::string& requestBody = request.body_str();
 
         if (!requestBody.empty()) {
 
             HttpResponseHeader respHeader;
             respHeader.version() = HttpVersion::HttpVersion_1_1;
             respHeader.code() = HttpStatusCode::OK_200;
-            respHeader.headerPairs().addHeaderPair("Content-Type", "text/plain");
-            respHeader.headerPairs().addHeaderPair("Transfer-Encoding", "chunked");
-            respHeader.headerPairs().addHeaderPair("Server", "galay-http-chunked-test/1.0");
+            respHeader.header_pairs().add_header_pair("Content-Type", "text/plain");
+            respHeader.header_pairs().add_header_pair("Transfer-Encoding", "chunked");
+            respHeader.header_pairs().add_header_pair("Server", "galay-http-chunked-test/1.0");
 
-            auto headerResult = co_await writer.sendHeader(std::move(respHeader));
+            auto headerResult = co_await writer.send_header(std::move(respHeader));
             if (!headerResult) {
                 co_await client.close();
                 continue;
             }
 
             std::string chunk1 = "Decoded body bytes: " + std::to_string(requestBody.size()) + "\n";
-            auto chunk1Result = co_await writer.sendChunk(chunk1, false);
+            auto chunk1Result = co_await writer.send_chunk(chunk1, false);
             if (!chunk1Result) {
                 co_await client.close();
                 continue;
             }
 
             std::string chunk2 = "Echo: ";
-            auto chunk2Result = co_await writer.sendChunk(chunk2, false);
+            auto chunk2Result = co_await writer.send_chunk(chunk2, false);
             if (!chunk2Result) {
                 co_await client.close();
                 continue;
             }
 
-            auto chunk3Result = co_await writer.sendChunk(requestBody, false);
+            auto chunk3Result = co_await writer.send_chunk(requestBody, false);
             if (!chunk3Result) {
                 co_await client.close();
                 continue;
             }
 
             std::string emptyChunk;
-            auto lastChunkResult = co_await writer.sendChunk(emptyChunk, true);
+            auto lastChunkResult = co_await writer.send_chunk(emptyChunk, true);
             if (!lastChunkResult) {
                 co_await client.close();
                 continue;
@@ -264,9 +264,9 @@ Task<void> chunkedTestServer() {
                 .header("Content-Type", "text/plain")
                 .header("Server", "galay-http-chunked-test/1.0")
                 .body("Non-chunked request received\n")
-                .buildMove();
+                .build_move();
 
-            auto sendResult = co_await writer.sendResponse(response);
+            auto sendResult = co_await writer.send_response(response);
             if (!sendResult) {
             } else {
             }
@@ -282,17 +282,17 @@ Task<void> chunkedTestServer() {
 int main() {
 
 #if defined(USE_KQUEUE) || defined(USE_EPOLL) || defined(USE_IOURING)
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     rt.start();
 
-    auto* scheduler = rt.getNextIOScheduler();
+    auto* scheduler = rt.get_next_io_scheduler();
     if (!scheduler) {
         rt.stop();
         return 1;
     }
 
     // 启动服务器
-    scheduleTask(scheduler, chunkedTestServer());
+    schedule_task(scheduler, chunked_test_server());
 
 
     // 保持运行

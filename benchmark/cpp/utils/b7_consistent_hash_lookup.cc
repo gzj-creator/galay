@@ -15,21 +15,21 @@ volatile std::size_t g_sink = 0;
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     constexpr std::size_t iterations = 200'000;
 
     galay::utils::ConsistentHash hash(64);
-    hash.addNode({"node-a", "127.0.0.1:9001", 1});
-    hash.addNode({"node-b", "127.0.0.1:9002", 1});
-    hash.addNode({"node-c", "127.0.0.1:9003", 2});
+    hash.add_node({"node-a", "127.0.0.1:9001", 1});
+    hash.add_node({"node-b", "127.0.0.1:9002", 1});
+    hash.add_node({"node-c", "127.0.0.1:9003", 2});
 
     std::size_t checksum = 0;
     const auto start = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < iterations; ++i) {
-        auto node = hash.getNode("request-" + std::to_string(i));
+        auto node = hash.get_node("request-" + std::to_string(i));
         if (!node.has_value()) {
             std::cerr << "consistent hash lookup returned no node\n";
             return 1;

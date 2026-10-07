@@ -47,7 +47,7 @@ void producer(galay::mpsc::UnboundedChannel<int>* channel, int producerId) {
         const int value = producerId * 100 + i;
         if (!channel->send(value)) {
             g_failed.store(true, std::memory_order_release);
-            if (!channel->close() && !channel->isClosed()) {
+            if (!channel->close() && !channel->is_closed()) {
                 std::cerr << "mpsc import example failed to close channel\n";
             }
             return;
@@ -65,7 +65,7 @@ int main() {
         return 1;
     }
 
-    if (!scheduleTask(scheduler, consumer(&channel))) {
+    if (!schedule_task(scheduler, consumer(&channel))) {
         std::cerr << "mpsc import example failed to schedule consumer\n";
         scheduler.stop();
         return 1;

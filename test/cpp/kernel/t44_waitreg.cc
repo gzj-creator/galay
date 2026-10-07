@@ -23,7 +23,7 @@ int main() {
         return 1;
     }
 
-    if (!registration.hasWaiter()) {
+    if (!registration.has_waiter()) {
         std::cerr << "[T44] expected armed waiter\n";
         return 1;
     }
@@ -42,13 +42,13 @@ int main() {
         return 1;
     }
 
-    void* signaled = registration.consumeWake();
+    void* signaled = registration.consume_wake();
     if (signaled != first_waiter) {
         std::cerr << "[T44] expected first waiter to be signaled\n";
         return 1;
     }
 
-    if (registration.consumeWake() != nullptr) {
+    if (registration.consume_wake() != nullptr) {
         std::cerr << "[T44] consumeWake should be single-shot\n";
         return 1;
     }
@@ -74,7 +74,7 @@ int main() {
         return 1;
     }
 
-    if (registration.hasWaiter()) {
+    if (registration.has_waiter()) {
         std::cerr << "[T44] expected waiter to be cleared\n";
         return 1;
     }

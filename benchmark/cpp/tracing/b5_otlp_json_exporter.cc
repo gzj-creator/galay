@@ -10,7 +10,7 @@
 
 namespace {
 
-[[nodiscard]] const char* buildType() {
+[[nodiscard]] const char* build_type() {
 #ifdef NDEBUG
     return "Release";
 #else
@@ -18,15 +18,15 @@ namespace {
 #endif
 }
 
-galay::tracing::TraceContext makeContext(std::string_view spanHex) {
+galay::tracing::TraceContext make_context(std::string_view spanHex) {
     return galay::tracing::TraceContext(
-        galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
-        galay::tracing::SpanId::fromHex(spanHex),
+        galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"),
+        galay::tracing::SpanId::from_hex(spanHex),
         0x01,
         "vendor=value");
 }
 
-std::vector<galay::tracing::Span> makeBatch() {
+std::vector<galay::tracing::Span> make_batch() {
     constexpr std::string_view kSpanIds[] = {
         "00f067aa0ba902b7",
         "00f067aa0ba902b8",
@@ -41,7 +41,7 @@ std::vector<galay::tracing::Span> makeBatch() {
     std::vector<galay::tracing::Span> spans;
     spans.reserve(std::size(kSpanIds));
     for (std::size_t i = 0; i < std::size(kSpanIds); ++i) {
-        galay::tracing::Span span("otlp-bench-span", makeContext(kSpanIds[i]));
+        galay::tracing::Span span("otlp-bench-span", make_context(kSpanIds[i]));
         span.end();
         spans.push_back(std::move(span));
     }
@@ -51,12 +51,12 @@ std::vector<galay::tracing::Span> makeBatch() {
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     constexpr int kIterations = 10000;
-    auto spans = makeBatch();
+    auto spans = make_batch();
 
     std::size_t requests = 0;
     std::size_t bytes = 0;
@@ -68,7 +68,7 @@ int main() {
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
-        static_cast<void>(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)));
+        static_cast<void>(exporter.export_spans(std::span<const galay::tracing::Span>(spans)));
     }
     const auto elapsed = std::chrono::steady_clock::now() - start;
     const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
@@ -76,7 +76,7 @@ int main() {
 
     std::cout << "B5-OtlpJsonExporter workload=" << kIterations
               << " batch_size=" << spans.size()
-              << " build=" << buildType()
+              << " build=" << build_type()
               << " backend=mock_transport"
               << " ns_per_span=" << (static_cast<double>(ns) / total_spans)
               << " requests=" << requests

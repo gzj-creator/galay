@@ -28,15 +28,15 @@ namespace galay::utils
             return digest;
         }
 
-        static std::string hashHex(const uint8_t* data, size_t length)
+        static std::string hash_hex(const uint8_t* data, size_t length)
         {
             const auto digest = hash(data, length);
-            return toHex(digest.data(), digest.size());
+            return to_hex(digest.data(), digest.size());
         }
 
-        static std::string hashHex(const std::string& data)
+        static std::string hash_hex(const std::string& data)
         {
-            return hashHex(reinterpret_cast<const uint8_t*>(data.data()), data.size());
+            return hash_hex(reinterpret_cast<const uint8_t*>(data.data()), data.size());
         }
 
     private:
@@ -55,7 +55,7 @@ namespace galay::utils
             0xCA62C1D6U
         };
 
-        static inline uint32_t leftRotate(uint32_t value, uint32_t bits)
+        static inline uint32_t left_rotate(uint32_t value, uint32_t bits)
         {
             return (value << bits) | (value >> (32U - bits));
         }
@@ -131,7 +131,7 @@ namespace galay::utils
             }
 
             for (size_t i = 16; i < 80; ++i) {
-                schedule[i] = leftRotate(
+                schedule[i] = left_rotate(
                     schedule[i - 3] ^ schedule[i - 8] ^ schedule[i - 14] ^ schedule[i - 16], 1U);
             }
 
@@ -158,10 +158,10 @@ namespace galay::utils
                     k = kRoundConstants[3];
                 }
 
-                const uint32_t temp = leftRotate(a, 5U) + f + e + k + schedule[i];
+                const uint32_t temp = left_rotate(a, 5U) + f + e + k + schedule[i];
                 e = d;
                 d = c;
-                c = leftRotate(b, 30U);
+                c = left_rotate(b, 30U);
                 b = a;
                 a = temp;
             }
@@ -173,7 +173,7 @@ namespace galay::utils
             state[4] += e;
         }
 
-        static inline std::string toHex(const uint8_t* data, size_t length)
+        static inline std::string to_hex(const uint8_t* data, size_t length)
         {
             static constexpr char kHexDigits[] = "0123456789abcdef";
             std::string result;

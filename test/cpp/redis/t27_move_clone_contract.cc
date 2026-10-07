@@ -97,7 +97,7 @@ static_assert(!std::is_copy_constructible_v<RedissConnectionPool>);
 static_assert(!std::is_move_constructible_v<RedissConnectionPool>);
 #endif
 
-RedisReply makeNestedReply()
+RedisReply make_nested_reply()
 {
     std::vector<RedisReply> inner;
     inner.emplace_back(RespType::BulkString, std::string("leaf"));
@@ -122,81 +122,81 @@ bool expect(bool condition, const char* message)
     return true;
 }
 
-bool testRedisReplyClone()
+bool test_redis_reply_clone()
 {
-    RedisReply original = makeNestedReply();
+    RedisReply original = make_nested_reply();
     RedisReply cloned = original.clone();
     RedisReply moved_original = std::move(original);
 
-    const auto& cloned_array = cloned.asArray();
+    const auto& cloned_array = cloned.as_array();
     if (!expect(cloned_array.size() == 2, "cloned reply array size mismatch")) {
         return false;
     }
-    if (!expect(cloned_array[1].asInteger() == 42, "cloned reply integer mismatch")) {
+    if (!expect(cloned_array[1].as_integer() == 42, "cloned reply integer mismatch")) {
         return false;
     }
 
-    const auto& cloned_map = cloned_array[0].asMap();
+    const auto& cloned_map = cloned_array[0].as_map();
     if (!expect(cloned_map.size() == 1, "cloned reply map size mismatch")) {
         return false;
     }
-    if (!expect(cloned_map[0].first.asString() == "key", "cloned reply map key mismatch")) {
+    if (!expect(cloned_map[0].first.as_string() == "key", "cloned reply map key mismatch")) {
         return false;
     }
-    if (!expect(cloned_map[0].second.asArray()[0].asString() == "leaf",
+    if (!expect(cloned_map[0].second.as_array()[0].as_string() == "leaf",
                 "cloned reply nested payload mismatch")) {
         return false;
     }
-    return expect(moved_original.asArray().size() == 2, "moved reply lost payload");
+    return expect(moved_original.as_array().size() == 2, "moved reply lost payload");
 }
 
-bool testRedisValueCloneAndConversions()
+bool test_redis_value_clone_and_conversions()
 {
-    RedisValue value(makeNestedReply());
+    RedisValue value(make_nested_reply());
     RedisValue cloned = value.clone();
     RedisValue moved = std::move(cloned);
 
-    const std::vector<RedisValue> array = moved.toArray();
+    const std::vector<RedisValue> array = moved.to_array();
     if (!expect(array.size() == 2, "RedisValue clone array size mismatch")) {
         return false;
     }
-    if (!expect(array[1].toInteger() == 42, "RedisValue clone integer mismatch")) {
+    if (!expect(array[1].to_integer() == 42, "RedisValue clone integer mismatch")) {
         return false;
     }
 
-    const std::map<std::string, RedisValue> map = array[0].toMap();
+    const std::map<std::string, RedisValue> map = array[0].to_map();
     auto it = map.find("key");
     if (!expect(it != map.end(), "RedisValue clone map key missing")) {
         return false;
     }
-    const std::vector<RedisValue> nested = it->second.toArray();
+    const std::vector<RedisValue> nested = it->second.to_array();
     if (!expect(nested.size() == 1, "RedisValue clone nested array size mismatch")) {
         return false;
     }
-    if (!expect(nested[0].toString() == "leaf", "RedisValue clone nested payload mismatch")) {
+    if (!expect(nested[0].to_string() == "leaf", "RedisValue clone nested payload mismatch")) {
         return false;
     }
 
     std::vector<RedisReply> set_items;
     set_items.emplace_back(RespType::BulkString, std::string("member"));
     RedisValue set_value(RedisReply(RespType::Set, std::move(set_items)));
-    if (!expect(set_value.toSet()[0].toString() == "member", "RedisValue set conversion mismatch")) {
+    if (!expect(set_value.to_set()[0].to_string() == "member", "RedisValue set conversion mismatch")) {
         return false;
     }
 
     std::vector<RedisReply> push_items;
     push_items.emplace_back(RespType::SimpleString, std::string("message"));
     RedisValue push_value(RedisReply(RespType::Push, std::move(push_items)));
-    if (!expect(push_value.toPush()[0].toStatus() == "message", "RedisValue push conversion mismatch")) {
+    if (!expect(push_value.to_push()[0].to_status() == "message", "RedisValue push conversion mismatch")) {
         return false;
     }
 
-    RedisAsyncValue async_value(makeNestedReply());
+    RedisAsyncValue async_value(make_nested_reply());
     RedisAsyncValue async_clone = async_value.clone();
-    return expect(async_clone.toArray().size() == 2, "RedisAsyncValue clone array size mismatch");
+    return expect(async_clone.to_array().size() == 2, "RedisAsyncValue clone array size mismatch");
 }
 
-bool testRedisEncodedCommandClone()
+bool test_redis_encoded_command_clone()
 {
     RedisEncodedCommand command;
     command.encoded = "*1\r\n$4\r\nPING\r\n";
@@ -217,7 +217,7 @@ bool testRedisEncodedCommandClone()
     return expect(moved.expected_replies == 3, "encoded command move reply count mismatch");
 }
 
-bool testRedisCommandBuilderCloneAndMoveRebuildViews()
+bool test_redis_command_builder_clone_and_move_rebuild_views()
 {
     RedisCommandBuilder builder;
     const std::array<std::string_view, 2> args{"alpha-key", "alpha-value"};
@@ -262,16 +262,16 @@ bool testRedisCommandBuilderCloneAndMoveRebuildViews()
 
 int main()
 {
-    if (!testRedisReplyClone()) {
+    if (!test_redis_reply_clone()) {
         return 1;
     }
-    if (!testRedisValueCloneAndConversions()) {
+    if (!test_redis_value_clone_and_conversions()) {
         return 1;
     }
-    if (!testRedisEncodedCommandClone()) {
+    if (!test_redis_encoded_command_clone()) {
         return 1;
     }
-    if (!testRedisCommandBuilderCloneAndMoveRebuildViews()) {
+    if (!test_redis_command_builder_clone_and_move_rebuild_views()) {
         return 1;
     }
 

@@ -79,12 +79,12 @@ concept AlwaysReadyAwaitable =
 /**
  * @brief 显式超时结果注入定制点。
  *
- * `setTimeout()` is useful for awaitables whose result is kept in private
+ * `set_timeout()` is useful for awaitables whose result is kept in private
  * state, where exposing an `m_result` member would weaken the abstraction.
  */
 template <typename T>
 concept TimeoutSettable = requires(T& value) {
-    value.setTimeout();
+    value.set_timeout();
 };
 
 /**
@@ -92,15 +92,15 @@ concept TimeoutSettable = requires(T& value) {
  */
 template <typename T>
 concept TimeoutMarkable = requires(T& value) {
-    value.markTimeout();
+    value.mark_timeout();
 };
 
 /**
  * @brief 匹配可注入超时结果的等待器的概念
  * @tparam T 要检查的类型
  * @details 满足以下任一通道即认为可注入超时：
- *          - 提供 `markTimeout()`（推荐定制点）；
- *          - 提供 `setTimeout()`（私有结果存储的显式定制点）；
+ *          - 提供 `mark_timeout()`（推荐定制点）；
+ *          - 提供 `set_timeout()`（私有结果存储的显式定制点）；
  *          - 提供公共 `m_result` 成员（历史兼容，超时错误直接写入）；
  *          - 恒不挂起（kAlwaysReady，超时注入不可达）。
  *          不满足任何通道的类型与 `.timeout()` 组合会在编译期报错，

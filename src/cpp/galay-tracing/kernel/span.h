@@ -76,35 +76,35 @@ public:
      * @param value 整数值
      * @return 对应的 SpanAttributeValue
      */
-    [[nodiscard]] static SpanAttributeValue fromInt64(std::int64_t value);
+    [[nodiscard]] static SpanAttributeValue from_int64(std::int64_t value);
 
     /**
      * @brief 从 uint64 值创建属性值
      * @param value 无符号整数值
      * @return 对应的 SpanAttributeValue
      */
-    [[nodiscard]] static SpanAttributeValue fromUInt64(std::uint64_t value);
+    [[nodiscard]] static SpanAttributeValue from_uint64(std::uint64_t value);
 
     /**
      * @brief 从 double 值创建属性值
      * @param value 浮点数值
      * @return 对应的 SpanAttributeValue
      */
-    [[nodiscard]] static SpanAttributeValue fromDouble(double value);
+    [[nodiscard]] static SpanAttributeValue from_double(double value);
 
     /**
      * @brief 从 bool 值创建属性值
      * @param value 布尔值
      * @return 对应的 SpanAttributeValue
      */
-    [[nodiscard]] static SpanAttributeValue fromBool(bool value);
+    [[nodiscard]] static SpanAttributeValue from_bool(bool value);
 
     /**
      * @brief 从 string 值创建属性值
      * @param value 字符串值（会被移动）
      * @return 对应的 SpanAttributeValue
      */
-    [[nodiscard]] static SpanAttributeValue fromString(std::string value);
+    [[nodiscard]] static SpanAttributeValue from_string(std::string value);
 
     /**
      * @brief 获取属性值类型
@@ -116,31 +116,31 @@ public:
      * @brief 以 int64 类型获取值
      * @return int64 值
      */
-    [[nodiscard]] std::int64_t asInt64() const;
+    [[nodiscard]] std::int64_t as_int64() const;
 
     /**
      * @brief 以 uint64 类型获取值
      * @return uint64 值
      */
-    [[nodiscard]] std::uint64_t asUInt64() const;
+    [[nodiscard]] std::uint64_t as_uint64() const;
 
     /**
      * @brief 以 double 类型获取值
      * @return double 值
      */
-    [[nodiscard]] double asDouble() const;
+    [[nodiscard]] double as_double() const;
 
     /**
      * @brief 以 bool 类型获取值
      * @return bool 值
      */
-    [[nodiscard]] bool asBool() const;
+    [[nodiscard]] bool as_bool() const;
 
     /**
      * @brief 以 string 类型获取值
      * @return 字符串的常量引用
      */
-    [[nodiscard]] const std::string& asString() const;
+    [[nodiscard]] const std::string& as_string() const;
 
 private:
     using Storage = std::variant<std::int64_t, std::uint64_t, double, bool, std::string>;
@@ -185,7 +185,7 @@ struct SpanLink {
  * @param value 属性值
  * @return SpanAttribute 键值对
  */
-[[nodiscard]] SpanAttribute spanAttribute(std::string_view name, std::int64_t value);
+[[nodiscard]] SpanAttribute span_attribute(std::string_view name, std::int64_t value);
 
 /**
  * @brief 创建 int 类型的 Span 属性
@@ -193,7 +193,7 @@ struct SpanLink {
  * @param value 属性值
  * @return SpanAttribute 键值对
  */
-[[nodiscard]] SpanAttribute spanAttribute(std::string_view name, int value);
+[[nodiscard]] SpanAttribute span_attribute(std::string_view name, int value);
 
 /**
  * @brief 创建 uint64 类型的 Span 属性
@@ -201,7 +201,7 @@ struct SpanLink {
  * @param value 属性值
  * @return SpanAttribute 键值对
  */
-[[nodiscard]] SpanAttribute spanAttribute(std::string_view name, std::uint64_t value);
+[[nodiscard]] SpanAttribute span_attribute(std::string_view name, std::uint64_t value);
 
 /**
  * @brief 创建 double 类型的 Span 属性
@@ -209,7 +209,7 @@ struct SpanLink {
  * @param value 属性值
  * @return SpanAttribute 键值对
  */
-[[nodiscard]] SpanAttribute spanAttribute(std::string_view name, double value);
+[[nodiscard]] SpanAttribute span_attribute(std::string_view name, double value);
 
 /**
  * @brief 创建 bool 类型的 Span 属性
@@ -217,7 +217,7 @@ struct SpanLink {
  * @param value 属性值
  * @return SpanAttribute 键值对
  */
-[[nodiscard]] SpanAttribute spanAttribute(std::string_view name, bool value);
+[[nodiscard]] SpanAttribute span_attribute(std::string_view name, bool value);
 
 /**
  * @brief 创建 string_view 类型的 Span 属性
@@ -225,7 +225,7 @@ struct SpanLink {
  * @param value 属性值
  * @return SpanAttribute 键值对
  */
-[[nodiscard]] SpanAttribute spanAttribute(std::string_view name, std::string_view value);
+[[nodiscard]] SpanAttribute span_attribute(std::string_view name, std::string_view value);
 
 /**
  * @brief 创建 C 字符串类型的 Span 属性
@@ -233,7 +233,7 @@ struct SpanLink {
  * @param value 属性值
  * @return SpanAttribute 键值对
  */
-[[nodiscard]] SpanAttribute spanAttribute(std::string_view name, const char* value);
+[[nodiscard]] SpanAttribute span_attribute(std::string_view name, const char* value);
 
 /**
  * @brief Span 状态
@@ -249,13 +249,13 @@ struct SpanStatus {
  * 以日志时间戳作为低成本的默认时间来源。
  * @param policy 时间策略
  */
-void setSpanTimingPolicy(SpanTimingPolicy policy) noexcept;
+void set_span_timing_policy(SpanTimingPolicy policy) noexcept;
 
 /**
  * @brief 获取当前 Span 时间戳记录策略
  * @return 当前策略
  */
-[[nodiscard]] SpanTimingPolicy spanTimingPolicy() noexcept;
+[[nodiscard]] SpanTimingPolicy span_timing_policy() noexcept;
 
 /**
  * @brief 追踪 Span 数据模型
@@ -334,14 +334,14 @@ public:
      * @return TraceContext 实例
      */
     [[nodiscard]] TraceContext context() const {
-        return m_context.toTraceContext(m_tracestate);
+        return m_context.to_trace_context(m_tracestate);
     }
 
     /**
      * @brief 获取 Span 上下文
      * @return SpanContext 的常量引用
      */
-    [[nodiscard]] const SpanContext& spanContext() const noexcept {
+    [[nodiscard]] const SpanContext& span_context() const noexcept {
         return m_context;
     }
 
@@ -365,7 +365,7 @@ public:
      * @brief 设置 Span 类型
      * @param kind Span 类型
      */
-    void setKind(SpanKind kind) noexcept {
+    void set_kind(SpanKind kind) noexcept {
         m_kind = kind;
     }
 
@@ -382,7 +382,7 @@ public:
      * @param code 状态码
      * @param message 状态描述消息（默认为空）
      */
-    void setStatus(SpanStatusCode code, std::string message = {});
+    void set_status(SpanStatusCode code, std::string message = {});
 
     /**
      * @brief 获取所有属性
@@ -397,7 +397,7 @@ public:
      * @param attribute 属性键值对
      * @return 成功添加返回 true，已达上限返回 false
      */
-    [[nodiscard]] bool setAttribute(SpanAttribute attribute);
+    [[nodiscard]] bool set_attribute(SpanAttribute attribute);
 
     /**
      * @brief 设置 int64 属性
@@ -405,7 +405,7 @@ public:
      * @param value 属性值
      * @return 成功添加返回 true，已达上限返回 false
      */
-    [[nodiscard]] bool setAttribute(std::string_view name, std::int64_t value);
+    [[nodiscard]] bool set_attribute(std::string_view name, std::int64_t value);
 
     /**
      * @brief 设置 int 属性
@@ -413,7 +413,7 @@ public:
      * @param value 属性值
      * @return 成功添加返回 true，已达上限返回 false
      */
-    [[nodiscard]] bool setAttribute(std::string_view name, int value);
+    [[nodiscard]] bool set_attribute(std::string_view name, int value);
 
     /**
      * @brief 设置 uint64 属性
@@ -421,7 +421,7 @@ public:
      * @param value 属性值
      * @return 成功添加返回 true，已达上限返回 false
      */
-    [[nodiscard]] bool setAttribute(std::string_view name, std::uint64_t value);
+    [[nodiscard]] bool set_attribute(std::string_view name, std::uint64_t value);
 
     /**
      * @brief 设置 double 属性
@@ -429,7 +429,7 @@ public:
      * @param value 属性值
      * @return 成功添加返回 true，已达上限返回 false
      */
-    [[nodiscard]] bool setAttribute(std::string_view name, double value);
+    [[nodiscard]] bool set_attribute(std::string_view name, double value);
 
     /**
      * @brief 设置 bool 属性
@@ -437,7 +437,7 @@ public:
      * @param value 属性值
      * @return 成功添加返回 true，已达上限返回 false
      */
-    [[nodiscard]] bool setAttribute(std::string_view name, bool value);
+    [[nodiscard]] bool set_attribute(std::string_view name, bool value);
 
     /**
      * @brief 设置 string_view 属性
@@ -445,7 +445,7 @@ public:
      * @param value 属性值
      * @return 成功添加返回 true，已达上限返回 false
      */
-    [[nodiscard]] bool setAttribute(std::string_view name, std::string_view value);
+    [[nodiscard]] bool set_attribute(std::string_view name, std::string_view value);
 
     /**
      * @brief 设置 C 字符串属性
@@ -453,7 +453,7 @@ public:
      * @param value 属性值
      * @return 成功添加返回 true，已达上限返回 false
      */
-    [[nodiscard]] bool setAttribute(std::string_view name, const char* value);
+    [[nodiscard]] bool set_attribute(std::string_view name, const char* value);
 
     /**
      * @brief 添加 Span 事件
@@ -461,7 +461,7 @@ public:
      * @param attributes 事件属性；超过 kMaxEventAttributes 的尾部属性会被丢弃
      * @return 成功添加返回 true，已达事件上限返回 false
      */
-    [[nodiscard]] bool addEvent(std::string_view name, std::vector<SpanAttribute> attributes = {});
+    [[nodiscard]] bool add_event(std::string_view name, std::vector<SpanAttribute> attributes = {});
 
     /**
      * @brief 获取所有事件
@@ -478,7 +478,7 @@ public:
      * @param attributes 链接属性；超过 kMaxLinkAttributes 的尾部属性会被丢弃
      * @return 成功添加返回 true，已达链接上限返回 false
      */
-    [[nodiscard]] bool addLink(
+    [[nodiscard]] bool add_link(
         SpanContext context,
         std::string tracestate = {},
         std::vector<SpanAttribute> attributes = {});
@@ -495,7 +495,7 @@ public:
      * @brief 获取 Span 开始时间
      * @return 开始时间点
      */
-    [[nodiscard]] Clock::time_point startedAt() const noexcept {
+    [[nodiscard]] Clock::time_point started_at() const noexcept {
         return m_startedAt;
     }
 
@@ -503,7 +503,7 @@ public:
      * @brief 获取 Span 结束时间
      * @return 结束时间点
      */
-    [[nodiscard]] Clock::time_point endedAt() const noexcept {
+    [[nodiscard]] Clock::time_point ended_at() const noexcept {
         return m_endedAt;
     }
 

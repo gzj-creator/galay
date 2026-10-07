@@ -92,7 +92,7 @@ public:
      * @param projection 字段投影（默认空 = 返回全部字段）
      * @return 响应文档或 MongoError
      */
-    MongoResult findOne(const std::string& database,
+    MongoResult find_one(const std::string& database,
                         const std::string& collection,
                         const MongoDocument& filter = {},
                         const MongoDocument& projection = {});
@@ -104,7 +104,7 @@ public:
      * @param document   待插入的文档
      * @return 响应文档或 MongoError
      */
-    MongoResult insertOne(const std::string& database,
+    MongoResult insert_one(const std::string& database,
                           const std::string& collection,
                           const MongoDocument& document);
 
@@ -117,7 +117,7 @@ public:
      * @param upsert     未匹配时是否插入，默认 false
      * @return 响应文档或 MongoError
      */
-    MongoResult updateOne(const std::string& database,
+    MongoResult update_one(const std::string& database,
                           const std::string& collection,
                           const MongoDocument& filter,
                           const MongoDocument& update,
@@ -130,7 +130,7 @@ public:
      * @param filter     匹配条件
      * @return 响应文档或 MongoError
      */
-    MongoResult deleteOne(const std::string& database,
+    MongoResult delete_one(const std::string& database,
                           const std::string& collection,
                           const MongoDocument& filter);
 
@@ -143,7 +143,7 @@ public:
      * @brief 判断当前是否已连接
      * @return 已连接时返回 true
      */
-    bool isConnected() const { return m_connection.isConnected(); }
+    bool is_connected() const { return m_connection.is_connected(); }
 
 private:
     /**
@@ -153,7 +153,7 @@ private:
      * @param check_ok 是否检查响应的 ok 字段
      * @return 响应文档或 MongoError
      */
-    MongoResult runCommandRequest(const std::string& database,
+    MongoResult run_command_request(const std::string& database,
                                   const MongoDocument& command,
                                   bool check_ok);
 
@@ -162,21 +162,21 @@ private:
      * @param config 连接配置
      * @return 成功返回 void，失败返回 MongoError
      */
-    MongoVoidResult authenticateIfNeeded(const MongoConfig& config);
+    MongoVoidResult authenticate_if_needed(const MongoConfig& config);
 
     /**
      * @brief 执行 SCRAM-SHA-256 认证流程
      * @param config 包含用户名和密码的连接配置
      * @return 成功返回 void，失败返回 MongoError
      */
-    MongoVoidResult authenticateScramSha256(const MongoConfig& config);
+    MongoVoidResult authenticate_scram_sha256(const MongoConfig& config);
 
     /**
      * @brief 转义 SCRAM 用户名中的特殊字符
      * @param username 原始用户名
      * @return 转义后的用户名
      */
-    static std::string escapeScramUsername(const std::string& username);
+    static std::string escape_scram_username(const std::string& username);
 
     /**
      * @brief 解析 SCRAM 交互中的 payload 键值对
@@ -184,21 +184,21 @@ private:
      * @return 键值对映射
      */
     static std::unordered_map<std::string, std::string>
-    parseScramPayload(const std::string& payload);
+    parse_scram_payload(const std::string& payload);
 
     /**
      * @brief Base64 编码
      * @param bytes 原始字节
      * @return Base64 编码字符串
      */
-    static std::string base64Encode(const std::vector<uint8_t>& bytes);
+    static std::string base64_encode(const std::vector<uint8_t>& bytes);
 
     /**
      * @brief Base64 解码
      * @param text Base64 编码字符串
      * @return 解码后的字节向量，或 MongoError
      */
-    static std::expected<std::vector<uint8_t>, MongoError> base64Decode(const std::string& text);
+    static std::expected<std::vector<uint8_t>, MongoError> base64_decode(const std::string& text);
 
     /**
      * @brief PBKDF2-HMAC-SHA256 密钥派生
@@ -208,7 +208,7 @@ private:
      * @return 派生密钥，或 MongoError
      */
     static std::expected<std::vector<uint8_t>, MongoError>
-    pbkdf2HmacSha256(const std::string& password,
+    pbkdf2_hmac_sha256(const std::string& password,
                     const std::vector<uint8_t>& salt,
                     int iterations);
 
@@ -219,7 +219,7 @@ private:
      * @return HMAC 结果，或 MongoError
      */
     static std::expected<std::vector<uint8_t>, MongoError>
-    hmacSha256(const std::vector<uint8_t>& key, const std::string& data);
+    hmac_sha256(const std::vector<uint8_t>& key, const std::string& data);
 
     /**
      * @brief SHA-256 哈希计算
@@ -235,14 +235,14 @@ private:
      * @param b 第二个字节向量
      * @return 异或结果
      */
-    static std::vector<uint8_t> xorBytes(const std::vector<uint8_t>& a,
+    static std::vector<uint8_t> xor_bytes(const std::vector<uint8_t>& a,
                                          const std::vector<uint8_t>& b);
 
     /**
      * @brief 生成 SCRAM 客户端随机数
      * @return Base64 编码的随机数，或 MongoError
      */
-    static std::expected<std::string, MongoError> generateClientNonce();
+    static std::expected<std::string, MongoError> generate_client_nonce();
 
 private:
     protocol::Connection m_connection;              ///< 底层同步 TCP 连接

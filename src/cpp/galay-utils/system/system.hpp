@@ -46,7 +46,7 @@ class System {
 public:
     // File functions
 
-    static std::optional<std::string> readFile(const std::string& path) {
+    static std::optional<std::string> read_file(const std::string& path) {
         std::ifstream file(path, std::ios::binary | std::ios::ate);
         if (!file) {
             return std::nullopt;
@@ -70,7 +70,7 @@ public:
         return std::nullopt;
     }
 
-    static bool writeFile(const std::string& path, const std::string& content, bool append = false) {
+    static bool write_file(const std::string& path, const std::string& content, bool append = false) {
         std::ios_base::openmode mode = std::ios::binary;
         if (append) {
             mode |= std::ios::app;
@@ -87,7 +87,7 @@ public:
         return file.good();
     }
 
-    static std::optional<std::string> readFileMmap(const std::string& path) {
+    static std::optional<std::string> read_file_mmap(const std::string& path) {
 #if defined(_WIN32)
         HANDLE hFile = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -95,13 +95,13 @@ public:
             return std::nullopt;
         }
 
-        LARGE_INTEGER fileSize;
-        if (!GetFileSizeEx(hFile, &fileSize)) {
+        LARGE_INTEGER file_size;
+        if (!GetFileSizeEx(hFile, &file_size)) {
             CloseHandle(hFile);
             return std::nullopt;
         }
 
-        if (fileSize.QuadPart == 0) {
+        if (file_size.QuadPart == 0) {
             CloseHandle(hFile);
             return std::string();
         }
@@ -119,7 +119,7 @@ public:
             return std::nullopt;
         }
 
-        std::string result(static_cast<const char*>(data), fileSize.QuadPart);
+        std::string result(static_cast<const char*>(data), file_size.QuadPart);
 
         UnmapViewOfFile(data);
         CloseHandle(hMapping);
@@ -158,7 +158,7 @@ public:
 #endif
     }
 
-    static bool fileExists(const std::string& path) {
+    static bool file_exists(const std::string& path) {
 #if defined(_WIN32)
         DWORD attrs = GetFileAttributesA(path.c_str());
         return attrs != INVALID_FILE_ATTRIBUTES;
@@ -168,7 +168,7 @@ public:
 #endif
     }
 
-    static bool isDirectory(const std::string& path) {
+    static bool is_directory(const std::string& path) {
 #if defined(_WIN32)
         DWORD attrs = GetFileAttributesA(path.c_str());
         return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY);
@@ -178,7 +178,7 @@ public:
 #endif
     }
 
-    static int64_t fileSize(const std::string& path) {
+    static int64_t file_size(const std::string& path) {
 #if defined(_WIN32)
         WIN32_FILE_ATTRIBUTE_DATA fad;
         if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &fad)) {
@@ -197,7 +197,7 @@ public:
 #endif
     }
 
-    static bool createDirectory(const std::string& path) {
+    static bool create_directory(const std::string& path) {
 #if defined(_WIN32)
         return CreateDirectoryA(path.c_str(), nullptr) || GetLastError() == ERROR_ALREADY_EXISTS;
 #else
@@ -218,7 +218,7 @@ public:
 
     static bool remove(const std::string& path) {
 #if defined(_WIN32)
-        if (isDirectory(path)) {
+        if (is_directory(path)) {
             return RemoveDirectoryA(path.c_str()) != 0;
         }
         return DeleteFileA(path.c_str()) != 0;
@@ -227,7 +227,7 @@ public:
 #endif
     }
 
-    static std::vector<std::string> listDirectory(const std::string& path) {
+    static std::vector<std::string> list_directory(const std::string& path) {
         std::vector<std::string> result;
 
 #if defined(_WIN32)
@@ -263,7 +263,7 @@ public:
 
     // Network functions
 
-    static std::string resolveHostIPv4(const std::string& hostname) {
+    static std::string resolve_host_ipv4(const std::string& hostname) {
         struct addrinfo hints{}, *result;
         hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_STREAM;
@@ -280,7 +280,7 @@ public:
         return std::string(ip);
     }
 
-    static std::string resolveHostIPv6(const std::string& hostname) {
+    static std::string resolve_host_ipv6(const std::string& hostname) {
         struct addrinfo hints{}, *result;
         hints.ai_family = AF_INET6;
         hints.ai_socktype = SOCK_STREAM;
@@ -305,7 +305,7 @@ public:
      * @param address 待检查的地址字符串
      * @return 地址类型枚举值
      */
-    static AddressType checkAddressType(const std::string& address) {
+    static AddressType check_address_type(const std::string& address) {
         struct in_addr ipv4;
         struct in6_addr ipv6;
 
@@ -347,7 +347,7 @@ public:
         return "";
     }
 
-    static std::string currentDir() {
+    static std::string current_dir() {
 #if defined(_WIN32)
         char buffer[MAX_PATH];
         if (_getcwd(buffer, sizeof(buffer))) {
@@ -362,7 +362,7 @@ public:
         return "";
     }
 
-    static bool changeDir(const std::string& path) {
+    static bool change_dir(const std::string& path) {
 #if defined(_WIN32)
         return _chdir(path.c_str()) == 0;
 #else
@@ -370,7 +370,7 @@ public:
 #endif
     }
 
-    static std::string executablePath() {
+    static std::string executable_path() {
 #if defined(__APPLE__)
         char buffer[PATH_MAX];
         uint32_t size = sizeof(buffer);

@@ -18,27 +18,27 @@ using namespace galay::websocket;
 
 namespace {
 
-std::string encodeMaskedFrame(WsOpcode opcode, std::string payload, bool fin = true) {
+std::string encode_masked_frame(WsOpcode opcode, std::string payload, bool fin = true) {
     WsFrame frame(opcode, std::move(payload), fin);
     std::string encoded;
-    WsFrameParser::encodeInto(encoded, frame, true);
+    WsFrameParser::encode_into(encoded, frame, true);
     return encoded;
 }
 
-void writeAll(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring, std::string_view bytes) {
-    const size_t written = ring.tryWriteBatch(bytes.data(), bytes.size());
+void write_all(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring, std::string_view bytes) {
+    const size_t written = ring.try_write_batch(bytes.data(), bytes.size());
     if (written != bytes.size()) {
         throw std::runtime_error("ring buffer write truncated");
     }
 }
 
-bool expectSuccess(galay::websocket::detail::WsMessageReadState& state, const char* label) {
-    const bool completed = state.parseFromBuffer();
+bool expect_success(galay::websocket::detail::WsMessageReadState& state, const char* label) {
+    const bool completed = state.parse_from_buffer();
     if (!completed) {
         std::cerr << "[T60] " << label << ": parse did not complete\n";
         return false;
     }
-    const auto result = state.takeResult();
+    const auto result = state.take_result();
     if (!result.has_value()) {
         std::cerr << "[T60] " << label << ": unexpected error " << result.error().message() << "\n";
         return false;
@@ -50,13 +50,13 @@ bool expectSuccess(galay::websocket::detail::WsMessageReadState& state, const ch
     return true;
 }
 
-bool expectError(galay::websocket::detail::WsMessageReadState& state, WsErrorCode code, const char* label) {
-    const bool completed = state.parseFromBuffer();
+bool expect_error(galay::websocket::detail::WsMessageReadState& state, WsErrorCode code, const char* label) {
+    const bool completed = state.parse_from_buffer();
     if (!completed) {
         std::cerr << "[T60] " << label << ": parse did not complete\n";
         return false;
     }
-    const auto result = state.takeResult();
+    const auto result = state.take_result();
     if (result.has_value()) {
         std::cerr << "[T60] " << label << ": expected error but got success\n";
         return false;
@@ -87,14 +87,14 @@ int main() {
     {
         RingBuffer ring(1024);
         const std::string payload = "hello websocket";
-        writeAll(ring, encodeMaskedFrame(WsOpcode::Text, payload));
+        write_all(ring, encode_masked_frame(WsOpcode::Text, payload));
 
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
         galay::websocket::detail::WsMessageReadState state(
             ring, setting, message, opcode, true, false, nullptr);
 
-        CHECK(expectSuccess(state, "single masked text"), "single masked text parse should succeed");
+        CHECK(expect_success(state, "single masked text"), "single masked text parse should succeed");
         CHECK(message == payload, "single masked text payload mismatch");
         CHECK(opcode == WsOpcode::Text, "single masked text opcode mismatch");
         CHECK(ring.readable() == 0, "single masked text should consume full frame");
@@ -104,14 +104,14 @@ int main() {
     {
         RingBuffer ring(1024);
         const std::string payload("\x01\x02\x03\x04", 4);
-        writeAll(ring, encodeMaskedFrame(WsOpcode::Binary, payload));
+        write_all(ring, encode_masked_frame(WsOpcode::Binary, payload));
 
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
         galay::websocket::detail::WsMessageReadState state(
             ring, setting, message, opcode, true, false, nullptr);
 
-        CHECK(expectSuccess(state, "single masked binary"), "single masked binary parse should succeed");
+        CHECK(expect_success(state, "single masked binary"), "single masked binary parse should succeed");
         CHECK(message == payload, "single masked binary payload mismatch");
         CHECK(opcode == WsOpcode::Binary, "single masked binary opcode mismatch");
         CHECK(ring.readable() == 0, "single masked binary should consume full frame");
@@ -121,16 +121,16 @@ int main() {
     {
         RingBuffer ring(1024);
         std::string buffered;
-        buffered += encodeMaskedFrame(WsOpcode::Text, "frag-", false);
-        buffered += encodeMaskedFrame(WsOpcode::Continuation, "done", true);
-        writeAll(ring, buffered);
+        buffered += encode_masked_frame(WsOpcode::Text, "frag-", false);
+        buffered += encode_masked_frame(WsOpcode::Continuation, "done", true);
+        write_all(ring, buffered);
 
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
         galay::websocket::detail::WsMessageReadState state(
             ring, setting, message, opcode, true, false, nullptr);
 
-        CHECK(expectSuccess(state, "fragmented message"), "fragmented message parse should succeed");
+        CHECK(expect_success(state, "fragmented message"), "fragmented message parse should succeed");
         CHECK(message == "frag-done", "fragmented message payload mismatch");
         CHECK(opcode == WsOpcode::Text, "fragmented message opcode mismatch");
         CHECK(ring.readable() == 0, "fragmented message should consume buffered frames");
@@ -140,11 +140,11 @@ int main() {
     {
         RingBuffer ring(1024);
         std::string buffered;
-        buffered += encodeMaskedFrame(WsOpcode::Text, "part-", false);
-        const auto trailing = encodeMaskedFrame(WsOpcode::Continuation, "tail", true);
-        buffered += encodeMaskedFrame(WsOpcode::Ping, "mid-ping", true);
+        buffered += encode_masked_frame(WsOpcode::Text, "part-", false);
+        const auto trailing = encode_masked_frame(WsOpcode::Continuation, "tail", true);
+        buffered += encode_masked_frame(WsOpcode::Ping, "mid-ping", true);
         buffered += trailing;
-        writeAll(ring, buffered);
+        write_all(ring, buffered);
 
         std::vector<std::pair<WsOpcode, std::string>> controls;
         std::string message;
@@ -160,7 +160,7 @@ int main() {
                 controls.emplace_back(op, payload);
             });
 
-        CHECK(expectSuccess(state, "control interleave"), "control interleave parse should succeed");
+        CHECK(expect_success(state, "control interleave"), "control interleave parse should succeed");
         CHECK(controls.size() == 1, "control interleave should surface one ping");
         CHECK(controls[0].first == WsOpcode::Ping, "control interleave callback opcode mismatch");
         CHECK(controls[0].second == "mid-ping", "control interleave callback payload mismatch");
@@ -173,15 +173,15 @@ int main() {
     {
         RingBuffer ring(1024);
         const std::string invalid_utf8("\xFF\xFF", 2);
-        const auto encoded = encodeMaskedFrame(WsOpcode::Text, invalid_utf8);
-        writeAll(ring, encoded);
+        const auto encoded = encode_masked_frame(WsOpcode::Text, invalid_utf8);
+        write_all(ring, encoded);
 
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
         galay::websocket::detail::WsMessageReadState state(
             ring, setting, message, opcode, true, false, nullptr);
 
-        CHECK(expectError(state, kWsInvalidUtf8, "invalid utf8"), "invalid utf8 should report parser error");
+        CHECK(expect_error(state, kWsInvalidUtf8, "invalid utf8"), "invalid utf8 should report parser error");
         CHECK(message.empty(), "invalid utf8 should not populate message");
         CHECK(opcode == WsOpcode::Close, "invalid utf8 should preserve initial opcode");
         CHECK(ring.readable() == encoded.size(), "invalid UTF-8 should preserve current non-consume error behavior");

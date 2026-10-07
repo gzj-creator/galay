@@ -46,7 +46,7 @@ public:
      * @param key 待校验键名
      * @return 成功或INVALID_REQUEST错误
      */
-    static std::expected<void, RpcError> validateKey(std::string_view key) {
+    static std::expected<void, RpcError> validate_key(std::string_view key) {
         if (key.empty()) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                             "Metadata key is empty"));
@@ -72,7 +72,7 @@ public:
      * @return 成功或INVALID_REQUEST错误
      */
     std::expected<void, RpcError> insert(std::string_view key, std::string_view value) {
-        auto validation = validateKey(key);
+        auto validation = validate_key(key);
         if (!validation.has_value()) {
             return std::unexpected(validation.error());
         }
@@ -85,12 +85,12 @@ public:
             return std::unexpected(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
                                             "Metadata entry limit exceeded"));
         }
-        const size_t previous_size = encodedValueSize();
+        const size_t previous_size = encoded_value_size();
         size_t next_size = previous_size;
         if (auto it = m_values.find(key_string); it != m_values.end()) {
-            next_size -= encodedEntrySize(it->first, it->second);
+            next_size -= encoded_entry_size(it->first, it->second);
         }
-        next_size += encodedEntrySize(key, value);
+        next_size += encoded_entry_size(key, value);
         if (next_size > kRpcMetadataMaxWireSize) {
             return std::unexpected(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
                                             "Metadata wire size limit exceeded"));
@@ -106,7 +106,7 @@ public:
      * @note 返回视图借用容器内部存储，修改容器后可能失效。
      */
     std::optional<std::string_view> get(std::string_view key) const {
-        if (!validateKey(key).has_value()) {
+        if (!validate_key(key).has_value()) {
             return std::nullopt;
         }
         auto it = m_values.find(std::string(key));
@@ -122,7 +122,7 @@ public:
      * @return 是否移除了已存在的键
      */
     bool remove(std::string_view key) {
-        if (!validateKey(key).has_value()) {
+        if (!validate_key(key).has_value()) {
             return false;
         }
         return m_values.erase(std::string(key)) != 0;
@@ -140,17 +140,17 @@ public:
     const_iterator end() const { return m_values.end(); }
 
 private:
-    static size_t encodedEntrySize(std::string_view key, std::string_view value) {
+    static size_t encoded_entry_size(std::string_view key, std::string_view value) {
         return sizeof(uint16_t) + sizeof(uint16_t) + key.size() + value.size();
     }
 
-    size_t encodedValueSize() const {
+    size_t encoded_value_size() const {
         if (m_values.empty()) {
             return 0;
         }
         size_t size = sizeof(uint16_t) + sizeof(uint16_t);
         for (const auto& [key, value] : m_values) {
-            size += encodedEntrySize(key, value);
+            size += encoded_entry_size(key, value);
         }
         return size;
     }

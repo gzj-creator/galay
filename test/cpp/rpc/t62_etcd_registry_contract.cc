@@ -29,7 +29,7 @@ RpcEndpointInfo endpoint()
     return info;
 }
 
-bool integrationEnabled()
+bool integration_enabled()
 {
     const char* value = std::getenv("GALAY_IT_ENABLE");
     if (value == nullptr || value[0] == '\0') {
@@ -47,7 +47,7 @@ int main()
 {
     RpcEndpointCache cache;
     FakeEtcdServiceRegistry fake("/galay/rpc");
-    if (auto rc = expect(fake.registerEndpoint(endpoint()).has_value(),
+    if (auto rc = expect(fake.register_endpoint(endpoint()).has_value(),
                          "fake registry register failed")) {
         return rc;
     }
@@ -64,7 +64,7 @@ int main()
     }
     auto updated = endpoint();
     updated.port = 7011;
-    if (auto rc = expect(fake.registerEndpoint(updated).has_value(),
+    if (auto rc = expect(fake.register_endpoint(updated).has_value(),
                          "fake registry update failed")) {
         return rc;
     }
@@ -76,7 +76,7 @@ int main()
                          "fake registry did not update endpoint cache")) {
         return rc;
     }
-    if (auto rc = expect(fake.deregisterEndpoint("Echo", "fake-1").has_value(),
+    if (auto rc = expect(fake.deregister_endpoint("Echo", "fake-1").has_value(),
                          "fake registry deregister failed")) {
         return rc;
     }
@@ -86,7 +86,7 @@ int main()
     }
 
     const char* endpoint_env = std::getenv("GALAY_ETCD_ENDPOINT");
-    if (endpoint_env == nullptr || endpoint_env[0] == '\0' || !integrationEnabled()) {
+    if (endpoint_env == nullptr || endpoint_env[0] == '\0' || !integration_enabled()) {
         std::cout << "RPC etcd real integration SKIP: set GALAY_IT_ENABLE=1 and GALAY_ETCD_ENDPOINT\n";
         std::cout << "RPC etcd registry contract PASS\n";
         return 0;
@@ -95,7 +95,7 @@ int main()
 #ifdef GALAY_RPC_HAS_ETCD
     EtcdServiceRegistry registry(RpcEtcdRegistryConfig{.endpoint = endpoint_env,
                                                        .prefix = "/galay/rpc/test"});
-    auto real_result = registry.integrationAvailable();
+    auto real_result = registry.integration_available();
     if (auto rc = expect(real_result.has_value(), "real etcd adapter reported unavailable")) {
         return rc;
     }

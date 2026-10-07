@@ -39,11 +39,11 @@ public:
         return copy;
     }
 
-    bool parseFile(const std::string& path) override {
-        return parseFileContent(path);
+    bool parse_file(const std::string& path) override {
+        return parse_file_content(path);
     }
 
-    bool parseString(const std::string& content) override {
+    bool parse_string(const std::string& content) override {
         m_values.clear();
         m_last_error.clear();
 
@@ -73,7 +73,7 @@ public:
         return true;
     }
 
-    std::optional<std::string> getValue(const std::string& key) const override {
+    std::optional<std::string> get_value(const std::string& key) const override {
         auto iter = m_values.find(key);
         if (iter != m_values.end()) {
             return iter->second;
@@ -81,11 +81,11 @@ public:
         return std::nullopt;
     }
 
-    bool hasKey(const std::string& key) const override {
+    bool has_key(const std::string& key) const override {
         return m_values.find(key) != m_values.end();
     }
 
-    std::vector<std::string> getKeys() const override {
+    std::vector<std::string> get_keys() const override {
         std::vector<std::string> keys;
         keys.reserve(m_values.size());
         for (const auto& entry : m_values) {

@@ -26,7 +26,7 @@ namespace galay::utils {
 /**
  * @brief 高性能线程池
  * @details 使用 moodycamel::BlockingConcurrentQueue 传递任务，提交路径不使用互斥锁或条件变量；
- *          waitAll()/stop()/stopNow() 仍是阻塞线程 API。
+ *          wait_all()/stop()/stop_now() 仍是阻塞线程 API。
  */
 class ThreadPool {
 public:
@@ -40,7 +40,7 @@ public:
 
         m_workers.reserve(numThreads);
         for (size_t i = 0; i < numThreads; ++i) {
-            m_workers.emplace_back([this] { workerLoop(); });
+            m_workers.emplace_back([this] { worker_loop(); });
         }
     }
 
@@ -60,7 +60,7 @@ public:
      * @return 包含返回值的 future 对象
      */
     template<typename F, typename... Args>
-    auto addTask(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>> {
+    auto add_task(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>> {
         using ReturnType = std::invoke_result_t<F, Args...>;
 
         auto task = std::make_shared<std::packaged_task<ReturnType()>>(
@@ -69,7 +69,7 @@ public:
 
         std::future<ReturnType> result = task->get_future();
 
-        if (!enqueueTask([task]() { (*task)(); })) {
+        if (!enqueue_task([task]() { (*task)(); })) {
             throw std::runtime_error("ThreadPool is stopped");
         }
 
@@ -83,26 +83,26 @@ public:
      */
     template<typename F>
     void execute(F&& f) {
-        (void)enqueueTask(std::function<void()>(std::forward<F>(f)));
+        (void)enqueue_task(std::function<void()>(std::forward<F>(f)));
     }
 
-    size_t threadCount() const { return m_workers.size(); } ///< 获取线程数量
+    size_t thread_count() const { return m_workers.size(); } ///< 获取线程数量
 
     /**
      * @brief 获取待处理任务数量
      * @return 待处理任务数量
      */
-    size_t pendingTasks() const {
+    size_t pending_tasks() const {
         return m_pendingTasks.load(std::memory_order_acquire);
     }
 
-    bool isStopped() const { return m_stopped; } ///< 判断线程池是否已停止
+    bool is_stopped() const { return m_stopped; } ///< 判断线程池是否已停止
 
     /**
      * @brief 阻塞等待所有任务完成
      * @warning 会阻塞当前线程，不要在协程中使用
      */
-    void waitAll() {
+    void wait_all() {
         size_t unfinished = m_unfinishedTasks.load(std::memory_order_acquire);
         while (unfinished != 0) {
             m_unfinishedTasks.wait(unfinished, std::memory_order_acquire);
@@ -119,9 +119,9 @@ public:
         }
 
         m_accepting.store(false, std::memory_order_release);
-        waitForSubmitters();
-        waitAll();
-        enqueueStopSignals();
+        wait_for_submitters();
+        wait_all();
+        enqueue_stop_signals();
 
         for (auto& worker : m_workers) {
             if (worker.joinable()) {
@@ -133,23 +133,23 @@ public:
     /**
      * @brief 立即停止线程池（丢弃所有未完成任务）
      */
-    void stopNow() {
+    void stop_now() {
         if (m_stopped.exchange(true, std::memory_order_acq_rel)) {
             return;
         }
 
         m_accepting.store(false, std::memory_order_release);
-        waitForSubmitters();
+        wait_for_submitters();
 
         std::function<void()> discarded;
         while (m_tasks.try_dequeue(discarded)) {
             if (discarded) {
                 m_pendingTasks.fetch_sub(1, std::memory_order_acq_rel);
-                finishQueuedTask();
+                finish_queued_task();
             }
         }
 
-        enqueueStopSignals();
+        enqueue_stop_signals();
 
         for (auto& worker : m_workers) {
             if (worker.joinable()) {
@@ -159,7 +159,7 @@ public:
     }
 
 private:
-    bool beginSubmit() {
+    bool begin_submit() {
         while (true) {
             if (!m_accepting.load(std::memory_order_acquire)) {
                 return false;
@@ -170,17 +170,17 @@ private:
                 return true;
             }
 
-            endSubmit();
+            end_submit();
         }
     }
 
-    void endSubmit() {
+    void end_submit() {
         if (m_submitters.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             m_submitters.notify_all();
         }
     }
 
-    void waitForSubmitters() {
+    void wait_for_submitters() {
         size_t submitters = m_submitters.load(std::memory_order_acquire);
         while (submitters != 0) {
             m_submitters.wait(submitters, std::memory_order_acquire);
@@ -188,8 +188,8 @@ private:
         }
     }
 
-    bool enqueueTask(std::function<void()> task) {
-        if (!beginSubmit()) {
+    bool enqueue_task(std::function<void()> task) {
+        if (!begin_submit()) {
             return false;
         }
 
@@ -197,35 +197,35 @@ private:
         m_unfinishedTasks.fetch_add(1, std::memory_order_acq_rel);
 
         const bool enqueued = m_tasks.enqueue(std::move(task));
-        endSubmit();
+        end_submit();
 
         if (!enqueued) {
             m_pendingTasks.fetch_sub(1, std::memory_order_acq_rel);
-            finishQueuedTask();
+            finish_queued_task();
             throw std::bad_alloc();
         }
 
         return true;
     }
 
-    void enqueueStopSignals() {
+    void enqueue_stop_signals() {
         for (size_t i = 0; i < m_workers.size(); ++i) {
             (void)m_tasks.enqueue(std::function<void()>{});
         }
     }
 
-    void finishQueuedTask() {
+    void finish_queued_task() {
         if (m_unfinishedTasks.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             m_unfinishedTasks.notify_all();
         }
     }
 
-    void finishActiveTask() {
+    void finish_active_task() {
         m_activeTasks.fetch_sub(1, std::memory_order_acq_rel);
-        finishQueuedTask();
+        finish_queued_task();
     }
 
-    void workerLoop() {
+    void worker_loop() {
         while (true) {
             std::function<void()> task;
             m_tasks.wait_dequeue(task);
@@ -243,10 +243,10 @@ private:
             try {
                 task();
             } catch (...) {
-                finishActiveTask();
+                finish_active_task();
                 throw;
             }
-            finishActiveTask();
+            finish_active_task();
         }
     }
 
@@ -275,18 +275,18 @@ public:
      * @param f 待执行的任务
      */
     template<typename F>
-    void addTask(ThreadPool& pool, F&& f) {
+    void add_task(ThreadPool& pool, F&& f) {
         m_count.fetch_add(1, std::memory_order_acq_rel);
         try {
-            (void)pool.addTask([this, func = std::forward<F>(f)]() {
+            (void)pool.add_task([this, func = std::forward<F>(f)]() {
                 try {
                     func();
                 } catch (...) {
                 }
-                finishOne();
+                finish_one();
             });
         } catch (...) {
-            finishOne();
+            finish_one();
             throw;
         }
     }
@@ -308,7 +308,7 @@ public:
      * @warning 会阻塞当前线程，不要在协程中使用
      */
     template<typename Rep, typename Period>
-    bool waitFor(const std::chrono::duration<Rep, Period>& timeout) {
+    bool wait_for(const std::chrono::duration<Rep, Period>& timeout) {
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         while (m_count.load(std::memory_order_acquire) != 0) {
             if (std::chrono::steady_clock::now() >= deadline) {
@@ -320,7 +320,7 @@ public:
     }
 
 private:
-    void finishOne() {
+    void finish_one() {
         if (m_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             m_count.notify_all();
         }

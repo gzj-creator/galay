@@ -14,7 +14,7 @@
 
 namespace {
 
-std::string readAll(const std::filesystem::path& path)
+std::string read_all(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -24,7 +24,7 @@ std::string readAll(const std::filesystem::path& path)
                        std::istreambuf_iterator<char>());
 }
 
-std::string extractFunction(const std::string& content, const std::string& marker)
+std::string extract_function(const std::string& content, const std::string& marker)
 {
     const size_t begin = content.find(marker);
     if (begin == std::string::npos) {
@@ -48,7 +48,7 @@ std::string extractFunction(const std::string& content, const std::string& marke
     return {};
 }
 
-void requireContains(std::vector<std::string>& failures,
+void require_contains(std::vector<std::string>& failures,
                      const std::string& content,
                      const std::string& needle,
                      const std::string& message)
@@ -58,7 +58,7 @@ void requireContains(std::vector<std::string>& failures,
     }
 }
 
-void requireNotContains(std::vector<std::string>& failures,
+void require_not_contains(std::vector<std::string>& failures,
                         const std::string& content,
                         const std::string& needle,
                         const std::string& message)
@@ -68,7 +68,7 @@ void requireNotContains(std::vector<std::string>& failures,
     }
 }
 
-void requireOrdered(std::vector<std::string>& failures,
+void require_ordered(std::vector<std::string>& failures,
                     const std::string& content,
                     const std::string& first,
                     const std::string& second,
@@ -88,104 +88,104 @@ void requireOrdered(std::vector<std::string>& failures,
 int main()
 {
     galay::test::TestResultWriter writer("t154_mpsc_unbounded_source");
-    writer.addTest();
+    writer.add_test();
 
     const std::filesystem::path header = std::filesystem::path(GALAY_SOURCE_ROOT) /
         "galay-kernel" / "concurrency" / "mpsc" / "unbounded_channel.h";
-    const std::string content = readAll(header);
+    const std::string content = read_all(header);
     std::vector<std::string> failures;
     if (content.empty()) {
         failures.push_back("failed to read " + header.string());
     } else {
-        requireNotContains(failures,
+        require_not_contains(failures,
                            content,
                            "concurrentqueue/moodycamel",
                            "MPSC unbounded must not include moodycamel");
-        requireNotContains(failures,
+        require_not_contains(failures,
                            content,
                            "moodycamel::",
                            "MPSC unbounded must not use an MPMC data plane");
-        requireNotContains(failures,
+        require_not_contains(failures,
                            content,
                            "std::default_initializable",
                            "MPSC storage must not require default construction");
-        requireContains(failures,
+        require_contains(failures,
                         content,
                         "thread_local",
                         "default send must cache a producer-local stream");
-        requireContains(failures,
+        require_contains(failures,
                         content,
                         "ProducerStream",
                         "MPSC must own per-producer SPSC streams");
-        requireNotContains(failures,
+        require_not_contains(failures,
                            content,
                            "m_streamCount",
                            "append-only stream traversal must not maintain a shared count");
-        requireContains(failures,
+        require_contains(failures,
                         content,
                         "m_readyStack",
                         "consumer must discover only active producer streams");
-        requireContains(failures,
+        require_contains(failures,
                         content,
                         "active.compare_exchange_strong",
                         "active stream discovery must use a single membership transition");
-        requireContains(failures,
+        require_contains(failures,
                         content,
                         "recycledBlocks",
                         "retired producer blocks must be recycled across the SPSC boundary");
-        requireContains(failures,
+        require_contains(failures,
                         content,
-                        "constructionAddress",
+                        "construction_address",
                         "raw storage construction must not call std::launder before lifetime begins");
-        requireNotContains(
+        require_not_contains(
             failures,
             content,
             "std::array<std::atomic<uint8_t>, kBlockCapacity> ready{}",
             "blocks must not carry per-slot ready atomics");
-        requireContains(failures,
+        require_contains(failures,
                         content,
                         "uint64_t observedPublished = 0;",
                         "consumer must cache each stream's cumulative published tail");
-        const std::string slot = extractFunction(content, "struct Slot");
+        const std::string slot = extract_function(content, "struct Slot");
         if (slot.empty()) {
             failures.push_back("failed to locate MPSC slot storage");
         } else {
-            requireNotContains(failures,
+            require_not_contains(failures,
                                slot,
                                "std::atomic",
                                "tail publication must not increase the slot stride");
         }
-        requireContains(
+        require_contains(
             failures,
             content,
             "(kBlockTargetBytes - ::galay::utils::kCacheLineSize)",
             "block capacity must remain derived from the original slot storage");
-        requireContains(failures,
+        require_contains(failures,
                         content,
                         "kWaking",
                         "producer wake must keep the waiter slot non-rearmable until consumed");
-        requireContains(failures,
+        require_contains(failures,
                         content,
                         "kPublished",
                         "producer gate must distinguish published data from active construction");
 
-        const std::string tokenValidity = extractFunction(
+        const std::string tokenValidity = extract_function(
             content,
-            "bool validFor(const UnboundedChannel* channel) const noexcept");
+            "bool valid_for(const UnboundedChannel* channel) const noexcept");
         if (tokenValidity.empty()) {
             failures.push_back("failed to locate MPSC producer token validity check");
         } else {
-            requireContains(
+            require_contains(
                 failures,
                 tokenValidity,
                 "lifetime->state.load(std::memory_order_acquire)",
                 "producer token validity must inspect its retained lifetime state");
-            requireContains(
+            require_contains(
                 failures,
                 tokenValidity,
                 "ProducerLifetimeState::kOwned",
                 "producer token validity must reject detached or relinquished streams");
-            requireOrdered(
+            require_ordered(
                 failures,
                 tokenValidity,
                 "lifetime->state.load(std::memory_order_acquire)",
@@ -193,93 +193,93 @@ int main()
                 "producer token validity must reject detached lifetime before comparing an expired channel pointer");
         }
 
-        const std::string liveTokenValidity = extractFunction(
+        const std::string liveTokenValidity = extract_function(
             content,
-            "bool validForLiveChannel(\n"
+            "bool valid_for_live_channel(\n"
             "            const UnboundedChannel* channel) const noexcept");
         if (liveTokenValidity.empty()) {
             failures.push_back("failed to locate MPSC live-channel token check");
         } else {
-            requireNotContains(
+            require_not_contains(
                 failures,
                 liveTokenValidity,
                 ".load(",
                 "live-channel token send hot path must not load lifetime state");
-            requireNotContains(
+            require_not_contains(
                 failures,
                 liveTokenValidity,
                 "ProducerLifetimeState",
                 "live-channel token send hot path must not inspect cold lifetime state");
         }
 
-        const std::string tokenSend = extractFunction(
+        const std::string tokenSend = extract_function(
             content, "bool send(ProducerToken& token, T&& value) noexcept");
         if (tokenSend.empty()) {
             failures.push_back("failed to locate MPSC token single send");
         } else {
-            requireContains(
+            require_contains(
                 failures,
                 tokenSend,
-                "token.validForLiveChannel(this)",
+                "token.valid_for_live_channel(this)",
                 "token single send must retain the live-channel hot-path check");
-            requireNotContains(
+            require_not_contains(
                 failures,
                 tokenSend,
-                "token.validFor(this)",
+                "token.valid_for(this)",
                 "token single send must not restore the lifetime acquire");
         }
 
         const std::string tryRecv =
-            extractFunction(content, "std::optional<T> tryRecv()");
+            extract_function(content, "std::optional<T> try_recv()");
         if (tryRecv.empty()) {
-            failures.push_back("failed to locate MPSC tryRecv");
+            failures.push_back("failed to locate MPSC try_recv");
         } else {
-            requireNotContains(failures,
+            require_not_contains(failures,
                                tryRecv,
                                "fetch_add",
-                               "single consumer tryRecv must not execute an RMW");
-            requireNotContains(failures,
+                               "single consumer try_recv must not execute an RMW");
+            require_not_contains(failures,
                                tryRecv,
                                "compare_exchange",
-                               "single consumer tryRecv must not execute CAS");
-            requireNotContains(failures,
+                               "single consumer try_recv must not execute CAS");
+            require_not_contains(failures,
                                tryRecv,
                                "try_dequeue",
-                               "single consumer tryRecv must not call MPMC dequeue");
+                               "single consumer try_recv must not call MPMC dequeue");
         }
 
         const std::string beginSend =
-            extractFunction(content, "bool beginSend(ProducerStream& stream) noexcept");
+            extract_function(content, "bool begin_send(ProducerStream& stream) noexcept");
         if (beginSend.empty()) {
-            failures.push_back("failed to locate MPSC beginSend");
+            failures.push_back("failed to locate MPSC begin_send");
         } else {
-            requireContains(failures,
+            require_contains(failures,
                             beginSend,
                             "stream.control.gate.store(\n"
                             "            ProducerGate::kSending,\n"
                             "            std::memory_order_seq_cst)",
                             "send permit must announce in-flight state with a seq_cst store");
-            requireNotContains(failures,
+            require_not_contains(failures,
                                beginSend,
                                "test_and_set",
                             "send permit must not use atomic test-and-set");
-            requireNotContains(failures,
+            require_not_contains(failures,
                                beginSend,
                                ".exchange(",
                                "send permit must not use atomic exchange");
-            requireNotContains(failures,
+            require_not_contains(failures,
                                beginSend,
                                "compare_exchange",
                                "steady-state send permit must not use CAS");
-            requireNotContains(failures,
+            require_not_contains(failures,
                                beginSend,
                                "fetch_",
                                "send permit must not use atomic fetch RMW");
-            requireContains(failures,
+            require_contains(failures,
                             beginSend,
                             "m_closeState.load(std::memory_order_seq_cst)",
                             "send permit must share the close cutoff seq_cst order");
-            requireContains(failures,
+            require_contains(failures,
                             beginSend,
                             "stream.control.gate.store(ProducerGate::kOpen,\n"
                             "                                  std::memory_order_release)",
@@ -287,23 +287,23 @@ int main()
         }
 
         const std::string finishSend =
-            extractFunction(content, "void finishSend(ProducerStream& stream) noexcept");
+            extract_function(content, "void finish_send(ProducerStream& stream) noexcept");
         if (finishSend.empty()) {
-            failures.push_back("failed to locate MPSC finishSend");
+            failures.push_back("failed to locate MPSC finish_send");
         } else {
-            requireContains(failures,
+            require_contains(failures,
                             finishSend,
                             "std::memory_order_release",
                             "completed send must release the producer gate");
         }
 
-        const std::string reserveProducerSlots = extractFunction(
+        const std::string reserveProducerSlots = extract_function(
             content,
-            "bool reserveProducerSlots(ProducerStream& stream, size_t count) noexcept");
+            "bool reserve_producer_slots(ProducerStream& stream, size_t count) noexcept");
         if (reserveProducerSlots.empty()) {
             failures.push_back("failed to locate MPSC producer slot reservation");
         } else {
-            requireOrdered(
+            require_ordered(
                 failures,
                 reserveProducerSlots,
                 "producer.block = first;",
@@ -311,183 +311,183 @@ int main()
                 "a full-block producer cursor must advance before the old link becomes recyclable");
         }
 
-        const std::string takeRecycledBlock = extractFunction(
+        const std::string takeRecycledBlock = extract_function(
             content,
-            "Block* takeRecycledBlock(ProducerStream& stream) noexcept");
+            "Block* take_recycled_block(ProducerStream& stream) noexcept");
         if (takeRecycledBlock.empty()) {
             failures.push_back("failed to locate MPSC recycled block acquisition");
         } else {
-            requireNotContains(failures,
+            require_not_contains(failures,
                                takeRecycledBlock,
                                "ready",
                                "recycled blocks must not retain per-slot ready atomics");
-            requireContains(
+            require_contains(
                 failures,
                 takeRecycledBlock,
                 "block->next.store(nullptr, std::memory_order_relaxed)",
                 "recycled blocks must clear their old chain link");
         }
 
-        const std::string publishStream = extractFunction(
+        const std::string publishStream = extract_function(
             content,
-            "TaskState* publishStream(ProducerStream& stream,");
+            "TaskState* publish_stream(ProducerStream& stream,");
         if (publishStream.empty()) {
             failures.push_back("failed to locate MPSC stream publication");
         } else {
-            requireNotContains(
+            require_not_contains(
                 failures,
                 publishStream,
                 "ready[",
                 "stream publication must not touch per-slot ready atomics");
-            requireContains(
+            require_contains(
                 failures,
                 publishStream,
                 "stream.shared.published.store(producer.localPublished,\n"
                 "                                      std::memory_order_release)",
                 "diagnostic publication counter must remain a release snapshot");
-            requireNotContains(
+            require_not_contains(
                 failures,
                 publishStream,
                 "published.store(producer.localPublished,\n"
                 "                                      std::memory_order_seq_cst)",
                 "consumer-shared publication counter must not use seq_cst store");
-            requireContains(
+            require_contains(
                 failures,
                 publishStream,
                 "stream.control.gate.store(\n"
                 "            ProducerGate::kPublished,\n"
                 "            std::memory_order_seq_cst)",
                 "published data must join waiter ordering through the producer gate");
-            requireOrdered(
+            require_ordered(
                 failures,
                 publishStream,
-                "activateReadyStream(stream)",
+                "activate_ready_stream(stream)",
                 "published.store(producer.localPublished",
                 "ready stream membership must precede cumulative tail publication");
-            requireOrdered(
+            require_ordered(
                 failures,
                 publishStream,
                 "published.store(producer.localPublished",
                 "ProducerGate::kPublished",
                 "data publication must precede the published gate announcement");
-            requireOrdered(
+            require_ordered(
                 failures,
                 publishStream,
                 "ProducerGate::kPublished",
-                "detachPublishedWaiter()",
+                "detach_published_waiter()",
                 "published gate announcement must precede waiter arbitration");
         }
 
-        const std::string singleSend = extractFunction(
+        const std::string singleSend = extract_function(
             content,
-            "bool sendToStream(ProducerStream& stream, T&& value) noexcept");
+            "bool send_to_stream(ProducerStream& stream, T&& value) noexcept");
         if (singleSend.empty()) {
             failures.push_back("failed to locate MPSC single send");
         } else {
-            requireContains(failures,
+            require_contains(failures,
                             singleSend,
-                            "publishStream(stream, 1);",
+                            "publish_stream(stream, 1);",
                             "empty single-send wake path must use a nullable raw waiter state");
-            requireNotContains(failures,
+            require_not_contains(failures,
                                singleSend,
-                               "TaskRef waiterTask",
+                               "TaskRef waiter_task",
                                "empty single-send wake path must not construct TaskRef");
-            requireContains(failures,
+            require_contains(failures,
                             singleSend,
                             "if (waiterState != nullptr)",
                             "empty single-send wake path must bypass the out-of-line waker");
-            requireOrdered(failures,
+            require_ordered(failures,
                            singleSend,
-                           "publishStream(stream, 1)",
-                           "finishSend(stream);",
+                           "publish_stream(stream, 1)",
+                           "finish_send(stream);",
                            "single send must publish before releasing its producer gate");
-            requireOrdered(failures,
+            require_ordered(failures,
                            singleSend,
-                           "finishSend(stream);",
-                           "wakeDetachedWaiter",
+                           "finish_send(stream);",
+                           "wake_detached_waiter",
                            "single send must release its producer gate before waking a waiter");
         }
 
-        const std::string copyBatchSend = extractFunction(
+        const std::string copyBatchSend = extract_function(
             content,
             "ProducerStream& stream, const std::vector<T>& values)");
         if (copyBatchSend.empty()) {
             failures.push_back("failed to locate MPSC copy batch send");
         } else {
-            requireNotContains(failures,
+            require_not_contains(failures,
                                copyBatchSend,
-                               "TaskRef waiterTask",
+                               "TaskRef waiter_task",
                                "empty copy-batch wake path must not construct TaskRef");
-            requireContains(failures,
+            require_contains(failures,
                             copyBatchSend,
                             "if (waiterState != nullptr)",
                             "empty copy-batch wake path must bypass the out-of-line waker");
-            requireOrdered(failures,
+            require_ordered(failures,
                            copyBatchSend,
-                           "publishStream(stream, values.size())",
-                           "finishSend(stream);",
+                           "publish_stream(stream, values.size())",
+                           "finish_send(stream);",
                            "copy batch send must publish before releasing its producer gate");
-            requireOrdered(failures,
+            require_ordered(failures,
                            copyBatchSend,
-                           "finishSend(stream);",
-                           "wakeDetachedWaiter",
+                           "finish_send(stream);",
+                           "wake_detached_waiter",
                            "copy batch send must release its producer gate before waking a waiter");
         }
 
-        const std::string moveBatchSend = extractFunction(
+        const std::string moveBatchSend = extract_function(
             content,
             "ProducerStream& stream, std::vector<T>&& values) noexcept");
         if (moveBatchSend.empty()) {
             failures.push_back("failed to locate MPSC move batch send");
         } else {
-            requireNotContains(failures,
+            require_not_contains(failures,
                                moveBatchSend,
-                               "TaskRef waiterTask",
+                               "TaskRef waiter_task",
                                "empty move-batch wake path must not construct TaskRef");
-            requireContains(failures,
+            require_contains(failures,
                             moveBatchSend,
                             "if (waiterState != nullptr)",
                             "empty move-batch wake path must bypass the out-of-line waker");
             size_t finishCount = 0;
             size_t position = 0;
-            while ((position = moveBatchSend.find("finishSend(stream);", position)) !=
+            while ((position = moveBatchSend.find("finish_send(stream);", position)) !=
                    std::string::npos) {
                 ++finishCount;
-                position += sizeof("finishSend(stream);") - 1;
+                position += sizeof("finish_send(stream);") - 1;
             }
             if (finishCount != 2) {
                 failures.push_back(
                     "move batch send must release the producer gate exactly once per exit path");
             }
-            requireOrdered(failures,
+            require_ordered(failures,
                            moveBatchSend,
-                           "publishStream(stream, values.size())",
-                           "finishSend(stream);",
+                           "publish_stream(stream, values.size())",
+                           "finish_send(stream);",
                            "move batch send must publish before releasing its producer gate");
-            requireOrdered(failures,
+            require_ordered(failures,
                            moveBatchSend,
-                           "finishSend(stream);",
-                           "wakeDetachedWaiter",
+                           "finish_send(stream);",
+                           "wake_detached_waiter",
                            "move batch send must release its producer gate before waking a waiter");
         }
 
-        const std::string popStream = extractFunction(
+        const std::string popStream = extract_function(
             content,
-            "std::optional<T> tryPopStream(ProducerStream& stream) noexcept");
+            "std::optional<T> try_pop_stream(ProducerStream& stream) noexcept");
         if (popStream.empty()) {
             failures.push_back("failed to locate MPSC stream consumer hot path");
         } else {
-            requireContains(
+            require_contains(
                 failures,
                 popStream,
                 "stream.shared.published.load(std::memory_order_acquire)",
                 "consumer must acquire a fresh cumulative producer tail");
-            requireNotContains(
+            require_not_contains(
                 failures,
                 popStream,
                 "ready[",
                 "consumer hot path must not access per-slot ready atomics");
-            requireOrdered(
+            require_ordered(
                 failures,
                 popStream,
                 "consumer.localConsumed == consumer.observedPublished",
@@ -495,44 +495,44 @@ int main()
                 "consumer must prove data availability before advancing blocks");
         }
 
-        const std::string close = extractFunction(content, "bool close() noexcept");
+        const std::string close = extract_function(content, "bool close() noexcept");
         if (close.empty()) {
             failures.push_back("failed to locate MPSC close");
         } else {
-            requireContains(failures,
+            require_contains(failures,
                             close,
                             "stream->control.gate.load(std::memory_order_seq_cst)",
                             "close must pair its cutoff with the producer seq_cst announcement");
-            requireContains(failures,
+            require_contains(failures,
                             close,
                             "std::memory_order_seq_cst) !=\n"
                             "                   ProducerGate::kOpen",
                             "close must wait for constructing and published producer states");
-            requireNotContains(failures,
+            require_not_contains(failures,
                                close,
                                "stream->control.gate.store",
                                "close must not write the producer-owned in-flight flag");
-            requireContains(failures,
+            require_contains(failures,
                             close,
                             "m_closeState.store(CloseState::kClosed,\n"
                             "                           std::memory_order_seq_cst)",
                             "terminal close publication must share the waiter seq_cst order");
-            requireOrdered(failures,
+            require_ordered(failures,
                            close,
-                           "detachPublishedWaiter();",
-                           "wakeDetachedWaiter",
+                           "detach_published_waiter();",
+                           "wake_detached_waiter",
                            "close must detach all channel-owned waiter state before waking");
         }
 
-        const std::string singleAwaitSuspend = extractFunction(
+        const std::string singleAwaitSuspend = extract_function(
             content,
             "bool UnboundedRecvAwaitable<T>::await_suspend(");
         if (singleAwaitSuspend.empty()) {
             failures.push_back("failed to locate MPSC single await_suspend");
         } else {
             const size_t registration =
-                singleAwaitSuspend.find("beginWaiterRegistration()");
-            const size_t publication = singleAwaitSuspend.find("publishWaiter(");
+                singleAwaitSuspend.find("begin_waiter_registration()");
+            const size_t publication = singleAwaitSuspend.find("publish_waiter(");
             if (registration == std::string::npos ||
                 publication == std::string::npos || registration >= publication) {
                 failures.push_back(
@@ -540,39 +540,39 @@ int main()
             } else {
                 const std::string armingPath = singleAwaitSuspend.substr(
                     registration, publication - registration);
-                requireNotContains(
+                require_not_contains(
                     failures,
                     armingPath,
-                    "tryReceiveNow()",
+                    "try_receive_now()",
                     "single waiter final check must not rely on a receive probe");
-                requireContains(
+                require_contains(
                     failures,
                     armingPath,
-                    "hasPublishedValueForWaiter()",
+                    "has_published_value_for_waiter()",
                     "single waiter final check must scan producer gates");
             }
         }
 
         const std::string closedAndDrained =
-            extractFunction(content, "bool isClosedAndDrained() const noexcept");
+            extract_function(content, "bool is_closed_and_drained() const noexcept");
         if (closedAndDrained.empty()) {
-            failures.push_back("failed to locate MPSC isClosedAndDrained");
+            failures.push_back("failed to locate MPSC is_closed_and_drained");
         } else {
-            requireContains(failures,
+            require_contains(failures,
                             closedAndDrained,
                             "m_closeState.load(std::memory_order_seq_cst)",
                             "waiter close recheck must share the waiter seq_cst order");
         }
 
-        const std::string batchToAwaitSuspend = extractFunction(
+        const std::string batchToAwaitSuspend = extract_function(
             content,
             "bool UnboundedRecvBatchToAwaitable<T>::await_suspend(");
         if (batchToAwaitSuspend.empty()) {
             failures.push_back("failed to locate MPSC batch-to await_suspend");
         } else {
             const size_t registration =
-                batchToAwaitSuspend.find("beginWaiterRegistration()");
-            const size_t publication = batchToAwaitSuspend.find("publishWaiter(");
+                batchToAwaitSuspend.find("begin_waiter_registration()");
+            const size_t publication = batchToAwaitSuspend.find("publish_waiter(");
             if (registration == std::string::npos ||
                 publication == std::string::npos || registration >= publication) {
                 failures.push_back(
@@ -580,28 +580,28 @@ int main()
             } else {
                 const std::string armingPath = batchToAwaitSuspend.substr(
                     registration, publication - registration);
-                requireNotContains(
+                require_not_contains(
                     failures,
                     armingPath,
-                    "tryReceiveNow()",
+                    "try_receive_now()",
                     "batch-to waiter final check must not rely on a drain probe");
-                requireContains(
+                require_contains(
                     failures,
                     armingPath,
-                    "hasPublishedValueForWaiter()",
+                    "has_published_value_for_waiter()",
                     "batch-to waiter final check must scan producer gates");
             }
         }
 
-        const std::string batchAwaitSuspend = extractFunction(
+        const std::string batchAwaitSuspend = extract_function(
             content,
             "bool UnboundedRecvBatchAwaitable<T>::await_suspend(");
         if (batchAwaitSuspend.empty()) {
             failures.push_back("failed to locate MPSC vector batch await_suspend");
         } else {
             const size_t registration =
-                batchAwaitSuspend.find("beginWaiterRegistration()");
-            const size_t publication = batchAwaitSuspend.find("publishWaiter(");
+                batchAwaitSuspend.find("begin_waiter_registration()");
+            const size_t publication = batchAwaitSuspend.find("publish_waiter(");
             if (registration == std::string::npos ||
                 publication == std::string::npos || registration >= publication) {
                 failures.push_back(
@@ -609,25 +609,25 @@ int main()
             } else {
                 const std::string armingPath = batchAwaitSuspend.substr(
                     registration, publication - registration);
-                requireNotContains(
+                require_not_contains(
                     failures,
                     armingPath,
-                    "tryReceiveNow()",
+                    "try_receive_now()",
                     "vector batch waiter arming path must not execute allocating receive");
-                requireContains(
+                require_contains(
                     failures,
                     armingPath,
-                    "hasPublishedValueForWaiter()",
+                    "has_published_value_for_waiter()",
                     "vector batch waiter arming path must use a non-allocating readiness check");
             }
         }
 
         const std::string pushReady =
-            extractFunction(content, "void pushReadyStream(ProducerStream& stream) noexcept");
+            extract_function(content, "void push_ready_stream(ProducerStream& stream) noexcept");
         if (pushReady.empty()) {
             failures.push_back("failed to locate MPSC ready stream publication");
         } else {
-            requireContains(
+            require_contains(
                 failures,
                 pushReady,
                 "std::memory_order_seq_cst",
@@ -635,70 +635,70 @@ int main()
         }
 
         const std::string appendReady =
-            extractFunction(content, "void appendReadyStreams() noexcept");
+            extract_function(content, "void append_ready_streams() noexcept");
         if (appendReady.empty()) {
             failures.push_back("failed to locate MPSC ready stream discovery");
         } else {
-            requireContains(
+            require_contains(
                 failures,
                 appendReady,
                 "m_readyStack.load(std::memory_order_seq_cst)",
                 "ready stream probe must join waiter discovery SC order");
-            requireContains(
+            require_contains(
                 failures,
                 appendReady,
                 "m_readyStack.exchange(nullptr, std::memory_order_seq_cst)",
                 "ready stream detach must join waiter discovery SC order");
         }
 
-        const std::string waiterReadiness = extractFunction(
-            content, "bool hasPublishedValueForWaiter() noexcept");
+        const std::string waiterReadiness = extract_function(
+            content, "bool has_published_value_for_waiter() noexcept");
         if (waiterReadiness.empty()) {
             failures.push_back("failed to locate MPSC non-allocating waiter readiness check");
         } else {
-            requireContains(
+            require_contains(
                 failures,
                 waiterReadiness,
-                "appendReadyStreams();",
+                "append_ready_streams();",
                 "waiter readiness must discover first-active streams before probing data");
-            requireContains(
+            require_contains(
                 failures,
                 waiterReadiness,
                 "ProducerStream* stream = m_readyHead;",
                 "waiter readiness must retain the ready-stack publication path");
-            requireContains(
+            require_contains(
                 failures,
                 waiterReadiness,
                 "m_streamHead.load(std::memory_order_acquire)",
                 "waiter readiness must scan every registered producer stream");
-            requireContains(
+            require_contains(
                 failures,
                 waiterReadiness,
                 "control.gate.load(std::memory_order_seq_cst)",
                 "waiter readiness must join producer notification ordering through the gate");
-            requireContains(
+            require_contains(
                 failures,
                 waiterReadiness,
                 "ProducerGate::kPublished",
                 "waiter readiness must treat a published gate as immediately readable");
-            requireContains(
+            require_contains(
                 failures,
                 waiterReadiness,
                 "ProducerGate::kSending",
                 "waiter readiness must identify sends that will arbitrate after arming");
-            requireContains(
+            require_contains(
                 failures,
                 waiterReadiness,
                 "if (gate == ProducerGate::kSending) {\n"
                 "                if (stream->consumer.localConsumed !=\n"
                 "                    stream->shared.published.load(std::memory_order_acquire))",
                 "a sending stream must recheck previously published data before arming");
-            requireContains(
+            require_contains(
                 failures,
                 waiterReadiness,
                 "published.load(std::memory_order_acquire)",
                 "open producer streams must acquire the released publication counter");
-            requireNotContains(
+            require_not_contains(
                 failures,
                 waiterReadiness,
                 "published.load(std::memory_order_seq_cst)",
@@ -710,13 +710,13 @@ int main()
         for (const std::string& failure : failures) {
             std::cerr << failure << '\n';
         }
-        writer.addFailed();
-        writer.writeResult();
+        writer.add_failed();
+        writer.write_result();
         return 1;
     }
 
-    writer.addPassed();
-    writer.writeResult();
+    writer.add_passed();
+    writer.write_result();
     std::cout << "t154_mpsc_unbounded_source PASS\n";
     return 0;
 }

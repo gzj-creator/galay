@@ -43,13 +43,13 @@ void measure(const std::string& name, std::size_t iterations, Fn&& fn)
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     constexpr std::size_t iterations = 200'000;
     const std::string base64Payload(1024, 'x');
-    const std::string base64Encoded = galay::utils::Base64Util::Base64Encode(base64Payload);
+    const std::string base64Encoded = galay::utils::Base64Util::base64_encode(base64Payload);
 
     std::cout << "Utils resource/error boundary benchmark\n";
     std::cout << std::left << std::setw(34) << "Scenario"
@@ -69,17 +69,17 @@ int main()
     });
 
     measure("base64 whitespace decode", iterations, [](std::size_t i) {
-        const auto decoded = galay::utils::Base64Util::Base64Decode("SGVs\r\n bG8=\t", true);
+        const auto decoded = galay::utils::Base64Util::base64_decode("SGVs\r\n bG8=\t", true);
         return decoded.size() + (i & 1U);
     });
 
     measure("base64 encode 1KiB", iterations, [&](std::size_t i) {
-        const auto encoded = galay::utils::Base64Util::Base64Encode(base64Payload);
+        const auto encoded = galay::utils::Base64Util::base64_encode(base64Payload);
         return encoded.size() + (i & 1U);
     });
 
     measure("base64 decode 1KiB", iterations, [&](std::size_t i) {
-        const auto decoded = galay::utils::Base64Util::Base64Decode(base64Encoded);
+        const auto decoded = galay::utils::Base64Util::base64_decode(base64Encoded);
         return decoded.size() + (i & 1U);
     });
 

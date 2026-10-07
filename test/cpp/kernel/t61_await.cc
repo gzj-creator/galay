@@ -2,7 +2,7 @@
  * @file t61_await.cc
  * @brief 用途：锁定 `Task<T>` 作为公开协程返回类型时可被直接 `co_await` 的接口形态。
  * 关键覆盖点：公开 `task.h` 入口、`Task<int>` 直接 await、`Runtime::blockOn` 返回 await 后结果。
- * 通过条件：测试可编译运行，`co_await childTask()` 返回值正确且进程退出码为 0。
+ * 通过条件：测试可编译运行，`co_await child_task()` 返回值正确且进程退出码为 0。
  */
 
 #include <galay/cpp/galay-kernel/core/runtime.h>
@@ -12,14 +12,14 @@
 
 using namespace galay::kernel;
 
-Task<int> childTask()
+Task<int> child_task()
 {
     co_return 7;
 }
 
-Task<int> parentTask()
+Task<int> parent_task()
 {
-    auto value = co_await childTask();
+    auto value = co_await child_task();
     assert(value.has_value());
     co_return *value + 1;
 }
@@ -27,7 +27,7 @@ Task<int> parentTask()
 int main()
 {
     Runtime runtime;
-    auto result = runtime.blockOnIO(parentTask());
+    auto result = runtime.block_on_io(parent_task());
     assert(result.has_value());
     assert(*result == 8);
     return 0;

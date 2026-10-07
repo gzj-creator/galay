@@ -24,7 +24,7 @@ using namespace galay::kernel;
 
 namespace {
 
-Task<void> aioWriteThenRead(std::atomic<bool>* done, std::atomic<bool>* passed)
+Task<void> aio_write_then_read(std::atomic<bool>* done, std::atomic<bool>* passed)
 {
     const char* path = "/tmp/galay_epoll_aio_eventfd_rearm_test.dat";
     galay::async::AsyncAio file;
@@ -34,11 +34,11 @@ Task<void> aioWriteThenRead(std::atomic<bool>* done, std::atomic<bool>* passed)
         co_return;
     }
 
-    char* write_buffer = galay::async::AsyncAio::allocAlignedBuffer(4096);
-    char* read_buffer = galay::async::AsyncAio::allocAlignedBuffer(4096);
+    char* write_buffer = galay::async::AsyncAio::alloc_aligned_buffer(4096);
+    char* read_buffer = galay::async::AsyncAio::alloc_aligned_buffer(4096);
     if (!write_buffer || !read_buffer) {
-        galay::async::AsyncAio::freeAlignedBuffer(write_buffer);
-        galay::async::AsyncAio::freeAlignedBuffer(read_buffer);
+        galay::async::AsyncAio::free_aligned_buffer(write_buffer);
+        galay::async::AsyncAio::free_aligned_buffer(read_buffer);
         std::remove(path);
         done->store(true, std::memory_order_release);
         co_return;
@@ -49,7 +49,7 @@ Task<void> aioWriteThenRead(std::atomic<bool>* done, std::atomic<bool>* passed)
     std::memcpy(write_buffer, "epoll-aio-rearm-ok", sizeof("epoll-aio-rearm-ok"));
 
     file.clear();
-    file.preWrite(write_buffer, 4096, 0);
+    file.pre_write(write_buffer, 4096, 0);
     auto write_result = co_await file.commit();
     const bool write_ok = write_result.has_value() &&
                           !write_result->empty() &&
@@ -57,7 +57,7 @@ Task<void> aioWriteThenRead(std::atomic<bool>* done, std::atomic<bool>* passed)
 
     if (write_ok) {
         file.clear();
-        file.preRead(read_buffer, 4096, 0);
+        file.pre_read(read_buffer, 4096, 0);
         auto read_result = co_await file.commit();
         const bool read_ok = read_result.has_value() &&
                              !read_result->empty() &&
@@ -66,8 +66,8 @@ Task<void> aioWriteThenRead(std::atomic<bool>* done, std::atomic<bool>* passed)
         passed->store(read_ok, std::memory_order_release);
     }
 
-    galay::async::AsyncAio::freeAlignedBuffer(write_buffer);
-    galay::async::AsyncAio::freeAlignedBuffer(read_buffer);
+    galay::async::AsyncAio::free_aligned_buffer(write_buffer);
+    galay::async::AsyncAio::free_aligned_buffer(read_buffer);
     std::remove(path);
     done->store(true, std::memory_order_release);
     co_return;
@@ -82,7 +82,7 @@ int main()
 
     std::atomic<bool> done{false};
     std::atomic<bool> passed{false};
-    if (!scheduleTask(scheduler, aioWriteThenRead(&done, &passed))) {
+    if (!schedule_task(scheduler, aio_write_then_read(&done, &passed))) {
         scheduler.stop();
         std::cerr << "T67 scheduleTask failed\n";
         return 1;

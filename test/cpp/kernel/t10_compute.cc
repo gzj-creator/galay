@@ -26,9 +26,9 @@ std::atomic<int> g_passed{0};
 std::atomic<int> g_total{0};
 
 template <typename SchedulerT, typename T>
-void requireSchedule(SchedulerT& scheduler, Task<T>&& task)
+void require_schedule(SchedulerT& scheduler, Task<T>&& task)
 {
-    const bool scheduled = scheduler.schedule(detail::TaskAccess::detachTask(std::move(task)));
+    const bool scheduled = scheduler.schedule(detail::TaskAccess::detach_task(std::move(task)));
     if (!scheduled) {
         throw std::runtime_error("failed to schedule task in T10");
     }
@@ -77,7 +77,7 @@ Task<void> test_start_stop() {
 std::atomic<int> g_test8_result{0};
 
 // 计算任务 - 在 ParallelScheduler 中执行
-Task<void> computeTask(AsyncWaiter<int>* waiter) {
+Task<void> compute_task(AsyncWaiter<int>* waiter) {
     // 模拟计算
     volatile int sum = 0;
     for (int i = 0; i < 10000; ++i) {
@@ -94,7 +94,7 @@ std::atomic<bool> g_test9_done{false};
 // 测试10：专用 resume admission 只能在 scheduler 运行期接纳任务
 std::atomic<int> g_test10_resume_count{0};
 
-Task<void> computeTaskVoid(AsyncWaiter<void>* waiter) {
+Task<void> compute_task_void(AsyncWaiter<void>* waiter) {
     // 模拟计算
     volatile int sum = 0;
     for (int i = 0; i < 10000; ++i) {
@@ -105,16 +105,16 @@ Task<void> computeTaskVoid(AsyncWaiter<void>* waiter) {
     co_return;
 }
 
-Task<void> resumeLifecycleTask() {
+Task<void> resume_lifecycle_task() {
     g_test10_resume_count.fetch_add(1, std::memory_order_relaxed);
     co_return;
 }
 
-Task<void> resumeProbeTask() {
+Task<void> resume_probe_task() {
     co_return;
 }
 
-Task<void> stopDrainBlocker(std::atomic<bool>* started,
+Task<void> stop_drain_blocker(std::atomic<bool>* started,
                             std::atomic<bool>* release) {
     started->store(true, std::memory_order_release);
     while (!release->load(std::memory_order_acquire)) {
@@ -123,7 +123,7 @@ Task<void> stopDrainBlocker(std::atomic<bool>* started,
     co_return;
 }
 
-Task<void> stopDrainStep(std::atomic<int>* steps) {
+Task<void> stop_drain_step(std::atomic<int>* steps) {
     steps->fetch_add(1, std::memory_order_release);
     co_return;
 }
@@ -133,14 +133,14 @@ struct SelfWakeAwaitable {
 
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) const noexcept {
-        Waker(handle).wakeUp();
+        Waker(handle).wake_up();
         return true;
     }
 
     void await_resume() const noexcept {}
 };
 
-Task<void> selfWakeTask(std::atomic<bool>* started,
+Task<void> self_wake_task(std::atomic<bool>* started,
                         std::atomic<bool>* release,
                         std::atomic<int>* resumptions,
                         std::atomic<bool>* done,
@@ -157,14 +157,14 @@ Task<void> selfWakeTask(std::atomic<bool>* started,
     co_return;
 }
 
-Task<void> recordResumeProgress(std::atomic<int>* resumptions,
+Task<void> record_resume_progress(std::atomic<int>* resumptions,
                                 std::atomic<int>* observed) {
     observed->store(resumptions->load(std::memory_order_acquire),
                     std::memory_order_release);
     co_return;
 }
 
-void runTests() {
+void run_tests() {
     LogInfo("=== ParallelScheduler Test Suite ===");
 
     // 测试1：基本任务执行
@@ -174,7 +174,7 @@ void runTests() {
 
         ParallelScheduler scheduler;
         scheduler.start();
-        requireSchedule(scheduler, test_basic_execution());
+        require_schedule(scheduler, test_basic_execution());
         // 使用调度器的空闲等待
         scheduler.stop();
 
@@ -200,10 +200,10 @@ void runTests() {
         for (int i = 0; i < TEST2_COUNT; ++i) {
             // 轮询分发到4个调度器
             switch (i % 4) {
-                case 0: requireSchedule(scheduler1, test_concurrent_task()); break;
-                case 1: requireSchedule(scheduler2, test_concurrent_task()); break;
-                case 2: requireSchedule(scheduler3, test_concurrent_task()); break;
-                case 3: requireSchedule(scheduler4, test_concurrent_task()); break;
+                case 0: require_schedule(scheduler1, test_concurrent_task()); break;
+                case 1: require_schedule(scheduler2, test_concurrent_task()); break;
+                case 2: require_schedule(scheduler3, test_concurrent_task()); break;
+                case 3: require_schedule(scheduler4, test_concurrent_task()); break;
             }
         }
 
@@ -236,10 +236,10 @@ void runTests() {
 
         for (int i = 0; i < TEST3_COUNT; ++i) {
             switch (i % 4) {
-                case 0: requireSchedule(scheduler1, test_compute_intensive()); break;
-                case 1: requireSchedule(scheduler2, test_compute_intensive()); break;
-                case 2: requireSchedule(scheduler3, test_compute_intensive()); break;
-                case 3: requireSchedule(scheduler4, test_compute_intensive()); break;
+                case 0: require_schedule(scheduler1, test_compute_intensive()); break;
+                case 1: require_schedule(scheduler2, test_compute_intensive()); break;
+                case 2: require_schedule(scheduler3, test_compute_intensive()); break;
+                case 3: require_schedule(scheduler4, test_compute_intensive()); break;
             }
         }
 
@@ -276,7 +276,7 @@ void runTests() {
 
         // 第一次启停
         scheduler.start();
-        requireSchedule(scheduler, test_start_stop());
+        require_schedule(scheduler, test_start_stop());
         // 使用调度器的空闲等待
         scheduler.stop();
 
@@ -284,7 +284,7 @@ void runTests() {
 
         // 第二次启停
         scheduler.start();
-        requireSchedule(scheduler, test_start_stop());
+        require_schedule(scheduler, test_start_stop());
         // 使用调度器的空闲等待
         scheduler.stop();
 
@@ -307,9 +307,9 @@ void runTests() {
 
         // 单线程调度器，验证基本功能
         scheduler.start();
-        bool running = scheduler.isRunning();
+        bool running = scheduler.is_running();
         scheduler.stop();
-        bool stopped = !scheduler.isRunning();
+        bool stopped = !scheduler.is_running();
 
         if (running && stopped) {
             LogInfo("[Test 6] PASSED: Single-threaded ParallelScheduler works correctly");
@@ -319,18 +319,18 @@ void runTests() {
         }
     }
 
-    // 测试7：isRunning 状态
+    // 测试7：is_running 状态
     {
         LogInfo("[Test 7] isRunning state...");
         g_total++;
 
         ParallelScheduler scheduler;
 
-        bool before_start = scheduler.isRunning();
+        bool before_start = scheduler.is_running();
         scheduler.start();
-        bool after_start = scheduler.isRunning();
+        bool after_start = scheduler.is_running();
         scheduler.stop();
-        bool after_stop = scheduler.isRunning();
+        bool after_stop = scheduler.is_running();
 
         if (!before_start && after_start && !after_stop) {
             LogInfo("[Test 7] PASSED: isRunning state correct");
@@ -350,17 +350,17 @@ void runTests() {
         parallelScheduler.start();
 
         AsyncWaiter<int> waiter;
-        requireSchedule(parallelScheduler, computeTask(&waiter));
+        require_schedule(parallelScheduler, compute_task(&waiter));
 
         // 等待结果（简单轮询，实际使用中应在协程内 co_await）
-        while (!waiter.isReady()) {
+        while (!waiter.is_ready()) {
             // 使用调度器的空闲等待
         }
 
         parallelScheduler.stop();
 
         // 预期结果: 0+1+2+...+9999 = 49995000
-        if (waiter.isReady()) {
+        if (waiter.is_ready()) {
             LogInfo("[Test 8] PASSED: AsyncWaiter notified");
             g_passed++;
         } else {
@@ -377,15 +377,15 @@ void runTests() {
         parallelScheduler.start();
 
         AsyncWaiter<void> waiter;
-        requireSchedule(parallelScheduler, computeTaskVoid(&waiter));
+        require_schedule(parallelScheduler, compute_task_void(&waiter));
 
-        while (!waiter.isReady()) {
+        while (!waiter.is_ready()) {
             // 使用调度器的空闲等待
         }
 
         parallelScheduler.stop();
 
-        if (waiter.isReady() && g_test9_done) {
+        if (waiter.is_ready() && g_test9_done) {
             LogInfo("[Test 9] PASSED: AsyncWaiter<void> notified");
             g_passed++;
         } else {
@@ -399,19 +399,19 @@ void runTests() {
         g_total++;
 
         ParallelScheduler scheduler;
-        const bool acceptedBeforeStart = scheduler.scheduleResume(
-            detail::TaskAccess::detachTask(resumeLifecycleTask()));
+        const bool acceptedBeforeStart = scheduler.schedule_resume(
+            detail::TaskAccess::detach_task(resume_lifecycle_task()));
 
         const auto started = scheduler.start();
         bool acceptedWhileRunning = false;
         if (started.has_value()) {
-            acceptedWhileRunning = scheduler.scheduleResume(
-                detail::TaskAccess::detachTask(resumeLifecycleTask()));
+            acceptedWhileRunning = scheduler.schedule_resume(
+                detail::TaskAccess::detach_task(resume_lifecycle_task()));
         }
         scheduler.stop();
 
-        const bool acceptedAfterStop = scheduler.scheduleResume(
-            detail::TaskAccess::detachTask(resumeLifecycleTask()));
+        const bool acceptedAfterStop = scheduler.schedule_resume(
+            detail::TaskAccess::detach_task(resume_lifecycle_task()));
         const auto restarted = scheduler.start();
         scheduler.stop();
 
@@ -448,8 +448,8 @@ void runTests() {
         const auto started = scheduler.start();
         if (started.has_value()) {
             const bool blockerScheduled = scheduler.schedule(
-                detail::TaskAccess::detachTask(
-                    stopDrainBlocker(&blockerStarted, &releaseBlocker)));
+                detail::TaskAccess::detach_task(
+                    stop_drain_blocker(&blockerStarted, &releaseBlocker)));
             const auto blockerDeadline = std::chrono::steady_clock::now() + 1500ms;
             while (blockerScheduled &&
                    !blockerStarted.load(std::memory_order_acquire) &&
@@ -459,18 +459,18 @@ void runTests() {
 
             const bool chainScheduled = blockerScheduled &&
                 blockerStarted.load(std::memory_order_acquire) &&
-                scheduler.schedule(detail::TaskAccess::detachTask(
-                    stopDrainStep(&continuationSteps)
-                        .then(stopDrainStep(&continuationSteps))));
+                scheduler.schedule(detail::TaskAccess::detach_task(
+                    stop_drain_step(&continuationSteps)
+                        .then(stop_drain_step(&continuationSteps))));
 
             std::thread stopper([&scheduler]() { scheduler.stop(); });
             const auto stopDeadline = std::chrono::steady_clock::now() + 1500ms;
-            while (scheduler.isRunning() &&
+            while (scheduler.is_running() &&
                    std::chrono::steady_clock::now() < stopDeadline) {
                 std::this_thread::yield();
             }
-            const bool resumeRejected = !scheduler.scheduleResume(
-                detail::TaskAccess::detachTask(resumeProbeTask()));
+            const bool resumeRejected = !scheduler.schedule_resume(
+                detail::TaskAccess::detach_task(resume_probe_task()));
             releaseBlocker.store(true, std::memory_order_release);
             stopper.join();
 
@@ -506,7 +506,7 @@ void runTests() {
         const auto started = scheduler.start();
         if (started.has_value()) {
             const bool selfWakeScheduled = scheduler.schedule(
-                detail::TaskAccess::detachTask(selfWakeTask(
+                detail::TaskAccess::detach_task(self_wake_task(
                     &selfWakeStarted,
                     &releaseSelfWake,
                     &resumptions,
@@ -520,8 +520,8 @@ void runTests() {
             }
             scheduled = selfWakeScheduled &&
                 selfWakeStarted.load(std::memory_order_acquire) &&
-                scheduler.schedule(detail::TaskAccess::detachTask(
-                    recordResumeProgress(&resumptions, &markerObserved)));
+                scheduler.schedule(detail::TaskAccess::detach_task(
+                    record_resume_progress(&resumptions, &markerObserved)));
             releaseSelfWake.store(true, std::memory_order_release);
 
             const auto finishDeadline = std::chrono::steady_clock::now() + 5s;
@@ -553,16 +553,16 @@ void runTests() {
 
 int main() {
     galay::test::TestResultWriter resultWriter("test_parallel_scheduler");
-    runTests();
+    run_tests();
 
     // 写入测试结果
-    resultWriter.addTest();
+    resultWriter.add_test();
     if (g_passed == g_total) {
-        resultWriter.addPassed();
+        resultWriter.add_passed();
     } else {
-        resultWriter.addFailed();
+        resultWriter.add_failed();
     }
-    resultWriter.writeResult();
+    resultWriter.write_result();
 
     return g_passed.load() == g_total.load() ? 0 : 1;
 }

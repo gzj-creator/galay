@@ -69,10 +69,10 @@ void expect(bool condition, const char* message)
     }
 }
 
-Task<void> handleAcceptedClient(SslContext* ctx, GHandle handle, TestState* state)
+Task<void> handle_accepted_client(SslContext* ctx, GHandle handle, TestState* state)
 {
     SslSocket client(ctx, handle);
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     auto handshake = co_await client.handshake();
     if (!handshake) {
@@ -85,11 +85,11 @@ Task<void> handleAcceptedClient(SslContext* ctx, GHandle handle, TestState* stat
     state->server_done.fetch_add(1, std::memory_order_relaxed);
 }
 
-Task<void> runServer(IOScheduler* scheduler, SslContext* ctx, TestState* state)
+Task<void> run_server(IOScheduler* scheduler, SslContext* ctx, TestState* state)
 {
     SslSocket listener(ctx);
-    listener.option().handleReuseAddr();
-    listener.option().handleNonBlock();
+    listener.option().handle_reuse_addr();
+    listener.option().handle_non_block();
 
     if (!listener.bind(Host(IPType::IPV4, "127.0.0.1", kPort))) {
         fail(state, "bind failed");
@@ -110,7 +110,7 @@ Task<void> runServer(IOScheduler* scheduler, SslContext* ctx, TestState* state)
             break;
         }
         state->accepted.fetch_add(1, std::memory_order_relaxed);
-        if (!scheduleTask(scheduler, handleAcceptedClient(ctx, accepted.value(), state))) {
+        if (!schedule_task(scheduler, handle_accepted_client(ctx, accepted.value(), state))) {
             fail(state, "schedule accepted client failed");
             break;
         }
@@ -119,11 +119,11 @@ Task<void> runServer(IOScheduler* scheduler, SslContext* ctx, TestState* state)
     (void)co_await listener.close();
 }
 
-Task<void> runClient(SslContext* ctx, TestState* state)
+Task<void> run_client(SslContext* ctx, TestState* state)
 {
     SslSocket socket(ctx);
-    socket.option().handleNonBlock();
-    if (!socket.setHostname("localhost")) {
+    socket.option().handle_non_block();
+    if (!socket.set_hostname("localhost")) {
         fail(state, "set hostname failed");
         state->client_done.fetch_add(1, std::memory_order_relaxed);
         co_return;
@@ -161,7 +161,7 @@ Task<void> runClient(SslContext* ctx, TestState* state)
     state->client_done.fetch_add(1, std::memory_order_relaxed);
 }
 
-void waitFor(std::atomic<bool>& flag, const char* message)
+void wait_for(std::atomic<bool>& flag, const char* message)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
     while (!flag.load(std::memory_order_acquire)) {
@@ -172,7 +172,7 @@ void waitFor(std::atomic<bool>& flag, const char* message)
     }
 }
 
-void waitForCompletion(TestState& state)
+void wait_for_completion(TestState& state)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     while (state.client_done.load(std::memory_order_relaxed) < kConnections ||
@@ -202,36 +202,36 @@ int main()
 {
     SslContext server_ctx(SslMethod::TLS_Server);
     SslContext client_ctx(SslMethod::TLS_Client);
-    expect(server_ctx.isValid(), "server context invalid");
-    expect(client_ctx.isValid(), "client context invalid");
+    expect(server_ctx.is_valid(), "server context invalid");
+    expect(client_ctx.is_valid(), "client context invalid");
     const auto cert_dir = std::filesystem::path(__FILE__).parent_path() / "certs";
-    expect(server_ctx.loadCertificate((cert_dir / "server.crt").string()).has_value(), "load server cert failed");
-    expect(server_ctx.loadPrivateKey((cert_dir / "server.key").string()).has_value(), "load server key failed");
-    expect(client_ctx.loadCACertificate((cert_dir / "ca.crt").string()).has_value(), "load CA failed");
-    server_ctx.setSessionCacheMode(SSL_SESS_CACHE_OFF);
-    server_ctx.setSessionTimeout(0);
-    client_ctx.setVerifyMode(SslVerifyMode::Peer);
-    client_ctx.setSessionCacheMode(SSL_SESS_CACHE_OFF);
-    client_ctx.setSessionTimeout(0);
+    expect(server_ctx.load_certificate((cert_dir / "server.crt").string()).has_value(), "load server cert failed");
+    expect(server_ctx.load_private_key((cert_dir / "server.key").string()).has_value(), "load server key failed");
+    expect(client_ctx.load_ca_certificate((cert_dir / "ca.crt").string()).has_value(), "load CA failed");
+    server_ctx.set_session_cache_mode(SSL_SESS_CACHE_OFF);
+    server_ctx.set_session_timeout(0);
+    client_ctx.set_verify_mode(SslVerifyMode::Peer);
+    client_ctx.set_session_cache_mode(SSL_SESS_CACHE_OFF);
+    client_ctx.set_session_timeout(0);
     SSL_CTX_set_options(client_ctx.native(), SSL_OP_NO_TICKET);
 
     TestScheduler scheduler;
     scheduler.start();
 
     TestState state;
-    expect(scheduleTask(scheduler, runServer(&scheduler, &server_ctx, &state)), "schedule server failed");
-    waitFor(state.server_ready, "server did not become ready");
+    expect(schedule_task(scheduler, run_server(&scheduler, &server_ctx, &state)), "schedule server failed");
+    wait_for(state.server_ready, "server did not become ready");
 
     for (int i = 0; i < kConnections; ++i) {
-        expect(scheduleTask(scheduler, runClient(&client_ctx, &state)), "schedule client failed");
+        expect(schedule_task(scheduler, run_client(&client_ctx, &state)), "schedule client failed");
     }
 
     int rc = 0;
     try {
-        waitForCompletion(state);
+        wait_for_completion(state);
     } catch (const std::exception& ex) {
         std::cerr << "[T13] " << ex.what() << "\n";
-        if (auto error = scheduler.lastError(); error.has_value()) {
+        if (auto error = scheduler.last_error(); error.has_value()) {
             std::cerr << "[T13] scheduler lastError: " << error->message() << "\n";
         }
         rc = 1;

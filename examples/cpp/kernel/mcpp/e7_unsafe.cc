@@ -62,8 +62,8 @@ int main() {
         return 1;
     }
 
-    if (!scheduleTask(scheduler, consumer(&channel)) ||
-        !scheduleTask(scheduler, producer(&channel))) {
+    if (!schedule_task(scheduler, consumer(&channel)) ||
+        !schedule_task(scheduler, producer(&channel))) {
         std::cerr << "unsafe-channel import example failed to schedule tasks\n";
         scheduler.stop();
         return 1;

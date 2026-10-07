@@ -16,7 +16,7 @@ using namespace galay::rpc;
 
 namespace {
 
-size_t parseSizeArg(char** argv, int index, size_t fallback)
+size_t parse_size_arg(char** argv, int index, size_t fallback)
 {
     if (argv[index] == nullptr) {
         return fallback;
@@ -29,7 +29,7 @@ size_t parseSizeArg(char** argv, int index, size_t fallback)
     return static_cast<size_t>(value);
 }
 
-bool viewEquals(RpcPayloadView view, std::string_view expected)
+bool view_equals(RpcPayloadView view, std::string_view expected)
 {
     if (view.size() != expected.size()) {
         return false;
@@ -51,12 +51,12 @@ bool viewEquals(RpcPayloadView view, std::string_view expected)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    const size_t iterations = argc > 1 ? parseSizeArg(argv, 1, 10000) : 10000;
-    const size_t payload_size = argc > 2 ? parseSizeArg(argv, 2, 1024) : 1024;
+    const size_t iterations = argc > 1 ? parse_size_arg(argv, 1, 10000) : 10000;
+    const size_t payload_size = argc > 2 ? parse_size_arg(argv, 2, 1024) : 1024;
 
     std::string owned_payload(payload_size, 'x');
     std::string borrowed_first(payload_size / 2, 'a');
@@ -72,17 +72,17 @@ int main(int argc, char** argv)
     RpcRequest owned_request(1, "BenchOwnershipService", "clone");
     owned_request.payload(owned_payload.data(), owned_payload.size());
     RpcRequest borrowed_request(2, "BenchOwnershipService", "clone");
-    borrowed_request.payloadView(borrowed_view);
+    borrowed_request.payload_view(borrowed_view);
 
     RpcResponse owned_response(3, RpcErrorCode::OK);
     owned_response.payload(owned_payload.data(), owned_payload.size());
     RpcResponse borrowed_response(4, RpcErrorCode::OK);
-    borrowed_response.payloadView(borrowed_view);
+    borrowed_response.payload_view(borrowed_view);
 
     StreamMessage owned_message(5, owned_payload.data(), owned_payload.size());
     StreamMessage borrowed_message;
-    borrowed_message.streamId(6);
-    borrowed_message.payloadView(borrowed_view);
+    borrowed_message.stream_id(6);
+    borrowed_message.payload_view(borrowed_view);
 
     size_t checksum = 0;
     size_t errors = 0;
@@ -96,19 +96,19 @@ int main(int argc, char** argv)
         StreamMessage owned_message_clone = owned_message.clone();
         StreamMessage borrowed_message_clone = borrowed_message.clone();
 
-        checksum += owned_request_clone.payloadSize();
-        checksum += borrowed_request_clone.payloadSize();
-        checksum += owned_response_clone.payloadSize();
-        checksum += borrowed_response_clone.payloadSize();
-        checksum += owned_message_clone.payloadSize();
-        checksum += borrowed_message_clone.payloadSize();
+        checksum += owned_request_clone.payload_size();
+        checksum += borrowed_request_clone.payload_size();
+        checksum += owned_response_clone.payload_size();
+        checksum += borrowed_response_clone.payload_size();
+        checksum += owned_message_clone.payload_size();
+        checksum += borrowed_message_clone.payload_size();
 
-        if (!viewEquals(owned_request_clone.payloadView(), owned_payload) ||
-            !viewEquals(borrowed_request_clone.payloadView(), borrowed_payload) ||
-            !viewEquals(owned_response_clone.payloadView(), owned_payload) ||
-            !viewEquals(borrowed_response_clone.payloadView(), borrowed_payload) ||
-            !viewEquals(owned_message_clone.payloadView(), owned_payload) ||
-            !viewEquals(borrowed_message_clone.payloadView(), borrowed_payload)) {
+        if (!view_equals(owned_request_clone.payload_view(), owned_payload) ||
+            !view_equals(borrowed_request_clone.payload_view(), borrowed_payload) ||
+            !view_equals(owned_response_clone.payload_view(), owned_payload) ||
+            !view_equals(borrowed_response_clone.payload_view(), borrowed_payload) ||
+            !view_equals(owned_message_clone.payload_view(), owned_payload) ||
+            !view_equals(borrowed_message_clone.payload_view(), borrowed_payload)) {
             ++errors;
         }
     }
@@ -118,19 +118,19 @@ int main(int argc, char** argv)
     for (size_t i = 0; i < iterations; ++i) {
         galay::rpc::detail::RpcRequestWriteState request_state(owned_request);
         galay::rpc::detail::RpcResponseWriteState response_state(owned_response);
-        galay::rpc::detail::StreamFrameWriteState stream_state(owned_message.streamId(), borrowed_view);
+        galay::rpc::detail::StreamFrameWriteState stream_state(owned_message.stream_id(), borrowed_view);
         std::vector<char> raw_payload(owned_payload.begin(), owned_payload.end());
         galay::rpc::detail::RpcVectorWriteState vector_state(std::move(raw_payload));
 
-        checksum += request_state.writeIovecsCount();
-        checksum += response_state.writeIovecsCount();
-        checksum += stream_state.writeIovecsCount();
-        checksum += vector_state.writeIovecsCount();
+        checksum += request_state.write_iovecs_count();
+        checksum += response_state.write_iovecs_count();
+        checksum += stream_state.write_iovecs_count();
+        checksum += vector_state.write_iovecs_count();
 
-        if (!request_state.takeResult().has_value() ||
-            !response_state.takeResult().has_value() ||
-            !stream_state.takeResult().has_value() ||
-            !vector_state.takeResult().has_value()) {
+        if (!request_state.take_result().has_value() ||
+            !response_state.take_result().has_value() ||
+            !stream_state.take_result().has_value() ||
+            !vector_state.take_result().has_value()) {
             ++errors;
         }
     }

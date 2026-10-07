@@ -129,7 +129,7 @@ public:
 };
 ```
 
-使用 `http::HttpServerBuilder().buildConfig()` 传入配置，而非会构造底层
+使用 `http::HttpServerBuilder().build_config()` 传入配置，而非会构造底层
 server 和 Runtime 的 `build()`。`ApiServer` 构造只保存配置和策略，不创建
 Runtime；`start` 先验证 `PreparedApi` 并执行自持策略的 `install`，成功后
 才创建 HTTP server 和 Runtime。server 不可复制或移动，也没有新增 virtual
@@ -157,7 +157,7 @@ builder 或 `install` 参数的 `PreparedApi&`。文档和资源应捕获不可�
 对象，不能依赖局部变量或已被移动的 prepared 对象。
 
 文档只包含同一个 `ApiBuilder` 登记的全部 typed endpoint；不自动反射
-裸 `HttpRouter::addHandler`，也不把文档策略新建的非 typed 路由虚构成
+裸 `HttpRouter::add_handler`，也不把文档策略新建的非 typed 路由虚构成
 DTO 操作。`ApiServer` 是 `galay-api` 的上层组合，不更改底层 `HttpServer`
 模板或为 `galay-http` 增加 serde / Swagger 依赖。
 

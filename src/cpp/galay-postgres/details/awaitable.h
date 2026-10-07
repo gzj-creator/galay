@@ -26,7 +26,7 @@ public:
     PostgresConnectAwaitable(const PostgresConnectAwaitable&) = delete;
     PostgresConnectAwaitable& operator=(const PostgresConnectAwaitable&) = delete;
 
-    [[nodiscard]] bool isInvalid() const;
+    [[nodiscard]] bool is_invalid() const;
 
 private:
     enum class AuthStage
@@ -80,16 +80,16 @@ private:
 
         explicit Machine(std::shared_ptr<SharedState> state);
         galay::kernel::MachineAction<result_type> advance();
-        void onConnect(std::expected<void, galay::kernel::IOError> result);
-        void onRead(std::expected<size_t, galay::kernel::IOError> result);
-        void onWrite(std::expected<size_t, galay::kernel::IOError> result);
+        void on_connect(std::expected<void, galay::kernel::IOError> result);
+        void on_read(std::expected<size_t, galay::kernel::IOError> result);
+        void on_write(std::expected<size_t, galay::kernel::IOError> result);
 
     private:
-        bool prepareReadWindow();
-        std::expected<bool, PostgresError> parseFromRingBuffer();
-        void setError(PostgresError error) noexcept;
-        void setIoError(const galay::kernel::IOError& error, PostgresErrorType fallback) noexcept;
-        void completeSuccess() noexcept;
+        bool prepare_read_window();
+        std::expected<bool, PostgresError> parse_from_ring_buffer();
+        void set_error(PostgresError error) noexcept;
+        void set_io_error(const galay::kernel::IOError& error, PostgresErrorType fallback) noexcept;
+        void complete_success() noexcept;
 
         std::shared_ptr<SharedState> m_state;
     };
@@ -116,7 +116,7 @@ public:
     PostgresQueryAwaitable(const PostgresQueryAwaitable&) = delete;
     PostgresQueryAwaitable& operator=(const PostgresQueryAwaitable&) = delete;
 
-    [[nodiscard]] bool isInvalid() const;
+    [[nodiscard]] bool is_invalid() const;
 
 private:
     enum class Phase { Invalid, SendCommand, Receiving, Done };
@@ -145,14 +145,14 @@ private:
 
         explicit Machine(std::shared_ptr<SharedState> state);
         galay::kernel::MachineAction<result_type> advance();
-        void onRead(std::expected<size_t, galay::kernel::IOError> result);
-        void onWrite(std::expected<size_t, galay::kernel::IOError> result);
+        void on_read(std::expected<size_t, galay::kernel::IOError> result);
+        void on_write(std::expected<size_t, galay::kernel::IOError> result);
 
     private:
-        bool prepareReadWindow();
-        std::expected<bool, PostgresError> parseFromRingBuffer();
-        void setError(PostgresError error) noexcept;
-        void setIoError(const galay::kernel::IOError& error, PostgresErrorType fallback) noexcept;
+        bool prepare_read_window();
+        std::expected<bool, PostgresError> parse_from_ring_buffer();
+        void set_error(PostgresError error) noexcept;
+        void set_io_error(const galay::kernel::IOError& error, PostgresErrorType fallback) noexcept;
 
         std::shared_ptr<SharedState> m_state;
     };
@@ -198,7 +198,7 @@ public:
     PostgresPrepareAwaitable(const PostgresPrepareAwaitable&) = delete;
     PostgresPrepareAwaitable& operator=(const PostgresPrepareAwaitable&) = delete;
 
-    [[nodiscard]] bool isInvalid() const;
+    [[nodiscard]] bool is_invalid() const;
 
 private:
     enum class Phase { Invalid, SendCommand, Receiving, Done };
@@ -230,14 +230,14 @@ private:
 
         explicit Machine(std::shared_ptr<SharedState> state);
         galay::kernel::MachineAction<result_type> advance();
-        void onRead(std::expected<size_t, galay::kernel::IOError> result);
-        void onWrite(std::expected<size_t, galay::kernel::IOError> result);
+        void on_read(std::expected<size_t, galay::kernel::IOError> result);
+        void on_write(std::expected<size_t, galay::kernel::IOError> result);
 
     private:
-        bool prepareReadWindow();
-        std::expected<bool, PostgresError> parseFromRingBuffer();
-        void setError(PostgresError error) noexcept;
-        void setIoError(const galay::kernel::IOError& error, PostgresErrorType fallback) noexcept;
+        bool prepare_read_window();
+        std::expected<bool, PostgresError> parse_from_ring_buffer();
+        void set_error(PostgresError error) noexcept;
+        void set_io_error(const galay::kernel::IOError& error, PostgresErrorType fallback) noexcept;
 
         std::shared_ptr<SharedState> m_state;
     };
@@ -266,7 +266,7 @@ public:
     PostgresExecuteAwaitable(const PostgresExecuteAwaitable&) = delete;
     PostgresExecuteAwaitable& operator=(const PostgresExecuteAwaitable&) = delete;
 
-    [[nodiscard]] bool isInvalid() const;
+    [[nodiscard]] bool is_invalid() const;
 
 private:
     enum class Phase { Invalid, SendCommand, Receiving, Done };
@@ -297,14 +297,14 @@ private:
 
         explicit Machine(std::shared_ptr<SharedState> state);
         galay::kernel::MachineAction<result_type> advance();
-        void onRead(std::expected<size_t, galay::kernel::IOError> result);
-        void onWrite(std::expected<size_t, galay::kernel::IOError> result);
+        void on_read(std::expected<size_t, galay::kernel::IOError> result);
+        void on_write(std::expected<size_t, galay::kernel::IOError> result);
 
     private:
-        bool prepareReadWindow();
-        std::expected<bool, PostgresError> parseFromRingBuffer();
-        void setError(PostgresError error) noexcept;
-        void setIoError(const galay::kernel::IOError& error, PostgresErrorType fallback) noexcept;
+        bool prepare_read_window();
+        std::expected<bool, PostgresError> parse_from_ring_buffer();
+        void set_error(PostgresError error) noexcept;
+        void set_io_error(const galay::kernel::IOError& error, PostgresErrorType fallback) noexcept;
 
         std::shared_ptr<SharedState> m_state;
     };
@@ -332,7 +332,7 @@ public:
     PostgresPipelineAwaitable(const PostgresPipelineAwaitable&) = delete;
     PostgresPipelineAwaitable& operator=(const PostgresPipelineAwaitable&) = delete;
 
-    [[nodiscard]] bool isInvalid() const;
+    [[nodiscard]] bool is_invalid() const;
 
 private:
     enum class Phase { Invalid, SendCommands, Receiving, Done };
@@ -365,14 +365,14 @@ private:
 
         explicit Machine(std::shared_ptr<SharedState> state);
         galay::kernel::MachineAction<result_type> advance();
-        void onRead(std::expected<size_t, galay::kernel::IOError> result);
-        void onWrite(std::expected<size_t, galay::kernel::IOError> result);
+        void on_read(std::expected<size_t, galay::kernel::IOError> result);
+        void on_write(std::expected<size_t, galay::kernel::IOError> result);
 
     private:
-        bool prepareReadWindow();
-        std::expected<bool, PostgresError> parseFromRingBuffer();
-        void setError(PostgresError error) noexcept;
-        void setIoError(const galay::kernel::IOError& error, PostgresErrorType fallback) noexcept;
+        bool prepare_read_window();
+        std::expected<bool, PostgresError> parse_from_ring_buffer();
+        void set_error(PostgresError error) noexcept;
+        void set_io_error(const galay::kernel::IOError& error, PostgresErrorType fallback) noexcept;
 
         std::shared_ptr<SharedState> m_state;
     };

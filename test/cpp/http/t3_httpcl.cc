@@ -18,7 +18,7 @@ Task<void> test_get(IOScheduler* scheduler)
 
     // 创建socket并连接
     AsyncTcpSocket socket(IPType::IPV4);
-    auto nonblock_result = socket.option().handleNonBlock();
+    auto nonblock_result = socket.option().handle_non_block();
     if (!nonblock_result) {
         co_return;
     }
@@ -31,8 +31,8 @@ Task<void> test_get(IOScheduler* scheduler)
 
 
     // 创建HttpClient
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -72,7 +72,7 @@ Task<void> test_post(IOScheduler* scheduler)
 
     // 创建socket并连接
     AsyncTcpSocket socket(IPType::IPV4);
-    auto nonblock_result = socket.option().handleNonBlock();
+    auto nonblock_result = socket.option().handle_non_block();
     if (!nonblock_result) {
         co_return;
     }
@@ -85,12 +85,12 @@ Task<void> test_post(IOScheduler* scheduler)
 
 
     // 创建HttpClient
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
     // 使用 HttpClientAwaitable API 发送 POST 请求
     std::string body = R"({"name":"test","value":123})";
     int loop_count = 0;
-    auto session_result = client.getSession();
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -124,7 +124,7 @@ Task<void> test_multiple_requests(IOScheduler* scheduler)
 
     // 创建socket并连接
     AsyncTcpSocket socket(IPType::IPV4);
-    auto nonblock_result = socket.option().handleNonBlock();
+    auto nonblock_result = socket.option().handle_non_block();
     if (!nonblock_result) {
         co_return;
     }
@@ -137,11 +137,11 @@ Task<void> test_multiple_requests(IOScheduler* scheduler)
 
 
     // 创建HttpClient
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
     // 发送多个请求
     std::vector<std::string> uris = {"/", "/hello", "/test"};
-    auto session_result = client.getSession();
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -180,19 +180,19 @@ int main()
         runtime.start();
 
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             return 1;
         }
 
         // 运行测试
-        scheduleTask(scheduler, test_get(scheduler));
+        schedule_task(scheduler, test_get(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, test_post(scheduler));
+        schedule_task(scheduler, test_post(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, test_multiple_requests(scheduler));
+        schedule_task(scheduler, test_multiple_requests(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
         runtime.stop();

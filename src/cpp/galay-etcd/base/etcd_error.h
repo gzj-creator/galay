@@ -74,7 +74,7 @@ public:
      * @brief 判断是否为成功状态
      * @return 若错误类型为 Success 则返回 true
      */
-    [[nodiscard]] bool isOk() const;
+    [[nodiscard]] bool is_ok() const;
 
 private:
     std::string m_extra_msg; ///< 附加错误消息

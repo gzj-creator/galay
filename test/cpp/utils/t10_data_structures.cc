@@ -9,7 +9,7 @@ concept HasPreciseContains = requires(Filter filter) {
     filter.contains(1);
 };
 
-uint64_t stableBloomTestHash(uint64_t value) {
+uint64_t stable_bloom_test_hash(uint64_t value) {
     value += 0x9e3779b97f4a7c15ULL;
     value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
     value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
@@ -31,14 +31,14 @@ void test_trie_tree() {
     assert(trie.contains("help"));
     assert(!trie.contains("hel"));
 
-    assert(trie.startsWith("hel"));
-    assert(trie.startsWith("wor"));
-    assert(!trie.startsWith("xyz"));
+    assert(trie.starts_with("hel"));
+    assert(trie.starts_with("wor"));
+    assert(!trie.starts_with("xyz"));
 
     assert(trie.query("hello") == 2); // Added twice
     assert(trie.query("help") == 1);
 
-    auto words = trie.getWordsWithPrefix("hel");
+    auto words = trie.get_words_with_prefix("hel");
     assert(words.size() == 2);
 
     assert(trie.remove("hello"));
@@ -55,19 +55,19 @@ void test_huffman() {
 
     // Build table from data
     std::vector<char> data = {'a', 'a', 'a', 'b', 'b', 'c'};
-    auto table = HuffmanBuilder<char>::buildFromData(data);
+    auto table = HuffmanBuilder<char>::build_from_data(data);
 
     assert(table.size() == 3);
-    assert(table.hasSymbol('a'));
-    assert(table.hasSymbol('b'));
-    assert(table.hasSymbol('c'));
+    assert(table.has_symbol('a'));
+    assert(table.has_symbol('b'));
+    assert(table.has_symbol('c'));
 
-    // Encode
+    // encode
     HuffmanEncoder<char> encoder(table);
     encoder.encode(data);
     auto encoded = encoder.finish();
 
-    // Decode
+    // decode
     HuffmanDecoder<char> decoder(table, 1, 8);
     auto decoded = decoder.decode(encoded, data.size());
 
@@ -87,19 +87,19 @@ void test_mvcc() {
     Mvcc<std::string> mvcc;
 
     // Put values
-    Version v1 = mvcc.putValue("value1");
+    Version v1 = mvcc.put_value("value1");
     assert(v1 == 1);
 
-    Version v2 = mvcc.putValue("value2");
+    Version v2 = mvcc.put_value("value2");
     assert(v2 == 2);
 
     // Read current
-    const std::string* current = mvcc.getCurrentValue();
+    const std::string* current = mvcc.get_current_value();
     assert(current != nullptr);
     assert(*current == "value2");
 
     // Read by version
-    const std::string* val1 = mvcc.getValue(v1);
+    const std::string* val1 = mvcc.get_value(v1);
     assert(val1 != nullptr);
     assert(*val1 == "value1");
 
@@ -117,12 +117,12 @@ void test_mvcc() {
 
     txn.write(std::make_unique<std::string>("value3"));
     assert(txn.commit());
-    assert(*mvcc.getCurrentValue() == "value3");
+    assert(*mvcc.get_current_value() == "value3");
 
     // GC
-    assert(mvcc.versionCount() == 3);
+    assert(mvcc.version_count() == 3);
     mvcc.gc(2);
-    assert(mvcc.versionCount() == 2);
+    assert(mvcc.version_count() == 2);
 
     std::cout << "MVCC tests passed!" << std::endl;
 }
@@ -135,46 +135,46 @@ void test_bloom_filter() {
     static_assert(!HasPreciseContains<BloomFilter<int>>);
 
     BloomFilter<int> minFilter(1);
-    assert(minFilter.bitCount() == BloomFilter<int>::kBitsPerBlock);
-    assert(minFilter.blockCount() == 1);
-    assert(minFilter.hashCount() == BloomFilter<int>::kHashCount);
+    assert(minFilter.bit_count() == BloomFilter<int>::kBitsPerBlock);
+    assert(minFilter.block_count() == 1);
+    assert(minFilter.hash_count() == BloomFilter<int>::kHashCount);
 
     BloomFilter<int> roundedFilter(BloomFilter<int>::kBitsPerBlock + 1);
-    assert(roundedFilter.bitCount() == BloomFilter<int>::kBitsPerBlock * 2);
-    assert(roundedFilter.blockCount() == 2);
+    assert(roundedFilter.bit_count() == BloomFilter<int>::kBitsPerBlock * 2);
+    assert(roundedFilter.block_count() == 2);
 
-    auto filter = BloomFilter<std::string>::fromExpectedItems(128, 0.01);
-    assert(filter.bitCount() >= 256);
-    assert(filter.bitCount() % BloomFilter<std::string>::kBitsPerBlock == 0);
-    assert(filter.blockCount() > 0);
-    assert(filter.hashCount() == 8);
+    auto filter = BloomFilter<std::string>::from_expected_items(128, 0.01);
+    assert(filter.bit_count() >= 256);
+    assert(filter.bit_count() % BloomFilter<std::string>::kBitsPerBlock == 0);
+    assert(filter.block_count() > 0);
+    assert(filter.hash_count() == 8);
     assert(filter.empty());
-    assert(filter.insertionCount() == 0);
+    assert(filter.insertion_count() == 0);
 
-    assert(!filter.possiblyContains("alpha"));
+    assert(!filter.possibly_contains("alpha"));
     filter.add("alpha");
     filter.add("beta");
     filter.add("alpha");
 
     assert(!filter.empty());
-    assert(filter.insertionCount() == 3);
-    assert(filter.possiblyContains("alpha"));
-    assert(filter.possiblyContains("beta"));
+    assert(filter.insertion_count() == 3);
+    assert(filter.possibly_contains("alpha"));
+    assert(filter.possibly_contains("beta"));
 
     filter.clear();
     assert(filter.empty());
-    assert(filter.insertionCount() == 0);
-    assert(!filter.possiblyContains("alpha"));
-    assert(!filter.possiblyContains("beta"));
+    assert(filter.insertion_count() == 0);
+    assert(!filter.possibly_contains("alpha"));
+    assert(!filter.possibly_contains("beta"));
 
     BloomFilter<uint64_t> hashFilter(256);
-    hashFilter.addHash(0x123456789abcdef0ULL);
-    assert(hashFilter.possiblyContainsHash(0x123456789abcdef0ULL));
-    assert(!hashFilter.possiblyContainsHash(0xfedcba9876543210ULL));
+    hashFilter.add_hash(0x123456789abcdef0ULL);
+    assert(hashFilter.possibly_contains_hash(0x123456789abcdef0ULL));
+    assert(!hashFilter.possibly_contains_hash(0xfedcba9876543210ULL));
 
     bool invalidExpectedItems = false;
     try {
-        (void)BloomFilter<int>::fromExpectedItems(0, 0.01);
+        (void)BloomFilter<int>::from_expected_items(0, 0.01);
     } catch (const std::invalid_argument&) {
         invalidExpectedItems = true;
     }
@@ -182,7 +182,7 @@ void test_bloom_filter() {
 
     bool invalidFalsePositiveRate = false;
     try {
-        (void)BloomFilter<int>::fromExpectedItems(10, 1.0);
+        (void)BloomFilter<int>::from_expected_items(10, 1.0);
     } catch (const std::invalid_argument&) {
         invalidFalsePositiveRate = true;
     }
@@ -198,7 +198,7 @@ void test_bloom_filter() {
 
     bool invalidZeroFalsePositiveRate = false;
     try {
-        (void)BloomFilter<int>::bitCountForExpectedItems(10, 0.0);
+        (void)BloomFilter<int>::bit_count_for_expected_items(10, 0.0);
     } catch (const std::invalid_argument&) {
         invalidZeroFalsePositiveRate = true;
     }
@@ -206,7 +206,7 @@ void test_bloom_filter() {
 
     bool invalidNaNFalsePositiveRate = false;
     try {
-        (void)BloomFilter<int>::bitCountForExpectedItems(
+        (void)BloomFilter<int>::bit_count_for_expected_items(
             10, std::numeric_limits<double>::quiet_NaN());
     } catch (const std::invalid_argument&) {
         invalidNaNFalsePositiveRate = true;
@@ -214,25 +214,25 @@ void test_bloom_filter() {
     assert(invalidNaNFalsePositiveRate);
 
     constexpr size_t stressItems = 50000;
-    auto stressFilter = BloomFilter<uint64_t>::fromExpectedItems(stressItems, 0.01);
+    auto stressFilter = BloomFilter<uint64_t>::from_expected_items(stressItems, 0.01);
     std::vector<uint64_t> inserted;
     inserted.reserve(stressItems);
 
     for (uint64_t i = 0; i < stressItems; ++i) {
-        const uint64_t hash = stableBloomTestHash(i);
+        const uint64_t hash = stable_bloom_test_hash(i);
         inserted.push_back(hash);
-        stressFilter.addHash(hash);
+        stressFilter.add_hash(hash);
     }
-    assert(stressFilter.insertionCount() == stressItems);
+    assert(stressFilter.insertion_count() == stressItems);
 
     for (uint64_t hash : inserted) {
-        assert(stressFilter.possiblyContainsHash(hash));
+        assert(stressFilter.possibly_contains_hash(hash));
     }
 
     size_t falsePositives = 0;
     for (uint64_t i = 0; i < stressItems; ++i) {
-        const uint64_t hash = stableBloomTestHash(i + 1000000ULL);
-        if (stressFilter.possiblyContainsHash(hash)) {
+        const uint64_t hash = stable_bloom_test_hash(i + 1000000ULL);
+        if (stressFilter.possibly_contains_hash(hash)) {
             ++falsePositives;
         }
     }

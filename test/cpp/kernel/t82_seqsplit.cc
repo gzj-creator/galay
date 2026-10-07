@@ -37,7 +37,7 @@ namespace {
 using SequenceResult = std::expected<size_t, IOError>;
 
 struct ReadOnlyFlow {
-    void onRecv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& ctx) {
+    void on_recv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& ctx) {
         ops.complete(std::move(ctx.m_result));
     }
 
@@ -45,7 +45,7 @@ struct ReadOnlyFlow {
 };
 
 struct WriteOnlyFlow {
-    void onSend(SequenceOps<SequenceResult, 4>& ops, SendIOContext& ctx) {
+    void on_send(SequenceOps<SequenceResult, 4>& ops, SendIOContext& ctx) {
         ops.complete(std::move(ctx.m_result));
     }
 
@@ -90,10 +90,10 @@ struct SuspendProbeAwaitable {
     }
 };
 
-Task<void> readTask(SharedState* state) {
+Task<void> read_task(SharedState* state) {
     ReadOnlyFlow flow;
     auto inner = AwaitableBuilder<SequenceResult, 4, ReadOnlyFlow>(&state->controller, flow)
-        .recv<&ReadOnlyFlow::onRecv>(&flow.m_byte, 1)
+        .recv<&ReadOnlyFlow::on_recv>(&flow.m_byte, 1)
         .build();
     SuspendProbeAwaitable<decltype(inner)> awaitable{
         .inner = std::move(inner),
@@ -105,10 +105,10 @@ Task<void> readTask(SharedState* state) {
     state->read_done.store(true, std::memory_order_release);
 }
 
-Task<void> writeTask(SharedState* state) {
+Task<void> write_task(SharedState* state) {
     WriteOnlyFlow flow;
     auto inner = AwaitableBuilder<SequenceResult, 4, WriteOnlyFlow>(&state->controller, flow)
-        .send<&WriteOnlyFlow::onSend>(&flow.m_byte, 1)
+        .send<&WriteOnlyFlow::on_send>(&flow.m_byte, 1)
         .build();
     SuspendProbeAwaitable<decltype(inner)> awaitable{
         .inner = std::move(inner),
@@ -120,7 +120,7 @@ Task<void> writeTask(SharedState* state) {
     state->write_done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -133,12 +133,12 @@ bool waitUntil(auto&& predicate,
     return predicate();
 }
 
-bool setNonBlocking(int fd) {
+bool set_non_blocking(int fd) {
     const int flags = fcntl(fd, F_GETFL, 0);
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool sendByteWithRetry(int fd,
+bool send_byte_with_retry(int fd,
                        char value,
                        std::chrono::milliseconds timeout = 1000ms,
                        std::chrono::milliseconds step = 2ms) {
@@ -160,7 +160,7 @@ bool sendByteWithRetry(int fd,
     return false;
 }
 
-bool drainPeerUntilWriteCompletes(SharedState* state,
+bool drain_peer_until_write_completes(SharedState* state,
                                   int fd,
                                   std::chrono::milliseconds timeout = 1000ms,
                                   std::chrono::milliseconds step = 2ms) {
@@ -187,7 +187,7 @@ bool drainPeerUntilWriteCompletes(SharedState* state,
     return state->write_done.load(std::memory_order_acquire);
 }
 
-bool fillSendBuffer(int fd) {
+bool fill_send_buffer(int fd) {
     std::array<char, 4096> payload{};
     payload.fill('b');
     while (true) {
@@ -216,13 +216,13 @@ int main() {
         std::perror("[T82] socketpair");
         return 1;
     }
-    if (!setNonBlocking(fds[0]) || !setNonBlocking(fds[1])) {
+    if (!set_non_blocking(fds[0]) || !set_non_blocking(fds[1])) {
         std::cerr << "[T82] failed to set non-blocking mode\n";
         close(fds[0]);
         close(fds[1]);
         return 1;
     }
-    if (!fillSendBuffer(fds[0])) {
+    if (!fill_send_buffer(fds[0])) {
         std::cerr << "[T82] failed to pre-fill socket send buffer\n";
         close(fds[0]);
         close(fds[1]);
@@ -233,10 +233,10 @@ int main() {
     scheduler.start();
 
     SharedState state(fds[0]);
-    scheduleTask(scheduler, readTask(&state));
-    scheduleTask(scheduler, writeTask(&state));
+    schedule_task(scheduler, read_task(&state));
+    schedule_task(scheduler, write_task(&state));
 
-    const bool suspend_barrier_ready = waitUntil([&]() {
+    const bool suspend_barrier_ready = wait_until([&]() {
         return state.read_suspend_done.load(std::memory_order_acquire) &&
                state.write_suspend_done.load(std::memory_order_acquire);
     });
@@ -249,7 +249,7 @@ int main() {
     }
 
     constexpr char kReadPayload = 'r';
-    if (!sendByteWithRetry(fds[1], kReadPayload)) {
+    if (!send_byte_with_retry(fds[1], kReadPayload)) {
         std::cerr << "[T82] failed to inject read payload\n";
         scheduler.stop();
         close(fds[0]);
@@ -257,7 +257,7 @@ int main() {
         return 1;
     }
 
-    if (!drainPeerUntilWriteCompletes(&state, fds[1])) {
+    if (!drain_peer_until_write_completes(&state, fds[1])) {
         std::cerr << "[T82] failed to drain peer buffer until write completion\n";
         scheduler.stop();
         close(fds[0]);
@@ -265,10 +265,10 @@ int main() {
         return 1;
     }
 
-    const bool read_completed = waitUntil([&]() {
+    const bool read_completed = wait_until([&]() {
         return state.read_done.load(std::memory_order_acquire);
     });
-    const bool write_completed = waitUntil([&]() {
+    const bool write_completed = wait_until([&]() {
         return state.write_done.load(std::memory_order_acquire);
     });
 

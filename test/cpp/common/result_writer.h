@@ -25,19 +25,19 @@ public:
         m_start_time = std::chrono::steady_clock::now();
     }
 
-    void addTest() {
+    void add_test() {
         m_total++;
     }
 
-    void addPassed() {
+    void add_passed() {
         m_passed++;
     }
 
-    void addFailed() {
+    void add_failed() {
         m_failed++;
     }
 
-    void writeResult(const std::string& output_dir = "test_results") {
+    void write_result(const std::string& output_dir = "test_results") {
         auto end_time = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
             end_time - m_start_time).count();
@@ -70,9 +70,9 @@ public:
         ofs.close();
     }
 
-    int getPassed() const { return m_passed; }
-    int getFailed() const { return m_failed; }
-    int getTotal() const { return m_total; }
+    int get_passed() const { return m_passed; }
+    int get_failed() const { return m_failed; }
+    int get_total() const { return m_total; }
 
 private:
     std::string m_test_name;

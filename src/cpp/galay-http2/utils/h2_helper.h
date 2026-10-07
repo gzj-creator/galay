@@ -25,7 +25,7 @@ namespace galay::http2
  * @param payload_length Frame payload length, encoded as a 24-bit big-endian value.
  * @return Serialized frame header bytes.
  */
-std::array<char, kHttp2FrameHeaderLength> buildH2FrameHeaderBytes(Http2FrameType type,
+std::array<char, kHttp2FrameHeaderLength> build_h2_frame_header_bytes(Http2FrameType type,
                                                                   uint8_t flags,
                                                                   uint32_t stream_id,
                                                                   uint32_t payload_length);
@@ -38,7 +38,7 @@ std::array<char, kHttp2FrameHeaderLength> buildH2FrameHeaderBytes(Http2FrameType
  * @param payload Frame payload view copied into the returned buffer.
  * @return Serialized frame bytes.
  */
-std::string buildH2FrameBytes(Http2FrameType type,
+std::string build_h2_frame_bytes(Http2FrameType type,
                               uint8_t flags,
                               uint32_t stream_id,
                               std::string_view payload);

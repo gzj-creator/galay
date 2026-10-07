@@ -31,7 +31,7 @@ enum class Operation {
     PromptsList
 };
 
-static const char* operationName(Operation op) {
+static const char* operation_name(Operation op) {
     switch (op) {
         case Operation::Ping: return "HTTP Ping";
         case Operation::ToolCall: return "HTTP Tool Call";
@@ -45,7 +45,7 @@ static const char* operationName(Operation op) {
 
 class ConcurrentStats {
 public:
-    void addLatency(double latencyMs) {
+    void add_latency(double latencyMs) {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_latencies.push_back(latencyMs);
         m_totalTimeMs += latencyMs;
@@ -54,12 +54,12 @@ public:
         m_successCount++;
     }
 
-    void addError() {
+    void add_error() {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_errorCount++;
     }
 
-    void printReport(const std::string& testName,
+    void print_report(const std::string& testName,
                      double totalTestTimeMs,
                      size_t expectedRequests) {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -122,7 +122,7 @@ private:
     double m_maxLatencyMs = 0.0;
 };
 
-static void printSystemInfo() {
+static void print_system_info() {
     std::cout << "\n=== System Information ===" << std::endl;
     std::cout << "Test Date: " << __DATE__ << " " << __TIME__ << std::endl;
 
@@ -138,7 +138,7 @@ static void printSystemInfo() {
     std::cout << "C++ Standard: " << __cplusplus << std::endl;
 }
 
-galay::kernel::Task<void> workerTask(McpClient& client,
+galay::kernel::Task<void> worker_task(McpClient& client,
                           const std::string& url,
                           Operation op,
                           size_t requestsPerWorker,
@@ -152,7 +152,7 @@ galay::kernel::Task<void> workerTask(McpClient& client,
                           size_t workerId) {
     auto connectResult = co_await client.connect();
     if (!connectResult) {
-        stats.addError();
+        stats.add_error();
         startupFailures++;
         finishedWorkers++;
         disconnectedWorkers++;
@@ -162,10 +162,10 @@ galay::kernel::Task<void> workerTask(McpClient& client,
     std::expected<void, McpError> initResult;
     co_await client.initialize("benchmark-http-client-" + std::to_string(workerId), "1.0.0", initResult);
     if (!initResult) {
-        stats.addError();
+        stats.add_error();
         startupFailures++;
         finishedWorkers++;
-        co_await client.disconnectAsync();
+        co_await client.disconnect_async();
         disconnectedWorkers++;
         co_return;
     }
@@ -179,7 +179,7 @@ galay::kernel::Task<void> workerTask(McpClient& client,
 
     if (benchmarkAborted.load(std::memory_order_acquire)) {
         finishedWorkers++;
-        co_await client.disconnectAsync();
+        co_await client.disconnect_async();
         disconnectedWorkers++;
         co_return;
     }
@@ -197,42 +197,42 @@ galay::kernel::Task<void> workerTask(McpClient& client,
             }
             case Operation::ToolCall: {
                 std::string args;
-                auto argsWriter = makeJsonWriter(args);
+                auto argsWriter = make_json_writer(args);
                 // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
                 (void)argsWriter.start_object();
                 (void)argsWriter.key("message");
                 (void)argsWriter.string("Benchmark test message " + std::to_string(i));
                 (void)argsWriter.end_object();
                 if (!argsWriter.finish()) {
-                    stats.addError();
+                    stats.add_error();
                     break;
                 }
                 std::expected<std::string, McpError> callResult;
-                co_await client.callTool("echo", args, callResult);
+                co_await client.call_tool("echo", args, callResult);
                 ok = callResult.has_value();
                 break;
             }
             case Operation::ResourceRead: {
                 std::expected<std::string, McpError> readResult;
-                co_await client.readResource("example://hello", readResult);
+                co_await client.read_resource("example://hello", readResult);
                 ok = readResult.has_value();
                 break;
             }
             case Operation::ToolsList: {
                 std::expected<std::vector<Tool>, McpError> result;
-                co_await client.listTools(result);
+                co_await client.list_tools(result);
                 ok = result.has_value();
                 break;
             }
             case Operation::ResourcesList: {
                 std::expected<std::vector<Resource>, McpError> result;
-                co_await client.listResources(result);
+                co_await client.list_resources(result);
                 ok = result.has_value();
                 break;
             }
             case Operation::PromptsList: {
                 std::expected<std::vector<Prompt>, McpError> result;
-                co_await client.listPrompts(result);
+                co_await client.list_prompts(result);
                 ok = result.has_value();
                 break;
             }
@@ -241,19 +241,19 @@ galay::kernel::Task<void> workerTask(McpClient& client,
         auto end = high_resolution_clock::now();
         if (ok) {
             double latencyMs = duration_cast<microseconds>(end - start).count() / 1000.0;
-            stats.addLatency(latencyMs);
+            stats.add_latency(latencyMs);
         } else {
-            stats.addError();
+            stats.add_error();
         }
     }
 
     finishedWorkers++;
-    co_await client.disconnectAsync();
+    co_await client.disconnect_async();
     disconnectedWorkers++;
     co_return;
 }
 
-static void runConcurrentTest(Runtime& runtime,
+static void run_concurrent_test(Runtime& runtime,
                               std::vector<std::unique_ptr<McpClient>>& clients,
                               const std::string& url,
                               Operation op,
@@ -262,7 +262,7 @@ static void runConcurrentTest(Runtime& runtime,
     size_t totalRequests = numWorkers * requestsPerWorker;
 
     std::cout << "\n=== Concurrent Test ===" << std::endl;
-    std::cout << "Operation:         " << operationName(op) << std::endl;
+    std::cout << "Operation:         " << operation_name(op) << std::endl;
     std::cout << "Connections:       " << numWorkers << std::endl;
     std::cout << "Requests/Conn:     " << requestsPerWorker << std::endl;
     std::cout << "Total Requests:    " << totalRequests << std::endl;
@@ -277,10 +277,10 @@ static void runConcurrentTest(Runtime& runtime,
     std::atomic<bool> benchmarkAborted(false);
 
     for (size_t i = 0; i < numWorkers; ++i) {
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler ||
-            !scheduleTask(scheduler,
-                          workerTask(*clients[i],
+            !schedule_task(scheduler,
+                          worker_task(*clients[i],
                                           url,
                                           op,
                                           requestsPerWorker,
@@ -293,7 +293,7 @@ static void runConcurrentTest(Runtime& runtime,
                                           benchmarkAborted,
                                           i))) {
             std::cerr << "Failed to schedule worker " << i << std::endl;
-            stats.addError();
+            stats.add_error();
             startupFailures++;
             finishedWorkers++;
             disconnectedWorkers++;
@@ -315,7 +315,7 @@ static void runConcurrentTest(Runtime& runtime,
                high_resolution_clock::now() < deadline) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        std::cerr << "Benchmark startup failed for " << operationName(op) << std::endl;
+        std::cerr << "Benchmark startup failed for " << operation_name(op) << std::endl;
         return;
     }
 
@@ -336,10 +336,10 @@ static void runConcurrentTest(Runtime& runtime,
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    stats.printReport(operationName(op), totalTestTimeMs, totalRequests);
+    stats.print_report(operation_name(op), totalTestTimeMs, totalRequests);
 }
 
-static void printUsage(const char* prog) {
+static void print_usage(const char* prog) {
     std::cout << "Usage: " << prog << " [options]\n";
     std::cout << "Options:\n";
     std::cout << "  --url <url>           Server URL (default: http://127.0.0.1:8080/mcp)\n";
@@ -351,7 +351,7 @@ static void printUsage(const char* prog) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -374,12 +374,12 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--parallel" && i + 1 < argc) {
             parallelSchedulers = std::stoul(argv[++i]);
         } else if (arg == "--help") {
-            printUsage(argv[0]);
+            print_usage(argv[0]);
             return 0;
         }
     }
 
-    printSystemInfo();
+    print_system_info();
 
     std::cout << "\n=== HTTP MCP Performance Benchmark (Concurrent) ===" << std::endl;
     std::cout << "Server URL:        " << url << std::endl;
@@ -389,7 +389,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Parallel Schedulers:" << parallelSchedulers << std::endl;
     std::cout << "Make sure the HTTP MCP server is running!" << std::endl;
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(ioSchedulers).parallelSchedulerCount(parallelSchedulers).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(ioSchedulers).parallel_scheduler_count(parallelSchedulers).build();
     runtime.start();
 
     std::vector<std::unique_ptr<McpClient>> clients;
@@ -398,12 +398,12 @@ int main(int argc, char* argv[]) {
         clients.push_back(std::make_unique<McpClient>(runtime, McpHttpClientConfig{.url = url}));
     }
 
-    runConcurrentTest(runtime, clients, url, Operation::Ping, requestsPerConn);
-    runConcurrentTest(runtime, clients, url, Operation::ToolCall, requestsPerConn);
-    runConcurrentTest(runtime, clients, url, Operation::ResourceRead, requestsPerConn);
-    runConcurrentTest(runtime, clients, url, Operation::ToolsList, requestsPerConn);
-    runConcurrentTest(runtime, clients, url, Operation::ResourcesList, requestsPerConn);
-    runConcurrentTest(runtime, clients, url, Operation::PromptsList, requestsPerConn);
+    run_concurrent_test(runtime, clients, url, Operation::Ping, requestsPerConn);
+    run_concurrent_test(runtime, clients, url, Operation::ToolCall, requestsPerConn);
+    run_concurrent_test(runtime, clients, url, Operation::ResourceRead, requestsPerConn);
+    run_concurrent_test(runtime, clients, url, Operation::ToolsList, requestsPerConn);
+    run_concurrent_test(runtime, clients, url, Operation::ResourcesList, requestsPerConn);
+    run_concurrent_test(runtime, clients, url, Operation::PromptsList, requestsPerConn);
 
     runtime.stop();
 

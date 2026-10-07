@@ -1,6 +1,6 @@
 /**
  * @file t48_joinhandle.cc
- * @brief 用途：验证 `Runtime::spawnCpu` 返回的 `JoinHandle` 可等待任务完成并取回结果。
+ * @brief 用途：验证 `Runtime::spawn_cpu` 返回的 `JoinHandle` 可等待任务完成并取回结果。
  * 关键覆盖点：spawn 提交、JoinHandle 等待、结果读取与完成语义。
  * 通过条件：`JoinHandle` 正确返回结果且测试返回 0。
  */
@@ -16,18 +16,18 @@ namespace {
 std::atomic<bool> g_detached_done{false};
 }
 
-Task<int> sumTask()
+Task<int> sum_task()
 {
     co_return 7;
 }
 
-Task<void> detachedTask()
+Task<void> detached_task()
 {
     g_detached_done.store(true, std::memory_order_release);
     co_return;
 }
 
-Task<void> waitForDetached()
+Task<void> wait_for_detached()
 {
     for (int i = 0; i < 1024 && !g_detached_done.load(std::memory_order_acquire); ++i) {
         co_yield true;
@@ -39,13 +39,13 @@ Task<void> waitForDetached()
 int main()
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
     runtime.start();
 
     {
-        auto handle = runtime.spawnCpu(sumTask());
+        auto handle = runtime.spawn_cpu(sum_task());
         assert(handle.has_value());
         auto result = handle->join();
         assert(result.has_value());
@@ -53,11 +53,11 @@ int main()
     }
 
     {
-        auto detached = runtime.spawnCpu(detachedTask());
+        auto detached = runtime.spawn_cpu(detached_task());
         assert(detached.has_value());
     }
 
-    auto wait_result = runtime.blockOnCpu(waitForDetached());
+    auto wait_result = runtime.block_on_cpu(wait_for_detached());
     assert(wait_result.has_value());
     runtime.stop();
 

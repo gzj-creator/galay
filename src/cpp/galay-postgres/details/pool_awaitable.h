@@ -17,7 +17,7 @@ public:
 
     template<typename Promise>
     requires requires(const Promise& promise) {
-        { promise.taskRefView() } -> std::same_as<const galay::kernel::TaskRef&>;
+        { promise.task_ref_view() } -> std::same_as<const galay::kernel::TaskRef&>;
     }
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
@@ -25,13 +25,13 @@ public:
             return false;
         }
 
-        m_client = m_pool.tryAcquire();
+        m_client = m_pool.try_acquire();
         if (m_client != nullptr) {
             m_state = State::Ready;
             return false;
         }
 
-        m_client = m_pool.createClient();
+        m_client = m_pool.create_client();
         if (m_client != nullptr) {
             m_state = State::Creating;
             m_connect_awaitable.emplace(*m_client, m_pool.m_postgres_config);
@@ -40,12 +40,12 @@ public:
 
         m_state = State::Waiting;
         m_waiter = std::make_shared<detail::PostgresPoolWaiter>(galay::kernel::Waker(handle));
-        if (!m_pool.enqueueWaiter(m_waiter)) {
+        if (!m_pool.enqueue_waiter(m_waiter)) {
             m_state = State::EnqueueFailed;
             return false;
         }
         if (m_pool.m_idle_connections.load(std::memory_order_acquire) > 0) {
-            (void)m_pool.wakeOneWaiter();
+            (void)m_pool.wake_one_waiter();
         }
         return true;
     }
@@ -78,7 +78,7 @@ public:
 
     template<typename Promise>
     requires requires(const Promise& promise) {
-        { promise.taskRefView() } -> std::same_as<const galay::kernel::TaskRef&>;
+        { promise.task_ref_view() } -> std::same_as<const galay::kernel::TaskRef&>;
     }
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {

@@ -17,7 +17,7 @@ struct RpcTlsConfig {
     bool enabled = false;
 };
 
-inline bool rpcTlsCompiled()
+inline bool rpc_tls_compiled()
 {
 #if defined(GALAY_ENABLE_SSL) || defined(GALAY_RPC_ENABLE_TLS)
     return true;

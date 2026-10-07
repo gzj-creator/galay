@@ -39,13 +39,13 @@ namespace galay::mpmc {
 
 struct UnboundedChannelTestAccess {
     template <UnboundedValue T>
-    static consteval size_t blockAlignment()
+    static consteval size_t block_alignment()
     {
         return alignof(typename UnboundedChannel<T>::Block);
     }
 
     template <UnboundedValue T>
-    static bool tailUsesWordStorage(const UnboundedChannel<T>& channel)
+    static bool tail_uses_word_storage(const UnboundedChannel<T>& channel)
     {
         return std::is_same_v<
             std::remove_cvref_t<decltype(channel.m_tail)>,
@@ -53,7 +53,7 @@ struct UnboundedChannelTestAccess {
     }
 
     template <UnboundedValue T>
-    static bool flagUsesByteStorage(const UnboundedChannel<T>& channel)
+    static bool flag_uses_byte_storage(const UnboundedChannel<T>& channel)
     {
         return std::is_same_v<
             std::remove_cvref_t<decltype(channel.m_recvWaiterPathUsed)>,
@@ -61,7 +61,7 @@ struct UnboundedChannelTestAccess {
     }
 
     template <UnboundedValue T>
-    static bool pumpUsesByteStorage(const UnboundedChannel<T>& channel)
+    static bool pump_uses_byte_storage(const UnboundedChannel<T>& channel)
     {
         return std::is_same_v<
             std::remove_cvref_t<decltype(channel.m_recvPumpState)>,
@@ -69,7 +69,7 @@ struct UnboundedChannelTestAccess {
     }
 
     template <UnboundedValue T>
-    static bool tokenBlockBaseMatches(
+    static bool token_block_base_matches(
         const typename UnboundedChannel<T>::ProducerToken& token)
     {
         return token.m_block != nullptr &&
@@ -78,43 +78,43 @@ struct UnboundedChannelTestAccess {
     }
 
     template <UnboundedValue T>
-    static void registerRecvWaiterPath(UnboundedChannel<T>& channel)
+    static void register_recv_waiter_path(UnboundedChannel<T>& channel)
     {
-        channel.registerRecvWaiterPath();
+        channel.register_recv_waiter_path();
     }
 
     template <UnboundedValue T>
-    static bool waiterPathUsedAfterPublish(UnboundedChannel<T>& channel)
+    static bool waiter_path_used_after_publish(UnboundedChannel<T>& channel)
     {
-        return channel.waiterPathUsedAfterPublish();
+        return channel.waiter_path_used_after_publish();
     }
 
     template <UnboundedValue T>
-    static bool enqueueWaiter(
+    static bool enqueue_waiter(
         UnboundedChannel<T>& channel,
         const std::shared_ptr<UnboundedChannelWaiter<T>>& waiter)
     {
-        return channel.enqueueWaiter(waiter);
+        return channel.enqueue_waiter(waiter);
     }
 
     template <UnboundedValue T>
-    static void requestRecvPump(UnboundedChannel<T>& channel)
+    static void request_recv_pump(UnboundedChannel<T>& channel)
     {
-        channel.requestRecvPump();
+        channel.request_recv_pump();
     }
 
     template <UnboundedValue T>
-    static bool recvPumpIdle(const UnboundedChannel<T>& channel)
+    static bool recv_pump_idle(const UnboundedChannel<T>& channel)
     {
         return channel.m_recvPumpState.load(std::memory_order_acquire) == 0;
     }
 
     template <UnboundedValue T>
-    static size_t drainWaiters(UnboundedChannel<T>& channel)
+    static size_t drain_waiters(UnboundedChannel<T>& channel)
     {
         size_t count = 0;
         std::shared_ptr<UnboundedChannelWaiter<T>> waiter;
-        while (channel.tryDequeueWaiter(waiter)) {
+        while (channel.try_dequeue_waiter(waiter)) {
             ++count;
         }
         return count;
@@ -124,9 +124,9 @@ struct UnboundedChannelTestAccess {
 } // namespace galay::mpmc
 
 #if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
-static_assert(galay::mpmc::UnboundedChannelTestAccess::blockAlignment<int>() == 128);
+static_assert(galay::mpmc::UnboundedChannelTestAccess::block_alignment<int>() == 128);
 #else
-static_assert(galay::mpmc::UnboundedChannelTestAccess::blockAlignment<int>() == 64);
+static_assert(galay::mpmc::UnboundedChannelTestAccess::block_alignment<int>() == 64);
 #endif
 
 namespace {
@@ -148,7 +148,7 @@ struct AsyncMultiState {
     std::atomic<bool> invalid{false};
 };
 
-bool waitFor(const std::atomic<bool>& flag)
+bool wait_for(const std::atomic<bool>& flag)
 {
     const auto deadline = std::chrono::steady_clock::now() + 2s;
     while (std::chrono::steady_clock::now() < deadline) {
@@ -160,7 +160,7 @@ bool waitFor(const std::atomic<bool>& flag)
     return flag.load(std::memory_order_acquire);
 }
 
-bool waitFor(const std::atomic<int>& value, int expected)
+bool wait_for(const std::atomic<int>& value, int expected)
 {
     const auto deadline = std::chrono::steady_clock::now() + 5s;
     while (std::chrono::steady_clock::now() < deadline) {
@@ -172,7 +172,7 @@ bool waitFor(const std::atomic<int>& value, int expected)
     return value.load(std::memory_order_acquire) == expected;
 }
 
-galay::kernel::Task<void> receiveMpmcUnbounded(
+galay::kernel::Task<void> receive_mpmc_unbounded(
     galay::mpmc::UnboundedChannel<int>* channel,
     AsyncState* state)
 {
@@ -188,7 +188,7 @@ galay::kernel::Task<void> receiveMpmcUnbounded(
     co_return;
 }
 
-galay::kernel::Task<void> receiveMpmcUnboundedWithTimeout(
+galay::kernel::Task<void> receive_mpmc_unbounded_with_timeout(
     galay::mpmc::UnboundedChannel<int>* channel,
     AsyncState* state)
 {
@@ -200,7 +200,7 @@ galay::kernel::Task<void> receiveMpmcUnboundedWithTimeout(
     co_return;
 }
 
-galay::kernel::Task<void> receiveManyMpmcUnbounded(
+galay::kernel::Task<void> receive_many_mpmc_unbounded(
     galay::mpmc::UnboundedChannel<int>* channel,
     AsyncMultiState* state,
     std::atomic_uint8_t* seen,
@@ -222,32 +222,32 @@ galay::kernel::Task<void> receiveManyMpmcUnbounded(
 }
 
 template <typename Channel>
-bool checkBoundedChannel()
+bool check_bounded_channel()
 {
     Channel channel(2);
-    if (!channel.trySend(1) || !channel.trySend(2) || channel.trySend(3)) {
+    if (!channel.try_send(1) || !channel.try_send(2) || channel.try_send(3)) {
         return false;
     }
-    auto first = channel.tryRecv();
-    auto second = channel.tryRecv();
+    auto first = channel.try_recv();
+    auto second = channel.try_recv();
     return first.has_value() && second.has_value() && *first == 1 && *second == 2 &&
-           !channel.tryRecv().has_value();
+           !channel.try_recv().has_value();
 }
 
 template <typename Channel>
-bool checkUnboundedChannel()
+bool check_unbounded_channel()
 {
     Channel channel;
     if (!channel.send(1) || !channel.send(2)) {
         return false;
     }
-    auto first = channel.tryRecv();
-    auto second = channel.tryRecv();
+    auto first = channel.try_recv();
+    auto second = channel.try_recv();
     return first.has_value() && second.has_value() && *first == 1 && *second == 2 &&
-           !channel.tryRecv().has_value();
+           !channel.try_recv().has_value();
 }
 
-bool checkMpmcUnboundedConcurrency()
+bool check_mpmc_unbounded_concurrency()
 {
     constexpr int kProducerCount = 4;
     constexpr int kConsumerCount = 4;
@@ -264,7 +264,7 @@ bool checkMpmcUnboundedConcurrency()
 
     for (int producer = 0; producer < kProducerCount; ++producer) {
         producers.emplace_back([&, producer]() {
-            auto producerToken = channel.makeProducerToken();
+            auto producerToken = channel.make_producer_token();
             if (!producerToken.valid()) {
                 sendFailed.store(true, std::memory_order_release);
                 producersDone.fetch_add(1, std::memory_order_release);
@@ -284,13 +284,13 @@ bool checkMpmcUnboundedConcurrency()
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     for (int consumer = 0; consumer < kConsumerCount; ++consumer) {
         consumers.emplace_back([&]() {
-            auto consumerToken = channel.makeConsumerToken();
+            auto consumerToken = channel.make_consumer_token();
             if (!consumerToken.valid()) {
                 sendFailed.store(true, std::memory_order_release);
                 return;
             }
             while (std::chrono::steady_clock::now() < deadline) {
-                auto value = channel.tryRecv(consumerToken);
+                auto value = channel.try_recv(consumerToken);
                 if (value.has_value()) {
                     if (*value < 0 || *value >= kMessageCount) {
                         sendFailed.store(true, std::memory_order_release);
@@ -328,7 +328,7 @@ bool checkMpmcUnboundedConcurrency()
     return true;
 }
 
-bool checkMpmcUnboundedTokenSurface()
+bool check_mpmc_unbounded_token_surface()
 {
     using Channel = galay::mpmc::UnboundedChannel<int>;
     static_assert(std::is_move_constructible_v<typename Channel::ProducerToken>);
@@ -341,8 +341,8 @@ bool checkMpmcUnboundedTokenSurface()
     static_assert(!std::is_copy_assignable_v<typename Channel::ConsumerToken>);
 
     Channel channel;
-    auto producer = channel.makeProducerToken();
-    auto consumer = channel.makeConsumerToken();
+    auto producer = channel.make_producer_token();
+    auto consumer = channel.make_consumer_token();
     if (!producer.valid() || !consumer.valid() || !channel.empty()) {
         return false;
     }
@@ -351,7 +351,7 @@ bool checkMpmcUnboundedTokenSurface()
         return false;
     }
 
-    auto first = channel.tryRecv(consumer);
+    auto first = channel.try_recv(consumer);
     if (!first.has_value() || *first != 11 || channel.size() != 1) {
         return false;
     }
@@ -365,17 +365,17 @@ bool checkMpmcUnboundedTokenSurface()
 
     Channel other;
     if (other.send(movedProducer, 99) ||
-        other.tryRecv(movedConsumer).has_value()) {
+        other.try_recv(movedConsumer).has_value()) {
         return false;
     }
 
-    auto remaining = channel.tryRecvBatch(movedConsumer, 2);
+    auto remaining = channel.try_recv_batch(movedConsumer, 2);
     return remaining.has_value() && remaining->size() == 2 &&
         (*remaining)[0] == 12 && (*remaining)[1] == 13 && channel.empty() &&
         channel.size() == 0;
 }
 
-bool checkMpmcUnboundedAsyncBoundaries()
+bool check_mpmc_unbounded_async_boundaries()
 {
     galay::kernel::ParallelScheduler scheduler;
     auto started = scheduler.start();
@@ -385,9 +385,9 @@ bool checkMpmcUnboundedAsyncBoundaries()
 
     galay::mpmc::UnboundedChannel<int> wakeChannel;
     AsyncState wakeState;
-    if (!galay::kernel::scheduleTask(
-            scheduler, receiveMpmcUnbounded(&wakeChannel, &wakeState)) ||
-        !waitFor(wakeState.entered) || !wakeChannel.send(42) || !waitFor(wakeState.done) ||
+    if (!galay::kernel::schedule_task(
+            scheduler, receive_mpmc_unbounded(&wakeChannel, &wakeState)) ||
+        !wait_for(wakeState.entered) || !wakeChannel.send(42) || !wait_for(wakeState.done) ||
         wakeState.value != 42) {
         scheduler.stop();
         return false;
@@ -395,28 +395,28 @@ bool checkMpmcUnboundedAsyncBoundaries()
 
     galay::mpmc::UnboundedChannel<int> closeChannel;
     AsyncState closeState;
-    if (!galay::kernel::scheduleTask(
-            scheduler, receiveMpmcUnbounded(&closeChannel, &closeState)) ||
-        !waitFor(closeState.entered)) {
+    if (!galay::kernel::schedule_task(
+            scheduler, receive_mpmc_unbounded(&closeChannel, &closeState)) ||
+        !wait_for(closeState.entered)) {
         scheduler.stop();
         return false;
     }
     closeChannel.close();
-    if (!waitFor(closeState.done) || !closeState.closed) {
+    if (!wait_for(closeState.done) || !closeState.closed) {
         scheduler.stop();
         return false;
     }
     std::vector<int> closedBatch{1, 2};
-    if (closeChannel.send(1) || closeChannel.sendBatch(std::move(closedBatch))) {
+    if (closeChannel.send(1) || closeChannel.send_batch(std::move(closedBatch))) {
         scheduler.stop();
         return false;
     }
 
     galay::mpmc::UnboundedChannel<int> timeoutChannel;
     AsyncState timeoutState;
-    if (!galay::kernel::scheduleTask(
-            scheduler, receiveMpmcUnboundedWithTimeout(&timeoutChannel, &timeoutState)) ||
-        !waitFor(timeoutState.done) || !timeoutState.timedOut) {
+    if (!galay::kernel::schedule_task(
+            scheduler, receive_mpmc_unbounded_with_timeout(&timeoutChannel, &timeoutState)) ||
+        !wait_for(timeoutState.done) || !timeoutState.timedOut) {
         scheduler.stop();
         return false;
     }
@@ -425,7 +425,7 @@ bool checkMpmcUnboundedAsyncBoundaries()
     return true;
 }
 
-bool checkMpmcUnboundedAsyncConcurrency()
+bool check_mpmc_unbounded_async_concurrency()
 {
     constexpr int kProducerCount = 4;
     constexpr int kConsumerCount = 4;
@@ -442,16 +442,16 @@ bool checkMpmcUnboundedAsyncConcurrency()
     AsyncMultiState state;
     auto seen = std::make_unique<std::atomic_uint8_t[]>(kMessageCount);
     for (int consumer = 0; consumer < kConsumerCount; ++consumer) {
-        if (!galay::kernel::scheduleTask(
+        if (!galay::kernel::schedule_task(
                 scheduler,
-                receiveManyMpmcUnbounded(
+                receive_many_mpmc_unbounded(
                     &channel, &state, seen.get(), kMessagesPerConsumer, kMessageCount))) {
             channel.close();
             scheduler.stop();
             return false;
         }
     }
-    if (!waitFor(state.started, kConsumerCount)) {
+    if (!wait_for(state.started, kConsumerCount)) {
         channel.close();
         scheduler.stop();
         return false;
@@ -474,9 +474,9 @@ bool checkMpmcUnboundedAsyncConcurrency()
         producer.join();
     }
 
-    if (!waitFor(state.done, kConsumerCount)) {
+    if (!wait_for(state.done, kConsumerCount)) {
         channel.close();
-        if (!waitFor(state.done, kConsumerCount)) {
+        if (!wait_for(state.done, kConsumerCount)) {
             scheduler.stop();
             return false;
         }
@@ -497,49 +497,49 @@ bool checkMpmcUnboundedAsyncConcurrency()
     return true;
 }
 
-bool checkMpmcUnboundedWaiterHandshake()
+bool check_mpmc_unbounded_waiter_handshake()
 {
     galay::mpmc::UnboundedChannel<int> publicationChannel;
-    auto producerToken = publicationChannel.makeProducerToken();
+    auto producerToken = publicationChannel.make_producer_token();
     if (!producerToken.valid()) {
         return false;
     }
     const bool tokenBaseBefore =
-        galay::mpmc::UnboundedChannelTestAccess::tokenBlockBaseMatches<int>(
+        galay::mpmc::UnboundedChannelTestAccess::token_block_base_matches<int>(
             producerToken);
     const bool defaultPublished = publicationChannel.send(1);
     const bool tokenPublished = publicationChannel.send(producerToken, 2);
     const bool tokenBaseAfter =
-        galay::mpmc::UnboundedChannelTestAccess::tokenBlockBaseMatches<int>(
+        galay::mpmc::UnboundedChannelTestAccess::token_block_base_matches<int>(
             producerToken);
     galay::mpmc::UnboundedChannel<int> handshakeChannel;
     const bool byteFlag =
-        galay::mpmc::UnboundedChannelTestAccess::flagUsesByteStorage(handshakeChannel);
+        galay::mpmc::UnboundedChannelTestAccess::flag_uses_byte_storage(handshakeChannel);
     const bool bytePump =
-        galay::mpmc::UnboundedChannelTestAccess::pumpUsesByteStorage(handshakeChannel);
+        galay::mpmc::UnboundedChannelTestAccess::pump_uses_byte_storage(handshakeChannel);
     const bool wordTail =
-        galay::mpmc::UnboundedChannelTestAccess::tailUsesWordStorage(
+        galay::mpmc::UnboundedChannelTestAccess::tail_uses_word_storage(
             handshakeChannel);
     const bool producerBeforeRegistration =
-        galay::mpmc::UnboundedChannelTestAccess::waiterPathUsedAfterPublish(
+        galay::mpmc::UnboundedChannelTestAccess::waiter_path_used_after_publish(
             handshakeChannel);
-    galay::mpmc::UnboundedChannelTestAccess::registerRecvWaiterPath(
+    galay::mpmc::UnboundedChannelTestAccess::register_recv_waiter_path(
         handshakeChannel);
     const bool producerAfterRegistration =
-        galay::mpmc::UnboundedChannelTestAccess::waiterPathUsedAfterPublish(
+        galay::mpmc::UnboundedChannelTestAccess::waiter_path_used_after_publish(
             handshakeChannel);
 
     galay::mpmc::UnboundedChannel<int> pumpChannel;
     auto waiter = std::make_shared<galay::mpmc::UnboundedChannelWaiter<int>>(
         galay::kernel::Waker());
     const bool enqueued =
-        galay::mpmc::UnboundedChannelTestAccess::enqueueWaiter(pumpChannel, waiter);
-    galay::mpmc::UnboundedChannelTestAccess::registerRecvWaiterPath(pumpChannel);
-    galay::mpmc::UnboundedChannelTestAccess::requestRecvPump(pumpChannel);
+        galay::mpmc::UnboundedChannelTestAccess::enqueue_waiter(pumpChannel, waiter);
+    galay::mpmc::UnboundedChannelTestAccess::register_recv_waiter_path(pumpChannel);
+    galay::mpmc::UnboundedChannelTestAccess::request_recv_pump(pumpChannel);
     const bool pumpIdle =
-        galay::mpmc::UnboundedChannelTestAccess::recvPumpIdle(pumpChannel);
+        galay::mpmc::UnboundedChannelTestAccess::recv_pump_idle(pumpChannel);
     const size_t queuedCopies =
-        galay::mpmc::UnboundedChannelTestAccess::drainWaiters(pumpChannel);
+        galay::mpmc::UnboundedChannelTestAccess::drain_waiters(pumpChannel);
 
     return tokenBaseBefore && defaultPublished && tokenPublished &&
         tokenBaseAfter && byteFlag && bytePump && wordTail &&
@@ -550,7 +550,7 @@ bool checkMpmcUnboundedWaiterHandshake()
         queuedCopies == 1;
 }
 
-bool checkMpmcUnboundedQueuedValuePrecedesNewSend()
+bool check_mpmc_unbounded_queued_value_precedes_new_send()
 {
     galay::mpmc::UnboundedChannel<int> channel;
     if (!channel.send(1)) {
@@ -559,17 +559,17 @@ bool checkMpmcUnboundedQueuedValuePrecedesNewSend()
 
     auto waiter = std::make_shared<galay::mpmc::UnboundedChannelWaiter<int>>(
         galay::kernel::Waker());
-    if (!galay::mpmc::UnboundedChannelTestAccess::enqueueWaiter(channel, waiter)) {
+    if (!galay::mpmc::UnboundedChannelTestAccess::enqueue_waiter(channel, waiter)) {
         return false;
     }
-    galay::mpmc::UnboundedChannelTestAccess::registerRecvWaiterPath(channel);
+    galay::mpmc::UnboundedChannelTestAccess::register_recv_waiter_path(channel);
     if (!channel.send(2)) {
         return false;
     }
     if (!waiter->value.has_value() || *waiter->value != 1) {
         return false;
     }
-    auto remaining = channel.tryRecv();
+    auto remaining = channel.try_recv();
     return remaining.has_value() && *remaining == 2 && channel.empty();
 }
 
@@ -578,7 +578,7 @@ bool checkMpmcUnboundedQueuedValuePrecedesNewSend()
 int main()
 {
     galay::test::TestResultWriter writer("t151_channel_namespaces");
-    writer.addTest();
+    writer.add_test();
 
     static_assert(!std::is_same_v<galay::mpmc::BoundedChannel<int>,
                                   galay::mpsc::BoundedChannel<int>>);
@@ -586,27 +586,27 @@ int main()
                                   galay::spsc::BoundedChannel<int>>);
 
     const bool ok =
-        checkBoundedChannel<galay::mpmc::BoundedChannel<int>>() &&
-        checkUnboundedChannel<galay::mpmc::UnboundedChannel<int>>() &&
-        checkBoundedChannel<galay::mpsc::BoundedChannel<int>>() &&
-        checkUnboundedChannel<galay::mpsc::UnboundedChannel<int>>() &&
-        checkBoundedChannel<galay::spsc::BoundedChannel<int>>() &&
-        checkUnboundedChannel<galay::spsc::UnboundedChannel<int>>() &&
-        checkMpmcUnboundedTokenSurface() &&
-        checkMpmcUnboundedConcurrency() &&
-        checkMpmcUnboundedAsyncBoundaries() &&
-        checkMpmcUnboundedAsyncConcurrency() &&
-        checkMpmcUnboundedWaiterHandshake() &&
-        checkMpmcUnboundedQueuedValuePrecedesNewSend();
+        check_bounded_channel<galay::mpmc::BoundedChannel<int>>() &&
+        check_unbounded_channel<galay::mpmc::UnboundedChannel<int>>() &&
+        check_bounded_channel<galay::mpsc::BoundedChannel<int>>() &&
+        check_unbounded_channel<galay::mpsc::UnboundedChannel<int>>() &&
+        check_bounded_channel<galay::spsc::BoundedChannel<int>>() &&
+        check_unbounded_channel<galay::spsc::UnboundedChannel<int>>() &&
+        check_mpmc_unbounded_token_surface() &&
+        check_mpmc_unbounded_concurrency() &&
+        check_mpmc_unbounded_async_boundaries() &&
+        check_mpmc_unbounded_async_concurrency() &&
+        check_mpmc_unbounded_waiter_handshake() &&
+        check_mpmc_unbounded_queued_value_precedes_new_send();
 
     if (!ok) {
         std::cerr << "channel namespace classification test failed\n";
-        writer.addFailed();
-        writer.writeResult();
+        writer.add_failed();
+        writer.write_result();
         return 1;
     }
-    writer.addPassed();
-    writer.writeResult();
+    writer.add_passed();
+    writer.write_result();
     std::cout << "t151_channel_namespaces PASS\n";
     return 0;
 }

@@ -7,7 +7,7 @@
 namespace
 {
 
-std::string readFile(const std::filesystem::path& path)
+std::string read_file(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input) {
@@ -25,7 +25,7 @@ bool contains(const std::string& text, const std::string& needle)
     return text.find(needle) != std::string::npos;
 }
 
-std::filesystem::path repoRoot()
+std::filesystem::path repo_root()
 {
     std::filesystem::path file = __FILE__;
     return file.parent_path().parent_path().parent_path().parent_path();
@@ -35,11 +35,11 @@ std::filesystem::path repoRoot()
 
 int main()
 {
-    const auto root = repoRoot();
+    const auto root = repo_root();
     const auto awaitable_header =
-        readFile(root / "src/cpp/galay-kernel/core/awaitable.h");
+        read_file(root / "src/cpp/galay-kernel/core/awaitable.h");
     const auto awaitable_inline =
-        readFile(root / "src/cpp/galay-kernel/core/awaitable.inl");
+        read_file(root / "src/cpp/galay-kernel/core/awaitable.inl");
 
     if (awaitable_header.empty() || awaitable_inline.empty()) {
         return 1;

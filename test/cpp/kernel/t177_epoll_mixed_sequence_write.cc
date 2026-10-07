@@ -35,21 +35,21 @@ using IOResult = std::expected<size_t, IOError>;
 
 class TestEpollScheduler final : public EpollScheduler {
 public:
-    bool pollOnceAfterStop() {
-        if (!m_worker.reopenResumeAdmission()) {
+    bool poll_once_after_stop() {
+        if (!m_worker.reopen_resume_admission()) {
             return false;
         }
         m_reactor.poll(0, m_wake_coordinator);
         return true;
     }
 
-    void finishManualDispatch() {
+    void finish_manual_dispatch() {
         for (int round = 0; round < 4; ++round) {
-            while (m_core.hasPendingWork()) {
-                (void)m_core.runReadyPass(
+            while (m_core.has_pending_work()) {
+                (void)m_core.run_ready_pass(
                     [this](TaskRef& next) { resume(next); },
                     [this](size_t drained) {
-                        m_wake_coordinator.onRemoteCollected(drained);
+                        m_wake_coordinator.on_remote_collected(drained);
                     });
             }
             m_reactor.poll(0, m_wake_coordinator);
@@ -71,7 +71,7 @@ struct SharedState {
 };
 
 struct ReadFlow {
-    void onReadv(SequenceOps<IOResult, 4>& ops, ReadvIOContext& context) {
+    void on_readv(SequenceOps<IOResult, 4>& ops, ReadvIOContext& context) {
         ops.complete(std::move(context.m_result));
     }
 
@@ -116,7 +116,7 @@ struct DirectWriteAwaitable final : WritevAwaitable {
         return should_suspend;
     }
 
-    bool handleComplete(GHandle handle) override {
+    bool handle_complete(GHandle handle) override {
         const ssize_t written = ::write(handle.fd, data, 1);
         if (written == 1) {
             m_result = 1;
@@ -134,11 +134,11 @@ struct DirectWriteAwaitable final : WritevAwaitable {
     std::atomic<bool>* suspended;
 };
 
-Task<void> readSequence(SharedState* state) {
+Task<void> read_sequence(SharedState* state) {
     ReadFlow flow;
     flow.iovecs[0] = iovec{.iov_base = &flow.byte, .iov_len = 1};
     auto inner = AwaitableBuilder<IOResult, 4, ReadFlow>(&state->controller, flow)
-        .readv<&ReadFlow::onReadv>(flow.iovecs)
+        .readv<&ReadFlow::on_readv>(flow.iovecs)
         .build();
     SuspendProbeAwaitable<decltype(inner)> awaitable{
         .inner = std::move(inner),
@@ -150,7 +150,7 @@ Task<void> readSequence(SharedState* state) {
     state->read_done.store(true, std::memory_order_release);
 }
 
-Task<void> simpleWrite(SharedState* state) {
+Task<void> simple_write(SharedState* state) {
     char byte = 'w';
     std::array<iovec, 1> iovecs{{iovec{
         .iov_base = &byte,
@@ -164,7 +164,7 @@ Task<void> simpleWrite(SharedState* state) {
     state->write_done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -177,12 +177,12 @@ bool waitUntil(auto&& predicate,
     return predicate();
 }
 
-bool setNonBlocking(int fd) {
+bool set_non_blocking(int fd) {
     const int flags = fcntl(fd, F_GETFL, 0);
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool fillSendBuffer(int fd) {
+bool fill_send_buffer(int fd) {
     std::array<char, 4096> data{};
     while (true) {
         const ssize_t written = ::write(fd, data.data(), data.size());
@@ -196,7 +196,7 @@ bool fillSendBuffer(int fd) {
     }
 }
 
-bool writeByte(int fd, char byte) {
+bool write_byte(int fd, char byte) {
     while (true) {
         const ssize_t written = ::write(fd, &byte, 1);
         if (written == 1) {
@@ -209,7 +209,7 @@ bool writeByte(int fd, char byte) {
     }
 }
 
-bool drainSocket(int fd) {
+bool drain_socket(int fd) {
     std::array<char, 4096> data{};
     bool drained = false;
     while (true) {
@@ -225,7 +225,7 @@ bool drainSocket(int fd) {
     }
 }
 
-bool closeSocket(int fd) {
+bool close_socket(int fd) {
     if (fd < 0 || ::close(fd) == 0) {
         return true;
     }
@@ -243,11 +243,11 @@ int main() {
 #else
     int fds[2] = {-1, -1};
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) != 0 ||
-        !setNonBlocking(fds[0]) || !setNonBlocking(fds[1]) ||
-        !fillSendBuffer(fds[0])) {
+        !set_non_blocking(fds[0]) || !set_non_blocking(fds[1]) ||
+        !fill_send_buffer(fds[0])) {
         std::cerr << "[T177] failed to prepare a blocked nonblocking socket\n";
-        const bool first_closed = closeSocket(fds[0]);
-        const bool second_closed = closeSocket(fds[1]);
+        const bool first_closed = close_socket(fds[0]);
+        const bool second_closed = close_socket(fds[1]);
         return first_closed && second_closed ? 1 : 2;
     }
 
@@ -255,38 +255,38 @@ int main() {
     TestEpollScheduler scheduler;
     auto started = scheduler.start();
     if (!started ||
-        !scheduleTask(scheduler, readSequence(&state)) ||
-        !scheduleTask(scheduler, simpleWrite(&state)) ||
-        !waitUntil([&]() {
+        !schedule_task(scheduler, read_sequence(&state)) ||
+        !schedule_task(scheduler, simple_write(&state)) ||
+        !wait_until([&]() {
             return state.read_suspended.load(std::memory_order_acquire) &&
                    state.write_suspended.load(std::memory_order_acquire);
         })) {
         std::cerr << "[T177] mixed awaitables did not both suspend\n";
         scheduler.stop();
-        const bool first_closed = closeSocket(fds[0]);
-        const bool second_closed = closeSocket(fds[1]);
+        const bool first_closed = close_socket(fds[0]);
+        const bool second_closed = close_socket(fds[1]);
         return first_closed && second_closed ? 1 : 2;
     }
 
     scheduler.stop();
-    if (!writeByte(fds[1], 'r') || !drainSocket(fds[1])) {
+    if (!write_byte(fds[1], 'r') || !drain_socket(fds[1])) {
         std::cerr << "[T177] failed to create simultaneous read/write readiness\n";
-        const bool first_closed = closeSocket(fds[0]);
-        const bool second_closed = closeSocket(fds[1]);
+        const bool first_closed = close_socket(fds[0]);
+        const bool second_closed = close_socket(fds[1]);
         return first_closed && second_closed ? 1 : 2;
     }
 
-    const bool polled = scheduler.pollOnceAfterStop();
+    const bool polled = scheduler.poll_once_after_stop();
     const bool sequence_dispatched =
         state.controller.m_sequence_owner[IOController::READ] == nullptr;
 
-    scheduler.finishManualDispatch();
+    scheduler.finish_manual_dispatch();
     const bool read_completed = state.read_done.load(std::memory_order_acquire);
     const bool write_completed = state.write_done.load(std::memory_order_acquire);
 
     scheduler.stop();
-    const bool first_closed = closeSocket(fds[0]);
-    const bool second_closed = closeSocket(fds[1]);
+    const bool first_closed = close_socket(fds[0]);
+    const bool second_closed = close_socket(fds[1]);
     if (!polled || !sequence_dispatched || !read_completed || !write_completed ||
         state.read_value.load(std::memory_order_acquire) != 1 ||
         state.write_value.load(std::memory_order_acquire) != 1 ||

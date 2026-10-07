@@ -8,8 +8,8 @@ using namespace galay::mysql;
 
 int main()
 {
-    const auto cfg = mysql_example::loadDbExampleConfig();
-    mysql_example::printDbExampleConfig(cfg);
+    const auto cfg = mysql_example::load_db_example_config();
+    mysql_example::print_db_example_config(cfg);
 
     MysqlClient session;
     auto conn = session.connect(cfg.host, cfg.port, cfg.user, cfg.password, cfg.database);
@@ -18,7 +18,7 @@ int main()
         return 1;
     }
 
-    auto begin = session.beginTransaction();
+    auto begin = session.begin_transaction();
     if (!begin) {
         std::cerr << "begin transaction failed: " << begin.error().message() << std::endl;
         session.close();
@@ -34,18 +34,18 @@ int main()
     }
 
     std::vector<std::optional<std::string>> params = {"3", "5"};
-    auto exec = session.stmtExecute(prep->statement_id, params);
+    auto exec = session.stmt_execute(prep->statement_id, params);
     if (!exec) {
         std::cerr << "stmtExecute failed: " << exec.error().message() << std::endl;
-        session.stmtClose(prep->statement_id);
+        session.stmt_close(prep->statement_id);
         session.rollback();
         session.close();
         return 1;
     }
 
-    std::cout << "[E4] prepared SELECT returned " << exec->rowCount() << " row(s)" << std::endl;
+    std::cout << "[E4] prepared SELECT returned " << exec->row_count() << " row(s)" << std::endl;
 
-    session.stmtClose(prep->statement_id);
+    session.stmt_close(prep->statement_id);
     session.commit();
     session.close();
     return 0;

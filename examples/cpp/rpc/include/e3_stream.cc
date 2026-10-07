@@ -29,7 +29,7 @@ constexpr size_t kDefaultRingBufferSize = 128 * 1024;
 
 std::atomic<bool> g_running{true};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running.store(false, std::memory_order_release);
 }
 
@@ -37,7 +37,7 @@ class StreamExampleService : public RpcService {
 public:
     StreamExampleService()
         : RpcService("StreamExampleService") {
-        registerStreamMethod("echo", &StreamExampleService::echo);
+        register_stream_method("echo", &StreamExampleService::echo);
     }
 
     Task<void> echo(RpcStream& stream) {
@@ -51,30 +51,30 @@ public:
                 co_return;
             }
 
-            if (msg.messageType() == RpcMessageType::STREAM_DATA) {
+            if (msg.message_type() == RpcMessageType::STREAM_DATA) {
                 frames += 1;
                 bytes += msg.payload().size();
 
-                auto send_result = co_await stream.sendData(msg.payload().data(), msg.payload().size());
+                auto send_result = co_await stream.send_data(msg.payload().data(), msg.payload().size());
                 if (!send_result.has_value()) {
                     co_return;
                 }
                 continue;
             }
 
-            if (msg.messageType() == RpcMessageType::STREAM_END) {
+            if (msg.message_type() == RpcMessageType::STREAM_END) {
                 const std::string summary =
-                    "service=" + stream.serviceName() +
-                    ", method=" + stream.methodName() +
+                    "service=" + stream.service_name() +
+                    ", method=" + stream.method_name() +
                     ", frames=" + std::to_string(frames) +
                     ", bytes=" + std::to_string(bytes);
 
-                auto send_result = co_await stream.sendData(summary.data(), summary.size());
+                auto send_result = co_await stream.send_data(summary.data(), summary.size());
                 if (!send_result.has_value()) {
                     co_return;
                 }
 
-                send_result = co_await stream.sendEnd();
+                send_result = co_await stream.send_end();
                 if (!send_result.has_value()) {
                     co_return;
                 }
@@ -82,10 +82,10 @@ public:
                 co_return;
             }
 
-            if (msg.messageType() == RpcMessageType::STREAM_CANCEL) {
+            if (msg.message_type() == RpcMessageType::STREAM_CANCEL) {
                 co_return;
             }
-            (void)co_await stream.sendCancel();
+            (void)co_await stream.send_cancel();
             co_return;
         }
     }
@@ -93,8 +93,8 @@ public:
 } // namespace
 
 int main(int argc, char* argv[]) {
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 #if defined(SIGPIPE)
     std::signal(SIGPIPE, SIG_IGN);
 #endif
@@ -113,15 +113,15 @@ int main(int argc, char* argv[]) {
         ring_buffer_size = static_cast<size_t>(std::strtoull(argv[3], nullptr, 10));
     }
 
-    const size_t resolved_io_count = resolveIoSchedulerCount(io_count);
+    const size_t resolved_io_count = resolve_io_scheduler_count(io_count);
     auto server = RpcStreamServerBuilder()
         .host("0.0.0.0")
         .port(port)
-        .ioSchedulerCount(resolved_io_count)
-        .ringBufferSize(ring_buffer_size)
+        .io_scheduler_count(resolved_io_count)
+        .ring_buffer_size(ring_buffer_size)
         .build();
     StreamExampleService service;
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "Failed to register stream service: " << registered.error().message() << "\n";
         return 1;
@@ -140,7 +140,7 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "ring_buffer: " << ring_buffer_size << " bytes\n";
 
-    while (g_running.load(std::memory_order_acquire) && server.isRunning()) {
+    while (g_running.load(std::memory_order_acquire) && server.is_running()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 

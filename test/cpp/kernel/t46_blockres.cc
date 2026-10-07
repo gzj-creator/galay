@@ -11,7 +11,7 @@
 
 using namespace galay::kernel;
 
-Task<int> answerTask()
+Task<int> answer_task()
 {
     co_return 42;
 }
@@ -19,11 +19,11 @@ Task<int> answerTask()
 int main()
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
 
-    auto value = runtime.blockOnIO(answerTask());
+    auto value = runtime.block_on_io(answer_task());
     assert(value.has_value());
     assert(*value == 42);
 

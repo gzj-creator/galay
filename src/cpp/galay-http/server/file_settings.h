@@ -72,7 +72,7 @@ public:
      *             - FileTransferMode::SENDFILE 零拷贝模式，使用 sendfile 系统调用，适合大文件
      *             - FileTransferMode::AUTO     自动模式，根据文件大小在以上三种模式间选择
      */
-    void setTransferMode(FileTransferMode mode) {
+    void set_transfer_mode(FileTransferMode mode) {
         m_transfer_mode = mode;
     }
 
@@ -80,7 +80,7 @@ public:
      * @brief 获取文件传输模式
      * @return 当前传输模式，参见 FileTransferMode 各枚举值
      */
-    FileTransferMode getTransferMode() const {
+    FileTransferMode get_transfer_mode() const {
         return m_transfer_mode;
     }
 
@@ -88,7 +88,7 @@ public:
      * @brief 设置小文件阈值（用于 AUTO 模式）
      * @param threshold 阈值（字节），小于此值使用 MEMORY 模式
      */
-    void setSmallFileThreshold(const size_t threshold) {
+    void set_small_file_threshold(const size_t threshold) {
         m_small_file_threshold = threshold;
     }
 
@@ -96,7 +96,7 @@ public:
      * @brief 获取小文件阈值
      * @return 阈值（字节）
      */
-    size_t getSmallFileThreshold() const {
+    size_t get_small_file_threshold() const {
         return m_small_file_threshold;
     }
 
@@ -104,7 +104,7 @@ public:
      * @brief 设置大文件阈值（用于 AUTO 模式）
      * @param threshold 阈值（字节），大于此值使用 SENDFILE 模式
      */
-    void setLargeFileThreshold(const size_t threshold) {
+    void set_large_file_threshold(const size_t threshold) {
         m_large_file_threshold = threshold;
     }
 
@@ -112,7 +112,7 @@ public:
      * @brief 获取大文件阈值
      * @return 阈值（字节）
      */
-    size_t getLargeFileThreshold() const {
+    size_t get_large_file_threshold() const {
         return m_large_file_threshold;
     }
 
@@ -120,7 +120,7 @@ public:
      * @brief 设置 Chunk 大小
      * @param size Chunk 大小（字节）
      */
-    void setChunkSize(size_t size) {
+    void set_chunk_size(size_t size) {
         m_chunk_size = size;
     }
 
@@ -128,7 +128,7 @@ public:
      * @brief 获取 Chunk 大小
      * @return Chunk 大小（字节）
      */
-    size_t getChunkSize() const {
+    size_t get_chunk_size() const {
         return m_chunk_size;
     }
 
@@ -136,7 +136,7 @@ public:
      * @brief 设置 SendFile 每次传输的块大小
      * @param size 块大小（字节）
      */
-    void setSendFileChunkSize(const size_t size) {
+    void set_send_file_chunk_size(const size_t size) {
         m_sendfile_chunk_size = size;
     }
 
@@ -144,16 +144,16 @@ public:
      * @brief 获取 SendFile 每次传输的块大小
      * @return 块大小（字节）
      */
-    size_t getSendFileChunkSize() const {
+    size_t get_send_file_chunk_size() const {
         return m_sendfile_chunk_size;
     }
 
     /**
      * @brief 设置是否启用文件缓存
      * @param enable 是否启用
-     * @note 仅对 mountHardly() 有效
+     * @note 仅对 mount_hardly() 有效
      */
-    void setEnableCache(bool enable) {
+    void set_enable_cache(bool enable) {
         m_enable_cache = enable;
     }
 
@@ -161,7 +161,7 @@ public:
      * @brief 获取是否启用文件缓存
      * @return 是否启用
      */
-    bool isEnableCache() const {
+    bool is_enable_cache() const {
         return m_enable_cache;
     }
 
@@ -170,7 +170,7 @@ public:
      * @param enable 是否启用
      * @details 启用后支持 If-None-Match / If-Match，并可返回 304
      */
-    void setEnableETag(const bool enable) {
+    void set_enable_e_tag(const bool enable) {
         m_enable_etag = enable;
     }
 
@@ -178,7 +178,7 @@ public:
      * @brief 获取是否启用 ETag 条件请求
      * @return 是否启用
      */
-    bool isEnableETag() const {
+    bool is_enable_e_tag() const {
         return m_enable_etag;
     }
 
@@ -186,7 +186,7 @@ public:
      * @brief 设置最大缓存大小
      * @param size 最大缓存大小（字节）
      */
-    void setMaxCacheSize(const size_t size) {
+    void set_max_cache_size(const size_t size) {
         m_max_cache_size = size;
     }
 
@@ -194,7 +194,7 @@ public:
      * @brief 获取最大缓存大小
      * @return 最大缓存大小（字节）
      */
-    size_t getMaxCacheSize() const {
+    size_t get_max_cache_size() const {
         return m_max_cache_size;
     }
 
@@ -203,7 +203,7 @@ public:
      * @param file_size 文件大小（字节）
      * @return 实际使用的传输模式
      */
-    FileTransferMode decideTransferMode(const size_t file_size) const {
+    FileTransferMode decide_transfer_mode(const size_t file_size) const {
         if (m_transfer_mode != FileTransferMode::AUTO) {
             return m_transfer_mode;
         }

@@ -42,7 +42,7 @@ std::atomic<uint32_t> g_error_sys{0};
 std::mutex g_error_mutex;
 std::string g_error_message;
 
-void recordFailure(const std::string& message, uint32_t sys = 0) {
+void record_failure(const std::string& message, uint32_t sys = 0) {
     {
         std::lock_guard<std::mutex> lock(g_error_mutex);
         g_error_message = message;
@@ -51,7 +51,7 @@ void recordFailure(const std::string& message, uint32_t sys = 0) {
     g_done.store(true, std::memory_order_release);
 }
 
-uint16_t boundPort(int fd) {
+uint16_t bound_port(int fd) {
     sockaddr_in addr{};
     socklen_t len = sizeof(addr);
     if (::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
@@ -60,7 +60,7 @@ uint16_t boundPort(int fd) {
     return ntohs(addr.sin_port);
 }
 
-bool connectOnce(uint16_t port) {
+bool connect_once(uint16_t port) {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         return false;
@@ -77,37 +77,37 @@ bool connectOnce(uint16_t port) {
 }
 
 #ifdef USE_IOURING
-Task<void> acceptTwice() {
+Task<void> accept_twice() {
     AsyncTcpSocket listener;
 
-    auto opt = listener.option().handleReuseAddr();
+    auto opt = listener.option().handle_reuse_addr();
     if (!opt) {
-        recordFailure("reuse addr failed: " + opt.error().message());
+        record_failure("reuse addr failed: " + opt.error().message());
         co_return;
     }
 
-    opt = listener.option().handleNonBlock();
+    opt = listener.option().handle_non_block();
     if (!opt) {
-        recordFailure("non-block failed: " + opt.error().message());
+        record_failure("non-block failed: " + opt.error().message());
         co_return;
     }
 
     Host bindHost(IPType::IPV4, "127.0.0.1", 0);
     auto bindResult = listener.bind(bindHost);
     if (!bindResult) {
-        recordFailure("bind failed: " + bindResult.error().message());
+        record_failure("bind failed: " + bindResult.error().message());
         co_return;
     }
 
     auto listenResult = listener.listen(16);
     if (!listenResult) {
-        recordFailure("listen failed: " + listenResult.error().message());
+        record_failure("listen failed: " + listenResult.error().message());
         co_return;
     }
 
-    const uint16_t port = boundPort(listener.handle().fd);
+    const uint16_t port = bound_port(listener.handle().fd);
     if (port == 0) {
-        recordFailure("getsockname returned port 0");
+        record_failure("getsockname returned port 0");
         co_await listener.close();
         co_return;
     }
@@ -119,7 +119,7 @@ Task<void> acceptTwice() {
     auto firstAccept = co_await listener.accept(&firstClientHost);
     if (!firstAccept) {
         const uint32_t sys = static_cast<uint32_t>(firstAccept.error().code() >> 32);
-        recordFailure("first accept failed: " + firstAccept.error().message(), sys);
+        record_failure("first accept failed: " + firstAccept.error().message(), sys);
         co_await listener.close();
         co_return;
     }
@@ -132,7 +132,7 @@ Task<void> acceptTwice() {
     auto secondAccept = co_await listener.accept(&secondClientHost);
     if (!secondAccept) {
         const uint32_t sys = static_cast<uint32_t>(secondAccept.error().code() >> 32);
-        recordFailure("second accept failed: " + secondAccept.error().message(), sys);
+        record_failure("second accept failed: " + secondAccept.error().message(), sys);
         co_await listener.close();
         co_return;
     }
@@ -157,7 +157,7 @@ int main() {
 
     IOUringScheduler scheduler;
     scheduler.start();
-    scheduleTask(scheduler, acceptTwice());
+    schedule_task(scheduler, accept_twice());
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!g_listener_ready.load(std::memory_order_acquire) &&
@@ -172,7 +172,7 @@ int main() {
         return 1;
     }
 
-    if (!connectOnce(port)) {
+    if (!connect_once(port)) {
         scheduler.stop();
         LogError("first client connect failed");
         return 1;
@@ -184,7 +184,7 @@ int main() {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 
-    if (!g_done.load(std::memory_order_acquire) && !connectOnce(port)) {
+    if (!g_done.load(std::memory_order_acquire) && !connect_once(port)) {
         scheduler.stop();
         LogError("second client connect failed");
         return 1;

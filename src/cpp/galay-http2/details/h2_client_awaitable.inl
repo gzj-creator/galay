@@ -15,7 +15,7 @@ template<typename Promise>
 bool CaptureSchedulerAwaitable::await_suspend(std::coroutine_handle<Promise> handle) noexcept
 {
     if (m_out != nullptr) {
-        *m_out = handle.promise().taskRefView().belongScheduler();
+        *m_out = handle.promise().task_ref_view().belong_scheduler();
     }
     return false;
 }

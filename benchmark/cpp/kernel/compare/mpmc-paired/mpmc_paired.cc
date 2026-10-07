@@ -31,18 +31,18 @@ namespace galay::mpmc {
 struct UnboundedChannelTestAccess
 {
     template <UnboundedValue T>
-    static bool rawSend(UnboundedChannel<T>& channel,
+    static bool raw_send(UnboundedChannel<T>& channel,
                         typename UnboundedChannel<T>::ProducerToken& token, T&& value)
     {
-        return token.validFor(channel) &&
-            channel.template sendTokenFast<false>(token, std::move(value));
+        return token.valid_for(channel) &&
+            channel.template send_token_fast<false>(token, std::move(value));
     }
 
     template <UnboundedValue T>
-    static bool rawRecv(UnboundedChannel<T>& channel,
+    static bool raw_recv(UnboundedChannel<T>& channel,
                         typename UnboundedChannel<T>::ConsumerToken& token, T& value)
     {
-        auto received = channel.tryRecv(token);
+        auto received = channel.try_recv(token);
         if (!received.has_value()) {
             return false;
         }
@@ -98,7 +98,7 @@ struct Measurement
     bool setupFailed = false;
 };
 
-const char* argumentErrorName(ArgumentError error) noexcept
+const char* argument_error_name(ArgumentError error) noexcept
 {
     switch (error) {
     case ArgumentError::kMissingValue:
@@ -118,7 +118,7 @@ const char* argumentErrorName(ArgumentError error) noexcept
 }
 
 template <typename UInt>
-std::expected<UInt, ArgumentError> parseUnsigned(std::string_view text) noexcept
+std::expected<UInt, ArgumentError> parse_unsigned(std::string_view text) noexcept
 {
     UInt value = 0;
     const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
@@ -128,7 +128,7 @@ std::expected<UInt, ArgumentError> parseUnsigned(std::string_view text) noexcept
     return value;
 }
 
-std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexcept
+std::expected<Config, ArgumentError> parse_arguments(int argc, char** argv) noexcept
 {
     Config config;
     for (int index = 1; index < argc; index += 2) {
@@ -138,23 +138,23 @@ std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexc
         const std::string_view option(argv[index]);
         const std::string_view text(argv[index + 1]);
         if (option == "--messages") {
-            auto value = parseUnsigned<uint64_t>(text);
+            auto value = parse_unsigned<uint64_t>(text);
             if (!value || *value == 0 || *value > (uint64_t{1} << 32U)) {
                 return std::unexpected(ArgumentError::kInvalidNumber);
             }
             config.messages = *value;
         } else if (option == "--producers") {
-            auto value = parseUnsigned<size_t>(text);
+            auto value = parse_unsigned<size_t>(text);
             if (!value)
                 return std::unexpected(value.error());
             config.producers = *value;
         } else if (option == "--consumers") {
-            auto value = parseUnsigned<size_t>(text);
+            auto value = parse_unsigned<size_t>(text);
             if (!value)
                 return std::unexpected(value.error());
             config.consumers = *value;
         } else if (option == "--capacity") {
-            auto value = parseUnsigned<size_t>(text);
+            auto value = parse_unsigned<size_t>(text);
             if (!value || *value == 0) {
                 return std::unexpected(ArgumentError::kInvalidNumber);
             }
@@ -196,12 +196,12 @@ std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexc
     return config;
 }
 
-const char* caseName(ChannelCase channelCase) noexcept
+const char* case_name(ChannelCase channelCase) noexcept
 {
     return channelCase == ChannelCase::kBounded ? "bounded" : "unbounded";
 }
 
-const char* pathName(Path path) noexcept
+const char* path_name(Path path) noexcept
 {
     switch (path) {
     case Path::kToken:
@@ -216,12 +216,12 @@ const char* pathName(Path path) noexcept
     return "unknown";
 }
 
-uint64_t expectedChecksum(uint64_t messages) noexcept
+uint64_t expected_checksum(uint64_t messages) noexcept
 {
     return (messages & 1U) == 0 ? (messages / 2) * (messages - 1) : messages * ((messages - 1) / 2);
 }
 
-template <bool RawSend, bool RawRecv> Measurement runPath(const Config& config)
+template <bool RawSend, bool RawRecv> Measurement run_path(const Config& config)
 {
     using Channel = galay::mpmc::UnboundedChannel<uint64_t>;
     Channel channel;
@@ -241,8 +241,8 @@ template <bool RawSend, bool RawRecv> Measurement runPath(const Config& config)
 
     for (size_t producer = 0; producer < config.producers; ++producer) {
         producers.emplace_back([&, producer]() {
-            placements[producer] = galay::benchmark::pinCurrentThread(producer);
-            auto token = channel.makeProducerToken();
+            placements[producer] = galay::benchmark::pin_current_thread(producer);
+            auto token = channel.make_producer_token();
             if (!token.valid()) {
                 setupFailed.store(true, std::memory_order_release);
             }
@@ -259,7 +259,7 @@ template <bool RawSend, bool RawRecv> Measurement runPath(const Config& config)
                 uint64_t value = id;
                 bool sent = false;
                 if constexpr (RawSend) {
-                    sent = galay::mpmc::UnboundedChannelTestAccess::rawSend(channel, token,
+                    sent = galay::mpmc::UnboundedChannelTestAccess::raw_send(channel, token,
                                                                             std::move(value));
                 } else {
                     sent = channel.send(token, std::move(value));
@@ -268,7 +268,7 @@ template <bool RawSend, bool RawRecv> Measurement runPath(const Config& config)
                     ++retries;
                     std::this_thread::yield();
                     if constexpr (RawSend) {
-                        sent = galay::mpmc::UnboundedChannelTestAccess::rawSend(channel, token,
+                        sent = galay::mpmc::UnboundedChannelTestAccess::raw_send(channel, token,
                                                                                 std::move(value));
                     } else {
                         sent = channel.send(token, std::move(value));
@@ -282,8 +282,8 @@ template <bool RawSend, bool RawRecv> Measurement runPath(const Config& config)
     for (size_t consumer = 0; consumer < config.consumers; ++consumer) {
         consumers.emplace_back([&, consumer]() {
             placements[config.producers + consumer] =
-                galay::benchmark::pinCurrentThread(config.producers + consumer);
-            auto token = channel.makeConsumerToken();
+                galay::benchmark::pin_current_thread(config.producers + consumer);
+            auto token = channel.make_consumer_token();
             if (!token.valid()) {
                 setupFailed.store(true, std::memory_order_release);
             }
@@ -302,9 +302,9 @@ template <bool RawSend, bool RawRecv> Measurement runPath(const Config& config)
                 bool receivedValue = false;
                 if constexpr (RawRecv) {
                     receivedValue =
-                        galay::mpmc::UnboundedChannelTestAccess::rawRecv(channel, token, rawValue);
+                        galay::mpmc::UnboundedChannelTestAccess::raw_recv(channel, token, rawValue);
                 } else {
-                    value = channel.tryRecv(token);
+                    value = channel.try_recv(token);
                     receivedValue = value.has_value();
                 }
                 if (receivedValue) {
@@ -316,7 +316,7 @@ template <bool RawSend, bool RawRecv> Measurement runPath(const Config& config)
                     }
                     continue;
                 }
-                if (channel.isClosed()) {
+                if (channel.is_closed()) {
                     break;
                 }
                 ++retries;
@@ -357,7 +357,7 @@ template <bool RawSend, bool RawRecv> Measurement runPath(const Config& config)
     };
 }
 
-Measurement runBoundedPath(const Config& config)
+Measurement run_bounded_path(const Config& config)
 {
     galay::mpmc::BoundedChannel<uint64_t> channel(config.capacity);
     galay::benchmark::CompletionLatch ready(config.producers + config.consumers);
@@ -375,14 +375,14 @@ Measurement runBoundedPath(const Config& config)
 
     for (size_t producer = 0; producer < config.producers; ++producer) {
         producers.emplace_back([&, producer]() {
-            placements[producer] = galay::benchmark::pinCurrentThread(producer);
+            placements[producer] = galay::benchmark::pin_current_thread(producer);
             ready.arrive();
             start.wait();
             const uint64_t first = config.messages * producer / config.producers;
             const uint64_t last = config.messages * (producer + 1) / config.producers;
             uint64_t retries = 0;
             for (uint64_t value = first; value < last; ++value) {
-                while (!channel.trySend(std::move(value))) {
+                while (!channel.try_send(std::move(value))) {
                     ++retries;
                     std::this_thread::yield();
                 }
@@ -394,20 +394,20 @@ Measurement runBoundedPath(const Config& config)
     for (size_t consumer = 0; consumer < config.consumers; ++consumer) {
         consumers.emplace_back([&, consumer]() {
             placements[config.producers + consumer] =
-                galay::benchmark::pinCurrentThread(config.producers + consumer);
+                galay::benchmark::pin_current_thread(config.producers + consumer);
             ready.arrive();
             start.wait();
             uint64_t localReceived = 0;
             uint64_t localChecksum = 0;
             uint64_t retries = 0;
             for (;;) {
-                auto value = channel.tryRecv();
+                auto value = channel.try_recv();
                 if (value.has_value()) {
                     ++localReceived;
                     localChecksum += *value;
                     continue;
                 }
-                if (channel.isClosed()) {
+                if (channel.is_closed()) {
                     break;
                 }
                 ++retries;
@@ -450,22 +450,22 @@ Measurement runBoundedPath(const Config& config)
 Measurement run(const Config& config)
 {
     if (config.channelCase == ChannelCase::kBounded) {
-        return runBoundedPath(config);
+        return run_bounded_path(config);
     }
     switch (config.path) {
     case Path::kToken:
-        return runPath<false, false>(config);
+        return run_path<false, false>(config);
     case Path::kRaw:
-        return runPath<true, true>(config);
+        return run_path<true, true>(config);
     case Path::kRawSend:
-        return runPath<true, false>(config);
+        return run_path<true, false>(config);
     case Path::kRawRecv:
-        return runPath<false, true>(config);
+        return run_path<false, true>(config);
     }
     return {.setupFailed = true};
 }
 
-bool placementValid(galay::benchmark::ThreadPlacement placement) noexcept
+bool placement_valid(galay::benchmark::ThreadPlacement placement) noexcept
 {
 #if defined(__APPLE__)
     return placement == galay::benchmark::ThreadPlacement::kPerformanceClassOnly;
@@ -476,42 +476,42 @@ bool placementValid(galay::benchmark::ThreadPlacement placement) noexcept
 #endif
 }
 
-bool validMeasurement(const Config& config, const Measurement& result) noexcept
+bool valid_measurement(const Config& config, const Measurement& result) noexcept
 {
     return !result.setupFailed && result.elapsedNs > 0 && result.received == config.messages &&
-           result.checksum == expectedChecksum(config.messages) && result.finalSize == 0 &&
-           placementValid(result.placement);
+           result.checksum == expected_checksum(config.messages) && result.finalSize == 0 &&
+           placement_valid(result.placement);
 }
 
 } // namespace
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    auto config = parseArguments(argc, argv);
+    auto config = parse_arguments(argc, argv);
     if (!config) {
-        std::cerr << "mpmc paired benchmark argument error: " << argumentErrorName(config.error())
+        std::cerr << "mpmc paired benchmark argument error: " << argument_error_name(config.error())
                   << '\n';
         return 2;
     }
 
     const Measurement result = run(*config);
-    const uint64_t expected = expectedChecksum(config->messages);
-    const bool valid = validMeasurement(*config, result);
+    const uint64_t expected = expected_checksum(config->messages);
+    const bool valid = valid_measurement(*config, result);
     const double messagesPerSecond = result.elapsedNs > 0
                                          ? static_cast<double>(config->messages) * 1'000'000'000.0 /
                                                static_cast<double>(result.elapsedNs)
                                          : 0.0;
 
     const char* const path =
-        config->channelCase == ChannelCase::kBounded ? "direct" : pathName(config->path);
+        config->channelCase == ChannelCase::kBounded ? "direct" : path_name(config->path);
     const size_t capacity = config->channelCase == ChannelCase::kBounded ? config->capacity : 0;
     std::cout << "{\"schema\":\"galay.mpmc.paired.v2\""
               << ",\"language\":\"cpp\""
-              << ",\"case\":\"" << caseName(config->channelCase) << "\""
+              << ",\"case\":\"" << case_name(config->channelCase) << "\""
               << ",\"path\":\"" << path << "\""
               << ",\"topology\":\"" << config->producers << 'p' << config->consumers << "c\""
               << ",\"payload_bytes\":8"
@@ -521,7 +521,7 @@ int main(int argc, char** argv)
               << ",\"received\":" << result.received << ",\"checksum\":" << result.checksum
               << ",\"expected_checksum\":" << expected << ",\"send_retries\":" << result.sendRetries
               << ",\"empty_retries\":" << result.emptyRetries << ",\"placement\":\""
-              << galay::benchmark::threadPlacementName(result.placement) << "\""
+              << galay::benchmark::thread_placement_name(result.placement) << "\""
               << ",\"backoff\":\"yield\""
               << ",\"generator\":\"partitioned_monotonic_u64\""
               << ",\"valid\":" << (valid ? "true" : "false") << "}\n";

@@ -30,7 +30,7 @@ namespace galay::http::detail
  * @param ch 输入字符
  * @return 转换后的字符
  */
-inline char toLowerAsciiChar(char ch)
+inline char to_lower_ascii_char(char ch)
 {
     if (ch >= 'A' && ch <= 'Z') {
         return static_cast<char>(ch + ('a' - 'A'));
@@ -43,7 +43,7 @@ inline char toLowerAsciiChar(char ch)
  * @param ch 输入字符
  * @return 转换后的字符
  */
-inline char toUpperAsciiChar(char ch)
+inline char to_upper_ascii_char(char ch)
 {
     if (ch >= 'a' && ch <= 'z') {
         return static_cast<char>(ch - ('a' - 'A'));
@@ -57,14 +57,14 @@ inline char toUpperAsciiChar(char ch)
  * @param rhs 右操作数
  * @return 相等返回 true
  */
-inline bool equalsIgnoreCaseAscii(std::string_view lhs, std::string_view rhs)
+inline bool equals_ignore_case_ascii(std::string_view lhs, std::string_view rhs)
 {
     if (lhs.size() != rhs.size()) {
         return false;
     }
 
     for (size_t i = 0; i < lhs.size(); ++i) {
-        if (toLowerAsciiChar(lhs[i]) != toLowerAsciiChar(rhs[i])) {
+        if (to_lower_ascii_char(lhs[i]) != to_lower_ascii_char(rhs[i])) {
             return false;
         }
     }
@@ -77,7 +77,7 @@ inline bool equalsIgnoreCaseAscii(std::string_view lhs, std::string_view rhs)
  * @param token 要查找的 token
  * @return 包含返回 true
  */
-inline bool headerValueContainsToken(std::string_view value, std::string_view token)
+inline bool header_value_contains_token(std::string_view value, std::string_view token)
 {
     if (value.empty() || token.empty()) {
         return false;
@@ -99,7 +99,7 @@ inline bool headerValueContainsToken(std::string_view value, std::string_view to
             --right;
         }
 
-        if (right > left && equalsIgnoreCaseAscii(value.substr(left, right - left), token)) {
+        if (right > left && equals_ignore_case_ascii(value.substr(left, right - left), token)) {
             return true;
         }
         start = end + 1;
@@ -114,9 +114,9 @@ inline bool headerValueContainsToken(std::string_view value, std::string_view to
  * @param key 头部键名
  * @return 值指针，不存在时返回 nullptr
  */
-inline const std::string* getHeaderValuePtrLoose(const HeaderPair& headers, const std::string& key)
+inline const std::string* get_header_value_ptr_loose(const HeaderPair& headers, const std::string& key)
 {
-    return headers.getValuePtr(key);
+    return headers.get_value_ptr(key);
 }
 
 /**
@@ -124,7 +124,7 @@ inline const std::string* getHeaderValuePtrLoose(const HeaderPair& headers, cons
  * @param input 输入字符串
  * @return 解析成功返回值，失败返回 std::nullopt
  */
-inline std::optional<size_t> parseSizeTStrict(std::string_view input)
+inline std::optional<size_t> parse_size_t_strict(std::string_view input)
 {
     size_t begin = 0;
     size_t end = input.size();
@@ -155,7 +155,7 @@ inline std::optional<size_t> parseSizeTStrict(std::string_view input)
  * @param skip_bytes 要跳过的字节数
  * @return 切片后的 iovec 数组
  */
-inline std::vector<iovec> sliceIovecs(const std::vector<iovec>& iovecs, size_t skip_bytes)
+inline std::vector<iovec> slice_iovecs(const std::vector<iovec>& iovecs, size_t skip_bytes)
 {
     std::vector<iovec> sliced;
     sliced.reserve(iovecs.size());
@@ -184,32 +184,32 @@ inline std::vector<iovec> sliceIovecs(const std::vector<iovec>& iovecs, size_t s
  * @param key 头部键名
  * @details 依次尝试原始键名、全小写、全大写、首字母大写等形式进行移除
  */
-inline void removeHeaderPairLoose(HeaderPair& headers, const std::string& key)
+inline void remove_header_pair_loose(HeaderPair& headers, const std::string& key)
 {
-    headers.removeHeaderPair(key);
+    headers.remove_header_pair(key);
 
     std::string lower = key;
     std::transform(lower.begin(), lower.end(), lower.begin(),
-                   [](char c) { return toLowerAsciiChar(c); });
+                   [](char c) { return to_lower_ascii_char(c); });
     if (lower != key) {
-        headers.removeHeaderPair(lower);
+        headers.remove_header_pair(lower);
     }
 
     std::string upper = key;
     std::transform(upper.begin(), upper.end(), upper.begin(),
-                   [](char c) { return toUpperAsciiChar(c); });
+                   [](char c) { return to_upper_ascii_char(c); });
     if (upper != key && upper != lower) {
-        headers.removeHeaderPair(upper);
+        headers.remove_header_pair(upper);
     }
 
     std::string canonical = lower;
     bool word_start = true;
     for (char& ch : canonical) {
-        ch = word_start ? toUpperAsciiChar(ch) : toLowerAsciiChar(ch);
+        ch = word_start ? to_upper_ascii_char(ch) : to_lower_ascii_char(ch);
         word_start = (ch == '-');
     }
     if (canonical != key && canonical != lower && canonical != upper) {
-        headers.removeHeaderPair(canonical);
+        headers.remove_header_pair(canonical);
     }
 }
 

@@ -36,7 +36,7 @@ struct RegisteredAccept {
     auto await_resume() { return inner.await_resume(); }
 };
 
-Task<void> pendingAccept(AsyncTcpSocket& listener, Trace& trace)
+Task<void> pending_accept(AsyncTcpSocket& listener, Trace& trace)
 {
     struct FrameProbe {
         Trace& trace;
@@ -64,7 +64,7 @@ int main(int argc, char** argv)
     listeners.reserve(count);
     for (unsigned i = 0; i != count; ++i) {
         auto listener = AsyncTcpSocket::create(IPType::IPV4);
-        if (!listener || !listener->option().handleNonBlock() ||
+        if (!listener || !listener->option().handle_non_block() ||
             !listener->bind(Host(IPType::IPV4, "127.0.0.1", 0)) || !listener->listen(16)) {
             std::cerr << "listener setup failed at " << i << '\n';
             return 1;
@@ -72,7 +72,7 @@ int main(int argc, char** argv)
         listeners.push_back(std::move(*listener));
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto started = runtime.start();
     if (!started) {
         std::cerr << "runtime start failed\n";
@@ -86,9 +86,9 @@ int main(int argc, char** argv)
     keepers.reserve(count);
     for (unsigned i = 0; i != count; ++i) {
         registrations.push_back(traces[i].registered.get_future());
-        auto task = pendingAccept(listeners[i], traces[i]);
-        keepers.push_back(detail::TaskAccess::taskRef(task));
-        if (!runtime.spawnIO(std::move(task))) {
+        auto task = pending_accept(listeners[i], traces[i]);
+        keepers.push_back(detail::TaskAccess::task_ref(task));
+        if (!runtime.spawn_io(std::move(task))) {
             std::cerr << "pending accept submit failed\n";
             runtime.stop();
             return 1;

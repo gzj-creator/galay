@@ -67,7 +67,7 @@ public:
 
     constexpr ParallelErrorCode code() const noexcept { return m_code; }
     constexpr std::size_t node() const noexcept { return m_node; }
-    constexpr bool hasError() const noexcept { return m_code != ParallelErrorCode::kNone; }
+    constexpr bool has_error() const noexcept { return m_code != ParallelErrorCode::kNone; }
 
     std::string_view message() const noexcept
     {
@@ -328,7 +328,7 @@ private:
  *       `std::expected<void, ParallelError>`。
  */
 template <typename F>
-ParallelWork makeParallelWork(F&& function) noexcept
+ParallelWork make_parallel_work(F&& function) noexcept
 {
     return ParallelWork::make(std::forward<F>(function));
 }
@@ -391,7 +391,7 @@ public:
     template <typename F>
     std::expected<ParallelNodeId, ParallelError> add(F&& function) noexcept
     {
-        return add(makeParallelWork(std::forward<F>(function)));
+        return add(make_parallel_work(std::forward<F>(function)));
     }
 
     std::expected<void, ParallelError> then(ParallelNodeId predecessor,
@@ -400,7 +400,7 @@ public:
         if (m_sealed) {
             return std::unexpected(ParallelError(ParallelErrorCode::kInvalidGraph));
         }
-        if (!validNode(predecessor) || !validNode(successor) || predecessor == successor) {
+        if (!valid_node(predecessor) || !valid_node(successor) || predecessor == successor) {
             return std::unexpected(ParallelError(ParallelErrorCode::kInvalidNode));
         }
 
@@ -447,7 +447,7 @@ private:
     friend class detail::ParallelState;
     friend class detail::ParallelAwaitable;
 
-    bool validNode(ParallelNodeId id) const noexcept
+    bool valid_node(ParallelNodeId id) const noexcept
     {
         return id < m_nodes.size();
     }
@@ -570,7 +570,7 @@ public:
     {
         for (ParallelNodeId id = 0; id < m_graph.m_nodes.size(); ++id) {
             if (m_graph.m_nodes[id]->predecessor_count == 0) {
-                submitNode(id);
+                submit_node(id);
             }
         }
     }
@@ -595,26 +595,26 @@ public:
     }
 
 private:
-    static void runWork(void* context, std::size_t index) noexcept
+    static void run_work(void* context, std::size_t index) noexcept
     {
-        static_cast<ParallelState*>(context)->runNode(index);
+        static_cast<ParallelState*>(context)->run_node(index);
     }
 
-    static void releaseWork(void* context) noexcept
+    static void release_work(void* context) noexcept
     {
         static_cast<ParallelState*>(context)->release();
     }
 
-    ParallelWorkItem makeWork(ParallelNodeId id) noexcept
+    ParallelWorkItem make_work(ParallelNodeId id) noexcept
     {
         retain();
-        return ParallelWorkItem(this, id, &runWork, &releaseWork);
+        return ParallelWorkItem(this, id, &run_work, &release_work);
     }
 
-    ParallelScheduler* chooseScheduler() noexcept
+    ParallelScheduler* choose_scheduler() noexcept
     {
         if (m_runtime != nullptr) {
-            if (auto* scheduler = m_runtime->getNextParallelScheduler(); scheduler != nullptr) {
+            if (auto* scheduler = m_runtime->get_next_parallel_scheduler(); scheduler != nullptr) {
                 return scheduler;
             }
         }
@@ -625,7 +625,7 @@ private:
         return nullptr;
     }
 
-    void submitNode(ParallelNodeId id) noexcept
+    void submit_node(ParallelNodeId id) noexcept
     {
         auto& node = *m_graph.m_nodes[id];
         auto expected = ParallelGraph::NodeState::kPending;
@@ -636,38 +636,38 @@ private:
             return;
         }
 
-        auto* scheduler = chooseScheduler();
+        auto* scheduler = choose_scheduler();
         if (scheduler == nullptr) {
-            terminalizeRunning(id,
+            terminalize_running(id,
                                ParallelGraph::NodeState::kRejected,
                                ParallelError(ParallelErrorCode::kSchedulerUnavailable, id));
             return;
         }
 
-        auto work = makeWork(id);
-        if (!scheduler->scheduleWork(std::move(work))) {
-            terminalizeRunning(id,
+        auto work = make_work(id);
+        if (!scheduler->schedule_work(std::move(work))) {
+            terminalize_running(id,
                                ParallelGraph::NodeState::kRejected,
                                ParallelError(ParallelErrorCode::kScheduleFailed, id));
         }
     }
 
-    void runNode(ParallelNodeId id) noexcept
+    void run_node(ParallelNodeId id) noexcept
     {
         auto& node = *m_graph.m_nodes[id];
         const auto error = node.work.invoke();
-        if (error.hasError()) {
-            terminalizeRunning(id,
+        if (error.has_error()) {
+            terminalize_running(id,
                                ParallelGraph::NodeState::kFailed,
                                error.code() == ParallelErrorCode::kNone
                                    ? ParallelError(ParallelErrorCode::kWorkFailed, id)
                                    : ParallelError(error.code(), id));
             return;
         }
-        terminalizeRunning(id, ParallelGraph::NodeState::kSucceeded, {});
+        terminalize_running(id, ParallelGraph::NodeState::kSucceeded, {});
     }
 
-    void terminalizeRunning(ParallelNodeId id,
+    void terminalize_running(ParallelNodeId id,
                             ParallelGraph::NodeState terminal_state,
                             ParallelError error) noexcept
     {
@@ -682,13 +682,13 @@ private:
 
         node.error = error;
         node.state.store(terminal_state, std::memory_order_release);
-        if (error.hasError() && error.code() != ParallelErrorCode::kSkipped) {
-            recordError(id);
+        if (error.has_error() && error.code() != ParallelErrorCode::kSkipped) {
+            record_error(id);
         }
-        finishNode(id, terminal_state == ParallelGraph::NodeState::kSucceeded);
+        finish_node(id, terminal_state == ParallelGraph::NodeState::kSucceeded);
     }
 
-    void skipNode(ParallelNodeId id, ParallelError cause) noexcept
+    void skip_node(ParallelNodeId id, ParallelError cause) noexcept
     {
         auto& node = *m_graph.m_nodes[id];
         auto expected = ParallelGraph::NodeState::kPending;
@@ -701,10 +701,10 @@ private:
 
         node.error = ParallelError(ParallelErrorCode::kSkipped, cause.node());
         node.state.store(ParallelGraph::NodeState::kSkipped, std::memory_order_release);
-        finishNode(id, false);
+        finish_node(id, false);
     }
 
-    void finishNode(ParallelNodeId id, bool succeeded) noexcept
+    void finish_node(ParallelNodeId id, bool succeeded) noexcept
     {
         auto& node = *m_graph.m_nodes[id];
         if (succeeded) {
@@ -713,13 +713,13 @@ private:
                 const auto previous = next.pending_predecessors.fetch_sub(
                     1, std::memory_order_acq_rel);
                 if (previous == 1) {
-                    submitNode(successor);
+                    submit_node(successor);
                 }
             }
         } else {
             const auto cause = node.error;
             for (const auto successor : node.successors) {
-                skipNode(successor, cause);
+                skip_node(successor, cause);
             }
         }
 
@@ -730,7 +730,7 @@ private:
             // parent frame -> ParallelState -> parent state 的引用环。
             TaskRef parent = std::move(m_parent);
             const auto resume_result =
-                detail::requestTaskResumeStateDetailed(parent.state());
+                detail::request_task_resume_state_detailed(parent.state());
             if (resume_result == detail::TaskResumeResult::kRejected) {
                 // 最后一个节点完成前 owner scheduler 可能已经停止，导致无法进行
                 // owner-only resume。直接向挂起的 parent 发布失败，让 join/wait
@@ -738,16 +738,16 @@ private:
                 auto* parent_state = parent.state();
                 if (parent_state != nullptr &&
                     !parent_state->m_done.load(std::memory_order_acquire)) {
-                    storeTaskError(parent_state,
+                    store_task_error(parent_state,
                                    TaskResultError(
                                        TaskResultErrorCode::kResumeFailed));
-                    completeTaskState(parent_state);
+                    complete_task_state(parent_state);
                 }
             }
         }
     }
 
-    void recordError(ParallelNodeId id) noexcept
+    void record_error(ParallelNodeId id) noexcept
     {
         auto expected = ParallelError::kNoNode;
         (void)m_first_error_node.compare_exchange_strong(expected,
@@ -789,7 +789,7 @@ public:
     ParallelAwaitable& operator=(ParallelAwaitable&& other) noexcept
     {
         if (this != &other) {
-            releaseState();
+            release_state();
             m_graph = std::move(other.m_graph);
             m_state = other.m_state;
             m_inline_error = other.m_inline_error;
@@ -799,7 +799,7 @@ public:
         return *this;
     }
 
-    ~ParallelAwaitable() { releaseState(); }
+    ~ParallelAwaitable() { release_state(); }
 
     bool await_ready() const noexcept
     {
@@ -815,16 +815,16 @@ public:
             return false;
         }
 
-        const TaskRef parent = handle.promise().taskRefView();
-        if (!parent.isValid() || parent.belongScheduler() == nullptr) {
+        const TaskRef parent = handle.promise().task_ref_view();
+        if (!parent.is_valid() || parent.belong_scheduler() == nullptr) {
             m_inline_error = ParallelError(ParallelErrorCode::kSchedulerUnavailable);
             return false;
         }
 
         if (m_graph.m_nodes.size() == 1 &&
-            parent.belongScheduler()->type() == kParallelScheduler) {
+            parent.belong_scheduler()->type() == kParallelScheduler) {
             const auto error = m_graph.m_nodes[0]->work.invoke();
-            if (error.hasError()) {
+            if (error.has_error()) {
                 m_inline_error = ParallelError(error.code(), 0);
             }
             return false;
@@ -833,8 +833,8 @@ public:
         auto* state = new (std::nothrow) ParallelState(
             std::move(m_graph),
             parent,
-            detail::taskRuntime(parent),
-            parent.belongScheduler());
+            detail::task_runtime(parent),
+            parent.belong_scheduler());
         if (state == nullptr) {
             m_inline_error = ParallelError(ParallelErrorCode::kAllocationFailed);
             return false;
@@ -847,7 +847,7 @@ public:
     std::expected<void, ParallelError> await_resume() const noexcept
     {
         if (m_state == nullptr) {
-            if (m_inline_error.hasError()) {
+            if (m_inline_error.has_error()) {
                 return std::unexpected(m_inline_error);
             }
             return {};
@@ -856,7 +856,7 @@ public:
     }
 
 private:
-    void releaseState() noexcept
+    void release_state() noexcept
     {
         if (m_state != nullptr) {
             m_state->release();

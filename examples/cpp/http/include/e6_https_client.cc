@@ -14,11 +14,11 @@ using namespace galay::kernel;
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 
-Task<void> httpsClientExample(const std::string& url) {
+Task<void> https_client_example(const std::string& url) {
     std::cout << "Connecting to " << url << "...\n";
 
     HttpsClient client(HttpsClientBuilder()
-        .verifyPeer(false)  // 测试时不验证证书
+        .verify_peer(false)  // 测试时不验证证书
         .build());
 
     try {
@@ -38,14 +38,14 @@ Task<void> httpsClientExample(const std::string& url) {
             co_return;
         }
         std::cout << "SSL handshake completed\n";
-        auto session_result = client.getSession();
+        auto session_result = client.get_session();
         if (!session_result) {
             (void)co_await client.close();
             co_return;
         }
         auto& session = *session_result.value();
-        auto& writer = session.getWriter();
-        auto& reader = session.getReader();
+        auto& writer = session.get_writer();
+        auto& reader = session.get_reader();
 
         // 发送多个请求 (Keep-Alive)
         for (int i = 1; i <= 3; i++) {
@@ -55,11 +55,11 @@ Task<void> httpsClientExample(const std::string& url) {
             auto request = Http1_1RequestBuilder::get("/")
                 .host("localhost")
                 .connection("keep-alive")
-                .buildMove();
+                .build_move();
 
             // 发送请求
             while (true) {
-                auto send_result = co_await writer.sendRequest(request);
+                auto send_result = co_await writer.send_request(request);
                 if (!send_result) {
                     std::cerr << "Send failed: " << send_result.error().message() << "\n";
                     co_await client.close();
@@ -72,7 +72,7 @@ Task<void> httpsClientExample(const std::string& url) {
             // 接收响应
             HttpResponse response;
             while (true) {
-                auto recv_result = co_await reader.getResponse(response);
+                auto recv_result = co_await reader.get_response(response);
                 if (!recv_result) {
                     std::cerr << "Recv failed: " << recv_result.error().message() << "\n";
                     co_await client.close();
@@ -82,7 +82,7 @@ Task<void> httpsClientExample(const std::string& url) {
             }
 
             std::cout << "Response: " << static_cast<int>(response.header().code()) << "\n";
-            std::cout << "Body length: " << response.getBodyStr().size() << " bytes\n";
+            std::cout << "Body length: " << response.get_body_str().size() << " bytes\n";
 
             // 重置 response
             response = HttpResponse();
@@ -106,10 +106,10 @@ int main(int argc, char* argv[]) {
     std::cout << "HTTPS Client Example\n";
     std::cout << "========================================\n";
 
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     rt.start();
 
-    auto join = rt.spawnIO(httpsClientExample(url));
+    auto join = rt.spawn_io(https_client_example(url));
     if (!join) {
         rt.stop();
         return 1;

@@ -36,7 +36,7 @@ struct Measurement
         galay::benchmark::ThreadPlacement::kUnsupported;
 };
 
-Measurement runChannel(int producerCount, int consumerCount, size_t capacity)
+Measurement run_channel(int producerCount, int consumerCount, size_t capacity)
 {
     galay::mpmc::BoundedChannel<int64_t> channel(capacity);
     galay::benchmark::CompletionLatch ready(
@@ -57,7 +57,7 @@ Measurement runChannel(int producerCount, int consumerCount, size_t capacity)
     for (int producer = 0; producer < producerCount; ++producer) {
         producers.emplace_back([&, producer]() {
             placements[static_cast<size_t>(producer)] =
-                galay::benchmark::pinCurrentThread(static_cast<size_t>(producer));
+                galay::benchmark::pin_current_thread(static_cast<size_t>(producer));
             ready.arrive();
             start.wait();
             const int64_t first = kMessages * producer / producerCount;
@@ -65,7 +65,7 @@ Measurement runChannel(int producerCount, int consumerCount, size_t capacity)
             uint64_t localFullRetries = 0;
             for (int64_t valueId = first; valueId < last; ++valueId) {
                 int64_t value = valueId;
-                while (!channel.trySend(std::move(value))) {
+                while (!channel.try_send(std::move(value))) {
                     ++localFullRetries;
                     std::this_thread::yield();
                 }
@@ -77,7 +77,7 @@ Measurement runChannel(int producerCount, int consumerCount, size_t capacity)
     for (int consumer = 0; consumer < consumerCount; ++consumer) {
         consumers.emplace_back([&, consumer]() {
             placements[static_cast<size_t>(producerCount + consumer)] =
-                galay::benchmark::pinCurrentThread(
+                galay::benchmark::pin_current_thread(
                     static_cast<size_t>(producerCount + consumer));
             ready.arrive();
             start.wait();
@@ -85,13 +85,13 @@ Measurement runChannel(int producerCount, int consumerCount, size_t capacity)
             int64_t localSum = 0;
             uint64_t localEmptyRetries = 0;
             for (;;) {
-                auto value = channel.tryRecv();
+                auto value = channel.try_recv();
                 if (value.has_value()) {
                     ++localReceived;
                     localSum += *value;
                     continue;
                 }
-                if (channel.isClosed()) {
+                if (channel.is_closed()) {
                     break;
                 }
                 ++localEmptyRetries;
@@ -137,7 +137,7 @@ Measurement runChannel(int producerCount, int consumerCount, size_t capacity)
     };
 }
 
-bool validMeasurement(const Measurement& measurement)
+bool valid_measurement(const Measurement& measurement)
 {
     bool placementValid = true;
 #if defined(__APPLE__)
@@ -151,7 +151,7 @@ bool validMeasurement(const Measurement& measurement)
         measurement.received == kMessages && measurement.sum == kExpectedSum;
 }
 
-void printSummary(const char* topology,
+void print_summary(const char* topology,
                   int producerCount,
                   int consumerCount,
                   size_t capacity,
@@ -182,24 +182,24 @@ void printSummary(const char* topology,
               << " messages=" << kMessages
               << " samples=" << samples.size()
               << " median_msg_s="
-              << galay::benchmark::medianElement(std::move(throughput))
+              << galay::benchmark::median_element(std::move(throughput))
               << " min_msg_s=" << minimumThroughput
               << " max_msg_s=" << maximumThroughput
               << " median_full_retries="
-              << galay::benchmark::medianElement(std::move(fullRetries))
+              << galay::benchmark::median_element(std::move(fullRetries))
               << " median_empty_retries="
-              << galay::benchmark::medianElement(std::move(emptyRetries))
-              << " placement=" << galay::benchmark::threadPlacementName(placement)
+              << galay::benchmark::median_element(std::move(emptyRetries))
+              << " placement=" << galay::benchmark::thread_placement_name(placement)
               << '\n';
 }
 
-bool runCase(const char* topology,
+bool run_case(const char* topology,
              int producerCount,
              int consumerCount,
              size_t capacity)
 {
     for (int warmup = 0; warmup < kWarmupSamples; ++warmup) {
-        if (!validMeasurement(runChannel(producerCount, consumerCount, capacity))) {
+        if (!valid_measurement(run_channel(producerCount, consumerCount, capacity))) {
             std::cout << "mpmc_bounded warmup_failed topology=" << topology
                       << " capacity=" << capacity << '\n';
             return false;
@@ -209,8 +209,8 @@ bool runCase(const char* topology,
     std::vector<Measurement> samples;
     samples.reserve(kSamples);
     for (int sample = 0; sample < kSamples; ++sample) {
-        Measurement measurement = runChannel(producerCount, consumerCount, capacity);
-        if (!validMeasurement(measurement)) {
+        Measurement measurement = run_channel(producerCount, consumerCount, capacity);
+        if (!valid_measurement(measurement)) {
             std::cout << "mpmc_bounded sample_failed topology=" << topology
                       << " capacity=" << capacity
                       << " sample=" << sample << '\n';
@@ -218,7 +218,7 @@ bool runCase(const char* topology,
         }
         samples.push_back(std::move(measurement));
     }
-    printSummary(topology, producerCount, consumerCount, capacity, samples);
+    print_summary(topology, producerCount, consumerCount, capacity, samples);
     return true;
 }
 
@@ -226,14 +226,14 @@ bool runCase(const char* topology,
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     bool ok = true;
     for (const size_t capacity : {size_t{256}, size_t{4096}}) {
-        ok = runCase("2p2c", 2, 2, capacity) && ok;
-        ok = runCase("4p4c", 4, 4, capacity) && ok;
+        ok = run_case("2p2c", 2, 2, capacity) && ok;
+        ok = run_case("4p4c", 4, 4, capacity) && ok;
     }
     return ok ? 0 : 1;
 }

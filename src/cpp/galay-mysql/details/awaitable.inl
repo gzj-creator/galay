@@ -28,7 +28,7 @@ concept ParseFn = requires(Fn&& fn) {
     { std::forward<Fn>(fn)() } -> std::same_as<std::expected<bool, MysqlError>>;
 };
 
-inline void syncSendWindow(const std::string& payload, size_t sent, const char*& buffer, size_t& length)
+inline void sync_send_window(const std::string& payload, size_t sent, const char*& buffer, size_t& length)
 {
     if (sent >= payload.size()) {
         buffer = nullptr;
@@ -43,7 +43,7 @@ template<typename OnIoError, typename OnZeroSend, typename OnDone>
 requires IoErrorCallback<OnIoError> &&
          VoidCallback<OnZeroSend> &&
          VoidCallback<OnDone>
-bool handleSendResult(std::expected<size_t, IOError>& io_result,
+bool handle_send_result(std::expected<size_t, IOError>& io_result,
                       size_t& sent,
                       size_t total,
                       OnIoError&& on_io_error,
@@ -70,10 +70,10 @@ bool handleSendResult(std::expected<size_t, IOError>& io_result,
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool prepareRecvWindow(RingBuffer<Strategy>& ring_buffer, std::vector<struct iovec>& iovecs)
+bool prepare_recv_window(RingBuffer<Strategy>& ring_buffer, std::vector<struct iovec>& iovecs)
 {
     struct iovec raw_iovecs[2];
-    const size_t count = ring_buffer.getWriteIovecs(raw_iovecs, 2);
+    const size_t count = ring_buffer.get_write_iovecs(raw_iovecs, 2);
     iovecs.assign(raw_iovecs, raw_iovecs + count);
     return !iovecs.empty();
 }
@@ -81,7 +81,7 @@ bool prepareRecvWindow(RingBuffer<Strategy>& ring_buffer, std::vector<struct iov
 template<typename ParseFnType, typename OnParseError>
 requires ParseFn<ParseFnType> &&
          ParseErrorCallback<OnParseError>
-bool parseOrSetError(ParseFnType&& parse_fn, OnParseError&& on_parse_error)
+bool parse_or_set_error(ParseFnType&& parse_fn, OnParseError&& on_parse_error)
 {
     auto parsed = parse_fn();
     if (!parsed.has_value()) {
@@ -96,7 +96,7 @@ requires IoErrorCallback<OnIoError> &&
          VoidCallback<OnClosed> &&
          ParseFn<ParseFnType> &&
          ParseErrorCallback<OnParseError>
-bool handleReadResult(std::expected<size_t, IOError>& io_result,
+bool handle_read_result(std::expected<size_t, IOError>& io_result,
                       BufferLike& ring_buffer,
                       OnIoError&& on_io_error,
                       OnClosed&& on_closed,
@@ -115,11 +115,11 @@ bool handleReadResult(std::expected<size_t, IOError>& io_result,
     }
 
     ring_buffer.produce(n);
-    return detail::parseOrSetError(std::forward<ParseFnType>(parse_fn),
+    return detail::parse_or_set_error(std::forward<ParseFnType>(parse_fn),
                                    std::forward<OnParseError>(on_parse_error));
 }
 
-MysqlError toTimeoutOrInternalError(const IOError& io_error)
+MysqlError to_timeout_or_internal_error(const IOError& io_error)
 {
     if (IOError::contains(io_error.code(), galay::kernel::kTimeout)) {
         return MysqlError(MYSQL_ERROR_TIMEOUT, io_error.message());
@@ -127,7 +127,7 @@ MysqlError toTimeoutOrInternalError(const IOError& io_error)
     return MysqlError(MYSQL_ERROR_INTERNAL, io_error.message());
 }
 
-MysqlError mapAwaitableIoError(const IOError& io_error, MysqlErrorType fallback_type)
+MysqlError map_awaitable_io_error(const IOError& io_error, MysqlErrorType fallback_type)
 {
     if (IOError::contains(io_error.code(), galay::kernel::kTimeout)) {
         return MysqlError(MYSQL_ERROR_TIMEOUT, io_error.message());
@@ -138,7 +138,7 @@ MysqlError mapAwaitableIoError(const IOError& io_error, MysqlErrorType fallback_
     return MysqlError(fallback_type, io_error.message());
 }
 
-inline std::string_view linearizeReadIovecs(std::span<const struct iovec> iovecs, std::string& scratch)
+inline std::string_view linearize_read_iovecs(std::span<const struct iovec> iovecs, std::string& scratch)
 {
     if (iovecs.size() == 1) {
         return std::string_view(static_cast<const char*>(iovecs[0].iov_base),
@@ -151,17 +151,17 @@ inline std::string_view linearizeReadIovecs(std::span<const struct iovec> iovecs
     return std::string_view(scratch);
 }
 
-inline std::string buildSingleCommandPacket(protocol::CommandType cmd,
+inline std::string build_single_command_packet(protocol::CommandType cmd,
                                             std::string_view payload,
                                             protocol::MysqlCommandKind kind)
 {
     protocol::MysqlCommandBuilder builder;
     builder.reserve(1, protocol::MYSQL_PACKET_HEADER_SIZE + 1 + payload.size());
-    builder.appendFast(cmd, payload, 0, kind);
+    builder.append_fast(cmd, payload, 0, kind);
     return std::move(builder.release().encoded);
 }
 
-inline std::string encodeRawPacket(std::string_view payload, uint8_t sequence_id)
+inline std::string encode_raw_packet(std::string_view payload, uint8_t sequence_id)
 {
     std::string packet;
     packet.reserve(protocol::MYSQL_PACKET_HEADER_SIZE + payload.size());
@@ -182,7 +182,7 @@ constexpr int kPipelineWritevMaxIov = IOV_MAX > 0 ? IOV_MAX : 1024;
 constexpr int kPipelineWritevMaxIov = 1024;
 #endif
 
-std::array<struct iovec, 1>& emptyIovecs()
+std::array<struct iovec, 1>& empty_iovecs()
 {
     static std::array<struct iovec, 1> empty{};
     return empty;
@@ -198,7 +198,7 @@ namespace details
 template<RingBufferBackendStrategy Strategy>
 MysqlConnectAwaitable<Strategy>::MysqlConnectAwaitable(AsyncMysqlClient<Strategy>& client, MysqlConfig config)
     : m_state(std::make_shared<SharedState>(client, std::move(config)))
-    , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
+    , m_inner(galay::kernel::AwaitableBuilder<Result>::from_state_machine(
                   client.socket().controller(),
                   Machine(m_state))
                   .build())
@@ -206,7 +206,7 @@ MysqlConnectAwaitable<Strategy>::MysqlConnectAwaitable(AsyncMysqlClient<Strategy
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool MysqlConnectAwaitable<Strategy>::isInvalid() const
+bool MysqlConnectAwaitable<Strategy>::is_invalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
@@ -217,8 +217,8 @@ MysqlConnectAwaitable<Strategy>::SharedState::SharedState(AsyncMysqlClient<Strat
     , config(std::move(config_in))
     , host(IPType::IPV4, config.host, config.port)
 {
-    client.ringBuffer().clear();
-    auto nonblock_result = client.socket().option().handleNonBlock();
+    client.ring_buffer().clear();
+    auto nonblock_result = client.socket().option().handle_non_block();
     if (!nonblock_result) {
         result = std::unexpected(MysqlError(
             MYSQL_ERROR_CONNECTION,
@@ -228,7 +228,7 @@ MysqlConnectAwaitable<Strategy>::SharedState::SharedState(AsyncMysqlClient<Strat
     }
 
     if (config.tcp_no_delay) {
-        auto nodelay_result = client.socket().option().handleTcpNoDelay();
+        auto nodelay_result = client.socket().option().handle_tcp_no_delay();
         if (!nodelay_result) {
             result = std::unexpected(MysqlError(
                 MYSQL_ERROR_CONNECTION,
@@ -246,32 +246,32 @@ MysqlConnectAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState> s
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlConnectAwaitable<Strategy>::Machine::setError(MysqlError error) noexcept
+void MysqlConnectAwaitable<Strategy>::Machine::set_error(MysqlError error) noexcept
 {
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlConnectAwaitable<Strategy>::Machine::setConnectError(const IOError& io_error) noexcept
+void MysqlConnectAwaitable<Strategy>::Machine::set_connect_error(const IOError& io_error) noexcept
 {
-    setError(MysqlError(MYSQL_ERROR_CONNECTION, io_error.message()));
+    set_error(MysqlError(MYSQL_ERROR_CONNECTION, io_error.message()));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlConnectAwaitable<Strategy>::Machine::setSendError(const IOError& io_error) noexcept
+void MysqlConnectAwaitable<Strategy>::Machine::set_send_error(const IOError& io_error) noexcept
 {
-    setError(MysqlError(MYSQL_ERROR_SEND, io_error.message()));
+    set_error(MysqlError(MYSQL_ERROR_SEND, io_error.message()));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlConnectAwaitable<Strategy>::Machine::setRecvError(const std::string& phase, const IOError& io_error) noexcept
+void MysqlConnectAwaitable<Strategy>::Machine::set_recv_error(const std::string& phase, const IOError& io_error) noexcept
 {
-    setError(MysqlError(MYSQL_ERROR_RECV, io_error.message() + " during " + phase));
+    set_error(MysqlError(MYSQL_ERROR_RECV, io_error.message() + " during " + phase));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlConnectAwaitable<Strategy>::Machine::completeSuccess() noexcept
+void MysqlConnectAwaitable<Strategy>::Machine::complete_success() noexcept
 {
     m_state->connected = true;
     m_state->phase = Phase::Done;
@@ -282,14 +282,14 @@ void MysqlConnectAwaitable<Strategy>::Machine::completeSuccess() noexcept
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool MysqlConnectAwaitable<Strategy>::Machine::prepareReadWindow()
+bool MysqlConnectAwaitable<Strategy>::Machine::prepare_read_window()
 {
-    m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
+    m_state->read_iov_count = m_state->client->ring_buffer().get_write_iovecs(
         m_state->read_iovecs.data(),
         m_state->read_iovecs.size());
     if (m_state->read_iov_count == 0) {
         const char* phase_name = m_state->phase == Phase::HandshakeRead ? "handshake" : "auth";
-        setError(MysqlError(MYSQL_ERROR_RECV,
+        set_error(MysqlError(MYSQL_ERROR_RECV,
                             std::string("No writable ring buffer space while waiting ") + phase_name));
         return false;
     }
@@ -306,23 +306,23 @@ MysqlConnectAwaitable<Strategy>::Machine::advance()
 
     switch (m_state->phase) {
     case Phase::Invalid:
-        setError(MysqlError(MYSQL_ERROR_INTERNAL, "Connect machine entered invalid state"));
+        set_error(MysqlError(MYSQL_ERROR_INTERNAL, "Connect machine entered invalid state"));
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     case Phase::Connect:
-        return galay::kernel::MachineAction<result_type>::waitConnect(m_state->host);
+        return galay::kernel::MachineAction<result_type>::wait_connect(m_state->host);
     case Phase::HandshakeRead: {
-        auto parsed = parseHandshakeFromRingBuffer();
+        auto parsed = parse_handshake_from_ring_buffer();
         if (!parsed.has_value()) {
-            setError(std::move(parsed.error()));
+            set_error(std::move(parsed.error()));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
         if (parsed.value()) {
             return galay::kernel::MachineAction<result_type>::continue_();
         }
-        if (!prepareReadWindow()) {
+        if (!prepare_read_window()) {
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
-        return galay::kernel::MachineAction<result_type>::waitReadv(
+        return galay::kernel::MachineAction<result_type>::wait_readv(
             m_state->read_iovecs.data(),
             m_state->read_iov_count);
     }
@@ -332,50 +332,50 @@ MysqlConnectAwaitable<Strategy>::Machine::advance()
             m_state->phase = Phase::AuthResultRead;
             return galay::kernel::MachineAction<result_type>::continue_();
         }
-        return galay::kernel::MachineAction<result_type>::waitWrite(
+        return galay::kernel::MachineAction<result_type>::wait_write(
             m_state->auth_packet.data() + m_state->sent,
             m_state->auth_packet.size() - m_state->sent);
     case Phase::AuthResultRead: {
-        auto parsed = parseAuthResultFromRingBuffer();
+        auto parsed = parse_auth_result_from_ring_buffer();
         if (!parsed.has_value()) {
-            setError(std::move(parsed.error()));
+            set_error(std::move(parsed.error()));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
         if (parsed.value()) {
             return galay::kernel::MachineAction<result_type>::continue_();
         }
-        if (!prepareReadWindow()) {
+        if (!prepare_read_window()) {
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
-        return galay::kernel::MachineAction<result_type>::waitReadv(
+        return galay::kernel::MachineAction<result_type>::wait_readv(
             m_state->read_iovecs.data(),
             m_state->read_iov_count);
     }
     case Phase::Done:
         if (!m_state->result.has_value()) {
-            completeSuccess();
+            complete_success();
         }
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     }
 
-    setError(MysqlError(MYSQL_ERROR_INTERNAL, "Unknown connect machine state"));
+    set_error(MysqlError(MYSQL_ERROR_INTERNAL, "Unknown connect machine state"));
     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlConnectAwaitable<Strategy>::Machine::onConnect(std::expected<void, IOError> result)
+void MysqlConnectAwaitable<Strategy>::Machine::on_connect(std::expected<void, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result.has_value()) {
-        setConnectError(result.error());
+        set_connect_error(result.error());
         return;
     }
 
-    auto nonblock_result = m_state->client->socket().option().handleNonBlock();
+    auto nonblock_result = m_state->client->socket().option().handle_non_block();
     if (!nonblock_result) {
-        setError(MysqlError(MYSQL_ERROR_CONNECTION,
+        set_error(MysqlError(MYSQL_ERROR_CONNECTION,
                             "Failed to keep non-blocking after connect: " +
                                 nonblock_result.error().message()));
         return;
@@ -385,7 +385,7 @@ void MysqlConnectAwaitable<Strategy>::Machine::onConnect(std::expected<void, IOE
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlConnectAwaitable<Strategy>::Machine::onRead(std::expected<size_t, IOError> result)
+void MysqlConnectAwaitable<Strategy>::Machine::on_read(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -393,41 +393,41 @@ void MysqlConnectAwaitable<Strategy>::Machine::onRead(std::expected<size_t, IOEr
 
     const char* phase_name = m_state->phase == Phase::HandshakeRead ? "handshake" : "auth";
     if (!result.has_value()) {
-        setRecvError(phase_name, result.error());
+        set_recv_error(phase_name, result.error());
         return;
     }
 
     const size_t n = result.value();
     if (n == 0) {
-        setError(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED,
+        set_error(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED,
                             std::string("Connection closed during ") + phase_name));
         return;
     }
 
-    m_state->client->ringBuffer().produce(n);
+    m_state->client->ring_buffer().produce(n);
 
     auto parsed = m_state->phase == Phase::HandshakeRead
-        ? parseHandshakeFromRingBuffer()
-        : parseAuthResultFromRingBuffer();
+        ? parse_handshake_from_ring_buffer()
+        : parse_auth_result_from_ring_buffer();
     if (!parsed.has_value()) {
-        setError(std::move(parsed.error()));
+        set_error(std::move(parsed.error()));
     }
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlConnectAwaitable<Strategy>::Machine::onWrite(std::expected<size_t, IOError> result)
+void MysqlConnectAwaitable<Strategy>::Machine::on_write(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result.has_value()) {
-        setSendError(result.error());
+        set_send_error(result.error());
         return;
     }
 
     const size_t sent_once = result.value();
     if (sent_once == 0) {
-        setError(MysqlError(MYSQL_ERROR_SEND, "Send returned 0 bytes"));
+        set_error(MysqlError(MYSQL_ERROR_SEND, "Send returned 0 bytes"));
         return;
     }
 
@@ -439,22 +439,22 @@ void MysqlConnectAwaitable<Strategy>::Machine::onWrite(std::expected<size_t, IOE
 }
 
 template<RingBufferBackendStrategy Strategy>
-std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseHandshakeFromRingBuffer()
+std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parse_handshake_from_ring_buffer()
 {
     struct iovec read_iovecs[2];
-    const size_t read_iovecs_count = m_state->client->ringBuffer().getReadIovecs(read_iovecs, 2);
+    const size_t read_iovecs_count = m_state->client->ring_buffer().get_read_iovecs(read_iovecs, 2);
     if (read_iovecs_count == 0) {
         return false;
     }
 
-    auto linear = detail::linearizeReadIovecs(
+    auto linear = detail::linearize_read_iovecs(
         std::span<const struct iovec>(read_iovecs, read_iovecs_count),
         m_state->parse_scratch);
     const char* data = linear.data();
     size_t len = linear.size();
 
     size_t consumed = 0;
-    auto pkt = m_state->client->parser().extractPacket(data, len, consumed);
+    auto pkt = m_state->client->parser().extract_packet(data, len, consumed);
     if (!pkt) {
         if (pkt.error() == protocol::ParseError::Incomplete) {
             return false;
@@ -463,19 +463,19 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseH
     }
 
     if (static_cast<uint8_t>(pkt->payload[0]) == 0xFF) {
-        auto err = m_state->client->parser().parseErr(
+        auto err = m_state->client->parser().parse_err(
             pkt->payload,
             pkt->payload_len,
             protocol::CLIENT_PROTOCOL_41);
-        m_state->client->ringBuffer().consume(consumed);
+        m_state->client->ring_buffer().consume(consumed);
         if (err) {
             return std::unexpected(MysqlError(MYSQL_ERROR_SERVER, err->error_code, err->error_message));
         }
         return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse handshake ERR packet"));
     }
 
-    auto hs = m_state->client->parser().parseHandshake(pkt->payload, pkt->payload_len);
-    m_state->client->ringBuffer().consume(consumed);
+    auto hs = m_state->client->parser().parse_handshake(pkt->payload, pkt->payload_len);
+    m_state->client->ring_buffer().consume(consumed);
     if (!hs) {
         return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse handshake packet body"));
     }
@@ -496,20 +496,20 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseH
         resp.capability_flags |= protocol::CLIENT_CONNECT_WITH_DB;
     }
     resp.capability_flags &= m_state->handshake.capability_flags;
-    m_state->client->setServerCapabilities(resp.capability_flags);
+    m_state->client->set_server_capabilities(resp.capability_flags);
     resp.character_set = protocol::CHARSET_UTF8MB4_GENERAL_CI;
     resp.username = m_state->config.username;
     resp.database = m_state->config.database;
     resp.auth_plugin_name = m_state->auth_plugin_name;
 
-    auto initial_auth = protocol::AuthPlugin::authResponseForPlugin(
+    auto initial_auth = protocol::AuthPlugin::auth_response_for_plugin(
         m_state->auth_plugin_name,
         m_state->config.password,
         m_state->auth_plugin_data);
     if (initial_auth) {
         resp.auth_response = std::move(initial_auth.value());
     } else {
-        resp.auth_response = protocol::AuthPlugin::nativePasswordAuth(
+        resp.auth_response = protocol::AuthPlugin::native_password_auth(
             m_state->config.password,
             m_state->handshake.auth_plugin_data);
         resp.auth_plugin_name = "mysql_native_password";
@@ -518,30 +518,30 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseH
 
     m_state->auth_stage = AuthStage::InitialResponse;
     m_state->auth_packet =
-        m_state->client->encoder().encodeHandshakeResponse(resp, pkt->sequence_id + 1);
+        m_state->client->encoder().encode_handshake_response(resp, pkt->sequence_id + 1);
     m_state->sent = 0;
     m_state->phase = Phase::AuthWrite;
     return true;
 }
 
 template<RingBufferBackendStrategy Strategy>
-std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseAuthResultFromRingBuffer()
+std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parse_auth_result_from_ring_buffer()
 {
     while (true) {
         struct iovec read_iovecs[2];
-        const size_t read_iovecs_count = m_state->client->ringBuffer().getReadIovecs(read_iovecs, 2);
+        const size_t read_iovecs_count = m_state->client->ring_buffer().get_read_iovecs(read_iovecs, 2);
         if (read_iovecs_count == 0) {
             return false;
         }
 
-        auto linear = detail::linearizeReadIovecs(
+        auto linear = detail::linearize_read_iovecs(
             std::span<const struct iovec>(read_iovecs, read_iovecs_count),
             m_state->parse_scratch);
         const char* data = linear.data();
         size_t len = linear.size();
 
         size_t consumed = 0;
-        auto pkt = m_state->client->parser().extractPacket(data, len, consumed);
+        auto pkt = m_state->client->parser().extract_packet(data, len, consumed);
         if (!pkt) {
             if (pkt.error() == protocol::ParseError::Incomplete) {
                 return false;
@@ -550,14 +550,14 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseA
         }
 
         const uint8_t first_byte = static_cast<uint8_t>(pkt->payload[0]);
-        m_state->client->ringBuffer().consume(consumed);
+        m_state->client->ring_buffer().consume(consumed);
 
         if (m_state->auth_stage == AuthStage::AwaitPublicKey) {
             if (first_byte == 0xFF) {
-                auto err = m_state->client->parser().parseErr(
+                auto err = m_state->client->parser().parse_err(
                     pkt->payload,
                     pkt->payload_len,
-                    m_state->client->serverCapabilities());
+                    m_state->client->server_capabilities());
                 if (err) {
                     return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, err->error_code, err->error_message));
                 }
@@ -569,7 +569,7 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseA
                 public_key.remove_prefix(1);
             }
 
-            auto encrypted = protocol::AuthPlugin::cachingSha2FullAuth(
+            auto encrypted = protocol::AuthPlugin::caching_sha2_full_auth(
                 m_state->config.password,
                 m_state->auth_plugin_data,
                 public_key);
@@ -577,7 +577,7 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseA
                 return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, encrypted.error()));
             }
 
-            m_state->auth_packet = detail::encodeRawPacket(*encrypted, pkt->sequence_id + 1);
+            m_state->auth_packet = detail::encode_raw_packet(*encrypted, pkt->sequence_id + 1);
             m_state->sent = 0;
             m_state->auth_stage = AuthStage::AwaitFinalResult;
             m_state->phase = Phase::AuthWrite;
@@ -585,15 +585,15 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseA
         }
 
         if (first_byte == 0x00) {
-            completeSuccess();
+            complete_success();
             return true;
         }
 
         if (first_byte == 0xFF) {
-            auto err = m_state->client->parser().parseErr(
+            auto err = m_state->client->parser().parse_err(
                 pkt->payload,
                 pkt->payload_len,
-                m_state->client->serverCapabilities());
+                m_state->client->server_capabilities());
             if (err) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, err->error_code, err->error_message));
             }
@@ -609,7 +609,7 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseA
                 static_cast<uint8_t>(pkt->payload[1]) == 0x04 &&
                 m_state->auth_plugin_name == "caching_sha2_password") {
                 static const std::string kPublicKeyRequest(1, '\x02');
-                m_state->auth_packet = detail::encodeRawPacket(kPublicKeyRequest, pkt->sequence_id + 1);
+                m_state->auth_packet = detail::encode_raw_packet(kPublicKeyRequest, pkt->sequence_id + 1);
                 m_state->sent = 0;
                 m_state->auth_stage = AuthStage::AwaitPublicKey;
                 m_state->phase = Phase::AuthWrite;
@@ -621,7 +621,7 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseA
         }
 
         if (first_byte == 0xFE) {
-            auto auth_switch = m_state->client->parser().parseAuthSwitchRequest(
+            auto auth_switch = m_state->client->parser().parse_auth_switch_request(
                 pkt->payload,
                 pkt->payload_len);
             if (!auth_switch) {
@@ -630,7 +630,7 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseA
 
             m_state->auth_plugin_name = std::move(auth_switch->auth_plugin_name);
             m_state->auth_plugin_data = std::move(auth_switch->auth_plugin_data);
-            auto switched_auth = protocol::AuthPlugin::authResponseForPlugin(
+            auto switched_auth = protocol::AuthPlugin::auth_response_for_plugin(
                 m_state->auth_plugin_name,
                 m_state->config.password,
                 m_state->auth_plugin_data);
@@ -638,7 +638,7 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseA
                 return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, switched_auth.error()));
             }
 
-            m_state->auth_packet = detail::encodeRawPacket(*switched_auth, pkt->sequence_id + 1);
+            m_state->auth_packet = detail::encode_raw_packet(*switched_auth, pkt->sequence_id + 1);
             m_state->sent = 0;
             m_state->auth_stage = AuthStage::AwaitFinalResult;
             m_state->phase = Phase::AuthWrite;
@@ -654,7 +654,7 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseA
 template<RingBufferBackendStrategy Strategy>
 MysqlQueryAwaitable<Strategy>::MysqlQueryAwaitable(AsyncMysqlClient<Strategy>& client, std::string_view sql)
     : m_state(std::make_shared<SharedState>(client, sql))
-    , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
+    , m_inner(galay::kernel::AwaitableBuilder<Result>::from_state_machine(
                   client.socket().controller(),
                   Machine(m_state))
                   .build())
@@ -662,7 +662,7 @@ MysqlQueryAwaitable<Strategy>::MysqlQueryAwaitable(AsyncMysqlClient<Strategy>& c
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool MysqlQueryAwaitable<Strategy>::isInvalid() const
+bool MysqlQueryAwaitable<Strategy>::is_invalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
@@ -670,7 +670,7 @@ bool MysqlQueryAwaitable<Strategy>::isInvalid() const
 template<RingBufferBackendStrategy Strategy>
 MysqlQueryAwaitable<Strategy>::SharedState::SharedState(AsyncMysqlClient<Strategy>& client, std::string_view sql)
     : client(&client)
-    , encoded_cmd(detail::buildSingleCommandPacket(protocol::CommandType::COM_QUERY,
+    , encoded_cmd(detail::build_single_command_packet(protocol::CommandType::COM_QUERY,
                                                    sql,
                                                    protocol::MysqlCommandKind::Query))
 {
@@ -681,8 +681,8 @@ MysqlQueryAwaitable<Strategy>::SharedState::SharedState(AsyncMysqlClient<Strateg
         return;
     }
 
-    if (client.asyncConfig().result_row_reserve_hint > 0) {
-        result_set.reserveRows(client.asyncConfig().result_row_reserve_hint);
+    if (client.async_config().result_row_reserve_hint > 0) {
+        result_set.reserve_rows(client.async_config().result_row_reserve_hint);
     }
 }
 
@@ -693,34 +693,34 @@ MysqlQueryAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState> sta
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlQueryAwaitable<Strategy>::Machine::setError(MysqlError error) noexcept
+void MysqlQueryAwaitable<Strategy>::Machine::set_error(MysqlError error) noexcept
 {
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlQueryAwaitable<Strategy>::Machine::setSendError(const IOError& io_error) noexcept
+void MysqlQueryAwaitable<Strategy>::Machine::set_send_error(const IOError& io_error) noexcept
 {
     MYSQL_LOG_DEBUG("[client]", "send query failed: {}", io_error.message());
-    setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_SEND));
+    set_error(detail::map_awaitable_io_error(io_error, MYSQL_ERROR_SEND));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlQueryAwaitable<Strategy>::Machine::setRecvError(const IOError& io_error) noexcept
+void MysqlQueryAwaitable<Strategy>::Machine::set_recv_error(const IOError& io_error) noexcept
 {
     MYSQL_LOG_DEBUG("[client]", "recv query failed: {}", io_error.message());
-    setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_RECV));
+    set_error(detail::map_awaitable_io_error(io_error, MYSQL_ERROR_RECV));
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool MysqlQueryAwaitable<Strategy>::Machine::prepareReadWindow()
+bool MysqlQueryAwaitable<Strategy>::Machine::prepare_read_window()
 {
-    m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
+    m_state->read_iov_count = m_state->client->ring_buffer().get_write_iovecs(
         m_state->read_iovecs.data(),
         m_state->read_iovecs.size());
     if (m_state->read_iov_count == 0) {
-        setError(MysqlError(MYSQL_ERROR_RECV, "No writable ring buffer space"));
+        set_error(MysqlError(MYSQL_ERROR_RECV, "No writable ring buffer space"));
         return false;
     }
     return true;
@@ -736,33 +736,33 @@ MysqlQueryAwaitable<Strategy>::Machine::advance()
 
     switch (m_state->phase) {
     case Phase::Invalid:
-        setError(MysqlError(MYSQL_ERROR_INTERNAL, "Query machine entered invalid state"));
+        set_error(MysqlError(MYSQL_ERROR_INTERNAL, "Query machine entered invalid state"));
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     case Phase::SendCommand:
         if (m_state->sent >= m_state->encoded_cmd.size()) {
-            m_state->client->ringBuffer().clear();
+            m_state->client->ring_buffer().clear();
             m_state->phase = Phase::ReceivingHeader;
             return galay::kernel::MachineAction<result_type>::continue_();
         }
-        return galay::kernel::MachineAction<result_type>::waitWrite(
+        return galay::kernel::MachineAction<result_type>::wait_write(
             m_state->encoded_cmd.data() + m_state->sent,
             m_state->encoded_cmd.size() - m_state->sent);
     case Phase::ReceivingHeader:
     case Phase::ReceivingColumns:
     case Phase::ReceivingColumnEof:
     case Phase::ReceivingRows: {
-        auto parsed = tryParseFromRingBuffer();
+        auto parsed = try_parse_from_ring_buffer();
         if (!parsed.has_value()) {
-            setError(std::move(parsed.error()));
+            set_error(std::move(parsed.error()));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
         if (parsed.value()) {
             return galay::kernel::MachineAction<result_type>::continue_();
         }
-        if (!prepareReadWindow()) {
+        if (!prepare_read_window()) {
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
-        return galay::kernel::MachineAction<result_type>::waitReadv(
+        return galay::kernel::MachineAction<result_type>::wait_readv(
             m_state->read_iovecs.data(),
             m_state->read_iov_count);
     }
@@ -773,66 +773,66 @@ MysqlQueryAwaitable<Strategy>::Machine::advance()
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     }
 
-    setError(MysqlError(MYSQL_ERROR_INTERNAL, "Unknown query machine state"));
+    set_error(MysqlError(MYSQL_ERROR_INTERNAL, "Unknown query machine state"));
     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlQueryAwaitable<Strategy>::Machine::onRead(std::expected<size_t, IOError> result)
+void MysqlQueryAwaitable<Strategy>::Machine::on_read(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result.has_value()) {
-        setRecvError(result.error());
+        set_recv_error(result.error());
         return;
     }
     if (result.value() == 0) {
-        setError(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED, "Connection closed"));
+        set_error(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED, "Connection closed"));
         return;
     }
-    m_state->client->ringBuffer().produce(result.value());
+    m_state->client->ring_buffer().produce(result.value());
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlQueryAwaitable<Strategy>::Machine::onWrite(std::expected<size_t, IOError> result)
+void MysqlQueryAwaitable<Strategy>::Machine::on_write(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result.has_value()) {
-        setSendError(result.error());
+        set_send_error(result.error());
         return;
     }
     if (result.value() == 0) {
-        setError(MysqlError(MYSQL_ERROR_SEND, "Send returned 0 bytes"));
+        set_error(MysqlError(MYSQL_ERROR_SEND, "Send returned 0 bytes"));
         return;
     }
     m_state->sent += result.value();
     if (m_state->sent >= m_state->encoded_cmd.size()) {
-        m_state->client->ringBuffer().clear();
+        m_state->client->ring_buffer().clear();
         m_state->phase = Phase::ReceivingHeader;
     }
 }
 
 template<RingBufferBackendStrategy Strategy>
-std::expected<bool, MysqlError> MysqlQueryAwaitable<Strategy>::Machine::tryParseFromRingBuffer()
+std::expected<bool, MysqlError> MysqlQueryAwaitable<Strategy>::Machine::try_parse_from_ring_buffer()
 {
     while (true) {
         struct iovec read_iovecs[2];
-        const size_t read_iovecs_count = m_state->client->ringBuffer().getReadIovecs(read_iovecs, 2);
+        const size_t read_iovecs_count = m_state->client->ring_buffer().get_read_iovecs(read_iovecs, 2);
         if (read_iovecs_count == 0) {
             return false;
         }
 
-        auto linear = detail::linearizeReadIovecs(
+        auto linear = detail::linearize_read_iovecs(
             std::span<const struct iovec>(read_iovecs, read_iovecs_count),
             m_state->parse_scratch);
         const char* data = linear.data();
         size_t len = linear.size();
 
         size_t consumed = 0;
-        auto pkt = m_state->client->parser().extractPacket(data, len, consumed);
+        auto pkt = m_state->client->parser().extract_packet(data, len, consumed);
         if (!pkt) {
             if (pkt.error() == protocol::ParseError::Incomplete) {
                 return false;
@@ -841,12 +841,12 @@ std::expected<bool, MysqlError> MysqlQueryAwaitable<Strategy>::Machine::tryParse
         }
 
         const uint8_t first_byte = static_cast<uint8_t>(pkt->payload[0]);
-        const uint32_t caps = m_state->client->serverCapabilities();
+        const uint32_t caps = m_state->client->server_capabilities();
 
         if (m_state->phase == Phase::ReceivingHeader) {
             if (first_byte == 0xFF) {
-                auto err = m_state->client->parser().parseErr(pkt->payload, pkt->payload_len, caps);
-                m_state->client->ringBuffer().consume(consumed);
+                auto err = m_state->client->parser().parse_err(pkt->payload, pkt->payload_len, caps);
+                m_state->client->ring_buffer().consume(consumed);
                 if (err) {
                     return std::unexpected(MysqlError(MYSQL_ERROR_SERVER, err->error_code, err->error_message));
                 }
@@ -854,38 +854,38 @@ std::expected<bool, MysqlError> MysqlQueryAwaitable<Strategy>::Machine::tryParse
             }
 
             if (first_byte == 0x00) {
-                auto ok = m_state->client->parser().parseOk(pkt->payload, pkt->payload_len, caps);
-                m_state->client->ringBuffer().consume(consumed);
+                auto ok = m_state->client->parser().parse_ok(pkt->payload, pkt->payload_len, caps);
+                m_state->client->ring_buffer().consume(consumed);
                 if (!ok) {
                     return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse OK packet"));
                 }
-                m_state->result_set.setAffectedRows(ok->affected_rows);
-                m_state->result_set.setLastInsertId(ok->last_insert_id);
-                m_state->result_set.setWarnings(ok->warnings);
-                m_state->result_set.setStatusFlags(ok->status_flags);
-                m_state->result_set.setInfo(ok->info);
+                m_state->result_set.set_affected_rows(ok->affected_rows);
+                m_state->result_set.set_last_insert_id(ok->last_insert_id);
+                m_state->result_set.set_warnings(ok->warnings);
+                m_state->result_set.set_status_flags(ok->status_flags);
+                m_state->result_set.set_info(ok->info);
                 m_state->phase = Phase::Done;
                 return true;
             }
 
             size_t int_consumed = 0;
-            auto col_count = protocol::readLenEncInt(pkt->payload, pkt->payload_len, int_consumed);
+            auto col_count = protocol::read_len_enc_int(pkt->payload, pkt->payload_len, int_consumed);
             if (!col_count) {
-                m_state->client->ringBuffer().consume(consumed);
+                m_state->client->ring_buffer().consume(consumed);
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse column count"));
             }
 
             m_state->column_count = col_count.value();
             m_state->columns_received = 0;
-            m_state->result_set.reserveFields(static_cast<size_t>(m_state->column_count));
-            m_state->client->ringBuffer().consume(consumed);
+            m_state->result_set.reserve_fields(static_cast<size_t>(m_state->column_count));
+            m_state->client->ring_buffer().consume(consumed);
             m_state->phase = Phase::ReceivingColumns;
             continue;
         }
 
         if (m_state->phase == Phase::ReceivingColumns) {
-            auto col = m_state->client->parser().parseColumnDefinition(pkt->payload, pkt->payload_len);
-            m_state->client->ringBuffer().consume(consumed);
+            auto col = m_state->client->parser().parse_column_definition(pkt->payload, pkt->payload_len);
+            m_state->client->ring_buffer().consume(consumed);
             if (!col) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse column definition"));
             }
@@ -895,13 +895,13 @@ std::expected<bool, MysqlError> MysqlQueryAwaitable<Strategy>::Machine::tryParse
                              col->flags,
                              col->column_length,
                              col->decimals);
-            field.setCatalog(col->catalog);
-            field.setSchema(col->schema);
-            field.setTable(col->table);
-            field.setOrgTable(col->org_table);
-            field.setOrgName(col->org_name);
-            field.setCharacterSet(col->character_set);
-            m_state->result_set.addField(std::move(field));
+            field.set_catalog(col->catalog);
+            field.set_schema(col->schema);
+            field.set_table(col->table);
+            field.set_org_table(col->org_table);
+            field.set_org_name(col->org_name);
+            field.set_character_set(col->character_set);
+            m_state->result_set.add_field(std::move(field));
 
             ++m_state->columns_received;
             if (m_state->columns_received >= m_state->column_count) {
@@ -913,7 +913,7 @@ std::expected<bool, MysqlError> MysqlQueryAwaitable<Strategy>::Machine::tryParse
         }
 
         if (m_state->phase == Phase::ReceivingColumnEof) {
-            m_state->client->ringBuffer().consume(consumed);
+            m_state->client->ring_buffer().consume(consumed);
             m_state->phase = Phase::ReceivingRows;
             continue;
         }
@@ -921,41 +921,41 @@ std::expected<bool, MysqlError> MysqlQueryAwaitable<Strategy>::Machine::tryParse
         if (m_state->phase == Phase::ReceivingRows) {
             if (first_byte == 0xFE && pkt->payload_len < 0xFFFFFF) {
                 if (caps & protocol::CLIENT_DEPRECATE_EOF) {
-                    auto ok = m_state->client->parser().parseOk(pkt->payload, pkt->payload_len, caps);
+                    auto ok = m_state->client->parser().parse_ok(pkt->payload, pkt->payload_len, caps);
                     if (ok) {
-                        m_state->result_set.setWarnings(ok->warnings);
-                        m_state->result_set.setStatusFlags(ok->status_flags);
+                        m_state->result_set.set_warnings(ok->warnings);
+                        m_state->result_set.set_status_flags(ok->status_flags);
                     }
                 } else {
-                    auto eof = m_state->client->parser().parseEof(pkt->payload, pkt->payload_len);
+                    auto eof = m_state->client->parser().parse_eof(pkt->payload, pkt->payload_len);
                     if (eof) {
-                        m_state->result_set.setWarnings(eof->warnings);
-                        m_state->result_set.setStatusFlags(eof->status_flags);
+                        m_state->result_set.set_warnings(eof->warnings);
+                        m_state->result_set.set_status_flags(eof->status_flags);
                     }
                 }
-                m_state->client->ringBuffer().consume(consumed);
+                m_state->client->ring_buffer().consume(consumed);
                 m_state->phase = Phase::Done;
                 return true;
             }
 
             if (first_byte == 0xFF) {
-                auto err = m_state->client->parser().parseErr(pkt->payload, pkt->payload_len, caps);
-                m_state->client->ringBuffer().consume(consumed);
+                auto err = m_state->client->parser().parse_err(pkt->payload, pkt->payload_len, caps);
+                m_state->client->ring_buffer().consume(consumed);
                 if (err) {
                     return std::unexpected(MysqlError(MYSQL_ERROR_SERVER, err->error_code, err->error_message));
                 }
                 return std::unexpected(MysqlError(MYSQL_ERROR_QUERY, "Error during row fetch"));
             }
 
-            auto row = m_state->client->parser().parseTextRow(
+            auto row = m_state->client->parser().parse_text_row(
                 pkt->payload,
                 pkt->payload_len,
                 m_state->column_count);
-            m_state->client->ringBuffer().consume(consumed);
+            m_state->client->ring_buffer().consume(consumed);
             if (!row) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse text row"));
             }
-            m_state->result_set.addRow(MysqlRow(std::move(row.value())));
+            m_state->result_set.add_row(MysqlRow(std::move(row.value())));
             continue;
         }
 
@@ -968,7 +968,7 @@ std::expected<bool, MysqlError> MysqlQueryAwaitable<Strategy>::Machine::tryParse
 template<RingBufferBackendStrategy Strategy>
 MysqlPrepareAwaitable<Strategy>::MysqlPrepareAwaitable(AsyncMysqlClient<Strategy>& client, std::string_view sql)
     : m_state(std::make_shared<SharedState>(client, sql))
-    , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
+    , m_inner(galay::kernel::AwaitableBuilder<Result>::from_state_machine(
                   client.socket().controller(),
                   Machine(m_state))
                   .build())
@@ -976,7 +976,7 @@ MysqlPrepareAwaitable<Strategy>::MysqlPrepareAwaitable(AsyncMysqlClient<Strategy
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool MysqlPrepareAwaitable<Strategy>::isInvalid() const
+bool MysqlPrepareAwaitable<Strategy>::is_invalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
@@ -984,7 +984,7 @@ bool MysqlPrepareAwaitable<Strategy>::isInvalid() const
 template<RingBufferBackendStrategy Strategy>
 MysqlPrepareAwaitable<Strategy>::SharedState::SharedState(AsyncMysqlClient<Strategy>& client, std::string_view sql)
     : client(&client)
-    , encoded_cmd(detail::buildSingleCommandPacket(protocol::CommandType::COM_STMT_PREPARE,
+    , encoded_cmd(detail::build_single_command_packet(protocol::CommandType::COM_STMT_PREPARE,
                                                    sql,
                                                    protocol::MysqlCommandKind::StmtPrepare))
 {
@@ -1002,32 +1002,32 @@ MysqlPrepareAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState> s
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPrepareAwaitable<Strategy>::Machine::setError(MysqlError error) noexcept
+void MysqlPrepareAwaitable<Strategy>::Machine::set_error(MysqlError error) noexcept
 {
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPrepareAwaitable<Strategy>::Machine::setSendError(const IOError& io_error) noexcept
+void MysqlPrepareAwaitable<Strategy>::Machine::set_send_error(const IOError& io_error) noexcept
 {
-    setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_SEND));
+    set_error(detail::map_awaitable_io_error(io_error, MYSQL_ERROR_SEND));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPrepareAwaitable<Strategy>::Machine::setRecvError(const IOError& io_error) noexcept
+void MysqlPrepareAwaitable<Strategy>::Machine::set_recv_error(const IOError& io_error) noexcept
 {
-    setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_RECV));
+    set_error(detail::map_awaitable_io_error(io_error, MYSQL_ERROR_RECV));
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool MysqlPrepareAwaitable<Strategy>::Machine::prepareReadWindow()
+bool MysqlPrepareAwaitable<Strategy>::Machine::prepare_read_window()
 {
-    m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
+    m_state->read_iov_count = m_state->client->ring_buffer().get_write_iovecs(
         m_state->read_iovecs.data(),
         m_state->read_iovecs.size());
     if (m_state->read_iov_count == 0) {
-        setError(MysqlError(MYSQL_ERROR_RECV, "No writable ring buffer space"));
+        set_error(MysqlError(MYSQL_ERROR_RECV, "No writable ring buffer space"));
         return false;
     }
     return true;
@@ -1043,15 +1043,15 @@ MysqlPrepareAwaitable<Strategy>::Machine::advance()
 
     switch (m_state->phase) {
     case Phase::Invalid:
-        setError(MysqlError(MYSQL_ERROR_INTERNAL, "Prepare machine entered invalid state"));
+        set_error(MysqlError(MYSQL_ERROR_INTERNAL, "Prepare machine entered invalid state"));
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     case Phase::SendCommand:
         if (m_state->sent >= m_state->encoded_cmd.size()) {
-            m_state->client->ringBuffer().clear();
+            m_state->client->ring_buffer().clear();
             m_state->phase = Phase::ReceivingPrepareOk;
             return galay::kernel::MachineAction<result_type>::continue_();
         }
-        return galay::kernel::MachineAction<result_type>::waitWrite(
+        return galay::kernel::MachineAction<result_type>::wait_write(
             m_state->encoded_cmd.data() + m_state->sent,
             m_state->encoded_cmd.size() - m_state->sent);
     case Phase::ReceivingPrepareOk:
@@ -1059,18 +1059,18 @@ MysqlPrepareAwaitable<Strategy>::Machine::advance()
     case Phase::ReceivingParamEof:
     case Phase::ReceivingColumnDefs:
     case Phase::ReceivingColumnEof: {
-        auto parsed = tryParseFromRingBuffer();
+        auto parsed = try_parse_from_ring_buffer();
         if (!parsed.has_value()) {
-            setError(std::move(parsed.error()));
+            set_error(std::move(parsed.error()));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
         if (parsed.value()) {
             return galay::kernel::MachineAction<result_type>::continue_();
         }
-        if (!prepareReadWindow()) {
+        if (!prepare_read_window()) {
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
-        return galay::kernel::MachineAction<result_type>::waitReadv(
+        return galay::kernel::MachineAction<result_type>::wait_readv(
             m_state->read_iovecs.data(),
             m_state->read_iov_count);
     }
@@ -1081,66 +1081,66 @@ MysqlPrepareAwaitable<Strategy>::Machine::advance()
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     }
 
-    setError(MysqlError(MYSQL_ERROR_INTERNAL, "Unknown prepare machine state"));
+    set_error(MysqlError(MYSQL_ERROR_INTERNAL, "Unknown prepare machine state"));
     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPrepareAwaitable<Strategy>::Machine::onRead(std::expected<size_t, IOError> result)
+void MysqlPrepareAwaitable<Strategy>::Machine::on_read(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result.has_value()) {
-        setRecvError(result.error());
+        set_recv_error(result.error());
         return;
     }
     if (result.value() == 0) {
-        setError(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED, "Connection closed"));
+        set_error(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED, "Connection closed"));
         return;
     }
-    m_state->client->ringBuffer().produce(result.value());
+    m_state->client->ring_buffer().produce(result.value());
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPrepareAwaitable<Strategy>::Machine::onWrite(std::expected<size_t, IOError> result)
+void MysqlPrepareAwaitable<Strategy>::Machine::on_write(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result.has_value()) {
-        setSendError(result.error());
+        set_send_error(result.error());
         return;
     }
     if (result.value() == 0) {
-        setError(MysqlError(MYSQL_ERROR_SEND, "Send returned 0 bytes"));
+        set_error(MysqlError(MYSQL_ERROR_SEND, "Send returned 0 bytes"));
         return;
     }
     m_state->sent += result.value();
     if (m_state->sent >= m_state->encoded_cmd.size()) {
-        m_state->client->ringBuffer().clear();
+        m_state->client->ring_buffer().clear();
         m_state->phase = Phase::ReceivingPrepareOk;
     }
 }
 
 template<RingBufferBackendStrategy Strategy>
-std::expected<bool, MysqlError> MysqlPrepareAwaitable<Strategy>::Machine::tryParseFromRingBuffer()
+std::expected<bool, MysqlError> MysqlPrepareAwaitable<Strategy>::Machine::try_parse_from_ring_buffer()
 {
     while (true) {
         struct iovec read_iovecs[2];
-        const size_t read_iovecs_count = m_state->client->ringBuffer().getReadIovecs(read_iovecs, 2);
+        const size_t read_iovecs_count = m_state->client->ring_buffer().get_read_iovecs(read_iovecs, 2);
         if (read_iovecs_count == 0) {
             return false;
         }
 
-        auto linear = detail::linearizeReadIovecs(
+        auto linear = detail::linearize_read_iovecs(
             std::span<const struct iovec>(read_iovecs, read_iovecs_count),
             m_state->parse_scratch);
         const char* data = linear.data();
         size_t len = linear.size();
 
         size_t consumed = 0;
-        auto pkt = m_state->client->parser().extractPacket(data, len, consumed);
+        auto pkt = m_state->client->parser().extract_packet(data, len, consumed);
         if (!pkt) {
             if (pkt.error() == protocol::ParseError::Incomplete) {
                 return false;
@@ -1149,20 +1149,20 @@ std::expected<bool, MysqlError> MysqlPrepareAwaitable<Strategy>::Machine::tryPar
         }
 
         const uint8_t first_byte = static_cast<uint8_t>(pkt->payload[0]);
-        const uint32_t caps = m_state->client->serverCapabilities();
+        const uint32_t caps = m_state->client->server_capabilities();
 
         if (m_state->phase == Phase::ReceivingPrepareOk) {
             if (first_byte == 0xFF) {
-                auto err = m_state->client->parser().parseErr(pkt->payload, pkt->payload_len, caps);
-                m_state->client->ringBuffer().consume(consumed);
+                auto err = m_state->client->parser().parse_err(pkt->payload, pkt->payload_len, caps);
+                m_state->client->ring_buffer().consume(consumed);
                 if (err) {
                     return std::unexpected(MysqlError(MYSQL_ERROR_PREPARED_STMT, err->error_code, err->error_message));
                 }
                 return std::unexpected(MysqlError(MYSQL_ERROR_PREPARED_STMT, "Prepare failed"));
             }
 
-            auto ok = m_state->client->parser().parseStmtPrepareOk(pkt->payload, pkt->payload_len);
-            m_state->client->ringBuffer().consume(consumed);
+            auto ok = m_state->client->parser().parse_stmt_prepare_ok(pkt->payload, pkt->payload_len);
+            m_state->client->ring_buffer().consume(consumed);
             if (!ok) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse COM_STMT_PREPARE OK"));
             }
@@ -1188,8 +1188,8 @@ std::expected<bool, MysqlError> MysqlPrepareAwaitable<Strategy>::Machine::tryPar
         }
 
         if (m_state->phase == Phase::ReceivingParamDefs) {
-            auto col = m_state->client->parser().parseColumnDefinition(pkt->payload, pkt->payload_len);
-            m_state->client->ringBuffer().consume(consumed);
+            auto col = m_state->client->parser().parse_column_definition(pkt->payload, pkt->payload_len);
+            m_state->client->ring_buffer().consume(consumed);
             if (!col) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Parse parameter definition failed"));
             }
@@ -1208,7 +1208,7 @@ std::expected<bool, MysqlError> MysqlPrepareAwaitable<Strategy>::Machine::tryPar
         }
 
         if (m_state->phase == Phase::ReceivingParamEof) {
-            m_state->client->ringBuffer().consume(consumed);
+            m_state->client->ring_buffer().consume(consumed);
             if (m_state->prepare_result.num_columns > 0) {
                 m_state->phase = Phase::ReceivingColumnDefs;
                 continue;
@@ -1218,8 +1218,8 @@ std::expected<bool, MysqlError> MysqlPrepareAwaitable<Strategy>::Machine::tryPar
         }
 
         if (m_state->phase == Phase::ReceivingColumnDefs) {
-            auto col = m_state->client->parser().parseColumnDefinition(pkt->payload, pkt->payload_len);
-            m_state->client->ringBuffer().consume(consumed);
+            auto col = m_state->client->parser().parse_column_definition(pkt->payload, pkt->payload_len);
+            m_state->client->ring_buffer().consume(consumed);
             if (!col) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Parse column definition failed"));
             }
@@ -1238,7 +1238,7 @@ std::expected<bool, MysqlError> MysqlPrepareAwaitable<Strategy>::Machine::tryPar
         }
 
         if (m_state->phase == Phase::ReceivingColumnEof) {
-            m_state->client->ringBuffer().consume(consumed);
+            m_state->client->ring_buffer().consume(consumed);
             m_state->phase = Phase::Done;
             return true;
         }
@@ -1252,7 +1252,7 @@ std::expected<bool, MysqlError> MysqlPrepareAwaitable<Strategy>::Machine::tryPar
 template<RingBufferBackendStrategy Strategy>
 MysqlStmtExecuteAwaitable<Strategy>::MysqlStmtExecuteAwaitable(AsyncMysqlClient<Strategy>& client, std::string encoded_cmd)
     : m_state(std::make_shared<SharedState>(client, std::move(encoded_cmd)))
-    , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
+    , m_inner(galay::kernel::AwaitableBuilder<Result>::from_state_machine(
                   client.socket().controller(),
                   Machine(m_state))
                   .build())
@@ -1260,7 +1260,7 @@ MysqlStmtExecuteAwaitable<Strategy>::MysqlStmtExecuteAwaitable(AsyncMysqlClient<
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool MysqlStmtExecuteAwaitable<Strategy>::isInvalid() const
+bool MysqlStmtExecuteAwaitable<Strategy>::is_invalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
@@ -1277,8 +1277,8 @@ MysqlStmtExecuteAwaitable<Strategy>::SharedState::SharedState(AsyncMysqlClient<S
         return;
     }
 
-    if (client.asyncConfig().result_row_reserve_hint > 0) {
-        result_set.reserveRows(client.asyncConfig().result_row_reserve_hint);
+    if (client.async_config().result_row_reserve_hint > 0) {
+        result_set.reserve_rows(client.async_config().result_row_reserve_hint);
     }
 }
 
@@ -1289,32 +1289,32 @@ MysqlStmtExecuteAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedStat
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlStmtExecuteAwaitable<Strategy>::Machine::setError(MysqlError error) noexcept
+void MysqlStmtExecuteAwaitable<Strategy>::Machine::set_error(MysqlError error) noexcept
 {
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlStmtExecuteAwaitable<Strategy>::Machine::setSendError(const IOError& io_error) noexcept
+void MysqlStmtExecuteAwaitable<Strategy>::Machine::set_send_error(const IOError& io_error) noexcept
 {
-    setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_SEND));
+    set_error(detail::map_awaitable_io_error(io_error, MYSQL_ERROR_SEND));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlStmtExecuteAwaitable<Strategy>::Machine::setRecvError(const IOError& io_error) noexcept
+void MysqlStmtExecuteAwaitable<Strategy>::Machine::set_recv_error(const IOError& io_error) noexcept
 {
-    setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_RECV));
+    set_error(detail::map_awaitable_io_error(io_error, MYSQL_ERROR_RECV));
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool MysqlStmtExecuteAwaitable<Strategy>::Machine::prepareReadWindow()
+bool MysqlStmtExecuteAwaitable<Strategy>::Machine::prepare_read_window()
 {
-    m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
+    m_state->read_iov_count = m_state->client->ring_buffer().get_write_iovecs(
         m_state->read_iovecs.data(),
         m_state->read_iovecs.size());
     if (m_state->read_iov_count == 0) {
-        setError(MysqlError(MYSQL_ERROR_RECV, "No writable ring buffer space"));
+        set_error(MysqlError(MYSQL_ERROR_RECV, "No writable ring buffer space"));
         return false;
     }
     return true;
@@ -1330,33 +1330,33 @@ MysqlStmtExecuteAwaitable<Strategy>::Machine::advance()
 
     switch (m_state->phase) {
     case Phase::Invalid:
-        setError(MysqlError(MYSQL_ERROR_INTERNAL, "StmtExecute machine entered invalid state"));
+        set_error(MysqlError(MYSQL_ERROR_INTERNAL, "StmtExecute machine entered invalid state"));
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     case Phase::SendCommand:
         if (m_state->sent >= m_state->encoded_cmd.size()) {
-            m_state->client->ringBuffer().clear();
+            m_state->client->ring_buffer().clear();
             m_state->phase = Phase::ReceivingHeader;
             return galay::kernel::MachineAction<result_type>::continue_();
         }
-        return galay::kernel::MachineAction<result_type>::waitWrite(
+        return galay::kernel::MachineAction<result_type>::wait_write(
             m_state->encoded_cmd.data() + m_state->sent,
             m_state->encoded_cmd.size() - m_state->sent);
     case Phase::ReceivingHeader:
     case Phase::ReceivingColumns:
     case Phase::ReceivingColumnEof:
     case Phase::ReceivingRows: {
-        auto parsed = tryParseFromRingBuffer();
+        auto parsed = try_parse_from_ring_buffer();
         if (!parsed.has_value()) {
-            setError(std::move(parsed.error()));
+            set_error(std::move(parsed.error()));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
         if (parsed.value()) {
             return galay::kernel::MachineAction<result_type>::continue_();
         }
-        if (!prepareReadWindow()) {
+        if (!prepare_read_window()) {
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
-        return galay::kernel::MachineAction<result_type>::waitReadv(
+        return galay::kernel::MachineAction<result_type>::wait_readv(
             m_state->read_iovecs.data(),
             m_state->read_iov_count);
     }
@@ -1367,66 +1367,66 @@ MysqlStmtExecuteAwaitable<Strategy>::Machine::advance()
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     }
 
-    setError(MysqlError(MYSQL_ERROR_INTERNAL, "Unknown stmt-execute machine state"));
+    set_error(MysqlError(MYSQL_ERROR_INTERNAL, "Unknown stmt-execute machine state"));
     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlStmtExecuteAwaitable<Strategy>::Machine::onRead(std::expected<size_t, IOError> result)
+void MysqlStmtExecuteAwaitable<Strategy>::Machine::on_read(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result.has_value()) {
-        setRecvError(result.error());
+        set_recv_error(result.error());
         return;
     }
     if (result.value() == 0) {
-        setError(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED, "Connection closed"));
+        set_error(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED, "Connection closed"));
         return;
     }
-    m_state->client->ringBuffer().produce(result.value());
+    m_state->client->ring_buffer().produce(result.value());
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlStmtExecuteAwaitable<Strategy>::Machine::onWrite(std::expected<size_t, IOError> result)
+void MysqlStmtExecuteAwaitable<Strategy>::Machine::on_write(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result.has_value()) {
-        setSendError(result.error());
+        set_send_error(result.error());
         return;
     }
     if (result.value() == 0) {
-        setError(MysqlError(MYSQL_ERROR_SEND, "Send returned 0 bytes"));
+        set_error(MysqlError(MYSQL_ERROR_SEND, "Send returned 0 bytes"));
         return;
     }
     m_state->sent += result.value();
     if (m_state->sent >= m_state->encoded_cmd.size()) {
-        m_state->client->ringBuffer().clear();
+        m_state->client->ring_buffer().clear();
         m_state->phase = Phase::ReceivingHeader;
     }
 }
 
 template<RingBufferBackendStrategy Strategy>
-std::expected<bool, MysqlError> MysqlStmtExecuteAwaitable<Strategy>::Machine::tryParseFromRingBuffer()
+std::expected<bool, MysqlError> MysqlStmtExecuteAwaitable<Strategy>::Machine::try_parse_from_ring_buffer()
 {
     while (true) {
         struct iovec read_iovecs[2];
-        const size_t read_iovecs_count = m_state->client->ringBuffer().getReadIovecs(read_iovecs, 2);
+        const size_t read_iovecs_count = m_state->client->ring_buffer().get_read_iovecs(read_iovecs, 2);
         if (read_iovecs_count == 0) {
             return false;
         }
 
-        auto linear = detail::linearizeReadIovecs(
+        auto linear = detail::linearize_read_iovecs(
             std::span<const struct iovec>(read_iovecs, read_iovecs_count),
             m_state->parse_scratch);
         const char* data = linear.data();
         size_t len = linear.size();
 
         size_t consumed = 0;
-        auto pkt = m_state->client->parser().extractPacket(data, len, consumed);
+        auto pkt = m_state->client->parser().extract_packet(data, len, consumed);
         if (!pkt) {
             if (pkt.error() == protocol::ParseError::Incomplete) {
                 return false;
@@ -1435,12 +1435,12 @@ std::expected<bool, MysqlError> MysqlStmtExecuteAwaitable<Strategy>::Machine::tr
         }
 
         const uint8_t first_byte = static_cast<uint8_t>(pkt->payload[0]);
-        const uint32_t caps = m_state->client->serverCapabilities();
+        const uint32_t caps = m_state->client->server_capabilities();
 
         if (m_state->phase == Phase::ReceivingHeader) {
             if (first_byte == 0xFF) {
-                auto err = m_state->client->parser().parseErr(pkt->payload, pkt->payload_len, caps);
-                m_state->client->ringBuffer().consume(consumed);
+                auto err = m_state->client->parser().parse_err(pkt->payload, pkt->payload_len, caps);
+                m_state->client->ring_buffer().consume(consumed);
                 if (err) {
                     return std::unexpected(MysqlError(MYSQL_ERROR_SERVER, err->error_code, err->error_message));
                 }
@@ -1448,36 +1448,36 @@ std::expected<bool, MysqlError> MysqlStmtExecuteAwaitable<Strategy>::Machine::tr
             }
 
             if (first_byte == 0x00) {
-                auto ok = m_state->client->parser().parseOk(pkt->payload, pkt->payload_len, caps);
-                m_state->client->ringBuffer().consume(consumed);
+                auto ok = m_state->client->parser().parse_ok(pkt->payload, pkt->payload_len, caps);
+                m_state->client->ring_buffer().consume(consumed);
                 if (!ok) {
                     return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse OK packet"));
                 }
-                m_state->result_set.setAffectedRows(ok->affected_rows);
-                m_state->result_set.setLastInsertId(ok->last_insert_id);
-                m_state->result_set.setWarnings(ok->warnings);
-                m_state->result_set.setStatusFlags(ok->status_flags);
+                m_state->result_set.set_affected_rows(ok->affected_rows);
+                m_state->result_set.set_last_insert_id(ok->last_insert_id);
+                m_state->result_set.set_warnings(ok->warnings);
+                m_state->result_set.set_status_flags(ok->status_flags);
                 m_state->phase = Phase::Done;
                 return true;
             }
 
             size_t int_consumed = 0;
-            auto col_count = protocol::readLenEncInt(pkt->payload, pkt->payload_len, int_consumed);
+            auto col_count = protocol::read_len_enc_int(pkt->payload, pkt->payload_len, int_consumed);
             if (!col_count) {
-                m_state->client->ringBuffer().consume(consumed);
+                m_state->client->ring_buffer().consume(consumed);
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse column count"));
             }
             m_state->column_count = col_count.value();
             m_state->columns_received = 0;
-            m_state->result_set.reserveFields(static_cast<size_t>(m_state->column_count));
-            m_state->client->ringBuffer().consume(consumed);
+            m_state->result_set.reserve_fields(static_cast<size_t>(m_state->column_count));
+            m_state->client->ring_buffer().consume(consumed);
             m_state->phase = Phase::ReceivingColumns;
             continue;
         }
 
         if (m_state->phase == Phase::ReceivingColumns) {
-            auto col = m_state->client->parser().parseColumnDefinition(pkt->payload, pkt->payload_len);
-            m_state->client->ringBuffer().consume(consumed);
+            auto col = m_state->client->parser().parse_column_definition(pkt->payload, pkt->payload_len);
+            m_state->client->ring_buffer().consume(consumed);
             if (!col) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Parse column definition failed"));
             }
@@ -1487,13 +1487,13 @@ std::expected<bool, MysqlError> MysqlStmtExecuteAwaitable<Strategy>::Machine::tr
                              col->flags,
                              col->column_length,
                              col->decimals);
-            field.setCatalog(col->catalog);
-            field.setSchema(col->schema);
-            field.setTable(col->table);
-            field.setOrgTable(col->org_table);
-            field.setOrgName(col->org_name);
-            field.setCharacterSet(col->character_set);
-            m_state->result_set.addField(std::move(field));
+            field.set_catalog(col->catalog);
+            field.set_schema(col->schema);
+            field.set_table(col->table);
+            field.set_org_table(col->org_table);
+            field.set_org_name(col->org_name);
+            field.set_character_set(col->character_set);
+            m_state->result_set.add_field(std::move(field));
 
             ++m_state->columns_received;
             if (m_state->columns_received >= m_state->column_count) {
@@ -1505,7 +1505,7 @@ std::expected<bool, MysqlError> MysqlStmtExecuteAwaitable<Strategy>::Machine::tr
         }
 
         if (m_state->phase == Phase::ReceivingColumnEof) {
-            m_state->client->ringBuffer().consume(consumed);
+            m_state->client->ring_buffer().consume(consumed);
             m_state->phase = Phase::ReceivingRows;
             continue;
         }
@@ -1513,41 +1513,41 @@ std::expected<bool, MysqlError> MysqlStmtExecuteAwaitable<Strategy>::Machine::tr
         if (m_state->phase == Phase::ReceivingRows) {
             if (first_byte == 0xFE && pkt->payload_len < 0xFFFFFF) {
                 if (caps & protocol::CLIENT_DEPRECATE_EOF) {
-                    auto ok = m_state->client->parser().parseOk(pkt->payload, pkt->payload_len, caps);
+                    auto ok = m_state->client->parser().parse_ok(pkt->payload, pkt->payload_len, caps);
                     if (ok) {
-                        m_state->result_set.setWarnings(ok->warnings);
-                        m_state->result_set.setStatusFlags(ok->status_flags);
+                        m_state->result_set.set_warnings(ok->warnings);
+                        m_state->result_set.set_status_flags(ok->status_flags);
                     }
                 } else {
-                    auto eof = m_state->client->parser().parseEof(pkt->payload, pkt->payload_len);
+                    auto eof = m_state->client->parser().parse_eof(pkt->payload, pkt->payload_len);
                     if (eof) {
-                        m_state->result_set.setWarnings(eof->warnings);
-                        m_state->result_set.setStatusFlags(eof->status_flags);
+                        m_state->result_set.set_warnings(eof->warnings);
+                        m_state->result_set.set_status_flags(eof->status_flags);
                     }
                 }
-                m_state->client->ringBuffer().consume(consumed);
+                m_state->client->ring_buffer().consume(consumed);
                 m_state->phase = Phase::Done;
                 return true;
             }
 
             if (first_byte == 0xFF) {
-                auto err = m_state->client->parser().parseErr(pkt->payload, pkt->payload_len, caps);
-                m_state->client->ringBuffer().consume(consumed);
+                auto err = m_state->client->parser().parse_err(pkt->payload, pkt->payload_len, caps);
+                m_state->client->ring_buffer().consume(consumed);
                 if (err) {
                     return std::unexpected(MysqlError(MYSQL_ERROR_SERVER, err->error_code, err->error_message));
                 }
                 return std::unexpected(MysqlError(MYSQL_ERROR_QUERY, "Error during row fetch"));
             }
 
-            auto row = m_state->client->parser().parseTextRow(
+            auto row = m_state->client->parser().parse_text_row(
                 pkt->payload,
                 pkt->payload_len,
                 m_state->column_count);
-            m_state->client->ringBuffer().consume(consumed);
+            m_state->client->ring_buffer().consume(consumed);
             if (!row) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Parse row failed"));
             }
-            m_state->result_set.addRow(MysqlRow(std::move(row.value())));
+            m_state->result_set.add_row(MysqlRow(std::move(row.value())));
             continue;
         }
 
@@ -1561,7 +1561,7 @@ template<RingBufferBackendStrategy Strategy>
 MysqlPipelineAwaitable<Strategy>::MysqlPipelineAwaitable(AsyncMysqlClient<Strategy>& client,
                                                std::span<const protocol::MysqlCommandView> commands)
     : m_state(std::make_shared<SharedState>(client, commands))
-    , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
+    , m_inner(galay::kernel::AwaitableBuilder<Result>::from_state_machine(
                   client.socket().controller(),
                   Machine(m_state))
                   .build())
@@ -1569,7 +1569,7 @@ MysqlPipelineAwaitable<Strategy>::MysqlPipelineAwaitable(AsyncMysqlClient<Strate
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool MysqlPipelineAwaitable<Strategy>::isInvalid() const
+bool MysqlPipelineAwaitable<Strategy>::is_invalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
@@ -1583,8 +1583,8 @@ MysqlPipelineAwaitable<Strategy>::SharedState::SharedState(
     , phase(commands.empty() ? Phase::Done : Phase::SendCommands)
 {
     results.reserve(expected_results);
-    if (client.asyncConfig().result_row_reserve_hint > 0) {
-        current_result.reserveRows(client.asyncConfig().result_row_reserve_hint);
+    if (client.async_config().result_row_reserve_hint > 0) {
+        current_result.reserve_rows(client.async_config().result_row_reserve_hint);
     }
 
     if (commands.empty()) {
@@ -1625,26 +1625,26 @@ MysqlPipelineAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState> 
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPipelineAwaitable<Strategy>::Machine::setError(MysqlError error) noexcept
+void MysqlPipelineAwaitable<Strategy>::Machine::set_error(MysqlError error) noexcept
 {
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPipelineAwaitable<Strategy>::Machine::setSendError(const IOError& io_error) noexcept
+void MysqlPipelineAwaitable<Strategy>::Machine::set_send_error(const IOError& io_error) noexcept
 {
-    setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_SEND));
+    set_error(detail::map_awaitable_io_error(io_error, MYSQL_ERROR_SEND));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPipelineAwaitable<Strategy>::Machine::setRecvError(const IOError& io_error) noexcept
+void MysqlPipelineAwaitable<Strategy>::Machine::set_recv_error(const IOError& io_error) noexcept
 {
-    setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_RECV));
+    set_error(detail::map_awaitable_io_error(io_error, MYSQL_ERROR_RECV));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPipelineAwaitable<Strategy>::Machine::refillWriteIovWindow()
+void MysqlPipelineAwaitable<Strategy>::Machine::refill_write_iov_window()
 {
     if (m_state->write_iov_cursor > 0) {
         m_state->write_iovecs.erase(
@@ -1669,7 +1669,7 @@ void MysqlPipelineAwaitable<Strategy>::Machine::refillWriteIovWindow()
 }
 
 template<RingBufferBackendStrategy Strategy>
-size_t MysqlPipelineAwaitable<Strategy>::Machine::pendingWriteIovCount()
+size_t MysqlPipelineAwaitable<Strategy>::Machine::pending_write_iov_count()
 {
     while (m_state->write_iov_cursor < m_state->write_iovecs.size() &&
            m_state->write_iovecs[m_state->write_iov_cursor].iov_len == 0) {
@@ -1677,7 +1677,7 @@ size_t MysqlPipelineAwaitable<Strategy>::Machine::pendingWriteIovCount()
     }
 
     if (m_state->write_iov_cursor >= m_state->write_iovecs.size()) {
-        refillWriteIovWindow();
+        refill_write_iov_window();
         while (m_state->write_iov_cursor < m_state->write_iovecs.size() &&
                m_state->write_iovecs[m_state->write_iov_cursor].iov_len == 0) {
             ++m_state->write_iov_cursor;
@@ -1692,7 +1692,7 @@ size_t MysqlPipelineAwaitable<Strategy>::Machine::pendingWriteIovCount()
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool MysqlPipelineAwaitable<Strategy>::Machine::advanceAfterWrite(size_t sent_bytes)
+bool MysqlPipelineAwaitable<Strategy>::Machine::advance_after_write(size_t sent_bytes)
 {
     size_t remaining = sent_bytes;
     while (remaining > 0 && m_state->write_iov_cursor < m_state->write_iovecs.size()) {
@@ -1718,20 +1718,20 @@ bool MysqlPipelineAwaitable<Strategy>::Machine::advanceAfterWrite(size_t sent_by
     }
 
     if (m_state->write_iov_cursor >= m_state->write_iovecs.size()) {
-        refillWriteIovWindow();
+        refill_write_iov_window();
     }
 
     return true;
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool MysqlPipelineAwaitable<Strategy>::Machine::prepareReadWindow()
+bool MysqlPipelineAwaitable<Strategy>::Machine::prepare_read_window()
 {
-    m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
+    m_state->read_iov_count = m_state->client->ring_buffer().get_write_iovecs(
         m_state->read_iovecs.data(),
         m_state->read_iovecs.size());
     if (m_state->read_iov_count == 0) {
-        setError(MysqlError(
+        set_error(MysqlError(
             MYSQL_ERROR_RECV,
             "No writable ring buffer space while receiving pipeline response"));
         return false;
@@ -1740,25 +1740,25 @@ bool MysqlPipelineAwaitable<Strategy>::Machine::prepareReadWindow()
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPipelineAwaitable<Strategy>::Machine::resetCurrentResult()
+void MysqlPipelineAwaitable<Strategy>::Machine::reset_current_result()
 {
     m_state->phase = Phase::ReceivingHeader;
     m_state->current_result = MysqlResultSet{};
-    if (m_state->client->asyncConfig().result_row_reserve_hint > 0) {
-        m_state->current_result.reserveRows(m_state->client->asyncConfig().result_row_reserve_hint);
+    if (m_state->client->async_config().result_row_reserve_hint > 0) {
+        m_state->current_result.reserve_rows(m_state->client->async_config().result_row_reserve_hint);
     }
     m_state->column_count = 0;
     m_state->columns_received = 0;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPipelineAwaitable<Strategy>::Machine::finalizeCurrentResult()
+void MysqlPipelineAwaitable<Strategy>::Machine::finalize_current_result()
 {
     m_state->results.push_back(std::move(m_state->current_result));
     if (m_state->results.size() >= m_state->expected_results) {
         m_state->phase = Phase::Done;
     } else {
-        resetCurrentResult();
+        reset_current_result();
     }
 }
 
@@ -1772,16 +1772,16 @@ MysqlPipelineAwaitable<Strategy>::Machine::advance()
 
     switch (m_state->phase) {
     case Phase::Invalid:
-        setError(MysqlError(MYSQL_ERROR_INTERNAL, "Pipeline machine entered invalid state"));
+        set_error(MysqlError(MYSQL_ERROR_INTERNAL, "Pipeline machine entered invalid state"));
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     case Phase::SendCommands: {
-        const size_t pending = pendingWriteIovCount();
+        const size_t pending = pending_write_iov_count();
         if (pending == 0) {
-            m_state->client->ringBuffer().clear();
+            m_state->client->ring_buffer().clear();
             m_state->phase = Phase::ReceivingHeader;
             return galay::kernel::MachineAction<result_type>::continue_();
         }
-        return galay::kernel::MachineAction<result_type>::waitWritev(
+        return galay::kernel::MachineAction<result_type>::wait_writev(
             m_state->write_iovecs.data() + m_state->write_iov_cursor,
             pending);
     }
@@ -1789,18 +1789,18 @@ MysqlPipelineAwaitable<Strategy>::Machine::advance()
     case Phase::ReceivingColumns:
     case Phase::ReceivingColumnEof:
     case Phase::ReceivingRows: {
-        auto parsed = tryParseFromRingBuffer();
+        auto parsed = try_parse_from_ring_buffer();
         if (!parsed.has_value()) {
-            setError(std::move(parsed.error()));
+            set_error(std::move(parsed.error()));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
         if (parsed.value()) {
             return galay::kernel::MachineAction<result_type>::continue_();
         }
-        if (!prepareReadWindow()) {
+        if (!prepare_read_window()) {
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
-        return galay::kernel::MachineAction<result_type>::waitReadv(
+        return galay::kernel::MachineAction<result_type>::wait_readv(
             m_state->read_iovecs.data(),
             m_state->read_iov_count);
     }
@@ -1812,72 +1812,72 @@ MysqlPipelineAwaitable<Strategy>::Machine::advance()
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     }
 
-    setError(MysqlError(MYSQL_ERROR_INTERNAL, "Unknown pipeline machine state"));
+    set_error(MysqlError(MYSQL_ERROR_INTERNAL, "Unknown pipeline machine state"));
     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPipelineAwaitable<Strategy>::Machine::onRead(std::expected<size_t, IOError> result)
+void MysqlPipelineAwaitable<Strategy>::Machine::on_read(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result.has_value()) {
-        setRecvError(result.error());
+        set_recv_error(result.error());
         return;
     }
     if (result.value() == 0) {
-        setError(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED, "Connection closed"));
+        set_error(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED, "Connection closed"));
         return;
     }
-    m_state->client->ringBuffer().produce(result.value());
+    m_state->client->ring_buffer().produce(result.value());
 }
 
 template<RingBufferBackendStrategy Strategy>
-void MysqlPipelineAwaitable<Strategy>::Machine::onWrite(std::expected<size_t, IOError> result)
+void MysqlPipelineAwaitable<Strategy>::Machine::on_write(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result) {
-        setSendError(result.error());
+        set_send_error(result.error());
         return;
     }
 
     const size_t sent = result.value();
     if (sent == 0) {
-        setError(MysqlError(MYSQL_ERROR_SEND, "Send returned 0 bytes in pipeline"));
+        set_error(MysqlError(MYSQL_ERROR_SEND, "Send returned 0 bytes in pipeline"));
         return;
     }
 
-    if (!advanceAfterWrite(sent)) {
-        setSendError(IOError(galay::kernel::kSendFailed, 0));
+    if (!advance_after_write(sent)) {
+        set_send_error(IOError(galay::kernel::kSendFailed, 0));
         return;
     }
 
-    if (pendingWriteIovCount() == 0) {
-        m_state->client->ringBuffer().clear();
+    if (pending_write_iov_count() == 0) {
+        m_state->client->ring_buffer().clear();
         m_state->phase = Phase::ReceivingHeader;
     }
 }
 template<RingBufferBackendStrategy Strategy>
-std::expected<bool, MysqlError> MysqlPipelineAwaitable<Strategy>::Machine::tryParseFromRingBuffer()
+std::expected<bool, MysqlError> MysqlPipelineAwaitable<Strategy>::Machine::try_parse_from_ring_buffer()
 {
     while (m_state->results.size() < m_state->expected_results) {
         struct iovec read_iovecs[2];
-        const size_t read_iovecs_count = m_state->client->ringBuffer().getReadIovecs(read_iovecs, 2);
+        const size_t read_iovecs_count = m_state->client->ring_buffer().get_read_iovecs(read_iovecs, 2);
         if (read_iovecs_count == 0) {
             return false;
         }
 
-        auto linear = detail::linearizeReadIovecs(
+        auto linear = detail::linearize_read_iovecs(
             std::span<const struct iovec>(read_iovecs, read_iovecs_count),
             m_state->parse_scratch);
         const char* data = linear.data();
         size_t len = linear.size();
 
         size_t consumed = 0;
-        auto pkt = m_state->client->parser().extractPacket(data, len, consumed);
+        auto pkt = m_state->client->parser().extract_packet(data, len, consumed);
         if (!pkt) {
             if (pkt.error() == protocol::ParseError::Incomplete) {
                 return false;
@@ -1886,12 +1886,12 @@ std::expected<bool, MysqlError> MysqlPipelineAwaitable<Strategy>::Machine::tryPa
         }
 
         const uint8_t first_byte = static_cast<uint8_t>(pkt->payload[0]);
-        const uint32_t caps = m_state->client->serverCapabilities();
+        const uint32_t caps = m_state->client->server_capabilities();
 
         if (m_state->phase == Phase::ReceivingHeader) {
             if (first_byte == 0xFF) {
-                auto err = m_state->client->parser().parseErr(pkt->payload, pkt->payload_len, caps);
-                m_state->client->ringBuffer().consume(consumed);
+                auto err = m_state->client->parser().parse_err(pkt->payload, pkt->payload_len, caps);
+                m_state->client->ring_buffer().consume(consumed);
                 if (err) {
                     return std::unexpected(MysqlError(MYSQL_ERROR_SERVER, err->error_code, err->error_message));
                 }
@@ -1899,39 +1899,39 @@ std::expected<bool, MysqlError> MysqlPipelineAwaitable<Strategy>::Machine::tryPa
             }
 
             if (first_byte == 0x00) {
-                auto ok = m_state->client->parser().parseOk(pkt->payload, pkt->payload_len, caps);
-                m_state->client->ringBuffer().consume(consumed);
+                auto ok = m_state->client->parser().parse_ok(pkt->payload, pkt->payload_len, caps);
+                m_state->client->ring_buffer().consume(consumed);
                 if (!ok) {
                     return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse OK packet"));
                 }
 
-                m_state->current_result.setAffectedRows(ok->affected_rows);
-                m_state->current_result.setLastInsertId(ok->last_insert_id);
-                m_state->current_result.setWarnings(ok->warnings);
-                m_state->current_result.setStatusFlags(ok->status_flags);
-                m_state->current_result.setInfo(ok->info);
-                finalizeCurrentResult();
+                m_state->current_result.set_affected_rows(ok->affected_rows);
+                m_state->current_result.set_last_insert_id(ok->last_insert_id);
+                m_state->current_result.set_warnings(ok->warnings);
+                m_state->current_result.set_status_flags(ok->status_flags);
+                m_state->current_result.set_info(ok->info);
+                finalize_current_result();
                 continue;
             }
 
             size_t int_consumed = 0;
-            auto col_count = protocol::readLenEncInt(pkt->payload, pkt->payload_len, int_consumed);
+            auto col_count = protocol::read_len_enc_int(pkt->payload, pkt->payload_len, int_consumed);
             if (!col_count) {
-                m_state->client->ringBuffer().consume(consumed);
+                m_state->client->ring_buffer().consume(consumed);
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse column count"));
             }
 
             m_state->column_count = col_count.value();
             m_state->columns_received = 0;
-            m_state->current_result.reserveFields(static_cast<size_t>(m_state->column_count));
-            m_state->client->ringBuffer().consume(consumed);
+            m_state->current_result.reserve_fields(static_cast<size_t>(m_state->column_count));
+            m_state->client->ring_buffer().consume(consumed);
             m_state->phase = Phase::ReceivingColumns;
             continue;
         }
 
         if (m_state->phase == Phase::ReceivingColumns) {
-            auto col = m_state->client->parser().parseColumnDefinition(pkt->payload, pkt->payload_len);
-            m_state->client->ringBuffer().consume(consumed);
+            auto col = m_state->client->parser().parse_column_definition(pkt->payload, pkt->payload_len);
+            m_state->client->ring_buffer().consume(consumed);
             if (!col) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse column definition"));
             }
@@ -1941,13 +1941,13 @@ std::expected<bool, MysqlError> MysqlPipelineAwaitable<Strategy>::Machine::tryPa
                              col->flags,
                              col->column_length,
                              col->decimals);
-            field.setCatalog(col->catalog);
-            field.setSchema(col->schema);
-            field.setTable(col->table);
-            field.setOrgTable(col->org_table);
-            field.setOrgName(col->org_name);
-            field.setCharacterSet(col->character_set);
-            m_state->current_result.addField(std::move(field));
+            field.set_catalog(col->catalog);
+            field.set_schema(col->schema);
+            field.set_table(col->table);
+            field.set_org_table(col->org_table);
+            field.set_org_name(col->org_name);
+            field.set_character_set(col->character_set);
+            m_state->current_result.add_field(std::move(field));
 
             ++m_state->columns_received;
             if (m_state->columns_received >= m_state->column_count) {
@@ -1959,7 +1959,7 @@ std::expected<bool, MysqlError> MysqlPipelineAwaitable<Strategy>::Machine::tryPa
         }
 
         if (m_state->phase == Phase::ReceivingColumnEof) {
-            m_state->client->ringBuffer().consume(consumed);
+            m_state->client->ring_buffer().consume(consumed);
             m_state->phase = Phase::ReceivingRows;
             continue;
         }
@@ -1967,42 +1967,42 @@ std::expected<bool, MysqlError> MysqlPipelineAwaitable<Strategy>::Machine::tryPa
         if (m_state->phase == Phase::ReceivingRows) {
             if (first_byte == 0xFE && pkt->payload_len < 0xFFFFFF) {
                 if (caps & protocol::CLIENT_DEPRECATE_EOF) {
-                    auto ok = m_state->client->parser().parseOk(pkt->payload, pkt->payload_len, caps);
+                    auto ok = m_state->client->parser().parse_ok(pkt->payload, pkt->payload_len, caps);
                     if (ok) {
-                        m_state->current_result.setWarnings(ok->warnings);
-                        m_state->current_result.setStatusFlags(ok->status_flags);
+                        m_state->current_result.set_warnings(ok->warnings);
+                        m_state->current_result.set_status_flags(ok->status_flags);
                     }
                 } else {
-                    auto eof = m_state->client->parser().parseEof(pkt->payload, pkt->payload_len);
+                    auto eof = m_state->client->parser().parse_eof(pkt->payload, pkt->payload_len);
                     if (eof) {
-                        m_state->current_result.setWarnings(eof->warnings);
-                        m_state->current_result.setStatusFlags(eof->status_flags);
+                        m_state->current_result.set_warnings(eof->warnings);
+                        m_state->current_result.set_status_flags(eof->status_flags);
                     }
                 }
 
-                m_state->client->ringBuffer().consume(consumed);
-                finalizeCurrentResult();
+                m_state->client->ring_buffer().consume(consumed);
+                finalize_current_result();
                 continue;
             }
 
             if (first_byte == 0xFF) {
-                auto err = m_state->client->parser().parseErr(pkt->payload, pkt->payload_len, caps);
-                m_state->client->ringBuffer().consume(consumed);
+                auto err = m_state->client->parser().parse_err(pkt->payload, pkt->payload_len, caps);
+                m_state->client->ring_buffer().consume(consumed);
                 if (err) {
                     return std::unexpected(MysqlError(MYSQL_ERROR_SERVER, err->error_code, err->error_message));
                 }
                 return std::unexpected(MysqlError(MYSQL_ERROR_QUERY, "Pipeline row fetch failed"));
             }
 
-            auto row = m_state->client->parser().parseTextRow(
+            auto row = m_state->client->parser().parse_text_row(
                 pkt->payload,
                 pkt->payload_len,
                 m_state->column_count);
-            m_state->client->ringBuffer().consume(consumed);
+            m_state->client->ring_buffer().consume(consumed);
             if (!row) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse text row"));
             }
-            m_state->current_result.addRow(MysqlRow(std::move(row.value())));
+            m_state->current_result.add_row(MysqlRow(std::move(row.value())));
             continue;
         }
 

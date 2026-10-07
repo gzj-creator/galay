@@ -145,9 +145,9 @@ private:
     explicit UnboundedRecvAwaitable(UnboundedChannel<T>* channel) noexcept
         : m_channel(channel) {}
 
-    bool tryReceiveNow() noexcept;
-    void markTimeout() noexcept { m_timedOut = true; }
-    void bindTimeoutTimer(const TimeoutTimer::ptr& timer) noexcept
+    bool try_receive_now() noexcept;
+    void mark_timeout() noexcept { m_timedOut = true; }
+    void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
     }
@@ -234,9 +234,9 @@ private:
                                 size_t maxCount) noexcept
         : m_channel(channel), m_maxCount(maxCount) {}
 
-    bool tryReceiveNow();
-    void markTimeout() noexcept { m_timedOut = true; }
-    void bindTimeoutTimer(const TimeoutTimer::ptr& timer) noexcept
+    bool try_receive_now();
+    void mark_timeout() noexcept { m_timedOut = true; }
+    void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
     }
@@ -330,9 +330,9 @@ private:
     }
     friend struct WithTimeout<UnboundedRecvBatchToAwaitable<T>>;
 
-    bool tryReceiveNow() noexcept;
-    void markTimeout() noexcept { m_timedOut = true; }
-    void bindTimeoutTimer(const TimeoutTimer::ptr& timer) noexcept
+    bool try_receive_now() noexcept;
+    void mark_timeout() noexcept { m_timedOut = true; }
+    void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
     }
@@ -356,10 +356,10 @@ private:
  * - 每个显式 token 或默认线程生产者独占一条 SPSC 分块流。
  * - 同一生产者流内严格 FIFO；不同生产者之间不承诺全局顺序。
  * - 唯一消费者按固定配额轮询，避免持续活跃的生产者饿死稀疏生产者。
- * - send()/sendBatch() 先完整预留所需分块，分配失败不会移动输入或部分发布。
- * - recv()/recvBatch() 空时只挂起协程，不阻塞调度器线程。
- * - 空转轮询影响吞吐时使用 drainTo() 批量排空；低频、延迟敏感或单次命中率高的
- *   路径可继续使用 tryRecv()。
+ * - send()/send_batch() 先完整预留所需分块，分配失败不会移动输入或部分发布。
+ * - recv()/recv_batch() 空时只挂起协程，不阻塞调度器线程。
+ * - 空转轮询影响吞吐时使用 drain_to() 批量排空；低频、延迟敏感或单次命中率高的
+ *   路径可继续使用 try_recv()。
  *
  * @note 同一 ProducerToken 同时只能由一个生产者调用；所有接收操作必须串行。
  * @note T 的复制、移动构造和析构不得调用或销毁同一 channel，否则可能重入
@@ -375,7 +375,7 @@ private:
     static constexpr size_t kBlockTargetBytes = 4096;
     static constexpr size_t kConsumerQuota = 64;
 
-    static void cpuPause() noexcept
+    static void cpu_pause() noexcept
     {
 #if defined(_MSC_VER)
         YieldProcessor();
@@ -390,7 +390,7 @@ private:
     {
         alignas(T) std::byte storage[sizeof(T)];
 
-        T* constructionAddress() noexcept
+        T* construction_address() noexcept
         {
             return reinterpret_cast<T*>(storage);
         }
@@ -509,10 +509,10 @@ private:
 
             Block* unused = initialBlock->next.load(std::memory_order_relaxed);
             initialBlock->next.store(nullptr, std::memory_order_relaxed);
-            destroyBlockChain(unused);
+            destroy_block_chain(unused);
         }
 
-        void recordConstructed() noexcept
+        void record_constructed() noexcept
         {
             ++constructed;
         }
@@ -570,7 +570,7 @@ private:
         uint64_t generation = 0;
     };
 
-    static void releaseProducerLifetimeReference(
+    static void release_producer_lifetime_reference(
         ProducerLifetime* lifetime) noexcept
     {
         const uint32_t previous =
@@ -580,14 +580,14 @@ private:
         }
     }
 
-    static void retainProducerLifetime(ProducerLifetime* lifetime) noexcept
+    static void retain_producer_lifetime(ProducerLifetime* lifetime) noexcept
     {
         // stream anchor 保证旧引用至少为 1；这里只需要增加 owner 引用。
         [[maybe_unused]] const uint32_t previous =
             lifetime->references.fetch_add(1, std::memory_order_relaxed);
     }
 
-    static void releaseProducerOwner(ProducerLifetime* lifetime) noexcept
+    static void release_producer_owner(ProducerLifetime* lifetime) noexcept
     {
         if (lifetime == nullptr) {
             return;
@@ -601,7 +601,7 @@ private:
                    std::memory_order_release,
                    std::memory_order_acquire)) {
         }
-        releaseProducerLifetimeReference(lifetime);
+        release_producer_lifetime_reference(lifetime);
     }
 
     /**
@@ -615,7 +615,7 @@ private:
         {
             while (head != nullptr) {
                 DefaultProducerCacheEntry* next = head->next;
-                releaseProducerOwner(head->lifetime);
+                release_producer_owner(head->lifetime);
                 delete head;
                 head = next;
             }
@@ -706,10 +706,10 @@ public:
             m_channel = nullptr;
             m_stream = nullptr;
             m_generation = 0;
-            releaseProducerOwner(lifetime);
+            release_producer_owner(lifetime);
         }
 
-        [[nodiscard]] bool validFor(const UnboundedChannel* channel) const noexcept
+        [[nodiscard]] bool valid_for(const UnboundedChannel* channel) const noexcept
         {
             ProducerLifetime* lifetime = m_lifetime;
             if (lifetime == nullptr ||
@@ -728,7 +728,7 @@ public:
          * @note channel 的 send() 调用和 ProducerToken 的单生产者契约已满足此前提；
          *       不读取 lifetime 状态，避免每条消息为析构后 valid() 查询付出 acquire。
          */
-        [[nodiscard]] bool validForLiveChannel(
+        [[nodiscard]] bool valid_for_live_channel(
             const UnboundedChannel* channel) const noexcept
         {
             return m_lifetime != nullptr && m_channel == channel &&
@@ -744,14 +744,14 @@ public:
 
     /**
      * @brief 构造 MPSC 通道。
-     * @param defaultBatchSize recvBatch() 未指定上限时的默认值。
+     * @param defaultBatchSize recv_batch() 未指定上限时的默认值。
      * @param singleRecvPrefetchLimit 单条接收后最多预取的消息数；默认不预取。
      *        b26 的新 ready 数据面测量表明同步单条接收直接轮转 stream 更快；
      *        显式预取仍只在当前一个活跃 producer stream 时启用。
      */
     explicit UnboundedChannel(size_t defaultBatchSize = DEFAULT_BATCH_SIZE,
                               size_t singleRecvPrefetchLimit = 0)
-        : m_generation(nextGeneration())
+        : m_generation(next_generation())
         , m_defaultBatchSize(std::max<size_t>(1, defaultBatchSize))
         , m_singleRecvPrefetchLimit(singleRecvPrefetchLimit)
     {
@@ -769,7 +769,7 @@ public:
         ProducerStream* stream = m_streamHead.load(std::memory_order_relaxed);
         while (stream != nullptr) {
             ProducerStream* next = stream->next;
-            destroyStream(stream);
+            destroy_stream(stream);
             stream = next;
         }
     }
@@ -783,9 +783,9 @@ public:
      * @brief 创建生产者独占 token。
      * @return 创建成功时 valid()==true；通道已开始关闭或内存不足时返回无效 token。
      */
-    [[nodiscard]] ProducerToken makeProducerToken() noexcept
+    [[nodiscard]] ProducerToken make_producer_token() noexcept
     {
-        ProducerStream* stream = acquireProducerStream();
+        ProducerStream* stream = acquire_producer_stream();
         if (stream == nullptr) {
             return ProducerToken();
         }
@@ -799,8 +799,8 @@ public:
      */
     [[nodiscard]] bool send(T&& value) noexcept
     {
-        ProducerStream* stream = defaultProducerStream();
-        return stream != nullptr && sendToStream(*stream, std::move(value));
+        ProducerStream* stream = default_producer_stream();
+        return stream != nullptr && send_to_stream(*stream, std::move(value));
     }
 
     /**
@@ -810,8 +810,8 @@ public:
      */
     [[nodiscard]] bool send(ProducerToken& token, T&& value) noexcept
     {
-        return token.validForLiveChannel(this) &&
-            sendToStream(*token.m_stream, std::move(value));
+        return token.valid_for_live_channel(this) &&
+            send_to_stream(*token.m_stream, std::move(value));
     }
 
     /**
@@ -833,7 +833,7 @@ public:
     [[nodiscard]] bool send(ProducerToken& token, const T& value)
         noexcept requires std::is_nothrow_copy_constructible_v<T>
     {
-        if (!token.validForLiveChannel(this)) {
+        if (!token.valid_for_live_channel(this)) {
             return false;
         }
         T copy = value;
@@ -844,15 +844,15 @@ public:
      * @brief 复制并原子发布一批消息到默认生产者流。
      * @return 全批发布返回 true；通道已开始关闭或预留失败返回 false，通道保持不变。
      */
-    [[nodiscard]] bool sendBatch(const std::vector<T>& values)
+    [[nodiscard]] bool send_batch(const std::vector<T>& values)
         noexcept requires std::is_nothrow_copy_constructible_v<T>
     {
         if (values.empty()) {
             return m_closeState.load(std::memory_order_seq_cst) ==
                 CloseState::kOpen;
         }
-        ProducerStream* stream = defaultProducerStream();
-        return stream != nullptr && sendBatchToStream(*stream, values);
+        ProducerStream* stream = default_producer_stream();
+        return stream != nullptr && send_batch_to_stream(*stream, values);
     }
 
     /**
@@ -860,18 +860,18 @@ public:
      * @return 全批发布返回 true；token 无效/foreign、通道已开始关闭或预留失败
      *         返回 false，通道保持不变。
      */
-    [[nodiscard]] bool sendBatch(ProducerToken& token,
+    [[nodiscard]] bool send_batch(ProducerToken& token,
                                  const std::vector<T>& values)
         noexcept requires std::is_nothrow_copy_constructible_v<T>
     {
-        if (!token.validForLiveChannel(this)) {
+        if (!token.valid_for_live_channel(this)) {
             return false;
         }
         if (values.empty()) {
             return m_closeState.load(std::memory_order_seq_cst) ==
                 CloseState::kOpen;
         }
-        return sendBatchToStream(*token.m_stream, values);
+        return send_batch_to_stream(*token.m_stream, values);
     }
 
     /**
@@ -879,14 +879,14 @@ public:
      * @return 全批发布返回 true；通道已开始关闭或预留失败返回 false，values
      *         保持未移动。
      */
-    [[nodiscard]] bool sendBatch(std::vector<T>&& values) noexcept
+    [[nodiscard]] bool send_batch(std::vector<T>&& values) noexcept
     {
         if (values.empty()) {
             return m_closeState.load(std::memory_order_seq_cst) ==
                 CloseState::kOpen;
         }
-        ProducerStream* stream = defaultProducerStream();
-        return stream != nullptr && sendBatchToStream(*stream, std::move(values));
+        ProducerStream* stream = default_producer_stream();
+        return stream != nullptr && send_batch_to_stream(*stream, std::move(values));
     }
 
     /**
@@ -894,17 +894,17 @@ public:
      * @return 全批发布返回 true；token 无效/foreign、通道已开始关闭或预留失败
      *         返回 false，values 保持未移动。
      */
-    [[nodiscard]] bool sendBatch(
+    [[nodiscard]] bool send_batch(
         ProducerToken& token, std::vector<T>&& values) noexcept
     {
-        if (!token.validForLiveChannel(this)) {
+        if (!token.valid_for_live_channel(this)) {
             return false;
         }
         if (values.empty()) {
             return m_closeState.load(std::memory_order_seq_cst) ==
                 CloseState::kOpen;
         }
-        return sendBatchToStream(*token.m_stream, std::move(values));
+        return send_batch_to_stream(*token.m_stream, std::move(values));
     }
 
     /** @brief 返回单条异步接收等待体。 */
@@ -915,18 +915,18 @@ public:
 
     /**
      * @brief 返回使用默认批量上限的 vector-returning 异步接收等待体。
-     * @note 接收路径可能分配；OOM 敏感或要求无分配时使用 recvBatchTo()。
+     * @note 接收路径可能分配；OOM 敏感或要求无分配时使用 recv_batch_to()。
      */
-    [[nodiscard]] UnboundedRecvBatchAwaitable<T> recvBatch() noexcept
+    [[nodiscard]] UnboundedRecvBatchAwaitable<T> recv_batch() noexcept
     {
         return UnboundedRecvBatchAwaitable<T>(this, m_defaultBatchSize);
     }
 
     /**
      * @brief 返回最多接收 maxCount 条消息的 vector-returning 异步等待体。
-     * @note 接收路径可能分配；OOM 敏感或要求无分配时使用 recvBatchTo()。
+     * @note 接收路径可能分配；OOM 敏感或要求无分配时使用 recv_batch_to()。
      */
-    [[nodiscard]] UnboundedRecvBatchAwaitable<T> recvBatch(size_t maxCount) noexcept
+    [[nodiscard]] UnboundedRecvBatchAwaitable<T> recv_batch(size_t maxCount) noexcept
     {
         return UnboundedRecvBatchAwaitable<T>(this, maxCount);
     }
@@ -937,7 +937,7 @@ public:
      * @return 数据搬运路径不分配的等待体；无 spare capacity 时以
      *         kParamInvalid 完成。timeout() wrapper 自身可能分配 timer 状态。
      */
-    [[nodiscard]] UnboundedRecvBatchToAwaitable<T> recvBatchTo(
+    [[nodiscard]] UnboundedRecvBatchToAwaitable<T> recv_batch_to(
         std::vector<T>& destination) noexcept
     {
         return UnboundedRecvBatchToAwaitable<T>(
@@ -952,7 +952,7 @@ public:
      * @return 数据搬运路径不分配的等待体；maxCount>0 且无 spare capacity
      *         时以 kParamInvalid 完成。timeout() wrapper 自身可能分配 timer 状态。
      */
-    [[nodiscard]] UnboundedRecvBatchToAwaitable<T> recvBatchTo(
+    [[nodiscard]] UnboundedRecvBatchToAwaitable<T> recv_batch_to(
         std::vector<T>& destination, size_t maxCount) noexcept
     {
         return UnboundedRecvBatchToAwaitable<T>(this, &destination, maxCount);
@@ -963,14 +963,14 @@ public:
      * @return 成功返回消息；所有流当前均为空时返回 std::nullopt。
      * @note 仅唯一消费者可调用；本函数不执行 cursor CAS 或 RMW。
      */
-    [[nodiscard]] std::optional<T> tryRecv() noexcept
+    [[nodiscard]] std::optional<T> try_recv() noexcept
     {
-        if (auto cached = tryPopPrefetchedValue(); cached.has_value()) {
+        if (auto cached = try_pop_prefetched_value(); cached.has_value()) {
             return cached;
         }
-        auto value = tryPopNextValue();
+        auto value = try_pop_next_value();
         if (value.has_value()) {
-            tryPrefetchSingleRecvValues();
+            try_prefetch_single_recv_values();
         }
         return value;
     }
@@ -982,14 +982,14 @@ public:
      * @return 实际追加数量；容量不足或当前为空时返回 0。
      * @note 仅唯一消费者可调用，稳态路径不分配内存。
      */
-    [[nodiscard]] size_t drainTo(
+    [[nodiscard]] size_t drain_to(
         std::vector<T>& destination, size_t maxCount) noexcept
     {
         const size_t spare = destination.capacity() - destination.size();
         const size_t limit = std::min(maxCount, spare);
         const size_t initialSize = destination.size();
         while (destination.size() - initialSize < limit) {
-            auto value = tryRecv();
+            auto value = try_recv();
             if (!value.has_value()) {
                 break;
             }
@@ -1000,20 +1000,20 @@ public:
 
     /**
      * @brief 使用构造时配置的默认上限非阻塞批量接收。
-     * @note 返回 vector 可能分配；OOM 敏感路径使用 drainTo()。
+     * @note 返回 vector 可能分配；OOM 敏感路径使用 drain_to()。
      */
-    [[nodiscard]] std::optional<std::vector<T>> tryRecvBatch()
+    [[nodiscard]] std::optional<std::vector<T>> try_recv_batch()
     {
-        return tryRecvBatch(m_defaultBatchSize);
+        return try_recv_batch(m_defaultBatchSize);
     }
 
     /**
      * @brief 非阻塞批量接收。
      * @param maxCount 单次最多接收数量，0 返回空 vector 且不消费消息。
      * @return 收到至少一条时返回批次；当前为空返回 std::nullopt。
-     * @note 返回 vector 可能分配；OOM 敏感路径使用 drainTo()。
+     * @note 返回 vector 可能分配；OOM 敏感路径使用 drain_to()。
      */
-    [[nodiscard]] std::optional<std::vector<T>> tryRecvBatch(size_t maxCount)
+    [[nodiscard]] std::optional<std::vector<T>> try_recv_batch(size_t maxCount)
     {
         if (maxCount == 0) {
             return std::vector<T>{};
@@ -1028,14 +1028,14 @@ public:
         const size_t limit = std::min({maxCount, available, values.max_size()});
         values.reserve(limit);
         while (values.size() < limit) {
-            auto cached = tryPopPrefetchedValue();
+            auto cached = try_pop_prefetched_value();
             if (!cached.has_value()) {
                 break;
             }
             values.push_back(std::move(*cached));
         }
         while (values.size() < limit) {
-            auto value = tryPopNextValue();
+            auto value = try_pop_next_value();
             if (!value.has_value()) {
                 break;
             }
@@ -1123,7 +1123,7 @@ public:
             while (stream->control.gate.load(std::memory_order_seq_cst) !=
                    ProducerGate::kOpen) {
                 if (spins < 64) {
-                    cpuPause();
+                    cpu_pause();
                     ++spins;
                 } else {
                     std::this_thread::yield();
@@ -1134,22 +1134,22 @@ public:
         }
         m_closeState.store(CloseState::kClosed,
                            std::memory_order_seq_cst);
-        TaskState* waiterState = detachPublishedWaiter();
+        TaskState* waiterState = detach_published_waiter();
         // close 的全部 channel 访问在调度前完成，允许 waiter 内联重入 close()。
         if (waiterState != nullptr) {
-            wakeDetachedWaiter(waiterState);
+            wake_detached_waiter(waiterState);
         }
         return true;
     }
 
     /** @brief 返回通道是否已经进入 Closing 或 Closed。 */
-    [[nodiscard]] bool isClosed() const noexcept
+    [[nodiscard]] bool is_closed() const noexcept
     {
         return m_closeState.load(std::memory_order_acquire) != CloseState::kOpen;
     }
 
     /** @brief 返回通道是否已关闭且所有已发布消息均已排空。 */
-    [[nodiscard]] bool isClosedAndDrained() const noexcept
+    [[nodiscard]] bool is_closed_and_drained() const noexcept
     {
         return m_closeState.load(std::memory_order_seq_cst) ==
                 CloseState::kClosed &&
@@ -1167,7 +1167,7 @@ private:
 
     inline static std::atomic<uint64_t> s_generationSeed{1};
 
-    static uint64_t nextGeneration() noexcept
+    static uint64_t next_generation() noexcept
     {
         uint64_t generation =
             s_generationSeed.fetch_add(1, std::memory_order_relaxed);
@@ -1177,13 +1177,13 @@ private:
         return generation;
     }
 
-    static DefaultProducerCache& defaultProducerCache() noexcept
+    static DefaultProducerCache& default_producer_cache() noexcept
     {
         static thread_local DefaultProducerCache cache;
         return cache;
     }
 
-    static void destroyBlockChain(Block* block) noexcept
+    static void destroy_block_chain(Block* block) noexcept
     {
         while (block != nullptr) {
             Block* next = block->next.load(std::memory_order_relaxed);
@@ -1192,7 +1192,7 @@ private:
         }
     }
 
-    static void destroyStream(ProducerStream* stream) noexcept
+    static void destroy_stream(ProducerStream* stream) noexcept
     {
         ProducerLifetime* lifetime = stream->lifetime;
         lifetime->state.store(ProducerLifetimeState::kDetached,
@@ -1212,14 +1212,14 @@ private:
             ++consumer.index;
             ++consumer.localConsumed;
         }
-        destroyBlockChain(consumer.block);
-        destroyBlockChain(
+        destroy_block_chain(consumer.block);
+        destroy_block_chain(
             stream->shared.recycledBlocks.load(std::memory_order_relaxed));
         delete stream;
-        releaseProducerLifetimeReference(lifetime);
+        release_producer_lifetime_reference(lifetime);
     }
 
-    ProducerStream* acquireProducerStream() noexcept
+    ProducerStream* acquire_producer_stream() noexcept
     {
         // fetch_add/sub 的返回值只是旧计数快照；关闭仲裁只依赖原子副作用。
         [[maybe_unused]] const size_t registrationsBeforeAcquire =
@@ -1240,7 +1240,7 @@ private:
                     ProducerLifetimeState::kOwned,
                     std::memory_order_acq_rel,
                     std::memory_order_acquire)) {
-                retainProducerLifetime(reusable->lifetime);
+                retain_producer_lifetime(reusable->lifetime);
                 [[maybe_unused]] const size_t registrationsBeforeRelease =
                     m_producerRegistrations.fetch_sub(
                         1, std::memory_order_seq_cst);
@@ -1285,7 +1285,7 @@ private:
         return stream;
     }
 
-    static Block* takeRecycledBlock(ProducerStream& stream) noexcept
+    static Block* take_recycled_block(ProducerStream& stream) noexcept
     {
         Block* block =
             stream.shared.recycledBlocks.load(std::memory_order_acquire);
@@ -1303,7 +1303,7 @@ private:
         return new (std::nothrow) Block;
     }
 
-    static void recycleBlock(ProducerStream& stream, Block* block) noexcept
+    static void recycle_block(ProducerStream& stream, Block* block) noexcept
     {
         Block* recycled =
             stream.shared.recycledBlocks.load(std::memory_order_relaxed);
@@ -1316,16 +1316,16 @@ private:
             std::memory_order_relaxed));
     }
 
-    ProducerStream* defaultProducerStream() noexcept
+    ProducerStream* default_producer_stream() noexcept
     {
-        DefaultProducerCache& cache = defaultProducerCache();
+        DefaultProducerCache& cache = default_producer_cache();
         DefaultProducerCacheEntry** link = &cache.head;
         while (*link != nullptr) {
             DefaultProducerCacheEntry* entry = *link;
             if (entry->lifetime->state.load(std::memory_order_acquire) ==
                 ProducerLifetimeState::kDetached) {
                 *link = entry->next;
-                releaseProducerOwner(entry->lifetime);
+                release_producer_owner(entry->lifetime);
                 delete entry;
                 continue;
             }
@@ -1344,7 +1344,7 @@ private:
         if (entry == nullptr) {
             return nullptr;
         }
-        ProducerStream* stream = acquireProducerStream();
+        ProducerStream* stream = acquire_producer_stream();
         if (stream == nullptr) {
             delete entry;
             return nullptr;
@@ -1358,7 +1358,7 @@ private:
         return stream;
     }
 
-    static bool reserveProducerSlots(ProducerStream& stream, size_t count) noexcept
+    static bool reserve_producer_slots(ProducerStream& stream, size_t count) noexcept
     {
         if (count == 0) {
             return true;
@@ -1375,9 +1375,9 @@ private:
         Block* first = nullptr;
         Block* last = nullptr;
         for (size_t i = 0; i < blocksNeeded; ++i) {
-            Block* block = takeRecycledBlock(stream);
+            Block* block = take_recycled_block(stream);
             if (block == nullptr) {
-                destroyBlockChain(first);
+                destroy_block_chain(first);
                 return false;
             }
             if (last == nullptr) {
@@ -1399,7 +1399,7 @@ private:
         return true;
     }
 
-    void pushReadyStream(ProducerStream& stream) noexcept
+    void push_ready_stream(ProducerStream& stream) noexcept
     {
         ProducerStream* ready = m_readyStack.load(std::memory_order_relaxed);
         do {
@@ -1411,7 +1411,7 @@ private:
             std::memory_order_relaxed));
     }
 
-    void activateReadyStream(ProducerStream& stream) noexcept
+    void activate_ready_stream(ProducerStream& stream) noexcept
     {
         if (stream.shared.active.load(std::memory_order_relaxed)) {
             return;
@@ -1422,17 +1422,17 @@ private:
                 true,
                 std::memory_order_acq_rel,
                 std::memory_order_relaxed)) {
-            pushReadyStream(stream);
+            push_ready_stream(stream);
         }
     }
 
-    [[nodiscard]] TaskState* publishStream(ProducerStream& stream,
+    [[nodiscard]] TaskState* publish_stream(ProducerStream& stream,
                                            size_t count) noexcept
     {
         ProducerCursor& producer = stream.producer;
         producer.localPublished += static_cast<uint64_t>(count);
         if (!producer.activated) {
-            activateReadyStream(stream);
+            activate_ready_stream(stream);
             producer.activated = true;
         }
         // 累计 tail 是整批的唯一发布点；consumer 的 acquire 同步本批
@@ -1444,7 +1444,7 @@ private:
         stream.control.gate.store(
             ProducerGate::kPublished,
             std::memory_order_seq_cst);
-        return detachPublishedWaiter();
+        return detach_published_waiter();
     }
 
     /**
@@ -1455,7 +1455,7 @@ private:
      *       并读取 gate。该非对称握手共享同一全序，保证双方不可能同时漏看，且
      *       steady-state send 不执行 RMW。
      */
-    [[nodiscard]] bool beginSend(ProducerStream& stream) noexcept
+    [[nodiscard]] bool begin_send(ProducerStream& stream) noexcept
     {
         if (m_closeState.load(std::memory_order_relaxed) != CloseState::kOpen) {
             return false;
@@ -1472,44 +1472,44 @@ private:
         return false;
     }
 
-    static void finishSend(ProducerStream& stream) noexcept
+    static void finish_send(ProducerStream& stream) noexcept
     {
         stream.control.gate.store(ProducerGate::kOpen,
                                   std::memory_order_release);
     }
 
-    bool sendToStream(ProducerStream& stream, T&& value) noexcept
+    bool send_to_stream(ProducerStream& stream, T&& value) noexcept
     {
-        if (!beginSend(stream)) {
+        if (!begin_send(stream)) {
             return false;
         }
-        if (!reserveProducerSlots(stream, 1)) {
-            finishSend(stream);
+        if (!reserve_producer_slots(stream, 1)) {
+            finish_send(stream);
             return false;
         }
         ProducerCursor& producer = stream.producer;
         [[maybe_unused]] T* const stored = std::construct_at(
-            producer.block->slots[producer.index].constructionAddress(),
+            producer.block->slots[producer.index].construction_address(),
             std::move(value));
         ++producer.index;
-        TaskState* waiterState = publishStream(stream, 1);
-        // finishSend() 是本 sender 对 channel/stream 的最后一次访问。只有先
+        TaskState* waiterState = publish_stream(stream, 1);
+        // finish_send() 是本 sender 对 channel/stream 的最后一次访问。只有先
         // 释放 gate，内联恢复的 receiver 才能安全重入 close()。
-        finishSend(stream);
+        finish_send(stream);
         if (waiterState != nullptr) {
-            wakeDetachedWaiter(waiterState);
+            wake_detached_waiter(waiterState);
         }
         return true;
     }
 
-    bool sendBatchToStream(ProducerStream& stream, const std::vector<T>& values)
+    bool send_batch_to_stream(ProducerStream& stream, const std::vector<T>& values)
         noexcept requires std::is_nothrow_copy_constructible_v<T>
     {
-        if (!beginSend(stream)) {
+        if (!begin_send(stream)) {
             return false;
         }
-        if (!reserveProducerSlots(stream, values.size())) {
-            finishSend(stream);
+        if (!reserve_producer_slots(stream, values.size())) {
+            finish_send(stream);
             return false;
         }
         ProducerCursor& producer = stream.producer;
@@ -1520,28 +1520,28 @@ private:
                 producer.index = 0;
             }
             [[maybe_unused]] T* const stored = std::construct_at(
-                producer.block->slots[producer.index].constructionAddress(), value);
+                producer.block->slots[producer.index].construction_address(), value);
             ++producer.index;
-            guard.recordConstructed();
+            guard.record_constructed();
         }
         guard.commit();
-        TaskState* waiterState = publishStream(stream, values.size());
+        TaskState* waiterState = publish_stream(stream, values.size());
         // waiter 已完全摘出，释放 gate 后的调度不再访问 channel/stream。
-        finishSend(stream);
+        finish_send(stream);
         if (waiterState != nullptr) {
-            wakeDetachedWaiter(waiterState);
+            wake_detached_waiter(waiterState);
         }
         return true;
     }
 
-    bool sendBatchToStream(
+    bool send_batch_to_stream(
         ProducerStream& stream, std::vector<T>&& values) noexcept
     {
-        if (!beginSend(stream)) {
+        if (!begin_send(stream)) {
             return false;
         }
-        if (!reserveProducerSlots(stream, values.size())) {
-            finishSend(stream);
+        if (!reserve_producer_slots(stream, values.size())) {
+            finish_send(stream);
             return false;
         }
         ProducerCursor& producer = stream.producer;
@@ -1552,22 +1552,22 @@ private:
                 producer.index = 0;
             }
             [[maybe_unused]] T* const stored = std::construct_at(
-                producer.block->slots[producer.index].constructionAddress(),
+                producer.block->slots[producer.index].construction_address(),
                 std::move(value));
             ++producer.index;
-            guard.recordConstructed();
+            guard.record_constructed();
         }
         guard.commit();
-        TaskState* waiterState = publishStream(stream, values.size());
+        TaskState* waiterState = publish_stream(stream, values.size());
         // waiter 已完全摘出，释放 gate 后的调度不再访问 channel/stream。
-        finishSend(stream);
+        finish_send(stream);
         if (waiterState != nullptr) {
-            wakeDetachedWaiter(waiterState);
+            wake_detached_waiter(waiterState);
         }
         return true;
     }
 
-    static std::optional<T> tryPopStream(ProducerStream& stream) noexcept
+    static std::optional<T> try_pop_stream(ProducerStream& stream) noexcept
     {
         ConsumerCursor& consumer = stream.consumer;
         if (consumer.localConsumed == consumer.observedPublished) {
@@ -1588,7 +1588,7 @@ private:
             Block* retired = consumer.block;
             consumer.block = next;
             consumer.index = 0;
-            recycleBlock(stream, retired);
+            recycle_block(stream, retired);
         }
 
         Block& block = *consumer.block;
@@ -1602,7 +1602,7 @@ private:
         return value;
     }
 
-    void appendReadyStreams() noexcept
+    void append_ready_streams() noexcept
     {
         if (m_readyStack.load(std::memory_order_seq_cst) == nullptr) {
             return;
@@ -1634,7 +1634,7 @@ private:
         m_activeStreamCount += appended;
     }
 
-    void rotateReadyHead() noexcept
+    void rotate_ready_head() noexcept
     {
         ProducerStream* current = m_readyHead;
         m_consumerQuotaUsed = 0;
@@ -1647,34 +1647,34 @@ private:
         m_readyTail = current;
     }
 
-    std::optional<T> tryPopNextValue() noexcept
+    std::optional<T> try_pop_next_value() noexcept
     {
         if (m_readyHead == nullptr || m_consumerQuotaUsed == 0) {
-            appendReadyStreams();
+            append_ready_streams();
         }
         size_t remaining = m_activeStreamCount;
         while (m_readyHead != nullptr && remaining != 0) {
             ProducerStream* current = m_readyHead;
-            auto value = tryPopStream(*current);
+            auto value = try_pop_stream(*current);
             if (value.has_value()) {
                 ++m_consumerQuotaUsed;
                 if (m_consumerQuotaUsed >= kConsumerQuota) {
-                    rotateReadyHead();
+                    rotate_ready_head();
                 }
                 return value;
             }
-            rotateReadyHead();
+            rotate_ready_head();
             --remaining;
         }
         return std::nullopt;
     }
 
-    size_t prefetchedCount() const noexcept
+    size_t prefetched_count() const noexcept
     {
         return m_prefetchedVisible.load(std::memory_order_acquire);
     }
 
-    std::optional<T> tryPopPrefetchedValue() noexcept
+    std::optional<T> try_pop_prefetched_value() noexcept
     {
         if (m_prefetchIndex == m_singleRecvPrefetch.size()) {
             return std::nullopt;
@@ -1691,14 +1691,14 @@ private:
         return value;
     }
 
-    void tryPrefetchSingleRecvValues() noexcept
+    void try_prefetch_single_recv_values() noexcept
     {
         if (m_singleRecvPrefetchLimit == 0 || m_activeStreamCount != 1 ||
-            prefetchedCount() != 0) {
+            prefetched_count() != 0) {
             return;
         }
         while (m_singleRecvPrefetch.size() < m_singleRecvPrefetchLimit) {
-            auto value = tryPopNextValue();
+            auto value = try_pop_next_value();
             if (!value.has_value()) {
                 break;
             }
@@ -1718,12 +1718,12 @@ private:
      *          gate 与 waiter phase 共用 SC 全序，因此返回 false 后的新发布必由
      *          pending/armed 路径唤醒。
      */
-    [[nodiscard]] bool hasPublishedValueForWaiter() noexcept
+    [[nodiscard]] bool has_published_value_for_waiter() noexcept
     {
-        if (prefetchedCount() != 0) {
+        if (prefetched_count() != 0) {
             return true;
         }
-        appendReadyStreams();
+        append_ready_streams();
         ProducerStream* stream = m_readyHead;
         while (stream != nullptr) {
             if (stream->consumer.localConsumed !=
@@ -1768,9 +1768,9 @@ private:
      * @note 返回非空时 registration 已消费、timer 仲裁完成且 phase 已回到 Idle；
      *       arming race 返回空并由唯一 consumer 完成撤销。本函数不调用 scheduler，
      *       因此可在 producer gate 为 kPublished 时安全执行。非空返回值必须且只能
-     *       传给 wakeDetachedWaiter() 一次。
+     *       传给 wake_detached_waiter() 一次。
      */
-    [[nodiscard]] TaskState* detachPublishedWaiter() noexcept
+    [[nodiscard]] TaskState* detach_published_waiter() noexcept
     {
         WaiterPhase phase = m_waiterPhase.load(std::memory_order_seq_cst);
         for (;;) {
@@ -1780,7 +1780,7 @@ private:
                 return nullptr;
             }
             if (phase == WaiterPhase::kArmed) {
-                return detachArmedWaiter();
+                return detach_armed_waiter();
             }
             if (m_waiterPhase.compare_exchange_weak(
                     phase,
@@ -1794,16 +1794,16 @@ private:
 
     /**
      * @brief 在不访问 channel 的情况下接管 registration 引用并调度 waiter。
-     * @param waiterState detachPublishedWaiter() 返回的非空 owning 指针。
+     * @param waiterState detach_published_waiter() 返回的非空 owning 指针。
      */
-    static void wakeDetachedWaiter(TaskState* waiterState) noexcept
+    static void wake_detached_waiter(TaskState* waiterState) noexcept
     {
         TaskRef waiterTask =
-            kernel::detail::TaskRefStorageAccess::adoptState(waiterState);
-        Waker(std::move(waiterTask)).wakeUp();
+            kernel::detail::TaskRefStorageAccess::adopt_state(waiterState);
+        Waker(std::move(waiterTask)).wake_up();
     }
 
-    bool beginWaiterRegistration() noexcept
+    bool begin_waiter_registration() noexcept
     {
         WaiterPhase expected = WaiterPhase::kIdle;
         if (!m_waiterPhase.compare_exchange_strong(
@@ -1813,11 +1813,11 @@ private:
                 std::memory_order_seq_cst)) {
             return false;
         }
-        m_waiterRegistration.clearPendingWake();
+        m_waiterRegistration.clear_pending_wake();
         return true;
     }
 
-    void cancelWaiterRegistration() noexcept
+    void cancel_waiter_registration() noexcept
     {
         // 仅由已 begin、尚未 publish 的唯一 consumer 调用。
         WaiterPhase phase = m_waiterPhase.load(std::memory_order_seq_cst);
@@ -1833,25 +1833,25 @@ private:
         }
     }
 
-    bool publishWaiter(TaskState* waiterState,
+    bool publish_waiter(TaskState* waiterState,
                        TimeoutTimer::ptr timeoutTimer = {}) noexcept
     {
         if (waiterState == nullptr) {
-            cancelWaiterRegistration();
+            cancel_waiter_registration();
             return false;
         }
 
         // m_waiterPhase 在线性化点之间转移 m_waiterTimer 的唯一访问权：
         // consumer 在 kArming 写入，kArmed 的 producer/consumer CAS 胜者读取并清空。
         m_waiterTimer = std::move(timeoutTimer);
-        TaskRef registrationTask(waiterState, true);
+        TaskRef registration_task(waiterState, true);
         TaskState* registeredState =
-            kernel::detail::TaskRefStorageAccess::releaseState(registrationTask);
+            kernel::detail::TaskRefStorageAccess::release_state(registration_task);
         if (!m_waiterRegistration.arm(static_cast<void*>(registeredState))) {
             TaskRef releasedRegistration =
-                kernel::detail::TaskRefStorageAccess::adoptState(registeredState);
+                kernel::detail::TaskRefStorageAccess::adopt_state(registeredState);
             m_waiterTimer.reset();
-            cancelWaiterRegistration();
+            cancel_waiter_registration();
             return false;
         }
 
@@ -1867,15 +1867,15 @@ private:
         void* registered = static_cast<void*>(registeredState);
         if (m_waiterRegistration.clear(registered)) {
             TaskRef releasedRegistration =
-                kernel::detail::TaskRefStorageAccess::adoptState(registeredState);
+                kernel::detail::TaskRefStorageAccess::adopt_state(registeredState);
         }
         m_waiterTimer.reset();
-        m_waiterRegistration.clearPendingWake();
+        m_waiterRegistration.clear_pending_wake();
         m_waiterPhase.store(WaiterPhase::kIdle, std::memory_order_release);
         return false;
     }
 
-    bool clearWaiter(TaskState* waiterState) noexcept
+    bool clear_waiter(TaskState* waiterState) noexcept
     {
         if (waiterState == nullptr) {
             return false;
@@ -1886,23 +1886,23 @@ private:
                 WaiterPhase::kWaking,
                 std::memory_order_acq_rel,
                 std::memory_order_acquire)) {
-            m_waiterRegistration.clearPendingWake();
+            m_waiterRegistration.clear_pending_wake();
             return false;
         }
         TimeoutTimer::ptr timeoutTimer = std::move(m_waiterTimer);
         void* registered = static_cast<void*>(waiterState);
         const bool cleared = m_waiterRegistration.clear(registered);
-        m_waiterRegistration.clearPendingWake();
+        m_waiterRegistration.clear_pending_wake();
         m_waiterPhase.store(WaiterPhase::kIdle, std::memory_order_release);
         if (cleared) {
             TaskRef releasedRegistration =
-                kernel::detail::TaskRefStorageAccess::adoptState(waiterState);
+                kernel::detail::TaskRefStorageAccess::adopt_state(waiterState);
             return true;
         }
         return false;
     }
 
-    [[nodiscard]] TaskState* detachArmedWaiter() noexcept
+    [[nodiscard]] TaskState* detach_armed_waiter() noexcept
     {
         WaiterPhase expected = WaiterPhase::kArmed;
         if (!m_waiterPhase.compare_exchange_strong(
@@ -1913,16 +1913,16 @@ private:
             return nullptr;
         }
         auto* waiterState =
-            static_cast<TaskState*>(m_waiterRegistration.consumeWake());
+            static_cast<TaskState*>(m_waiterRegistration.consume_wake());
         TimeoutTimer::ptr timeoutTimer = std::move(m_waiterTimer);
         const bool operationWon = waiterState != nullptr &&
-            (timeoutTimer == nullptr || timeoutTimer->tryCompleteOperation());
-        m_waiterRegistration.clearPendingWake();
+            (timeoutTimer == nullptr || timeoutTimer->try_complete_operation());
+        m_waiterRegistration.clear_pending_wake();
         m_waiterPhase.store(WaiterPhase::kIdle, std::memory_order_release);
         if (!operationWon) {
             if (waiterState != nullptr) {
                 [[maybe_unused]] TaskRef releasedRegistration =
-                    kernel::detail::TaskRefStorageAccess::adoptState(waiterState);
+                    kernel::detail::TaskRefStorageAccess::adopt_state(waiterState);
             }
             return nullptr;
         }
@@ -1955,12 +1955,12 @@ private:
 };
 
 template <UnboundedValue T>
-inline bool UnboundedRecvAwaitable<T>::tryReceiveNow() noexcept
+inline bool UnboundedRecvAwaitable<T>::try_receive_now() noexcept
 {
     if (m_readyValue.has_value()) {
         return true;
     }
-    auto value = m_channel->tryRecv();
+    auto value = m_channel->try_recv();
     if (!value.has_value()) {
         return false;
     }
@@ -1972,7 +1972,7 @@ inline bool UnboundedRecvAwaitable<T>::tryReceiveNow() noexcept
 template <UnboundedValue T>
 inline bool UnboundedRecvAwaitable<T>::await_ready() noexcept
 {
-    return tryReceiveNow() || m_channel->isClosedAndDrained();
+    return try_receive_now() || m_channel->is_closed_and_drained();
 }
 
 template <UnboundedValue T>
@@ -1982,24 +1982,24 @@ inline bool UnboundedRecvAwaitable<T>::await_suspend(
 {
     auto* channel = m_channel;
     TimeoutTimer::ptr timeoutTimer = std::move(m_timeoutTimer);
-    if (tryReceiveNow() || channel->isClosedAndDrained()) {
+    if (try_receive_now() || channel->is_closed_and_drained()) {
         return false;
     }
 
-    TaskState* waiterState = handle.promise().taskRefView().state();
+    TaskState* waiterState = handle.promise().task_ref_view().state();
     m_waiterState = waiterState;
-    if (!channel->beginWaiterRegistration()) {
+    if (!channel->begin_waiter_registration()) {
         m_waiterState = nullptr;
         return false;
     }
-    if (channel->hasPublishedValueForWaiter() ||
-        channel->isClosedAndDrained()) {
-        channel->cancelWaiterRegistration();
+    if (channel->has_published_value_for_waiter() ||
+        channel->is_closed_and_drained()) {
+        channel->cancel_waiter_registration();
         m_waiterState = nullptr;
         return false;
     }
     // 发布后生产者可立即恢复并销毁协程帧，因此必须是最后一次访问 awaiter。
-    return channel->publishWaiter(waiterState, std::move(timeoutTimer));
+    return channel->publish_waiter(waiterState, std::move(timeoutTimer));
 }
 
 template <UnboundedValue T>
@@ -2007,7 +2007,7 @@ inline std::expected<T, IOError> UnboundedRecvAwaitable<T>::await_resume() noexc
 {
     if (m_waiterState != nullptr) {
         TaskState* waiterState = m_waiterState;
-        if (!m_channel->clearWaiter(waiterState)) {
+        if (!m_channel->clear_waiter(waiterState)) {
             // producer/timeout 已消费注册时无需再次释放 waiter 引用。
         }
         m_waiterState = nullptr;
@@ -2018,23 +2018,23 @@ inline std::expected<T, IOError> UnboundedRecvAwaitable<T>::await_resume() noexc
     if (m_readyValue.has_value()) {
         return std::move(*m_readyValue);
     }
-    auto value = m_channel->tryRecv();
+    auto value = m_channel->try_recv();
     if (value.has_value()) {
         return std::move(*value);
     }
-    if (m_channel->isClosedAndDrained()) {
+    if (m_channel->is_closed_and_drained()) {
         return std::unexpected(IOError(kClosed, 0));
     }
     return std::unexpected(IOError(kTimeout, 0));
 }
 
 template <UnboundedValue T>
-inline bool UnboundedRecvBatchAwaitable<T>::tryReceiveNow()
+inline bool UnboundedRecvBatchAwaitable<T>::try_receive_now()
 {
     if (m_readyValues.has_value()) {
         return true;
     }
-    auto values = m_channel->tryRecvBatch(m_maxCount);
+    auto values = m_channel->try_recv_batch(m_maxCount);
     if (!values.has_value()) {
         return false;
     }
@@ -2047,7 +2047,7 @@ inline bool UnboundedRecvBatchAwaitable<T>::tryReceiveNow()
 template <UnboundedValue T>
 inline bool UnboundedRecvBatchAwaitable<T>::await_ready()
 {
-    return tryReceiveNow() || m_channel->isClosedAndDrained();
+    return try_receive_now() || m_channel->is_closed_and_drained();
 }
 
 template <UnboundedValue T>
@@ -2057,24 +2057,24 @@ inline bool UnboundedRecvBatchAwaitable<T>::await_suspend(
 {
     auto* channel = m_channel;
     TimeoutTimer::ptr timeoutTimer = std::move(m_timeoutTimer);
-    if (tryReceiveNow() || channel->isClosedAndDrained()) {
+    if (try_receive_now() || channel->is_closed_and_drained()) {
         return false;
     }
 
-    TaskState* waiterState = handle.promise().taskRefView().state();
+    TaskState* waiterState = handle.promise().task_ref_view().state();
     m_waiterState = waiterState;
-    if (!channel->beginWaiterRegistration()) {
+    if (!channel->begin_waiter_registration()) {
         m_waiterState = nullptr;
         return false;
     }
-    if (channel->hasPublishedValueForWaiter() ||
-        channel->isClosedAndDrained()) {
-        channel->cancelWaiterRegistration();
+    if (channel->has_published_value_for_waiter() ||
+        channel->is_closed_and_drained()) {
+        channel->cancel_waiter_registration();
         m_waiterState = nullptr;
         return false;
     }
     // 发布后生产者可立即恢复并销毁协程帧，因此必须是最后一次访问 awaiter。
-    return channel->publishWaiter(waiterState, std::move(timeoutTimer));
+    return channel->publish_waiter(waiterState, std::move(timeoutTimer));
 }
 
 template <UnboundedValue T>
@@ -2083,7 +2083,7 @@ UnboundedRecvBatchAwaitable<T>::await_resume()
 {
     if (m_waiterState != nullptr) {
         TaskState* waiterState = m_waiterState;
-        if (!m_channel->clearWaiter(waiterState)) {
+        if (!m_channel->clear_waiter(waiterState)) {
             // producer/timeout 已消费注册时无需再次释放 waiter 引用。
         }
         m_waiterState = nullptr;
@@ -2094,18 +2094,18 @@ UnboundedRecvBatchAwaitable<T>::await_resume()
     if (m_readyValues.has_value()) {
         return std::move(*m_readyValues);
     }
-    auto values = m_channel->tryRecvBatch(m_maxCount);
+    auto values = m_channel->try_recv_batch(m_maxCount);
     if (values.has_value()) {
         return std::move(*values);
     }
-    if (m_channel->isClosedAndDrained()) {
+    if (m_channel->is_closed_and_drained()) {
         return std::unexpected(IOError(kClosed, 0));
     }
     return std::unexpected(IOError(kTimeout, 0));
 }
 
 template <UnboundedValue T>
-inline bool UnboundedRecvBatchToAwaitable<T>::tryReceiveNow() noexcept
+inline bool UnboundedRecvBatchToAwaitable<T>::try_receive_now() noexcept
 {
     if (m_ready || m_invalid) {
         return true;
@@ -2118,7 +2118,7 @@ inline bool UnboundedRecvBatchToAwaitable<T>::tryReceiveNow() noexcept
         m_invalid = true;
         return true;
     }
-    m_readyCount = m_channel->drainTo(*m_destination, m_maxCount);
+    m_readyCount = m_channel->drain_to(*m_destination, m_maxCount);
     m_ready = m_readyCount != 0;
     return m_ready;
 }
@@ -2126,7 +2126,7 @@ inline bool UnboundedRecvBatchToAwaitable<T>::tryReceiveNow() noexcept
 template <UnboundedValue T>
 inline bool UnboundedRecvBatchToAwaitable<T>::await_ready() noexcept
 {
-    return tryReceiveNow() || m_channel->isClosedAndDrained();
+    return try_receive_now() || m_channel->is_closed_and_drained();
 }
 
 template <UnboundedValue T>
@@ -2136,24 +2136,24 @@ inline bool UnboundedRecvBatchToAwaitable<T>::await_suspend(
 {
     auto* channel = m_channel;
     TimeoutTimer::ptr timeoutTimer = std::move(m_timeoutTimer);
-    if (tryReceiveNow() || channel->isClosedAndDrained()) {
+    if (try_receive_now() || channel->is_closed_and_drained()) {
         return false;
     }
 
-    TaskState* waiterState = handle.promise().taskRefView().state();
+    TaskState* waiterState = handle.promise().task_ref_view().state();
     m_waiterState = waiterState;
-    if (!channel->beginWaiterRegistration()) {
+    if (!channel->begin_waiter_registration()) {
         m_waiterState = nullptr;
         return false;
     }
-    if (channel->hasPublishedValueForWaiter() ||
-        channel->isClosedAndDrained()) {
-        channel->cancelWaiterRegistration();
+    if (channel->has_published_value_for_waiter() ||
+        channel->is_closed_and_drained()) {
+        channel->cancel_waiter_registration();
         m_waiterState = nullptr;
         return false;
     }
     // 发布后 producer 可立即恢复并销毁协程帧，因此必须是最后一次访问 awaiter。
-    return channel->publishWaiter(waiterState, std::move(timeoutTimer));
+    return channel->publish_waiter(waiterState, std::move(timeoutTimer));
 }
 
 template <UnboundedValue T>
@@ -2162,7 +2162,7 @@ UnboundedRecvBatchToAwaitable<T>::await_resume() noexcept
 {
     if (m_waiterState != nullptr) {
         TaskState* waiterState = m_waiterState;
-        const bool cleared = m_channel->clearWaiter(waiterState);
+        const bool cleared = m_channel->clear_waiter(waiterState);
         if (!cleared) {
             // producer/timeout 已消费注册时无需再次释放 waiter 引用。
         }
@@ -2172,8 +2172,8 @@ UnboundedRecvBatchToAwaitable<T>::await_resume() noexcept
         return std::unexpected(IOError(kTimeout, 0));
     }
     if (!m_ready && !m_invalid) {
-        const bool completed = tryReceiveNow();
-        if (!completed && m_channel->isClosedAndDrained()) {
+        const bool completed = try_receive_now();
+        if (!completed && m_channel->is_closed_and_drained()) {
             return std::unexpected(IOError(kClosed, 0));
         }
     }

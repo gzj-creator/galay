@@ -92,7 +92,7 @@ def verify_policy() -> None:
     for needle in ("co_spawn", "awaitable", "async_connect", "async_read", "async_write"):
         require(needle in asio_tcp_source, f"Asio TCP coroutine baseline is missing {needle}")
     galay_tcp_source = (ROOT / "benchmark/cpp/kernel/b31_tcp_socket_fair_throughput.cc").read_text()
-    for needle in ("enum class Phase", "readExact", "writeAll", "settledCountersMatch"):
+    for needle in ("enum class Phase", "read_exact", "write_all", "settled_counters_match"):
         require(needle in galay_tcp_source, f"Galay TCP fair harness is missing {needle}")
 
     runner = TENCENT_RUNNER.read_text()

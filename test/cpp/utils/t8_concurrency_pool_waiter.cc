@@ -80,12 +80,12 @@ void test_thread() {
     std::cout << "=== Testing Thread ===" << std::endl;
 
     ThreadPool pool(4);
-    assert(pool.threadCount() == 4);
+    assert(pool.thread_count() == 4);
 
     // Add tasks with futures
     std::vector<std::future<int>> futures;
     for (int i = 0; i < 10; ++i) {
-        futures.push_back(pool.addTask([i]() {
+        futures.push_back(pool.add_task([i]() {
             return i * i;
         }));
     }
@@ -100,7 +100,7 @@ void test_thread() {
     std::atomic<int> counter{0};
 
     for (int i = 0; i < 5; ++i) {
-        waiter.addTask(pool, [&counter]() {
+        waiter.add_task(pool, [&counter]() {
             ++counter;
         });
     }
@@ -111,7 +111,7 @@ void test_thread() {
     // Edge cases for thread pool
     // Zero thread pool
     ThreadPool zeroPool(0);
-    assert(zeroPool.threadCount() > 0); // Should default to hardware concurrency
+    assert(zeroPool.thread_count() > 0); // Should default to hardware concurrency
 
     // Empty task list
     TaskWaiter emptyWaiter;
@@ -122,7 +122,7 @@ void test_thread() {
 
     bool addTaskRejected = false;
     try {
-        (void)stoppedPool.addTask([] { return 1; });
+        (void)stoppedPool.add_task([] { return 1; });
     } catch (const std::runtime_error&) {
         addTaskRejected = true;
     }
@@ -153,7 +153,7 @@ void test_stress_pool() {
     for (int t = 0; t < numThreads; ++t) {
         threads.emplace_back([&]() {
             for (int i = 0; i < opsPerThread; ++i) {
-                auto obj = pool.tryAcquireFor(std::chrono::microseconds(1));
+                auto obj = pool.try_acquire_for(std::chrono::microseconds(1));
                 if (obj) {
                     ++acquired;
                     *obj = i;
@@ -199,14 +199,14 @@ void test_stress_thread_pool() {
         });
     }
 
-    pool.waitAll();
+    pool.wait_all();
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     double tasksPerSec = (numTasks * 1000.0) / duration;
 
-    std::cout << "  Thread count: " << pool.threadCount() << std::endl;
+    std::cout << "  Thread count: " << pool.thread_count() << std::endl;
     std::cout << "  Total tasks: " << numTasks << std::endl;
     std::cout << "  Duration: " << duration << "ms" << std::endl;
     std::cout << "  Throughput: " << std::fixed << std::setprecision(0) << tasksPerSec << " tasks/sec" << std::endl;

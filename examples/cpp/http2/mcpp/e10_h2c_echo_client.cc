@@ -10,7 +10,7 @@ import galay.http2;
 using namespace galay::http2;
 using namespace galay::kernel;
 
-Task<void> runClient(const std::string& host, uint16_t port) {
+Task<void> run_client(const std::string& host, uint16_t port) {
     auto client = H2cClientBuilder().build();
 
     auto connect_result = co_await client.connect(host, port);
@@ -21,12 +21,12 @@ Task<void> runClient(const std::string& host, uint16_t port) {
 
     auto upgrade_result = co_await client.upgrade("/");
     if (!upgrade_result) {
-        std::cerr << "Upgrade failed: " << upgrade_result.error().toString() << "\n";
+        std::cerr << "Upgrade failed: " << upgrade_result.error().to_string() << "\n";
         co_return;
     }
 
-    auto* manager = client.getConn()->streamManager();
-    auto stream = manager->allocateStream();
+    auto* manager = client.get_conn()->stream_manager();
+    auto stream = manager->allocate_stream();
 
     std::string body = "Hello from import h2c client!";
     std::vector<Http2HeaderField> headers;
@@ -38,12 +38,12 @@ Task<void> runClient(const std::string& host, uint16_t port) {
     headers.emplace_back("content-type", "text/plain");
     headers.emplace_back("content-length", std::to_string(body.size()));
 
-    stream->sendHeaders(headers, false, true);
-    stream->sendData(body, true);
+    stream->send_headers(headers, false, true);
+    stream->send_data(body, true);
 
     bool finished = false;
     while (!finished) {
-        auto batch_result = co_await stream->getFrames(16);
+        auto batch_result = co_await stream->get_frames(16);
         if (!batch_result) {
             std::cerr << "Response stream closed unexpectedly\n";
             co_await client.shutdown();
@@ -56,7 +56,7 @@ Task<void> runClient(const std::string& host, uint16_t port) {
                 co_await client.shutdown();
                 co_return;
             }
-            if ((frame->isHeaders() || frame->isData()) && frame->isEndStream()) {
+            if ((frame->is_headers() || frame->is_data()) && frame->is_end_stream()) {
                 finished = true;
                 break;
             }
@@ -81,9 +81,9 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
         runtime.start();
-        auto join = runtime.spawnIO(runClient(host, port));
+        auto join = runtime.spawn_io(run_client(host, port));
         if (!join) {
             runtime.stop();
             return 1;

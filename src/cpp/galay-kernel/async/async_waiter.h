@@ -11,7 +11,7 @@
  * @code
  * // IO 任务中
  * AsyncWaiter<int> waiter;
- * scheduleTask(*parallelScheduler, computeTask(&waiter));
+ * schedule_task(*parallelScheduler, compute_task(&waiter));
  * auto result = co_await waiter.wait();  // 挂起等待
  * if (result) {
  *     // 使用 result.value()
@@ -24,7 +24,7 @@
  * }
  *
  * // 计算任务中
- * Task<void> computeTask(AsyncWaiter<int>* waiter) {
+ * Task<void> compute_task(AsyncWaiter<int>* waiter) {
  *     int result = heavyCompute();
  *     waiter->notify(result);  // 唤醒等待任务
  *     co_return;
@@ -107,7 +107,7 @@ public:
     bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;  ///< 注册等待协程并在尚未完成时挂起
     bool await_suspend(Waker waker) noexcept;  ///< 使用外部 Waker 注册等待，用于 C coroutine bridge
     std::expected<void, IOError> await_resume() noexcept;  ///< 返回完成结果；超时时返回 IOError(kTimeout, 0)
-    void markTimeout() noexcept;  ///< 标记超时并清理等待器中的外部 Waker
+    void mark_timeout() noexcept;  ///< 标记超时并清理等待器中的外部 Waker
 
 private:
     friend struct WithTimeout<AsyncWaiterAwaitable<void>>;
@@ -168,7 +168,7 @@ public:
         const auto previous = m_state.exchange(AsyncWaiterState::kReady,
                                                std::memory_order_acq_rel);
         if (previous == AsyncWaiterState::kWaiting) {
-            m_waker.wakeUp();
+            m_waker.wake_up();
         }
         return true;
     }
@@ -177,7 +177,7 @@ public:
      * @brief 检查是否正在等待
      * @return true 当前已有协程注册在该等待器上并处于挂起状态
      */
-    bool isWaiting() const {
+    bool is_waiting() const {
         return m_state.load(std::memory_order_acquire) == AsyncWaiterState::kWaiting;
     }
 
@@ -185,7 +185,7 @@ public:
      * @brief 检查结果是否就绪
      * @return true 已调用 notify() 且结果对等待侧可见
      */
-    bool isReady() const {
+    bool is_ready() const {
         return m_ready.load(std::memory_order_acquire);
     }
 
@@ -239,7 +239,7 @@ public:
         const auto previous = m_state.exchange(AsyncWaiterState::kReady,
                                                std::memory_order_acq_rel);
         if (previous == AsyncWaiterState::kWaiting) {
-            m_waker.wakeUp();
+            m_waker.wake_up();
         }
         return true;
     }
@@ -248,7 +248,7 @@ public:
      * @brief 检查是否已有协程在等待
      * @return true 当前已有协程注册在该等待器上并处于挂起状态
      */
-    bool isWaiting() const {
+    bool is_waiting() const {
         return m_state.load(std::memory_order_acquire) == AsyncWaiterState::kWaiting;
     }
 
@@ -256,7 +256,7 @@ public:
      * @brief 检查完成信号是否已经到达
      * @return true 已调用 notify() 且结果对等待侧可见
      */
-    bool isReady() const {
+    bool is_ready() const {
         return m_ready.load(std::memory_order_acquire);
     }
 
@@ -343,7 +343,7 @@ inline bool AsyncWaiterAwaitable<void>::await_suspend(Waker waker) noexcept {
     return false;
 }
 
-inline void AsyncWaiterAwaitable<void>::markTimeout() noexcept {
+inline void AsyncWaiterAwaitable<void>::mark_timeout() noexcept {
     m_result = std::unexpected(IOError(kTimeout, 0));
     AsyncWaiterState expected = AsyncWaiterState::kWaiting;
     if (m_waiter->m_state.compare_exchange_strong(expected,

@@ -28,21 +28,21 @@ static std::atomic<bool> g_running{true};
 static std::atomic<uint64_t> g_message_count{0};
 static std::atomic<uint64_t> g_connection_count{0};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
 /**
  * @brief 处理 WebSocket 连接
  */
-Task<void> handleWebSocketConnection(WsConn& ws_conn) {
+Task<void> handle_web_socket_connection(WsConn& ws_conn) {
     g_connection_count++;
 
-    auto reader = ws_conn.getReader();
-    auto writer = ws_conn.getWriter(WsWriterSetting::byServer());
+    auto reader = ws_conn.get_reader();
+    auto writer = ws_conn.get_writer(WsWriterSetting::by_server());
 
     // 发送欢迎消息
-    auto send_result = co_await writer.sendText("Welcome to WebSocket Test Server!");
+    auto send_result = co_await writer.send_text("Welcome to WebSocket Test Server!");
     if (!send_result) {
         co_return;
     }
@@ -55,7 +55,7 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
         // 循环等待接收消息
         bool recv_success = false;
         while (true) {
-            auto result = co_await reader.getMessage(message, opcode);
+            auto result = co_await reader.get_message(message, opcode);
 
             if (!result.has_value()) {
                 WsError error = result.error();
@@ -81,7 +81,7 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
 
         // 处理不同类型的消息
         if (opcode == WsOpcode::Ping) {
-            auto pong_result = co_await writer.sendPong(message);
+            auto pong_result = co_await writer.send_pong(message);
             if (!pong_result) {
                 co_await ws_conn.close();
                 co_return;
@@ -90,7 +90,7 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
         else if (opcode == WsOpcode::Pong) {
         }
         else if (opcode == WsOpcode::Close) {
-            auto close_result = co_await writer.sendClose();
+            auto close_result = co_await writer.send_close();
             if (!close_result) {
             }
             break;
@@ -99,7 +99,7 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
 
             // Echo back
             std::string echo_msg = "Echo: " + message;
-            auto echo_result = co_await writer.sendText(echo_msg);
+            auto echo_result = co_await writer.send_text(echo_msg);
             if (!echo_result) {
                 co_await ws_conn.close();
                 co_return;
@@ -108,7 +108,7 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
         else if (opcode == WsOpcode::Binary) {
 
             // Echo back binary
-            auto echo_result = co_await writer.sendBinary(message);
+            auto echo_result = co_await writer.send_binary(message);
             if (!echo_result) {
                 co_await ws_conn.close();
                 co_return;
@@ -123,11 +123,11 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
 /**
  * @brief HTTP 请求处理器
  */
-Task<void> handleHttpRequest(HttpConn conn) {
-    auto reader = conn.getReader();
+Task<void> handle_http_request(HttpConn conn) {
+    auto reader = conn.get_reader();
     HttpRequest request;
 
-    auto read_result = co_await reader.getRequest(request);
+    auto read_result = co_await reader.get_request(request);
     if (!read_result) {
         co_await conn.close();
         co_return;
@@ -136,20 +136,20 @@ Task<void> handleHttpRequest(HttpConn conn) {
 
     // 检查是否是 WebSocket 升级请求
     if (request.header().uri() == "/ws" || request.header().uri() == "/") {
-        auto upgrade_result = WsUpgrade::handleUpgrade(request);
+        auto upgrade_result = WsUpgrade::handle_upgrade(request);
 
         if (!upgrade_result.success) {
 
-            auto writer = conn.getWriter();
-            co_await writer.sendResponse(upgrade_result.response);
+            auto writer = conn.get_writer();
+            co_await writer.send_response(upgrade_result.response);
             co_await conn.close();
             co_return;
         }
 
 
         // 发送升级响应
-        auto writer = conn.getWriter();
-        auto send_result = co_await writer.sendResponse(upgrade_result.response);
+        auto writer = conn.get_writer();
+        auto send_result = co_await writer.send_response(upgrade_result.response);
 
         if (!send_result) {
             co_await conn.close();
@@ -158,20 +158,20 @@ Task<void> handleHttpRequest(HttpConn conn) {
 
         WsConn ws_conn = WsConn::from(std::move(conn), true);
 
-        co_await handleWebSocketConnection(ws_conn);
+        co_await handle_web_socket_connection(ws_conn);
     }
     else {
         // 普通 HTTP 请求
         auto response = Http1_1ResponseBuilder()
             .status(HttpStatusCode::OK_200)
             .header("Content-Type", "text/html")
-            .buildMove();
+            .build_move();
 
         std::string body = "<html><body><h1>WebSocket Test Server</h1><p>Connect to /ws for WebSocket</p></body></html>";
-        response.setBodyStr(std::move(body));
+        response.set_body_str(std::move(body));
 
-        auto writer = conn.getWriter();
-        co_await writer.sendResponse(response);
+        auto writer = conn.get_writer();
+        co_await writer.send_response(response);
         co_await conn.close();
     }
 
@@ -193,19 +193,19 @@ int main(int argc, char* argv[]) {
     std::cout << "Press Ctrl+C to stop\n";
     std::cout << "========================================\n\n";
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
         HttpServer server(HttpServerBuilder()
             .host("0.0.0.0")
             .port(port)
-            .ioSchedulerCount(4)
-            .parallelSchedulerCount(0)
+            .io_scheduler_count(4)
+            .parallel_scheduler_count(0)
             .build());
 
 
-        server.start(handleHttpRequest);
+        server.start(handle_http_request);
 
         std::cout << "Server started successfully!\n\n";
 

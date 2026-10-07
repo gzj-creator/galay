@@ -50,11 +50,11 @@ namespace galay::redis
         bool await_ready() const noexcept { return false; }
         template <typename Promise>
         requires requires(const Promise& promise) {
-            { promise.taskRefView() } -> std::same_as<const galay::kernel::TaskRef&>;
+            { promise.task_ref_view() } -> std::same_as<const galay::kernel::TaskRef&>;
         }
         bool await_suspend(std::coroutine_handle<Promise> handle)
         {
-            const auto action = prepareSuspend(galay::kernel::Waker(handle));
+            const auto action = prepare_suspend(galay::kernel::Waker(handle));
             if (action == SuspendAction::Wait) {
                 return true;
             }
@@ -64,7 +64,7 @@ namespace galay::redis
             return false;
         }
         Result await_resume();
-        void markTimeout();
+        void mark_timeout();
 
     private:
         enum class SuspendAction {
@@ -84,7 +84,7 @@ namespace galay::redis
             Error,
         };
 
-        SuspendAction prepareSuspend(galay::kernel::Waker waiter_waker);
+        SuspendAction prepare_suspend(galay::kernel::Waker waiter_waker);
 
         std::optional<RedisConnectOperation> m_connect_awaitable;
         std::optional<RedisError> m_error;
@@ -144,11 +144,11 @@ namespace galay::redis
         bool await_ready() const noexcept { return false; }
         template <typename Promise>
         requires requires(const Promise& promise) {
-            { promise.taskRefView() } -> std::same_as<const galay::kernel::TaskRef&>;
+            { promise.task_ref_view() } -> std::same_as<const galay::kernel::TaskRef&>;
         }
         bool await_suspend(std::coroutine_handle<Promise> handle)
         {
-            const auto action = prepareSuspend(galay::kernel::Waker(handle));
+            const auto action = prepare_suspend(galay::kernel::Waker(handle));
             if (action == SuspendAction::Wait) {
                 return true;
             }
@@ -158,7 +158,7 @@ namespace galay::redis
             return false;
         }
         Result await_resume();
-        void markTimeout();
+        void mark_timeout();
 
     private:
         enum class SuspendAction {
@@ -178,7 +178,7 @@ namespace galay::redis
             Error,
         };
 
-        SuspendAction prepareSuspend(galay::kernel::Waker waiter_waker);
+        SuspendAction prepare_suspend(galay::kernel::Waker waiter_waker);
 
         std::optional<detail::RedissConnectOperation> m_connect_awaitable;
         std::optional<RedisError> m_error;

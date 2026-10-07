@@ -8,7 +8,7 @@
 namespace
 {
 
-std::string readFile(const std::filesystem::path& path)
+std::string read_file(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input) {
@@ -26,7 +26,7 @@ bool contains(const std::string& text, const std::string& needle)
     return text.find(needle) != std::string::npos;
 }
 
-bool hasClassDefinition(const std::string& text, const std::string& name)
+bool has_class_definition(const std::string& text, const std::string& name)
 {
     const std::string needle = "class " + name;
     size_t search_from = 0;
@@ -48,7 +48,7 @@ bool hasClassDefinition(const std::string& text, const std::string& name)
     return false;
 }
 
-std::string bodyAfter(const std::string& text, const std::string& signature)
+std::string body_after(const std::string& text, const std::string& signature)
 {
     const auto signature_pos = text.find(signature);
     if (signature_pos == std::string::npos) {
@@ -78,13 +78,13 @@ std::string bodyAfter(const std::string& text, const std::string& signature)
     std::exit(1);
 }
 
-std::filesystem::path repoRoot()
+std::filesystem::path repo_root()
 {
     std::filesystem::path file = __FILE__;
     return file.parent_path().parent_path().parent_path().parent_path();
 }
 
-bool hasBlockingLockToken(const std::string& text)
+bool has_blocking_lock_token(const std::string& text)
 {
     return contains(text, "std::mutex") ||
            contains(text, "std::lock_guard") ||
@@ -95,21 +95,21 @@ bool hasBlockingLockToken(const std::string& text)
 
 int main()
 {
-    const auto root = repoRoot();
-    const auto client_header = readFile(root / "src/cpp/galay-redis/async/client.h");
-    const auto client_source = readFile(root / "src/cpp/galay-redis/async/client.cc");
+    const auto root = repo_root();
+    const auto client_header = read_file(root / "src/cpp/galay-redis/async/client.h");
+    const auto client_source = read_file(root / "src/cpp/galay-redis/async/client.cc");
     const auto client_awaitable_header =
-        readFile(root / "src/cpp/galay-redis/details/awaitable.h");
+        read_file(root / "src/cpp/galay-redis/details/awaitable.h");
     const auto client_awaitable_inline =
-        readFile(root / "src/cpp/galay-redis/details/awaitable.inl");
-    const auto pool_header = readFile(root / "src/cpp/galay-redis/async/conn_pool.h");
+        read_file(root / "src/cpp/galay-redis/details/awaitable.inl");
+    const auto pool_header = read_file(root / "src/cpp/galay-redis/async/conn_pool.h");
     const auto pool_awaitable_header =
-        readFile(root / "src/cpp/galay-redis/details/pool_awaitable.h");
+        read_file(root / "src/cpp/galay-redis/details/pool_awaitable.h");
     const auto pool_awaitable_inline =
-        readFile(root / "src/cpp/galay-redis/details/pool_awaitable.inl");
-    const auto waiter_state_header = readFile(root / "src/cpp/galay-redis/async/conn_pool_waiter_state.h");
-    const auto pool_source = readFile(root / "src/cpp/galay-redis/async/conn_pool.cc");
-    const auto session_source = readFile(root / "src/cpp/galay-redis/sync/redis_session.cc");
+        read_file(root / "src/cpp/galay-redis/details/pool_awaitable.inl");
+    const auto waiter_state_header = read_file(root / "src/cpp/galay-redis/async/conn_pool_waiter_state.h");
+    const auto pool_source = read_file(root / "src/cpp/galay-redis/async/conn_pool.cc");
+    const auto session_source = read_file(root / "src/cpp/galay-redis/sync/redis_session.cc");
 
     if (std::filesystem::exists(root / "src/cpp/galay-redis/async/redis_client.h") ||
         std::filesystem::exists(root / "src/cpp/galay-redis/async/redis_client.cc") ||
@@ -125,8 +125,8 @@ int main()
     }
 
     for (const auto* forbidden : {
-             "m_pool->initializeSync()",
-             "m_pool->acquireSync(",
+             "m_pool->initialize_sync()",
+             "m_pool->acquire_sync(",
              "std::condition_variable",
              "暂时创建未连接的客户端",
              "No available connections",
@@ -159,33 +159,33 @@ int main()
              "RedissPoolAcquireAwaitable",
     }) {
         const std::string declaration = std::string("class ") + awaitable;
-        if (hasClassDefinition(pool_header, awaitable) ||
-            !hasClassDefinition(pool_awaitable_header, awaitable)) {
+        if (has_class_definition(pool_header, awaitable) ||
+            !has_class_definition(pool_awaitable_header, awaitable)) {
             std::cerr << "redis pool awaitable declarations must live in details/pool_awaitable.h: "
                       << declaration << "\n";
             return 1;
         }
     }
-    if (contains(pool_source, "PoolAcquireAwaitable::prepareSuspend") ||
-        !contains(pool_awaitable_inline, "PoolAcquireAwaitable::prepareSuspend")) {
+    if (contains(pool_source, "PoolAcquireAwaitable::prepare_suspend") ||
+        !contains(pool_awaitable_inline, "PoolAcquireAwaitable::prepare_suspend")) {
         std::cerr << "redis pool awaitable definitions must live in details/pool_awaitable.inl\n";
         return 1;
     }
 
     const auto redis_prepare_suspend =
-        bodyAfter(pool_awaitable_inline, "PoolAcquireAwaitable::prepareSuspend");
+        body_after(pool_awaitable_inline, "PoolAcquireAwaitable::prepare_suspend");
     const auto redis_await_resume =
-        bodyAfter(pool_awaitable_inline, "PoolAcquireAwaitable::await_resume");
+        body_after(pool_awaitable_inline, "PoolAcquireAwaitable::await_resume");
     const auto redis_mark_timeout =
-        bodyAfter(pool_awaitable_inline, "PoolAcquireAwaitable::markTimeout");
+        body_after(pool_awaitable_inline, "PoolAcquireAwaitable::mark_timeout");
     const auto redis_await_suspend =
-        bodyAfter(pool_awaitable_header, "bool await_suspend(std::coroutine_handle<Promise> handle)");
+        body_after(pool_awaitable_header, "bool await_suspend(std::coroutine_handle<Promise> handle)");
     const auto rediss_prepare_suspend =
-        bodyAfter(pool_awaitable_inline, "RedissPoolAcquireAwaitable::prepareSuspend");
+        body_after(pool_awaitable_inline, "RedissPoolAcquireAwaitable::prepare_suspend");
     const auto rediss_await_resume =
-        bodyAfter(pool_awaitable_inline, "RedissPoolAcquireAwaitable::await_resume");
+        body_after(pool_awaitable_inline, "RedissPoolAcquireAwaitable::await_resume");
     const auto rediss_mark_timeout =
-        bodyAfter(pool_awaitable_inline, "RedissPoolAcquireAwaitable::markTimeout");
+        body_after(pool_awaitable_inline, "RedissPoolAcquireAwaitable::mark_timeout");
 
     for (const auto* forbidden : {"std::mutex", "std::lock_guard", "std::unique_lock"}) {
         if (contains(redis_prepare_suspend, forbidden) ||
@@ -201,10 +201,10 @@ int main()
         }
     }
 
-    if (contains(rediss_prepare_suspend, "acquireSync") ||
-        contains(rediss_await_resume, "acquireSync") ||
-        contains(rediss_mark_timeout, "acquireSync")) {
-        std::cerr << "RedissPoolAcquireAwaitable acquire path must not call acquireSync\n";
+    if (contains(rediss_prepare_suspend, "acquire_sync") ||
+        contains(rediss_await_resume, "acquire_sync") ||
+        contains(rediss_mark_timeout, "acquire_sync")) {
+        std::cerr << "RedissPoolAcquireAwaitable acquire path must not call acquire_sync\n";
         return 1;
     }
 
@@ -235,11 +235,11 @@ int main()
     }
 
     for (const auto* forbidden : {
-             "(void)m_pool->wakeOneWaiterFromAvailable()",
-             "(void)returnToAvailable",
-             "(void)completeOneWaiter",
-             "(void)drainAvailableConnections",
-             "(void)wakeOneWaiterFromAvailable",
+             "(void)m_pool->wake_one_waiter_from_available()",
+             "(void)return_to_available",
+             "(void)complete_one_waiter",
+             "(void)drain_available_connections",
+             "(void)wake_one_waiter_from_available",
          }) {
         if (contains(pool_source, forbidden)) {
             std::cerr << "redis pool must handle non-void state helper result explicitly: "

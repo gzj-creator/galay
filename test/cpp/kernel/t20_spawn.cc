@@ -18,9 +18,9 @@ namespace {
 
 std::atomic<int> g_finishedTasks{0};
 
-Task<int> computeTask(int id, int yields)
+Task<int> compute_task(int id, int yields)
 {
-    assert(RuntimeHandle::tryCurrent().has_value());
+    assert(RuntimeHandle::try_current().has_value());
 
     for (int i = 0; i < yields; ++i) {
         co_yield true;
@@ -30,13 +30,13 @@ Task<int> computeTask(int id, int yields)
     co_return id * 10;
 }
 
-Task<void> spawnDetachedTasks()
+Task<void> spawn_detached_tasks()
 {
     auto runtime_handle = RuntimeHandle::current();
     assert(runtime_handle.has_value());
 
-    auto handle = runtime_handle->spawnCpu(computeTask(2, 2));
-    auto detached = runtime_handle->spawnCpu(computeTask(3, 3));
+    auto handle = runtime_handle->spawn_cpu(compute_task(2, 2));
+    auto detached = runtime_handle->spawn_cpu(compute_task(3, 3));
     assert(handle.has_value());
     assert(detached.has_value());
     (void)handle;
@@ -44,7 +44,7 @@ Task<void> spawnDetachedTasks()
     co_return;
 }
 
-Task<void> waitForFinishedTasks(int expected)
+Task<void> wait_for_finished_tasks(int expected)
 {
     for (int i = 0; i < 4096 && g_finishedTasks.load(std::memory_order_acquire) < expected; ++i) {
         co_yield true;
@@ -54,17 +54,17 @@ Task<void> waitForFinishedTasks(int expected)
     co_return;
 }
 
-Task<int> rootValue()
+Task<int> root_value()
 {
     co_return 42;
 }
 
-Task<void> spawnBlockingFromHandle()
+Task<void> spawn_blocking_from_handle()
 {
     auto runtime_handle = RuntimeHandle::current();
     assert(runtime_handle.has_value());
 
-    auto blocking = runtime_handle->spawnBlocking([]() {
+    auto blocking = runtime_handle->spawn_blocking([]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         return 7;
     });
@@ -82,25 +82,25 @@ Task<void> spawnBlockingFromHandle()
 int main()
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
 
-    const auto value = runtime.blockOnCpu(rootValue());
+    const auto value = runtime.block_on_cpu(root_value());
     assert(value.has_value());
     assert(*value == 42);
 
-    auto joined = runtime.spawnCpu(computeTask(1, 1));
+    auto joined = runtime.spawn_cpu(compute_task(1, 1));
     assert(joined.has_value());
     auto joined_value = joined->join();
     assert(joined_value.has_value());
     assert(*joined_value == 10);
 
-    auto detached = runtime.blockOnCpu(spawnDetachedTasks());
+    auto detached = runtime.block_on_cpu(spawn_detached_tasks());
     assert(detached.has_value());
-    auto finished = runtime.blockOnCpu(waitForFinishedTasks(3));
+    auto finished = runtime.block_on_cpu(wait_for_finished_tasks(3));
     assert(finished.has_value());
-    auto blocking = runtime.blockOnCpu(spawnBlockingFromHandle());
+    auto blocking = runtime.block_on_cpu(spawn_blocking_from_handle());
     assert(blocking.has_value());
 
     std::cout << "T20-RuntimeTaskApiDemo PASS\n";

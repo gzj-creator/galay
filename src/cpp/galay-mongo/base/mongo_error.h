@@ -77,7 +77,7 @@ public:
      * @brief 返回服务端错误码
      * @return 服务端错误码；非服务端错误时为 0
      */
-    int32_t serverCode() const;
+    int32_t server_code() const;
 
     /**
      * @brief 返回可读的错误描述字符串

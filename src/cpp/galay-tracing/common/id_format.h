@@ -25,7 +25,7 @@ namespace detail {
  * @param ch 十六进制字符（0-9、a-f、A-F）
  * @return 对应的整数值（0-15），无效字符返回 -1
  */
-[[nodiscard]] constexpr int hexValue(char ch) noexcept {
+[[nodiscard]] constexpr int hex_value(char ch) noexcept {
     if (ch >= '0' && ch <= '9') {
         return ch - '0';
     }
@@ -44,7 +44,7 @@ namespace detail {
  * @param len 数组长度
  * @return 存在非零字节时返回 true，全为零时返回 false
  */
-[[nodiscard]] constexpr bool hasNonZeroByte(const std::byte* bytes, std::size_t len) noexcept {
+[[nodiscard]] constexpr bool has_non_zero_byte(const std::byte* bytes, std::size_t len) noexcept {
     for (std::size_t i = 0; i < len; ++i) {
         if (bytes[i] != std::byte{0}) {
             return true;
@@ -60,7 +60,7 @@ namespace detail {
  * @param len 期望解析的字节数
  * @return 解析成功返回 true，格式不匹配或长度不足时返回 false
  */
-[[nodiscard]] bool parseHex(std::string_view hex, std::byte* out, std::size_t len) noexcept;
+[[nodiscard]] bool parse_hex(std::string_view hex, std::byte* out, std::size_t len) noexcept;
 
 /**
  * @brief 将字节数组格式化为小写十六进制字符串
@@ -70,19 +70,19 @@ namespace detail {
  * @param outLen 输出缓冲区大小（至少为 byteLen * 2）
  * @return 格式化成功返回 true，缓冲区不足时返回 false
  */
-[[nodiscard]] bool formatHex(const std::byte* bytes, std::size_t byteLen, char* out, std::size_t outLen) noexcept;
+[[nodiscard]] bool format_hex(const std::byte* bytes, std::size_t byteLen, char* out, std::size_t outLen) noexcept;
 
 /**
  * @brief 生成随机的 TraceId（16 字节）
  * @return 随机生成的 TraceId
  */
-[[nodiscard]] TraceId makeRandomTraceId() noexcept;
+[[nodiscard]] TraceId make_random_trace_id() noexcept;
 
 /**
  * @brief 生成随机的 SpanId（8 字节）
  * @return 随机生成的 SpanId
  */
-[[nodiscard]] SpanId makeRandomSpanId() noexcept;
+[[nodiscard]] SpanId make_random_span_id() noexcept;
 
 } // namespace detail
 } // namespace galay::tracing

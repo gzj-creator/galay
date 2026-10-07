@@ -84,7 +84,7 @@ enum class ProcessPriorityError {
  * @param error 错误枚举值
  * @return 静态错误描述字符串
  */
-inline constexpr const char* processPriorityErrorString(ProcessPriorityError error) noexcept {
+inline constexpr const char* process_priority_error_string(ProcessPriorityError error) noexcept {
     switch (error) {
     case ProcessPriorityError::InvalidPriority:
         return "invalid priority";
@@ -115,7 +115,7 @@ enum class ProcessAffinityError {
  * @param error 错误枚举值
  * @return 静态错误描述字符串
  */
-inline constexpr const char* processAffinityErrorString(ProcessAffinityError error) noexcept {
+inline constexpr const char* process_affinity_error_string(ProcessAffinityError error) noexcept {
     switch (error) {
     case ProcessAffinityError::EmptyCpuSet:
         return "empty cpu set";
@@ -143,7 +143,7 @@ public:
      * @brief 获取当前进程 ID
      * @return 当前进程 ID
      */
-    static ProcessId currentId() {
+    static ProcessId current_id() {
 #if defined(_WIN32)
         return GetCurrentProcessId();
 #else
@@ -155,7 +155,7 @@ public:
      * @brief 获取父进程 ID
      * @return 父进程 ID
      */
-    static ProcessId parentId() {
+    static ProcessId parent_id() {
 #if defined(_WIN32)
         HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if (hSnapshot == INVALID_HANDLE_VALUE) {
@@ -189,7 +189,7 @@ public:
      * @note Windows 平台会把进程 priority class 映射为近似 nice 值。
      */
     [[nodiscard]] static std::expected<int, ProcessPriorityError> priority() {
-        return priority(currentId());
+        return priority(current_id());
     }
 
     /**
@@ -202,14 +202,14 @@ public:
 #if defined(_WIN32)
         HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
         if (!hProcess) {
-            return std::unexpected(priorityErrorFromWindows(GetLastError()));
+            return std::unexpected(priority_error_from_windows(GetLastError()));
         }
 
         DWORD priorityClass = GetPriorityClass(hProcess);
         DWORD priorityError = priorityClass == 0 ? GetLastError() : ERROR_SUCCESS;
         BOOL closeResult = CloseHandle(hProcess);
         if (priorityClass == 0) {
-            return std::unexpected(priorityErrorFromWindows(priorityError));
+            return std::unexpected(priority_error_from_windows(priorityError));
         }
         if (closeResult == 0) {
             return std::unexpected(ProcessPriorityError::SystemError);
@@ -235,7 +235,7 @@ public:
         errno = 0;
         int value = getpriority(PRIO_PROCESS, static_cast<id_t>(pid));
         if (value == -1 && errno != 0) {
-            return std::unexpected(priorityErrorFromErrno(errno));
+            return std::unexpected(priority_error_from_errno(errno));
         }
         return value;
 #endif
@@ -246,8 +246,8 @@ public:
      * @param value POSIX nice 值语义的优先级，范围为 [-20, 19]；数值越小优先级越高
      * @return 成功返回空 expected，失败返回具体错误
      */
-    [[nodiscard]] static std::expected<void, ProcessPriorityError> setPriority(int value) {
-        return setPriority(currentId(), value);
+    [[nodiscard]] static std::expected<void, ProcessPriorityError> set_priority(int value) {
+        return set_priority(current_id(), value);
     }
 
     /**
@@ -257,7 +257,7 @@ public:
      * @return 成功返回空 expected，失败返回具体错误
      * @note POSIX 平台降低 nice 值通常需要额外权限；Windows 平台会映射到进程 priority class。
      */
-    [[nodiscard]] static std::expected<void, ProcessPriorityError> setPriority(ProcessId pid, int value) {
+    [[nodiscard]] static std::expected<void, ProcessPriorityError> set_priority(ProcessId pid, int value) {
         if (value < -20 || value > 19) {
             return std::unexpected(ProcessPriorityError::InvalidPriority);
         }
@@ -265,7 +265,7 @@ public:
 #if defined(_WIN32)
         HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION, FALSE, pid);
         if (!hProcess) {
-            return std::unexpected(priorityErrorFromWindows(GetLastError()));
+            return std::unexpected(priority_error_from_windows(GetLastError()));
         }
 
         DWORD priorityClass = NORMAL_PRIORITY_CLASS;
@@ -287,7 +287,7 @@ public:
         DWORD setError = setResult == 0 ? GetLastError() : ERROR_SUCCESS;
         BOOL closeResult = CloseHandle(hProcess);
         if (setResult == 0) {
-            return std::unexpected(priorityErrorFromWindows(setError));
+            return std::unexpected(priority_error_from_windows(setError));
         }
         if (closeResult == 0) {
             return std::unexpected(ProcessPriorityError::SystemError);
@@ -295,7 +295,7 @@ public:
         return {};
 #else
         if (setpriority(PRIO_PROCESS, static_cast<id_t>(pid), value) != 0) {
-            return std::unexpected(priorityErrorFromErrno(errno));
+            return std::unexpected(priority_error_from_errno(errno));
         }
         return {};
 #endif
@@ -307,8 +307,8 @@ public:
      * @note Linux 查询进程主线程（pid）的 mask，不代表所有线程；Windows 查询进程 mask。
      *       不支持的平台返回 Unsupported。
      */
-    [[nodiscard]] static std::expected<std::vector<unsigned int>, ProcessAffinityError> cpuAffinity() {
-        return cpuAffinity(currentId());
+    [[nodiscard]] static std::expected<std::vector<unsigned int>, ProcessAffinityError> cpu_affinity() {
+        return cpu_affinity(current_id());
     }
 
     /**
@@ -317,11 +317,11 @@ public:
      * @return 目标进程允许运行的零基 CPU ID 列表；失败返回具体错误
      * @note Linux 使用动态 mask；枚举完整 CPU ID，不能用 CPU::count() 作为 ID 上界。
      */
-    [[nodiscard]] static std::expected<std::vector<unsigned int>, ProcessAffinityError> cpuAffinity(ProcessId pid) {
+    [[nodiscard]] static std::expected<std::vector<unsigned int>, ProcessAffinityError> cpu_affinity(ProcessId pid) {
 #if defined(_WIN32)
         HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
         if (!hProcess) {
-            return std::unexpected(affinityErrorFromWindows(GetLastError()));
+            return std::unexpected(affinity_error_from_windows(GetLastError()));
         }
 
         DWORD_PTR processMask = 0;
@@ -330,7 +330,7 @@ public:
         DWORD getError = getResult == 0 ? GetLastError() : ERROR_SUCCESS;
         BOOL closeResult = CloseHandle(hProcess);
         if (getResult == 0) {
-            return std::unexpected(affinityErrorFromWindows(getError));
+            return std::unexpected(affinity_error_from_windows(getError));
         }
         if (closeResult == 0) {
             return std::unexpected(ProcessAffinityError::SystemError);
@@ -344,9 +344,9 @@ public:
         }
         return cpus;
 #elif defined(__linux__)
-        auto cpus = detail::queryCpuAffinity(static_cast<pid_t>(pid));
+        auto cpus = detail::query_cpu_affinity(static_cast<pid_t>(pid));
         if (!cpus) {
-            return std::unexpected(affinityErrorFromErrno(cpus.error().value()));
+            return std::unexpected(affinity_error_from_errno(cpus.error().value()));
         }
         return std::move(*cpus);
 #else
@@ -361,8 +361,8 @@ public:
      * @return 成功返回空 expected，失败返回具体错误
      */
     [[nodiscard]] static std::expected<void, ProcessAffinityError>
-    setCpuAffinity(std::span<const unsigned int> cpus) {
-        return setCpuAffinity(currentId(), cpus);
+    set_cpu_affinity(std::span<const unsigned int> cpus) {
+        return set_cpu_affinity(current_id(), cpus);
     }
 
     /**
@@ -374,8 +374,8 @@ public:
      *       online/cpuset 交集。Windows 设置进程 mask；不支持的平台返回 Unsupported。
      */
     [[nodiscard]] static std::expected<void, ProcessAffinityError>
-    setCpuAffinity(ProcessId pid, std::span<const unsigned int> cpus) {
-        auto normalized = normalizeCpuSet(cpus);
+    set_cpu_affinity(ProcessId pid, std::span<const unsigned int> cpus) {
+        auto normalized = normalize_cpu_set(cpus);
         if (!normalized.has_value()) {
             return std::unexpected(normalized.error());
         }
@@ -391,23 +391,23 @@ public:
 
         HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION, FALSE, pid);
         if (!hProcess) {
-            return std::unexpected(affinityErrorFromWindows(GetLastError()));
+            return std::unexpected(affinity_error_from_windows(GetLastError()));
         }
 
         BOOL setResult = SetProcessAffinityMask(hProcess, processMask);
         DWORD setError = setResult == 0 ? GetLastError() : ERROR_SUCCESS;
         BOOL closeResult = CloseHandle(hProcess);
         if (setResult == 0) {
-            return std::unexpected(affinityErrorFromWindows(setError));
+            return std::unexpected(affinity_error_from_windows(setError));
         }
         if (closeResult == 0) {
             return std::unexpected(ProcessAffinityError::SystemError);
         }
         return {};
 #elif defined(__linux__)
-        const auto set = detail::setCpuAffinity(static_cast<pid_t>(pid), *normalized);
+        const auto set = detail::set_cpu_affinity(static_cast<pid_t>(pid), *normalized);
         if (!set) {
-            return std::unexpected(affinityErrorFromErrno(set.error().value()));
+            return std::unexpected(affinity_error_from_errno(set.error().value()));
         }
         return {};
 #else
@@ -537,7 +537,7 @@ public:
      * @param command shell 命令字符串
      * @return 退出状态和标准输出内容的键值对
      */
-    static std::pair<ExitStatus, std::string> executeWithOutput(const std::string& command) {
+    static std::pair<ExitStatus, std::string> execute_with_output(const std::string& command) {
         std::string output;
         ExitStatus status{0, 0, false};
 
@@ -599,7 +599,7 @@ public:
      * @param pid 目标进程 ID
      * @return 正在运行返回 true
      */
-    static bool isRunning(ProcessId pid) {
+    static bool is_running(ProcessId pid) {
 #if defined(_WIN32)
         HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
         if (!hProcess) {
@@ -668,7 +668,7 @@ public:
 
 private:
     static std::expected<std::vector<unsigned int>, ProcessAffinityError>
-    normalizeCpuSet(std::span<const unsigned int> cpus) {
+    normalize_cpu_set(std::span<const unsigned int> cpus) {
         if (cpus.empty()) {
             return std::unexpected(ProcessAffinityError::EmptyCpuSet);
         }
@@ -681,7 +681,7 @@ private:
     }
 
 #if defined(_WIN32)
-    static ProcessPriorityError priorityErrorFromWindows(DWORD error) {
+    static ProcessPriorityError priority_error_from_windows(DWORD error) {
         switch (error) {
         case ERROR_ACCESS_DENIED:
             return ProcessPriorityError::PermissionDenied;
@@ -694,7 +694,7 @@ private:
         }
     }
 
-    static ProcessAffinityError affinityErrorFromWindows(DWORD error) {
+    static ProcessAffinityError affinity_error_from_windows(DWORD error) {
         switch (error) {
         case ERROR_ACCESS_DENIED:
             return ProcessAffinityError::PermissionDenied;
@@ -707,7 +707,7 @@ private:
         }
     }
 #else
-    static ProcessPriorityError priorityErrorFromErrno(int error) {
+    static ProcessPriorityError priority_error_from_errno(int error) {
         switch (error) {
         case EACCES:
         case EPERM:
@@ -721,7 +721,7 @@ private:
         }
     }
 
-    static ProcessAffinityError affinityErrorFromErrno(int error) {
+    static ProcessAffinityError affinity_error_from_errno(int error) {
         switch (error) {
         case EACCES:
         case EPERM:

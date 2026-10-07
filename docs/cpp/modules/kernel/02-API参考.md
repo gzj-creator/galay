@@ -139,21 +139,21 @@
 - `Host(IPType proto, const std::string& ip, uint16_t port)`
 - `Host(const sockaddr_in& addr)`
 - `Host(const sockaddr_in6& addr)`
-- `static Host fromSockAddr(const sockaddr_storage& addr)`
-- `bool isIPv4() const`
-- `bool isIPv6() const`
+- `static Host from_sock_addr(const sockaddr_storage& addr)`
+- `bool is_ipv4() const`
+- `bool is_ipv6() const`
 - `std::string ip() const`
 - `uint16_t port() const`
-- `sockaddr* sockAddr()`
-- `const sockaddr* sockAddr() const`
-- `socklen_t* addrLen()`
-- `socklen_t addrLen() const`
+- `sockaddr* sock_addr()`
+- `const sockaddr* sock_addr() const`
+- `socklen_t* addr_len()`
+- `socklen_t addr_len() const`
 
 语义说明：
 
-- `Host()` 默认构造一个清零后的 IPv4 地址槽位：`ss_family=AF_INET`，`addrLen()==sizeof(sockaddr_in)`
+- `Host()` 默认构造一个清零后的 IPv4 地址槽位：`ss_family=AF_INET`，`addr_len()==sizeof(sockaddr_in)`
 - `Host(IPType, ip, port)` 直接调用 `inet_pton(...)` 写入底层地址，但当前构造函数本身不返回解析错误；文本地址是否合法，最终由后续系统调用通过 `IOError` 暴露
-- `fromSockAddr(...)` 会按 `ss_family` 自动选择 `sockaddr_in` / `sockaddr_in6` 的有效长度
+- `from_sock_addr(...)` 会按 `ss_family` 自动选择 `sockaddr_in` / `sockaddr_in6` 的有效长度
 
 `IOErrorCode` / `IOError` / `Infallible`：
 
@@ -201,27 +201,27 @@
 - `Bytes(size_t capacity)`
 - `Bytes(Bytes&& other) noexcept`
 - `Bytes& operator=(Bytes&& other) noexcept`
-- `static Bytes fromString(std::string& str)`
-- `static Bytes fromString(const std::string_view& str)`
-- `static Bytes fromCString(const char* str, size_t length, size_t capacity)`
+- `static Bytes from_string(std::string& str)`
+- `static Bytes from_string(const std::string_view& str)`
+- `static Bytes from_c_string(const char* str, size_t length, size_t capacity)`
 - `const uint8_t* data() const noexcept`
 - `const char* c_str() const noexcept`
 - `size_t size() const noexcept`
 - `size_t capacity() const noexcept`
 - `bool empty() const noexcept`
 - `void clear() noexcept`
-- `std::string toString() const`
-- `std::string_view toStringView() const`
+- `std::string to_string() const`
+- `std::string_view to_string_view() const`
 - `bool operator==(const Bytes& other) const`
 - `bool operator!=(const Bytes& other) const`
 
 语义说明：
 
 - 构造函数族会分配并深拷贝数据，`Bytes` 本身是 move-only；没有公开拷贝构造 / 拷贝赋值
-- `fromString(std::string&)`、`fromString(std::string_view)`、`fromCString(...)` 生成的是 non-owning 视图，底层存储必须由调用方继续持有
+- `from_string(std::string&)`、`from_string(std::string_view)`、`from_c_string(...)` 生成的是 non-owning 视图，底层存储必须由调用方继续持有
 - `clear()` 会释放 owning 存储并把对象重置为空视图
-- `toString()` 返回副本；`toStringView()` 返回零拷贝视图
-- `c_str()` 当前实现会在末尾不是 `\0` 时尝试原地补终止符，因此更适合本身可写、并且为终止符预留了容量的文本缓冲；对二进制数据或精确容量缓冲，更稳妥的读取方式是 `toString()` / `toStringView()`
+- `to_string()` 返回副本；`to_string_view()` 返回零拷贝视图
+- `c_str()` 当前实现会在末尾不是 `\0` 时尝试原地补终止符，因此更适合本身可写、并且为终止符预留了容量的文本缓冲；对二进制数据或精确容量缓冲，更稳妥的读取方式是 `to_string()` / `to_string_view()`
 
 `ByteMetaData` 与辅助函数：
 
@@ -229,20 +229,20 @@
 - `ByteMetaData(std::string& str)` / `ByteMetaData(std::string_view str)`
 - `ByteMetaData(const char* str)` / `ByteMetaData(const uint8_t* str)`
 - `ByteMetaData(const char* str, size_t length)` / `ByteMetaData(const uint8_t* str, size_t length)`
-- `ByteMetaData mallocBytes(size_t length)`
-- `ByteMetaData deepCopyBytes(const ByteMetaData& meta)`
-- `void reallocBytes(ByteMetaData& meta, size_t length)`
-- `void clearBytes(ByteMetaData& meta)`
-- `void freeBytes(ByteMetaData& meta)`
+- `ByteMetaData malloc_bytes(size_t length)`
+- `ByteMetaData deep_copy_bytes(const ByteMetaData& meta)`
+- `void realloc_bytes(ByteMetaData& meta, size_t length)`
+- `void clear_bytes(ByteMetaData& meta)`
+- `void free_bytes(ByteMetaData& meta)`
 
 语义说明：
 
 - `Bytes`、`ByteMetaData` 与辅助函数由 `galay-utils/buffer/bytes.hpp` 提供，`galay-kernel` 不再保留本地 `bytes.h` / `bytes.cc`
 - `ByteMetaData` 是公开可见但偏底层的原始缓冲描述结构；业务代码更推荐优先使用 `Bytes` / `Buffer`
-- `mallocBytes(...)` 分配容量并把 `size` 初始化为 `0`
-- `deepCopyBytes(...)` 会按源对象的 `capacity` 分配并复制已有 `size`
-- `reallocBytes(...)` 在缩容时会同步截断 `size`；若重新分配失败会抛 `std::bad_alloc`
-- `clearBytes(...)` 只清空内容并保留容量；`freeBytes(...)` 才真正释放内存
+- `malloc_bytes(...)` 分配容量并把 `size` 初始化为 `0`
+- `deep_copy_bytes(...)` 会按源对象的 `capacity` 分配并复制已有 `size`
+- `realloc_bytes(...)` 在缩容时会同步截断 `size`；若重新分配失败会抛 `std::bad_alloc`
+- `clear_bytes(...)` 只清空内容并保留容量；`free_bytes(...)` 才真正释放内存
 
 `Buffer` / `RingBuffer`：
 
@@ -256,8 +256,8 @@
 - `size_t length() const`
 - `size_t capacity() const`
 - `void resize(size_t capacity)`
-- `std::string toString() const`
-- `std::string_view toStringView() const`
+- `std::string to_string() const`
+- `std::string_view to_string_view() const`
 - `Buffer& operator=(Buffer&& other)`
 - `explicit RingBuffer(size_t capacity = kDefaultCapacity)`
 - `size_t readable() const`
@@ -265,8 +265,8 @@
 - `size_t capacity() const`
 - `bool empty() const`
 - `bool full() const`
-- `size_t getWriteIovecs(struct iovec* out, size_t max_iovecs = 2) const`
-- `size_t getReadIovecs(struct iovec* out, size_t max_iovecs = 2) const`
+- `size_t get_write_iovecs(struct iovec* out, size_t max_iovecs = 2) const`
+- `size_t get_read_iovecs(struct iovec* out, size_t max_iovecs = 2) const`
 - `void produce(size_t len)`
 - `void consume(size_t len)`
 - `void clear()`
@@ -275,11 +275,11 @@
 
 语义说明：
 
-- `Buffer` 是 owning 动态缓冲区；`resize(...)` 最终调用 `reallocBytes(...)`，缩容时可能截断已有 `length()`
+- `Buffer` 是 owning 动态缓冲区；`resize(...)` 最终调用 `realloc_bytes(...)`，缩容时可能截断已有 `length()`
 - `Buffer::clear()` 会把已有容量区间清零，但保留已分配容量，适合重复复用
 - `RingBuffer` 由 `galay-utils/buffer/ring_buffer.hpp` 提供，`galay-kernel` 只在 `common/buffer.h` 中保留 `galay::kernel::RingBuffer` using 入口
-- `RingBuffer` 是固定容量、不会自动扩容的环形缓冲；写满后 `tryWriteBatch(...)` / `produce(...)` 只会推进可容纳的那部分字节
-- `getWriteIovecs(...)` / `getReadIovecs(...)` 最多返回两段连续内存，专门服务 `readv` / `writev`
+- `RingBuffer` 是固定容量、不会自动扩容的环形缓冲；写满后 `try_write_batch(...)` / `produce(...)` 只会推进可容纳的那部分字节
+- `get_write_iovecs(...)` / `get_read_iovecs(...)` 最多返回两段连续内存，专门服务 `readv` / `writev`
 - `consume(...)` 在把可读数据完全耗尽后，会把读写指针都重置到 `0`
 
 ## Runtime / Scheduler / Task / Timer
@@ -333,57 +333,57 @@
 `Runtime` 关键接口：
 
 - `explicit Runtime(const RuntimeConfig& config = RuntimeConfig{})`
-- `template <typename T> std::expected<T, RuntimeError> blockOnIO(Task<T> task)`
-- `template <typename T> std::expected<T, RuntimeError> blockOnCpu(Task<T> task)`
-- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawnIO(Task<T> task)`
-- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawnCpu(Task<T> task)`
-- `template <typename F> auto spawnBlocking(F&& func) -> JoinHandle<R>`
+- `template <typename T> std::expected<T, RuntimeError> block_on_io(Task<T> task)`
+- `template <typename T> std::expected<T, RuntimeError> block_on_cpu(Task<T> task)`
+- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawn_io(Task<T> task)`
+- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawn_cpu(Task<T> task)`
+- `template <typename F> auto spawn_blocking(F&& func) -> JoinHandle<R>`
 - `RuntimeHandle handle()`
 - `void start()`
 - `void stop()`
-- `bool isRunning() const`
-- `size_t getIOSchedulerCount() const`
-- `size_t getParallelSchedulerCount() const`
-- `IOScheduler* getIOScheduler(size_t index)`
-- `ParallelScheduler* getParallelScheduler(size_t index)`
-- `IOScheduler* getNextIOScheduler()`
-- `ParallelScheduler* getNextParallelScheduler()`
+- `bool is_running() const`
+- `size_t get_io_scheduler_count() const`
+- `size_t get_parallel_scheduler_count() const`
+- `IOScheduler* get_io_scheduler(size_t index)`
+- `ParallelScheduler* get_parallel_scheduler(size_t index)`
+- `IOScheduler* get_next_io_scheduler()`
+- `ParallelScheduler* get_next_parallel_scheduler()`
 
 `RuntimeHandle` 关键接口：
 
 - `static RuntimeHandle current()`
-- `static std::optional<RuntimeHandle> tryCurrent()`
-- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawnIO(Task<T> task) const`
-- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawnCpu(Task<T> task) const`
-- `template <typename F> auto spawnBlocking(F&& func) const -> JoinHandle<R>`
+- `static std::optional<RuntimeHandle> try_current()`
+- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawn_io(Task<T> task) const`
+- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawn_cpu(Task<T> task) const`
+- `template <typename F> auto spawn_blocking(F&& func) const -> JoinHandle<R>`
 
 `RuntimeBuilder` 关键接口：
 
-- `RuntimeBuilder& ioSchedulerCount(size_t n)`
-- `RuntimeBuilder& parallelSchedulerCount(size_t n)`
-- `RuntimeBuilder& sequentialAffinity(size_t io_count, size_t parallel_count)`
-- `bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus)`
-- `RuntimeBuilder& applyAffinity(const RuntimeAffinityConfig& aff)`
+- `RuntimeBuilder& io_scheduler_count(size_t n)`
+- `RuntimeBuilder& parallel_scheduler_count(size_t n)`
+- `RuntimeBuilder& sequential_affinity(size_t io_count, size_t parallel_count)`
+- `bool custom_affinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus)`
+- `RuntimeBuilder& apply_affinity(const RuntimeAffinityConfig& aff)`
 - `Runtime build() const`
-- `RuntimeConfig buildConfig() const`
+- `RuntimeConfig build_config() const`
 
 注意：
 
-- 高层任务入口按执行语义区分为 `blockOnIO(...)`、`blockOnCpu(...)`、`spawnIO(...)`、`spawnCpu(...)` 与 `spawnBlocking(...)`
+- 高层任务入口按执行语义区分为 `block_on_io(...)`、`block_on_cpu(...)`、`spawn_io(...)`、`spawn_cpu(...)` 与 `spawn_blocking(...)`
 - `JoinHandle<T>` 的公开结果路径只有 `wait()` / `join()`；当前没有 `result()` 一类兼容接口
-- `RuntimeHandle::current()` 在 runtime 上下文外会抛异常；更稳妥的探测入口是 `tryCurrent()`
-- `Runtime::start()` 按 `RuntimeConfig` 创建内置调度器；通过 `ioSchedulerCount(...)` / `parallelSchedulerCount(...)` 配置数量，不再支持自定义调度器注入
+- `RuntimeHandle::current()` 在 runtime 上下文外会抛异常；更稳妥的探测入口是 `try_current()`
+- `Runtime::start()` 按 `RuntimeConfig` 创建内置调度器；通过 `io_scheduler_count(...)` / `parallel_scheduler_count(...)` 配置数量，不再支持自定义调度器注入
 - Scheduler 实现细节：`SchedulerBase<Derived, Type>` 以 CRTP 静态分派；三个 IO 后端复用 `IOSchedulerBase<Derived, Reactor>`；`IOReadyQueue` 管理本地队列、注入队列和 owner-only 恢复接纳。调度器在 Runtime 生命周期内保持稳定地址，Task/Waker 中的基类指针为借用指针，不可用于删除
 - `Runtime::start()` 会先启动全局 `TimerScheduler`，再启动 IO / 计算调度器
 - `Runtime::stop()` 会按相反顺序停止并回收
-- 文档与示例应使用 `getIOScheduler(size_t)`、`getParallelScheduler(size_t)` 或 `getNext*()`；当前没有 `getIOSchedulers()` / `getParallelSchedulers()`
+- 文档与示例应使用 `get_io_scheduler(size_t)`、`get_parallel_scheduler(size_t)`、`get_next_io_scheduler()` 或 `get_next_parallel_scheduler()`；当前没有 `getIOSchedulers()` / `getParallelSchedulers()`
 - `GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 表示自动数量；默认规则是 `io=2*CPU`、`parallel=CPU`；`0` 表示禁用对应默认调度器
 - 默认 IO 后端由平台和宏决定：macOS / FreeBSD 为 `KqueueScheduler`，Linux + `USE_IOURING` 为 `IOUringScheduler`，否则为 `EpollScheduler`
 - 调度器属于内部实现：`SchedulerBase<Derived, Type>` 用 CRTP 提供具体类型调用；Task/Waker 的借用 `Scheduler*` 根据类型选择 `SchedulerBase` 上接收 `Derived*` 的静态分派函数，不含虚表或函数指针表
-- `getNextIOScheduler()` / `getNextParallelScheduler()` 采用 round-robin 轮询；对应容器为空时返回 `nullptr`
-- `RuntimeBuilder::sequentialAffinity(io_count, parallel_count)` 会从 CPU 0 开始顺序绑定，超出 CPU 数量后回绕
-- `RuntimeBuilder::customAffinity(...)` 要求两个向量长度与当前配置的调度器数量严格一致，否则返回 `false` 且不修改配置；因此通常要先调用 `ioSchedulerCount(...)` / `parallelSchedulerCount(...)`
-- `Runtime::applyAffinityConfig()` 在 custom 向量和最终调度器数量不一致时会整体跳过 custom affinity 应用
+- `get_next_io_scheduler()` / `get_next_parallel_scheduler()` 采用 round-robin 轮询；对应容器为空时返回 `nullptr`
+- `RuntimeBuilder::sequential_affinity(io_count, parallel_count)` 会从 CPU 0 开始顺序绑定，超出 CPU 数量后回绕
+- `RuntimeBuilder::custom_affinity(...)` 要求两个向量长度与当前配置的调度器数量严格一致，否则返回 `false` 且不修改配置；因此通常要先调用 `io_scheduler_count(...)` / `parallel_scheduler_count(...)`
+- `Runtime::apply_affinity_config()` 在 custom 向量和最终调度器数量不一致时会整体跳过 custom affinity 应用
 
 `ParallelScheduler` 关键接口：
 
@@ -391,17 +391,17 @@
 - `void start()`
 - `void stop()`
 - `bool schedule(TaskRef task)`
-- `bool scheduleDeferred(TaskRef task)`
-- `bool scheduleImmediately(TaskRef task)`
-- `bool isRunning() const`
-- `bool addTimer(Timer::ptr timer)`
+- `bool schedule_deferred(TaskRef task)`
+- `bool schedule_immediately(TaskRef task)`
+- `bool is_running() const`
+- `bool add_timer(Timer::ptr timer)`
 
 语义说明：
 
 - `ParallelScheduler` 是单工作线程调度器，底层队列是 `moodycamel::BlockingConcurrentQueue<ParallelTask>`
-- `schedule(...)` / `scheduleDeferred(...)` 会接收 `TaskRef`；若任务尚未绑定 owner scheduler，会绑定到当前 `ParallelScheduler`
-- `scheduleImmediately(...)` 会在当前线程立即恢复任务；若任务已绑定到其他调度器，则返回 `false`
-- `addTimer(...)` 只是转发到全局 `TimerScheduler::getInstance()->addTimer(...)`
+- `schedule(...)` / `schedule_deferred(...)` 会接收 `TaskRef`；若任务尚未绑定 owner scheduler，会绑定到当前 `ParallelScheduler`
+- `schedule_immediately(...)` 会在当前线程立即恢复任务；若任务已绑定到其他调度器，则返回 `false`
+- `add_timer(...)` 只是转发到全局 `TimerScheduler::get_instance()->add_timer(...)`
 
 具体 IO 调度器：
 
@@ -412,11 +412,11 @@
 这些后端当前共同公开：
 
 - 生命周期：`start()`、`stop()`、`notify()`
-- 事件注册：`addAccept(...)`、`addConnect(...)`、`addRecv(...)`、`addSend(...)`、`addReadv(...)`、`addWritev(...)`、`addClose(...)`
-- 文件 / UDP / 监控 / 零拷贝：`addFileRead(...)`、`addFileWrite(...)`、`addRecvFrom(...)`、`addSendTo(...)`、`addFileWatch(...)`、`addSendFile(...)`、`addSequence(...)`
-- 调度：`schedule(...)`、`scheduleDeferred(...)`、`scheduleImmediately(...)`
-- 任务辅助：`scheduleTask(...)`、`scheduleTaskDeferred(...)`、`scheduleTaskImmediately(...)`
-- 诊断：`int remove(IOController* controller)`、`std::optional<IOError> lastError() const`
+- 事件注册：`add_accept(...)`、`add_connect(...)`、`add_recv(...)`、`add_send(...)`、`add_readv(...)`、`add_writev(...)`、`add_close(...)`
+- 文件 / UDP / 监控 / 零拷贝：`add_file_read(...)`、`add_file_write(...)`、`add_recv_from(...)`、`add_send_to(...)`、`add_file_watch(...)`、`add_send_file(...)`、`add_sequence(...)`
+- 调度：`schedule(...)`、`schedule_deferred(...)`、`schedule_immediately(...)`
+- 任务辅助：`schedule_task(...)`、`schedule_task_deferred(...)`、`schedule_task_immediately(...)`
+- 诊断：`int remove(IOController* controller)`、`std::optional<IOError> last_error() const`
 
 平台边界：
 
@@ -451,11 +451,11 @@
 
 - 线性组合步骤优先用 `AwaitableBuilder`
 - 线性多段收发、header/body 分段 IO 优先 `AwaitableBuilder::readv(...) / writev(...)`
-- 复杂双向协议、读写切换或 handshake/shutdown 状态推进优先用 `AwaitableBuilder::fromStateMachine(...)` 或直接 `StateMachineAwaitable<MachineT>`
+- 复杂双向协议、读写切换或 handshake/shutdown 状态推进优先用 `AwaitableBuilder::from_state_machine(...)` 或直接 `StateMachineAwaitable<MachineT>`
 - 需要显式持有步骤对象、跨步骤共享状态或自定义 re-arm 路径时使用 `SequenceAwaitable + SequenceStep`
 - 协议解析优先使用 `AwaitableBuilder::parse(...)`，parse handler 返回 `ParseStatus`
 - `ByteQueueView` 由 `galay-utils/buffer/byte_queue_view.hpp` 提供，`galay-kernel` 不再保留本地 `queue_view.h`
-- 链式 `AwaitableBuilder` 的 `build()` 现在返回 machine-backed awaitable，并与 `fromStateMachine(...)` 共享同一套状态机驱动
+- 链式 `AwaitableBuilder` 的 `build()` 现在返回 machine-backed awaitable，并与 `from_state_machine(...)` 共享同一套状态机驱动
 
 自定义 awaitable 的最小扩展面：
 
@@ -476,22 +476,22 @@ struct MyAwaitable {
 ```cpp
 struct MyAwaitable;
 struct MyTimeoutPolicy {
-    static void inject(MyAwaitable& value) noexcept { value.setTimeout(); }
-    static bool ownsIoRegistration(MyAwaitable& value) noexcept {
-        return value.ownsIoRegistration();
+    static void inject(MyAwaitable& value) noexcept { value.set_timeout(); }
+    static bool owns_io_registration(MyAwaitable& value) noexcept {
+        return value.owns_io_registration();
     }
 };
 
 struct MyAwaitable
     : galay::kernel::TimeoutSupport<MyAwaitable, MyTimeoutPolicy> {
-    // await_ready / await_suspend / await_resume + setTimeout()
+    // await_ready / await_suspend / await_resume + set_timeout()
 };
 ```
 
 `TimeoutSupport<Derived, Policy>` 和 `WithTimeout<Awaitable, Policy>` 都是模板静态分发；
 策略不保存状态时不会增加 awaiter 布局，也不会引入虚调用或类型擦除。现有底层 IO
-awaitable 仍可使用默认策略（`markTimeout()` / `setTimeout()`），新类型建议提供显式
-`setTimeout()`。`ForwardingAwaitable<Derived, InnerT>` 可在需要 facade 时内联转发四个
+awaitable 仍可使用默认策略（`mark_timeout()` / `set_timeout()`），新类型建议提供显式
+`set_timeout()`。`ForwardingAwaitable<Derived, InnerT>` 可在需要 facade 时内联转发四个
 `await_*` 方法；两参数形式由 mixin 直接拥有 `InnerT`。
 
 完整可运行的 policy 示例：`examples/cpp/kernel/include/e12_policy.cc`；状态机 IO 参考：
@@ -514,15 +514,15 @@ builder iovec 公开面：
 
 状态机 / builder iovec 动作：
 
-- `MachineAction<ResultT>::waitReadv(const struct iovec* iovecs, size_t count)`
-- `MachineAction<ResultT>::waitWritev(const struct iovec* iovecs, size_t count)`
-- `MachineSignal::kWaitReadv`：挂多段读事件，完成后仍通过 `onRead(std::expected<size_t, IOError>)` 回传总字节数
-- `MachineSignal::kWaitWritev`：挂多段写事件，完成后仍通过 `onWrite(std::expected<size_t, IOError>)` 回传总字节数
+- `MachineAction<ResultT>::wait_readv(const struct iovec* iovecs, size_t count)`
+- `MachineAction<ResultT>::wait_writev(const struct iovec* iovecs, size_t count)`
+- `MachineSignal::kWaitReadv`：挂多段读事件，完成后仍通过 `on_read(std::expected<size_t, IOError>)` 回传总字节数
+- `MachineSignal::kWaitWritev`：挂多段写事件，完成后仍通过 `on_write(std::expected<size_t, IOError>)` 回传总字节数
 
 状态机 connect 语义：
 
 - `MachineSignal::kWaitConnect`：让内核注册 socket 连接完成
-- 若状态机会返回 `kWaitConnect`，则需要实现 `onConnect(std::expected<void, IOError>)`
+- 若状态机会返回 `kWaitConnect`，则需要实现 `on_connect(std::expected<void, IOError>)`
 - 链式 builder 的 `.connect(...)` 也会通过同一套状态机驱动推进，而不是走独立旧路径
 - machine-backed builder handler 不支持 `ops.queue(...)`；若需要显式排队步骤，请改用 `SequenceAwaitable + SequenceStep`
 
@@ -557,14 +557,14 @@ builder iovec 公开面：
 - `class TaskRef`
 - `Task<void>& then(Task<void> next) &`
 - `Task<void>&& then(Task<void> next) &&`
-- `template <typename T> bool scheduleTask(Scheduler&, Task<T>&&)`
-- `template <typename T> bool scheduleTaskDeferred(Scheduler&, Task<T>&&)`
-- `template <typename T> bool scheduleTaskImmediately(Scheduler&, Task<T>&&)`
+- `template <typename T> bool schedule_task(Scheduler&, Task<T>&&)`
+- `template <typename T> bool schedule_task_deferred(Scheduler&, Task<T>&&)`
+- `template <typename T> bool schedule_task_immediately(Scheduler&, Task<T>&&)`
 - `template<concepts::ChronoDuration Duration> SleepAwaitable sleep(Duration duration)`
 
 `Task<T>` / `JoinHandle<T>` / `TaskRef`：
 
-- `Task<T>`：公开任务返回类型；可直接 `co_await`，也可通过 `Runtime::blockOnIO(...)`、`Runtime::blockOnCpu(...)`、`Runtime::spawnIO(...)`、`Runtime::spawnCpu(...)` 及 `RuntimeHandle` 对应入口提交
+- `Task<T>`：公开任务返回类型；可直接 `co_await`，也可通过 `Runtime::block_on_io(...)`、`Runtime::block_on_cpu(...)`、`Runtime::spawn_io(...)`、`Runtime::spawn_cpu(...)` 及 `RuntimeHandle` 对应入口提交
 - `JoinHandle<T>::wait()`：阻塞到结果就绪，但不提取结果
 - `JoinHandle<T>::join()`：提取结果或重抛异常；结果只能消费一次
 - `Task<void>::then(...)`：用于根任务链式串接，continuation 生命周期不依赖调用点临时对象
@@ -578,38 +578,38 @@ builder iovec 公开面：
 语义说明：
 
 - `Task<T>` move 后仍共享同一底层任务状态；完成位和 continuation 挂接都在共享的 `TaskState` 上
-- `co_await childTask()` 会先尝试把子任务立即提交到当前等待者所属调度器；若子任务尚未完成，则把等待者挂到子任务 continuation
+- `co_await child_task()` 会先尝试把子任务立即提交到当前等待者所属调度器；若子任务尚未完成，则把等待者挂到子任务 continuation
 - `Task<void>::then(...)` 仅承接根任务串接语义；当前没有泛型 `map/flatMap` 一类 combinator
 - 被等待协程完成后，waiter 会通过其所属 `Scheduler::schedule(...)` 路径恢复，而不是直接跨线程恢复底层句柄
-- 低层直接调度 task 时，推荐通过 `scheduleTask(...)` / `scheduleTaskDeferred(...)` / `scheduleTaskImmediately(...)` 包装辅助函数，而不是手工拆 `TaskRef`
+- 低层直接调度 task 时，推荐通过 `schedule_task(...)` / `schedule_task_deferred(...)` / `schedule_task_immediately(...)` 包装辅助函数，而不是手工拆 `TaskRef`
 
 `Timer` / `CBTimer` / `TimerScheduler`：
 
 - `template<concepts::ChronoDuration Duration> Timer(Duration duration)`
-- `virtual void handleTimeout()`
+- `virtual void handle_timeout()`
 - `bool done()`
 - `void cancel()`
 - `bool cancelled()`
-- `uint64_t getDelay() const`
-- `uint64_t getExpireTime() const`
+- `uint64_t get_delay() const`
+- `uint64_t get_expire_time() const`
 - `template<concepts::ChronoDuration Duration> CBTimer(Duration duration, std::function<void()>&& callback)`
-- `static TimerScheduler* getInstance()`
+- `static TimerScheduler* get_instance()`
 - `void start()`
 - `void stop()`
-- `bool addTimer(Timer::ptr timer)`
-- `size_t addTimerBatch(const std::vector<Timer::ptr>& timers)`
-- `bool isRunning() const`
-- `uint64_t tickDuration() const`
+- `bool add_timer(Timer::ptr timer)`
+- `size_t add_timer_batch(const std::vector<Timer::ptr>& timers)`
+- `bool is_running() const`
+- `uint64_t tick_duration() const`
 - `size_t size() const`
 
 注意：
 
-- `Timer` 把原始 duration 统一保存成纳秒延迟；绝对过期时间在第一次调用 `getExpireTime()` 时才懒计算并缓存
-- `CBTimer::handleTimeout()` 只会在未取消且尚未完成时执行回调，随后再把自身标记为完成
-- `sleep(...)` 最终调用 `TimerScheduler::getInstance()->addTimer(...)`
-- 若全局 `TimerScheduler` 未启动，`sleep(...)` 所依赖的 `addTimer(...)` 会返回 `false`
-- `tickDuration()` 是只读观测接口；当前没有公开 setter 来修改时间轮 tick
-- `TimerScheduler` 是单例；`addTimerBatch(...)` 返回本次成功入队的定时器数量
+- `Timer` 把原始 duration 统一保存成纳秒延迟；绝对过期时间在第一次调用 `get_expire_time()` 时才懒计算并缓存
+- `CBTimer::handle_timeout()` 只会在未取消且尚未完成时执行回调，随后再把自身标记为完成
+- `sleep(...)` 最终调用 `TimerScheduler::get_instance()->add_timer(...)`
+- 若全局 `TimerScheduler` 未启动，`sleep(...)` 所依赖的 `add_timer(...)` 会返回 `false`
+- `tick_duration()` 是只读观测接口；当前没有公开 setter 来修改时间轮 tick
+- `TimerScheduler` 是单例；`add_timer_batch(...)` 返回本次成功入队的定时器数量
 
 ## HandleOption / 网络 IO
 
@@ -622,12 +622,12 @@ builder iovec 公开面：
 `HandleOption` 公开方法：
 
 - `explicit HandleOption(GHandle handle)`
-- `std::expected<void, IOError> handleBlock()`
-- `std::expected<void, IOError> handleNonBlock()`
-- `std::expected<void, IOError> handleReuseAddr()`
-- `std::expected<void, IOError> handleReusePort()`
+- `std::expected<void, IOError> handle_block()`
+- `std::expected<void, IOError> handle_non_block()`
+- `std::expected<void, IOError> handle_reuse_addr()`
+- `std::expected<void, IOError> handle_reuse_port()`
 
-当前没有 `handleTcpNoDelay()`。
+当前没有 `handle_tcp_no_delay()`。
 
 `AsyncTcpSocket` 关键接口：
 
@@ -687,29 +687,29 @@ builder iovec 公开面：
 - 仅在 `USE_EPOLL` 下公开
 - `AsyncAio(int max_events = 64)`
 - `std::expected<void, IOError> open(const std::string& path, AioOpenMode mode, int permissions = 0644)`
-- `void preRead(char* buffer, size_t length, off_t offset)`
-- `void preWrite(const char* buffer, size_t length, off_t offset)`
-- `void preReadBatch(const std::vector<std::tuple<char*, size_t, off_t>>& reads)`
-- `void preWriteBatch(const std::vector<std::tuple<const char*, size_t, off_t>>& writes)`
+- `void pre_read(char* buffer, size_t length, off_t offset)`
+- `void pre_write(const char* buffer, size_t length, off_t offset)`
+- `void pre_read_batch(const std::vector<std::tuple<char*, size_t, off_t>>& reads)`
+- `void pre_write_batch(const std::vector<std::tuple<const char*, size_t, off_t>>& writes)`
 - `AioCommitAwaitable commit()`
 - `void clear()`
 - `void close()`
 - `GHandle handle() const`
-- `bool isValid() const`
+- `bool is_valid() const`
 - `std::expected<size_t, IOError> size() const`
 - `std::expected<void, IOError> sync()`
-- `static char* allocAlignedBuffer(size_t size, size_t alignment = 512)`
-- `static void freeAlignedBuffer(char* buffer)`
+- `static char* alloc_aligned_buffer(size_t size, size_t alignment = 512)`
+- `static void free_aligned_buffer(char* buffer)`
 
 `AsyncFileWatcher`：
 
 - `AsyncFileWatcher()`
-- `std::expected<int, IOError> addWatch(const std::string& path, FileWatchEvent events = FileWatchEvent::All)`
-- `std::expected<void, IOError> removeWatch(int wd)`
+- `std::expected<int, IOError> add_watch(const std::string& path, FileWatchEvent events = FileWatchEvent::All)`
+- `std::expected<void, IOError> remove_watch(int wd)`
 - `FileWatchAwaitable watch()`
-- `bool isValid() const`
+- `bool is_valid() const`
 - `int fd() const`
-- `std::string getPath(int wd) const`
+- `std::string get_path(int wd) const`
 
 `FileWatchEvent` / `FileWatchResult`：
 
@@ -736,39 +736,39 @@ builder iovec 公开面：
 - `explicit AsyncMutex(size_t initial_capacity = 32)`
 - `AsyncMutexAwaitable lock()`
 - `void unlock()`
-- `bool isLocked() const`
+- `bool is_locked() const`
 
 有界 channel 公共接口（`galay::{mpmc,mpsc,spsc}::BoundedChannel<T>`）：
 
 - `explicit BoundedChannel(size_t capacity)`
-- `bool trySend(T&& value)`
+- `bool try_send(T&& value)`
 - `BoundedSendAwaitable<T> send(T&& value)`
-- `std::optional<T> tryRecv()`
+- `std::optional<T> try_recv()`
 - `BoundedRecvAwaitable<T> recv()`
-- `std::optional<std::vector<T>> tryRecvBatch(size_t count)`
-- `BoundedRecvBatchAwaitable<T> recvBatch(size_t count)`
-- `void close()` / `bool isClosed() const`
+- `std::optional<std::vector<T>> try_recv_batch(size_t count)`
+- `BoundedRecvBatchAwaitable<T> recv_batch(size_t count)`
+- `void close()` / `bool is_closed() const`
 - `size_t capacity() const` / `size_t size() const` / `bool empty() const` / `bool full() const`
 
 `galay::mpmc::UnboundedChannel<T>`：
 
-- `bool send(T&& value)` / `bool sendBatch(...)`
-- `std::optional<T> tryRecv()` / `std::optional<std::vector<T>> tryRecvBatch(size_t count)`
-- `UnboundedRecvAwaitable<T> recv()` / `UnboundedRecvBatchAwaitable<T> recvBatch(size_t count)`
-- `void close()` / `bool isClosed() const`
+- `bool send(T&& value)` / `bool send_batch(...)`
+- `std::optional<T> try_recv()` / `std::optional<std::vector<T>> try_recv_batch(size_t count)`
+- `UnboundedRecvAwaitable<T> recv()` / `UnboundedRecvBatchAwaitable<T> recv_batch(size_t count)`
+- `void close()` / `bool is_closed() const`
 - `size_t size() const` / `bool empty() const`
 
 `galay::mpsc::UnboundedChannel<T>`：
 
 - `bool send(T&& value)`
 - `bool send(const T& value)`
-- `bool sendBatch(const std::vector<T>& values)`
-- `bool sendBatch(std::vector<T>&& values)`
+- `bool send_batch(const std::vector<T>& values)`
+- `bool send_batch(std::vector<T>&& values)`
 - `UnboundedRecvAwaitable<T> recv()`
-- `UnboundedRecvBatchAwaitable<T> recvBatch(size_t maxCount = DEFAULT_BATCH_SIZE)`
-- `std::optional<T> tryRecv()`
-- `std::optional<std::vector<T>> tryRecvBatch(size_t maxCount = DEFAULT_BATCH_SIZE)`
-- `bool close()` / `bool isClosed() const` / `bool isClosedAndDrained() const`
+- `UnboundedRecvBatchAwaitable<T> recv_batch(size_t maxCount = DEFAULT_BATCH_SIZE)`
+- `std::optional<T> try_recv()`
+- `std::optional<std::vector<T>> try_recv_batch(size_t maxCount = DEFAULT_BATCH_SIZE)`
+- `bool close()` / `bool is_closed() const` / `bool is_closed_and_drained() const`
 - `size_t size() const`
 - `bool empty() const`
 
@@ -780,13 +780,13 @@ builder iovec 公开面：
 - `explicit UnboundedChannel(WakeMode wake_mode = WakeMode::Inline)`
 - `bool send(T&& value, bool immediately = false)`
 - `bool send(const T& value, bool immediately = false)`
-- `bool sendBatch(const std::vector<T>& values, bool immediately = false)`
-- `bool sendBatch(std::vector<T>&& values, bool immediately = false)`
+- `bool send_batch(const std::vector<T>& values, bool immediately = false)`
+- `bool send_batch(std::vector<T>&& values, bool immediately = false)`
 - `UnboundedRecvAwaitable<T> recv()`
-- `UnboundedRecvBatchAwaitable<T> recvBatch(size_t maxCount = DEFAULT_BATCH_SIZE)`
-- `UnboundedRecvBatchedAwaitable<T> recvBatched(size_t limit)`
-- `std::optional<T> tryRecv()`
-- `std::optional<std::vector<T>> tryRecvBatch(size_t maxCount = DEFAULT_BATCH_SIZE)`
+- `UnboundedRecvBatchAwaitable<T> recv_batch(size_t maxCount = DEFAULT_BATCH_SIZE)`
+- `UnboundedRecvBatchedAwaitable<T> recv_batched(size_t limit)`
+- `std::optional<T> try_recv()`
+- `std::optional<std::vector<T>> try_recv_batch(size_t maxCount = DEFAULT_BATCH_SIZE)`
 - `size_t size() const`
 - `bool empty() const`
 
@@ -795,23 +795,23 @@ builder iovec 公开面：
 - `galay::spsc::UnboundedChannel<T>` 是跨线程 SPSC 分块队列；调用方必须保证同一时刻只有一个生产者调用流和一个消费者调用流
 - 稳态通过分缓存线 producer/consumer cursor 与 acquire/release 发布，不使用 cursor CAS，也不逐消息分配
 - 调度器拥有的 waiter 无论 `WakeMode` 取值都通过 `Waker` 返回 owner scheduler；`Inline` 只为无 scheduler、同线程手工驱动协程保留兼容直接恢复
-- `recvBatched(limit)` 只有在队列累计到 `limit` 条或发送端使用 `immediately=true` 时才会唤醒等待者
-- `recv()` / `recvBatch()` / `recvBatched(...).timeout(...)` 超时后都会返回 `unexpected(IOError(kTimeout, 0))`
-- `recvBatched(limit).timeout(...)` 当前不会自动把“未达到 limit 的部分数据”作为成功结果返回；部分数据会继续留在队列中，调用方可再用 `tryRecvBatch()` 或后续 `recv*()` 取出
+- `recv_batched(limit)` 只有在队列累计到 `limit` 条或发送端使用 `immediately=true` 时才会唤醒等待者
+- `recv()` / `recv_batch()` / `recv_batched(...).timeout(...)` 超时后都会返回 `unexpected(IOError(kTimeout, 0))`
+- `recv_batched(limit).timeout(...)` 当前不会自动把“未达到 limit 的部分数据”作为成功结果返回；部分数据会继续留在队列中，调用方可再用 `try_recv_batch()` 或后续 `recv*()` 取出
 
 `AsyncWaiter<T>`：
 
 - `AsyncWaiterAwaitable<T> wait()`
 - `bool notify(T result)`
-- `bool isWaiting() const`
-- `bool isReady() const`
+- `bool is_waiting() const`
+- `bool is_ready() const`
 
 `AsyncWaiter<void>`：
 
 - `AsyncWaiterAwaitable<void> wait()`
 - `bool notify()`
-- `bool isWaiting() const`
-- `bool isReady() const`
+- `bool is_waiting() const`
+- `bool is_ready() const`
 
 ## 统一返回、所有权与并发语义
 
@@ -825,7 +825,7 @@ builder iovec 公开面：
 所有权与生命周期：
 
 - `Runtime` 直接持有内置具体调度器的所有权；`get*Scheduler()` 返回的指针仅供借用，不能超出 Runtime 生命周期，也不能通过 `Scheduler*` 删除对象
-- `Bytes` 的构造函数族是 owning 深拷贝；`Bytes::fromString(...)` / `fromCString(...)` 是 non-owning 视图，底层存储必须由调用方保活
+- `Bytes` 的构造函数族是 owning 深拷贝；`Bytes::from_string(...)` / `from_c_string(...)` 是 non-owning 视图，底层存储必须由调用方保活
 - `Buffer` 持有自己的动态缓冲；`RingBuffer` 也是 owning 固定容量缓冲，但不会自动扩容
 - `sleep(...)` 依赖全局 `TimerScheduler`；如果运行时还没启动计时器，`sleep` 对应的底层定时器注册不会成功
 - `AsyncTcpSocket` / `AsyncUdpSocket` / `AsyncFile` / `AsyncAio` / `AsyncFileWatcher` 都围绕底层句柄工作，关闭后不应继续复用旧句柄语义

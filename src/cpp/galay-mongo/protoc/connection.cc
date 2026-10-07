@@ -23,7 +23,7 @@ namespace galay::mongo::protocol
 namespace
 {
 
-int32_t readInt32LE(const char* p)
+int32_t read_int32_le(const char* p)
 {
     return static_cast<int32_t>(
         (static_cast<uint32_t>(static_cast<uint8_t>(p[0]))      ) |
@@ -44,7 +44,7 @@ Connection::ConnectOptions::ConnectOptions()
 }
 
 Connection::ConnectOptions
-Connection::ConnectOptions::fromMongoConfig(const ::galay::mongo::MongoConfig& config)
+Connection::ConnectOptions::from_mongo_config(const ::galay::mongo::MongoConfig& config)
 {
     ConnectOptions options;
     options.host = config.host;
@@ -181,7 +181,7 @@ Connection::connect(const ConnectOptions& options)
 
     if (options.tcp_nodelay) {
         auto nodelay_result =
-            ::galay::kernel::HandleOption(::GHandle{m_socket_fd}).handleTcpNoDelay();
+            ::galay::kernel::HandleOption(::GHandle{m_socket_fd}).handle_tcp_no_delay();
         if (!nodelay_result.has_value()) {
             ::close(m_socket_fd);
             m_socket_fd = -1;
@@ -245,7 +245,7 @@ std::expected<void, MongoError> Connection::send(const std::string& data)
     return {};
 }
 
-std::expected<void, MongoError> Connection::ensureData(size_t n)
+std::expected<void, MongoError> Connection::ensure_data(size_t n)
 {
     if (n > m_recv_ring.capacity()) {
         return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM,
@@ -259,7 +259,7 @@ std::expected<void, MongoError> Connection::ensureData(size_t n)
         }
 
         std::array<struct iovec, 2> write_iovecs{};
-        const size_t write_iovecs_count = m_recv_ring.getWriteIovecs(write_iovecs);
+        const size_t write_iovecs_count = m_recv_ring.get_write_iovecs(write_iovecs);
         if (write_iovecs_count == 0) {
             return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL,
                                               "Receive ring buffer has no writable regions"));
@@ -293,7 +293,7 @@ std::expected<void, MongoError> Connection::ensureData(size_t n)
     return {};
 }
 
-std::expected<void, MongoError> Connection::recvExact(char* buffer, size_t n)
+std::expected<void, MongoError> Connection::recv_exact(char* buffer, size_t n)
 {
     size_t received_total = 0;
     while (received_total < n) {
@@ -322,10 +322,10 @@ std::expected<void, MongoError> Connection::recvExact(char* buffer, size_t n)
     return {};
 }
 
-void Connection::copyReadable(size_t offset, char* dst, size_t len) const
+void Connection::copy_readable(size_t offset, char* dst, size_t len) const
 {
     std::array<struct iovec, 2> read_iovecs{};
-    const size_t read_iovecs_count = m_recv_ring.getReadIovecs(read_iovecs);
+    const size_t read_iovecs_count = m_recv_ring.get_read_iovecs(read_iovecs);
     size_t skipped = offset;
     size_t copied = 0;
 
@@ -352,37 +352,37 @@ void Connection::copyReadable(size_t offset, char* dst, size_t len) const
     }
 }
 
-std::string Connection::consumeToString(size_t len)
+std::string Connection::consume_to_string(size_t len)
 {
     std::string data(len, '\0');
     if (len > 0) {
-        copyReadable(0, data.data(), len);
+        copy_readable(0, data.data(), len);
         m_recv_ring.consume(len);
     }
     return data;
 }
 
-std::expected<std::string, MongoError> Connection::recvBytes(size_t expected_len)
+std::expected<std::string, MongoError> Connection::recv_bytes(size_t expected_len)
 {
     if (expected_len <= m_recv_ring.capacity()) {
-        auto ensured = ensureData(expected_len);
+        auto ensured = ensure_data(expected_len);
         if (!ensured) {
             return std::unexpected(ensured.error());
         }
 
-        return consumeToString(expected_len);
+        return consume_to_string(expected_len);
     }
 
     std::string data(expected_len, '\0');
     size_t copied = 0;
     const size_t buffered = std::min(m_recv_ring.readable(), expected_len);
     if (buffered > 0) {
-        copyReadable(0, data.data(), buffered);
+        copy_readable(0, data.data(), buffered);
         m_recv_ring.consume(buffered);
         copied = buffered;
     }
 
-    auto direct_recv = recvExact(data.data() + copied, expected_len - copied);
+    auto direct_recv = recv_exact(data.data() + copied, expected_len - copied);
     if (!direct_recv) {
         return std::unexpected(direct_recv.error());
     }
@@ -390,16 +390,16 @@ std::expected<std::string, MongoError> Connection::recvBytes(size_t expected_len
     return data;
 }
 
-std::expected<std::string, MongoError> Connection::recvMessageRaw()
+std::expected<std::string, MongoError> Connection::recv_message_raw()
 {
-    auto ensured = ensureData(4);
+    auto ensured = ensure_data(4);
     if (!ensured) {
         return std::unexpected(ensured.error());
     }
 
     char len_bytes[4];
-    copyReadable(0, len_bytes, sizeof(len_bytes));
-    const int32_t message_len = readInt32LE(len_bytes);
+    copy_readable(0, len_bytes, sizeof(len_bytes));
+    const int32_t message_len = read_int32_le(len_bytes);
     if (message_len < 16 || static_cast<size_t>(message_len) > kMaxMessageSize) {
         return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL,
                                           "Invalid Mongo message length: " +
@@ -408,11 +408,11 @@ std::expected<std::string, MongoError> Connection::recvMessageRaw()
 
     const size_t message_size = static_cast<size_t>(message_len);
     if (message_size <= m_recv_ring.capacity()) {
-        ensured = ensureData(message_size);
+        ensured = ensure_data(message_size);
         if (!ensured) {
             return std::unexpected(ensured.error());
         }
-        return consumeToString(message_size);
+        return consume_to_string(message_size);
     }
 
     std::string raw(message_size, '\0');
@@ -420,12 +420,12 @@ std::expected<std::string, MongoError> Connection::recvMessageRaw()
 
     const size_t buffered = std::min(m_recv_ring.readable(), message_size);
     if (buffered > 0) {
-        copyReadable(0, raw.data(), buffered);
+        copy_readable(0, raw.data(), buffered);
         m_recv_ring.consume(buffered);
         copied = buffered;
     }
 
-    auto direct_recv = recvExact(raw.data() + copied, message_size - copied);
+    auto direct_recv = recv_exact(raw.data() + copied, message_size - copied);
     if (!direct_recv) {
         return std::unexpected(direct_recv.error());
     }
@@ -433,16 +433,16 @@ std::expected<std::string, MongoError> Connection::recvMessageRaw()
     return raw;
 }
 
-std::expected<MongoMessage, MongoError> Connection::recvMessage()
+std::expected<MongoMessage, MongoError> Connection::recv_message()
 {
-    auto ensured = ensureData(4);
+    auto ensured = ensure_data(4);
     if (!ensured) {
         return std::unexpected(ensured.error());
     }
 
     char len_bytes[4];
-    copyReadable(0, len_bytes, sizeof(len_bytes));
-    const int32_t message_len = readInt32LE(len_bytes);
+    copy_readable(0, len_bytes, sizeof(len_bytes));
+    const int32_t message_len = read_int32_le(len_bytes);
     if (message_len < 16 || static_cast<size_t>(message_len) > kMaxMessageSize) {
         return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL,
                                           "Invalid Mongo message length: " +
@@ -451,13 +451,13 @@ std::expected<MongoMessage, MongoError> Connection::recvMessage()
 
     const size_t message_size = static_cast<size_t>(message_len);
     if (message_size <= m_recv_ring.capacity()) {
-        ensured = ensureData(message_size);
+        ensured = ensure_data(message_size);
         if (!ensured) {
             return std::unexpected(ensured.error());
         }
 
         std::array<struct iovec, 2> read_iovecs{};
-        const size_t read_iovecs_count = m_recv_ring.getReadIovecs(read_iovecs);
+        const size_t read_iovecs_count = m_recv_ring.get_read_iovecs(read_iovecs);
         if (read_iovecs_count == 0) {
             return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL,
                                               "Receive ring buffer has no readable regions"));
@@ -465,13 +465,13 @@ std::expected<MongoMessage, MongoError> Connection::recvMessage()
 
         std::expected<MongoMessage, MongoError> decoded;
         if (read_iovecs[0].iov_len >= message_size) {
-            decoded = MongoProtocol::decodeMessage(
+            decoded = MongoProtocol::decode_message(
                 static_cast<const char*>(read_iovecs[0].iov_base),
                 message_size);
         } else {
             m_decode_buffer.resize(message_size);
-            copyReadable(0, m_decode_buffer.data(), message_size);
-            decoded = MongoProtocol::decodeMessage(m_decode_buffer.data(), message_size);
+            copy_readable(0, m_decode_buffer.data(), message_size);
+            decoded = MongoProtocol::decode_message(m_decode_buffer.data(), message_size);
         }
 
         m_recv_ring.consume(message_size);
@@ -481,11 +481,11 @@ std::expected<MongoMessage, MongoError> Connection::recvMessage()
         return decoded;
     }
 
-    auto raw_or_err = recvMessageRaw();
+    auto raw_or_err = recv_message_raw();
     if (!raw_or_err) {
         return std::unexpected(raw_or_err.error());
     }
-    return MongoProtocol::decodeMessage(raw_or_err->data(), raw_or_err->size());
+    return MongoProtocol::decode_message(raw_or_err->data(), raw_or_err->size());
 }
 
 } // namespace galay::mongo::protocol

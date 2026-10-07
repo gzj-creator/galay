@@ -9,8 +9,8 @@ concept UnifiedByteRingBatchApi = requires(
     Ring& ring,
     std::span<const std::byte> input,
     std::span<std::byte> output) {
-    { ring.tryWriteBatch(input) } -> std::same_as<size_t>;
-    { ring.tryReadBatch(output) } -> std::same_as<size_t>;
+    { ring.try_write_batch(input) } -> std::same_as<size_t>;
+    { ring.try_read_batch(output) } -> std::same_as<size_t>;
 };
 
 template <typename Ring>
@@ -118,36 +118,36 @@ void test_ring_buffer() {
         assert(buffer.capacity() == 8);
         assert(buffer.readable() == 0);
         assert(buffer.writable() == 8);
-        assert(buffer.tryWriteBatch(nullptr, 4) == 0);
-        assert(buffer.tryWriteBatch("abc", 0) == 0);
+        assert(buffer.try_write_batch(nullptr, 4) == 0);
+        assert(buffer.try_write_batch("abc", 0) == 0);
 
         char emptyOut[1]{};
-        assert(buffer.tryReadBatch(emptyOut, 0) == 0);
-        assert(buffer.tryReadBatch(nullptr, 1) == 0);
+        assert(buffer.try_read_batch(emptyOut, 0) == 0);
+        assert(buffer.try_read_batch(nullptr, 1) == 0);
 
         std::array<std::span<const std::byte>, 2> emptyReadSpans{};
-        assert(buffer.readSpans(emptyReadSpans) == 0);
+        assert(buffer.read_spans(emptyReadSpans) == 0);
 
-        assert(buffer.tryWriteBatch("abcdef", 6) == 6);
+        assert(buffer.try_write_batch("abcdef", 6) == 6);
         assert(buffer.readable() == 6);
         assert(buffer.writable() == 2);
 
         char out[4]{};
-        assert(buffer.tryReadBatch(out, sizeof(out)) == 4);
+        assert(buffer.try_read_batch(out, sizeof(out)) == 4);
         assert(std::string(out, 4) == "abcd");
         assert(buffer.readable() == 2);
 
-        assert(buffer.tryWriteBatch("ghijkl", 6) == 6);
+        assert(buffer.try_write_batch("ghijkl", 6) == 6);
         assert(buffer.full());
 
         std::array<std::span<const std::byte>, 2> readSpans{};
-        const size_t readSpanCount = buffer.readSpans(readSpans);
+        const size_t readSpanCount = buffer.read_spans(readSpans);
         assert(readSpanCount == 2);
         assert(readSpans[0].size() == 4);
         assert(readSpans[1].size() == 4);
 
         char all[8]{};
-        assert(buffer.tryReadBatch(all, sizeof(all)) == 8);
+        assert(buffer.try_read_batch(all, sizeof(all)) == 8);
         assert(std::string(all, 8) == "efghijkl");
         assert(buffer.empty());
     }
@@ -156,7 +156,7 @@ void test_ring_buffer() {
         VectorRingBuffer buffer(4);
 
         std::array<std::span<std::byte>, 2> writeSpans{};
-        const size_t writeSpanCount = buffer.writeSpans(writeSpans);
+        const size_t writeSpanCount = buffer.write_spans(writeSpans);
         assert(writeSpanCount == 1);
         assert(writeSpans[0].size() == 4);
 
@@ -177,12 +177,12 @@ void test_ring_buffer() {
         assert(capacity >= 8);
 
         std::string prefix(capacity - 2, 'x');
-        assert(buffer.tryWriteBatch(prefix.data(), prefix.size()) == prefix.size());
+        assert(buffer.try_write_batch(prefix.data(), prefix.size()) == prefix.size());
         buffer.consume(capacity - 4);
-        assert(buffer.tryWriteBatch("abcdef", 6) == 6);
+        assert(buffer.try_write_batch("abcdef", 6) == 6);
 
         std::array<struct iovec, 2> readIovecs{};
-        const size_t readCount = buffer.getReadIovecs(readIovecs);
+        const size_t readCount = buffer.get_read_iovecs(readIovecs);
         assert(readCount >= 1 && readCount <= readIovecs.size());
         size_t readableLength = 0;
         for (size_t index = 0; index < readCount; ++index) {
@@ -195,17 +195,17 @@ void test_ring_buffer() {
         VectorRingBuffer buffer(8);
 
         std::array<struct iovec, 2> writeIovecs{};
-        const size_t writeCount = buffer.getWriteIovecs(writeIovecs);
+        const size_t writeCount = buffer.get_write_iovecs(writeIovecs);
         assert(writeCount == 1);
         assert(writeIovecs[0].iov_len == 8);
 
         std::memcpy(writeIovecs[0].iov_base, "abcdefgh", 8);
         buffer.produce(6);
         buffer.consume(4);
-        assert(buffer.tryWriteBatch("ijklmn", 6) == 6);
+        assert(buffer.try_write_batch("ijklmn", 6) == 6);
 
         std::array<struct iovec, 2> readIovecs{};
-        const size_t readCount = buffer.getReadIovecs(readIovecs);
+        const size_t readCount = buffer.get_read_iovecs(readIovecs);
         assert(readCount == 2);
         assert(readIovecs[0].iov_len == 4);
         assert(readIovecs[1].iov_len == 4);
@@ -215,37 +215,37 @@ void test_ring_buffer() {
         merged.append(static_cast<const char*>(readIovecs[1].iov_base), readIovecs[1].iov_len);
         assert(merged == "efijklmn");
 
-        assert(buffer.getReadIovecs(nullptr, 2) == 0);
-        assert(buffer.getReadIovecs(readIovecs.data(), 0) == 0);
-        assert(buffer.getWriteIovecs(nullptr, 2) == 0);
-        assert(buffer.getWriteIovecs(writeIovecs.data(), 0) == 0);
+        assert(buffer.get_read_iovecs(nullptr, 2) == 0);
+        assert(buffer.get_read_iovecs(readIovecs.data(), 0) == 0);
+        assert(buffer.get_write_iovecs(nullptr, 2) == 0);
+        assert(buffer.get_write_iovecs(writeIovecs.data(), 0) == 0);
         assert(buffer.full());
-        assert(buffer.getWriteIovecs(writeIovecs) == 0);
+        assert(buffer.get_write_iovecs(writeIovecs) == 0);
     }
 #endif
 
     {
         VectorRingBuffer buffer(5);
-        assert(buffer.tryWriteBatch("abcde", 5) == 5);
-        assert(buffer.tryWriteBatch("z", 1) == 0);
+        assert(buffer.try_write_batch("abcde", 5) == 5);
+        assert(buffer.try_write_batch("z", 1) == 0);
 
         char out[3]{};
-        assert(buffer.tryReadBatch(out, sizeof(out)) == 3);
+        assert(buffer.try_read_batch(out, sizeof(out)) == 3);
         assert(std::string(out, 3) == "abc");
 
-        assert(buffer.tryWriteBatch("fg", 2) == 2);
+        assert(buffer.try_write_batch("fg", 2) == 2);
 
         VectorRingBuffer moved(std::move(buffer));
         assert(moved.readable() == 4);
         assert(buffer.empty());
         assert(buffer.readable() == 0);
         char movedOut[4]{};
-        assert(moved.tryReadBatch(movedOut, sizeof(movedOut)) == 4);
+        assert(moved.try_read_batch(movedOut, sizeof(movedOut)) == 4);
         assert(std::string(movedOut, 4) == "defg");
         assert(moved.empty());
 
         VectorRingBuffer assigned(3);
-        assert(assigned.tryWriteBatch("xy", 2) == 2);
+        assert(assigned.try_write_batch("xy", 2) == 2);
         assigned = std::move(moved);
         assert(assigned.empty());
         assert(moved.empty());
@@ -257,7 +257,7 @@ void test_ring_buffer() {
 void test_byte_meta_data_helpers() {
     std::cout << "=== Testing ByteMetaData helpers ===" << std::endl;
 
-    ByteMetaData meta = mallocBytes(8);
+    ByteMetaData meta = malloc_bytes(8);
     assert(meta.data != nullptr);
     assert(meta.size == 0);
     assert(meta.capacity == 8);
@@ -265,29 +265,29 @@ void test_byte_meta_data_helpers() {
     std::memcpy(meta.data, "abcd", 4);
     meta.size = 4;
 
-    ByteMetaData copy = deepCopyBytes(meta);
+    ByteMetaData copy = deep_copy_bytes(meta);
     assert(copy.data != nullptr);
     assert(copy.data != meta.data);
     assert(copy.size == 4);
     assert(copy.capacity == 8);
     assert(std::memcmp(copy.data, "abcd", 4) == 0);
 
-    reallocBytes(copy, 2);
+    realloc_bytes(copy, 2);
     assert(copy.size == 2);
     assert(copy.capacity == 2);
     assert(std::memcmp(copy.data, "ab", 2) == 0);
 
-    clearBytes(copy);
+    clear_bytes(copy);
     assert(copy.data != nullptr);
     assert(copy.size == 0);
     assert(copy.capacity == 2);
 
-    freeBytes(copy);
+    free_bytes(copy);
     assert(copy.data == nullptr);
     assert(copy.size == 0);
     assert(copy.capacity == 0);
 
-    freeBytes(meta);
+    free_bytes(meta);
 
     std::cout << "ByteMetaData helper tests passed!" << std::endl;
 }
@@ -298,7 +298,7 @@ void test_bytes_container() {
     std::string source = "hello";
     Bytes owned(source);
     source[0] = 'H';
-    assert(owned.toString() == "hello");
+    assert(owned.to_string() == "hello");
     assert(owned.size() == 5);
     assert(owned.capacity() == 5);
     assert(!owned.empty());
@@ -308,23 +308,23 @@ void test_bytes_container() {
     assert(!(owned != literal));
 
     std::string viewSource = "view";
-    Bytes view = Bytes::fromString(viewSource);
-    assert(view.toStringView() == "view");
+    Bytes view = Bytes::from_string(viewSource);
+    assert(view.to_string_view() == "view");
     viewSource[0] = 'V';
-    assert(view.toStringView() == "View");
+    assert(view.to_string_view() == "View");
 
-    Bytes raw = Bytes::fromCString("abcdef", 3, 6);
-    assert(raw.toString() == "abc");
+    Bytes raw = Bytes::from_c_string("abcdef", 3, 6);
+    assert(raw.to_string() == "abc");
     assert(raw.capacity() == 6);
 
     Bytes moved(std::move(owned));
-    assert(moved.toString() == "hello");
+    assert(moved.to_string() == "hello");
     assert(owned.empty());
     assert(owned.data() == nullptr);
 
     Bytes assigned(4);
     assigned = std::move(moved);
-    assert(assigned.toString() == "hello");
+    assert(assigned.to_string() == "hello");
     assert(moved.empty());
 
     assigned.clear();

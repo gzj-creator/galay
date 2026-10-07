@@ -30,7 +30,7 @@ concept HasClone = requires(const T& value) {
 };
 
 template <typename T>
-consteval bool isMoveOnlyCloneable()
+consteval bool is_move_only_cloneable()
 {
     return !std::is_copy_constructible_v<T> &&
            !std::is_copy_assignable_v<T> &&
@@ -39,16 +39,16 @@ consteval bool isMoveOnlyCloneable()
            HasClone<T>;
 }
 
-static_assert(isMoveOnlyCloneable<PostgresField>());
-static_assert(isMoveOnlyCloneable<PostgresRow>());
-static_assert(isMoveOnlyCloneable<PostgresResultSet>());
+static_assert(is_move_only_cloneable<PostgresField>());
+static_assert(is_move_only_cloneable<PostgresRow>());
+static_assert(is_move_only_cloneable<PostgresResultSet>());
 
-std::string longString(char value)
+std::string long_string(char value)
 {
     return std::string(160, value);
 }
 
-PostgresField makeField(std::string name)
+PostgresField make_field(std::string name)
 {
     return PostgresField(std::move(name),
                          42,
@@ -59,19 +59,19 @@ PostgresField makeField(std::string name)
                          0);
 }
 
-void testOidAndFieldMetadata()
+void test_oid_and_field_metadata()
 {
     require(static_cast<uint32_t>(PostgresOid::BOOL) == 16, "BOOL OID mismatch");
     require(static_cast<uint32_t>(PostgresOid::INT8) == 20, "INT8 OID mismatch");
     require(static_cast<uint32_t>(PostgresOid::INT4) == 23, "INT4 OID mismatch");
     require(static_cast<uint32_t>(PostgresOid::JSONB) == 3802, "JSONB OID mismatch");
 
-    PostgresField field = makeField(longString('f'));
-    require(field.tableOid() == 42, "table OID mismatch");
-    require(field.columnIndex() == 3, "column index mismatch");
-    require(field.typeOid() == static_cast<uint32_t>(PostgresOid::VARCHAR), "type OID mismatch");
-    require(field.typeSize() == -1, "variable-width type size must remain signed");
-    require(field.typeModifier() == 17, "type modifier mismatch");
+    PostgresField field = make_field(long_string('f'));
+    require(field.table_oid() == 42, "table OID mismatch");
+    require(field.column_index() == 3, "column index mismatch");
+    require(field.type_oid() == static_cast<uint32_t>(PostgresOid::VARCHAR), "type OID mismatch");
+    require(field.type_size() == -1, "variable-width type size must remain signed");
+    require(field.type_modifier() == 17, "type modifier mismatch");
     require(field.format() == 0, "text format mismatch");
 
     PostgresField clone = field.clone();
@@ -79,15 +79,15 @@ void testOidAndFieldMetadata()
     require(clone.name().data() != field.name().data(), "field clone must own its name");
 
     const PostgresField extension_type("custom", 0, 0, 91042, -1, -1, 1);
-    require(extension_type.typeOid() == 91042, "unknown extension OIDs must be preserved");
-    require(extension_type.typeModifier() == -1, "negative type modifier must be preserved");
+    require(extension_type.type_oid() == 91042, "unknown extension OIDs must be preserved");
+    require(extension_type.type_modifier() == -1, "negative type modifier must be preserved");
     require(extension_type.format() == 1, "binary format mismatch");
 }
 
-void testRowAccessAndConversion()
+void test_row_access_and_conversion()
 {
     std::vector<std::optional<std::string>> values;
-    values.emplace_back(longString('a'));
+    values.emplace_back(long_string('a'));
     values.emplace_back(std::nullopt);
     values.emplace_back("-9223372036854775808");
     values.emplace_back("18446744073709551615");
@@ -96,14 +96,14 @@ void testRowAccessAndConversion()
 
     PostgresRow row(std::move(values));
     require(row.size() == 6, "row size mismatch");
-    require(!row.isNull(0) && row.isNull(1), "row NULL semantics mismatch");
-    require(row.isNull(99), "out-of-range isNull must be safe");
-    require(row.getString(1, "fallback") == "fallback", "NULL string fallback mismatch");
-    require(row.getInt64(2, 7) == std::numeric_limits<int64_t>::min(), "int64 conversion mismatch");
-    require(row.getUint64(3, 7) == std::numeric_limits<uint64_t>::max(), "uint64 conversion mismatch");
-    require(row.getDouble(4, 7.0) == 3.25, "double conversion mismatch");
-    require(row.getInt64(5, 77) == 77, "partial numeric parse must use fallback");
-    require(row.getInt64(99, 88) == 88, "out-of-range numeric fallback mismatch");
+    require(!row.is_null(0) && row.is_null(1), "row NULL semantics mismatch");
+    require(row.is_null(99), "out-of-range isNull must be safe");
+    require(row.get_string(1, "fallback") == "fallback", "NULL string fallback mismatch");
+    require(row.get_int64(2, 7) == std::numeric_limits<int64_t>::min(), "int64 conversion mismatch");
+    require(row.get_uint64(3, 7) == std::numeric_limits<uint64_t>::max(), "uint64 conversion mismatch");
+    require(row.get_double(4, 7.0) == 3.25, "double conversion mismatch");
+    require(row.get_int64(5, 77) == 77, "partial numeric parse must use fallback");
+    require(row.get_int64(99, 88) == 88, "out-of-range numeric fallback mismatch");
 
     PostgresRow clone = row.clone();
     require(clone.values()[0] == row.values()[0], "row clone lost its value");
@@ -111,45 +111,45 @@ void testRowAccessAndConversion()
             "row clone must own independent value storage");
 }
 
-void testResultSetCloneAndMetadata()
+void test_result_set_clone_and_metadata()
 {
     PostgresResultSet result;
-    result.reserveFields(1);
-    result.reserveRows(1);
-    result.addField(makeField(longString('n')));
-    result.addRow(PostgresRow({std::optional<std::string>(longString('v'))}));
-    result.setCommandTag("UPDATE 7");
-    result.setAffectedRows(7);
+    result.reserve_fields(1);
+    result.reserve_rows(1);
+    result.add_field(make_field(long_string('n')));
+    result.add_row(PostgresRow({std::optional<std::string>(long_string('v'))}));
+    result.set_command_tag("UPDATE 7");
+    result.set_affected_rows(7);
 
-    require(result.hasResultSet(), "result with fields must report a result set");
-    require(result.fieldCount() == 1 && result.rowCount() == 1, "result dimensions mismatch");
-    require(result.findField(result.field(0).name()) == 0, "field lookup mismatch");
-    require(result.findField("missing") == -1, "missing field lookup mismatch");
-    require(result.commandTag() == "UPDATE 7", "command tag mismatch");
-    require(result.affectedRows() == 7, "affected row count mismatch");
+    require(result.has_result_set(), "result with fields must report a result set");
+    require(result.field_count() == 1 && result.row_count() == 1, "result dimensions mismatch");
+    require(result.find_field(result.field(0).name()) == 0, "field lookup mismatch");
+    require(result.find_field("missing") == -1, "missing field lookup mismatch");
+    require(result.command_tag() == "UPDATE 7", "command tag mismatch");
+    require(result.affected_rows() == 7, "affected row count mismatch");
 
     PostgresResultSet clone = result.clone();
     require(clone.field(0).name() == result.field(0).name(), "result clone lost field metadata");
-    require(clone.row(0).getString(0) == result.row(0).getString(0), "result clone lost row data");
-    require(clone.commandTag() == result.commandTag(), "result clone lost command tag");
+    require(clone.row(0).get_string(0) == result.row(0).get_string(0), "result clone lost row data");
+    require(clone.command_tag() == result.command_tag(), "result clone lost command tag");
     require(clone.field(0).name().data() != result.field(0).name().data(),
             "result clone must deep-copy field names");
     require(clone.row(0).values()[0]->data() != result.row(0).values()[0]->data(),
             "result clone must deep-copy row values");
-    require(clone.commandTag().data() != result.commandTag().data(),
+    require(clone.command_tag().data() != result.command_tag().data(),
             "result clone must deep-copy command tag");
 
     PostgresResultSet command_only;
-    command_only.setCommandTag("CREATE TABLE");
-    require(!command_only.hasResultSet(), "command-only result must not report fields");
+    command_only.set_command_tag("CREATE TABLE");
+    require(!command_only.has_result_set(), "command-only result must not report fields");
 }
 
 } // namespace
 
 int main()
 {
-    testOidAndFieldMetadata();
-    testRowAccessAndConversion();
-    testResultSetCloneAndMetadata();
+    test_oid_and_field_metadata();
+    test_row_access_and_conversion();
+    test_result_set_clone_and_metadata();
     return EXIT_SUCCESS;
 }

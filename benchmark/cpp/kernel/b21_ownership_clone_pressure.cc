@@ -33,7 +33,7 @@ struct Sample {
     double ops_per_sec = 0.0;
 };
 
-Sample makeSample(std::size_t iterations, std::chrono::steady_clock::duration elapsed)
+Sample make_sample(std::size_t iterations, std::chrono::steady_clock::duration elapsed)
 {
     const auto elapsed_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
@@ -45,7 +45,7 @@ Sample makeSample(std::size_t iterations, std::chrono::steady_clock::duration el
     };
 }
 
-bool parseIterations(int argc, char** argv, std::size_t& iterations)
+bool parse_iterations(int argc, char** argv, std::size_t& iterations)
 {
     if (argc <= 1) {
         iterations = kDefaultIterations;
@@ -62,7 +62,7 @@ bool parseIterations(int argc, char** argv, std::size_t& iterations)
     return true;
 }
 
-bool benchBufferClone(std::size_t iterations, const std::string& payload)
+bool bench_buffer_clone(std::size_t iterations, const std::string& payload)
 {
     std::size_t bytes = 0;
     unsigned char checksum = 0;
@@ -78,7 +78,7 @@ bool benchBufferClone(std::size_t iterations, const std::string& payload)
         checksum ^= static_cast<unsigned char>(cloned.data()[0]);
         bytes += cloned.length();
     }
-    const auto sample = makeSample(iterations, std::chrono::steady_clock::now() - start);
+    const auto sample = make_sample(iterations, std::chrono::steady_clock::now() - start);
     std::cout << "OwnershipBufferClone iterations=" << iterations
               << " bytes=" << bytes
               << " checksum=" << static_cast<unsigned>(checksum)
@@ -87,7 +87,7 @@ bool benchBufferClone(std::size_t iterations, const std::string& payload)
     return true;
 }
 
-bool benchBufferMove(std::size_t iterations, const std::string& payload)
+bool bench_buffer_move(std::size_t iterations, const std::string& payload)
 {
     std::size_t bytes = 0;
     const auto start = std::chrono::steady_clock::now();
@@ -100,7 +100,7 @@ bool benchBufferMove(std::size_t iterations, const std::string& payload)
         }
         bytes += moved.length();
     }
-    const auto sample = makeSample(iterations, std::chrono::steady_clock::now() - start);
+    const auto sample = make_sample(iterations, std::chrono::steady_clock::now() - start);
     std::cout << "OwnershipBufferMove iterations=" << iterations
               << " bytes=" << bytes
               << " elapsed_ms=" << std::fixed << std::setprecision(3) << sample.elapsed_ms
@@ -108,7 +108,7 @@ bool benchBufferMove(std::size_t iterations, const std::string& payload)
     return true;
 }
 
-bool benchTimerAwaitableConstruction(std::size_t iterations)
+bool bench_timer_awaitable_construction(std::size_t iterations)
 {
     std::size_t constructed = 0;
     const auto start = std::chrono::steady_clock::now();
@@ -157,7 +157,7 @@ bool benchTimerAwaitableConstruction(std::size_t iterations)
 
         ++constructed;
     }
-    const auto sample = makeSample(constructed, std::chrono::steady_clock::now() - start);
+    const auto sample = make_sample(constructed, std::chrono::steady_clock::now() - start);
     std::cout << "OwnershipTimerAwaitableConstruction iterations=" << constructed
               << " elapsed_ms=" << std::fixed << std::setprecision(3) << sample.elapsed_ms
               << " ops_per_sec=" << std::setprecision(0) << sample.ops_per_sec << "\n";
@@ -168,12 +168,12 @@ bool benchTimerAwaitableConstruction(std::size_t iterations)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     std::size_t iterations = 0;
-    if (!parseIterations(argc, argv, iterations)) {
+    if (!parse_iterations(argc, argv, iterations)) {
         return 1;
     }
 
@@ -181,9 +181,9 @@ int main(int argc, char** argv)
     payload[0] = 'b';
 
     bool ok = true;
-    ok = benchBufferClone(iterations, payload) && ok;
-    ok = benchBufferMove(iterations, payload) && ok;
-    ok = benchTimerAwaitableConstruction(iterations) && ok;
+    ok = bench_buffer_clone(iterations, payload) && ok;
+    ok = bench_buffer_move(iterations, payload) && ok;
+    ok = bench_timer_awaitable_construction(iterations) && ok;
     if (ok) {
         std::cout << "B21-OwnershipClonePressure PASS\n";
     }

@@ -9,7 +9,7 @@ using namespace std::chrono_literals;
 
 namespace {
 
-Task<void> instantiateRecvTimeoutSurface(SslSocket& socket)
+Task<void> instantiate_recv_timeout_surface(SslSocket& socket)
 {
     char buffer[16]{};
     auto result = co_await socket.recv(buffer, sizeof(buffer)).timeout(1ms);
@@ -17,7 +17,7 @@ Task<void> instantiateRecvTimeoutSurface(SslSocket& socket)
     co_return;
 }
 
-Task<void> instantiateSendTimeoutSurface(SslSocket& socket)
+Task<void> instantiate_send_timeout_surface(SslSocket& socket)
 {
     constexpr char payload[] = "ping";
     auto result = co_await socket.send(payload, sizeof(payload) - 1).timeout(1ms);
@@ -25,7 +25,7 @@ Task<void> instantiateSendTimeoutSurface(SslSocket& socket)
     co_return;
 }
 
-Task<void> instantiateHandshakeTimeoutSurface(SslSocket& socket)
+Task<void> instantiate_handshake_timeout_surface(SslSocket& socket)
 {
     auto result = co_await socket.handshake().timeout(1ms);
     (void)result;
@@ -38,8 +38,8 @@ int main()
 {
     SslContext ctx(SslMethod::TLS_Client);
     SslSocket socket(&ctx);
-    (void)instantiateRecvTimeoutSurface(socket);
-    (void)instantiateSendTimeoutSurface(socket);
-    (void)instantiateHandshakeTimeoutSurface(socket);
+    (void)instantiate_recv_timeout_surface(socket);
+    (void)instantiate_send_timeout_surface(socket);
+    (void)instantiate_handshake_timeout_surface(socket);
     return 0;
 }

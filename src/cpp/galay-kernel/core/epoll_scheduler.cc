@@ -13,15 +13,15 @@ EpollSchedulerBackend::~EpollSchedulerBackend()
     stop();
 }
 
-void EpollSchedulerBackend::pollBackend()
+void EpollSchedulerBackend::poll_backend()
 {
-    m_reactor.poll(schedulerPollTimeoutMilliseconds(), m_wake_coordinator);
+    m_reactor.poll(scheduler_poll_timeout_milliseconds(), m_wake_coordinator);
 }
 
-void EpollSchedulerBackend::flushBackend()
+void EpollSchedulerBackend::flush_backend()
 {
-    // flush 将错误保存到 lastError；事件循环继续排空已接纳的任务。
-    (void)m_reactor.flushPendingChanges();
+    // flush 将错误保存到 last_error；事件循环继续排空已接纳的任务。
+    (void)m_reactor.flush_pending_changes();
 }
 
 } // namespace galay::kernel

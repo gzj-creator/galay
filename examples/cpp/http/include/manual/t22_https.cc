@@ -23,7 +23,7 @@ Task<void> test_https_client() {
     std::cout << "=== HTTPS Client Test ===" << std::endl;
 
     HttpsClient client(HttpsClientBuilder()
-        .verifyPeer(false)  // 测试时不验证证书
+        .verify_peer(false)  // 测试时不验证证书
         .build());
 
     try {
@@ -55,18 +55,18 @@ Task<void> test_https_client() {
         auto request = Http1_1RequestBuilder::get("/")
             .host("localhost")
             .connection("close")
-            .buildMove();
+            .build_move();
 
-        auto session_result = client.getSession();
+        auto session_result = client.get_session();
         if (!session_result) {
             co_await client.close();
             co_return;
         }
         auto& session = *session_result.value();
 
-        auto& writer = session.getWriter();
+        auto& writer = session.get_writer();
         while (true) {
-            auto send_result = co_await writer.sendRequest(request);
+            auto send_result = co_await writer.send_request(request);
             if (!send_result) {
                 std::cerr << "Send failed: " << send_result.error().message() << std::endl;
                 g_failed = true;
@@ -81,12 +81,12 @@ Task<void> test_https_client() {
         // 接收响应
         std::cout << "Receiving response..." << std::endl;
         HttpResponse response;
-        auto& reader = session.getReader();
+        auto& reader = session.get_reader();
         int recv_attempts = 0;
         while (true) {
             recv_attempts++;
             std::cout << "  Recv attempt " << recv_attempts << "..." << std::endl;
-            auto recv_result = co_await reader.getResponse(response);
+            auto recv_result = co_await reader.get_response(response);
             if (!recv_result) {
                 auto& err = recv_result.error();
                 std::cerr << "Recv failed (attempt " << recv_attempts << "): "
@@ -108,12 +108,12 @@ Task<void> test_https_client() {
         }
 
         std::cout << "Response received:" << std::endl;
-        std::cout << "  Complete: " << (response.isComplete() ? "yes" : "no") << std::endl;
+        std::cout << "  Complete: " << (response.is_complete() ? "yes" : "no") << std::endl;
         std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-        std::cout << "  Body length: " << response.getBodyStr().size() << std::endl;
-        std::cout << "  Body: " << response.getBodyStr() << std::endl;
+        std::cout << "  Body length: " << response.get_body_str().size() << std::endl;
+        std::cout << "  Body: " << response.get_body_str() << std::endl;
 
-        if (response.isComplete() && static_cast<int>(response.header().code()) == 200) {
+        if (response.is_complete() && static_cast<int>(response.header().code()) == 200) {
             g_success = true;
         } else {
             g_failed = true;
@@ -139,16 +139,16 @@ int main() {
     std::cout << std::endl;
 
     // 创建运行时
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     rt.start();
 
-    auto* scheduler = rt.getNextIOScheduler();
+    auto* scheduler = rt.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "No IO scheduler available" << std::endl;
         return 1;
     }
 
-    scheduleTask(scheduler, test_https_client());
+    schedule_task(scheduler, test_https_client());
 
     // 等待测试完成
     while (!g_done) {

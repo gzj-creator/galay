@@ -23,40 +23,40 @@ namespace galay::http
         return copy;
     }
 
-    std::string HttpResponse::getBodyStr()
+    std::string HttpResponse::get_body_str()
     {
         return std::move(m_body);
     }
 
-    const std::string& HttpResponse::bodyStr() const
+    const std::string& HttpResponse::body_str() const
     {
         return m_body;
     }
 
-    void HttpResponse::setHeader(HttpResponseHeader &&header)
+    void HttpResponse::set_header(HttpResponseHeader &&header)
     {
         m_header = std::move(header);
     }
 
-    void HttpResponse::setHeader(HttpResponseHeader &header)
+    void HttpResponse::set_header(HttpResponseHeader &header)
     {
-        m_header.copyFrom(header);
+        m_header.copy_from(header);
     }
 
-    void HttpResponse::setBodyStr(std::string &&body)
+    void HttpResponse::set_body_str(std::string &&body)
     {
         m_body = std::move(body);
     }
 
-    std::string HttpResponse::toString()
+    std::string HttpResponse::to_string()
     {
-        if(!m_header.isChunked()) {
-            m_header.headerPairs().addHeaderPairIfNotExist("Content-Length", std::to_string(m_body.size()));
+        if(!m_header.is_chunked()) {
+            m_header.header_pairs().add_header_pair_if_not_exist("Content-Length", std::to_string(m_body.size()));
         }
 
-        std::string header_str = m_header.toString();
+        std::string header_str = m_header.to_string();
 
-        if(m_header.isChunked()) {
+        if(m_header.is_chunked()) {
             return header_str;
         }
 
@@ -68,12 +68,12 @@ namespace galay::http
         return result;
     }
 
-    std::pair<HttpErrorCode, ssize_t> HttpResponse::fromIOVec(const std::vector<iovec>& iovecs)
+    std::pair<HttpErrorCode, ssize_t> HttpResponse::from_io_vec(const std::vector<iovec>& iovecs)
     {
-        return fromIOVec(iovecs, 0);
+        return from_io_vec(iovecs, 0);
     }
 
-    std::pair<HttpErrorCode, ssize_t> HttpResponse::fromIOVec(const std::vector<iovec>& iovecs,
+    std::pair<HttpErrorCode, ssize_t> HttpResponse::from_io_vec(const std::vector<iovec>& iovecs,
                                                               size_t max_body_size)
     {
         ssize_t newly_consumed = 0;
@@ -82,7 +82,7 @@ namespace galay::http
 
         // 如果header还没解析完，先解析header
         if (!m_headerParsed) {
-            auto [err, header_consumed] = m_header.fromIOVec(iovecs);
+            auto [err, header_consumed] = m_header.from_io_vec(iovecs);
             if (err != kNoError && err != kIncomplete) {
                 return {err, -1};
             }
@@ -94,22 +94,22 @@ namespace galay::http
             header_bytes = header_consumed;
             newly_consumed = header_consumed;
             m_headerParsed = true;
-            if (const auto* te = detail::getHeaderValuePtrLoose(m_header.headerPairs(), "transfer-encoding");
+            if (const auto* te = detail::get_header_value_ptr_loose(m_header.header_pairs(), "transfer-encoding");
                 te != nullptr) {
-                is_chunked = detail::headerValueContainsToken(*te, "chunked");
+                is_chunked = detail::header_value_contains_token(*te, "chunked");
             }
 
             if (is_chunked) {
                 // chunked body 继续往下解析
             } else {
                 // header解析完成，获取Content-Length
-                const auto* content_length = detail::getHeaderValuePtrLoose(m_header.headerPairs(), "content-length");
+                const auto* content_length = detail::get_header_value_ptr_loose(m_header.header_pairs(), "content-length");
                 if (content_length == nullptr || content_length->empty()) {
                     // 没有body，解析完成
                     return {kNoError, newly_consumed};
                 }
 
-                auto parsed_length = detail::parseSizeTStrict(*content_length);
+                auto parsed_length = detail::parse_size_t_strict(*content_length);
                 if (!parsed_length.has_value()) {
                     return {kBadRequest, -1};
                 }
@@ -125,14 +125,14 @@ namespace galay::http
                 m_body.reserve(std::min(m_contentLength, kInitialBodyReserveLimit));
             }
         } else {
-            if (const auto* te = detail::getHeaderValuePtrLoose(m_header.headerPairs(), "transfer-encoding");
+            if (const auto* te = detail::get_header_value_ptr_loose(m_header.header_pairs(), "transfer-encoding");
                 te != nullptr) {
-                is_chunked = detail::headerValueContainsToken(*te, "chunked");
+                is_chunked = detail::header_value_contains_token(*te, "chunked");
             }
         }
 
         if (is_chunked) {
-            auto body_iovecs = detail::sliceIovecs(iovecs, header_bytes);
+            auto body_iovecs = detail::slice_iovecs(iovecs, header_bytes);
             if (body_iovecs.empty()) {
                 return {kNoError, newly_consumed};
             }
@@ -148,8 +148,8 @@ namespace galay::http
             newly_consumed += chunk_result.value().second;
 
             if (chunk_result.value().first) {
-                detail::removeHeaderPairLoose(m_header.headerPairs(), "transfer-encoding");
-                m_header.headerPairs().addHeaderPair("content-length", std::to_string(m_body.size()));
+                detail::remove_header_pair_loose(m_header.header_pairs(), "transfer-encoding");
+                m_header.header_pairs().add_header_pair("content-length", std::to_string(m_body.size()));
                 m_contentLength = m_body.size();
                 m_bodyParsed = m_contentLength;
             }
@@ -200,12 +200,12 @@ namespace galay::http
         return {kNoError, newly_consumed};
     }
 
-    bool HttpResponse::isComplete() const
+    bool HttpResponse::is_complete() const
     {
         if (!m_headerParsed) {
             return false;
         }
-        if (m_header.isChunked()) {
+        if (m_header.is_chunked()) {
             return false; // chunked需要单独处理
         }
         return m_bodyParsed >= m_contentLength;

@@ -24,12 +24,12 @@ using namespace std::chrono_literals;
 template <typename T>
 concept HasDrainTo = requires(galay::mpsc::BoundedChannel<T>& channel,
                               std::vector<T>& destination) {
-    { channel.drainTo(destination, size_t{1}) } noexcept -> std::same_as<size_t>;
+    { channel.drain_to(destination, size_t{1}) } noexcept -> std::same_as<size_t>;
 };
 
 static_assert(HasDrainTo<int>);
 
-bool waitFor(const std::atomic<bool>& flag,
+bool wait_for(const std::atomic<bool>& flag,
              std::chrono::milliseconds timeout = 2s)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -42,7 +42,7 @@ bool waitFor(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-bool runBoundaryAndFifo()
+bool run_boundary_and_fifo()
 {
     galay::mpsc::BoundedChannel<int> channel(8);
     std::vector<int> destination;
@@ -50,19 +50,19 @@ bool runBoundaryAndFifo()
     destination.push_back(-1);
     int* const storage = destination.data();
 
-    if (channel.drainTo(destination, 4) != 0) {
+    if (channel.drain_to(destination, 4) != 0) {
         return false;
     }
     for (int value = 0; value < 5; ++value) {
-        if (!channel.trySend(value)) {
+        if (!channel.try_send(value)) {
             return false;
         }
     }
-    if (channel.drainTo(destination, 0) != 0 || channel.size() != 5) {
+    if (channel.drain_to(destination, 0) != 0 || channel.size() != 5) {
         return false;
     }
 
-    const size_t first = channel.drainTo(destination, 5);
+    const size_t first = channel.drain_to(destination, 5);
     if (first != 2 || destination.data() != storage || destination.size() != 3 ||
         destination[0] != -1 || destination[1] != 0 || destination[2] != 1 ||
         channel.size() != 3) {
@@ -70,8 +70,8 @@ bool runBoundaryAndFifo()
     }
 
     destination.clear();
-    const size_t second = channel.drainTo(destination, 2);
-    auto last = channel.tryRecv();
+    const size_t second = channel.drain_to(destination, 2);
+    auto last = channel.try_recv();
     return second == 2 && destination.data() == storage &&
         destination.size() == 2 && destination[0] == 2 && destination[1] == 3 &&
         last.has_value() && *last == 4 && channel.empty();
@@ -117,12 +117,12 @@ struct CoordinatedValue
     int value;
 };
 
-bool runConcurrentClose()
+bool run_concurrent_close()
 {
     MoveGate gate;
     galay::mpsc::BoundedChannel<CoordinatedValue> channel(4);
-    if (!channel.trySend(CoordinatedValue(1, &gate)) ||
-        !channel.trySend(CoordinatedValue(2, &gate))) {
+    if (!channel.try_send(CoordinatedValue(1, &gate)) ||
+        !channel.try_send(CoordinatedValue(2, &gate))) {
         return false;
     }
 
@@ -131,17 +131,17 @@ bool runConcurrentClose()
     size_t drained = 0;
     gate.armed.store(true, std::memory_order_release);
     std::thread consumer([&]() {
-        drained = channel.drainTo(destination, 2);
+        drained = channel.drain_to(destination, 2);
     });
 
-    const bool entered = waitFor(gate.entered);
+    const bool entered = wait_for(gate.entered);
     if (entered) {
         channel.close();
     }
     gate.release.store(true, std::memory_order_release);
     consumer.join();
 
-    return entered && drained == 2 && channel.isClosed() && channel.empty() &&
+    return entered && drained == 2 && channel.is_closed() && channel.empty() &&
         destination.size() == 2 && destination[0].value == 1 &&
         destination[1].value == 2;
 }
@@ -153,7 +153,7 @@ struct SendState
     bool success = false;
 };
 
-galay::kernel::Task<void> sendOne(
+galay::kernel::Task<void> send_one(
     galay::mpsc::BoundedChannel<int>* channel, SendState* state)
 {
     state->entered.store(true, std::memory_order_release);
@@ -163,10 +163,10 @@ galay::kernel::Task<void> sendOne(
     co_return;
 }
 
-bool runSendWaiterProgress()
+bool run_send_waiter_progress()
 {
     galay::mpsc::BoundedChannel<int> channel(2);
-    if (!channel.trySend(1) || !channel.trySend(2)) {
+    if (!channel.try_send(1) || !channel.try_send(2)) {
         return false;
     }
 
@@ -176,16 +176,16 @@ bool runSendWaiterProgress()
         return false;
     }
     SendState state;
-    if (!galay::kernel::scheduleTask(scheduler, sendOne(&channel, &state)) ||
-        !waitFor(state.entered)) {
+    if (!galay::kernel::schedule_task(scheduler, send_one(&channel, &state)) ||
+        !wait_for(state.entered)) {
         scheduler.stop();
         return false;
     }
 
     std::vector<int> first;
     first.reserve(1);
-    const size_t drained = channel.drainTo(first, 1);
-    const bool done = waitFor(state.done);
+    const size_t drained = channel.drain_to(first, 1);
+    const bool done = wait_for(state.done);
     scheduler.stop();
     if (drained != 1 || first.size() != 1 || first[0] != 1 || !done ||
         !state.success) {
@@ -194,7 +194,7 @@ bool runSendWaiterProgress()
 
     std::vector<int> rest;
     rest.reserve(2);
-    const size_t remaining = channel.drainTo(rest, 2);
+    const size_t remaining = channel.drain_to(rest, 2);
     return remaining == 2 && rest.size() == 2 && rest[0] == 2 && rest[1] == 3 &&
         channel.empty();
 }
@@ -204,18 +204,18 @@ bool runSendWaiterProgress()
 int main()
 {
     galay::test::TestResultWriter writer("t172_mpsc_bounded_drain");
-    const bool boundaryAndFifo = runBoundaryAndFifo();
-    const bool concurrentClose = runConcurrentClose();
-    const bool sendWaiterProgress = runSendWaiterProgress();
+    const bool boundaryAndFifo = run_boundary_and_fifo();
+    const bool concurrentClose = run_concurrent_close();
+    const bool sendWaiterProgress = run_send_waiter_progress();
     const bool passed = boundaryAndFifo && concurrentClose && sendWaiterProgress;
 
-    writer.addTest();
+    writer.add_test();
     if (passed) {
-        writer.addPassed();
+        writer.add_passed();
     } else {
-        writer.addFailed();
+        writer.add_failed();
     }
-    writer.writeResult();
+    writer.write_result();
 
     std::cout << "boundary_and_fifo=" << (boundaryAndFifo ? "PASS" : "FAIL")
               << '\n'

@@ -25,7 +25,7 @@ struct PostgresConfig
     uint16_t port = 5432;
     bool tcp_no_delay = true;
 
-    static PostgresConfig defaultConfig()
+    static PostgresConfig default_config()
     {
         return {};
     }
@@ -54,17 +54,17 @@ struct AsyncPostgresConfig
     size_t result_row_reserve_hint = 0;
     bool tcp_no_delay = true;
 
-    [[nodiscard]] bool isSendTimeoutEnabled() const
+    [[nodiscard]] bool is_send_timeout_enabled() const
     {
         return send_timeout >= std::chrono::milliseconds(0);
     }
 
-    [[nodiscard]] bool isRecvTimeoutEnabled() const
+    [[nodiscard]] bool is_recv_timeout_enabled() const
     {
         return recv_timeout >= std::chrono::milliseconds(0);
     }
 
-    static AsyncPostgresConfig withTimeout(std::chrono::milliseconds send,
+    static AsyncPostgresConfig with_timeout(std::chrono::milliseconds send,
                                            std::chrono::milliseconds recv)
     {
         AsyncPostgresConfig config;
@@ -73,21 +73,21 @@ struct AsyncPostgresConfig
         return config;
     }
 
-    static AsyncPostgresConfig withSendTimeout(std::chrono::milliseconds send)
+    static AsyncPostgresConfig with_send_timeout(std::chrono::milliseconds send)
     {
         AsyncPostgresConfig config;
         config.send_timeout = send;
         return config;
     }
 
-    static AsyncPostgresConfig withRecvTimeout(std::chrono::milliseconds recv)
+    static AsyncPostgresConfig with_recv_timeout(std::chrono::milliseconds recv)
     {
         AsyncPostgresConfig config;
         config.recv_timeout = recv;
         return config;
     }
 
-    static AsyncPostgresConfig noTimeout()
+    static AsyncPostgresConfig no_timeout()
     {
         return {};
     }

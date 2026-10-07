@@ -57,8 +57,8 @@ template <typename T>
 concept HasCallerOwnedSpscBatch = requires(
     galay::spsc::BoundedChannel<T>& channel,
     std::span<T> output) {
-    { channel.tryRecvBatch(output) } noexcept -> std::same_as<size_t>;
-    { channel.recvBatchTo(output) } noexcept;
+    { channel.try_recv_batch(output) } noexcept -> std::same_as<size_t>;
+    { channel.recv_batch_to(output) } noexcept;
 };
 
 static_assert(!std::is_same_v<SpscChannel, MpscChannel>);
@@ -70,9 +70,9 @@ static_assert(HasCallerOwnedSpscBatch<int>);
 static_assert(!HasCallerOwnedSpscBatch<PotentiallyThrowingMoveAssign>);
 
 using SpscBatchToAwaitable = decltype(
-    std::declval<SpscChannel&>().recvBatchTo(std::declval<std::span<int>>()));
+    std::declval<SpscChannel&>().recv_batch_to(std::declval<std::span<int>>()));
 using SpscVectorBatchAwaitable = decltype(
-    std::declval<SpscChannel&>().recvBatch(size_t{2}));
+    std::declval<SpscChannel&>().recv_batch(size_t{2}));
 
 static_assert(!std::is_copy_constructible_v<SpscBatchToAwaitable>);
 static_assert(std::is_nothrow_move_constructible_v<SpscBatchToAwaitable>);
@@ -89,7 +89,7 @@ struct AsyncState
     int value = 0;
 };
 
-std::string readAll(const std::filesystem::path& path)
+std::string read_all(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -99,7 +99,7 @@ std::string readAll(const std::filesystem::path& path)
                        std::istreambuf_iterator<char>());
 }
 
-bool checkIndependentSources()
+bool check_independent_sources()
 {
     const std::filesystem::path concurrencyRoot =
         std::filesystem::path(GALAY_SOURCE_ROOT) / "galay-kernel" / "concurrency";
@@ -113,7 +113,7 @@ bool checkIndependentSources()
     };
 
     for (const auto& header : headers) {
-        const std::string content = readAll(header);
+        const std::string content = read_all(header);
         if (content.empty() || content.find("Topology") != std::string::npos ||
             content.find("concurrency/detail") != std::string::npos) {
             std::cerr << "channel source is not independent: " << header << '\n';
@@ -122,7 +122,7 @@ bool checkIndependentSources()
     }
 
     for (const auto& header : {headers[0], headers[1], headers[2], headers[3]}) {
-        const std::string content = readAll(header);
+        const std::string content = read_all(header);
         if (content.find("moodycamel") != std::string::npos) {
             std::cerr << "topology-specialized channel still uses MPMC queue: "
                       << header << '\n';
@@ -132,7 +132,7 @@ bool checkIndependentSources()
     return true;
 }
 
-bool waitFor(const std::atomic<bool>& flag, std::chrono::milliseconds timeout = 5s)
+bool wait_for(const std::atomic<bool>& flag, std::chrono::milliseconds timeout = 5s)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
@@ -145,7 +145,7 @@ bool waitFor(const std::atomic<bool>& flag, std::chrono::milliseconds timeout = 
 }
 
 template <typename Channel>
-galay::kernel::Task<void> sendOne(Channel* channel, AsyncState* state, int value)
+galay::kernel::Task<void> send_one(Channel* channel, AsyncState* state, int value)
 {
     state->entered.store(true, std::memory_order_release);
     auto result = co_await channel->send(std::move(value));
@@ -155,7 +155,7 @@ galay::kernel::Task<void> sendOne(Channel* channel, AsyncState* state, int value
 }
 
 template <typename Channel>
-galay::kernel::Task<void> receiveOne(Channel* channel, AsyncState* state)
+galay::kernel::Task<void> receive_one(Channel* channel, AsyncState* state)
 {
     state->entered.store(true, std::memory_order_release);
     auto result = co_await channel->recv();
@@ -168,28 +168,28 @@ galay::kernel::Task<void> receiveOne(Channel* channel, AsyncState* state)
 }
 
 template <typename Channel>
-bool runBasicCloseAndDrain()
+bool run_basic_close_and_drain()
 {
     Channel channel(2);
-    if (!channel.trySend(1) || !channel.trySend(2) || channel.trySend(3)) {
+    if (!channel.try_send(1) || !channel.try_send(2) || channel.try_send(3)) {
         return false;
     }
     channel.close();
     channel.close();
-    if (!channel.isClosed() || channel.trySend(4)) {
+    if (!channel.is_closed() || channel.try_send(4)) {
         return false;
     }
-    auto first = channel.tryRecv();
-    auto second = channel.tryRecv();
+    auto first = channel.try_recv();
+    auto second = channel.try_recv();
     return first.has_value() && second.has_value() && *first == 1 && *second == 2 &&
-        !channel.tryRecv().has_value();
+        !channel.try_recv().has_value();
 }
 
 template <typename Channel>
-bool runWaiterProgress()
+bool run_waiter_progress()
 {
     Channel sendChannel(2);
-    if (!sendChannel.trySend(1) || !sendChannel.trySend(2)) {
+    if (!sendChannel.try_send(1) || !sendChannel.try_send(2)) {
         return false;
     }
 
@@ -199,17 +199,17 @@ bool runWaiterProgress()
         return false;
     }
     AsyncState sendState;
-    if (!galay::kernel::scheduleTask(
-            sendScheduler, sendOne(&sendChannel, &sendState, 3)) ||
-        !waitFor(sendState.entered) || sendState.done.load(std::memory_order_acquire)) {
+    if (!galay::kernel::schedule_task(
+            sendScheduler, send_one(&sendChannel, &sendState, 3)) ||
+        !wait_for(sendState.entered) || sendState.done.load(std::memory_order_acquire)) {
         sendScheduler.stop();
         return false;
     }
-    auto first = sendChannel.tryRecv();
-    const bool sendDone = waitFor(sendState.done);
+    auto first = sendChannel.try_recv();
+    const bool sendDone = wait_for(sendState.done);
     sendScheduler.stop();
-    auto second = sendChannel.tryRecv();
-    auto third = sendChannel.tryRecv();
+    auto second = sendChannel.try_recv();
+    auto third = sendChannel.try_recv();
     if (!sendDone || !sendState.success || !first.has_value() || !second.has_value() ||
         !third.has_value() || *first != 1 || *second != 2 || *third != 3) {
         return false;
@@ -222,20 +222,20 @@ bool runWaiterProgress()
         return false;
     }
     AsyncState recvState;
-    if (!galay::kernel::scheduleTask(
-            recvScheduler, receiveOne(&recvChannel, &recvState)) ||
-        !waitFor(recvState.entered) || recvState.done.load(std::memory_order_acquire)) {
+    if (!galay::kernel::schedule_task(
+            recvScheduler, receive_one(&recvChannel, &recvState)) ||
+        !wait_for(recvState.entered) || recvState.done.load(std::memory_order_acquire)) {
         recvScheduler.stop();
         return false;
     }
     int value = 7;
-    const bool sent = recvChannel.trySend(std::move(value));
-    const bool recvDone = waitFor(recvState.done);
+    const bool sent = recvChannel.try_send(std::move(value));
+    const bool recvDone = wait_for(recvState.done);
     recvScheduler.stop();
     return sent && recvDone && recvState.success && recvState.value == 7;
 }
 
-bool runSpscWraparound()
+bool run_spsc_wraparound()
 {
     constexpr size_t kMessageCount = 200'000;
     galay::spsc::BoundedChannel<uint64_t> channel(2);
@@ -251,7 +251,7 @@ bool runSpscWraparound()
         start.wait();
         for (size_t sequence = 0; sequence < kMessageCount; ++sequence) {
             uint64_t value = sequence;
-            while (!channel.trySend(std::move(value))) {
+            while (!channel.try_send(std::move(value))) {
                 if (std::chrono::steady_clock::now() >= deadline) {
                     failed.store(true, std::memory_order_release);
                     return;
@@ -267,7 +267,7 @@ bool runSpscWraparound()
         start.wait();
         uint64_t expected = 0;
         while (expected < kMessageCount) {
-            auto value = channel.tryRecv();
+            auto value = channel.try_recv();
             if (!value.has_value()) {
                 if (std::chrono::steady_clock::now() >= deadline) {
                     failed.store(true, std::memory_order_release);
@@ -285,7 +285,7 @@ bool runSpscWraparound()
         }
     });
 
-    const bool allReady = ready.waitFor(2s);
+    const bool allReady = ready.wait_for(2s);
     start.open();
     producer.join();
     consumer.join();
@@ -294,35 +294,35 @@ bool runSpscWraparound()
         consumed.load(std::memory_order_acquire) == kMessageCount;
 }
 
-bool runSpscCallerOwnedBatch()
+bool run_spsc_caller_owned_batch()
 {
     using Pointer = std::unique_ptr<int>;
     galay::spsc::BoundedChannel<Pointer> channel(8);
 
-    if (!channel.trySend(std::make_unique<int>(1)) ||
-        !channel.trySend(std::make_unique<int>(2)) ||
-        !channel.trySend(std::make_unique<int>(3)) ||
-        !channel.trySend(std::make_unique<int>(4))) {
+    if (!channel.try_send(std::make_unique<int>(1)) ||
+        !channel.try_send(std::make_unique<int>(2)) ||
+        !channel.try_send(std::make_unique<int>(3)) ||
+        !channel.try_send(std::make_unique<int>(4))) {
         return false;
     }
 
     std::array<Pointer, 2> firstBatch{};
-    const size_t firstCount = channel.tryRecvBatch(std::span<Pointer>(firstBatch));
+    const size_t firstCount = channel.try_recv_batch(std::span<Pointer>(firstBatch));
     if (firstCount != firstBatch.size() || !firstBatch[0] || !firstBatch[1] ||
         *firstBatch[0] != 1 || *firstBatch[1] != 2) {
         return false;
     }
 
-    auto third = channel.tryRecv();
-    auto fourth = channel.tryRecv();
+    auto third = channel.try_recv();
+    auto fourth = channel.try_recv();
     if (!third.has_value() || !fourth.has_value() || !*third || !*fourth ||
-        **third != 3 || **fourth != 4 || channel.tryRecv().has_value()) {
+        **third != 3 || **fourth != 4 || channel.try_recv().has_value()) {
         return false;
     }
 
-    if (channel.tryRecvBatch(std::span<Pointer>{}) != 0 ||
-        !channel.trySend(std::make_unique<int>(5)) ||
-        !channel.trySend(std::make_unique<int>(6))) {
+    if (channel.try_recv_batch(std::span<Pointer>{}) != 0 ||
+        !channel.try_send(std::make_unique<int>(5)) ||
+        !channel.try_send(std::make_unique<int>(6))) {
         return false;
     }
     channel.close();
@@ -334,7 +334,7 @@ bool runSpscCallerOwnedBatch()
         std::make_unique<int>(-4),
     };
     const size_t closedCount =
-        channel.tryRecvBatch(std::span<Pointer>(closedBatch));
+        channel.try_recv_batch(std::span<Pointer>(closedBatch));
     if (closedCount != 2 || !closedBatch[0] || !closedBatch[1] ||
         !closedBatch[2] || !closedBatch[3] || *closedBatch[0] != 5 ||
         *closedBatch[1] != 6 || *closedBatch[2] != -3 ||
@@ -342,7 +342,7 @@ bool runSpscCallerOwnedBatch()
         return false;
     }
 
-    auto emptyAwaiter = channel.recvBatchTo(std::span<Pointer>{});
+    auto emptyAwaiter = channel.recv_batch_to(std::span<Pointer>{});
     if (!emptyAwaiter.await_ready()) {
         return false;
     }
@@ -353,7 +353,7 @@ bool runSpscCallerOwnedBatch()
 
     std::array<Pointer, 1> closedOutput{std::make_unique<int>(-9)};
     auto closedAwaiter =
-        channel.recvBatchTo(std::span<Pointer>(closedOutput));
+        channel.recv_batch_to(std::span<Pointer>(closedOutput));
     if (!closedAwaiter.await_ready()) {
         return false;
     }
@@ -364,7 +364,7 @@ bool runSpscCallerOwnedBatch()
             closedResult.error().code(), galay::kernel::kClosed);
 }
 
-bool runStaticSpscChannel()
+bool run_static_spsc_channel()
 {
     StaticSpscChannel channel;
     if (channel.error() != galay::spsc::RingError::kNone ||
@@ -372,15 +372,15 @@ bool runStaticSpscChannel()
         return false;
     }
     for (int value = 0; value < 8; ++value) {
-        if (!channel.trySend(value)) {
+        if (!channel.try_send(value)) {
             return false;
         }
     }
-    if (channel.trySend(8)) {
+    if (channel.try_send(8)) {
         return false;
     }
     for (int expected = 0; expected < 8; ++expected) {
-        auto value = channel.tryRecv();
+        auto value = channel.try_recv();
         if (!value.has_value() || *value != expected) {
             return false;
         }
@@ -393,20 +393,20 @@ bool runStaticSpscChannel()
         return false;
     }
     AsyncState state;
-    if (!galay::kernel::scheduleTask(
-            scheduler, receiveOne(&waitChannel, &state)) ||
-        !waitFor(state.entered) || state.done.load(std::memory_order_acquire)) {
+    if (!galay::kernel::schedule_task(
+            scheduler, receive_one(&waitChannel, &state)) ||
+        !wait_for(state.entered) || state.done.load(std::memory_order_acquire)) {
         scheduler.stop();
         return false;
     }
-    const bool sent = waitChannel.trySend(91);
-    const bool done = waitFor(state.done);
+    const bool sent = waitChannel.try_send(91);
+    const bool done = wait_for(state.done);
     scheduler.stop();
     return sent && done && state.success && state.value == 91 &&
         waitChannel.empty();
 }
 
-bool runMpscSmallCapacity()
+bool run_mpsc_small_capacity()
 {
     constexpr uint32_t kProducerCount = 4;
     constexpr uint32_t kMessagesPerProducer = 50'000;
@@ -427,7 +427,7 @@ bool runMpscSmallCapacity()
             start.wait();
             for (uint32_t sequence = 0; sequence < kMessagesPerProducer; ++sequence) {
                 uint64_t value = (static_cast<uint64_t>(producerId) << 32U) | sequence;
-                while (!channel.trySend(std::move(value))) {
+                while (!channel.try_send(std::move(value))) {
                     if (std::chrono::steady_clock::now() >= deadline) {
                         failed.store(true, std::memory_order_release);
                         return;
@@ -444,7 +444,7 @@ bool runMpscSmallCapacity()
         std::array<uint32_t, kProducerCount> expected{};
         uint64_t receivedCount = 0;
         while (receivedCount < kMessageCount) {
-            auto value = channel.tryRecv();
+            auto value = channel.try_recv();
             if (!value.has_value()) {
                 if (std::chrono::steady_clock::now() >= deadline) {
                     failed.store(true, std::memory_order_release);
@@ -465,7 +465,7 @@ bool runMpscSmallCapacity()
         }
     });
 
-    const bool allReady = ready.waitFor(2s);
+    const bool allReady = ready.wait_for(2s);
     start.open();
     for (auto& producer : producers) {
         producer.join();
@@ -480,28 +480,28 @@ bool runMpscSmallCapacity()
 int main()
 {
     galay::test::TestResultWriter writer("t152_bounded_topology");
-    const bool independentSources = checkIndependentSources();
-    const bool spscBasic = runBasicCloseAndDrain<SpscChannel>();
-    const bool mpscBasic = runBasicCloseAndDrain<MpscChannel>();
-    const bool mpmcBasic = runBasicCloseAndDrain<MpmcChannel>();
-    const bool spscWaiter = runWaiterProgress<SpscChannel>();
-    const bool mpscWaiter = runWaiterProgress<MpscChannel>();
-    const bool mpmcWaiter = runWaiterProgress<MpmcChannel>();
-    const bool spscWraparound = runSpscWraparound();
-    const bool spscCallerOwnedBatch = runSpscCallerOwnedBatch();
-    const bool staticSpscChannel = runStaticSpscChannel();
-    const bool mpscSmallCapacity = runMpscSmallCapacity();
+    const bool independentSources = check_independent_sources();
+    const bool spscBasic = run_basic_close_and_drain<SpscChannel>();
+    const bool mpscBasic = run_basic_close_and_drain<MpscChannel>();
+    const bool mpmcBasic = run_basic_close_and_drain<MpmcChannel>();
+    const bool spscWaiter = run_waiter_progress<SpscChannel>();
+    const bool mpscWaiter = run_waiter_progress<MpscChannel>();
+    const bool mpmcWaiter = run_waiter_progress<MpmcChannel>();
+    const bool spscWraparound = run_spsc_wraparound();
+    const bool spscCallerOwnedBatch = run_spsc_caller_owned_batch();
+    const bool staticSpscChannel = run_static_spsc_channel();
+    const bool mpscSmallCapacity = run_mpsc_small_capacity();
     const bool passed = independentSources && spscBasic && mpscBasic && mpmcBasic &&
         spscWaiter && mpscWaiter && mpmcWaiter && spscWraparound &&
         spscCallerOwnedBatch && staticSpscChannel && mpscSmallCapacity;
 
-    writer.addTest();
+    writer.add_test();
     if (passed) {
-        writer.addPassed();
+        writer.add_passed();
     } else {
-        writer.addFailed();
+        writer.add_failed();
     }
-    writer.writeResult();
+    writer.write_result();
 
     std::cout << "independent_sources=" << (independentSources ? "PASS" : "FAIL") << '\n'
               << "spsc_basic=" << (spscBasic ? "PASS" : "FAIL") << '\n'

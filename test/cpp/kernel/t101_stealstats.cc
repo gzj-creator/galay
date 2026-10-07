@@ -32,40 +32,40 @@ using namespace galay::kernel;
 
 namespace {
 
-TaskRef makeStealableTask(IOScheduler* owner) {
+TaskRef make_stealable_task(IOScheduler* owner) {
     auto* state = new TaskState(std::coroutine_handle<>{});
     state->m_scheduler = owner;
     return TaskRef(state, false);
 }
 
-bool runStatsScenario() {
+bool run_stats_scenario() {
     constexpr int kTaskCount = 16;
 
-    auto runtime = RuntimeBuilder().ioSchedulerCount(2).parallelSchedulerCount(0).build();
+    auto runtime = RuntimeBuilder().io_scheduler_count(2).parallel_scheduler_count(0).build();
     const auto started = runtime.start();
     if (!started) { return false; }
     runtime.stop();
-    auto* source_ptr = runtime.getIOScheduler(0);
-    auto* sibling_ptr = runtime.getIOScheduler(1);
+    auto* source_ptr = runtime.get_io_scheduler(0);
+    auto* sibling_ptr = runtime.get_io_scheduler(1);
 
     std::vector<IOScheduler*> siblings{source_ptr, sibling_ptr};
     std::span<IOScheduler* const> sibling_span{siblings.data(), siblings.size()};
-    source_ptr->configureStealDomain(sibling_span, 0);
-    sibling_ptr->configureStealDomain(sibling_span, 1);
+    source_ptr->configure_steal_domain(sibling_span, 0);
+    sibling_ptr->configure_steal_domain(sibling_span, 1);
 
     auto& source_worker = SchedulerTestAccess::worker(*source_ptr);
     auto& sibling_worker = SchedulerTestAccess::worker(*sibling_ptr);
-    source_worker.setStealingEnabled(true);
-    sibling_worker.setStealingEnabled(true);
+    source_worker.set_stealing_enabled(true);
+    sibling_worker.set_stealing_enabled(true);
     for (int i = 0; i < kTaskCount; ++i) {
-        auto task = makeStealableTask(source_ptr);
+        auto task = make_stealable_task(source_ptr);
         if (!source_worker.local_ring.push_back(std::move(task))) {
             std::cerr << "[T101] failed to seed source worker backlog " << i << "\n";
             return false;
         }
     }
 
-    if (!sibling_worker.trySteal()) {
+    if (!sibling_worker.try_steal()) {
         std::cerr << "[T101] sibling worker failed to steal seeded backlog\n";
         return false;
     }
@@ -100,7 +100,7 @@ bool runStatsScenario() {
 }  // namespace
 
 int main() {
-    if (!runStatsScenario()) {
+    if (!run_stats_scenario()) {
         return 1;
     }
 

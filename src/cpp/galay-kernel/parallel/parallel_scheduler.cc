@@ -37,7 +37,7 @@ ParallelScheduler::~ParallelScheduler()
  * @details 原子地切换到运行状态并创建工作线程，线程在进入主循环前
  * 应用已配置的 CPU 亲和性。若已在运行则不做任何操作。
  */
-std::expected<void, IOError> ParallelScheduler::startImpl()
+std::expected<void, IOError> ParallelScheduler::start_impl()
 {
     bool expected = false;
     if (!m_running.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
@@ -55,8 +55,8 @@ std::expected<void, IOError> ParallelScheduler::startImpl()
         m_threadId = std::this_thread::get_id();  // 设置调度器线程ID
         m_worker_active.store(true, std::memory_order_release);
         thread_ready.set_value();
-        (void)applyConfiguredAffinity();
-        workerLoop();
+        (void)apply_configured_affinity();
+        worker_loop();
         m_worker_active.store(false, std::memory_order_release);
     });
     ready.wait();
@@ -69,7 +69,7 @@ std::expected<void, IOError> ParallelScheduler::startImpl()
  * @details 先关闭专用恢复接纳，再切换运行状态并等待工作线程结束。
  * 线程在退出前会排空已接纳恢复和普通任务。若已停止则保持接纳关闭。
  */
-void ParallelScheduler::stopImpl()
+void ParallelScheduler::stop_impl()
 {
     m_resumeQueue.close();
     bool expected = true;
@@ -83,7 +83,7 @@ void ParallelScheduler::stopImpl()
     }
 }
 
-bool ParallelScheduler::scheduleWork(ParallelWorkItem work) noexcept
+bool ParallelScheduler::schedule_work(ParallelWorkItem work) noexcept
 {
     if (!work.valid()) {
         return false;
@@ -108,13 +108,13 @@ bool ParallelScheduler::scheduleWork(ParallelWorkItem work) noexcept
  * @details 阻塞在并发队列上等待任务，通过恢复协程处理每个任务。
  * 收到停止信号后排空剩余队列任务后退出。
  */
-void ParallelScheduler::workerLoop()
+void ParallelScheduler::worker_loop()
 {
     ParallelTask task;
     ParallelWorkItem work;
 
     while (m_running.load(std::memory_order_acquire)) {
-        drainResumeQueue();
+        drain_resume_queue();
         if (m_queue.try_dequeue(task)) {
             Scheduler::resume(task.task);
             continue;
@@ -145,7 +145,7 @@ void ParallelScheduler::workerLoop()
     // 协程内部提交普通工作项；将这些工作项纳入同一停机循环，避免只获取
     // resume 队列的最终快照后立即退出。
     for (;;) {
-        drainResumeQueue();
+        drain_resume_queue();
         if (m_queue.try_dequeue(task)) {
             Scheduler::resume(task.task);
             continue;
@@ -171,12 +171,12 @@ void ParallelScheduler::workerLoop()
     }
 }
 
-void ParallelScheduler::drainResumeQueue()
+void ParallelScheduler::drain_resume_queue()
 {
     TaskState* ready = detail::TaskResumeQueue::reverse(
-        m_resumeQueue.takeAll());
+        m_resumeQueue.take_all());
     while (ready != nullptr) {
-        TaskRef task = detail::TaskResumeQueue::popFront(ready);
+        TaskRef task = detail::TaskResumeQueue::pop_front(ready);
         Scheduler::resume(task);
     }
 }

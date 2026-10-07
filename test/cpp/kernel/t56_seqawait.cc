@@ -42,18 +42,18 @@ std::atomic<bool> g_client_ok{false};
 using BuilderResult = std::expected<size_t, IOError>;
 
 struct BuilderFlow {
-    void onSend(SequenceOps<BuilderResult, 4>&, SendIOContext& send_ctx) {
+    void on_send(SequenceOps<BuilderResult, 4>&, SendIOContext& send_ctx) {
         send_ok = send_ctx.m_result.has_value();
     }
 
-    void onRecv(SequenceOps<BuilderResult, 4>& ops, RecvIOContext& recv_ctx) {
+    void on_recv(SequenceOps<BuilderResult, 4>& ops, RecvIOContext& recv_ctx) {
         ops.complete(std::move(recv_ctx.m_result));
     }
 
     bool send_ok = false;
 };
 
-Task<void> serverTask(int listen_fd) {
+Task<void> server_task(int listen_fd) {
     IOController listen_ctrl(GHandle{.fd = listen_fd});
     Host client_host;
     AcceptAwaitable accept_awaitable(&listen_ctrl, &client_host);
@@ -71,8 +71,8 @@ Task<void> serverTask(int listen_fd) {
     const std::string greeting = "hello";
     BuilderFlow flow;
     auto exchange = AwaitableBuilder<BuilderResult, 4, BuilderFlow>(&controller, flow)
-        .send<&BuilderFlow::onSend>(greeting.c_str(), greeting.size())
-        .recv<&BuilderFlow::onRecv>(recv_buffer, sizeof(recv_buffer) - 1)
+        .send<&BuilderFlow::on_send>(greeting.c_str(), greeting.size())
+        .recv<&BuilderFlow::on_recv>(recv_buffer, sizeof(recv_buffer) - 1)
         .build();
 
     auto received = co_await exchange;
@@ -86,7 +86,7 @@ Task<void> serverTask(int listen_fd) {
     close(client_fd);
 }
 
-Task<void> clientTask(const char* ip, int port) {
+Task<void> client_task(const char* ip, int port) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -159,8 +159,8 @@ int main() {
 
     TestScheduler scheduler;
     scheduler.start();
-    scheduleTask(scheduler, serverTask(listen_fd));
-    scheduleTask(scheduler, clientTask("127.0.0.1", port));
+    schedule_task(scheduler, server_task(listen_fd));
+    schedule_task(scheduler, client_task("127.0.0.1", port));
     std::this_thread::sleep_for(std::chrono::seconds(2));
     scheduler.stop();
     close(listen_fd);

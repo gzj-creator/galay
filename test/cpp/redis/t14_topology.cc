@@ -37,7 +37,7 @@ void finish(TestState& state, bool success, std::string message)
     state.cv.notify_one();
 }
 
-std::optional<bool> parseBoolEnv(const char* value)
+std::optional<bool> parse_bool_env(const char* value)
 {
     if (value == nullptr) return std::nullopt;
     std::string text(value);
@@ -46,7 +46,7 @@ std::optional<bool> parseBoolEnv(const char* value)
     return std::nullopt;
 }
 
-bool integrationEnabled()
+bool integration_enabled()
 {
     const char* value = std::getenv("GALAY_IT_ENABLE");
     if (value == nullptr) return false;
@@ -60,7 +60,7 @@ struct ParsedRedissUrl {
     int32_t port = 6380;
 };
 
-std::optional<ParsedRedissUrl> parseRedissUrl(const std::string& url)
+std::optional<ParsedRedissUrl> parse_rediss_url(const std::string& url)
 {
     static const std::regex kUrlPattern(
         R"(^(rediss)://(?:[^@/]+@)?(\[[^\]]+\]|[^:/?#]+)(?::(\d+))?(?:/\d+)?$)",
@@ -98,16 +98,16 @@ static_assert(std::is_class_v<RedissClusterClientBuilder>);
 static_assert(requires(RedissMasterSlaveClientBuilder builder, AsyncRedisConfig async_config, RedissClientConfig tls_config) {
     { builder.scheduler(static_cast<IOScheduler*>(nullptr)) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
     { builder.config(async_config) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
-    { builder.tlsConfig(tls_config) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
+    { builder.tls_config(tls_config) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
 });
 
 static_assert(requires(RedissClusterClientBuilder builder, AsyncRedisConfig async_config, RedissClientConfig tls_config) {
     { builder.scheduler(static_cast<IOScheduler*>(nullptr)) } -> std::same_as<RedissClusterClientBuilder&>;
     { builder.config(async_config) } -> std::same_as<RedissClusterClientBuilder&>;
-    { builder.tlsConfig(tls_config) } -> std::same_as<RedissClusterClientBuilder&>;
+    { builder.tls_config(tls_config) } -> std::same_as<RedissClusterClientBuilder&>;
 });
 
-Task<void> runRedissPoolAndTopologySmoke(IOScheduler* scheduler, TestState* state)
+Task<void> run_rediss_pool_and_topology_smoke(IOScheduler* scheduler, TestState* state)
 {
     const char* url = std::getenv("GALAY_REDIS_TLS_URL");
     if (url == nullptr || std::string(url).empty()) {
@@ -115,7 +115,7 @@ Task<void> runRedissPoolAndTopologySmoke(IOScheduler* scheduler, TestState* stat
         co_return;
     }
 
-    auto parsed = parseRedissUrl(url);
+    auto parsed = parse_rediss_url(url);
     if (!parsed.has_value()) {
         finish(*state, false, "invalid GALAY_REDIS_TLS_URL");
         co_return;
@@ -125,7 +125,7 @@ Task<void> runRedissPoolAndTopologySmoke(IOScheduler* scheduler, TestState* stat
     if (const char* ca_path = std::getenv("GALAY_REDIS_TLS_CA")) {
         tls_config.ca_path = ca_path;
     }
-    if (const auto verify_peer = parseBoolEnv(std::getenv("GALAY_REDIS_TLS_VERIFY_PEER"))) {
+    if (const auto verify_peer = parse_bool_env(std::getenv("GALAY_REDIS_TLS_VERIFY_PEER"))) {
         tls_config.verify_peer = *verify_peer;
     }
     if (const char* server_name = std::getenv("GALAY_REDIS_TLS_SERVER_NAME")) {
@@ -170,23 +170,23 @@ Task<void> runRedissPoolAndTopologySmoke(IOScheduler* scheduler, TestState* stat
         const char* sentinel_port = std::getenv("GALAY_REDIS_TLS_SENTINEL_PORT");
         RedissMasterSlaveClient ms = RedissMasterSlaveClientBuilder()
                                          .scheduler(scheduler)
-                                         .tlsConfig(tls_config)
+                                         .tls_config(tls_config)
                                          .build();
         if (const char* master_name = std::getenv("GALAY_REDIS_TLS_SENTINEL_MASTER_NAME")) {
-            ms.setSentinelMasterName(master_name);
+            ms.set_sentinel_master_name(master_name);
         }
 
         RedisNodeAddress sentinel;
         sentinel.host = sentinel_host;
         sentinel.port = sentinel_port ? static_cast<int32_t>(std::stoi(sentinel_port)) : 26379;
 
-        auto sentinel_connect = co_await ms.addSentinel(sentinel).timeout(5s);
+        auto sentinel_connect = co_await ms.add_sentinel(sentinel).timeout(5s);
         if (!sentinel_connect) {
             finish(*state, false, "tls sentinel connect failed: " + sentinel_connect.error().message());
             co_return;
         }
 
-        auto refresh_result = co_await ms.refreshFromSentinel();
+        auto refresh_result = co_await ms.refresh_from_sentinel();
         if (!refresh_result) {
             finish(*state, false, std::string("tls sentinel refresh failed: ") +
                                       std::string(refresh_result.error().message()));
@@ -199,19 +199,19 @@ Task<void> runRedissPoolAndTopologySmoke(IOScheduler* scheduler, TestState* stat
 
         RedissClusterClient cluster = RedissClusterClientBuilder()
                                           .scheduler(scheduler)
-                                          .tlsConfig(tls_config)
+                                          .tls_config(tls_config)
                                           .build();
 
         RedisClusterNodeAddress node;
         node.host = cluster_host;
         node.port = cluster_port ? static_cast<int32_t>(std::stoi(cluster_port)) : parsed->port;
-        auto node_connect = co_await cluster.addNode(node).timeout(5s);
+        auto node_connect = co_await cluster.add_node(node).timeout(5s);
         if (!node_connect) {
             finish(*state, false, "tls cluster addNode failed: " + node_connect.error().message());
             co_return;
         }
 
-        auto refresh_result = co_await cluster.refreshSlots();
+        auto refresh_result = co_await cluster.refresh_slots();
         if (!refresh_result) {
             finish(*state, false, std::string("tls cluster refresh failed: ") +
                                       std::string(refresh_result.error().message()));
@@ -232,18 +232,18 @@ int main()
     std::cout << "SKIP: GALAY_SSL_FEATURE_ENABLED not set\n";
     return 0;
 #else
-    if (!integrationEnabled()) {
+    if (!integration_enabled()) {
         std::cout << "[SKIP] set GALAY_IT_ENABLE=1 to run TLS topology integration test\n";
         return 0;
     }
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "Failed to get IO scheduler\n";
         runtime.stop();
@@ -251,7 +251,7 @@ int main()
     }
 
     TestState state;
-    scheduleTask(scheduler, runRedissPoolAndTopologySmoke(scheduler, &state));
+    schedule_task(scheduler, run_rediss_pool_and_topology_smoke(scheduler, &state));
 
     std::unique_lock<std::mutex> lock(state.mutex);
     const bool done = state.cv.wait_for(lock, 15s, [&state]() { return state.done; });

@@ -32,11 +32,11 @@ bool check(bool condition, const char* message) {
     return true;
 }
 
-std::string flattenIoVecs(const WsWriterImpl<test::FakeTcpSocket>& writer) {
-    const auto* iovecs = writer.getIovecsData();
-    const size_t count = writer.getIovecsCount();
+std::string flatten_io_vecs(const WsWriterImpl<test::FakeTcpSocket>& writer) {
+    const auto* iovecs = writer.get_iovecs_data();
+    const size_t count = writer.get_iovecs_count();
     std::string result;
-    result.reserve(writer.getRemainingBytes());
+    result.reserve(writer.get_remaining_bytes());
     for (size_t index = 0; index < count; ++index) {
         const auto& seg = iovecs[index];
         result.append(static_cast<const char*>(seg.iov_base), seg.iov_len);
@@ -53,21 +53,21 @@ int main() {
     };
 
     using Writer = WsWriterImpl<test::FakeTcpSocket>;
-    WsWriterSetting setting = WsWriterSetting::byServer();
+    WsWriterSetting setting = WsWriterSetting::by_server();
     test::FakeTcpSocket socket;
     Writer writer(setting, socket);
 
     const std::string text_payload = "fast-path text";
     const std::string binary_payload(32, '\xA5');
 
-    const auto text_frame = WsFrameParser::createTextFrame(text_payload);
-    const auto expected_text = WsFrameParser::toBytes(text_frame, setting.use_mask);
+    const auto text_frame = WsFrameParser::create_text_frame(text_payload);
+    const auto expected_text = WsFrameParser::to_bytes(text_frame, setting.use_mask);
     const auto hits_before_text = writer.m_fast_path_counters.hits;
     const auto fallbacks_before_text = writer.m_fast_path_counters.fallbacks;
 
-    writer.resetPendingState();
-    writer.prepareSendFrame(text_frame);
-    const auto flat_text = flattenIoVecs(writer);
+    writer.reset_pending_state();
+    writer.prepare_send_frame(text_frame);
+    const auto flat_text = flatten_io_vecs(writer);
     if (!check(flat_text == expected_text, "text send layout must match WsFrameParser::toBytes")) {
         return fail("text layout mismatch");
     }
@@ -80,14 +80,14 @@ int main() {
         return fail("text fallback regression");
     }
 
-    const auto binary_frame = WsFrameParser::createBinaryFrame(binary_payload);
-    const auto expected_binary = WsFrameParser::toBytes(binary_frame, setting.use_mask);
+    const auto binary_frame = WsFrameParser::create_binary_frame(binary_payload);
+    const auto expected_binary = WsFrameParser::to_bytes(binary_frame, setting.use_mask);
     const auto hits_before_binary = writer.m_fast_path_counters.hits;
     const auto fallbacks_before_binary = writer.m_fast_path_counters.fallbacks;
 
-    writer.resetPendingState();
-    writer.prepareSendFrame(binary_frame);
-    const auto flat_binary = flattenIoVecs(writer);
+    writer.reset_pending_state();
+    writer.prepare_send_frame(binary_frame);
+    const auto flat_binary = flatten_io_vecs(writer);
     if (!check(flat_binary == expected_binary, "binary send layout must match WsFrameParser::toBytes")) {
         return fail("binary layout mismatch");
     }
@@ -100,12 +100,12 @@ int main() {
         return fail("binary fallback regression");
     }
 
-    const auto ping_frame = WsFrameParser::createPingFrame("ping");
+    const auto ping_frame = WsFrameParser::create_ping_frame("ping");
     const auto hits_before_ping = writer.m_fast_path_counters.hits;
     const auto fallbacks_before_ping = writer.m_fast_path_counters.fallbacks;
 
-    writer.resetPendingState();
-    writer.prepareSendFrame(ping_frame);
+    writer.reset_pending_state();
+    writer.prepare_send_frame(ping_frame);
     if (!check(writer.m_fast_path_counters.hits == hits_before_ping,
                "ping should not increment fast-path hits")) {
         return fail("ping fast-path hit regression");

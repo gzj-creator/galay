@@ -30,10 +30,10 @@ static_assert(requires(PostgresClient& client,
     { client.execute("galay_stmt", params) } -> std::same_as<PostgresResult>;
     { client.pipeline(sqls) } -> std::same_as<PostgresBatchResult>;
     { client.batch(commands) } -> std::same_as<PostgresBatchResult>;
-    { client.beginTransaction() } -> std::same_as<PostgresVoidResult>;
+    { client.begin_transaction() } -> std::same_as<PostgresVoidResult>;
     { client.commit() } -> std::same_as<PostgresVoidResult>;
     { client.rollback() } -> std::same_as<PostgresVoidResult>;
-    { client.transactionStatus() } -> std::same_as<char>;
+    { client.transaction_status() } -> std::same_as<char>;
 });
 
 int main()
@@ -56,12 +56,12 @@ int main()
         return 3;
     }
 
-    auto close_result = client.closePrepared(invalid_name);
+    auto close_result = client.close_prepared(invalid_name);
     if (close_result || close_result.error().type() != POSTGRES_ERROR_INVALID_PARAM) {
         return 4;
     }
 
-    auto config = galay::postgres::test::integrationConfig();
+    auto config = galay::postgres::test::integration_config();
     if (!config) {
         std::cerr << "t13_sync_client skipped: set GALAY_IT_ENABLE=1 and "
                      "GALAY_POSTGRES_TEST_{HOST,PORT,USER,PASSWORD,DATABASE}.\n";
@@ -81,21 +81,21 @@ int main()
     }
     std::vector<std::optional<std::string>> parameters{std::string("303"), std::nullopt};
     auto executed = client.execute(kStatement, parameters);
-    if (!executed || executed->rowCount() != 1 ||
-        executed->row(0).getInt64(0, -1) != 303 || !executed->row(0).isNull(1)) {
+    if (!executed || executed->row_count() != 1 ||
+        executed->row(0).get_int64(0, -1) != 303 || !executed->row(0).is_null(1)) {
         return 7;
     }
-    auto closed = client.closePrepared(kStatement);
+    auto closed = client.close_prepared(kStatement);
     if (!closed) {
         return 8;
     }
 
     auto failed = client.query("SELECT * FROM galay_postgres_t13_missing_relation");
-    if (failed || failed.error().sqlState() != "42P01" || client.transactionStatus() != 'I') {
+    if (failed || failed.error().sql_state() != "42P01" || client.transaction_status() != 'I') {
         return 9;
     }
     auto recovered = client.query("SELECT 404");
-    if (!recovered || recovered->row(0).getInt64(0, -1) != 404) {
+    if (!recovered || recovered->row(0).get_int64(0, -1) != 404) {
         return 10;
     }
     client.close();

@@ -30,8 +30,8 @@ int main() {
     Http2ConnImpl<MockSslSocket> conn(MockSslSocket{});
     Http2StreamManagerImpl<MockSslSocket> manager(conn);
 
-    const auto hot_wait = manager.sslIoOwnerPollInterval(true);
-    const auto idle_wait = manager.sslIoOwnerPollInterval(false);
+    const auto hot_wait = manager.ssl_io_owner_poll_interval(true);
+    const auto idle_wait = manager.ssl_io_owner_poll_interval(false);
 
     if (!(hot_wait < idle_wait)) {
         std::cerr << "[T76] hot wait poll interval should be shorter than idle poll interval\n";

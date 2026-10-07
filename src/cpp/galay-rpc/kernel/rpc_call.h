@@ -43,13 +43,13 @@ public:
     ~RpcCancellationRegistration() { deactivate(); }
 
     RpcCancellationRegistration(RpcCancellationRegistration&& other) noexcept {
-        takeFrom(other);
+        take_from(other);
     }
 
     RpcCancellationRegistration& operator=(RpcCancellationRegistration&& other) noexcept {
         if (this != &other) {
             deactivate();
-            takeFrom(other);
+            take_from(other);
         }
         return *this;
     }
@@ -97,7 +97,7 @@ private:
         m_next = nullptr;
     }
 
-    void takeFrom(RpcCancellationRegistration& other) noexcept {
+    void take_from(RpcCancellationRegistration& other) noexcept {
         m_callback = std::move(other.m_callback);
         m_state = std::exchange(other.m_state, nullptr);
         m_previous = std::exchange(other.m_previous, nullptr);
@@ -137,7 +137,7 @@ public:
      * @return 值注册；空 token 返回空注册，已取消的 token 立即执行回调。
      * @note 调用方必须持有返回值直到不再需要通知。
      */
-    [[nodiscard]] RpcCancellationRegistration registerCallback(std::function<void()> callback) const {
+    [[nodiscard]] RpcCancellationRegistration register_callback(std::function<void()> callback) const {
         return RpcCancellationRegistration(m_state, std::move(callback));
     }
 
@@ -210,7 +210,7 @@ public:
     }
 
     /// @brief 清除相对超时
-    RpcCallOptions& clearTimeout() {
+    RpcCallOptions& clear_timeout() {
         m_timeout.reset();
         return *this;
     }
@@ -225,7 +225,7 @@ public:
     }
 
     /// @brief 清除绝对deadline
-    RpcCallOptions& clearDeadline() {
+    RpcCallOptions& clear_deadline() {
         m_deadline.reset();
         return *this;
     }
@@ -238,7 +238,7 @@ public:
      * @param now 调用发起时刻
      * @return 绝对deadline；未配置deadline/timeout时为空
      */
-    std::optional<TimePoint> effectiveDeadline(TimePoint now) const {
+    std::optional<TimePoint> effective_deadline(TimePoint now) const {
         if (m_deadline.has_value()) {
             return m_deadline;
         }
@@ -258,19 +258,19 @@ public:
     bool idempotent() const { return m_idempotent; }
 
     /// @brief 设置最大尝试次数覆盖值
-    RpcCallOptions& maxAttempts(uint32_t value) {
+    RpcCallOptions& max_attempts(uint32_t value) {
         m_max_attempts = value;
         return *this;
     }
 
     /// @brief 清除最大尝试次数覆盖值
-    RpcCallOptions& clearMaxAttempts() {
+    RpcCallOptions& clear_max_attempts() {
         m_max_attempts.reset();
         return *this;
     }
 
     /// @brief 获取最大尝试次数覆盖值
-    std::optional<uint32_t> maxAttempts() const { return m_max_attempts; }
+    std::optional<uint32_t> max_attempts() const { return m_max_attempts; }
 
     /// @brief 获取可变metadata
     RpcMetadata& metadata() { return m_metadata; }
@@ -278,13 +278,13 @@ public:
     const RpcMetadata& metadata() const { return m_metadata; }
 
     /// @brief 设置取消token
-    RpcCallOptions& cancellationToken(RpcCancellationToken token) {
+    RpcCallOptions& cancellation_token(RpcCancellationToken token) {
         m_cancellation_token = std::move(token);
         return *this;
     }
 
     /// @brief 获取取消token
-    std::optional<RpcCancellationToken> cancellationToken() const {
+    std::optional<RpcCancellationToken> cancellation_token() const {
         return m_cancellation_token;
     }
 

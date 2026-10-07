@@ -35,7 +35,7 @@ namespace
 
 constexpr size_t kMaxWatchHeaderBytes = 64 * 1024;
 
-size_t configuredEndpointCount(const EtcdConfig& config)
+size_t configured_endpoint_count(const EtcdConfig& config)
 {
     if (!config.production.endpoints.empty()) {
         return config.production.endpoints.size();
@@ -43,9 +43,9 @@ size_t configuredEndpointCount(const EtcdConfig& config)
     return config.endpoint.empty() ? 0 : 1;
 }
 
-size_t queueCapacityForConfig(const EtcdConfig& config)
+size_t queue_capacity_for_config(const EtcdConfig& config)
 {
-    const size_t endpoint_count = configuredEndpointCount(config);
+    const size_t endpoint_count = configured_endpoint_count(config);
     const size_t per_endpoint = config.production.connections_per_endpoint;
     if (endpoint_count == 0 || per_endpoint == 0 ||
         endpoint_count > std::numeric_limits<size_t>::max() / per_endpoint) {
@@ -54,7 +54,7 @@ size_t queueCapacityForConfig(const EtcdConfig& config)
     return endpoint_count * per_endpoint;
 }
 
-EtcdError mapHttpError(const galay::http::HttpError& error)
+EtcdError map_http_error(const galay::http::HttpError& error)
 {
     using galay::http::kConnectionClose;
     using galay::http::kRecvTimeOut;
@@ -86,7 +86,7 @@ EtcdError mapHttpError(const galay::http::HttpError& error)
     }
 }
 
-EtcdError mapKernelIoError(const galay::kernel::IOError& error,
+EtcdError map_kernel_io_error(const galay::kernel::IOError& error,
                            EtcdErrorType fallback = EtcdErrorType::Connection)
 {
     using galay::kernel::IOError;
@@ -114,13 +114,13 @@ EtcdError mapKernelIoError(const galay::kernel::IOError& error,
     return EtcdError(fallback, error.message());
 }
 
-galay::kernel::IOController& invalidController()
+galay::kernel::IOController& invalid_controller()
 {
     static galay::kernel::IOController controller(GHandle::invalid());
     return controller;
 }
 
-std::string_view trimLeadingSlash(std::string_view path)
+std::string_view trim_leading_slash(std::string_view path)
 {
     while (!path.empty() && path.front() == '/') {
         path.remove_prefix(1);
@@ -128,19 +128,19 @@ std::string_view trimLeadingSlash(std::string_view path)
     return path;
 }
 
-bool isTimeoutErrno(int error_number)
+bool is_timeout_errno(int error_number)
 {
     return error_number == EAGAIN || error_number == EWOULDBLOCK || error_number == ETIMEDOUT;
 }
 
-EtcdError makeErrnoError(EtcdErrorType type, const std::string& action, int error_number)
+EtcdError make_errno_error(EtcdErrorType type, const std::string& action, int error_number)
 {
     return EtcdError(
         type,
         action + ": " + std::string(std::strerror(error_number)));
 }
 
-bool setSocketBlocking(int fd, bool blocking)
+bool set_socket_blocking(int fd, bool blocking)
 {
     int flags = ::fcntl(fd, F_GETFL, 0);
     if (flags < 0) {
@@ -155,7 +155,7 @@ bool setSocketBlocking(int fd, bool blocking)
     return ::fcntl(fd, F_SETFL, flags) == 0;
 }
 
-EtcdVoidResult connectWithTimeout(
+EtcdVoidResult connect_with_timeout(
     int fd,
     const sockaddr* address,
     socklen_t address_len,
@@ -166,30 +166,30 @@ EtcdVoidResult connectWithTimeout(
             return {};
         }
         const int error_number = errno;
-        if (isTimeoutErrno(error_number)) {
-            return std::unexpected(makeErrnoError(EtcdErrorType::Timeout, "connect timeout", error_number));
+        if (is_timeout_errno(error_number)) {
+            return std::unexpected(make_errno_error(EtcdErrorType::Timeout, "connect timeout", error_number));
         }
-        return std::unexpected(makeErrnoError(EtcdErrorType::Connection, "connect failed", error_number));
+        return std::unexpected(make_errno_error(EtcdErrorType::Connection, "connect failed", error_number));
     }
 
-    if (!setSocketBlocking(fd, false)) {
-        return std::unexpected(makeErrnoError(EtcdErrorType::Connection, "set nonblocking for connect failed", errno));
+    if (!set_socket_blocking(fd, false)) {
+        return std::unexpected(make_errno_error(EtcdErrorType::Connection, "set nonblocking for connect failed", errno));
     }
 
     if (::connect(fd, address, address_len) == 0) {
-        if (!setSocketBlocking(fd, true)) {
-            return std::unexpected(makeErrnoError(EtcdErrorType::Connection, "restore blocking mode failed", errno));
+        if (!set_socket_blocking(fd, true)) {
+            return std::unexpected(make_errno_error(EtcdErrorType::Connection, "restore blocking mode failed", errno));
         }
         return {};
     }
 
     if (errno != EINPROGRESS) {
         const int error_number = errno;
-        (void)setSocketBlocking(fd, true);
-        if (isTimeoutErrno(error_number)) {
-            return std::unexpected(makeErrnoError(EtcdErrorType::Timeout, "connect timeout", error_number));
+        (void)set_socket_blocking(fd, true);
+        if (is_timeout_errno(error_number)) {
+            return std::unexpected(make_errno_error(EtcdErrorType::Timeout, "connect timeout", error_number));
         }
-        return std::unexpected(makeErrnoError(EtcdErrorType::Connection, "connect failed", error_number));
+        return std::unexpected(make_errno_error(EtcdErrorType::Connection, "connect failed", error_number));
     }
 
     pollfd pfd{};
@@ -206,38 +206,38 @@ EtcdVoidResult connectWithTimeout(
     } while (poll_result < 0 && errno == EINTR);
 
     if (poll_result == 0) {
-        (void)setSocketBlocking(fd, true);
+        (void)set_socket_blocking(fd, true);
         return std::unexpected(EtcdError(EtcdErrorType::Timeout, "connect timeout"));
     }
     if (poll_result < 0) {
         const int error_number = errno;
-        (void)setSocketBlocking(fd, true);
-        return std::unexpected(makeErrnoError(EtcdErrorType::Connection, "poll connect failed", error_number));
+        (void)set_socket_blocking(fd, true);
+        return std::unexpected(make_errno_error(EtcdErrorType::Connection, "poll connect failed", error_number));
     }
 
     int socket_error = 0;
     socklen_t socket_error_len = sizeof(socket_error);
     if (::getsockopt(fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_len) != 0) {
         const int error_number = errno;
-        (void)setSocketBlocking(fd, true);
-        return std::unexpected(makeErrnoError(EtcdErrorType::Connection, "getsockopt connect failed", error_number));
+        (void)set_socket_blocking(fd, true);
+        return std::unexpected(make_errno_error(EtcdErrorType::Connection, "getsockopt connect failed", error_number));
     }
 
-    if (!setSocketBlocking(fd, true)) {
-        return std::unexpected(makeErrnoError(EtcdErrorType::Connection, "restore blocking mode failed", errno));
+    if (!set_socket_blocking(fd, true)) {
+        return std::unexpected(make_errno_error(EtcdErrorType::Connection, "restore blocking mode failed", errno));
     }
 
     if (socket_error != 0) {
-        if (isTimeoutErrno(socket_error)) {
-            return std::unexpected(makeErrnoError(EtcdErrorType::Timeout, "connect timeout", socket_error));
+        if (is_timeout_errno(socket_error)) {
+            return std::unexpected(make_errno_error(EtcdErrorType::Timeout, "connect timeout", socket_error));
         }
-        return std::unexpected(makeErrnoError(EtcdErrorType::Connection, "connect failed", socket_error));
+        return std::unexpected(make_errno_error(EtcdErrorType::Connection, "connect failed", socket_error));
     }
 
     return {};
 }
 
-EtcdVoidResult sendAll(int fd, std::string_view payload)
+EtcdVoidResult send_all(int fd, std::string_view payload)
 {
     size_t sent = 0;
     while (sent < payload.size()) {
@@ -254,15 +254,15 @@ EtcdVoidResult sendAll(int fd, std::string_view payload)
         if (errno == EINTR) {
             continue;
         }
-        if (isTimeoutErrno(errno)) {
-            return std::unexpected(makeErrnoError(EtcdErrorType::Timeout, "send timeout", errno));
+        if (is_timeout_errno(errno)) {
+            return std::unexpected(make_errno_error(EtcdErrorType::Timeout, "send timeout", errno));
         }
-        return std::unexpected(makeErrnoError(EtcdErrorType::Send, "send failed", errno));
+        return std::unexpected(make_errno_error(EtcdErrorType::Send, "send failed", errno));
     }
     return {};
 }
 
-EtcdVoidResult setSocketTimeouts(int fd, std::chrono::milliseconds timeout)
+EtcdVoidResult set_socket_timeouts(int fd, std::chrono::milliseconds timeout)
 {
     timeval tv{};
     const auto total_ms = timeout.count();
@@ -270,10 +270,10 @@ EtcdVoidResult setSocketTimeouts(int fd, std::chrono::milliseconds timeout)
     tv.tv_usec = static_cast<decltype(tv.tv_usec)>((total_ms % 1000) * 1000);
 
     if (::setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) != 0) {
-        return std::unexpected(makeErrnoError(EtcdErrorType::Connection, "setsockopt SO_SNDTIMEO failed", errno));
+        return std::unexpected(make_errno_error(EtcdErrorType::Connection, "setsockopt SO_SNDTIMEO failed", errno));
     }
     if (::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) != 0) {
-        return std::unexpected(makeErrnoError(EtcdErrorType::Connection, "setsockopt SO_RCVTIMEO failed", errno));
+        return std::unexpected(make_errno_error(EtcdErrorType::Connection, "setsockopt SO_RCVTIMEO failed", errno));
     }
     return {};
 }
@@ -286,7 +286,7 @@ struct ParsedHttpHeaders
     bool connection_close = false;
 };
 
-std::expected<ParsedHttpHeaders, EtcdError> parseHttpHeaders(std::string_view header_block)
+std::expected<ParsedHttpHeaders, EtcdError> parse_http_headers(std::string_view header_block)
 {
     ParsedHttpHeaders headers;
 
@@ -308,7 +308,7 @@ std::expected<ParsedHttpHeaders, EtcdError> parseHttpHeaders(std::string_view he
 
     int status_code = 0;
     const std::string_view status_code_view =
-        trimAscii(status_line.substr(first_space + 1, second_space - first_space - 1));
+        trim_ascii(status_line.substr(first_space + 1, second_space - first_space - 1));
     auto [status_ptr, status_ec] = std::from_chars(
         status_code_view.data(),
         status_code_view.data() + status_code_view.size(),
@@ -334,10 +334,10 @@ std::expected<ParsedHttpHeaders, EtcdError> parseHttpHeaders(std::string_view he
         const std::string_view line = header_block.substr(line_pos, line_end - line_pos);
         const size_t colon = line.find(':');
         if (colon != std::string_view::npos) {
-            const std::string_view key = trimAscii(line.substr(0, colon));
-            const std::string_view value = trimAscii(line.substr(colon + 1));
+            const std::string_view key = trim_ascii(line.substr(0, colon));
+            const std::string_view value = trim_ascii(line.substr(colon + 1));
 
-            if (equalsAsciiIgnoreCase(key, "content-length")) {
+            if (equals_ascii_ignore_case(key, "content-length")) {
                 uint64_t parsed = 0;
                 auto [len_ptr, len_ec] = std::from_chars(
                     value.data(),
@@ -350,12 +350,12 @@ std::expected<ParsedHttpHeaders, EtcdError> parseHttpHeaders(std::string_view he
                     return std::unexpected(EtcdError(EtcdErrorType::Parse, "content-length value too large"));
                 }
                 headers.content_length = static_cast<size_t>(parsed);
-            } else if (equalsAsciiIgnoreCase(key, "transfer-encoding")) {
-                if (containsAsciiTokenIgnoreCase(value, "chunked")) {
+            } else if (equals_ascii_ignore_case(key, "transfer-encoding")) {
+                if (contains_ascii_token_ignore_case(value, "chunked")) {
                     headers.chunked = true;
                 }
-            } else if (equalsAsciiIgnoreCase(key, "connection")) {
-                headers.connection_close = containsAsciiTokenIgnoreCase(value, "close");
+            } else if (equals_ascii_ignore_case(key, "connection")) {
+                headers.connection_close = contains_ascii_token_ignore_case(value, "close");
             }
         }
 
@@ -379,10 +379,10 @@ public:
                     return true;
                 }
 
-                std::string_view size_line = trimAscii(std::string_view(m_buffer.data(), line_end));
+                std::string_view size_line = trim_ascii(std::string_view(m_buffer.data(), line_end));
                 const size_t ext_sep = size_line.find(';');
                 if (ext_sep != std::string_view::npos) {
-                    size_line = trimAscii(size_line.substr(0, ext_sep));
+                    size_line = trim_ascii(size_line.substr(0, ext_sep));
                 }
                 if (size_line.empty()) {
                     error = "invalid chunk size line";
@@ -454,7 +454,7 @@ private:
     bool m_complete = false;
 };
 
-bool dispatchWatchLines(
+bool dispatch_watch_lines(
     std::string& line_buffer,
     const std::function<void(EtcdWatchResponse)>& dispatch,
     EtcdError* error)
@@ -467,12 +467,12 @@ bool dispatchWatchLines(
 
         std::string line = line_buffer.substr(0, line_end);
         line_buffer.erase(0, line_end + 1);
-        const std::string_view trimmed = trimAscii(line);
+        const std::string_view trimmed = trim_ascii(line);
         if (trimmed.empty()) {
             continue;
         }
 
-        auto parsed = parseWatchResponse(std::string(trimmed));
+        auto parsed = parse_watch_response(std::string(trimmed));
         if (!parsed.has_value()) {
             if (error != nullptr) {
                 *error = parsed.error();
@@ -493,7 +493,7 @@ struct AsyncEtcdClientPoolState
     AsyncEtcdClientPoolState(
         galay::kernel::IOScheduler* owner_scheduler,
         EtcdConfig config)
-        : idle_clients(queueCapacityForConfig(config))
+        : idle_clients(queue_capacity_for_config(config))
         , scheduler(owner_scheduler)
     {
         std::vector<std::string> endpoints = config.production.endpoints;
@@ -637,7 +637,7 @@ AsyncEtcdClusterClient::AsyncEtcdClusterClient(
 {
 }
 
-AsyncEtcdClientAcquireResult AsyncEtcdClusterClient::tryAcquire()
+AsyncEtcdClientAcquireResult AsyncEtcdClusterClient::try_acquire()
 {
     if (m_state == nullptr) {
         return std::unexpected(
@@ -662,9 +662,9 @@ AsyncEtcdClientAcquireResult AsyncEtcdClusterClient::tryAcquire()
 }
 
 galay::kernel::Task<AsyncEtcdClientAcquireResult>
-AsyncEtcdClusterClient::acquireConnected()
+AsyncEtcdClusterClient::acquire_connected()
 {
-    auto lease_result = tryAcquire();
+    auto lease_result = try_acquire();
     if (!lease_result.has_value()) {
         co_return std::unexpected(lease_result.error());
     }
@@ -684,7 +684,7 @@ size_t AsyncEtcdClusterClient::size() const noexcept
     return m_state == nullptr ? 0 : m_state->clients.size();
 }
 
-size_t AsyncEtcdClusterClient::idleCount() const noexcept
+size_t AsyncEtcdClusterClient::idle_count() const noexcept
 {
     if (m_state == nullptr) {
         return 0;
@@ -711,9 +711,9 @@ AsyncEtcdClient::AsyncEtcdClient(galay::kernel::IOScheduler* scheduler,
     : m_scheduler(scheduler)
     , m_config(std::move(config))
     , m_network_config(m_config)
-    , m_api_prefix(normalizeApiPrefix(m_config.api_prefix))
+    , m_api_prefix(normalize_api_prefix(m_config.api_prefix))
 {
-    auto endpoint_result = parseEndpoint(m_config.endpoint);
+    auto endpoint_result = parse_endpoint(m_config.endpoint);
     if (!endpoint_result.has_value()) {
         m_endpoint_error = endpoint_result.error();
         ETCD_LOG_WARN("[async] [init]", "invalid endpoint endpoint={} error={}",
@@ -730,7 +730,7 @@ AsyncEtcdClient::AsyncEtcdClient(galay::kernel::IOScheduler* scheduler,
 
     m_ip_type = endpoint_result->ipv6 ? galay::kernel::IPType::IPV6 : galay::kernel::IPType::IPV4;
     m_server_host.emplace(m_ip_type, endpoint_result->host, endpoint_result->port);
-    m_host_header = buildHostHeader(endpoint_result->host, endpoint_result->port, endpoint_result->ipv6);
+    m_host_header = build_host_header(endpoint_result->host, endpoint_result->port, endpoint_result->ipv6);
     m_serialized_request_prefix = "POST " + m_api_prefix + "/";
     m_serialized_request_headers =
         " HTTP/1.1\r\n"
@@ -744,12 +744,12 @@ AsyncEtcdClient::AsyncEtcdClient(galay::kernel::IOScheduler* scheduler,
 
 AsyncEtcdClient::~AsyncEtcdClient()
 {
-    stopWatchWorkers();
+    stop_watch_workers();
 }
 
 #include "../details/awaitable.inl"
 
-AsyncEtcdClient::PostJsonAwaitable AsyncEtcdClient::postJsonInternal(
+AsyncEtcdClient::PostJsonAwaitable AsyncEtcdClient::post_json_internal(
     const std::string& api_path,
     const std::string& body,
     std::optional<std::chrono::milliseconds> force_timeout)
@@ -757,10 +757,10 @@ AsyncEtcdClient::PostJsonAwaitable AsyncEtcdClient::postJsonInternal(
     return PostJsonAwaitable(*this, api_path, body, force_timeout);
 }
 
-std::string AsyncEtcdClient::buildSerializedPostRequest(std::string_view api_path,
+std::string AsyncEtcdClient::build_serialized_post_request(std::string_view api_path,
                                                         std::string_view body) const
 {
-    const std::string_view normalized_path = trimLeadingSlash(api_path);
+    const std::string_view normalized_path = trim_leading_slash(api_path);
     const std::string content_length = std::to_string(body.size());
     std::string request;
     request.reserve(
@@ -808,12 +808,12 @@ AsyncEtcdClient::DeleteAwaitable AsyncEtcdClient::del(const std::string& key, bo
     return DeleteAwaitable(*this, key, prefix);
 }
 
-AsyncEtcdClient::GrantLeaseAwaitable AsyncEtcdClient::grantLease(int64_t ttl_seconds)
+AsyncEtcdClient::GrantLeaseAwaitable AsyncEtcdClient::grant_lease(int64_t ttl_seconds)
 {
     return GrantLeaseAwaitable(*this, ttl_seconds);
 }
 
-AsyncEtcdClient::KeepAliveAwaitable AsyncEtcdClient::keepAliveOnce(int64_t lease_id)
+AsyncEtcdClient::KeepAliveAwaitable AsyncEtcdClient::keep_alive_once(int64_t lease_id)
 {
     return KeepAliveAwaitable(*this, lease_id);
 }
@@ -832,24 +832,24 @@ EtcdBoolResult AsyncEtcdClient::watch(const std::string& key, WatchTaskHandler h
 {
     if (m_scheduler == nullptr) {
         EtcdError error(EtcdErrorType::Internal, "IOScheduler is null");
-        setError(error);
+        set_error(error);
         ETCD_LOG_ERROR("[async] [watch]", "scheduler is null key={}", key);
         return std::unexpected(error);
     }
 
-    return startWatchWorker(
+    return start_watch_worker(
         key,
         [scheduler = m_scheduler, handler = std::move(handler)](EtcdWatchResponse response) mutable {
             if (scheduler == nullptr || !handler) {
                 return;
             }
-            (void)galay::kernel::scheduleTask(scheduler, handler(std::move(response)));
+            (void)galay::kernel::schedule_task(scheduler, handler(std::move(response)));
         });
 }
 
 EtcdBoolResult AsyncEtcdClient::watch(const std::string& key, WatchFunctionHandler handler)
 {
-    return startWatchWorker(
+    return start_watch_worker(
         key,
         [handler = std::move(handler)](EtcdWatchResponse response) mutable {
             if (!handler) {
@@ -864,23 +864,23 @@ bool AsyncEtcdClient::connected() const
     return m_connected;
 }
 
-EtcdBoolResult AsyncEtcdClient::startWatchWorker(
+EtcdBoolResult AsyncEtcdClient::start_watch_worker(
     const std::string& key,
     std::function<void(EtcdWatchResponse)> dispatch)
 {
-    resetLastOperation();
+    reset_last_operation();
 
     if (!dispatch) {
         EtcdError error(EtcdErrorType::InvalidParam, "watch handler must not be empty");
-        setError(error);
+        set_error(error);
         ETCD_LOG_WARN("[async] [watch]", "watch handler is empty key={}", key);
         return std::unexpected(error);
     }
 
-    auto endpoint_result = parseEndpoint(m_config.endpoint);
+    auto endpoint_result = parse_endpoint(m_config.endpoint);
     if (!endpoint_result.has_value()) {
         EtcdError error(EtcdErrorType::InvalidEndpoint, endpoint_result.error());
-        setError(error);
+        set_error(error);
         ETCD_LOG_ERROR("[async] [watch]", "invalid endpoint endpoint={} key={} error={}",
                        m_config.endpoint,
                        key,
@@ -891,16 +891,16 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
         EtcdError error(
             EtcdErrorType::InvalidEndpoint,
             "https endpoint is not supported in AsyncEtcdClient watch: " + m_config.endpoint);
-        setError(error);
+        set_error(error);
         ETCD_LOG_WARN("[async] [watch]", "unsupported https endpoint={} key={}",
                       m_config.endpoint,
                       key);
         return std::unexpected(error);
     }
 
-    auto request_body = buildWatchRequestBody(key);
+    auto request_body = build_watch_request_body(key);
     if (!request_body.has_value()) {
-        setError(request_body.error());
+        set_error(request_body.error());
         ETCD_LOG_WARN("[async] [watch]", "build watch request failed key={} error={}",
                       key,
                       request_body.error().message());
@@ -910,7 +910,7 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
     auto worker = std::make_shared<WatchWorkerState>();
     const std::string host = endpoint_result->host;
     const uint16_t port = endpoint_result->port;
-    const std::string request = buildSerializedPostRequest("/watch", request_body.value());
+    const std::string request = build_serialized_post_request("/watch", request_body.value());
     const auto network_config = m_network_config;
     const std::string watch_key = key;
 
@@ -976,11 +976,11 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
                     (void)::setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &enable_keepalive, sizeof(enable_keepalive));
                 }
 
-                auto connect_result = connectWithTimeout(
+                auto connect_result = connect_with_timeout(
                     fd,
                     it->ai_addr,
                     static_cast<socklen_t>(it->ai_addrlen),
-                    network_config.isRequestTimeoutEnabled()
+                    network_config.is_request_timeout_enabled()
                         ? network_config.request_timeout
                         : std::chrono::seconds(5));
                 if (connect_result.has_value()) {
@@ -1010,15 +1010,15 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
                 return;
             }
 
-            const auto io_timeout = network_config.isRequestTimeoutEnabled()
+            const auto io_timeout = network_config.is_request_timeout_enabled()
                 ? std::min(network_config.request_timeout, std::chrono::milliseconds(1000))
                 : std::chrono::milliseconds(1000);
-            if (!setSocketTimeouts(fd, io_timeout).has_value()) {
+            if (!set_socket_timeouts(fd, io_timeout).has_value()) {
                 ETCD_LOG_ERROR("[async] [watch]", "set socket timeouts failed key={}", watch_key);
                 (void)::close(fd);
                 return;
             }
-            if (!sendAll(fd, request).has_value()) {
+            if (!send_all(fd, request).has_value()) {
                 ETCD_LOG_ERROR("[async] [watch]", "send watch request failed key={}", watch_key);
                 (void)::close(fd);
                 return;
@@ -1046,7 +1046,7 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
                     if (!decoded.empty()) {
                         line_buffer.append(decoded);
                         EtcdError dispatch_error(EtcdErrorType::Success);
-                        if (!dispatchWatchLines(line_buffer, dispatch, &dispatch_error)) {
+                        if (!dispatch_watch_lines(line_buffer, dispatch, &dispatch_error)) {
                             return false;
                         }
                     }
@@ -1062,7 +1062,7 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
                 if (!to_append.empty()) {
                     line_buffer.append(to_append.data(), to_append.size());
                     EtcdError dispatch_error(EtcdErrorType::Success);
-                    if (!dispatchWatchLines(line_buffer, dispatch, &dispatch_error)) {
+                    if (!dispatch_watch_lines(line_buffer, dispatch, &dispatch_error)) {
                         return false;
                     }
                 }
@@ -1086,7 +1086,7 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
                             continue;
                         }
 
-                        auto parsed_headers = parseHttpHeaders(std::string_view(raw_header.data(), header_end));
+                        auto parsed_headers = parse_http_headers(std::string_view(raw_header.data(), header_end));
                         if (!parsed_headers.has_value()) {
                             ETCD_LOG_WARN("[async] [watch]", "parse response header failed key={} error={}",
                                           watch_key,
@@ -1129,7 +1129,7 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
                 if (errno == EINTR) {
                     continue;
                 }
-                if (isTimeoutErrno(errno)) {
+                if (is_timeout_errno(errno)) {
                     continue;
                 }
                 ETCD_LOG_ERROR("[async] [watch]", "recv failed key={} error={}",
@@ -1141,7 +1141,7 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
             if (!line_buffer.empty()) {
                 line_buffer.push_back('\n');
                 EtcdError dispatch_error(EtcdErrorType::Success);
-                (void)dispatchWatchLines(line_buffer, dispatch, &dispatch_error);
+                (void)dispatch_watch_lines(line_buffer, dispatch, &dispatch_error);
             }
 
             (void)::close(fd);
@@ -1156,7 +1156,7 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
     return true;
 }
 
-void AsyncEtcdClient::stopWatchWorkers()
+void AsyncEtcdClient::stop_watch_workers()
 {
     std::vector<std::shared_ptr<WatchWorkerState>> workers;
     {
@@ -1170,10 +1170,10 @@ void AsyncEtcdClient::stopWatchWorkers()
         }
     }
 
-    joinWatchWorkers();
+    join_watch_workers();
 }
 
-void AsyncEtcdClient::joinWatchWorkers()
+void AsyncEtcdClient::join_watch_workers()
 {
     std::vector<std::shared_ptr<WatchWorkerState>> workers;
     {
@@ -1188,19 +1188,19 @@ void AsyncEtcdClient::joinWatchWorkers()
     }
 }
 
-EtcdBoolResult AsyncEtcdClient::currentBoolResult() const
+EtcdBoolResult AsyncEtcdClient::current_bool_result() const
 {
-    if (m_last_error.isOk()) {
+    if (m_last_error.is_ok()) {
         return true;
     }
     return std::unexpected(m_last_error);
 }
 
-std::expected<std::string, EtcdError> AsyncEtcdClient::resumePostOrCurrent(
+std::expected<std::string, EtcdError> AsyncEtcdClient::resume_post_or_current(
     PostJsonAwaitable* post_awaitable)
 {
     if (post_awaitable == nullptr) {
-        if (m_last_error.isOk()) {
+        if (m_last_error.is_ok()) {
             return std::unexpected(EtcdError(EtcdErrorType::Internal, "post awaitable not started"));
         }
         return std::unexpected(m_last_error);
@@ -1208,24 +1208,24 @@ std::expected<std::string, EtcdError> AsyncEtcdClient::resumePostOrCurrent(
 
     auto post_result = post_awaitable->await_resume();
     if (!post_result.has_value()) {
-        setError(post_result.error());
+        set_error(post_result.error());
         return std::unexpected(post_result.error());
     }
 
     return post_result.value();
 }
 
-void AsyncEtcdClient::resetLastOperation()
+void AsyncEtcdClient::reset_last_operation()
 {
     m_last_error = EtcdError(EtcdErrorType::Success);
 }
 
-void AsyncEtcdClient::setError(EtcdErrorType type, const std::string& message)
+void AsyncEtcdClient::set_error(EtcdErrorType type, const std::string& message)
 {
     m_last_error = EtcdError(type, message);
 }
 
-void AsyncEtcdClient::setError(EtcdError error)
+void AsyncEtcdClient::set_error(EtcdError error)
 {
     m_last_error = std::move(error);
 }

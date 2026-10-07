@@ -14,82 +14,82 @@ using galay::kernel::TimeoutTimer;
 using galay::kernel::detail::DeferredWaker;
 using namespace std::chrono_literals;
 
-bool wakeBeforeArmContinuesSynchronously()
+bool wake_before_arm_continues_synchronously()
 {
     DeferredWaker waker;
-    return waker.requestWake() && !waker.arm() &&
-        !waker.requestWake();
+    return waker.request_wake() && !waker.arm() &&
+        !waker.request_wake();
 }
 
-bool wakeAfterArmIsIssuedOnce()
+bool wake_after_arm_is_issued_once()
 {
     DeferredWaker waker;
-    return waker.arm() && waker.requestWake() &&
-        !waker.requestWake();
+    return waker.arm() && waker.request_wake() &&
+        !waker.request_wake();
 }
 
-bool timerWakeBeforeArmContinuesSynchronously()
+bool timer_wake_before_arm_continues_synchronously()
 {
     TimeoutTimer timer(1h);
-    timer.handleTimeout();
-    return timer.timeouted() && !timer.armWaker();
+    timer.handle_timeout();
+    return timer.timeouted() && !timer.arm_waker();
 }
 
-bool operationCommitsAfterTimeoutRequest()
+bool operation_commits_after_timeout_request()
 {
     TimeoutTimer timer(1h);
-    if (timer.tryBeginOperation() !=
+    if (timer.try_begin_operation() !=
         TimeoutTimer::OperationStart::kStarted) {
         return false;
     }
-    timer.handleTimeout();
-    return !timer.timeouted() && timer.commitOperation() &&
+    timer.handle_timeout();
+    return !timer.timeouted() && timer.commit_operation() &&
         !timer.timeouted() && timer.cancelled();
 }
 
-bool timeoutCompletesAfterOperationAbort()
+bool timeout_completes_after_operation_abort()
 {
     TimeoutTimer timer(1h);
-    if (timer.tryBeginOperation() !=
+    if (timer.try_begin_operation() !=
         TimeoutTimer::OperationStart::kStarted) {
         return false;
     }
-    timer.handleTimeout();
-    return timer.abortOperation() ==
+    timer.handle_timeout();
+    return timer.abort_operation() ==
             TimeoutTimer::OperationAbort::kTimeoutWon &&
         timer.timeouted();
 }
 
-bool operationCanRearmBeforeTimeout()
+bool operation_can_rearm_before_timeout()
 {
     TimeoutTimer timer(1h);
-    if (timer.tryBeginOperation() !=
+    if (timer.try_begin_operation() !=
             TimeoutTimer::OperationStart::kStarted ||
-        timer.tryBeginOperation() !=
+        timer.try_begin_operation() !=
             TimeoutTimer::OperationStart::kBusy ||
-        timer.abortOperation() !=
+        timer.abort_operation() !=
             TimeoutTimer::OperationAbort::kRearmed) {
         return false;
     }
-    timer.handleTimeout();
+    timer.handle_timeout();
     return timer.timeouted() &&
-        timer.tryBeginOperation() ==
+        timer.try_begin_operation() ==
             TimeoutTimer::OperationStart::kTimeoutWon;
 }
 
-bool committedOperationStaysTerminal()
+bool committed_operation_stays_terminal()
 {
     TimeoutTimer timer(1h);
-    if (timer.tryBeginOperation() !=
+    if (timer.try_begin_operation() !=
             TimeoutTimer::OperationStart::kStarted ||
-        !timer.commitOperation()) {
+        !timer.commit_operation()) {
         return false;
     }
-    timer.handleTimeout();
+    timer.handle_timeout();
     return !timer.timeouted() &&
-        timer.tryBeginOperation() ==
+        timer.try_begin_operation() ==
             TimeoutTimer::OperationStart::kOperationWon &&
-        timer.abortOperation() ==
+        timer.abort_operation() ==
             TimeoutTimer::OperationAbort::kCompleted;
 }
 
@@ -97,31 +97,31 @@ bool committedOperationStaysTerminal()
 
 int main()
 {
-    if (!wakeBeforeArmContinuesSynchronously()) {
+    if (!wake_before_arm_continues_synchronously()) {
         std::cerr << "[T158] wake before arm did not stay synchronous\n";
         return 1;
     }
-    if (!wakeAfterArmIsIssuedOnce()) {
+    if (!wake_after_arm_is_issued_once()) {
         std::cerr << "[T158] armed waker issued more than one wake\n";
         return 1;
     }
-    if (!timerWakeBeforeArmContinuesSynchronously()) {
+    if (!timer_wake_before_arm_continues_synchronously()) {
         std::cerr << "[T158] timer woke before await_suspend was armed\n";
         return 1;
     }
-    if (!operationCommitsAfterTimeoutRequest()) {
+    if (!operation_commits_after_timeout_request()) {
         std::cerr << "[T158] operation commit lost to an in-flight timeout\n";
         return 1;
     }
-    if (!timeoutCompletesAfterOperationAbort()) {
+    if (!timeout_completes_after_operation_abort()) {
         std::cerr << "[T158] deferred timeout did not complete after abort\n";
         return 1;
     }
-    if (!operationCanRearmBeforeTimeout()) {
+    if (!operation_can_rearm_before_timeout()) {
         std::cerr << "[T158] aborted operation did not return to pending\n";
         return 1;
     }
-    if (!committedOperationStaysTerminal()) {
+    if (!committed_operation_stays_terminal()) {
         std::cerr << "[T158] committed operation was not terminal\n";
         return 1;
     }

@@ -25,7 +25,7 @@ namespace mongo_bench
 
 template <typename T>
 std::expected<T, galay::mongo::MongoError>
-unwrapMongoTaskResult(std::expected<std::expected<T, galay::mongo::MongoError>,
+unwrap_mongo_task_result(std::expected<std::expected<T, galay::mongo::MongoError>,
                                     galay::kernel::detail::TaskResultError>&& task_result,
                       galay::mongo::MongoErrorType fallback = galay::mongo::MONGO_ERROR_INTERNAL)
 {
@@ -43,7 +43,7 @@ enum class BenchMode
     Pipeline,
 };
 
-inline const char* modeToString(BenchMode mode)
+inline const char* mode_to_string(BenchMode mode)
 {
     switch (mode) {
     case BenchMode::Normal:
@@ -54,7 +54,7 @@ inline const char* modeToString(BenchMode mode)
     return "normal";
 }
 
-inline std::optional<BenchMode> parseMode(std::string_view text)
+inline std::optional<BenchMode> parse_mode(std::string_view text)
 {
     if (text == "normal") return BenchMode::Normal;
     if (text == "pipeline") return BenchMode::Pipeline;
@@ -79,7 +79,7 @@ struct BenchConfig
     bool alloc_stats = false;
 };
 
-inline const char* getEnvNonEmpty(const char* key)
+inline const char* get_env_non_empty(const char* key)
 {
     const char* value = std::getenv(key);
     if (value == nullptr || value[0] == '\0') {
@@ -88,15 +88,15 @@ inline const char* getEnvNonEmpty(const char* key)
     return value;
 }
 
-inline std::string getEnvOrDefault(const char* key, const std::string& fallback)
+inline std::string get_env_or_default(const char* key, const std::string& fallback)
 {
-    if (const char* value = getEnvNonEmpty(key)) {
+    if (const char* value = get_env_non_empty(key)) {
         return value;
     }
     return fallback;
 }
 
-inline uint16_t parsePortOrDefault(const char* value, uint16_t fallback)
+inline uint16_t parse_port_or_default(const char* value, uint16_t fallback)
 {
     if (value == nullptr || value[0] == '\0') {
         return fallback;
@@ -111,7 +111,7 @@ inline uint16_t parsePortOrDefault(const char* value, uint16_t fallback)
     return static_cast<uint16_t>(parsed);
 }
 
-inline size_t parseSizeOrDefault(const char* value, size_t fallback)
+inline size_t parse_size_or_default(const char* value, size_t fallback)
 {
     if (value == nullptr || value[0] == '\0') {
         return fallback;
@@ -126,7 +126,7 @@ inline size_t parseSizeOrDefault(const char* value, size_t fallback)
     return static_cast<size_t>(parsed);
 }
 
-inline bool parseBoolOrDefault(const char* value, bool fallback)
+inline bool parse_bool_or_default(const char* value, bool fallback)
 {
     if (value == nullptr || value[0] == '\0') {
         return fallback;
@@ -142,32 +142,32 @@ inline bool parseBoolOrDefault(const char* value, bool fallback)
     return fallback;
 }
 
-inline BenchConfig loadBenchConfig()
+inline BenchConfig load_bench_config()
 {
     BenchConfig cfg;
 
-    cfg.host = getEnvOrDefault("GALAY_MONGO_HOST", cfg.host);
-    cfg.port = parsePortOrDefault(getEnvNonEmpty("GALAY_MONGO_PORT"), cfg.port);
-    cfg.database = getEnvOrDefault("GALAY_MONGO_DB", cfg.database);
-    cfg.username = getEnvOrDefault("GALAY_MONGO_USER", cfg.username);
-    cfg.password = getEnvOrDefault("GALAY_MONGO_PASSWORD", cfg.password);
-    cfg.auth_database = getEnvOrDefault("GALAY_MONGO_AUTH_DB", cfg.auth_database);
+    cfg.host = get_env_or_default("GALAY_MONGO_HOST", cfg.host);
+    cfg.port = parse_port_or_default(get_env_non_empty("GALAY_MONGO_PORT"), cfg.port);
+    cfg.database = get_env_or_default("GALAY_MONGO_DB", cfg.database);
+    cfg.username = get_env_or_default("GALAY_MONGO_USER", cfg.username);
+    cfg.password = get_env_or_default("GALAY_MONGO_PASSWORD", cfg.password);
+    cfg.auth_database = get_env_or_default("GALAY_MONGO_AUTH_DB", cfg.auth_database);
 
     cfg.total_requests =
-        parseSizeOrDefault(getEnvNonEmpty("GALAY_MONGO_BENCH_TOTAL"), cfg.total_requests);
+        parse_size_or_default(get_env_non_empty("GALAY_MONGO_BENCH_TOTAL"), cfg.total_requests);
     cfg.concurrency =
-        parseSizeOrDefault(getEnvNonEmpty("GALAY_MONGO_BENCH_CONCURRENCY"), cfg.concurrency);
+        parse_size_or_default(get_env_non_empty("GALAY_MONGO_BENCH_CONCURRENCY"), cfg.concurrency);
     cfg.timeout_seconds =
-        parseSizeOrDefault(getEnvNonEmpty("GALAY_MONGO_BENCH_TIMEOUT"), cfg.timeout_seconds);
+        parse_size_or_default(get_env_non_empty("GALAY_MONGO_BENCH_TIMEOUT"), cfg.timeout_seconds);
     cfg.batch_size =
-        parseSizeOrDefault(getEnvNonEmpty("GALAY_MONGO_BENCH_BATCH_SIZE"), cfg.batch_size);
+        parse_size_or_default(get_env_non_empty("GALAY_MONGO_BENCH_BATCH_SIZE"), cfg.batch_size);
     cfg.buffer_size =
-        parseSizeOrDefault(getEnvNonEmpty("GALAY_MONGO_BENCH_BUFFER_SIZE"), cfg.buffer_size);
+        parse_size_or_default(get_env_non_empty("GALAY_MONGO_BENCH_BUFFER_SIZE"), cfg.buffer_size);
     cfg.alloc_stats =
-        parseBoolOrDefault(getEnvNonEmpty("GALAY_MONGO_BENCH_ALLOC_STATS"), cfg.alloc_stats);
+        parse_bool_or_default(get_env_non_empty("GALAY_MONGO_BENCH_ALLOC_STATS"), cfg.alloc_stats);
 
-    if (const char* mode_env = getEnvNonEmpty("GALAY_MONGO_BENCH_MODE")) {
-        if (auto mode = parseMode(mode_env); mode.has_value()) {
+    if (const char* mode_env = get_env_non_empty("GALAY_MONGO_BENCH_MODE")) {
+        if (auto mode = parse_mode(mode_env); mode.has_value()) {
             cfg.mode = mode.value();
         }
     }
@@ -175,12 +175,12 @@ inline BenchConfig loadBenchConfig()
     return cfg;
 }
 
-inline bool parseSizeArgValue(int argc, char** argv, int& i, size_t& out)
+inline bool parse_size_arg_value(int argc, char** argv, int& i, size_t& out)
 {
     if (i + 1 >= argc) {
         return false;
     }
-    const size_t parsed = parseSizeOrDefault(argv[i + 1], 0);
+    const size_t parsed = parse_size_or_default(argv[i + 1], 0);
     if (parsed == 0) {
         return false;
     }
@@ -189,12 +189,12 @@ inline bool parseSizeArgValue(int argc, char** argv, int& i, size_t& out)
     return true;
 }
 
-inline bool parsePortArgValue(int argc, char** argv, int& i, uint16_t& out)
+inline bool parse_port_arg_value(int argc, char** argv, int& i, uint16_t& out)
 {
     if (i + 1 >= argc) {
         return false;
     }
-    const uint16_t parsed = parsePortOrDefault(argv[i + 1], 0);
+    const uint16_t parsed = parse_port_or_default(argv[i + 1], 0);
     if (parsed == 0) {
         return false;
     }
@@ -203,7 +203,7 @@ inline bool parsePortArgValue(int argc, char** argv, int& i, uint16_t& out)
     return true;
 }
 
-inline bool parseArgs(BenchConfig& cfg, int argc, char** argv, std::ostream& err)
+inline bool parse_args(BenchConfig& cfg, int argc, char** argv, std::ostream& err)
 {
     std::vector<std::string_view> positional;
 
@@ -215,35 +215,35 @@ inline bool parseArgs(BenchConfig& cfg, int argc, char** argv, std::ostream& err
         }
 
         if (arg == "--total") {
-            if (!parseSizeArgValue(argc, argv, i, cfg.total_requests)) {
+            if (!parse_size_arg_value(argc, argv, i, cfg.total_requests)) {
                 err << "invalid --total value" << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "--concurrency") {
-            if (!parseSizeArgValue(argc, argv, i, cfg.concurrency)) {
+            if (!parse_size_arg_value(argc, argv, i, cfg.concurrency)) {
                 err << "invalid --concurrency value" << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "--timeout-sec") {
-            if (!parseSizeArgValue(argc, argv, i, cfg.timeout_seconds)) {
+            if (!parse_size_arg_value(argc, argv, i, cfg.timeout_seconds)) {
                 err << "invalid --timeout-sec value" << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "--batch-size") {
-            if (!parseSizeArgValue(argc, argv, i, cfg.batch_size)) {
+            if (!parse_size_arg_value(argc, argv, i, cfg.batch_size)) {
                 err << "invalid --batch-size value" << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "--buffer-size") {
-            if (!parseSizeArgValue(argc, argv, i, cfg.buffer_size)) {
+            if (!parse_size_arg_value(argc, argv, i, cfg.buffer_size)) {
                 err << "invalid --buffer-size value" << std::endl;
                 return false;
             }
@@ -258,7 +258,7 @@ inline bool parseArgs(BenchConfig& cfg, int argc, char** argv, std::ostream& err
             continue;
         }
         if (arg == "--port") {
-            if (!parsePortArgValue(argc, argv, i, cfg.port)) {
+            if (!parse_port_arg_value(argc, argv, i, cfg.port)) {
                 err << "invalid --port value" << std::endl;
                 return false;
             }
@@ -301,7 +301,7 @@ inline bool parseArgs(BenchConfig& cfg, int argc, char** argv, std::ostream& err
                 err << "missing --mode value" << std::endl;
                 return false;
             }
-            const auto mode = parseMode(argv[++i]);
+            const auto mode = parse_mode(argv[++i]);
             if (!mode.has_value()) {
                 err << "invalid --mode value, expected normal|pipeline" << std::endl;
                 return false;
@@ -320,10 +320,10 @@ inline bool parseArgs(BenchConfig& cfg, int argc, char** argv, std::ostream& err
 
     // 兼容旧参数形式:
     // [1]=total [2]=concurrency [3]=host [4]=port [5]=db [6]=user [7]=password [8]=auth_db
-    if (!positional.empty()) cfg.total_requests = parseSizeOrDefault(positional[0].data(), cfg.total_requests);
-    if (positional.size() > 1) cfg.concurrency = parseSizeOrDefault(positional[1].data(), cfg.concurrency);
+    if (!positional.empty()) cfg.total_requests = parse_size_or_default(positional[0].data(), cfg.total_requests);
+    if (positional.size() > 1) cfg.concurrency = parse_size_or_default(positional[1].data(), cfg.concurrency);
     if (positional.size() > 2) cfg.host = std::string(positional[2]);
-    if (positional.size() > 3) cfg.port = parsePortOrDefault(positional[3].data(), cfg.port);
+    if (positional.size() > 3) cfg.port = parse_port_or_default(positional[3].data(), cfg.port);
     if (positional.size() > 4) cfg.database = std::string(positional[4]);
     if (positional.size() > 5) cfg.username = std::string(positional[5]);
     if (positional.size() > 6) cfg.password = std::string(positional[6]);
@@ -345,7 +345,7 @@ inline bool parseArgs(BenchConfig& cfg, int argc, char** argv, std::ostream& err
     return true;
 }
 
-inline galay::mongo::MongoConfig toMongoConfig(const BenchConfig& cfg)
+inline galay::mongo::MongoConfig to_mongo_config(const BenchConfig& cfg)
 {
     galay::mongo::MongoConfig mongo_cfg;
     mongo_cfg.host = cfg.host;
@@ -358,7 +358,7 @@ inline galay::mongo::MongoConfig toMongoConfig(const BenchConfig& cfg)
     return mongo_cfg;
 }
 
-inline void printBenchConfig(const std::string& bench_name, const BenchConfig& cfg)
+inline void print_bench_config(const std::string& bench_name, const BenchConfig& cfg)
 {
     std::cout << "[" << bench_name << "]"
               << " host=" << cfg.host
@@ -367,7 +367,7 @@ inline void printBenchConfig(const std::string& bench_name, const BenchConfig& c
               << " user=" << (cfg.username.empty() ? "<empty>" : cfg.username)
               << " total=" << cfg.total_requests
               << " concurrency=" << cfg.concurrency
-              << " mode=" << modeToString(cfg.mode)
+              << " mode=" << mode_to_string(cfg.mode)
               << " batch_size=" << cfg.batch_size
               << " buffer_size=" << cfg.buffer_size
               << " timeout_sec=" << cfg.timeout_seconds
@@ -401,7 +401,7 @@ inline double percentile(std::vector<double> values, double p)
     return values[lo] * (1.0 - weight) + values[hi] * weight;
 }
 
-inline void printBenchReport(size_t total,
+inline void print_bench_report(size_t total,
                              size_t ok,
                              size_t error,
                              long long duration_ms,
@@ -436,7 +436,7 @@ inline void printBenchReport(size_t total,
     }
 }
 
-inline void printUsage(const char* prog)
+inline void print_usage(const char* prog)
 {
     std::cout
         << "Usage: " << prog

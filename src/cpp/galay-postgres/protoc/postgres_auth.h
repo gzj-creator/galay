@@ -33,7 +33,7 @@ public:
     ScramSha256& operator=(const ScramSha256&) = delete;
 
     /** Generate the PostgreSQL/libpq-style Base64 encoding of 18 random bytes. */
-    [[nodiscard]] static std::expected<std::string, std::string> generateNonce();
+    [[nodiscard]] static std::expected<std::string, std::string> generate_nonce();
 
     /**
      * PostgreSQL already sends the role in StartupMessage, so production
@@ -41,13 +41,13 @@ public:
      * A non-empty username remains supported for RFC 7677 vector verification.
      */
     [[nodiscard]] std::expected<std::string, std::string>
-    clientFirstMessage(std::string_view username, std::string_view nonce);
+    client_first_message(std::string_view username, std::string_view nonce);
     [[nodiscard]] std::expected<void, std::string>
-    parseServerFirst(std::string_view server_first);
+    parse_server_first(std::string_view server_first);
     [[nodiscard]] std::expected<std::string, std::string>
-    clientFinalMessage(std::string_view password);
+    client_final_message(std::string_view password);
     [[nodiscard]] std::expected<void, std::string>
-    verifyServerFinal(std::string_view server_final);
+    verify_server_final(std::string_view server_final);
 
     void reset() noexcept;
 
@@ -71,7 +71,7 @@ private:
     Phase m_phase = Phase::Initial;
 };
 
-[[nodiscard]] std::string md5Password(std::string_view username,
+[[nodiscard]] std::string md5_password(std::string_view username,
                                       std::string_view password,
                                       std::span<const uint8_t, 4> salt);
 

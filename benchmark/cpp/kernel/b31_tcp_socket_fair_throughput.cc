@@ -96,7 +96,7 @@ std::array<std::atomic<int>, kClients> g_server_handles{};
 galay::benchmark::CompletionLatch* g_client_completion = nullptr;
 galay::benchmark::CompletionLatch* g_server_completion = nullptr;
 
-constexpr const char* benchmarkBackend() noexcept
+constexpr const char* benchmark_backend() noexcept
 {
 #if defined(USE_KQUEUE)
     return "kqueue";
@@ -109,7 +109,7 @@ constexpr const char* benchmarkBackend() noexcept
 #endif
 }
 
-void addCounter(std::atomic<std::uint64_t>& counter,
+void add_counter(std::atomic<std::uint64_t>& counter,
                 std::uint64_t value = 1) noexcept
 {
     const auto previous = counter.fetch_add(value, std::memory_order_relaxed);
@@ -119,7 +119,7 @@ void addCounter(std::atomic<std::uint64_t>& counter,
     }
 }
 
-void recordError(std::uint64_t error_code) noexcept
+void record_error(std::uint64_t error_code) noexcept
 {
     if (IOError::contains(error_code, kTimeout)) {
         return;
@@ -128,17 +128,17 @@ void recordError(std::uint64_t error_code) noexcept
     if (phase >= Phase::drain &&
         (IOError::contains(error_code, kDisconnectError) ||
          IOError::contains(error_code, kClosed))) {
-        // shutdownActiveSockets() deliberately wakes pending exact I/O with EOF.
+        // shutdown_active_sockets() deliberately wakes pending exact I/O with EOF.
         return;
     }
     if (phase >= Phase::drain) {
-        addCounter(g_shutdown_errors);
+        add_counter(g_shutdown_errors);
     } else {
-        addCounter(g_runtime_errors);
+        add_counter(g_runtime_errors);
     }
 }
 
-void resetSocketHandles() noexcept
+void reset_socket_handles() noexcept
 {
     for (auto& handle : g_client_handles) {
         handle.store(-1, std::memory_order_relaxed);
@@ -148,7 +148,7 @@ void resetSocketHandles() noexcept
     }
 }
 
-void shutdownActiveSockets() noexcept
+void shutdown_active_sockets() noexcept
 {
     for (const auto& handle : g_client_handles) {
         const int fd = handle.load(std::memory_order_acquire);
@@ -164,7 +164,7 @@ void shutdownActiveSockets() noexcept
     }
 }
 
-StatsSnapshot snapshotStats() noexcept
+StatsSnapshot snapshot_stats() noexcept
 {
     return {
         .client_sent = g_client_sent.load(std::memory_order_relaxed),
@@ -180,7 +180,7 @@ StatsSnapshot snapshotStats() noexcept
     };
 }
 
-bool settledCountersMatch(const StatsSnapshot& values) noexcept
+bool settled_counters_match(const StatsSnapshot& values) noexcept
 {
     return values.client_sent == values.client_received &&
            values.client_received == values.server_received &&
@@ -190,7 +190,7 @@ bool settledCountersMatch(const StatsSnapshot& values) noexcept
            values.server_bytes_received == values.server_bytes_sent;
 }
 
-void resetMeasurementCounters() noexcept
+void reset_measurement_counters() noexcept
 {
     g_client_sent.store(0, std::memory_order_relaxed);
     g_client_received.store(0, std::memory_order_relaxed);
@@ -204,7 +204,7 @@ void resetMeasurementCounters() noexcept
     g_shutdown_errors.store(0, std::memory_order_relaxed);
 }
 
-bool waitForCount(const std::atomic<std::uint32_t>& value,
+bool wait_for_count(const std::atomic<std::uint32_t>& value,
                   std::uint32_t target,
                   std::chrono::seconds timeout) noexcept
 {
@@ -218,110 +218,110 @@ bool waitForCount(const std::atomic<std::uint32_t>& value,
     return value.load(std::memory_order_acquire) >= target;
 }
 
-void markClientStartupFailed() noexcept
+void mark_client_startup_failed() noexcept
 {
     g_client_failed.fetch_add(1, std::memory_order_release);
 }
 
-void markServerStartupFailed() noexcept
+void mark_server_startup_failed() noexcept
 {
     g_server_failed.fetch_add(1, std::memory_order_release);
 }
 
-void reportStartupError(const char* operation, std::uint64_t error_code) noexcept
+void report_startup_error(const char* operation, std::uint64_t error_code) noexcept
 {
     std::cerr << "tcp_server_startup_error operation=" << operation
               << " code=" << error_code
               << " code_hex=0x" << std::hex << error_code << std::dec << '\n';
 }
 
-// Keep the benchmark's readExact/writeAll names next to the Asio comparison;
+// Keep the benchmark's read_exact/write_all names next to the Asio comparison;
 // the socket now supplies the composed, allocation-free awaitables.
-auto readExact(AsyncTcpSocket& socket, char* buffer, std::size_t length)
+auto read_exact(AsyncTcpSocket& socket, char* buffer, std::size_t length)
 {
-    return socket.readExact(buffer, length);
+    return socket.read_exact(buffer, length);
 }
 
-auto writeAll(AsyncTcpSocket& socket, const char* buffer, std::size_t length)
+auto write_all(AsyncTcpSocket& socket, const char* buffer, std::size_t length)
 {
-    return socket.writeAll(buffer, length);
+    return socket.write_all(buffer, length);
 }
 
-Task<void> tcpServerConnection(AsyncTcpSocket client, std::size_t connection_id)
+Task<void> tcp_server_connection(AsyncTcpSocket client, std::size_t connection_id)
 {
-    if (!client.option().handleNonBlock()) {
-        addCounter(g_runtime_errors);
+    if (!client.option().handle_non_block()) {
+        add_counter(g_runtime_errors);
         ++g_server_connections_done;
         co_return;
     }
 
     std::array<char, kPayloadBytes> buffer{};
     while (g_phase.load(std::memory_order_acquire) != Phase::stopped) {
-        auto read_result = co_await readExact(client, buffer.data(), buffer.size())
+        auto read_result = co_await read_exact(client, buffer.data(), buffer.size())
                                       .timeout(kRecvTimeout);
         if (!read_result) {
             if (IOError::contains(read_result.error().code(), kTimeout)) {
                 g_recv_timeouts.fetch_add(1, std::memory_order_relaxed);
                 continue;
             }
-            recordError(read_result.error().code());
+            record_error(read_result.error().code());
             break;
         }
         const bool measured_frame = buffer[0] == kMeasuredMarker;
         if (measured_frame) {
-            addCounter(g_server_received);
-            addCounter(g_server_bytes_received, buffer.size());
+            add_counter(g_server_received);
+            add_counter(g_server_bytes_received, buffer.size());
         }
 
-        auto write_result = co_await writeAll(client, buffer.data(), buffer.size());
+        auto write_result = co_await write_all(client, buffer.data(), buffer.size());
         if (!write_result) {
-            recordError(write_result.error().code());
+            record_error(write_result.error().code());
             break;
         }
         if (measured_frame) {
-            addCounter(g_server_sent);
-            addCounter(g_server_bytes_sent, buffer.size());
+            add_counter(g_server_sent);
+            add_counter(g_server_bytes_sent, buffer.size());
         }
     }
 
     const auto closed = co_await client.close();
     if (!closed) {
-        recordError(closed.error().code());
+        record_error(closed.error().code());
     }
     g_server_handles[connection_id].store(-1, std::memory_order_release);
     g_server_connections_done.fetch_add(1, std::memory_order_release);
     co_return;
 }
 
-Task<void> tcpServerWorker(Scheduler* scheduler, int worker_id)
+Task<void> tcp_server_worker(Scheduler* scheduler, int worker_id)
 {
     auto socket_result = AsyncTcpSocket::create(IPType::IPV4);
     if (!socket_result) {
-        reportStartupError("create", socket_result.error().code());
-        recordError(socket_result.error().code());
-        markServerStartupFailed();
+        report_startup_error("create", socket_result.error().code());
+        record_error(socket_result.error().code());
+        mark_server_startup_failed();
         if (g_server_completion) g_server_completion->arrive();
         co_return;
     }
     AsyncTcpSocket listener = std::move(*socket_result);
 
-    const auto reuse_addr = listener.option().handleReuseAddr();
-    const auto reuse_port = listener.option().handleReusePort();
-    const auto non_block = listener.option().handleNonBlock();
+    const auto reuse_addr = listener.option().handle_reuse_addr();
+    const auto reuse_port = listener.option().handle_reuse_port();
+    const auto non_block = listener.option().handle_non_block();
     if (!reuse_addr || !reuse_port || !non_block) {
         if (!reuse_addr) {
-            reportStartupError("reuse_addr", reuse_addr.error().code());
-            recordError(reuse_addr.error().code());
+            report_startup_error("reuse_addr", reuse_addr.error().code());
+            record_error(reuse_addr.error().code());
         }
         if (!reuse_port) {
-            reportStartupError("reuse_port", reuse_port.error().code());
-            recordError(reuse_port.error().code());
+            report_startup_error("reuse_port", reuse_port.error().code());
+            record_error(reuse_port.error().code());
         }
         if (!non_block) {
-            reportStartupError("non_block", non_block.error().code());
-            recordError(non_block.error().code());
+            report_startup_error("non_block", non_block.error().code());
+            record_error(non_block.error().code());
         }
-        markServerStartupFailed();
+        mark_server_startup_failed();
         if (g_server_completion) g_server_completion->arrive();
         co_return;
     }
@@ -329,17 +329,17 @@ Task<void> tcpServerWorker(Scheduler* scheduler, int worker_id)
     const Host endpoint(IPType::IPV4, "127.0.0.1", kServerPort);
     const auto bound = listener.bind(endpoint);
     if (!bound) {
-        reportStartupError("bind", bound.error().code());
-        recordError(bound.error().code());
-        markServerStartupFailed();
+        report_startup_error("bind", bound.error().code());
+        record_error(bound.error().code());
+        mark_server_startup_failed();
         if (g_server_completion) g_server_completion->arrive();
         co_return;
     }
     const auto listening = listener.listen(1024);
     if (!listening) {
-        reportStartupError("listen", listening.error().code());
-        recordError(listening.error().code());
-        markServerStartupFailed();
+        report_startup_error("listen", listening.error().code());
+        record_error(listening.error().code());
+        mark_server_startup_failed();
         if (g_server_completion) g_server_completion->arrive();
         co_return;
     }
@@ -357,19 +357,19 @@ Task<void> tcpServerWorker(Scheduler* scheduler, int worker_id)
                 continue;
             }
             if (g_phase.load(std::memory_order_acquire) != Phase::stopped) {
-                recordError(accepted.error().code());
+                record_error(accepted.error().code());
             }
             break;
         }
 
         AsyncTcpSocket client(accepted.value());
-        const auto client_non_block = client.option().handleNonBlock();
-        const auto no_delay = client.option().handleTcpNoDelay();
+        const auto client_non_block = client.option().handle_non_block();
+        const auto no_delay = client.option().handle_tcp_no_delay();
         if (!client_non_block || !no_delay) {
-            if (!client_non_block) recordError(client_non_block.error().code());
-            if (!no_delay) recordError(no_delay.error().code());
+            if (!client_non_block) record_error(client_non_block.error().code());
+            if (!no_delay) record_error(no_delay.error().code());
             const auto closed = co_await client.close();
-            if (!closed) recordError(closed.error().code());
+            if (!closed) record_error(closed.error().code());
             continue;
         }
 
@@ -377,38 +377,38 @@ Task<void> tcpServerWorker(Scheduler* scheduler, int worker_id)
             1, std::memory_order_release);
         g_server_handles[connection_id].store(client.handle().fd,
                                               std::memory_order_release);
-        if (!scheduleTask(*scheduler,
-                          tcpServerConnection(std::move(client), connection_id))) {
-            addCounter(g_runtime_errors);
+        if (!schedule_task(*scheduler,
+                          tcp_server_connection(std::move(client), connection_id))) {
+            add_counter(g_runtime_errors);
             g_server_handles[connection_id].store(-1, std::memory_order_release);
             g_server_connections_done.fetch_add(1, std::memory_order_release);
         }
     }
 
     const auto closed = co_await listener.close();
-    if (!closed) recordError(closed.error().code());
+    if (!closed) record_error(closed.error().code());
     if (g_server_completion) g_server_completion->arrive();
     co_return;
 }
 
-Task<void> tcpBenchmarkClient(int client_id)
+Task<void> tcp_benchmark_client(int client_id)
 {
     auto socket_result = AsyncTcpSocket::create(IPType::IPV4);
     if (!socket_result) {
-        recordError(socket_result.error().code());
-        markClientStartupFailed();
+        record_error(socket_result.error().code());
+        mark_client_startup_failed();
         if (g_client_completion) g_client_completion->arrive();
         co_return;
     }
     AsyncTcpSocket client = std::move(*socket_result);
-    const auto non_block = client.option().handleNonBlock();
-    const auto no_delay = client.option().handleTcpNoDelay();
+    const auto non_block = client.option().handle_non_block();
+    const auto no_delay = client.option().handle_tcp_no_delay();
     if (!non_block || !no_delay) {
-        if (!non_block) recordError(non_block.error().code());
-        if (!no_delay) recordError(no_delay.error().code());
-        markClientStartupFailed();
+        if (!non_block) record_error(non_block.error().code());
+        if (!no_delay) record_error(no_delay.error().code());
+        mark_client_startup_failed();
         const auto closed = co_await client.close();
-        if (!closed) recordError(closed.error().code());
+        if (!closed) record_error(closed.error().code());
         if (g_client_completion) g_client_completion->arrive();
         co_return;
     }
@@ -416,10 +416,10 @@ Task<void> tcpBenchmarkClient(int client_id)
     const Host endpoint(IPType::IPV4, "127.0.0.1", kServerPort);
     auto connected = co_await client.connect(endpoint).timeout(std::chrono::seconds(2));
     if (!connected) {
-        recordError(connected.error().code());
-        markClientStartupFailed();
+        record_error(connected.error().code());
+        mark_client_startup_failed();
         const auto closed = co_await client.close();
-        if (!closed) recordError(closed.error().code());
+        if (!closed) record_error(closed.error().code());
         if (g_client_completion) g_client_completion->arrive();
         co_return;
     }
@@ -439,7 +439,7 @@ Task<void> tcpBenchmarkClient(int client_id)
         if (phase == Phase::drain) {
             while (measured_received < measured_sent &&
                    g_phase.load(std::memory_order_acquire) != Phase::stopped) {
-                auto receive_result = co_await readExact(
+                auto receive_result = co_await read_exact(
                     client, response.data(), response.size())
                     .timeout(kRecvTimeout);
                 if (!receive_result) {
@@ -447,13 +447,13 @@ Task<void> tcpBenchmarkClient(int client_id)
                         g_recv_timeouts.fetch_add(1, std::memory_order_relaxed);
                         continue;
                     }
-                    recordError(receive_result.error().code());
+                    record_error(receive_result.error().code());
                     break;
                 }
                 if (response[0] == kMeasuredMarker) {
                     ++measured_received;
-                    addCounter(g_client_received);
-                    addCounter(g_client_bytes_received, response.size());
+                    add_counter(g_client_received);
+                    add_counter(g_client_bytes_received, response.size());
                 }
             }
             break;
@@ -461,43 +461,43 @@ Task<void> tcpBenchmarkClient(int client_id)
         const bool measured_frame = phase == Phase::measured;
         payload[0] = measured_frame ? kMeasuredMarker : kWarmupMarker;
 
-        auto send_result = co_await writeAll(client, payload.data(), payload.size());
+        auto send_result = co_await write_all(client, payload.data(), payload.size());
         if (!send_result) {
-            recordError(send_result.error().code());
+            record_error(send_result.error().code());
             break;
         }
         if (measured_frame) {
             ++measured_sent;
-            addCounter(g_client_sent);
-            addCounter(g_client_bytes_sent, payload.size());
+            add_counter(g_client_sent);
+            add_counter(g_client_bytes_sent, payload.size());
         }
 
-        auto receive_result = co_await readExact(client, response.data(), response.size())
+        auto receive_result = co_await read_exact(client, response.data(), response.size())
                                          .timeout(kRecvTimeout);
         if (!receive_result) {
             if (IOError::contains(receive_result.error().code(), kTimeout)) {
                 g_recv_timeouts.fetch_add(1, std::memory_order_relaxed);
                 continue;
             }
-            recordError(receive_result.error().code());
+            record_error(receive_result.error().code());
             break;
         }
         if (measured_frame && response[0] == kMeasuredMarker) {
             ++measured_received;
-            addCounter(g_client_received);
-            addCounter(g_client_bytes_received, response.size());
+            add_counter(g_client_received);
+            add_counter(g_client_bytes_received, response.size());
         }
     }
 
     const auto closed = co_await client.close();
-    if (!closed) recordError(closed.error().code());
+    if (!closed) record_error(closed.error().code());
     g_client_handles[static_cast<std::size_t>(client_id)].store(
         -1, std::memory_order_release);
     if (g_client_completion) g_client_completion->arrive();
     co_return;
 }
 
-void printBenchmarkResults(std::chrono::steady_clock::time_point started,
+void print_benchmark_results(std::chrono::steady_clock::time_point started,
                            std::chrono::steady_clock::time_point ended,
                            const StatsSnapshot& measured,
                            const StatsSnapshot& settled,
@@ -532,7 +532,7 @@ void printBenchmarkResults(std::chrono::steady_clock::time_point started,
     LogInfo("===========================================\n");
 
     std::cout << "meta implementation=galay version=current coroutine=galay::Task"
-              << " scenario=tcp-echo backend=" << benchmarkBackend()
+              << " scenario=tcp-echo backend=" << benchmark_backend()
               << " clients=" << kClients
               << " workers=" << kServerWorkers
               << " payload_bytes=" << kPayloadBytes
@@ -574,7 +574,7 @@ void printBenchmarkResults(std::chrono::steady_clock::time_point started,
 }
 
 template <typename SchedulerType>
-int runBenchmark(SchedulerType& scheduler)
+int run_benchmark(SchedulerType& scheduler)
 {
     if (!scheduler.start()) {
         LogError("TCP benchmark scheduler failed to start");
@@ -588,8 +588,8 @@ int runBenchmark(SchedulerType& scheduler)
     g_server_failed.store(0, std::memory_order_relaxed);
     g_server_connections_started.store(0, std::memory_order_relaxed);
     g_server_connections_done.store(0, std::memory_order_relaxed);
-    resetSocketHandles();
-    resetMeasurementCounters();
+    reset_socket_handles();
+    reset_measurement_counters();
 
     galay::benchmark::CompletionLatch client_completion(kClients);
     galay::benchmark::CompletionLatch server_completion(kServerWorkers);
@@ -597,26 +597,26 @@ int runBenchmark(SchedulerType& scheduler)
     g_server_completion = &server_completion;
 
     for (std::size_t worker = 0; worker < kServerWorkers; ++worker) {
-        if (!scheduleTask(scheduler, tcpServerWorker(&scheduler, static_cast<int>(worker)))) {
-            markServerStartupFailed();
+        if (!schedule_task(scheduler, tcp_server_worker(&scheduler, static_cast<int>(worker)))) {
+            mark_server_startup_failed();
             server_completion.arrive();
         }
     }
 
-    bool setup_ok = waitForCount(g_server_ready, kServerWorkers, std::chrono::seconds(2)) &&
+    bool setup_ok = wait_for_count(g_server_ready, kServerWorkers, std::chrono::seconds(2)) &&
                     g_server_failed.load(std::memory_order_acquire) == 0;
     if (setup_ok) {
         for (std::size_t client = 0; client < kClients; ++client) {
-            if (!scheduleTask(scheduler, tcpBenchmarkClient(static_cast<int>(client)))) {
-                markClientStartupFailed();
+            if (!schedule_task(scheduler, tcp_benchmark_client(static_cast<int>(client)))) {
+                mark_client_startup_failed();
                 client_completion.arrive();
             }
         }
-        setup_ok = waitForCount(g_client_ready, kClients, std::chrono::seconds(2)) &&
+        setup_ok = wait_for_count(g_client_ready, kClients, std::chrono::seconds(2)) &&
                    g_client_failed.load(std::memory_order_acquire) == 0;
     }
     if (setup_ok) {
-        setup_ok = waitForCount(g_server_connections_started, kClients,
+        setup_ok = wait_for_count(g_server_connections_started, kClients,
                                 std::chrono::seconds(2));
     }
 
@@ -634,11 +634,11 @@ int runBenchmark(SchedulerType& scheduler)
                   << " shutdown_errors=" << g_shutdown_errors.load(std::memory_order_relaxed)
                   << '\n';
         g_phase.store(Phase::stopped, std::memory_order_release);
-        const bool clients_stopped = client_completion.waitFor(std::chrono::seconds(3));
-        const bool servers_stopped = server_completion.waitFor(std::chrono::seconds(3));
+        const bool clients_stopped = client_completion.wait_for(std::chrono::seconds(3));
+        const bool servers_stopped = server_completion.wait_for(std::chrono::seconds(3));
         (void)clients_stopped;
         (void)servers_stopped;
-        waitForCount(g_server_connections_done,
+        wait_for_count(g_server_connections_done,
                      g_server_connections_started.load(std::memory_order_acquire),
                      std::chrono::seconds(3));
         scheduler.stop();
@@ -662,11 +662,11 @@ int runBenchmark(SchedulerType& scheduler)
                   << " shutdown_errors=" << g_shutdown_errors.load(std::memory_order_relaxed)
                   << '\n';
         g_phase.store(Phase::stopped, std::memory_order_release);
-        const bool clients_stopped = client_completion.waitFor(std::chrono::seconds(3));
-        const bool servers_stopped = server_completion.waitFor(std::chrono::seconds(3));
+        const bool clients_stopped = client_completion.wait_for(std::chrono::seconds(3));
+        const bool servers_stopped = server_completion.wait_for(std::chrono::seconds(3));
         (void)clients_stopped;
         (void)servers_stopped;
-        waitForCount(g_server_connections_done,
+        wait_for_count(g_server_connections_done,
                      g_server_connections_started.load(std::memory_order_acquire),
                      std::chrono::seconds(3));
         scheduler.stop();
@@ -675,35 +675,35 @@ int runBenchmark(SchedulerType& scheduler)
         return 1;
     }
 
-    resetMeasurementCounters();
+    reset_measurement_counters();
     g_phase.store(Phase::measured, std::memory_order_release);
     const auto cpu_start = std::clock();
     const auto measurement_start = std::chrono::steady_clock::now();
     std::this_thread::sleep_for(kDuration);
     const auto measurement_end = std::chrono::steady_clock::now();
     const auto cpu_end = std::clock();
-    const auto measured = snapshotStats();
+    const auto measured = snapshot_stats();
 
     g_phase.store(Phase::drain, std::memory_order_release);
     std::this_thread::sleep_for(kDrain);
     g_phase.store(Phase::stopped, std::memory_order_release);
-    shutdownActiveSockets();
-    const bool clients_done = client_completion.waitFor(std::chrono::seconds(3));
-    const bool servers_done = server_completion.waitFor(std::chrono::seconds(3));
-    const bool connections_done = waitForCount(
+    shutdown_active_sockets();
+    const bool clients_done = client_completion.wait_for(std::chrono::seconds(3));
+    const bool servers_done = server_completion.wait_for(std::chrono::seconds(3));
+    const bool connections_done = wait_for_count(
         g_server_connections_done,
         g_server_connections_started.load(std::memory_order_acquire),
         std::chrono::seconds(3));
     scheduler.stop();
 
-    const auto settled = snapshotStats();
+    const auto settled = snapshot_stats();
     const bool status_ok = cpu_start != std::clock_t(-1) && cpu_end != std::clock_t(-1) && clients_done && servers_done && connections_done &&
                            g_client_ready.load(std::memory_order_acquire) == kClients &&
                            g_server_ready.load(std::memory_order_acquire) == kServerWorkers &&
                            measured.client_sent > 0 && measured.runtime_errors == 0 &&
                            measured.shutdown_errors == 0 && settled.runtime_errors == 0 &&
-                           settled.shutdown_errors == 0 && settledCountersMatch(settled);
-    printBenchmarkResults(measurement_start, measurement_end, measured, settled, status_ok,
+                           settled.shutdown_errors == 0 && settled_counters_match(settled);
+    print_benchmark_results(measurement_start, measurement_end, measured, settled, status_ok,
                           1e9 * static_cast<double>(cpu_end - cpu_start) / CLOCKS_PER_SEC);
 
     g_client_completion = nullptr;
@@ -715,7 +715,7 @@ int runBenchmark(SchedulerType& scheduler)
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -730,5 +730,5 @@ int main()
     return 1;
 #endif
     LogInfo("TCP Socket Fair Throughput Benchmark");
-    return runBenchmark(scheduler);
+    return run_benchmark(scheduler);
 }

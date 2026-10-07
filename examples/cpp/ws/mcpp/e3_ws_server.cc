@@ -13,15 +13,15 @@ using namespace galay::http;
 using namespace galay::websocket;
 using namespace galay::kernel;
 
-Task<void> handleWebSocketConnection(WsConn& ws_conn) {
+Task<void> handle_web_socket_connection(WsConn& ws_conn) {
     WsReaderSetting reader_setting;
     reader_setting.max_frame_size = 1024 * 1024;
     reader_setting.max_message_size = 10 * 1024 * 1024;
 
-    auto reader = ws_conn.getReader(reader_setting);
-    auto writer = ws_conn.getWriter(WsWriterSetting::byServer());
+    auto reader = ws_conn.get_reader(reader_setting);
+    auto writer = ws_conn.get_writer(WsWriterSetting::by_server());
 
-    auto welcome_result = co_await writer.sendText("Welcome to import WebSocket server!");
+    auto welcome_result = co_await writer.send_text("Welcome to import WebSocket server!");
     if (!welcome_result) {
         co_return;
     }
@@ -29,7 +29,7 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
     while (true) {
         std::string message;
         WsOpcode opcode{};
-        auto result = co_await reader.getMessage(message, opcode);
+        auto result = co_await reader.get_message(message, opcode);
         if (!result) {
             break;
         }
@@ -38,7 +38,7 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
         }
 
         if (opcode == WsOpcode::Ping) {
-            auto pong_result = co_await writer.sendPong(message);
+            auto pong_result = co_await writer.send_pong(message);
             if (!pong_result) {
                 break;
             }
@@ -46,12 +46,12 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
         }
 
         if (opcode == WsOpcode::Close) {
-            (void)co_await writer.sendClose();
+            (void)co_await writer.send_close();
             break;
         }
 
         if (opcode == WsOpcode::Text || opcode == WsOpcode::Binary) {
-            auto echo_result = co_await writer.sendText("Echo: " + message);
+            auto echo_result = co_await writer.send_text("Echo: " + message);
             if (!echo_result) {
                 break;
             }
@@ -62,26 +62,26 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
     co_return;
 }
 
-Task<void> handleHttpRequest(HttpConn conn) {
-    auto reader = conn.getReader();
+Task<void> handle_http_request(HttpConn conn) {
+    auto reader = conn.get_reader();
     HttpRequest request;
-    auto read_result = co_await reader.getRequest(request);
+    auto read_result = co_await reader.get_request(request);
     if (!read_result) {
         (void)co_await conn.close();
         co_return;
     }
 
     if (request.header().uri() == "/ws") {
-        auto upgrade_result = WsUpgrade::handleUpgrade(request);
-        auto writer = conn.getWriter();
-        auto send_result = co_await writer.sendResponse(upgrade_result.response);
+        auto upgrade_result = WsUpgrade::handle_upgrade(request);
+        auto writer = conn.get_writer();
+        auto send_result = co_await writer.send_response(upgrade_result.response);
         if (!send_result || !upgrade_result.success) {
             (void)co_await conn.close();
             co_return;
         }
 
         WsConn ws_conn = WsConn::from(std::move(conn), true);
-        co_await handleWebSocketConnection(ws_conn);
+        co_await handle_web_socket_connection(ws_conn);
         co_return;
     }
 
@@ -92,8 +92,8 @@ Task<void> handleHttpRequest(HttpConn conn) {
             "<p>Connect to <code>ws://127.0.0.1:8080/ws</code>.</p>"
             "</body></html>")
         .build();
-    auto writer = conn.getWriter();
-    (void)co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    (void)co_await writer.send_response(response);
     (void)co_await conn.close();
     co_return;
 }
@@ -107,8 +107,8 @@ int main(int argc, char* argv[]) {
     try {
         HttpServer server(HttpServerBuilder().host("0.0.0.0").port(port).build());
         std::cout << "Import WebSocket server: ws://127.0.0.1:" << port << "/ws\n";
-        server.start(handleHttpRequest);
-        while (server.isRunning()) {
+        server.start(handle_http_request);
+        while (server.is_running()) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     } catch (const std::exception& e) {

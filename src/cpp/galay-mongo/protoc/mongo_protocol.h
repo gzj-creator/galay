@@ -83,7 +83,7 @@ public:
      * @param flags      OP_MSG 标志位，默认 0
      * @return 成功时返回 OP_MSG 二进制字符串；失败时返回错误描述
      */
-    static std::expected<std::string, std::string> encodeOpMsg(int32_t request_id,
+    static std::expected<std::string, std::string> encode_op_msg(int32_t request_id,
                                                                const MongoDocument& body,
                                                                int32_t flags = 0);
 
@@ -96,7 +96,7 @@ public:
      * @return 成功时返回空值；失败时返回错误描述且不保留本次追加的部分数据
      * @note 减少临时字符串分配，适合批量编码场景
      */
-    static std::expected<void, std::string> appendOpMsg(std::string& out,
+    static std::expected<void, std::string> append_op_msg(std::string& out,
                                                         int32_t request_id,
                                                         const MongoDocument& body,
                                                         int32_t flags = 0);
@@ -110,7 +110,7 @@ public:
      * @param flags OP_MSG 标志位
      * @return 成功时返回空值；失败时返回错误描述且不保留本次追加的部分数据
      */
-    static std::expected<void, std::string> appendOpMsgWithDatabase(std::string& out,
+    static std::expected<void, std::string> append_op_msg_with_database(std::string& out,
                                                                     int32_t request_id,
                                                                     const MongoDocument& body,
                                                                     std::string_view database,
@@ -122,7 +122,7 @@ public:
      * @param len  数据长度
      * @return 解码后的消息，或 MongoError
      */
-    static std::expected<MongoMessage, MongoError> decodeMessage(const char* data, size_t len);
+    static std::expected<MongoMessage, MongoError> decode_message(const char* data, size_t len);
 
     /**
      * @brief 从数据流中提取一条完整消息（带消费字节数输出）
@@ -131,7 +131,7 @@ public:
      * @param consumed [out] 实际消费的字节数
      * @return 解码后的消息，或 MongoError
      */
-    static std::expected<MongoMessage, MongoError> extractMessage(const char* data,
+    static std::expected<MongoMessage, MongoError> extract_message(const char* data,
                                                                   size_t len,
                                                                   size_t& consumed);
 
@@ -143,7 +143,7 @@ public:
      * @param arguments     附加参数
      * @return 构造好的命令文档
      */
-    static MongoDocument makeCommand(std::string db,
+    static MongoDocument make_command(std::string db,
                                      std::string command_name,
                                      MongoValue command_value,
                                      MongoDocument arguments = {});

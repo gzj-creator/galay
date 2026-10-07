@@ -31,7 +31,7 @@ void finish(TestState& state, bool success, std::string message)
     state.cv.notify_one();
 }
 
-Task<void> runBorrowedBatchSmoke(IOScheduler* scheduler, TestState* state)
+Task<void> run_borrowed_batch_smoke(IOScheduler* scheduler, TestState* state)
 {
     auto client = RedisClientBuilder().scheduler(scheduler).build();
     RedisCommandBuilder builder;
@@ -52,24 +52,24 @@ Task<void> runBorrowedBatchSmoke(IOScheduler* scheduler, TestState* state)
     builder.append("GET", std::array<std::string_view, 1>{key1});
     builder.append("GET", std::array<std::string_view, 1>{key2});
 
-    auto result = co_await client.batchBorrowed(builder.encoded(), builder.size()).timeout(5s);
+    auto result = co_await client.batch_borrowed(builder.encoded(), builder.size()).timeout(5s);
     if (!result || !result.value() || result.value()->size() != 4) {
         finish(*state, false, "borrowed pipeline failed");
         co_return;
     }
-    if (!(*result.value())[0].isStatus() || (*result.value())[0].toStatus() != "OK") {
+    if (!(*result.value())[0].is_status() || (*result.value())[0].to_status() != "OK") {
         finish(*state, false, "borrowed pipeline SET #1 mismatch");
         co_return;
     }
-    if (!(*result.value())[1].isStatus() || (*result.value())[1].toStatus() != "OK") {
+    if (!(*result.value())[1].is_status() || (*result.value())[1].to_status() != "OK") {
         finish(*state, false, "borrowed pipeline SET #2 mismatch");
         co_return;
     }
-    if (!(*result.value())[2].isString() || (*result.value())[2].toString() != value1) {
+    if (!(*result.value())[2].is_string() || (*result.value())[2].to_string() != value1) {
         finish(*state, false, "borrowed pipeline GET #1 mismatch");
         co_return;
     }
-    if (!(*result.value())[3].isString() || (*result.value())[3].toString() != value2) {
+    if (!(*result.value())[3].is_string() || (*result.value())[3].to_string() != value2) {
         finish(*state, false, "borrowed pipeline GET #2 mismatch");
         co_return;
     }
@@ -82,15 +82,15 @@ Task<void> runBorrowedBatchSmoke(IOScheduler* scheduler, TestState* state)
 
 int main()
 {
-    if (const int skip_code = redis_test::requireIntegrationEnabledOrSkip("redis.t23.pipeline");
+    if (const int skip_code = redis_test::require_integration_enabled_or_skip("redis.t23.pipeline");
         skip_code != 0) {
         return skip_code;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "Failed to get IO scheduler\n";
         runtime.stop();
@@ -98,7 +98,7 @@ int main()
     }
 
     TestState state;
-    scheduleTask(scheduler, runBorrowedBatchSmoke(scheduler, &state));
+    schedule_task(scheduler, run_borrowed_batch_smoke(scheduler, &state));
 
     std::unique_lock<std::mutex> lock(state.mutex);
     const bool done = state.cv.wait_for(lock, 10s, [&state]() { return state.done; });

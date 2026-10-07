@@ -21,7 +21,7 @@ namespace galay::tracing {
 
 namespace {
 
-[[nodiscard]] spdlog::level::level_enum toSpdlogLevel(LogLevel level) noexcept {
+[[nodiscard]] spdlog::level::level_enum to_spdlog_level(LogLevel level) noexcept {
     switch (level) {
     case LogLevel::kTrace:
         return spdlog::level::trace;
@@ -39,15 +39,15 @@ namespace {
     return spdlog::level::info;
 }
 
-[[nodiscard]] std::string renderRecord(const LogRecord& record) {
+[[nodiscard]] std::string render_record(const LogRecord& record) {
     std::string line;
     line.append("level=");
-    line.append(logLevelName(record.level));
+    line.append(log_level_name(record.level));
     if (record.context.has_value()) {
         line.append(" trace_id=");
-        line.append(record.context->traceId().toHex());
+        line.append(record.context->trace_id().to_hex());
         line.append(" span_id=");
-        line.append(record.context->spanId().toHex());
+        line.append(record.context->span_id().to_hex());
     }
     line.append(" file=");
     line.append(record.source.file);
@@ -70,7 +70,7 @@ void SpdlogSink::write(const LogRecord& record) {
         return;
     }
 
-    m_logger->log(toSpdlogLevel(record.level), "{}", renderRecord(record));
+    m_logger->log(to_spdlog_level(record.level), "{}", render_record(record));
 }
 
 } // namespace galay::tracing

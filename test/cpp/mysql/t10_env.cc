@@ -55,19 +55,19 @@ int main()
     ScopedEnvOverride galay_password("GALAY_MYSQL_PASSWORD", "");
     ScopedEnvOverride mysql_password("MYSQL_PASSWORD", nullptr);
 
-    const auto example_cfg = mysql_example::loadDbExampleConfig();
+    const auto example_cfg = mysql_example::load_db_example_config();
     if (!require(example_cfg.password.empty(),
                  "example config must honor empty GALAY_MYSQL_PASSWORD")) {
         return 1;
     }
 
-    const auto benchmark_cfg = mysql_benchmark::loadDbBenchmarkConfig();
+    const auto benchmark_cfg = mysql_benchmark::load_db_benchmark_config();
     if (!require(benchmark_cfg.password.empty(),
                  "benchmark config must honor empty GALAY_MYSQL_PASSWORD")) {
         return 1;
     }
 
-    const auto test_cfg = mysql_test::loadDbTestConfig();
+    const auto test_cfg = mysql_test::load_db_test_config();
     if (!require(test_cfg.password.empty(),
                  "test config must honor empty GALAY_MYSQL_PASSWORD")) {
         return 1;

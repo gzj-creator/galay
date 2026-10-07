@@ -59,7 +59,7 @@ std::string Http2DataFrame::serialize() const
     std::string result;
     size_t payload_length = m_data.size();
 
-    if (isPadded()) {
+    if (is_padded()) {
         payload_length += 1 + m_pad_length;
     }
 
@@ -73,7 +73,7 @@ std::string Http2DataFrame::serialize() const
     size_t offset = kHttp2FrameHeaderLength;
 
     // Pad Length (如果有)
-    if (isPadded()) {
+    if (is_padded()) {
         result[offset++] = m_pad_length;
     }
 
@@ -82,19 +82,19 @@ std::string Http2DataFrame::serialize() const
     offset += m_data.size();
 
     // Padding
-    if (isPadded() && m_pad_length > 0) {
+    if (is_padded() && m_pad_length > 0) {
         std::memset(result.data() + offset, 0, m_pad_length);
     }
 
     return result;
 }
 
-Http2ErrorCode Http2DataFrame::parsePayload(const uint8_t* data, size_t length)
+Http2ErrorCode Http2DataFrame::parse_payload(const uint8_t* data, size_t length)
 {
     size_t offset = 0;
 
     // Pad Length
-    if (isPadded()) {
+    if (is_padded()) {
         if (length < 1) {
             return Http2ErrorCode::FrameSizeError;
         }
@@ -106,7 +106,7 @@ Http2ErrorCode Http2DataFrame::parsePayload(const uint8_t* data, size_t length)
     }
 
     // Data
-    size_t data_length = length - offset - (isPadded() ? m_pad_length : 0);
+    size_t data_length = length - offset - (is_padded() ? m_pad_length : 0);
     m_data.assign(reinterpret_cast<const char*>(data + offset), data_length);
 
     return Http2ErrorCode::NoError;
@@ -119,11 +119,11 @@ std::string Http2HeadersFrame::serialize() const
     std::string result;
     size_t payload_length = m_header_block.size();
 
-    if (hasPriority()) {
+    if (has_priority()) {
         payload_length += 5;  // E + Stream Dependency (4) + Weight (1)
     }
 
-    if (isPadded()) {
+    if (is_padded()) {
         payload_length += 1 + m_pad_length;
     }
 
@@ -136,12 +136,12 @@ std::string Http2HeadersFrame::serialize() const
     size_t offset = kHttp2FrameHeaderLength;
 
     // Pad Length
-    if (isPadded()) {
+    if (is_padded()) {
         result[offset++] = m_pad_length;
     }
 
     // Priority
-    if (hasPriority()) {
+    if (has_priority()) {
         uint32_t dep = m_stream_dependency;
         if (m_exclusive) {
             dep |= 0x80000000;
@@ -158,19 +158,19 @@ std::string Http2HeadersFrame::serialize() const
     offset += m_header_block.size();
 
     // Padding
-    if (isPadded() && m_pad_length > 0) {
+    if (is_padded() && m_pad_length > 0) {
         std::memset(result.data() + offset, 0, m_pad_length);
     }
 
     return result;
 }
 
-Http2ErrorCode Http2HeadersFrame::parsePayload(const uint8_t* data, size_t length)
+Http2ErrorCode Http2HeadersFrame::parse_payload(const uint8_t* data, size_t length)
 {
     size_t offset = 0;
 
     // Pad Length
-    if (isPadded()) {
+    if (is_padded()) {
         if (length < 1) {
             return Http2ErrorCode::FrameSizeError;
         }
@@ -178,7 +178,7 @@ Http2ErrorCode Http2HeadersFrame::parsePayload(const uint8_t* data, size_t lengt
     }
 
     // Priority
-    if (hasPriority()) {
+    if (has_priority()) {
         if (length - offset < 5) {
             return Http2ErrorCode::FrameSizeError;
         }
@@ -196,7 +196,7 @@ Http2ErrorCode Http2HeadersFrame::parsePayload(const uint8_t* data, size_t lengt
     }
 
     // 检查 padding
-    size_t padding = isPadded() ? m_pad_length : 0;
+    size_t padding = is_padded() ? m_pad_length : 0;
     if (offset + padding > length) {
         return Http2ErrorCode::ProtocolError;
     }
@@ -235,7 +235,7 @@ std::string Http2PriorityFrame::serialize() const
     return result;
 }
 
-Http2ErrorCode Http2PriorityFrame::parsePayload(const uint8_t* data, size_t length)
+Http2ErrorCode Http2PriorityFrame::parse_payload(const uint8_t* data, size_t length)
 {
     if (length != 5) {
         return Http2ErrorCode::FrameSizeError;
@@ -273,7 +273,7 @@ std::string Http2RstStreamFrame::serialize() const
     return result;
 }
 
-Http2ErrorCode Http2RstStreamFrame::parsePayload(const uint8_t* data, size_t length)
+Http2ErrorCode Http2RstStreamFrame::parse_payload(const uint8_t* data, size_t length)
 {
     if (length != 4) {
         return Http2ErrorCode::FrameSizeError;
@@ -295,7 +295,7 @@ std::string Http2SettingsFrame::serialize() const
 {
     std::string result;
 
-    if (isAck()) {
+    if (is_ack()) {
         // ACK 帧没有负载
         result.resize(kHttp2FrameHeaderLength);
         Http2FrameHeader header = m_header;
@@ -327,10 +327,10 @@ std::string Http2SettingsFrame::serialize() const
     return result;
 }
 
-Http2ErrorCode Http2SettingsFrame::parsePayload(const uint8_t* data, size_t length)
+Http2ErrorCode Http2SettingsFrame::parse_payload(const uint8_t* data, size_t length)
 {
     // ACK 帧必须没有负载
-    if (isAck()) {
+    if (is_ack()) {
         if (length != 0) {
             return Http2ErrorCode::FrameSizeError;
         }
@@ -368,7 +368,7 @@ std::string Http2PushPromiseFrame::serialize() const
     std::string result;
     size_t payload_length = 4 + m_header_block.size();  // Promised Stream ID + Header Block
 
-    if (isPadded()) {
+    if (is_padded()) {
         payload_length += 1 + m_pad_length;
     }
 
@@ -381,7 +381,7 @@ std::string Http2PushPromiseFrame::serialize() const
     size_t offset = kHttp2FrameHeaderLength;
 
     // Pad Length
-    if (isPadded()) {
+    if (is_padded()) {
         result[offset++] = m_pad_length;
     }
 
@@ -397,19 +397,19 @@ std::string Http2PushPromiseFrame::serialize() const
     offset += m_header_block.size();
 
     // Padding
-    if (isPadded() && m_pad_length > 0) {
+    if (is_padded() && m_pad_length > 0) {
         std::memset(result.data() + offset, 0, m_pad_length);
     }
 
     return result;
 }
 
-Http2ErrorCode Http2PushPromiseFrame::parsePayload(const uint8_t* data, size_t length)
+Http2ErrorCode Http2PushPromiseFrame::parse_payload(const uint8_t* data, size_t length)
 {
     size_t offset = 0;
 
     // Pad Length
-    if (isPadded()) {
+    if (is_padded()) {
         if (length < 1) {
             return Http2ErrorCode::FrameSizeError;
         }
@@ -428,7 +428,7 @@ Http2ErrorCode Http2PushPromiseFrame::parsePayload(const uint8_t* data, size_t l
     offset += 4;
 
     // 检查 padding
-    size_t padding = isPadded() ? m_pad_length : 0;
+    size_t padding = is_padded() ? m_pad_length : 0;
     if (offset + padding > length) {
         return Http2ErrorCode::ProtocolError;
     }
@@ -457,7 +457,7 @@ std::string Http2PingFrame::serialize() const
     return result;
 }
 
-Http2ErrorCode Http2PingFrame::parsePayload(const uint8_t* data, size_t length)
+Http2ErrorCode Http2PingFrame::parse_payload(const uint8_t* data, size_t length)
 {
     if (length != 8) {
         return Http2ErrorCode::FrameSizeError;
@@ -506,7 +506,7 @@ std::string Http2GoAwayFrame::serialize() const
     return result;
 }
 
-Http2ErrorCode Http2GoAwayFrame::parsePayload(const uint8_t* data, size_t length)
+Http2ErrorCode Http2GoAwayFrame::parse_payload(const uint8_t* data, size_t length)
 {
     if (length < 8) {
         return Http2ErrorCode::FrameSizeError;
@@ -554,7 +554,7 @@ std::string Http2WindowUpdateFrame::serialize() const
     return result;
 }
 
-Http2ErrorCode Http2WindowUpdateFrame::parsePayload(const uint8_t* data, size_t length)
+Http2ErrorCode Http2WindowUpdateFrame::parse_payload(const uint8_t* data, size_t length)
 {
     if (length != 4) {
         return Http2ErrorCode::FrameSizeError;
@@ -588,7 +588,7 @@ std::string Http2ContinuationFrame::serialize() const
     return result;
 }
 
-Http2ErrorCode Http2ContinuationFrame::parsePayload(const uint8_t* data, size_t length)
+Http2ErrorCode Http2ContinuationFrame::parse_payload(const uint8_t* data, size_t length)
 {
     m_header_block.assign(reinterpret_cast<const char*>(data), length);
     return Http2ErrorCode::NoError;
@@ -596,12 +596,12 @@ Http2ErrorCode Http2ContinuationFrame::parsePayload(const uint8_t* data, size_t 
 
 // ==================== Http2FrameParser ====================
 
-Http2FrameHeader Http2FrameParser::parseHeader(const uint8_t* data)
+Http2FrameHeader Http2FrameParser::parse_header(const uint8_t* data)
 {
     return Http2FrameHeader::deserialize(data);
 }
 
-Http2Frame::uptr Http2FrameParser::createFrame(Http2FrameType type)
+Http2Frame::uptr Http2FrameParser::create_frame(Http2FrameType type)
 {
     switch (type) {
         case Http2FrameType::Data:
@@ -629,19 +629,19 @@ Http2Frame::uptr Http2FrameParser::createFrame(Http2FrameType type)
     }
 }
 
-std::expected<Http2Frame::uptr, Http2ErrorCode> Http2FrameParser::parseFrame(const uint8_t* data, size_t length)
+std::expected<Http2Frame::uptr, Http2ErrorCode> Http2FrameParser::parse_frame(const uint8_t* data, size_t length)
 {
     if (length < kHttp2FrameHeaderLength) {
         return std::unexpected(Http2ErrorCode::FrameSizeError);
     }
 
-    Http2FrameHeader header = parseHeader(data);
+    Http2FrameHeader header = parse_header(data);
 
     if (length < kHttp2FrameHeaderLength + header.length) {
         return std::unexpected(Http2ErrorCode::FrameSizeError);
     }
 
-    auto frame = createFrame(header.type);
+    auto frame = create_frame(header.type);
     if (!frame) {
         // 未知帧类型，忽略
         return std::unexpected(Http2ErrorCode::ProtocolError);
@@ -649,7 +649,7 @@ std::expected<Http2Frame::uptr, Http2ErrorCode> Http2FrameParser::parseFrame(con
 
     frame->header() = header;
 
-    Http2ErrorCode error = frame->parsePayload(data + kHttp2FrameHeaderLength, header.length);
+    Http2ErrorCode error = frame->parse_payload(data + kHttp2FrameHeaderLength, header.length);
     if (error != Http2ErrorCode::NoError) {
         return std::unexpected(error);
     }
@@ -664,7 +664,7 @@ std::string Http2FrameCodec::encode(const Http2Frame& frame)
 
 std::expected<Http2Frame::uptr, Http2ErrorCode> Http2FrameCodec::decode(std::string_view bytes)
 {
-    return Http2FrameParser::parseFrame(
+    return Http2FrameParser::parse_frame(
         reinterpret_cast<const uint8_t*>(bytes.data()),
         bytes.size());
 }

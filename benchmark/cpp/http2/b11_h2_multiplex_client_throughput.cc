@@ -42,17 +42,17 @@ struct Stats {
 static Stats g;
 
 struct BatchBarrier {
-    void addOne() {
+    void add_one() {
         remaining.fetch_add(1, std::memory_order_relaxed);
     }
 
-    void completeOne() {
+    void complete_one() {
         if (remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             done.notify();
         }
     }
 
-    bool hasPending() const {
+    bool has_pending() const {
         return remaining.load(std::memory_order_acquire) > 0;
     }
 
@@ -68,7 +68,7 @@ struct BatchBarrierGuard {
 
     ~BatchBarrierGuard() {
         if (m_barrier) {
-            m_barrier->completeOne();
+            m_barrier->complete_one();
         }
     }
 
@@ -79,12 +79,12 @@ private:
 /**
  * 单个 stream 的响应处理协程（由 spawn 并发运行）
  */
-Task<void> handleResponse(Http2Stream::ptr stream, std::shared_ptr<BatchBarrier> barrier) {
+Task<void> handle_response(Http2Stream::ptr stream, std::shared_ptr<BatchBarrier> barrier) {
     BatchBarrierGuard guard(std::move(barrier));
 
     bool finished = false;
     while (!finished) {
-        auto batch_result = co_await stream->getFrames(16);
+        auto batch_result = co_await stream->get_frames(16);
         if (!batch_result) {
             g.fail++;
             co_return;
@@ -95,7 +95,7 @@ Task<void> handleResponse(Http2Stream::ptr stream, std::shared_ptr<BatchBarrier>
                 g.fail++;
                 co_return;
             }
-            if ((frame->isHeaders() || frame->isData()) && frame->isEndStream()) {
+            if ((frame->is_headers() || frame->is_data()) && frame->is_end_stream()) {
                 finished = true;
                 break;
             }
@@ -116,7 +116,7 @@ Task<void> handleResponse(Http2Stream::ptr stream, std::shared_ptr<BatchBarrier>
  *   每轮在同一连接上并发发射 streams_per_conn 个 stream，
  *   等待全部完成后进入下一轮
  */
-Task<void> runConnection(std::shared_ptr<H2cClient<>> client,
+Task<void> run_connection(std::shared_ptr<H2cClient<>> client,
                          int id,
                          const std::string& host, uint16_t port,
                          int streams_per_conn, int rounds) {
@@ -137,7 +137,7 @@ Task<void> runConnection(std::shared_ptr<H2cClient<>> client,
     auto upgrade_result = co_await client->upgrade("/");
     if (!upgrade_result) {
         if (g.upgrade_err.fetch_add(1) < 3) {
-            std::cerr << "[conn " << id << "] upgrade failed: " << upgrade_result.error().toString() << "\n";
+            std::cerr << "[conn " << id << "] upgrade failed: " << upgrade_result.error().to_string() << "\n";
         }
         g.fail += static_cast<int64_t>(streams_per_conn) * rounds;
         co_await client->shutdown();
@@ -146,7 +146,7 @@ Task<void> runConnection(std::shared_ptr<H2cClient<>> client,
     }
 
     g.connected++;
-    auto* mgr = client->getConn()->streamManager();
+    auto* mgr = client->get_conn()->stream_manager();
     std::string authority = host + ":" + std::to_string(port);
     const std::string kContentLength = std::to_string(kPayload.size());
 
@@ -159,21 +159,21 @@ Task<void> runConnection(std::shared_ptr<H2cClient<>> client,
     request_headers.emplace_back("content-type", "text/plain");
     request_headers.emplace_back("content-length", kContentLength);
 
-    for (int r = 0; r < rounds && mgr->isRunning(); r++) {
+    for (int r = 0; r < rounds && mgr->is_running(); r++) {
         // 并发发射一批 stream
         auto barrier = std::make_shared<BatchBarrier>();
 
         for (int s = 0; s < streams_per_conn; s++) {
-            auto stream = mgr->allocateStream();
-            stream->sendHeaders(request_headers, false, true);
-            stream->sendData(kPayload, true);
+            auto stream = mgr->allocate_stream();
+            stream->send_headers(request_headers, false, true);
+            stream->send_data(kPayload, true);
 
-            barrier->addOne();
-            co_await startDetachedTask(handleResponse(stream, barrier));
+            barrier->add_one();
+            co_await start_detached_task(handle_response(stream, barrier));
         }
 
         // 等待本轮所有 stream 完成
-        if (barrier->hasPending()) {
+        if (barrier->has_pending()) {
             co_await barrier->done.wait();
         }
     }
@@ -183,7 +183,7 @@ Task<void> runConnection(std::shared_ptr<H2cClient<>> client,
     co_return;
 }
 
-void printResults(int connections, int streams_per_conn, int rounds,
+void print_results(int connections, int streams_per_conn, int rounds,
                   std::chrono::milliseconds elapsed) {
     int64_t total = g.success.load() + g.fail.load();
     double sec = elapsed.count() / 1000.0;
@@ -204,7 +204,7 @@ void printResults(int connections, int streams_per_conn, int rounds,
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -239,7 +239,7 @@ int main(int argc, char* argv[]) {
     std::cout << "IO 调度器线程: " << io_schedulers << "\n";
     std::cout << "========================================\n\n";
 
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(io_schedulers).parallelSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().io_scheduler_count(io_schedulers).parallel_scheduler_count(0).build();
     rt.start();
 
     auto t0 = std::chrono::steady_clock::now();
@@ -248,10 +248,10 @@ int main(int argc, char* argv[]) {
     client_pool.reserve(connections);
 
     for (int i = 0; i < connections; i++) {
-        auto client = std::make_shared<H2cClient<>>(H2cClientBuilder().buildConfig());
+        auto client = std::make_shared<H2cClient<>>(H2cClientBuilder().build_config());
         client_pool.push_back(client);
-        auto* sched = rt.getNextIOScheduler();
-        scheduleTask(sched, runConnection(std::move(client), i, host, port, streams, rounds));
+        auto* sched = rt.get_next_io_scheduler();
+        schedule_task(sched, run_connection(std::move(client), i, host, port, streams, rounds));
     }
 
     std::cout << "压测进行中";
@@ -296,7 +296,7 @@ int main(int argc, char* argv[]) {
 
     rt.stop();
 
-    printResults(connections, streams, rounds, elapsed);
+    print_results(connections, streams, rounds, elapsed);
 
     return 0;
 }

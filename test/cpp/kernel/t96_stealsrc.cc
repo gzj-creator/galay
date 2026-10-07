@@ -22,11 +22,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -34,31 +34,31 @@ std::string readAll(const std::filesystem::path& path) {
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
-bool containsText(const std::string& haystack, const std::string& needle) {
+bool contains_text(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
-void requireContains(std::vector<std::string>& failures,
+void require_contains(std::vector<std::string>& failures,
                      const std::filesystem::path& path,
                      const std::string& content,
                      const std::string& needle,
                      const std::string& message) {
-    if (!containsText(content, needle)) {
+    if (!contains_text(content, needle)) {
         failures.push_back(path.string() + ": " + message);
     }
 }
 
-void requireNotContains(std::vector<std::string>& failures,
+void require_not_contains(std::vector<std::string>& failures,
                         const std::filesystem::path& path,
                         const std::string& content,
                         const std::string& needle,
                         const std::string& message) {
-    if (containsText(content, needle)) {
+    if (contains_text(content, needle)) {
         failures.push_back(path.string() + ": " + message);
     }
 }
 
-std::string extractSection(const std::string& content,
+std::string extract_section(const std::string& content,
                            const std::string& begin_marker,
                            const std::string& end_marker) {
     const auto begin_pos = content.find(begin_marker);
@@ -72,7 +72,7 @@ std::string extractSection(const std::string& content,
     return content.substr(begin_pos, end_pos + end_marker.size() - begin_pos);
 }
 
-std::string extractBracedSection(const std::string& content,
+std::string extract_braced_section(const std::string& content,
                                  const std::string& begin_marker) {
     const auto begin_pos = content.find(begin_marker);
     if (begin_pos == std::string::npos) {
@@ -114,7 +114,7 @@ std::string extractBracedSection(const std::string& content,
     return {};
 }
 
-bool closeDelimiter(const std::string& section, const std::string& delimiter) {
+bool close_delimiter(const std::string& section, const std::string& delimiter) {
     return section.find(delimiter) != std::string::npos;
 }
 
@@ -127,7 +127,7 @@ std::string trim(const std::string& input) {
     return input.substr(begin, end - begin + 1);
 }
 
-bool hasStealDeclaration(const std::string& section) {
+bool has_steal_declaration(const std::string& section) {
     std::istringstream stream(section);
     std::string line;
     while (std::getline(stream, line)) {
@@ -136,7 +136,7 @@ bool hasStealDeclaration(const std::string& section) {
         if (sanitized.empty()) {
             continue;
         }
-        if (!containsText(sanitized, "steal")) {
+        if (!contains_text(sanitized, "steal")) {
             continue;
         }
         if (sanitized.find('(') == std::string::npos) {
@@ -149,19 +149,19 @@ bool hasStealDeclaration(const std::string& section) {
     return false;
 }
 
-void requireRoutesThroughSharedLoop(std::vector<std::string>& failures,
+void require_routes_through_shared_loop(std::vector<std::string>& failures,
                                     const std::filesystem::path& scheduler_path,
                                     const std::string& scheduler_name) {
-    const std::string scheduler_content = readAll(scheduler_path);
+    const std::string scheduler_content = read_all(scheduler_path);
     if (scheduler_content.empty()) {
         failures.push_back(scheduler_path.string() + ": failed to read " + scheduler_name);
         return;
     }
-    requireContains(failures,
+    require_contains(failures,
                     scheduler_path,
                     scheduler_content,
-                    "detail::runIOSchedulerEventLoop(",
-                    "expected " + scheduler_name + " to route through runIOSchedulerEventLoop");
+                    "detail::run_io_scheduler_event_loop(",
+                    "expected " + scheduler_name + " to route through run_io_scheduler_event_loop");
 }
 
 }  // namespace
@@ -169,58 +169,58 @@ void requireRoutesThroughSharedLoop(std::vector<std::string>& failures,
 // This source-case builds on HEAD, but the red state is triggered during execution
 // until the work-stealing wiring exists.
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto ioscheduler = root / "galay-kernel" / "core" / "io_ready_queue.hpp";
 
     std::vector<std::string> failures;
-    const std::string ioscheduler_content = readAll(ioscheduler);
+    const std::string ioscheduler_content = read_all(ioscheduler);
 
     if (ioscheduler_content.empty()) {
         failures.push_back(ioscheduler.string() + ": failed to read io_scheduler.hpp");
     } else {
         const auto worker_section =
-            extractBracedSection(ioscheduler_content, "struct IOReadyQueue");
+            extract_braced_section(ioscheduler_content, "struct IOReadyQueue");
         if (worker_section.empty()) {
             failures.push_back(ioscheduler.string() +
                                ": failed to isolate IOReadyQueue for inspection");
         } else {
-            requireNotContains(failures,
+            require_not_contains(failures,
                                ioscheduler,
                                worker_section,
                                "std::deque<TaskRef> local_queue",
                                "expected IOReadyQueue to drop std::deque local_queue in favor of a ring");
 
-            requireContains(failures,
+            require_contains(failures,
                             ioscheduler,
                             worker_section,
                             "ChaseLevTaskRing",
                             "expected IOReadyQueue to own a ChaseLevTaskRing instance");
 
-            requireContains(failures,
+            require_contains(failures,
                             ioscheduler,
                             worker_section,
                             "local_ring.push_back",
                             "expected owner path to push tasks onto the ring");
 
-            requireContains(failures,
+            require_contains(failures,
                             ioscheduler,
                             worker_section,
                             "local_ring.pop_back",
                             "expected owner path to pop tasks from the ring");
 
-            requireContains(failures,
+            require_contains(failures,
                             ioscheduler,
                             worker_section,
                             "steal_front",
                             "expected ChaseLevTaskRing to expose a front-steal entry");
 
-            if (!hasStealDeclaration(worker_section)) {
+            if (!has_steal_declaration(worker_section)) {
                 failures.push_back(ioscheduler.string() +
                                    ": expected IOReadyQueue to declare a stealing entry or helper");
             }
         }
 
-        requireContains(failures,
+        require_contains(failures,
                         ioscheduler,
                         ioscheduler_content,
                         "kCapacity = 256",
@@ -228,30 +228,30 @@ int main() {
     }
 
     const auto event_loop = root / "galay-kernel" / "core" / "sched_loop.hpp";
-    const std::string event_loop_content = readAll(event_loop);
+    const std::string event_loop_content = read_all(event_loop);
     if (event_loop_content.empty()) {
         failures.push_back(event_loop.string() + ": failed to read sched_loop.hpp");
     } else {
-        requireContains(failures,
+        require_contains(failures,
                         event_loop,
                         event_loop_content,
-                        "core.hasPendingWork()",
-                        "expected event loop to guard stealing behind hasPendingWork()");
-        requireContains(failures,
+                        "core.has_pending_work()",
+                        "expected event loop to guard stealing behind has_pending_work()");
+        require_contains(failures,
                         event_loop,
                         event_loop_content,
-                        "core.trySteal()",
+                        "core.try_steal()",
                         "expected event loop to attempt stealing before polling");
-        requireContains(failures,
+        require_contains(failures,
                         event_loop,
                         event_loop_content,
                         "poll_fn()",
                         "expected event loop to still call poll_fn() when no steal succeeds");
 
-        const auto body_start = event_loop_content.find("void runIOSchedulerEventLoop");
+        const auto body_start = event_loop_content.find("void run_io_scheduler_event_loop");
         if (body_start == std::string::npos) {
             failures.push_back(event_loop.string() +
-                               ": failed to locate runIOSchedulerEventLoop body for ordering checks");
+                               ": failed to locate run_io_scheduler_event_loop body for ordering checks");
         } else {
             const std::string body_end_marker = "\n}  // namespace detail";
             const auto body_end = event_loop_content.find(body_end_marker, body_start);
@@ -260,25 +260,25 @@ int main() {
                     ? event_loop_content.substr(body_start, body_end - body_start)
                     : event_loop_content.substr(body_start);
 
-            const auto has_pending_pos = event_loop_body.find("core.hasPendingWork()");
-            const auto try_steal_pos = event_loop_body.find("core.trySteal()");
+            const auto has_pending_pos = event_loop_body.find("core.has_pending_work()");
+            const auto try_steal_pos = event_loop_body.find("core.try_steal()");
             const auto poll_pos = event_loop_body.find("poll_fn()");
             if (try_steal_pos != std::string::npos && has_pending_pos != std::string::npos &&
                 try_steal_pos <= has_pending_pos) {
                 failures.push_back(event_loop.string() +
-                                   ": expected core.trySteal() to run after the hasPendingWork() guard");
+                                   ": expected core.try_steal() to run after the has_pending_work() guard");
             }
             if (try_steal_pos != std::string::npos && poll_pos != std::string::npos &&
                 poll_pos <= try_steal_pos) {
                 failures.push_back(event_loop.string() +
-                                   ": expected core.trySteal() to run before poll_fn()");
+                                   ": expected core.try_steal() to run before poll_fn()");
             }
         }
     }
 
-    requireRoutesThroughSharedLoop(failures,
+    require_routes_through_shared_loop(failures,
                                    root / "galay-kernel" / "core" / "io_scheduler_base.hpp",
-                                   "IOSchedulerBase::eventLoop");
+                                   "IOSchedulerBase::event_loop");
 
     if (!failures.empty()) {
         for (const auto& failure : failures) {

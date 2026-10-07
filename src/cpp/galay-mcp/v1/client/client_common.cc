@@ -2,59 +2,59 @@
 
 namespace galay::mcp::detail {
 
-const std::string& emptyObjectString() {
+const std::string& empty_object_string() {
     static const std::string kEmptyObject = "{}";
     return kEmptyObject;
 }
 
-std::expected<InitializeResult, McpError> parseInitializeResult(std::string_view body) {
+std::expected<InitializeResult, McpError> parse_initialize_result(std::string_view body) {
     auto docExp = JsonDocument::parse(body);
     if (!docExp) {
-        return std::unexpected(McpError::parseError(docExp.error().details()));
+        return std::unexpected(McpError::parse_error(docExp.error().details()));
     }
 
-    auto initExp = InitializeResult::fromJson(docExp.value().root());
+    auto initExp = InitializeResult::from_json(docExp.value().root());
     if (!initExp) {
-        return std::unexpected(McpError::initializationFailed(initExp.error().message()));
+        return std::unexpected(McpError::initialization_failed(initExp.error().message()));
     }
 
     return initExp.value();
 }
 
-std::expected<std::string, McpError> parseToolCallResult(std::string_view body) {
+std::expected<std::string, McpError> parse_tool_call_result(std::string_view body) {
     auto docExp = JsonDocument::parse(body);
     if (!docExp) {
-        return std::unexpected(McpError::parseError(docExp.error().details()));
+        return std::unexpected(McpError::parse_error(docExp.error().details()));
     }
 
-    auto callExp = ToolCallResult::fromJson(docExp.value().root());
+    auto callExp = ToolCallResult::from_json(docExp.value().root());
     if (!callExp) {
-        return std::unexpected(McpError::parseError(callExp.error().message()));
+        return std::unexpected(McpError::parse_error(callExp.error().message()));
     }
 
     const auto& callResult = callExp.value();
     if (callResult.isError) {
-        return std::unexpected(McpError::toolExecutionFailed("Tool returned error"));
+        return std::unexpected(McpError::tool_execution_failed("Tool returned error"));
     }
     if (callResult.content.empty()) {
-        return emptyObjectString();
+        return empty_object_string();
     }
     if (callResult.content[0].type == ContentType::Text) {
         return callResult.content[0].text;
     }
-    return emptyObjectString();
+    return empty_object_string();
 }
 
-std::expected<std::string, McpError> parseFirstTextContent(std::string_view body,
+std::expected<std::string, McpError> parse_first_text_content(std::string_view body,
                                                            const char* fieldName) {
     auto docExp = JsonDocument::parse(body);
     if (!docExp) {
-        return std::unexpected(McpError::parseError(docExp.error().details()));
+        return std::unexpected(McpError::parse_error(docExp.error().details()));
     }
 
     json::Json obj = docExp.value().root();
     if (!obj.is_object()) {
-        return std::unexpected(McpError::parseError("Expected JSON object"));
+        return std::unexpected(McpError::parse_error("Expected JSON object"));
     }
 
     json::Json arr = obj.at(fieldName);
@@ -64,9 +64,9 @@ std::expected<std::string, McpError> parseFirstTextContent(std::string_view body
 
     for (size_t i = 0; i < arr.size(); ++i) {
         const json::Json item = arr.at(i);
-        auto contentExp = Content::fromJson(item);
+        auto contentExp = Content::from_json(item);
         if (!contentExp) {
-            return std::unexpected(McpError::parseError(contentExp.error().message()));
+            return std::unexpected(McpError::parse_error(contentExp.error().message()));
         }
         if (contentExp.value().type == ContentType::Text) {
             return contentExp.value().text;

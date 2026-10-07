@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 为 RPC 仓库内的读写 facade 提供共享的 state-machine helper，
- *          让上层 awaitable 通过 `AwaitableBuilder::fromStateMachine(...)`
+ *          让上层 awaitable 通过 `AwaitableBuilder::from_state_machine(...)`
  *          暴露，而不是继续继承手写 IO awaitable。
  */
 
@@ -37,7 +37,7 @@ namespace detail {
  * @param iovecs iovec数组引用
  * @param consumed 已消耗的字节数
  */
-inline void consumeWritevIovecs(std::vector<iovec>& iovecs, size_t consumed)
+inline void consume_writev_iovecs(std::vector<iovec>& iovecs, size_t consumed)
 {
     if (consumed == 0 || iovecs.empty()) {
         return;
@@ -74,11 +74,11 @@ inline void consumeWritevIovecs(std::vector<iovec>& iovecs, size_t consumed)
  * @return 是否有可写空间
  */
 template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
-inline bool prepareRingBufferReadWindow(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
+inline bool prepare_ring_buffer_read_window(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                                         std::array<struct iovec, 2>& read_iovecs,
                                         size_t& read_iov_count)
 {
-    read_iov_count = ring_buffer.getWriteIovecs(read_iovecs);
+    read_iov_count = ring_buffer.get_write_iovecs(read_iovecs);
     size_t writable = 0;
     for (size_t i = 0; i < read_iov_count; ++i) {
         writable += read_iovecs[i].iov_len;
@@ -92,7 +92,7 @@ inline bool prepareRingBufferReadWindow(RingBuffer<Strategy, std::dynamic_extent
  * @param default_code 默认RPC错误码
  * @return 映射后的RPC错误
  */
-inline RpcError mapRpcReadError(const IOError& io_error,
+inline RpcError map_rpc_read_error(const IOError& io_error,
                                 RpcErrorCode default_code = RpcErrorCode::INTERNAL_ERROR)
 {
     if (IOError::contains(io_error.code(), kDisconnectError)) {
@@ -126,9 +126,9 @@ public:
     }
 
     /// @brief 准备读取窗口，返回是否成功
-    bool prepareReadWindow()
+    bool prepare_read_window()
     {
-        if (!prepareRingBufferReadWindow(*m_ring_buffer, m_read_iovecs, m_read_iov_count)) {
+        if (!prepare_ring_buffer_read_window(*m_ring_buffer, m_read_iovecs, m_read_iov_count)) {
             m_error.emplace(RpcErrorCode::INTERNAL_ERROR, "No writable ring buffer space");
             return false;
         }
@@ -136,30 +136,30 @@ public:
     }
 
     /// @brief 获取接收iovec数组指针
-    const struct iovec* recvIovecsData() const { return m_read_iovecs.data(); }
+    const struct iovec* recv_iovecs_data() const { return m_read_iovecs.data(); }
     /// @brief 获取接收iovec数量
-    size_t recvIovecsCount() const { return m_read_iov_count; }
+    size_t recv_iovecs_count() const { return m_read_iov_count; }
 
     /// @brief 设置接收错误
-    void setRecvError(const IOError& io_error)
+    void set_recv_error(const IOError& io_error)
     {
-        m_error = mapRpcReadError(io_error);
+        m_error = map_rpc_read_error(io_error);
     }
 
     /// @brief 处理对端关闭事件
-    void onPeerClosed()
+    void on_peer_closed()
     {
         m_error.emplace(RpcErrorCode::CONNECTION_CLOSED, "Connection closed");
     }
 
     /// @brief 处理接收到的字节数
-    void onBytesReceived(size_t bytes_read)
+    void on_bytes_received(size_t bytes_read)
     {
         m_ring_buffer->produce(bytes_read);
     }
 
     /// @brief 取出最终结果
-    ResultType takeResult()
+    ResultType take_result()
     {
         if (m_error.has_value()) {
             return std::unexpected(std::move(*m_error));
@@ -169,10 +169,10 @@ public:
 
 protected:
     /// @brief 获取环形缓冲区引用
-    RingBufferType& ringBuffer() { return *m_ring_buffer; }
+    RingBufferType& ring_buffer() { return *m_ring_buffer; }
 
     /// @brief 设置读取错误
-    void setReadError(RpcError error)
+    void set_read_error(RpcError error)
     {
         m_error = std::move(error);
     }
@@ -207,42 +207,42 @@ public:
     ~RpcWriteStateBase() = default;
 
     /// @brief 判断写入是否完成（出错或所有iovec已消耗）
-    bool isComplete() const
+    bool is_complete() const
     {
         return m_error.has_value() || m_iovecs.empty();
     }
 
     /// @brief 准备写入iovec（默认无额外准备）
-    bool prepareWriteIovecs()
+    bool prepare_write_iovecs()
     {
         return true;
     }
 
     /// @brief 获取写入iovec数组指针
-    const struct iovec* writeIovecsData() const { return m_iovecs.data(); }
+    const struct iovec* write_iovecs_data() const { return m_iovecs.data(); }
     /// @brief 获取写入iovec数量
-    size_t writeIovecsCount() const { return m_iovecs.size(); }
+    size_t write_iovecs_count() const { return m_iovecs.size(); }
 
     /// @brief 处理已写入的字节数
-    void onBytesWritten(size_t bytes_written)
+    void on_bytes_written(size_t bytes_written)
     {
-        consumeWritevIovecs(m_iovecs, bytes_written);
+        consume_writev_iovecs(m_iovecs, bytes_written);
     }
 
     /// @brief 设置发送错误
-    void setSendError(const IOError& io_error)
+    void set_send_error(const IOError& io_error)
     {
         m_error = RpcError::from(io_error, RpcErrorCode::INTERNAL_ERROR);
     }
 
     /// @brief 处理零字节写入（发送失败）
-    void onZeroWrite()
+    void on_zero_write()
     {
         m_error = RpcError::from(IOError(kSendFailed, 0), RpcErrorCode::INTERNAL_ERROR);
     }
 
     /// @brief 取出最终结果
-    ResultType takeResult()
+    ResultType take_result()
     {
         if (m_error.has_value()) {
             return std::unexpected(std::move(*m_error));
@@ -252,10 +252,10 @@ public:
 
 protected:
     /// @brief 获取可修改的iovec数组引用
-    std::vector<struct iovec>& mutableIovecs() { return m_iovecs; }
+    std::vector<struct iovec>& mutable_iovecs() { return m_iovecs; }
 
     /// @brief 设置写入错误
-    void setWriteError(RpcError error)
+    void set_write_error(RpcError error)
     {
         m_error = std::move(error);
     }
@@ -281,7 +281,7 @@ public:
         : m_data(std::move(data))
     {
         if (!m_data.empty()) {
-            mutableIovecs().push_back(iovec{m_data.data(), m_data.size()});
+            mutable_iovecs().push_back(iovec{m_data.data(), m_data.size()});
         }
     }
 
@@ -325,41 +325,41 @@ struct RpcRingBufferReadMachine
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (m_state->parseFromRingBuffer()) {
-            m_result = m_state->takeResult();
+        if (m_state->parse_from_ring_buffer()) {
+            m_result = m_state->take_result();
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (!m_state->prepareReadWindow()) {
-            m_result = m_state->takeResult();
+        if (!m_state->prepare_read_window()) {
+            m_result = m_state->take_result();
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        return MachineAction<result_type>::waitReadv(
-            m_state->recvIovecsData(),
-            m_state->recvIovecsCount());
+        return MachineAction<result_type>::wait_readv(
+            m_state->recv_iovecs_data(),
+            m_state->recv_iovecs_count());
     }
 
     /// @brief 处理readv完成事件
-    void onRead(std::expected<size_t, IOError> result)
+    void on_read(std::expected<size_t, IOError> result)
     {
         if (!result.has_value()) {
-            m_state->setRecvError(result.error());
-            m_result = m_state->takeResult();
+            m_state->set_recv_error(result.error());
+            m_result = m_state->take_result();
             return;
         }
 
         if (result.value() == 0) {
-            m_state->onPeerClosed();
-            m_result = m_state->takeResult();
+            m_state->on_peer_closed();
+            m_result = m_state->take_result();
             return;
         }
 
-        m_state->onBytesReceived(result.value());
+        m_state->on_bytes_received(result.value());
     }
 
     /// @brief 写入完成回调（读取状态机中无操作）
-    void onWrite(std::expected<size_t, IOError>)
+    void on_write(std::expected<size_t, IOError>)
     {
     }
 
@@ -396,44 +396,44 @@ struct RpcWritevMachine
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (m_state->isComplete()) {
-            m_result = m_state->takeResult();
+        if (m_state->is_complete()) {
+            m_result = m_state->take_result();
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (!m_state->prepareWriteIovecs()) {
-            m_result = m_state->takeResult();
+        if (!m_state->prepare_write_iovecs()) {
+            m_result = m_state->take_result();
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        return MachineAction<result_type>::waitWritev(
-            m_state->writeIovecsData(),
-            m_state->writeIovecsCount());
+        return MachineAction<result_type>::wait_writev(
+            m_state->write_iovecs_data(),
+            m_state->write_iovecs_count());
     }
 
     /// @brief 读取完成回调（写入状态机中无操作）
-    void onRead(std::expected<size_t, IOError>)
+    void on_read(std::expected<size_t, IOError>)
     {
     }
 
     /// @brief 处理writev完成事件
-    void onWrite(std::expected<size_t, IOError> result)
+    void on_write(std::expected<size_t, IOError> result)
     {
         if (!result.has_value()) {
-            m_state->setSendError(result.error());
-            m_result = m_state->takeResult();
+            m_state->set_send_error(result.error());
+            m_result = m_state->take_result();
             return;
         }
 
         if (result.value() == 0) {
-            m_state->onZeroWrite();
-            m_result = m_state->takeResult();
+            m_state->on_zero_write();
+            m_result = m_state->take_result();
             return;
         }
 
-        m_state->onBytesWritten(result.value());
-        if (m_state->isComplete()) {
-            m_result = m_state->takeResult();
+        m_state->on_bytes_written(result.value());
+        if (m_state->is_complete()) {
+            m_result = m_state->take_result();
         }
     }
 

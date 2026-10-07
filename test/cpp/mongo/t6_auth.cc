@@ -30,32 +30,32 @@ struct AsyncClientConfig
     AsyncMongoConfig async;
 };
 
-void setFailure(AsyncCredentialState* state, std::string message)
+void set_failure(AsyncCredentialState* state, std::string message)
 {
     state->ok.store(false, std::memory_order_relaxed);
     state->error = std::move(message);
     state->done.store(true, std::memory_order_release);
 }
 
-Task<void> runAsyncCredentialCase(IOScheduler* scheduler,
+Task<void> run_async_credential_case(IOScheduler* scheduler,
                         AsyncCredentialState* state,
                         AsyncClientConfig cfg)
 {
     auto client = AsyncMongoClientBuilder().scheduler(scheduler).config(cfg.async).build();
 
     const std::expected<bool, MongoError> connected =
-        mongo_test::unwrapMongoTaskResult(co_await client.connect(cfg.mongo),
+        mongo_test::unwrap_mongo_task_result(co_await client.connect(cfg.mongo),
                                           MONGO_ERROR_CONNECTION);
     if (!connected) {
-        setFailure(state, "async connect failed: " + connected.error().message());
+        set_failure(state, "async connect failed: " + connected.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> ping =
-        mongo_test::unwrapMongoTaskResult(co_await client.ping(cfg.mongo.database),
+        mongo_test::unwrap_mongo_task_result(co_await client.ping(cfg.mongo.database),
                                           MONGO_ERROR_COMMAND);
     if (!ping) {
-        setFailure(state, "async ping failed: " + ping.error().message());
+        set_failure(state, "async ping failed: " + ping.error().message());
         co_return;
     }
 
@@ -69,8 +69,8 @@ int main()
 {
     std::cout << "=== T6: Auth Compatibility Tests (Sync + Async) ===" << std::endl;
 
-    const auto test_cfg = mongo_test::loadMongoTestConfig();
-    mongo_test::printMongoTestConfig(test_cfg);
+    const auto test_cfg = mongo_test::load_mongo_test_config();
+    mongo_test::print_mongo_test_config(test_cfg);
 
     const bool has_user = !test_cfg.username.empty();
     const bool has_password = !test_cfg.password.empty();
@@ -87,7 +87,7 @@ int main()
         return 1;
     }
 
-    const auto cfg = mongo_test::toMongoConfig(test_cfg);
+    const auto cfg = mongo_test::to_mongo_config(test_cfg);
 
     MongoClient session;
     auto sync_connected = session.connect(cfg);
@@ -107,7 +107,7 @@ int main()
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         std::cerr << "FAIL: no scheduler available" << std::endl;
         runtime.stop();
@@ -115,10 +115,10 @@ int main()
     }
 
     AsyncCredentialState state;
-    if (!scheduleTask(scheduler,
-                      runAsyncCredentialCase(scheduler,
+    if (!schedule_task(scheduler,
+                      run_async_credential_case(scheduler,
                                    &state,
-                                   AsyncClientConfig{cfg, mongo_test::loadAsyncMongoTestConfig()}))) {
+                                   AsyncClientConfig{cfg, mongo_test::load_async_mongo_test_config()}))) {
         std::cerr << "FAIL: failed to schedule async auth task" << std::endl;
         runtime.stop();
         return 1;

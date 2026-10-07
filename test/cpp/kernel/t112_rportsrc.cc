@@ -2,7 +2,7 @@
  * @file t112_rportsrc.cc
  * @brief 用途：锁定 benchmark server 侧的 SO_REUSEPORT 多 acceptor 结构。
  * 关键覆盖点：plain/iov benchmark server 按 scheduler 数创建多个 listener，并为每个 listener
- * 单独调度 acceptLoop；默认并行度受 benchmark helper 限制，避免压满机器。
+ * 单独调度 accept_loop；默认并行度受 benchmark helper 限制，避免压满机器。
  * 通过条件：源码包含目标 token，且不再只保留单 listener/单 scheduler accept 路径。
  */
 
@@ -13,11 +13,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_PROJECT_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -26,34 +26,34 @@ std::string readAll(const std::filesystem::path& path) {
                        std::istreambuf_iterator<char>());
 }
 
-bool containsText(const std::string& haystack, const std::string& needle) {
+bool contains_text(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
-bool verifyServer(const std::filesystem::path& path, const std::string& text) {
-    if (!containsText(text, "defaultBenchmarkSchedulerCount")) {
+bool verify_server(const std::filesystem::path& path, const std::string& text) {
+    if (!contains_text(text, "default_benchmark_scheduler_count")) {
         std::cerr << "[" << path.filename().string()
                   << "] expected scheduler count to be capped by benchmark helper\n";
         return false;
     }
-    if (!containsText(text, "std::vector<std::unique_ptr<IOSchedulerType>> schedulers;")) {
+    if (!contains_text(text, "std::vector<std::unique_ptr<IOSchedulerType>> schedulers;")) {
         std::cerr << "[" << path.filename().string()
                   << "] expected multiple schedulers for reuseport acceptors\n";
         return false;
     }
-    if (!containsText(text, "std::vector<AsyncTcpSocket> listeners;")) {
+    if (!contains_text(text, "std::vector<AsyncTcpSocket> listeners;")) {
         std::cerr << "[" << path.filename().string()
                   << "] expected one listener per scheduler\n";
         return false;
     }
-    if (!containsText(text, "listener.option().handleReusePort()")) {
+    if (!contains_text(text, "listener.option().handle_reuse_port()")) {
         std::cerr << "[" << path.filename().string()
                   << "] expected listener to enable SO_REUSEPORT\n";
         return false;
     }
-    if (!containsText(text, "scheduleTask(*schedulers[i], acceptLoop(schedulers[i].get(), &listeners[i]))")) {
+    if (!contains_text(text, "schedule_task(*schedulers[i], accept_loop(schedulers[i].get(), &listeners[i]))")) {
         std::cerr << "[" << path.filename().string()
-                  << "] expected acceptLoop to be scheduled per scheduler/listener pair\n";
+                  << "] expected accept_loop to be scheduled per scheduler/listener pair\n";
         return false;
     }
     return true;
@@ -62,17 +62,17 @@ bool verifyServer(const std::filesystem::path& path, const std::string& text) {
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto b2 = root / "benchmark" / "cpp" / "kernel" / "b2_tcp_server_throughput.cc";
     const auto b11 = root / "benchmark" / "cpp" / "kernel" / "b11_tcp_iov_server_throughput.cc";
-    const std::string b2_text = readAll(b2);
-    const std::string b11_text = readAll(b11);
+    const std::string b2_text = read_all(b2);
+    const std::string b11_text = read_all(b11);
     if (b2_text.empty() || b11_text.empty()) {
         std::cerr << "[T112] failed to read benchmark server sources\n";
         return 1;
     }
 
-    if (!verifyServer(b2, b2_text) || !verifyServer(b11, b11_text)) {
+    if (!verify_server(b2, b2_text) || !verify_server(b11, b11_text)) {
         return 1;
     }
 

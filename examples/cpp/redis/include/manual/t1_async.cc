@@ -37,8 +37,8 @@ Task<void> test_async_redis_client(IOScheduler* scheduler)
     }
 
     const auto& values = get_result.value().value();
-    if (!values.empty() && values[0].isString()) {
-        std::cout << "GET result: " << values[0].toString() << std::endl;
+    if (!values.empty() && values[0].is_string()) {
+        std::cout << "GET result: " << values[0].to_string() << std::endl;
     } else {
         std::cerr << "GET returned unexpected response" << std::endl;
         co_return;
@@ -69,13 +69,13 @@ int main()
         Runtime runtime;
         runtime.start();
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             std::cerr << "Failed to get IO scheduler" << std::endl;
             return 1;
         }
 
-        scheduleTask(scheduler, test_async_redis_client(scheduler));
+        schedule_task(scheduler, test_async_redis_client(scheduler));
 
         std::this_thread::sleep_for(std::chrono::seconds(3));
         runtime.stop();

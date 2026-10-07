@@ -10,7 +10,7 @@
 
 namespace {
 
-std::string readAll(const std::filesystem::path& path)
+std::string read_all(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -20,7 +20,7 @@ std::string readAll(const std::filesystem::path& path)
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
-std::string stripCommentsAndLiterals(std::string text)
+std::string strip_comments_and_literals(std::string text)
 {
     enum class State {
         Code,
@@ -95,7 +95,7 @@ std::string stripCommentsAndLiterals(std::string text)
     return text;
 }
 
-bool containsUpperCamelFunction(const std::filesystem::path& path)
+bool contains_upper_camel_function(const std::filesystem::path& path)
 {
     static const std::regex kUpperCamelFunction(
         R"((^|[^A-Za-z0-9_:~])([A-Z][A-Za-z0-9_]*)\s*\()",
@@ -107,7 +107,7 @@ bool containsUpperCamelFunction(const std::filesystem::path& path)
         R"(^(Mcp[A-Z].*|Json[A-Z].*|Schema[A-Z].*|Prompt[A-Z].*|Content$|Resource$|Tool$|Methods$|MCP_.*|GALAY_.*)$)",
         std::regex::ECMAScript);
 
-    const auto text = stripCommentsAndLiterals(readAll(path));
+    const auto text = strip_comments_and_literals(read_all(path));
     std::unordered_set<std::string> declaredTypes;
     for (auto it = std::sregex_iterator(text.begin(), text.end(), kDeclaredType);
          it != std::sregex_iterator();
@@ -129,7 +129,7 @@ bool containsUpperCamelFunction(const std::filesystem::path& path)
     return false;
 }
 
-bool isCxxSource(const std::filesystem::path& path)
+bool is_cxx_source(const std::filesystem::path& path)
 {
     const auto extension = path.extension().string();
     return extension == ".h" || extension == ".cc" ||
@@ -145,10 +145,10 @@ int main()
 
     bool failed = false;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(root)) {
-        if (!entry.is_regular_file() || !isCxxSource(entry.path())) {
+        if (!entry.is_regular_file() || !is_cxx_source(entry.path())) {
             continue;
         }
-        failed = containsUpperCamelFunction(entry.path()) || failed;
+        failed = contains_upper_camel_function(entry.path()) || failed;
     }
 
     return failed ? 1 : 0;

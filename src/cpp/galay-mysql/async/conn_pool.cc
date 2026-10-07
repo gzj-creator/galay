@@ -94,14 +94,14 @@ MysqlConnectionPool::~MysqlConnectionPool()
         if (waiter != nullptr) {
             waiter->active.store(false, std::memory_order_release);
             waiter->client.store(nullptr, std::memory_order_release);
-            waiter->waker.wakeUp();
+            waiter->waker.wake_up();
         }
     }
     AsyncMysqlClient<>* client = nullptr;
     while (m_idle_clients.try_dequeue(client)) {}
 }
 
-AsyncMysqlClient<>* MysqlConnectionPool::tryAcquire()
+AsyncMysqlClient<>* MysqlConnectionPool::try_acquire()
 {
     AsyncMysqlClient<>* client = nullptr;
     if (m_idle_clients.try_dequeue(client)) {
@@ -111,7 +111,7 @@ AsyncMysqlClient<>* MysqlConnectionPool::tryAcquire()
     return nullptr;
 }
 
-AsyncMysqlClient<>* MysqlConnectionPool::createClient()
+AsyncMysqlClient<>* MysqlConnectionPool::create_client()
 {
     size_t slot = m_total_connections.load(std::memory_order_acquire);
     while (slot < m_max_connections) {
@@ -128,12 +128,12 @@ AsyncMysqlClient<>* MysqlConnectionPool::createClient()
     return nullptr;
 }
 
-bool MysqlConnectionPool::enqueueWaiter(std::shared_ptr<detail::MysqlPoolWaiter> waiter)
+bool MysqlConnectionPool::enqueue_waiter(std::shared_ptr<detail::MysqlPoolWaiter> waiter)
 {
     return waiter != nullptr && m_waiters.enqueue(std::move(waiter));
 }
 
-bool MysqlConnectionPool::wakeOneWaiter()
+bool MysqlConnectionPool::wake_one_waiter()
 {
     std::shared_ptr<detail::MysqlPoolWaiter> waiter;
     while (m_idle_connections.load(std::memory_order_acquire) > 0 &&
@@ -150,19 +150,19 @@ bool MysqlConnectionPool::wakeOneWaiter()
             continue;
         }
 
-        auto* client = tryAcquire();
+        auto* client = try_acquire();
         if (client == nullptr) {
             waiter->active.store(true, std::memory_order_release);
             auto requeued_waiter = waiter;
-            if (!enqueueWaiter(std::move(waiter)) && requeued_waiter != nullptr) {
+            if (!enqueue_waiter(std::move(waiter)) && requeued_waiter != nullptr) {
                 requeued_waiter->active.store(false, std::memory_order_release);
-                requeued_waiter->waker.wakeUp();
+                requeued_waiter->waker.wake_up();
             }
             return false;
         }
 
         waiter->client.store(client, std::memory_order_release);
-        waiter->waker.wakeUp();
+        waiter->waker.wake_up();
         return true;
     }
 
@@ -177,17 +177,17 @@ void MysqlConnectionPool::release(AsyncMysqlClient<>* client)
         return;
     }
     m_idle_connections.fetch_add(1, std::memory_order_acq_rel);
-    (void)wakeOneWaiter();
+    (void)wake_one_waiter();
 }
 
-size_t MysqlConnectionPool::idleCount() const
+size_t MysqlConnectionPool::idle_count() const
 {
     return m_idle_connections.load(std::memory_order_acquire);
 }
 
 MysqlConnectionPool::AcquireAwaitable MysqlConnectionPool::acquire() { return AcquireAwaitable(*this); }
 
-MysqlConnectionPool::LeaseAwaitable MysqlConnectionPool::acquireLease() { return LeaseAwaitable(*this); }
+MysqlConnectionPool::LeaseAwaitable MysqlConnectionPool::acquire_lease() { return LeaseAwaitable(*this); }
 
 #include "../details/pool_awaitable.inl"
 

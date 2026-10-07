@@ -33,7 +33,7 @@ std::atomic<int> g_passed{0};
 std::atomic<int> g_failed{0};
 std::atomic<bool> g_test_done{false};
 
-std::string normalizeExpectedEchoPath(std::string path) {
+std::string normalize_expected_echo_path(std::string path) {
     auto query_pos = path.find('?');
     if (query_pos != std::string::npos) {
         path.resize(query_pos);
@@ -65,7 +65,7 @@ std::string normalizeExpectedEchoPath(std::string path) {
     return decoded;
 }
 
-bool parseExpectedResponseSize(const std::string& response, size_t& expected_size) {
+bool parse_expected_response_size(const std::string& response, size_t& expected_size) {
     auto header_end = response.find("\r\n\r\n");
     if (header_end == std::string::npos) {
         return false;
@@ -107,7 +107,7 @@ bool parseExpectedResponseSize(const std::string& response, size_t& expected_siz
 Task<void> test_client(int test_id, std::string path) {
 
     AsyncTcpSocket client;
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     // 连接到服务器
     Host serverHost(IPType::IPV4, "127.0.0.1", 9999);
@@ -160,7 +160,7 @@ Task<void> test_client(int test_id, std::string path) {
         response.append(buffer, bytes);
 
         if (!header_ready) {
-            header_ready = parseExpectedResponseSize(response, expected_size);
+            header_ready = parse_expected_response_size(response, expected_size);
         }
 
         if (header_ready && response.size() >= expected_size) {
@@ -176,7 +176,7 @@ Task<void> test_client(int test_id, std::string path) {
 
 
     // 验证响应
-    std::string expected_path = normalizeExpectedEchoPath(path);
+    std::string expected_path = normalize_expected_echo_path(path);
     if (response.find("HTTP/1.1 200 OK") != std::string::npos &&
         response.find("Echo: " + expected_path) != std::string::npos) {
         g_passed++;
@@ -189,24 +189,24 @@ Task<void> test_client(int test_id, std::string path) {
 }
 
 // 运行所有测试
-Task<void> runAllTests(IOScheduler* scheduler) {
+Task<void> run_all_tests(IOScheduler* scheduler) {
     // 等待一下确保服务器启动
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // 启动所有测试（并发执行）
-    scheduleTask(scheduler, test_client(1, "/test"));
+    schedule_task(scheduler, test_client(1, "/test"));
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    scheduleTask(scheduler, test_client(2, "/api/users?id=123"));
+    schedule_task(scheduler, test_client(2, "/api/users?id=123"));
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    scheduleTask(scheduler, test_client(3, "/very/long/path/to/resource"));
+    schedule_task(scheduler, test_client(3, "/very/long/path/to/resource"));
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    scheduleTask(scheduler, test_client(4, "/"));
+    schedule_task(scheduler, test_client(4, "/"));
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    scheduleTask(scheduler, test_client(5, "/test%20path"));
+    schedule_task(scheduler, test_client(5, "/test%20path"));
 
     // 等待所有测试完成
     std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -221,17 +221,17 @@ int main() {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
 #if defined(USE_KQUEUE) || defined(USE_EPOLL) || defined(USE_IOURING)
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     rt.start();
 
-    auto* scheduler = rt.getNextIOScheduler();
+    auto* scheduler = rt.get_next_io_scheduler();
     if (!scheduler) {
         rt.stop();
         return 1;
     }
 
     // 运行测试
-    scheduleTask(scheduler, runAllTests(scheduler));
+    schedule_task(scheduler, run_all_tests(scheduler));
 
     // 等待测试完成
     while (!g_test_done.load()) {

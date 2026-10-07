@@ -29,7 +29,7 @@ bool check(bool condition, const char* message)
     return condition;
 }
 
-bool installSigpipeHandler(void (*handler)(int), struct sigaction* previous)
+bool install_sigpipe_handler(void (*handler)(int), struct sigaction* previous)
 {
     struct sigaction action{};
     action.sa_handler = handler;
@@ -40,15 +40,15 @@ bool installSigpipeHandler(void (*handler)(int), struct sigaction* previous)
     return ::sigaction(SIGPIPE, &action, previous) == 0;
 }
 
-bool restoreSigpipeHandler(const struct sigaction& previous)
+bool restore_sigpipe_handler(const struct sigaction& previous)
 {
     return ::sigaction(SIGPIPE, &previous, nullptr) == 0;
 }
 
-bool runtimeConstructorDoesNotChangeSigpipe()
+bool runtime_constructor_does_not_change_sigpipe()
 {
     struct sigaction previous{};
-    if (!check(installSigpipeHandler(SIG_DFL, &previous), "failed to install default SIGPIPE handler")) {
+    if (!check(install_sigpipe_handler(SIG_DFL, &previous), "failed to install default SIGPIPE handler")) {
         return false;
     }
 
@@ -60,27 +60,27 @@ bool runtimeConstructorDoesNotChangeSigpipe()
         ok = check(current.sa_handler == SIG_DFL, "Runtime constructor must not ignore SIGPIPE globally") && ok;
     }
 
-    ok = check(restoreSigpipeHandler(previous), "failed to restore SIGPIPE handler") && ok;
+    ok = check(restore_sigpipe_handler(previous), "failed to restore SIGPIPE handler") && ok;
     return ok;
 }
 
 #if defined(__linux__) && !defined(USE_IOURING)
 volatile sig_atomic_t g_sigpipe_seen = 0;
 
-void sigpipeHandler(int)
+void sigpipe_handler(int)
 {
     g_sigpipe_seen = 1;
 }
 #endif
 
 #if defined(__linux__) && defined(USE_IOURING)
-std::filesystem::path repoRoot()
+std::filesystem::path repo_root()
 {
     std::filesystem::path file = __FILE__;
     return file.parent_path().parent_path().parent_path().parent_path();
 }
 
-std::string readFile(const std::filesystem::path& path)
+std::string read_file(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input) {
@@ -93,7 +93,7 @@ std::string readFile(const std::filesystem::path& path)
     return buffer.str();
 }
 
-std::string collapseWhitespace(std::string_view text)
+std::string collapse_whitespace(std::string_view text)
 {
     std::string result;
     result.reserve(text.size());
@@ -117,15 +117,15 @@ bool contains(std::string_view text, std::string_view needle)
     return text.find(needle) != std::string_view::npos;
 }
 
-bool linuxUringSendSubmissionsUseNoSignal()
+bool linux_uring_send_submissions_use_no_signal()
 {
     const auto source =
-        readFile(repoRoot() / "src/cpp/galay-kernel/core/uring_reactor.cc");
+        read_file(repo_root() / "src/cpp/galay-kernel/core/uring_reactor.cc");
     if (!check(!source.empty(), "failed to read io_uring reactor source")) {
         return false;
     }
 
-    const auto compact = collapseWhitespace(source);
+    const auto compact = collapse_whitespace(source);
     bool ok = true;
     ok = check(contains(compact, "constexpr int kSendNoSignalFlag ="),
                "io_uring backend must define a local no-SIGPIPE send flag") &&
@@ -145,7 +145,7 @@ bool linuxUringSendSubmissionsUseNoSignal()
 #endif
 
 #if defined(__linux__) && !defined(USE_IOURING)
-bool makeBrokenSocketPair(int fds[2])
+bool make_broken_socket_pair(int fds[2])
 {
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) != 0) {
         return false;
@@ -163,7 +163,7 @@ bool makeBrokenSocketPair(int fds[2])
     return true;
 }
 
-bool closeFd(int& fd)
+bool close_fd(int& fd)
 {
     if (fd < 0) {
         return true;
@@ -173,37 +173,37 @@ bool closeFd(int& fd)
     return close_result == 0;
 }
 
-bool linuxSendDoesNotDeliverSigpipe()
+bool linux_send_does_not_deliver_sigpipe()
 {
     struct sigaction previous{};
-    if (!check(installSigpipeHandler(sigpipeHandler, &previous), "failed to install SIGPIPE test handler")) {
+    if (!check(install_sigpipe_handler(sigpipe_handler, &previous), "failed to install SIGPIPE test handler")) {
         return false;
     }
 
     int fds[2]{-1, -1};
-    bool ok = check(makeBrokenSocketPair(fds), "failed to create broken socket pair");
+    bool ok = check(make_broken_socket_pair(fds), "failed to create broken socket pair");
     if (ok) {
         g_sigpipe_seen = 0;
         const char payload[] = "x";
-        auto result = galay::kernel::io::handleSend(GHandle{.fd = fds[0]}, payload, sizeof(payload));
+        auto result = galay::kernel::io::handle_send(GHandle{.fd = fds[0]}, payload, sizeof(payload));
         ok = check(!result, "send to closed peer should fail") && ok;
         ok = check(g_sigpipe_seen == 0, "send path must pass MSG_NOSIGNAL") && ok;
     }
 
-    ok = check(closeFd(fds[0]), "failed to close send test fd") && ok;
-    ok = check(restoreSigpipeHandler(previous), "failed to restore SIGPIPE handler") && ok;
+    ok = check(close_fd(fds[0]), "failed to close send test fd") && ok;
+    ok = check(restore_sigpipe_handler(previous), "failed to restore SIGPIPE handler") && ok;
     return ok;
 }
 
-bool linuxWritevDoesNotDeliverSigpipe()
+bool linux_writev_does_not_deliver_sigpipe()
 {
     struct sigaction previous{};
-    if (!check(installSigpipeHandler(sigpipeHandler, &previous), "failed to install SIGPIPE test handler")) {
+    if (!check(install_sigpipe_handler(sigpipe_handler, &previous), "failed to install SIGPIPE test handler")) {
         return false;
     }
 
     int fds[2]{-1, -1};
-    bool ok = check(makeBrokenSocketPair(fds), "failed to create broken socket pair");
+    bool ok = check(make_broken_socket_pair(fds), "failed to create broken socket pair");
     if (ok) {
         g_sigpipe_seen = 0;
         char payload[] = "xy";
@@ -211,19 +211,19 @@ bool linuxWritevDoesNotDeliverSigpipe()
             {.iov_base = payload, .iov_len = 1},
             {.iov_base = payload + 1, .iov_len = 1},
         };
-        auto result = galay::kernel::io::handleWritev(GHandle{.fd = fds[0]}, iovecs, 2);
+        auto result = galay::kernel::io::handle_writev(GHandle{.fd = fds[0]}, iovecs, 2);
         ok = check(!result, "writev to closed peer should fail") && ok;
         ok = check(g_sigpipe_seen == 0, "writev path must use sendmsg with MSG_NOSIGNAL") && ok;
     }
 
-    ok = check(closeFd(fds[0]), "failed to close writev test fd") && ok;
-    ok = check(restoreSigpipeHandler(previous), "failed to restore SIGPIPE handler") && ok;
+    ok = check(close_fd(fds[0]), "failed to close writev test fd") && ok;
+    ok = check(restore_sigpipe_handler(previous), "failed to restore SIGPIPE handler") && ok;
     return ok;
 }
 #endif
 
 #if defined(SO_NOSIGPIPE)
-bool tcpCreateEnablesNoSigpipe()
+bool tcp_create_enables_no_sigpipe()
 {
     auto socket = galay::async::AsyncTcpSocket::create(galay::kernel::IPType::IPV4);
     if (!check(socket.has_value(), "failed to create TCP socket")) {
@@ -244,15 +244,15 @@ bool tcpCreateEnablesNoSigpipe()
 int main()
 {
     bool ok = true;
-    ok = runtimeConstructorDoesNotChangeSigpipe() && ok;
+    ok = runtime_constructor_does_not_change_sigpipe() && ok;
 #if defined(__linux__) && defined(USE_IOURING)
-    ok = linuxUringSendSubmissionsUseNoSignal() && ok;
+    ok = linux_uring_send_submissions_use_no_signal() && ok;
 #elif defined(__linux__)
-    ok = linuxSendDoesNotDeliverSigpipe() && ok;
-    ok = linuxWritevDoesNotDeliverSigpipe() && ok;
+    ok = linux_send_does_not_deliver_sigpipe() && ok;
+    ok = linux_writev_does_not_deliver_sigpipe() && ok;
 #endif
 #if defined(SO_NOSIGPIPE)
-    ok = tcpCreateEnablesNoSigpipe() && ok;
+    ok = tcp_create_enables_no_sigpipe() && ok;
 #endif
     return ok ? 0 : 1;
 }

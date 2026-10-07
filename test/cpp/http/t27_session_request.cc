@@ -25,21 +25,21 @@ int main()
 
     HttpSessionState<AsyncTcpSocket> state(session, std::move(raw_request));
 
-    if (state.sendRemaining() == 0) {
+    if (state.send_remaining() == 0) {
         std::cerr << "[T78] serialized request should expose pending bytes\n";
         return 1;
     }
-    if (std::string(state.sendBuffer(), state.sendRemaining()).find("POST /v3/kv/put HTTP/1.1\r\n") != 0) {
+    if (std::string(state.send_buffer(), state.send_remaining()).find("POST /v3/kv/put HTTP/1.1\r\n") != 0) {
         std::cerr << "[T78] serialized request should be preserved verbatim\n";
         return 1;
     }
-    if (state.sendCompleted()) {
+    if (state.send_completed()) {
         std::cerr << "[T78] serialized request should not start completed\n";
         return 1;
     }
 
-    state.onBytesSent(state.sendRemaining());
-    if (!state.sendCompleted()) {
+    state.on_bytes_sent(state.send_remaining());
+    if (!state.send_completed()) {
         std::cerr << "[T78] serialized request should finish after all bytes are sent\n";
         return 1;
     }

@@ -23,7 +23,7 @@ struct AsyncTestState {
     }
 };
 
-inline void markFailure(AsyncTestState* state, const std::string& msg) {
+inline void mark_failure(AsyncTestState* state, const std::string& msg) {
     std::cerr << msg << std::endl;
     state->fail(msg);
 }
@@ -32,23 +32,23 @@ inline void markFailure(AsyncTestState* state, const std::string& msg) {
 #define MYSQL_CO_CONNECT(client, host, port, user, pass, db) \
     { \
         auto _r = co_await client.connect(host, port, user, pass, db); \
-        if (!_r) { markFailure(state, "Connect failed: " + _r.error().message()); co_return; } \
-        if (!_r->has_value()) { markFailure(state, "Connect awaitable resumed without value"); co_return; } \
+        if (!_r) { mark_failure(state, "Connect failed: " + _r.error().message()); co_return; } \
+        if (!_r->has_value()) { mark_failure(state, "Connect awaitable resumed without value"); co_return; } \
     }
 
 #define MYSQL_CO_QUERY(client, sql, result_var) \
     { \
         auto _r = co_await client.query(sql); \
-        if (!_r) { markFailure(state, std::string("Query failed [") + sql + "]: " + _r.error().message()); co_return; } \
-        if (!_r->has_value()) { markFailure(state, std::string("Query awaitable resumed without value [") + sql + "]"); co_return; } \
+        if (!_r) { mark_failure(state, std::string("Query failed [") + sql + "]: " + _r.error().message()); co_return; } \
+        if (!_r->has_value()) { mark_failure(state, std::string("Query awaitable resumed without value [") + sql + "]"); co_return; } \
         if (_r) { result_var = std::move(_r->value()); } \
     }
 
 #define MYSQL_CO_QUERY_VOID(client, sql) \
     { \
         auto _r = co_await client.query(sql); \
-        if (!_r) { markFailure(state, std::string("Query failed [") + sql + "]: " + _r.error().message()); co_return; } \
-        if (!_r->has_value()) { markFailure(state, std::string("Query awaitable resumed without value [") + sql + "]"); co_return; } \
+        if (!_r) { mark_failure(state, std::string("Query failed [") + sql + "]: " + _r.error().message()); co_return; } \
+        if (!_r->has_value()) { mark_failure(state, std::string("Query awaitable resumed without value [") + sql + "]"); co_return; } \
     }
 
 Task<void> test_transaction(IOScheduler* scheduler, AsyncTestState* state, mysql_test::DbTestConfig db_cfg)
@@ -81,8 +81,8 @@ Task<void> test_transaction(IOScheduler* scheduler, AsyncTestState* state, mysql
         std::expected<MysqlResultSet, MysqlError> sr = std::unexpected(MysqlError(MYSQL_ERROR_INTERNAL, ""));
         MYSQL_CO_QUERY(client, "SELECT name, balance FROM galay_tx_test ORDER BY name", sr);
         if (sr) {
-            for (size_t i = 0; i < sr->rowCount(); ++i) {
-                std::cout << "  " << sr->row(i).getString(0) << ": " << sr->row(i).getString(1) << std::endl;
+            for (size_t i = 0; i < sr->row_count(); ++i) {
+                std::cout << "  " << sr->row(i).get_string(0) << ": " << sr->row(i).get_string(1) << std::endl;
             }
         }
     }
@@ -100,8 +100,8 @@ Task<void> test_transaction(IOScheduler* scheduler, AsyncTestState* state, mysql
     {
         std::expected<MysqlResultSet, MysqlError> sr = std::unexpected(MysqlError(MYSQL_ERROR_INTERNAL, ""));
         MYSQL_CO_QUERY(client, "SELECT name, balance FROM galay_tx_test WHERE name = 'Alice'", sr);
-        if (sr && sr->rowCount() > 0) {
-            std::cout << "  Alice balance after rollback: " << sr->row(0).getString(1) << std::endl;
+        if (sr && sr->row_count() > 0) {
+            std::cout << "  Alice balance after rollback: " << sr->row(0).get_string(1) << std::endl;
         }
     }
 
@@ -117,20 +117,20 @@ Task<void> test_transaction(IOScheduler* scheduler, AsyncTestState* state, mysql
 int main()
 {
     std::cout << "=== T6: Transaction Tests ===" << std::endl;
-    const auto db_cfg = mysql_test::loadDbTestConfig();
-    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "t6_transaction");
+    const auto db_cfg = mysql_test::load_db_test_config();
+    if (const int skip_code = mysql_test::require_db_test_config_or_skip(db_cfg, "t6_transaction");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printDbTestConfig(db_cfg);
+    mysql_test::print_db_test_config(db_cfg);
 
     try {
         Runtime runtime;
         runtime.start();
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) { std::cerr << "No scheduler" << std::endl; return 1; }
         AsyncTestState state;
-        if (!scheduleTask(scheduler, test_transaction(scheduler, &state, db_cfg))) {
+        if (!schedule_task(scheduler, test_transaction(scheduler, &state, db_cfg))) {
             std::cerr << "Failed to schedule transaction test task on IO scheduler" << std::endl;
             runtime.stop();
             return 1;

@@ -33,14 +33,14 @@ struct SelfWakeAwaitable {
 
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) const noexcept {
-        Waker(handle).wakeUp();
+        Waker(handle).wake_up();
         return true;
     }
 
     void await_resume() const noexcept {}
 };
 
-Task<void> runSelfWake(std::atomic<bool>* done, size_t iterations, MicroMeasurement* measured) {
+Task<void> run_self_wake(std::atomic<bool>* done, size_t iterations, MicroMeasurement* measured) {
     MicroTimer timer;
     for (size_t i = 0; i < iterations; ++i) {
         co_await SelfWakeAwaitable{};
@@ -50,7 +50,7 @@ Task<void> runSelfWake(std::atomic<bool>* done, size_t iterations, MicroMeasurem
     co_return;
 }
 
-std::optional<MicroMeasurement> measureComputeResume(size_t iterations) {
+std::optional<MicroMeasurement> measure_compute_resume(size_t iterations) {
     ParallelScheduler scheduler;
     const auto started = scheduler.start();
     if (!started.has_value()) {
@@ -61,7 +61,7 @@ std::optional<MicroMeasurement> measureComputeResume(size_t iterations) {
     MicroMeasurement measured{.iterations = iterations};
     const auto begin = std::chrono::steady_clock::now();
     const bool scheduled = scheduler.schedule(
-        detail::TaskAccess::detachTask(runSelfWake(&done, iterations, &measured)));
+        detail::TaskAccess::detach_task(run_self_wake(&done, iterations, &measured)));
     if (!scheduled) {
         scheduler.stop();
         return std::nullopt;
@@ -82,9 +82,9 @@ std::optional<MicroMeasurement> measureComputeResume(size_t iterations) {
 }
 
 template <size_t BatchSize>
-std::optional<MicroMeasurement> measureIOResumeDrain(size_t repetitions) {
+std::optional<MicroMeasurement> measure_io_resume_drain(size_t repetitions) {
     IOReadyQueue worker;
-    worker.setStealingEnabled(false);
+    worker.set_stealing_enabled(false);
     std::array<TaskRef, BatchSize> tasks;
     for (TaskRef& task : tasks) {
         task = TaskRef(new TaskState(std::coroutine_handle<>{}), false);
@@ -94,11 +94,11 @@ std::optional<MicroMeasurement> measureIOResumeDrain(size_t repetitions) {
     MicroTimer timer;
     for (size_t repetition = 0; repetition < repetitions; ++repetition) {
         for (const TaskRef& task : tasks) {
-            if (!worker.scheduleResume(task).has_value()) {
+            if (!worker.schedule_resume(task).has_value()) {
                 return std::nullopt;
             }
         }
-        if (worker.drainInjected() != BatchSize) {
+        if (worker.drain_injected() != BatchSize) {
             return std::nullopt;
         }
         for (size_t i = 0; i < BatchSize; ++i) {
@@ -125,11 +125,11 @@ void report(const char* name, const char* metric, const MicroMeasurement& measur
 }
 
 template <size_t BatchSize>
-bool reportIOResumeDrain(size_t iterations) {
+bool report_io_resume_drain(size_t iterations) {
     const auto repetitions = (iterations + BatchSize - 1) / BatchSize;
-    const auto warmup = measureIOResumeDrain<BatchSize>(std::max(size_t(1), repetitions / 10));
+    const auto warmup = measure_io_resume_drain<BatchSize>(std::max(size_t(1), repetitions / 10));
     if (!warmup || warmup->cpu_ns < 0) { return false; }
-    const auto measured = measureIOResumeDrain<BatchSize>(repetitions);
+    const auto measured = measure_io_resume_drain<BatchSize>(repetitions);
     if (!measured || measured->cpu_ns < 0) { return false; }
     report("IOSchedulerResumeDrain", "ns_per_task", *measured, BatchSize);
     return true;
@@ -137,12 +137,12 @@ bool reportIOResumeDrain(size_t iterations) {
 } // namespace
 
 int main(int argc, char** argv) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     galay::benchmark::MicroOptions options;
-    if (!galay::benchmark::parseMicroOptions(argc, argv, options) || options.diagnostics ||
+    if (!galay::benchmark::parse_micro_options(argc, argv, options) || options.diagnostics ||
         (!options.sample.empty() && options.sample != "parallel" && options.sample != "io_1" &&
          options.sample != "io_8" && options.sample != "io_64" && options.sample != "io_256")) {
         std::cerr << "B28: --sample parallel|io_1|io_8|io_64|io_256 --iterations N\n";
@@ -150,15 +150,15 @@ int main(int argc, char** argv) {
     }
     const auto selected = [&](std::string_view name) { return options.sample.empty() || options.sample == name; };
     if (selected("parallel")) {
-        const auto warmup = measureComputeResume(std::max(size_t(1), options.iterations / 10));
+        const auto warmup = measure_compute_resume(std::max(size_t(1), options.iterations / 10));
         if (!warmup || warmup->cpu_ns < 0) { return 1; }
-        const auto measured = measureComputeResume(options.iterations);
+        const auto measured = measure_compute_resume(options.iterations);
         if (!measured || measured->cpu_ns < 0) { return 1; }
         report("ParallelSchedulerResume", "ns_per_resume", *measured);
     }
-    if ((selected("io_1") && !reportIOResumeDrain<1>(options.iterations)) ||
-        (selected("io_8") && !reportIOResumeDrain<8>(options.iterations)) ||
-        (selected("io_64") && !reportIOResumeDrain<64>(options.iterations)) ||
-        (selected("io_256") && !reportIOResumeDrain<256>(options.iterations))) { return 1; }
+    if ((selected("io_1") && !report_io_resume_drain<1>(options.iterations)) ||
+        (selected("io_8") && !report_io_resume_drain<8>(options.iterations)) ||
+        (selected("io_64") && !report_io_resume_drain<64>(options.iterations)) ||
+        (selected("io_256") && !report_io_resume_drain<256>(options.iterations))) { return 1; }
     return 0;
 }

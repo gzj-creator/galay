@@ -73,7 +73,7 @@ public:
     StaticFileSession& operator=(StaticFileSession&&) noexcept = default;
 
     /** Read exactly length bytes at the supplied offset. */
-    galay::kernel::Task<StaticFileReadResult> readAt(size_t offset, size_t length);
+    galay::kernel::Task<StaticFileReadResult> read_at(size_t offset, size_t length);
 
 private:
     friend class StaticFileReader;
@@ -87,7 +87,7 @@ private:
 
 using StaticFileSessionResult = std::expected<StaticFileSession, StaticFileReadError>;
 
-const char* staticFileReadErrorName(StaticFileReadErrorCode code) noexcept;
+const char* static_file_read_error_name(StaticFileReadErrorCode code) noexcept;
 
 /**
  * @brief Coroutine-facing static-file reader.
@@ -103,12 +103,12 @@ public:
     /** Open one reusable session without blocking the scheduler. */
     static galay::kernel::Task<StaticFileSessionResult> open(const std::string& filePath);
 
-    /** Read exactly fileSize bytes starting at offset zero. */
-    static galay::kernel::Task<StaticFileReadResult> readAll(const std::string& filePath,
+    /** Read exactly file_size bytes starting at offset zero. */
+    static galay::kernel::Task<StaticFileReadResult> read_all(const std::string& filePath,
                                                              size_t fileSize);
 
     /** Read exactly length bytes at the supplied file offset. */
-    static galay::kernel::Task<StaticFileReadResult> readAt(const std::string& filePath,
+    static galay::kernel::Task<StaticFileReadResult> read_at(const std::string& filePath,
                                                             size_t offset,
                                                             size_t length);
 
@@ -116,7 +116,7 @@ public:
     static galay::kernel::Task<StaticFileMetadataResult> inspect(const std::string& filePath);
 
     /** Open a descriptor for zero-copy sendfile without blocking the scheduler. */
-    static galay::kernel::Task<StaticFileDescriptorResult> openForSendfile(
+    static galay::kernel::Task<StaticFileDescriptorResult> open_for_sendfile(
         const std::string& filePath);
 };
 

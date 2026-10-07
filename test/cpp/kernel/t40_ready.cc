@@ -17,29 +17,29 @@ namespace {
 
 std::atomic<int> g_completed{0};
 
-Task<void> countingTask() {
+Task<void> counting_task() {
     g_completed.fetch_add(1, std::memory_order_relaxed);
     co_return;
 }
 
 template <typename SchedulerT>
-bool verifyLocalReadyBudget(const char* label) {
+bool verify_local_ready_budget(const char* label) {
     constexpr int kTaskCount = 300;
 
     g_completed.store(0, std::memory_order_relaxed);
     SchedulerT scheduler;
 
     for (int i = 0; i < kTaskCount; ++i) {
-        Task<void> task = countingTask();
-        detail::setTaskScheduler(detail::TaskAccess::taskRef(task), &scheduler);
-        SchedulerTestAccess::worker(scheduler).scheduleLocal(detail::TaskAccess::detachTask(std::move(task)));
-        if (!SchedulerTestAccess::worker(scheduler).hasLocalWork()) {
+        Task<void> task = counting_task();
+        detail::set_task_scheduler(detail::TaskAccess::task_ref(task), &scheduler);
+        SchedulerTestAccess::worker(scheduler).schedule_local(detail::TaskAccess::detach_task(std::move(task)));
+        if (!SchedulerTestAccess::worker(scheduler).has_local_work()) {
             std::cerr << "[T40] " << label << " failed to enqueue local task " << i << "\n";
             return false;
         }
     }
 
-    SchedulerTestAccess::processPending(scheduler);
+    SchedulerTestAccess::process_pending(scheduler);
 
     const int completed_after_first_pass = g_completed.load(std::memory_order_relaxed);
     if (completed_after_first_pass >= kTaskCount) {
@@ -54,7 +54,7 @@ bool verifyLocalReadyBudget(const char* label) {
         return false;
     }
 
-    SchedulerTestAccess::processPending(scheduler);
+    SchedulerTestAccess::process_pending(scheduler);
 
     if (g_completed.load(std::memory_order_relaxed) != kTaskCount) {
         std::cerr << "[T40] " << label << " did not finish remaining ready tasks\n";
@@ -64,13 +64,13 @@ bool verifyLocalReadyBudget(const char* label) {
     return true;
 }
 
-bool verifyReadyBudget() {
+bool verify_ready_budget() {
 #if defined(USE_KQUEUE)
-    return verifyLocalReadyBudget<KqueueScheduler>("kqueue");
+    return verify_local_ready_budget<KqueueScheduler>("kqueue");
 #elif defined(USE_EPOLL)
-    return verifyLocalReadyBudget<EpollScheduler>("epoll");
+    return verify_local_ready_budget<EpollScheduler>("epoll");
 #elif defined(USE_IOURING)
-    return verifyLocalReadyBudget<IOUringScheduler>("io_uring");
+    return verify_local_ready_budget<IOUringScheduler>("io_uring");
 #else
     std::cout << "T40-SchedulerReadyBudget SKIP\n";
     return true;
@@ -80,7 +80,7 @@ bool verifyReadyBudget() {
 }  // namespace
 
 int main() {
-    if (!verifyReadyBudget()) {
+    if (!verify_ready_budget()) {
         return 1;
     }
 

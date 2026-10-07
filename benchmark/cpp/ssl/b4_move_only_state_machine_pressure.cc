@@ -28,12 +28,12 @@ using BenchResult = std::expected<size_t, SslError>;
 struct BenchFlow {
     size_t local_steps = 0;
 
-    void onLocal(SslBuilderOps<BenchResult, 8>&)
+    void on_local(SslBuilderOps<BenchResult, 8>&)
     {
         ++local_steps;
     }
 
-    void onFinish(SslBuilderOps<BenchResult, 8>& ops)
+    void on_finish(SslBuilderOps<BenchResult, 8>& ops)
     {
         ops.complete(BenchResult{local_steps});
     }
@@ -48,7 +48,7 @@ struct BenchMetrics {
     uint64_t retained_objects = 0;
 };
 
-bool parseSize(const char* text, size_t min_value, size_t* value)
+bool parse_size(const char* text, size_t min_value, size_t* value)
 {
     size_t parsed = 0;
     const char* end = text + std::char_traits<char>::length(text);
@@ -60,23 +60,23 @@ bool parseSize(const char* text, size_t min_value, size_t* value)
     return true;
 }
 
-void printUsage(const char* program)
+void print_usage(const char* program)
 {
     std::cerr << "Usage: " << program << " [iterations>=1] [local_nodes>=1]\n";
 }
 
-LinearMachineT::NodeList makeNodes(size_t local_nodes)
+LinearMachineT::NodeList make_nodes(size_t local_nodes)
 {
     LinearMachineT::NodeList nodes;
     nodes.reserve(local_nodes + 1);
     for (size_t i = 0; i < local_nodes; ++i) {
-        nodes.push_back(LinearMachineT::template makeLocalNode<&BenchFlow::onLocal>());
+        nodes.push_back(LinearMachineT::template make_local_node<&BenchFlow::on_local>());
     }
-    nodes.push_back(LinearMachineT::template makeFinishNode<&BenchFlow::onFinish>());
+    nodes.push_back(LinearMachineT::template make_finish_node<&BenchFlow::on_finish>());
     return nodes;
 }
 
-void runDriverPressure(size_t iterations, BenchMetrics* metrics)
+void run_driver_pressure(size_t iterations, BenchMetrics* metrics)
 {
     std::vector<SslOperationDriver> retained;
     retained.reserve(64);
@@ -98,19 +98,19 @@ void runDriverPressure(size_t iterations, BenchMetrics* metrics)
     metrics->retained_objects += retained.size();
 }
 
-void runLinearMachinePressure(size_t iterations, size_t local_nodes, BenchMetrics* metrics)
+void run_linear_machine_pressure(size_t iterations, size_t local_nodes, BenchMetrics* metrics)
 {
     std::vector<LinearMachineT> retained;
     retained.reserve(32);
 
     BenchFlow flow;
-    LinearMachineT assigned(nullptr, &flow, makeNodes(local_nodes));
+    LinearMachineT assigned(nullptr, &flow, make_nodes(local_nodes));
     for (size_t i = 0; i < iterations; ++i) {
-        LinearMachineT machine(nullptr, &flow, makeNodes(local_nodes));
+        LinearMachineT machine(nullptr, &flow, make_nodes(local_nodes));
         LinearMachineT moved(std::move(machine));
         assigned = std::move(moved);
 
-        retained.push_back(LinearMachineT(nullptr, &flow, makeNodes(local_nodes)));
+        retained.push_back(LinearMachineT(nullptr, &flow, make_nodes(local_nodes)));
         retained.push_back(std::move(assigned));
         if (retained.size() >= 64) {
             metrics->retained_objects += retained.size();
@@ -121,14 +121,14 @@ void runLinearMachinePressure(size_t iterations, size_t local_nodes, BenchMetric
     metrics->retained_objects += retained.size();
 }
 
-void runAwaitableConstructPressure(size_t iterations, size_t local_nodes, BenchMetrics* metrics)
+void run_awaitable_construct_pressure(size_t iterations, size_t local_nodes, BenchMetrics* metrics)
 {
     BenchFlow flow;
     for (size_t i = 0; i < iterations; ++i) {
         SslStateMachineAwaitable<LinearMachineT> awaitable(
             nullptr,
             nullptr,
-            LinearMachineT(nullptr, &flow, makeNodes(local_nodes)));
+            LinearMachineT(nullptr, &flow, make_nodes(local_nodes)));
         if (awaitable.empty()) {
             metrics->awaitable_constructs += 1;
         }
@@ -139,32 +139,32 @@ void runAwaitableConstructPressure(size_t iterations, size_t local_nodes, BenchM
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
-        printUsage(argv[0]);
+        print_usage(argv[0]);
         return 0;
     }
 
     size_t iterations = 100000;
     size_t local_nodes = 4;
-    if (argc >= 2 && !parseSize(argv[1], 1, &iterations)) {
-        printUsage(argv[0]);
+    if (argc >= 2 && !parse_size(argv[1], 1, &iterations)) {
+        print_usage(argv[0]);
         return 1;
     }
-    if (argc >= 3 && !parseSize(argv[2], 1, &local_nodes)) {
-        printUsage(argv[0]);
+    if (argc >= 3 && !parse_size(argv[2], 1, &local_nodes)) {
+        print_usage(argv[0]);
         return 1;
     }
 
     BenchMetrics metrics;
     const auto start = std::chrono::steady_clock::now();
 
-    runDriverPressure(iterations, &metrics);
-    runLinearMachinePressure(iterations, local_nodes, &metrics);
-    runAwaitableConstructPressure(iterations, local_nodes, &metrics);
+    run_driver_pressure(iterations, &metrics);
+    run_linear_machine_pressure(iterations, local_nodes, &metrics);
+    run_awaitable_construct_pressure(iterations, local_nodes, &metrics);
 
     const auto elapsed = std::chrono::steady_clock::now() - start;
     const auto elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();

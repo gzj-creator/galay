@@ -7,16 +7,16 @@ namespace galay::mcp {
 namespace {
 
 template <typename T>
-galay::kernel::Task<void> makeWrongModeTask(std::expected<T, McpError>& result, std::string_view message) {
-    result = std::unexpected(McpError::invalidTransportMode(std::string(message)));
+galay::kernel::Task<void> make_wrong_mode_task(std::expected<T, McpError>& result, std::string_view message) {
+    result = std::unexpected(McpError::invalid_transport_mode(std::string(message)));
     co_return;
 }
 
-McpClient::ConnectAwaitable makeImmediateConnectErrorTask() {
+McpClient::ConnectAwaitable make_immediate_connect_error_task() {
     co_return std::unexpected(::galay::kernel::IOError(::galay::kernel::kParamInvalid, 0));
 }
 
-McpClient::CloseAwaitable makeImmediateCloseErrorTask() {
+McpClient::CloseAwaitable make_immediate_close_error_task() {
     co_return std::unexpected(::galay::kernel::IOError(::galay::kernel::kParamInvalid, 0));
 }
 
@@ -53,28 +53,28 @@ McpClientMode McpClient::mode() const {
 
 McpClient::ConnectAwaitable McpClient::connect() {
     if (m_impl->mode != McpClientMode::Http) {
-        return makeImmediateConnectErrorTask();
+        return make_immediate_connect_error_task();
     }
     return m_impl->httpTransport->connect();
 }
 
 McpClient::ConnectAwaitable McpClient::connect(std::string url) {
     if (m_impl->mode != McpClientMode::Http) {
-        return makeImmediateConnectErrorTask();
+        return make_immediate_connect_error_task();
     }
     return m_impl->httpTransport->connect(std::move(url));
 }
 
-McpClient::CloseAwaitable McpClient::disconnectAsync() {
+McpClient::CloseAwaitable McpClient::disconnect_async() {
     if (m_impl->mode != McpClientMode::Http) {
-        return makeImmediateCloseErrorTask();
+        return make_immediate_close_error_task();
     }
-    return m_impl->httpTransport->disconnectAsync();
+    return m_impl->httpTransport->disconnect_async();
 }
 
 std::expected<void, McpError> McpClient::disconnect() {
     if (m_impl->mode != McpClientMode::Stdio) {
-        return std::unexpected(McpError::invalidTransportMode("stdio disconnect called on HTTP client"));
+        return std::unexpected(McpError::invalid_transport_mode("stdio disconnect called on HTTP client"));
     }
     return m_impl->stdioTransport->disconnect();
 }
@@ -82,58 +82,58 @@ std::expected<void, McpError> McpClient::disconnect() {
 std::expected<void, McpError> McpClient::initialize(const std::string& clientName,
                                                    const std::string& clientVersion) {
     if (m_impl->mode != McpClientMode::Stdio) {
-        return std::unexpected(McpError::invalidTransportMode("stdio API called on HTTP client"));
+        return std::unexpected(McpError::invalid_transport_mode("stdio API called on HTTP client"));
     }
     return m_impl->stdioTransport->initialize(clientName, clientVersion);
 }
 
-std::expected<std::string, McpError> McpClient::callTool(const std::string& toolName,
+std::expected<std::string, McpError> McpClient::call_tool(const std::string& toolName,
                                                         const std::string& arguments) {
     if (m_impl->mode != McpClientMode::Stdio) {
-        return std::unexpected(McpError::invalidTransportMode("stdio API called on HTTP client"));
+        return std::unexpected(McpError::invalid_transport_mode("stdio API called on HTTP client"));
     }
-    return m_impl->stdioTransport->callTool(toolName, arguments);
+    return m_impl->stdioTransport->call_tool(toolName, arguments);
 }
 
-std::expected<std::vector<Tool>, McpError> McpClient::listTools() {
+std::expected<std::vector<Tool>, McpError> McpClient::list_tools() {
     if (m_impl->mode != McpClientMode::Stdio) {
-        return std::unexpected(McpError::invalidTransportMode("stdio API called on HTTP client"));
+        return std::unexpected(McpError::invalid_transport_mode("stdio API called on HTTP client"));
     }
-    return m_impl->stdioTransport->listTools();
+    return m_impl->stdioTransport->list_tools();
 }
 
-std::expected<std::vector<Resource>, McpError> McpClient::listResources() {
+std::expected<std::vector<Resource>, McpError> McpClient::list_resources() {
     if (m_impl->mode != McpClientMode::Stdio) {
-        return std::unexpected(McpError::invalidTransportMode("stdio API called on HTTP client"));
+        return std::unexpected(McpError::invalid_transport_mode("stdio API called on HTTP client"));
     }
-    return m_impl->stdioTransport->listResources();
+    return m_impl->stdioTransport->list_resources();
 }
 
-std::expected<std::string, McpError> McpClient::readResource(const std::string& uri) {
+std::expected<std::string, McpError> McpClient::read_resource(const std::string& uri) {
     if (m_impl->mode != McpClientMode::Stdio) {
-        return std::unexpected(McpError::invalidTransportMode("stdio API called on HTTP client"));
+        return std::unexpected(McpError::invalid_transport_mode("stdio API called on HTTP client"));
     }
-    return m_impl->stdioTransport->readResource(uri);
+    return m_impl->stdioTransport->read_resource(uri);
 }
 
-std::expected<std::vector<Prompt>, McpError> McpClient::listPrompts() {
+std::expected<std::vector<Prompt>, McpError> McpClient::list_prompts() {
     if (m_impl->mode != McpClientMode::Stdio) {
-        return std::unexpected(McpError::invalidTransportMode("stdio API called on HTTP client"));
+        return std::unexpected(McpError::invalid_transport_mode("stdio API called on HTTP client"));
     }
-    return m_impl->stdioTransport->listPrompts();
+    return m_impl->stdioTransport->list_prompts();
 }
 
-std::expected<std::string, McpError> McpClient::getPrompt(const std::string& name,
+std::expected<std::string, McpError> McpClient::get_prompt(const std::string& name,
                                                          const std::string& arguments) {
     if (m_impl->mode != McpClientMode::Stdio) {
-        return std::unexpected(McpError::invalidTransportMode("stdio API called on HTTP client"));
+        return std::unexpected(McpError::invalid_transport_mode("stdio API called on HTTP client"));
     }
-    return m_impl->stdioTransport->getPrompt(name, arguments);
+    return m_impl->stdioTransport->get_prompt(name, arguments);
 }
 
 std::expected<void, McpError> McpClient::ping() {
     if (m_impl->mode != McpClientMode::Stdio) {
-        return std::unexpected(McpError::invalidTransportMode("stdio API called on HTTP client"));
+        return std::unexpected(McpError::invalid_transport_mode("stdio API called on HTTP client"));
     }
     return m_impl->stdioTransport->ping();
 }
@@ -142,99 +142,99 @@ galay::kernel::Task<void> McpClient::initialize(std::string clientName,
                                 std::string clientVersion,
                                 std::expected<void, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
-        co_await makeWrongModeTask(result, "HTTP API called on stdio client");
+        co_await make_wrong_mode_task(result, "HTTP API called on stdio client");
         co_return;
     }
     co_await m_impl->httpTransport->initialize(std::move(clientName), std::move(clientVersion), result);
 }
 
-galay::kernel::Task<void> McpClient::callTool(std::string toolName,
+galay::kernel::Task<void> McpClient::call_tool(std::string toolName,
                               std::string arguments,
                               std::expected<std::string, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
-        co_await makeWrongModeTask(result, "HTTP API called on stdio client");
+        co_await make_wrong_mode_task(result, "HTTP API called on stdio client");
         co_return;
     }
-    co_await m_impl->httpTransport->callTool(std::move(toolName), std::move(arguments), result);
+    co_await m_impl->httpTransport->call_tool(std::move(toolName), std::move(arguments), result);
 }
 
-galay::kernel::Task<void> McpClient::listTools(std::expected<std::vector<Tool>, McpError>& result) {
+galay::kernel::Task<void> McpClient::list_tools(std::expected<std::vector<Tool>, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
-        co_await makeWrongModeTask(result, "HTTP API called on stdio client");
+        co_await make_wrong_mode_task(result, "HTTP API called on stdio client");
         co_return;
     }
-    co_await m_impl->httpTransport->listTools(result);
+    co_await m_impl->httpTransport->list_tools(result);
 }
 
-galay::kernel::Task<void> McpClient::listResources(std::expected<std::vector<Resource>, McpError>& result) {
+galay::kernel::Task<void> McpClient::list_resources(std::expected<std::vector<Resource>, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
-        co_await makeWrongModeTask(result, "HTTP API called on stdio client");
+        co_await make_wrong_mode_task(result, "HTTP API called on stdio client");
         co_return;
     }
-    co_await m_impl->httpTransport->listResources(result);
+    co_await m_impl->httpTransport->list_resources(result);
 }
 
-galay::kernel::Task<void> McpClient::readResource(std::string uri,
+galay::kernel::Task<void> McpClient::read_resource(std::string uri,
                                   std::expected<std::string, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
-        co_await makeWrongModeTask(result, "HTTP API called on stdio client");
+        co_await make_wrong_mode_task(result, "HTTP API called on stdio client");
         co_return;
     }
-    co_await m_impl->httpTransport->readResource(std::move(uri), result);
+    co_await m_impl->httpTransport->read_resource(std::move(uri), result);
 }
 
-galay::kernel::Task<void> McpClient::listPrompts(std::expected<std::vector<Prompt>, McpError>& result) {
+galay::kernel::Task<void> McpClient::list_prompts(std::expected<std::vector<Prompt>, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
-        co_await makeWrongModeTask(result, "HTTP API called on stdio client");
+        co_await make_wrong_mode_task(result, "HTTP API called on stdio client");
         co_return;
     }
-    co_await m_impl->httpTransport->listPrompts(result);
+    co_await m_impl->httpTransport->list_prompts(result);
 }
 
-galay::kernel::Task<void> McpClient::getPrompt(std::string name,
+galay::kernel::Task<void> McpClient::get_prompt(std::string name,
                                std::string arguments,
                                std::expected<std::string, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
-        co_await makeWrongModeTask(result, "HTTP API called on stdio client");
+        co_await make_wrong_mode_task(result, "HTTP API called on stdio client");
         co_return;
     }
-    co_await m_impl->httpTransport->getPrompt(std::move(name), std::move(arguments), result);
+    co_await m_impl->httpTransport->get_prompt(std::move(name), std::move(arguments), result);
 }
 
 galay::kernel::Task<void> McpClient::ping(std::expected<void, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
-        co_await makeWrongModeTask(result, "HTTP API called on stdio client");
+        co_await make_wrong_mode_task(result, "HTTP API called on stdio client");
         co_return;
     }
     co_await m_impl->httpTransport->ping(result);
 }
 
-bool McpClient::isConnected() const {
+bool McpClient::is_connected() const {
     if (m_impl->mode == McpClientMode::Stdio) {
-        return m_impl->stdioTransport->isConnected();
+        return m_impl->stdioTransport->is_connected();
     }
-    return m_impl->httpTransport->isConnected();
+    return m_impl->httpTransport->is_connected();
 }
 
-bool McpClient::isInitialized() const {
+bool McpClient::is_initialized() const {
     if (m_impl->mode == McpClientMode::Stdio) {
-        return m_impl->stdioTransport->isInitialized();
+        return m_impl->stdioTransport->is_initialized();
     }
-    return m_impl->httpTransport->isInitialized();
+    return m_impl->httpTransport->is_initialized();
 }
 
-const ServerInfo& McpClient::getServerInfo() const {
+const ServerInfo& McpClient::get_server_info() const {
     if (m_impl->mode == McpClientMode::Stdio) {
-        return m_impl->stdioTransport->getServerInfo();
+        return m_impl->stdioTransport->get_server_info();
     }
-    return m_impl->httpTransport->getServerInfo();
+    return m_impl->httpTransport->get_server_info();
 }
 
-const ServerCapabilities& McpClient::getServerCapabilities() const {
+const ServerCapabilities& McpClient::get_server_capabilities() const {
     if (m_impl->mode == McpClientMode::Stdio) {
-        return m_impl->stdioTransport->getServerCapabilities();
+        return m_impl->stdioTransport->get_server_capabilities();
     }
-    return m_impl->httpTransport->getServerCapabilities();
+    return m_impl->httpTransport->get_server_capabilities();
 }
 
 } // namespace galay::mcp

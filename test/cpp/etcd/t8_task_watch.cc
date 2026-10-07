@@ -21,7 +21,7 @@ using galay::kernel::Task;
 namespace
 {
 
-std::string nowSuffix()
+std::string now_suffix()
 {
     const auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
     return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(now).count());
@@ -33,7 +33,7 @@ int fail(const std::string& message)
     return 1;
 }
 
-Task<void> runTaskWatch(IOScheduler* scheduler,
+Task<void> run_task_watch(IOScheduler* scheduler,
                         std::string endpoint,
                         std::atomic<bool>* done,
                         int* exit_code)
@@ -61,8 +61,8 @@ Task<void> runTaskWatch(IOScheduler* scheduler,
         co_return;
     }
 
-    const std::string key = "/galay-etcd/async-task-watch/" + nowSuffix();
-    const std::string value = "watch-value-" + nowSuffix();
+    const std::string key = "/galay-etcd/async-task-watch/" + now_suffix();
+    const std::string value = "watch-value-" + now_suffix();
     auto watch_state = std::make_shared<TaskWatchState>();
 
     auto watch_started = client.watch(
@@ -113,17 +113,17 @@ Task<void> runTaskWatch(IOScheduler* scheduler,
 
 int main(int argc, char** argv)
 {
-    if (const int skip_code = etcd_test::requireIntegrationEnabledOrSkip("etcd.task_watch");
+    if (const int skip_code = etcd_test::require_integration_enabled_or_skip("etcd.task_watch");
         skip_code != 0) {
         return skip_code;
     }
 
     const std::string endpoint = argc > 1 ? argv[1] : "http://127.0.0.1:2379";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         return fail("failed to get io scheduler");
@@ -131,7 +131,7 @@ int main(int argc, char** argv)
 
     std::atomic<bool> done{false};
     int exit_code = 1;
-    if (!galay::kernel::scheduleTask(scheduler, runTaskWatch(scheduler, endpoint, &done, &exit_code))) {
+    if (!galay::kernel::schedule_task(scheduler, run_task_watch(scheduler, endpoint, &done, &exit_code))) {
         runtime.stop();
         return fail("failed to schedule async task watch test");
     }

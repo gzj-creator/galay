@@ -2,6 +2,6 @@
 #include <galay/cpp/galay-tracing/log/logger.h>
 
 int main() {
-    auto span = galay::tracing::startSpan("checkout");
+    auto span = galay::tracing::start_span("checkout");
     GALAY_LOG_INFO("order accepted {}", 123);
 }

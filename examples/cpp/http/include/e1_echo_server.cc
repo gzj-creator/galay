@@ -15,9 +15,9 @@ using namespace galay::http;
 using namespace galay::kernel;
 
 // Echo 处理器：返回客户端发送的内容
-Task<void> echoHandler(HttpConn& conn, HttpRequest req) {
+Task<void> echo_handler(HttpConn& conn, HttpRequest req) {
     // 获取请求体
-    std::string requestBody = req.getBodyStr();
+    std::string requestBody = req.get_body_str();
 
     // 使用 Builder 构造响应 - 简洁优雅！
     auto response = Http1_1ResponseBuilder::ok()
@@ -26,8 +26,8 @@ Task<void> echoHandler(HttpConn& conn, HttpRequest req) {
         .build();
 
     // 发送响应
-    auto writer = conn.getWriter();
-    auto result = co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    auto result = co_await writer.send_response(response);
     if (!result) {
         std::cerr << "Failed to send response: " << result.error().message() << "\n";
     }
@@ -37,7 +37,7 @@ Task<void> echoHandler(HttpConn& conn, HttpRequest req) {
 }
 
 // 主页处理器
-Task<void> indexHandler(HttpConn& conn, HttpRequest req) {
+Task<void> index_handler(HttpConn& conn, HttpRequest req) {
     std::string body = R"(<!DOCTYPE html>
 <html>
 <head>
@@ -58,8 +58,8 @@ Task<void> indexHandler(HttpConn& conn, HttpRequest req) {
         .html(body)
         .build();
 
-    auto writer = conn.getWriter();
-    auto result = co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    auto result = co_await writer.send_response(response);
     if (!result) {
         std::cerr << "Failed to send response: " << result.error().message() << "\n";
     }
@@ -86,8 +86,8 @@ int main(int argc, char* argv[]) {
         HttpRouter router;
 
         // 注册路由
-        router.addHandler<HttpMethod::GET>("/", indexHandler);
-        router.addHandler<HttpMethod::POST>("/echo", echoHandler);
+        router.add_handler<HttpMethod::GET>("/", index_handler);
+        router.add_handler<HttpMethod::POST>("/echo", echo_handler);
 
         // 创建并启动服务器
         HttpServer server(HttpServerBuilder()

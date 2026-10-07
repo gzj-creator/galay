@@ -27,7 +27,7 @@ namespace galay::kernel {
 template <typename Reactor>
 concept ReactorType = requires(Reactor& reactor, const Reactor& const_reactor) {
     { reactor.notify() } -> std::same_as<void>;
-    { const_reactor.getHandle() } -> std::same_as<GHandle>;
+    { const_reactor.get_handle() } -> std::same_as<GHandle>;
 };
 
 namespace detail {
@@ -38,7 +38,7 @@ namespace detail {
  * @param error_code 框架级错误码
  * @param system_code 系统调用错误码
  */
-inline void storeBackendError(std::atomic<uint64_t>& last_error_code,
+inline void store_backend_error(std::atomic<uint64_t>& last_error_code,
                               IOErrorCode error_code,
                               uint32_t system_code) noexcept {
     last_error_code.store(IOError(error_code, system_code).code(), std::memory_order_release);
@@ -49,7 +49,7 @@ inline void storeBackendError(std::atomic<uint64_t>& last_error_code,
  * @param last_error_code 保存编码后错误的原子变量
  * @return 存在错误时返回 `IOError`，否则返回 `std::nullopt`
  */
-inline auto loadBackendError(const std::atomic<uint64_t>& last_error_code)
+inline auto load_backend_error(const std::atomic<uint64_t>& last_error_code)
     -> std::optional<IOError> {
     const uint64_t code = last_error_code.load(std::memory_order_acquire);
     if (code == 0) {

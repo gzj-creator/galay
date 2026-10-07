@@ -38,21 +38,21 @@ Result measure(std::string name, std::size_t iterations, std::size_t bytesPerIte
     return Result{std::move(name), nsPerOp, totalMb / seconds, checksum};
 }
 
-void printResult(const Result& result) {
+void print_result(const Result& result) {
     std::cout << std::left << std::setw(30) << result.name
               << std::right << std::setw(12) << std::fixed << std::setprecision(2) << result.nsPerOp
               << std::setw(14) << std::fixed << std::setprecision(2) << result.mbPerSec
               << "  checksum=" << result.checksum << '\n';
 }
 
-void writeBigEndian32(std::string& out, std::uint32_t value) {
+void write_big_endian32(std::string& out, std::uint32_t value) {
     out.push_back(static_cast<char>((value >> 24) & 0xFFu));
     out.push_back(static_cast<char>((value >> 16) & 0xFFu));
     out.push_back(static_cast<char>((value >> 8) & 0xFFu));
     out.push_back(static_cast<char>(value & 0xFFu));
 }
 
-std::uint32_t readBigEndian32(std::string_view view) {
+std::uint32_t read_big_endian32(std::string_view view) {
     return (static_cast<std::uint32_t>(static_cast<unsigned char>(view[0])) << 24u) |
            (static_cast<std::uint32_t>(static_cast<unsigned char>(view[1])) << 16u) |
            (static_cast<std::uint32_t>(static_cast<unsigned char>(view[2])) << 8u) |
@@ -62,7 +62,7 @@ std::uint32_t readBigEndian32(std::string_view view) {
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -71,7 +71,7 @@ int main() {
 
     std::string payload(chunk, 'x');
     std::string frame;
-    writeBigEndian32(frame, static_cast<std::uint32_t>(payload.size()));
+    write_big_endian32(frame, static_cast<std::uint32_t>(payload.size()));
     frame += payload;
 
     std::cout << "ByteQueueView benchmark\n";
@@ -89,7 +89,7 @@ int main() {
             queue.consume(size);
             return size + i % 17;
         });
-        printResult(result);
+        print_result(result);
     }
 
     {
@@ -102,7 +102,7 @@ int main() {
             }
             return queue.size() + i % 17;
         });
-        printResult(result);
+        print_result(result);
     }
 
     {
@@ -112,7 +112,7 @@ int main() {
             std::size_t parsed = 0;
             while (queue.has(4)) {
                 const auto header = queue.view(0, 4);
-                const auto length = static_cast<std::size_t>(readBigEndian32(header));
+                const auto length = static_cast<std::size_t>(read_big_endian32(header));
                 if (!queue.has(4 + length)) {
                     break;
                 }
@@ -121,7 +121,7 @@ int main() {
             }
             return parsed + i % 17;
         });
-        printResult(result);
+        print_result(result);
     }
 
     return static_cast<int>(g_sink == static_cast<std::size_t>(-1));

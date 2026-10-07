@@ -51,7 +51,7 @@ struct SharedStats {
     std::atomic<std::int64_t> timeout{0};
 };
 
-bool parseInt(const std::string& text, int& value)
+bool parse_int(const std::string& text, int& value)
 {
     try {
         size_t used = 0;
@@ -64,7 +64,7 @@ bool parseInt(const std::string& text, int& value)
     }
 }
 
-void printUsage(const char* program)
+void print_usage(const char* program)
 {
     std::cout << "Usage: " << program
               << " [-h host] [-p port] [-c workers] [-n operations] "
@@ -72,7 +72,7 @@ void printUsage(const char* program)
               << std::endl;
 }
 
-bool parseArgs(int argc, char* argv[], BenchmarkOptions& options, bool& show_help)
+bool parse_args(int argc, char* argv[], BenchmarkOptions& options, bool& show_help)
 {
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -95,35 +95,35 @@ bool parseArgs(int argc, char* argv[], BenchmarkOptions& options, bool& show_hel
             continue;
         }
         if (arg == "-p" || arg == "--port") {
-            if (!parseInt(value, options.port) || options.port <= 0 || options.port > 65535) {
+            if (!parse_int(value, options.port) || options.port <= 0 || options.port > 65535) {
                 std::cerr << "Invalid port: " << value << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "-c" || arg == "--workers") {
-            if (!parseInt(value, options.workers) || options.workers <= 0) {
+            if (!parse_int(value, options.workers) || options.workers <= 0) {
                 std::cerr << "Invalid workers: " << value << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "-n" || arg == "--operations") {
-            if (!parseInt(value, options.operations) || options.operations <= 0) {
+            if (!parse_int(value, options.operations) || options.operations <= 0) {
                 std::cerr << "Invalid operations: " << value << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "-m" || arg == "--min-connections") {
-            if (!parseInt(value, options.min_connections) || options.min_connections <= 0) {
+            if (!parse_int(value, options.min_connections) || options.min_connections <= 0) {
                 std::cerr << "Invalid min-connections: " << value << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "-x" || arg == "--max-connections") {
-            if (!parseInt(value, options.max_connections) || options.max_connections <= 0) {
+            if (!parse_int(value, options.max_connections) || options.max_connections <= 0) {
                 std::cerr << "Invalid max-connections: " << value << std::endl;
                 return false;
             }
@@ -141,12 +141,12 @@ bool parseArgs(int argc, char* argv[], BenchmarkOptions& options, bool& show_hel
     return true;
 }
 
-bool isTimeoutError(const RedisError& error)
+bool is_timeout_error(const RedisError& error)
 {
     return error.type() == REDIS_ERROR_TYPE_TIMEOUT_ERROR;
 }
 
-void countCommandResult(
+void count_command_result(
     const std::expected<std::optional<std::vector<RedisValue>>, RedisError>& result,
     std::int64_t& success,
     std::int64_t& error,
@@ -158,7 +158,7 @@ void countCommandResult(
     }
 
     if (!result) {
-        if (isTimeoutError(result.error())) {
+        if (is_timeout_error(result.error())) {
             ++timeout;
         } else {
             ++error;
@@ -169,7 +169,7 @@ void countCommandResult(
     ++error;
 }
 
-Task<void> poolWorker(
+Task<void> pool_worker(
     std::shared_ptr<RedisConnectionPool> pool,
     const BenchmarkOptions* options,
     SharedStats* stats,
@@ -185,7 +185,7 @@ Task<void> poolWorker(
     for (int i = 0; i < options->operations; ++i) {
         auto acquire_result = co_await pool->acquire().timeout(std::chrono::seconds(5));
         if (!acquire_result) {
-            if (isTimeoutError(acquire_result.error())) {
+            if (is_timeout_error(acquire_result.error())) {
                 ++local_timeout;
             } else {
                 ++local_error;
@@ -201,11 +201,11 @@ Task<void> poolWorker(
 
         auto set_result = co_await client->command(command_builder.set(key, value))
                               .timeout(std::chrono::seconds(5));
-        countCommandResult(set_result, local_success, local_error, local_timeout);
+        count_command_result(set_result, local_success, local_error, local_timeout);
 
         auto get_result = co_await client->command(command_builder.get(key))
                               .timeout(std::chrono::seconds(5));
-        countCommandResult(get_result, local_success, local_error, local_timeout);
+        count_command_result(get_result, local_success, local_error, local_timeout);
 
         pool->release(conn);
     }
@@ -223,7 +223,7 @@ Task<void> poolWorker(
     }
 }
 
-Task<void> runBenchmark(
+Task<void> run_benchmark(
     IOScheduler* scheduler,
     const BenchmarkOptions* options,
     BenchmarkResult* result,
@@ -257,7 +257,7 @@ Task<void> runBenchmark(
 
     const auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < options->workers; ++i) {
-        scheduleTask(scheduler, poolWorker(pool, options, &stats, i, remaining, done_waiter));
+        schedule_task(scheduler, pool_worker(pool, options, &stats, i, remaining, done_waiter));
     }
 
     auto all_done = co_await done_waiter->wait().timeout(std::chrono::seconds(180));
@@ -268,7 +268,7 @@ Task<void> runBenchmark(
     result->success = stats.success.load(std::memory_order_relaxed);
     result->error = stats.error.load(std::memory_order_relaxed);
     result->timeout = stats.timeout.load(std::memory_order_relaxed);
-    result->pool_stats = pool->getStats();
+    result->pool_stats = pool->get_stats();
 
     pool->shutdown();
 
@@ -282,14 +282,14 @@ Task<void> runBenchmark(
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     BenchmarkOptions options;
     bool show_help = false;
-    if (!parseArgs(argc, argv, options, show_help)) {
-        printUsage(argv[0]);
+    if (!parse_args(argc, argv, options, show_help)) {
+        print_usage(argv[0]);
         return show_help ? 0 : 1;
     }
 
@@ -308,7 +308,7 @@ int main(int argc, char* argv[])
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "Failed to get IO scheduler" << std::endl;
         runtime.stop();
@@ -317,7 +317,7 @@ int main(int argc, char* argv[])
 
     BenchmarkResult result;
     CompletionState completion;
-    scheduleTask(scheduler, runBenchmark(scheduler, &options, &result, &completion));
+    schedule_task(scheduler, run_benchmark(scheduler, &options, &result, &completion));
 
     {
         std::unique_lock<std::mutex> lock(completion.mutex);

@@ -9,7 +9,7 @@ namespace galay::http
 {
     namespace {
 
-    std::string_view trimAscii(std::string_view value)
+    std::string_view trim_ascii(std::string_view value)
     {
         size_t begin = 0;
         size_t end = value.size();
@@ -22,11 +22,11 @@ namespace galay::http
         return value.substr(begin, end - begin);
     }
 
-    bool isSingleHeaderToken(std::string_view value, std::string_view expected)
+    bool is_single_header_token(std::string_view value, std::string_view expected)
     {
-        value = trimAscii(value);
+        value = trim_ascii(value);
         return value.find(',') == std::string_view::npos &&
-               detail::equalsIgnoreCaseAscii(value, expected);
+               detail::equals_ignore_case_ascii(value, expected);
     }
 
     } // namespace
@@ -56,40 +56,40 @@ namespace galay::http
         return copy;
     }
 
-    std::string HttpRequest::getBodyStr()
+    std::string HttpRequest::get_body_str()
     {
         return std::move(m_body);
     }
 
-    const std::string& HttpRequest::bodyStr() const
+    const std::string& HttpRequest::body_str() const
     {
         return m_body;
     }
 
-    void HttpRequest::setHeader(HttpRequestHeader &&header)
+    void HttpRequest::set_header(HttpRequestHeader &&header)
     {
         m_header = std::move(header);
     }
 
-    void HttpRequest::setHeader(HttpRequestHeader &header)
+    void HttpRequest::set_header(HttpRequestHeader &header)
     {
-        m_header.copyFrom(header);
+        m_header.copy_from(header);
     }
 
-    void HttpRequest::setBodyStr(std::string &&body)
+    void HttpRequest::set_body_str(std::string &&body)
     {
         m_body = std::move(body);
     }
 
-    std::string HttpRequest::toString()
+    std::string HttpRequest::to_string()
     {
-        if(!m_header.isChunked()) {
-            m_header.headerPairs().addHeaderPairIfNotExist("Content-Length", std::to_string(m_body.size()));
+        if(!m_header.is_chunked()) {
+            m_header.header_pairs().add_header_pair_if_not_exist("Content-Length", std::to_string(m_body.size()));
         }
 
-        std::string header_str = m_header.toString();
+        std::string header_str = m_header.to_string();
 
-        if(m_header.isChunked()) {
+        if(m_header.is_chunked()) {
             return header_str;
         }
 
@@ -101,12 +101,12 @@ namespace galay::http
         return result;
     }
 
-    std::pair<HttpErrorCode, ssize_t> HttpRequest::fromIOVec(const std::vector<iovec>& iovecs)
+    std::pair<HttpErrorCode, ssize_t> HttpRequest::from_io_vec(const std::vector<iovec>& iovecs)
     {
-        return fromIOVec(iovecs, 0);
+        return from_io_vec(iovecs, 0);
     }
 
-    std::pair<HttpErrorCode, ssize_t> HttpRequest::fromIOVec(const std::vector<iovec>& iovecs,
+    std::pair<HttpErrorCode, ssize_t> HttpRequest::from_io_vec(const std::vector<iovec>& iovecs,
                                                              size_t max_body_size)
     {
         ssize_t newly_consumed = 0;
@@ -115,7 +115,7 @@ namespace galay::http
 
         // 如果header还没解析完，先解析header
         if (!m_headerParsed) {
-            auto [err, header_consumed] = m_header.fromIOVec(iovecs);
+            auto [err, header_consumed] = m_header.from_io_vec(iovecs);
             if (err != kNoError && err != kIncomplete) {
                 return {err, -1};
             }
@@ -128,22 +128,22 @@ namespace galay::http
             newly_consumed = header_consumed;
             m_headerParsed = true;
             const auto* transfer_encoding =
-                detail::getHeaderValuePtrLoose(m_header.headerPairs(), "transfer-encoding");
+                detail::get_header_value_ptr_loose(m_header.header_pairs(), "transfer-encoding");
             const auto* content_length =
-                detail::getHeaderValuePtrLoose(m_header.headerPairs(), "content-length");
+                detail::get_header_value_ptr_loose(m_header.header_pairs(), "content-length");
 
             if (transfer_encoding != nullptr) {
                 if (content_length != nullptr) {
                     return {kBadRequest, -1};
                 }
-                if (!isSingleHeaderToken(*transfer_encoding, "chunked")) {
+                if (!is_single_header_token(*transfer_encoding, "chunked")) {
                     return {kBadRequest, -1};
                 }
                 is_chunked = true;
             }
 
             if (is_chunked) {
-                if (detail::getHeaderValuePtrLoose(m_header.headerPairs(), "content-length") != nullptr) {
+                if (detail::get_header_value_ptr_loose(m_header.header_pairs(), "content-length") != nullptr) {
                     return {kBadRequest, -1};
                 }
                 // chunked body 继续往下解析
@@ -154,7 +154,7 @@ namespace galay::http
                     return {kNoError, newly_consumed};
                 }
 
-                auto parsed_length = detail::parseSizeTStrict(*content_length);
+                auto parsed_length = detail::parse_size_t_strict(*content_length);
                 if (!parsed_length.has_value()) {
                     return {kBadRequest, -1};
                 }
@@ -170,14 +170,14 @@ namespace galay::http
                 m_body.reserve(std::min(m_contentLength, kInitialBodyReserveLimit));
             }
         } else {
-            if (const auto* te = detail::getHeaderValuePtrLoose(m_header.headerPairs(), "transfer-encoding");
+            if (const auto* te = detail::get_header_value_ptr_loose(m_header.header_pairs(), "transfer-encoding");
                 te != nullptr) {
-                is_chunked = detail::headerValueContainsToken(*te, "chunked");
+                is_chunked = detail::header_value_contains_token(*te, "chunked");
             }
         }
 
         if (is_chunked) {
-            auto body_iovecs = detail::sliceIovecs(iovecs, header_bytes);
+            auto body_iovecs = detail::slice_iovecs(iovecs, header_bytes);
             if (body_iovecs.empty()) {
                 return {kNoError, newly_consumed};
             }
@@ -193,8 +193,8 @@ namespace galay::http
             newly_consumed += chunk_result.value().second;
 
             if (chunk_result.value().first) {
-                detail::removeHeaderPairLoose(m_header.headerPairs(), "transfer-encoding");
-                m_header.headerPairs().addHeaderPair("content-length", std::to_string(m_body.size()));
+                detail::remove_header_pair_loose(m_header.header_pairs(), "transfer-encoding");
+                m_header.header_pairs().add_header_pair("content-length", std::to_string(m_body.size()));
                 m_contentLength = m_body.size();
                 m_bodyParsed = m_contentLength;
             }
@@ -245,12 +245,12 @@ namespace galay::http
         return {kNoError, newly_consumed};
     }
 
-    bool HttpRequest::isComplete() const
+    bool HttpRequest::is_complete() const
     {
         if (!m_headerParsed) {
             return false;
         }
-        if (m_header.isChunked()) {
+        if (m_header.is_chunked()) {
             return false; // chunked需要单独处理
         }
         return m_bodyParsed >= m_contentLength;
@@ -269,7 +269,7 @@ namespace galay::http
     }
 
     // ==================== 路由参数方法实现 ====================
-    void HttpRequest::setRouteParams(std::map<std::string, std::string>&& params)
+    void HttpRequest::set_route_params(std::map<std::string, std::string>&& params)
     {
         RouteParams compact;
         for (const auto& [name, value] : params) {
@@ -283,29 +283,29 @@ namespace galay::http
         m_routeParamMapCache.reset();
     }
 
-    void HttpRequest::setRouteParams(RouteParams&& params)
+    void HttpRequest::set_route_params(RouteParams&& params)
     {
         m_routeParams = std::move(params);
         m_routeParamMapCache.reset();
     }
 
-    const std::map<std::string, std::string>& HttpRequest::routeParams() const
+    const std::map<std::string, std::string>& HttpRequest::route_params() const
     {
         if (!m_routeParamMapCache.has_value()) {
-            auto materialized = m_routeParams.toMap();
+            auto materialized = m_routeParams.to_map();
             auto& cache = m_routeParamMapCache.emplace(std::move(materialized));
             return cache;
         }
         return *m_routeParamMapCache;
     }
 
-    std::string HttpRequest::getRouteParam(const std::string& name, const std::string& defaultValue) const
+    std::string HttpRequest::get_route_param(const std::string& name, const std::string& defaultValue) const
     {
         const std::string* value = m_routeParams.find(name);
         return value != nullptr ? *value : defaultValue;
     }
 
-    bool HttpRequest::hasRouteParam(const std::string& name) const
+    bool HttpRequest::has_route_param(const std::string& name) const
     {
         return m_routeParams.contains(name);
     }

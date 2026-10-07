@@ -22,39 +22,39 @@ void require(bool condition, const char* message)
     }
 }
 
-std::pair<HttpErrorCode, ssize_t> parseRequest(std::string& raw)
+std::pair<HttpErrorCode, ssize_t> parse_request(std::string& raw)
 {
     iovec iov{
         .iov_base = raw.data(),
         .iov_len = raw.size(),
     };
     HttpRequest request;
-    return request.fromIOVec({iov});
+    return request.from_io_vec({iov});
 }
 
-bool sessionRejectsOversizedResponse(std::string& raw)
+bool session_rejects_oversized_response(std::string& raw)
 {
     galay::async::AsyncTcpSocket socket;
     HttpReaderSetting setting;
-    setting.setMaxBodySize(4);
+    setting.set_max_body_size(4);
     HttpSession session(socket, 1024, setting);
     galay::http::detail::HttpSessionState<galay::async::AsyncTcpSocket> state(
         session, std::string("GET / HTTP/1.1\r\n\r\n"));
 
-    require(session.getRingBuffer().tryWriteBatch(raw.data(), raw.size()) ==
+    require(session.get_ring_buffer().try_write_batch(raw.data(), raw.size()) ==
                 raw.size(),
             "failed to seed oversized response fixture");
-    state.onBytesReceived(raw.size());
-    if (!state.parseFromRingBuffer()) {
+    state.on_bytes_received(raw.size());
+    if (!state.parse_from_ring_buffer()) {
         return false;
     }
 
-    auto result = state.takeResult();
+    auto result = state.take_result();
     return !result.has_value() && result.error().code() == kRequestEntityTooLarge;
 }
 
 template <typename Func>
-void runBench(const char* name, size_t iterations, Func&& func)
+void run_bench(const char* name, size_t iterations, Func&& func)
 {
     const auto start = std::chrono::steady_clock::now();
     size_t accepted = 0;
@@ -72,7 +72,7 @@ void runBench(const char* name, size_t iterations, Func&& func)
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -93,24 +93,24 @@ int main()
         "\r\n"
         "12345";
 
-    require(parseRequest(te_cl).first == kBadRequest, "TE+CL fixture should be rejected");
-    require(parseRequest(bad_uri).first == kUriEncodeError, "bad URI fixture should be rejected");
+    require(parse_request(te_cl).first == kBadRequest, "TE+CL fixture should be rejected");
+    require(parse_request(bad_uri).first == kUriEncodeError, "bad URI fixture should be rejected");
     require(HttpRangeParser::parse(range_header, 100).ranges.size() == 1,
             "range fixture should merge");
-    require(sessionRejectsOversizedResponse(oversized_response),
+    require(session_rejects_oversized_response(oversized_response),
             "oversized session response fixture should be rejected");
 
-    runBench("BM_RejectTransferEncodingContentLength", kIterations, [&]() {
-        return parseRequest(te_cl).first == kBadRequest;
+    run_bench("BM_RejectTransferEncodingContentLength", kIterations, [&]() {
+        return parse_request(te_cl).first == kBadRequest;
     });
-    runBench("BM_RejectTruncatedUriEscape", kIterations, [&]() {
-        return parseRequest(bad_uri).first == kUriEncodeError;
+    run_bench("BM_RejectTruncatedUriEscape", kIterations, [&]() {
+        return parse_request(bad_uri).first == kUriEncodeError;
     });
-    runBench("BM_MergeSmallRanges", kIterations, [&]() {
+    run_bench("BM_MergeSmallRanges", kIterations, [&]() {
         return HttpRangeParser::parse(range_header, 100).ranges.size() == 1;
     });
-    runBench("BM_RejectOversizedSessionResponse", kIterations, [&]() {
-        return sessionRejectsOversizedResponse(oversized_response);
+    run_bench("BM_RejectOversizedSessionResponse", kIterations, [&]() {
+        return session_rejects_oversized_response(oversized_response);
     });
 
     return 0;

@@ -35,7 +35,7 @@ using namespace galay::kernel;
  * @return 对应的 inotify 事件掩码
  */
 #if defined(USE_IOURING) || defined(USE_EPOLL)
-static uint32_t toInotifyMask(FileWatchEvent events)
+static uint32_t to_inotify_mask(FileWatchEvent events)
 {
     uint32_t mask = 0;
     uint32_t e = static_cast<uint32_t>(events);
@@ -69,7 +69,7 @@ AsyncFileWatcher::AsyncFileWatcher()
     m_controller->m_handle.fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
     m_watch_fd = m_controller->m_handle.fd;
 #endif
-    // macOS: m_controller 在 addWatch 时设置为第一个监控的文件 fd
+    // macOS: m_controller 在 add_watch 时设置为第一个监控的文件 fd
 }
 
 /**
@@ -157,14 +157,14 @@ AsyncFileWatcher& AsyncFileWatcher::operator=(AsyncFileWatcher&& other) noexcept
  * @param events 要监控的事件类型
  * @return 监控描述符（Linux：inotify wd，macOS：文件 fd），或 IOError
  */
-std::expected<int, IOError> AsyncFileWatcher::addWatch(const std::string& path, FileWatchEvent events)
+std::expected<int, IOError> AsyncFileWatcher::add_watch(const std::string& path, FileWatchEvent events)
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL)
     if (m_controller->m_handle.fd < 0) {
         return std::unexpected(IOError(kOpenFailed, EBADF));
     }
 
-    uint32_t mask = toInotifyMask(events);
+    uint32_t mask = to_inotify_mask(events);
     int wd = inotify_add_watch(m_controller->m_handle.fd, path.c_str(), mask);
     if (wd < 0) {
         return std::unexpected(IOError(kOpenFailed, errno));
@@ -201,7 +201,7 @@ std::expected<int, IOError> AsyncFileWatcher::addWatch(const std::string& path, 
  * @param wd 要移除的监控描述符
  * @return 成功返回 void，描述符无效或移除失败时返回 IOError
  */
-std::expected<void, IOError> AsyncFileWatcher::removeWatch(int wd)
+std::expected<void, IOError> AsyncFileWatcher::remove_watch(int wd)
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL)
     if (m_controller->m_handle.fd < 0) {
@@ -268,7 +268,7 @@ FileWatchAwaitable AsyncFileWatcher::watch()
  * @param wd 监控描述符
  * @return 注册的路径字符串，未找到时返回空字符串
  */
-std::string AsyncFileWatcher::getPath(int wd) const
+std::string AsyncFileWatcher::get_path(int wd) const
 {
     auto it = m_watches.find(wd);
     if (it != m_watches.end()) {

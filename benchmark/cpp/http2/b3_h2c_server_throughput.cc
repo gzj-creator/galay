@@ -18,10 +18,10 @@ static volatile bool g_running = true;
 static bool g_debug_log = false;
 static std::atomic<int> g_debug_logs{0};
 
-static const std::string& encodedEchoHeaders(size_t body_size) {
+static const std::string& encoded_echo_headers(size_t body_size) {
     static const std::string kEncoded0 = [] {
         HpackEncoder encoder;
-        return encoder.encodeStateless({
+        return encoder.encode_stateless({
             {":status", "200"},
             {"content-type", "text/plain"},
             {"content-length", "0"},
@@ -29,7 +29,7 @@ static const std::string& encodedEchoHeaders(size_t body_size) {
     }();
     static const std::string kEncoded128 = [] {
         HpackEncoder encoder;
-        return encoder.encodeStateless({
+        return encoder.encode_stateless({
             {":status", "200"},
             {"content-type", "text/plain"},
             {"content-length", "128"},
@@ -45,7 +45,7 @@ static const std::string& encodedEchoHeaders(size_t body_size) {
 
     static thread_local std::string dynamic_headers;
     HpackEncoder encoder;
-    dynamic_headers = encoder.encodeStateless({
+    dynamic_headers = encoder.encode_stateless({
         {":status", "200"},
         {"content-type", "text/plain"},
         {"content-length", std::to_string(body_size)},
@@ -53,9 +53,9 @@ static const std::string& encodedEchoHeaders(size_t body_size) {
     return dynamic_headers;
 }
 
-static std::shared_ptr<const std::string> sharedEncodedEchoHeaders(size_t body_size) {
-    static const auto kEncoded0 = std::make_shared<const std::string>(encodedEchoHeaders(0));
-    static const auto kEncoded128 = std::make_shared<const std::string>(encodedEchoHeaders(128));
+static std::shared_ptr<const std::string> shared_encoded_echo_headers(size_t body_size) {
+    static const auto kEncoded0 = std::make_shared<const std::string>(encoded_echo_headers(0));
+    static const auto kEncoded128 = std::make_shared<const std::string>(encoded_echo_headers(128));
 
     if (body_size == 0) {
         return kEncoded0;
@@ -63,29 +63,29 @@ static std::shared_ptr<const std::string> sharedEncodedEchoHeaders(size_t body_s
     if (body_size == 128) {
         return kEncoded128;
     }
-    return std::make_shared<const std::string>(encodedEchoHeaders(body_size));
+    return std::make_shared<const std::string>(encoded_echo_headers(body_size));
 }
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
-Task<void> handleActiveConn(Http2ConnContext& ctx) {
+Task<void> handle_active_conn(Http2ConnContext& ctx) {
     while (true) {
-        auto streams = co_await ctx.getActiveStreams(64);
+        auto streams = co_await ctx.get_active_streams(64);
         if (!streams) {
             break;
         }
 
         for (auto& stream : *streams) {
-            auto events = stream->takeEvents();
-            if (!hasHttp2StreamEvent(events, Http2StreamEvent::RequestComplete)) {
+            auto events = stream->take_events();
+            if (!has_http2_stream_event(events, Http2StreamEvent::RequestComplete)) {
                 continue;
             }
 
-            const size_t body_size = stream->request().bodySize();
-            const size_t body_chunk_count = stream->request().bodyChunkCount();
-            auto response_headers = sharedEncodedEchoHeaders(body_size);
+            const size_t body_size = stream->request().body_size();
+            const size_t body_chunk_count = stream->request().body_chunk_count();
+            auto response_headers = shared_encoded_echo_headers(body_size);
 
             if (g_debug_log) {
                 int idx = g_debug_logs.fetch_add(1);
@@ -95,13 +95,13 @@ Task<void> handleActiveConn(Http2ConnContext& ctx) {
             }
 
             if (body_chunk_count == 1) {
-                stream->sendEncodedHeadersAndData(
-                    std::move(response_headers), stream->request().takeSingleBodyChunk(), true);
+                stream->send_encoded_headers_and_data(
+                    std::move(response_headers), stream->request().take_single_body_chunk(), true);
             } else if (body_chunk_count > 1) {
-                stream->sendEncodedHeadersAndDataChunks(
-                    std::string(*response_headers), stream->request().takeBodyChunks(), true);
+                stream->send_encoded_headers_and_data_chunks(
+                    std::string(*response_headers), stream->request().take_body_chunks(), true);
             } else {
-                stream->sendEncodedHeadersAndData(
+                stream->send_encoded_headers_and_data(
                     std::move(response_headers), std::string(), true);
             }
         }
@@ -110,7 +110,7 @@ Task<void> handleActiveConn(Http2ConnContext& ctx) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -145,25 +145,25 @@ int main(int argc, char* argv[]) {
     std::cout << "Press Ctrl+C to stop\n";
     std::cout << "========================================\n\n";
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
         H2cServer server(H2cServerBuilder()
             .host("0.0.0.0")
             .port(port)
-            .ioSchedulerCount(static_cast<size_t>(io_threads))
-            .parallelSchedulerCount(0)
-            .maxConcurrentStreams(1000)
-            .initialWindowSize(65535)
-            .activeConnHandler(handleActiveConn)
+            .io_scheduler_count(static_cast<size_t>(io_threads))
+            .parallel_scheduler_count(0)
+            .max_concurrent_streams(1000)
+            .initial_window_size(65535)
+            .active_conn_handler(handle_active_conn)
             .build());
 
         server.start();
 
         std::cout << "Server started successfully!\n";
-        std::cout << "Runtime Config: io=" << server.getRuntime().getIOSchedulerCount()
-                  << " parallel=" << server.getRuntime().getParallelSchedulerCount()
+        std::cout << "Runtime Config: io=" << server.get_runtime().get_io_scheduler_count()
+                  << " parallel=" << server.get_runtime().get_parallel_scheduler_count()
                   << " (configured io=" << io_threads << " parallel=0)\n";
         std::cout << "Waiting for requests...\n\n";
 

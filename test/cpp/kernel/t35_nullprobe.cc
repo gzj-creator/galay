@@ -27,12 +27,12 @@ namespace {
 struct ProbeSendContext : public SendIOContext {
     using SendIOContext::SendIOContext;
 
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override {
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override {
         if (cqe == nullptr) {
             ++null_probes;
             return false;
         }
-        return SendIOContext::handleComplete(cqe, handle);
+        return SendIOContext::handle_complete(cqe, handle);
     }
 
     int null_probes = 0;
@@ -41,9 +41,9 @@ struct ProbeSendContext : public SendIOContext {
 using ProbeResult = std::expected<size_t, IOError>;
 
 struct ProbeFlow {
-    void onSend(SequenceOps<ProbeResult, 2>& ops, ProbeSendContext& send_ctx);
+    void on_send(SequenceOps<ProbeResult, 2>& ops, ProbeSendContext& send_ctx);
 
-    using SendStep = SequenceStep<ProbeResult, 2, ProbeFlow, ProbeSendContext, &ProbeFlow::onSend>;
+    using SendStep = SequenceStep<ProbeResult, 2, ProbeFlow, ProbeSendContext, &ProbeFlow::on_send>;
 
     ProbeFlow(const char* buffer, size_t length)
         : send(this, buffer, length) {}
@@ -58,7 +58,7 @@ struct ProbeFlow {
     int null_probes = 0;
 };
 
-inline void ProbeFlow::onSend(SequenceOps<ProbeResult, 2>& ops, ProbeSendContext& send_ctx) {
+inline void ProbeFlow::on_send(SequenceOps<ProbeResult, 2>& ops, ProbeSendContext& send_ctx) {
     null_probes = send_ctx.null_probes;
     ops.complete(std::move(send_ctx.m_result));
 }
@@ -69,7 +69,7 @@ struct TestState {
     std::atomic<int> null_probes{0};
 };
 
-Task<void> sendTask(TestState* state, int fd, const char* msg, size_t len) {
+Task<void> send_task(TestState* state, int fd, const char* msg, size_t len) {
     IOController controller(GHandle{.fd = fd});
     ProbeFlow flow(msg, len);
     auto sequence = flow.make(&controller);
@@ -81,7 +81,7 @@ Task<void> sendTask(TestState* state, int fd, const char* msg, size_t len) {
     co_return;
 }
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -131,9 +131,9 @@ int main() {
     TestState state;
     IOUringScheduler scheduler;
     scheduler.start();
-    scheduleTask(scheduler, sendTask(&state, fds[0], payload, sizeof(payload) - 1));
+    schedule_task(scheduler, send_task(&state, fds[0], payload, sizeof(payload) - 1));
 
-    const bool coroutine_done = waitUntil(state.done);
+    const bool coroutine_done = wait_until(state.done);
     scheduler.stop();
     peer.join();
 

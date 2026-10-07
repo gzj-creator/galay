@@ -34,7 +34,7 @@ struct BenchState {
 
 std::atomic<int64_t> g_fallback_requests{0};
 
-std::expected<size_t, const char*> parseSize(std::string_view text)
+std::expected<size_t, const char*> parse_size(std::string_view text)
 {
     size_t value = 0;
     const auto* begin = text.data();
@@ -46,7 +46,7 @@ std::expected<size_t, const char*> parseSize(std::string_view text)
     return value;
 }
 
-std::expected<void, const char*> writeFilledFile(const std::filesystem::path& path,
+std::expected<void, const char*> write_filled_file(const std::filesystem::path& path,
                                                  size_t size,
                                                  char fill)
 {
@@ -87,21 +87,21 @@ std::expected<void, const char*> writeFilledFile(const std::filesystem::path& pa
     return {};
 }
 
-Task<void> fallbackActiveHandler(Http2ConnContext& ctx)
+Task<void> fallback_active_handler(Http2ConnContext& ctx)
 {
     while (true) {
-        auto streams = co_await ctx.getActiveStreams(64);
+        auto streams = co_await ctx.get_active_streams(64);
         if (!streams) {
             break;
         }
         for (auto& stream : *streams) {
-            auto events = stream->takeEvents();
-            if (!hasHttp2StreamEvent(events, Http2StreamEvent::RequestComplete)) {
+            auto events = stream->take_events();
+            if (!has_http2_stream_event(events, Http2StreamEvent::RequestComplete)) {
                 continue;
             }
             g_fallback_requests.fetch_add(1, std::memory_order_relaxed);
-            stream->sendHeaders(
-                Http2Headers().status(404).contentType("text/plain").contentLength(0),
+            stream->send_headers(
+                Http2Headers().status(404).content_type("text/plain").content_length(0),
                 true,
                 true);
         }
@@ -109,7 +109,7 @@ Task<void> fallbackActiveHandler(Http2ConnContext& ctx)
     co_return;
 }
 
-Task<void> runClient(uint16_t port,
+Task<void> run_client(uint16_t port,
                      size_t requests,
                      size_t file_size,
                      BenchState* state)
@@ -135,7 +135,7 @@ Task<void> runClient(uint16_t port,
             ++state->errors;
             continue;
         }
-        auto completed = co_await stream->waitResponseComplete();
+        auto completed = co_await stream->wait_response_complete();
         if (!completed ||
             stream->response().status != 200 ||
             stream->response().body.size() != file_size) {
@@ -163,14 +163,14 @@ Task<void> runClient(uint16_t port,
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     size_t requests = 128;
     size_t file_size = 16 * 1024;
     if (argc > 1) {
-        auto parsed = parseSize(argv[1]);
+        auto parsed = parse_size(argv[1]);
         if (!parsed.has_value()) {
             std::cerr << parsed.error() << "\n";
             return 1;
@@ -178,7 +178,7 @@ int main(int argc, char** argv)
         requests = *parsed;
     }
     if (argc > 2) {
-        auto parsed = parseSize(argv[2]);
+        auto parsed = parse_size(argv[2]);
         if (!parsed.has_value()) {
             std::cerr << parsed.error() << "\n";
             return 1;
@@ -204,7 +204,7 @@ int main(int argc, char** argv)
         std::cerr << "create_directories failed\n";
         return 1;
     }
-    auto write_result = writeFilledFile(root / "payload.bin", file_size, 'x');
+    auto write_result = write_filled_file(root / "payload.bin", file_size, 'x');
     if (!write_result.has_value()) {
         std::cerr << write_result.error() << "\n";
         const auto removed = fs::remove_all(base, ec);
@@ -221,18 +221,18 @@ int main(int argc, char** argv)
     H2cServer server(H2cServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
-        .staticFiles("/files", H2StaticFileConfig{
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
+        .static_files("/files", H2StaticFileConfig{
             .root = root,
             .small_file_threshold = file_size,
         })
-        .activeConnHandler(fallbackActiveHandler)
+        .active_conn_handler(fallback_active_handler)
         .build());
     server.start();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();
@@ -245,7 +245,7 @@ int main(int argc, char** argv)
     }
 
     BenchState state;
-    auto scheduled = runtime.spawnIO(runClient(port, requests, file_size, &state));
+    auto scheduled = runtime.spawn_io(run_client(port, requests, file_size, &state));
     if (!scheduled.has_value()) {
         runtime.stop();
         server.stop();

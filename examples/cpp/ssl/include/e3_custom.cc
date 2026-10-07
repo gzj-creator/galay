@@ -59,7 +59,7 @@ struct EchoMachine {
         return SslMachineAction<result_type>::fail(SslError(SslErrorCode::kUnknown));
     }
 
-    void onHandshake(std::expected<void, SslError> result)
+    void on_handshake(std::expected<void, SslError> result)
     {
         if (!result) {
             m_result = std::unexpected(result.error());
@@ -69,9 +69,9 @@ struct EchoMachine {
         m_phase = Phase::kRecv;
     }
 
-    void onRecv(std::expected<Bytes, SslError> result)
+    void on_recv(std::expected<Bytes, SslError> result)
     {
-        if (!result || result.value().toStringView() != kPayload) {
+        if (!result || result.value().to_string_view() != kPayload) {
             m_result = std::unexpected(result ? SslError(SslErrorCode::kReadFailed) : result.error());
             m_phase = Phase::kDone;
             return;
@@ -79,7 +79,7 @@ struct EchoMachine {
         m_phase = Phase::kSend;
     }
 
-    void onSend(std::expected<size_t, SslError> result)
+    void on_send(std::expected<size_t, SslError> result)
     {
         if (!result || result.value() != m_reply.size()) {
             m_result = std::unexpected(result ? SslError(SslErrorCode::kWriteFailed) : result.error());
@@ -89,7 +89,7 @@ struct EchoMachine {
         m_phase = Phase::kShutdown;
     }
 
-    void onShutdown(std::expected<void, SslError> result)
+    void on_shutdown(std::expected<void, SslError> result)
     {
         if (!result) {
             m_result = std::unexpected(result.error());
@@ -120,13 +120,13 @@ struct ExampleState {
     std::atomic<bool> ok{false};
 };
 
-Task<void> serverTask(SslContext* ctx, ExampleState* state)
+Task<void> server_task(SslContext* ctx, ExampleState* state)
 {
     SslSocket listener(ctx);
-    listener.option().handleReuseAddr();
-    listener.option().handleNonBlock();
+    listener.option().handle_reuse_addr();
+    listener.option().handle_non_block();
 
-    if (!listener.isValid() ||
+    if (!listener.is_valid() ||
         !listener.bind(Host(IPType::IPV4, "127.0.0.1", kPort)) ||
         !listener.listen(16)) {
         state->done.store(true, std::memory_order_relaxed);
@@ -144,9 +144,9 @@ Task<void> serverTask(SslContext* ctx, ExampleState* state)
     }
 
     SslSocket client(ctx, accept_result.value());
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
-    auto awaitable = SslAwaitableBuilder<ExampleResult>::fromStateMachine(
+    auto awaitable = SslAwaitableBuilder<ExampleResult>::from_state_machine(
         client.controller(),
         &client,
         EchoMachine{}
@@ -160,13 +160,13 @@ Task<void> serverTask(SslContext* ctx, ExampleState* state)
     state->done.store(true, std::memory_order_relaxed);
 }
 
-Task<void> clientTask(SslContext* ctx, ExampleState* state)
+Task<void> client_task(SslContext* ctx, ExampleState* state)
 {
     SslSocket socket(ctx);
-    socket.option().handleNonBlock();
-    socket.setHostname("localhost");
+    socket.option().handle_non_block();
+    socket.set_hostname("localhost");
 
-    if (!socket.isValid()) {
+    if (!socket.is_valid()) {
         co_return;
     }
 
@@ -190,7 +190,7 @@ Task<void> clientTask(SslContext* ctx, ExampleState* state)
 
     char buffer[16];
     auto recv_result = co_await socket.recv(buffer, sizeof(buffer));
-    if (recv_result && recv_result.value().toStringView() == kReply) {
+    if (recv_result && recv_result.value().to_string_view() == kReply) {
         state->ok.store(true, std::memory_order_relaxed);
     }
 
@@ -198,7 +198,7 @@ Task<void> clientTask(SslContext* ctx, ExampleState* state)
     co_await socket.close();
 }
 
-void waitFor(const std::atomic<bool>& flag)
+void wait_for(const std::atomic<bool>& flag)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!flag.load(std::memory_order_relaxed)) {
@@ -215,25 +215,25 @@ int main()
 {
     SslContext server_ctx(SslMethod::TLS_Server);
     SslContext client_ctx(SslMethod::TLS_Client);
-    if (!server_ctx.isValid() || !client_ctx.isValid()) {
+    if (!server_ctx.is_valid() || !client_ctx.is_valid()) {
         return 1;
     }
 
-    if (!server_ctx.loadCertificate("certs/server.crt") ||
-        !server_ctx.loadPrivateKey("certs/server.key") ||
-        !client_ctx.loadCACertificate("certs/ca.crt")) {
+    if (!server_ctx.load_certificate("certs/server.crt") ||
+        !server_ctx.load_private_key("certs/server.key") ||
+        !client_ctx.load_ca_certificate("certs/ca.crt")) {
         return 1;
     }
-    client_ctx.setVerifyMode(SslVerifyMode::Peer);
+    client_ctx.set_verify_mode(SslVerifyMode::Peer);
 
     ExampleScheduler scheduler;
     scheduler.start();
 
     ExampleState state;
-    scheduleTask(scheduler, serverTask(&server_ctx, &state));
-    waitFor(state.server_ready);
-    scheduleTask(scheduler, clientTask(&client_ctx, &state));
-    waitFor(state.done);
+    schedule_task(scheduler, server_task(&server_ctx, &state));
+    wait_for(state.server_ready);
+    schedule_task(scheduler, client_task(&client_ctx, &state));
+    wait_for(state.done);
 
     scheduler.stop();
 

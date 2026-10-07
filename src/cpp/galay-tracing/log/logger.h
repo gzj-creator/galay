@@ -37,23 +37,23 @@ namespace galay::tracing {
 
 /**
  * @brief 日志写入器的编译期概念约束
- * @details 要求 Writer 类型支持 isEnabled(level) 和 write(record) 操作。
+ * @details 要求 Writer 类型支持 is_enabled(level) 和 write(record) 操作。
  * @tparam Writer 待检查的写入器类型
  */
 template <typename Writer>
 concept LogWriter = requires(Writer& writer, const Writer& constWriter, LogLevel level, LogRecord record) {
-    { constWriter.isEnabled(level) } noexcept -> std::convertible_to<bool>;
+    { constWriter.is_enabled(level) } noexcept -> std::convertible_to<bool>;
     writer.write(std::move(record));
 };
 
 /**
  * @brief 结构化日志写入器的编译期概念约束
- * @details 要求 Writer 类型支持 isEnabled(level) 和 write(structuredRecord) 操作。
+ * @details 要求 Writer 类型支持 is_enabled(level) 和 write(structuredRecord) 操作。
  * @tparam Writer 待检查的写入器类型
  */
 template <typename Writer>
 concept StructuredLogWriter = requires(Writer& writer, const Writer& constWriter, LogLevel level, StructuredLogRecord record) {
-    { constWriter.isEnabled(level) } noexcept -> std::convertible_to<bool>;
+    { constWriter.is_enabled(level) } noexcept -> std::convertible_to<bool>;
     writer.write(record);
 };
 
@@ -70,34 +70,34 @@ struct ErasedLogWriter {
     using WriteStructuredFn = void (*)(void*, StructuredLogRecord);     ///< 结构化日志写入函数指针类型
 
     void* object = nullptr;                  ///< 擦除类型后的 Writer 对象指针
-    IsEnabledFn isEnabledFn = nullptr;       ///< 级别检查函数指针
-    WriteFn writeFn = nullptr;               ///< 普通写入函数指针
-    WriteStructuredFn writeStructuredFn = nullptr; ///< 结构化写入函数指针
+    IsEnabledFn is_enabled_fn = nullptr;       ///< 级别检查函数指针
+    WriteFn write_fn = nullptr;               ///< 普通写入函数指针
+    WriteStructuredFn write_structured_fn = nullptr; ///< 结构化写入函数指针
 
     /**
      * @brief 检查给定级别是否启用
      * @param level 日志级别
      * @return 启用返回 true
      */
-    [[nodiscard]] bool isEnabled(LogLevel level) const noexcept {
-        return object != nullptr && isEnabledFn != nullptr && isEnabledFn(object, level);
+    [[nodiscard]] bool is_enabled(LogLevel level) const noexcept {
+        return object != nullptr && is_enabled_fn != nullptr && is_enabled_fn(object, level);
     }
 
     /**
      * @brief 写入普通日志记录
-     * @details 优先使用 writeFn，若不可用则回退到结构化写入（无字段）
+     * @details 优先使用 write_fn，若不可用则回退到结构化写入（无字段）
      * @param record 日志记录
      */
     void write(LogRecord record) const {
         if (object == nullptr) {
             return;
         }
-        if (writeFn != nullptr) {
-            writeFn(object, std::move(record));
+        if (write_fn != nullptr) {
+            write_fn(object, std::move(record));
             return;
         }
-        if (writeStructuredFn != nullptr) {
-            writeStructuredFn(object, StructuredLogRecord{
+        if (write_structured_fn != nullptr) {
+            write_structured_fn(object, StructuredLogRecord{
                 .level = record.level,
                 .name = record.message,
                 .fields = {},
@@ -109,25 +109,25 @@ struct ErasedLogWriter {
 
     /**
      * @brief 写入结构化日志记录
-     * @details 优先使用 writeStructuredFn，若不可用则回退到普通写入
+     * @details 优先使用 write_structured_fn，若不可用则回退到普通写入
      * @param record 结构化日志记录
      */
     void write(StructuredLogRecord record) const {
         if (object == nullptr) {
             return;
         }
-        if (writeStructuredFn != nullptr) {
-            writeStructuredFn(object, std::move(record));
+        if (write_structured_fn != nullptr) {
+            write_structured_fn(object, std::move(record));
             return;
         }
-        writeStructuredFallback(std::move(record));
+        write_structured_fallback(std::move(record));
     }
 
     /**
      * @brief 结构化日志的普通写入回退实现
      * @param record 结构化日志记录
      */
-    void writeStructuredFallback(StructuredLogRecord record) const;
+    void write_structured_fallback(StructuredLogRecord record) const;
 };
 
 /**
@@ -147,8 +147,8 @@ public:
     /**
      * @brief 检查级别是否启用
      */
-    [[nodiscard]] bool isEnabled(LogLevel level) const noexcept {
-        return m_writer != nullptr && m_writer->isEnabled(level);
+    [[nodiscard]] bool is_enabled(LogLevel level) const noexcept {
+        return m_writer != nullptr && m_writer->is_enabled(level);
     }
 
     /**
@@ -193,8 +193,8 @@ public:
     /**
      * @brief 检查级别是否启用
      */
-    [[nodiscard]] bool isEnabled(LogLevel level) const noexcept {
-        return m_writer != nullptr && m_writer->isEnabled(level);
+    [[nodiscard]] bool is_enabled(LogLevel level) const noexcept {
+        return m_writer != nullptr && m_writer->is_enabled(level);
     }
 
     /**
@@ -227,7 +227,7 @@ private:
  * @return 写入函数指针，不满足 LogWriter 时返回 nullptr
  */
 template <typename Writer>
-[[nodiscard]] constexpr ErasedLogWriter::WriteFn logWriteFn() noexcept {
+[[nodiscard]] constexpr ErasedLogWriter::WriteFn log_write_fn() noexcept {
     if constexpr (LogWriter<Writer>) {
         return [](void* object, LogRecord record) {
             static_cast<Writer*>(object)->write(std::move(record));
@@ -243,7 +243,7 @@ template <typename Writer>
  * @return 结构化写入函数指针，不满足时返回 nullptr
  */
 template <typename Writer>
-[[nodiscard]] constexpr ErasedLogWriter::WriteStructuredFn structuredLogWriteFn() noexcept {
+[[nodiscard]] constexpr ErasedLogWriter::WriteStructuredFn structured_log_write_fn() noexcept {
     if constexpr (StructuredLogWriter<Writer>) {
         return [](void* object, StructuredLogRecord record) {
             static_cast<Writer*>(object)->write(record);
@@ -266,7 +266,7 @@ template <typename Writer>
  * @param fields 结构化字段列表
  */
 template <LogLevel kLevel, StructuredLogWriter Writer, typename... Fields>
-void writeEventUnchecked(
+void write_event_unchecked(
     Writer& writer,
     std::optional<TraceContext> context,
     SourceLocation source,
@@ -278,39 +278,39 @@ void writeEventUnchecked(
         .name = name,
         .fields = std::span<const LogField>(fieldArray.data(), fieldArray.size()),
         .source = source,
-        .context = makeLogContext(std::move(context)),
+        .context = make_log_context(std::move(context)),
     });
 }
 
-void setDefaultLogWriterRef(ErasedLogWriter writer) noexcept;       ///< 设置默认写入器引用
+void set_default_log_writer_ref(ErasedLogWriter writer) noexcept;       ///< 设置默认写入器引用
 extern std::atomic<const ErasedLogWriter*> g_defaultLogWriterPtr;   ///< 全局默认写入器原子指针
 
 /**
  * @brief 获取内置默认写入器指针
  * @return 内置默认写入器指针
  */
-[[nodiscard]] const ErasedLogWriter* builtInDefaultLogWriterPtr() noexcept;
+[[nodiscard]] const ErasedLogWriter* built_in_default_log_writer_ptr() noexcept;
 
 /**
  * @brief 获取当前默认写入器指针
  * @return 优先返回用户设置的写入器，否则返回内置默认写入器
  */
-[[nodiscard]] inline const ErasedLogWriter* defaultLogWriterPtr() noexcept {
+[[nodiscard]] inline const ErasedLogWriter* default_log_writer_ptr() noexcept {
     if (auto* writer = g_defaultLogWriterPtr.load(std::memory_order_acquire); writer != nullptr) {
         return writer;
     }
-    return builtInDefaultLogWriterPtr();
+    return built_in_default_log_writer_ptr();
 }
 
 /**
  * @brief 获取默认写入器的类型擦除引用
  */
-[[nodiscard]] ErasedLogWriter defaultLogWriterRef() noexcept;
+[[nodiscard]] ErasedLogWriter default_log_writer_ref() noexcept;
 
 /**
  * @brief 获取默认写入器的值类型实例
  */
-[[nodiscard]] DefaultLogWriter defaultLogWriter() noexcept;
+[[nodiscard]] DefaultLogWriter default_log_writer() noexcept;
 
 } // namespace detail
 
@@ -368,7 +368,7 @@ public:
      * @brief 设置最低日志级别
      * @param level 新的最低级别
      */
-    void setLevel(LogLevel level) noexcept;
+    void set_level(LogLevel level) noexcept;
 
     /**
      * @brief 获取当前最低日志级别
@@ -381,18 +381,18 @@ public:
      * @param level 待检查的级别
      * @return 启用返回 true
      */
-    [[nodiscard]] bool isEnabled(LogLevel level) const noexcept;
+    [[nodiscard]] bool is_enabled(LogLevel level) const noexcept;
 
     /**
      * @brief 添加一个日志 Sink
      * @param sink LogSink 的共享指针
      */
-    void addSink(std::shared_ptr<LogSink> sink);
+    void add_sink(std::shared_ptr<LogSink> sink);
 
     /**
      * @brief 清除所有日志 Sink
      */
-    void clearSinks();
+    void clear_sinks();
 
     /**
      * @brief 使用线程本地上下文记录日志
@@ -404,7 +404,7 @@ public:
      */
     template <typename... Args>
     void log(LogLevel level, SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
-        if (!isEnabled(level)) {
+        if (!is_enabled(level)) {
             return;
         }
 
@@ -412,12 +412,12 @@ public:
             level,
             std::format(fmt, std::forward<Args>(args)...),
             source,
-            makeLogContext(currentContext())));
+            make_log_context(current_context())));
     }
 
     /**
      * @brief 使用显式上下文记录日志（协程安全入口）
-     * @details 适用于无法依赖线程本地 currentContext() 的协程任务
+     * @details 适用于无法依赖线程本地 current_context() 的协程任务
      * @tparam Args 格式化参数类型
      * @param level 日志级别
      * @param source 源码位置
@@ -426,13 +426,13 @@ public:
      * @param args 格式化参数
      */
     template <typename... Args>
-    void logWithContext(
+    void log_with_context(
         LogLevel level,
         SourceLocation source,
         std::optional<TraceContext> context,
         std::format_string<Args...> fmt,
         Args&&... args) {
-        if (!isEnabled(level)) {
+        if (!is_enabled(level)) {
             return;
         }
 
@@ -440,7 +440,7 @@ public:
             level,
             std::format(fmt, std::forward<Args>(args)...),
             source,
-            makeLogContext(std::move(context))));
+            make_log_context(std::move(context))));
     }
 
     /**
@@ -475,18 +475,18 @@ private:
  * @brief 获取进程级默认 Logger
  * @return 默认 Logger 的引用
  */
-[[nodiscard]] Logger& defaultLogger() noexcept;
+[[nodiscard]] Logger& default_logger() noexcept;
 
 /**
  * @brief 设置进程级默认 Logger
  * @param logger Logger 指针（不获取所有权）
  */
-void setDefaultLogger(Logger* logger) noexcept;
+void set_default_logger(Logger* logger) noexcept;
 
 /**
  * @brief 清除默认日志写入器
  */
-void setDefaultLogWriter(std::nullptr_t) noexcept;
+void set_default_log_writer(std::nullptr_t) noexcept;
 
 /**
  * @brief 设置进程级默认写入器（不获取所有权）
@@ -496,19 +496,19 @@ void setDefaultLogWriter(std::nullptr_t) noexcept;
  */
 template <typename Writer>
     requires(LogWriter<Writer> || StructuredLogWriter<Writer>)
-void setDefaultLogWriter(Writer* writer) noexcept {
+void set_default_log_writer(Writer* writer) noexcept {
     if (writer == nullptr) {
-        detail::setDefaultLogWriterRef({});
+        detail::set_default_log_writer_ref({});
         return;
     }
 
-    detail::setDefaultLogWriterRef(detail::ErasedLogWriter{
+    detail::set_default_log_writer_ref(detail::ErasedLogWriter{
         .object = writer,
-        .isEnabledFn = [](const void* object, LogLevel level) noexcept {
-            return static_cast<const Writer*>(object)->isEnabled(level);
+        .is_enabled_fn = [](const void* object, LogLevel level) noexcept {
+            return static_cast<const Writer*>(object)->is_enabled(level);
         },
-        .writeFn = detail::logWriteFn<Writer>(),
-        .writeStructuredFn = detail::structuredLogWriteFn<Writer>(),
+        .write_fn = detail::log_write_fn<Writer>(),
+        .write_structured_fn = detail::structured_log_write_fn<Writer>(),
     });
 }
 
@@ -530,7 +530,7 @@ public:
     ContextLogger(std::optional<TraceContext> context, Writer writer, SourceLocation source)
         : m_writer(std::move(writer)),
           m_source(source),
-          m_context(makeLogContext(std::move(context))) {
+          m_context(make_log_context(std::move(context))) {
     }
 
     /**
@@ -581,7 +581,7 @@ private:
      */
     template <LogLevel kLevel, typename... Args>
     void write(std::format_string<Args...> fmt, Args&&... args) {
-        if (!m_writer.isEnabled(kLevel)) {
+        if (!m_writer.is_enabled(kLevel)) {
             return;
         }
 
@@ -614,7 +614,7 @@ public:
     ContextEventLogger(std::optional<TraceContext> context, Writer writer, SourceLocation source)
         : m_writer(std::move(writer)),
           m_source(source),
-          m_context(makeLogContext(std::move(context))) {
+          m_context(make_log_context(std::move(context))) {
     }
 
     /**
@@ -665,7 +665,7 @@ private:
      */
     template <LogLevel kLevel, typename... Fields>
     void write(std::string_view name, Fields&&... fields) {
-        if (!m_writer.isEnabled(kLevel)) {
+        if (!m_writer.is_enabled(kLevel)) {
             return;
         }
 
@@ -695,7 +695,7 @@ private:
     SourceLocation source = SourceLocation::current()) {
     return ContextLogger<detail::DefaultLogWriter>(
         std::move(context),
-        detail::defaultLogWriter(),
+        detail::default_log_writer(),
         source);
 }
 
@@ -729,7 +729,7 @@ template <LogWriter Writer>
     SourceLocation source = SourceLocation::current()) {
     return ContextEventLogger<detail::DefaultLogWriter>(
         std::move(context),
-        detail::defaultLogWriter(),
+        detail::default_log_writer(),
         source);
 }
 
@@ -761,9 +761,9 @@ template <StructuredLogWriter Writer>
  * @param args 格式化参数
  */
 template <LogLevel kLevel, typename... Args>
-void logAt(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
-    auto writer = detail::defaultLogWriter();
-    if (!writer.isEnabled(kLevel)) {
+void log_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
+    auto writer = detail::default_log_writer();
+    if (!writer.is_enabled(kLevel)) {
         return;
     }
 
@@ -771,7 +771,7 @@ void logAt(SourceLocation source, std::format_string<Args...> fmt, Args&&... arg
         kLevel,
         std::format(fmt, std::forward<Args>(args)...),
         source,
-        makeLogContext(currentContext())));
+        make_log_context(current_context())));
 }
 
 /**
@@ -784,13 +784,13 @@ void logAt(SourceLocation source, std::format_string<Args...> fmt, Args&&... arg
  * @param args 格式化参数
  */
 template <LogLevel kLevel, typename... Args>
-void logWithContextAt(
+void log_with_context_at(
     SourceLocation source,
     std::optional<TraceContext> context,
     std::format_string<Args...> fmt,
     Args&&... args) {
-    auto writer = detail::defaultLogWriter();
-    if (!writer.isEnabled(kLevel)) {
+    auto writer = detail::default_log_writer();
+    if (!writer.is_enabled(kLevel)) {
         return;
     }
 
@@ -798,7 +798,7 @@ void logWithContextAt(
         kLevel,
         std::format(fmt, std::forward<Args>(args)...),
         source,
-        makeLogContext(std::move(context))));
+        make_log_context(std::move(context))));
 }
 
 /**
@@ -809,164 +809,164 @@ void logWithContextAt(
  * @param args 格式化参数
  */
 template <typename... Args>
-void logTraceAt(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
-    logAt<LogLevel::kTrace>(source, fmt, std::forward<Args>(args)...);
+void log_trace_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
+    log_at<LogLevel::kTrace>(source, fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 追踪级别日志（带源码位置和显式上下文）
  */
 template <typename... Args>
-void logTraceWithContextAt(
+void log_trace_with_context_at(
     SourceLocation source,
     std::optional<TraceContext> context,
     std::format_string<Args...> fmt,
     Args&&... args) {
-    logWithContextAt<LogLevel::kTrace>(source, std::move(context), fmt, std::forward<Args>(args)...);
+    log_with_context_at<LogLevel::kTrace>(source, std::move(context), fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 调试级别日志（带源码位置）
  */
 template <typename... Args>
-void logDebugAt(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
-    logAt<LogLevel::kDebug>(source, fmt, std::forward<Args>(args)...);
+void log_debug_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
+    log_at<LogLevel::kDebug>(source, fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 调试级别日志（带源码位置和显式上下文）
  */
 template <typename... Args>
-void logDebugWithContextAt(
+void log_debug_with_context_at(
     SourceLocation source,
     std::optional<TraceContext> context,
     std::format_string<Args...> fmt,
     Args&&... args) {
-    logWithContextAt<LogLevel::kDebug>(source, std::move(context), fmt, std::forward<Args>(args)...);
+    log_with_context_at<LogLevel::kDebug>(source, std::move(context), fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 信息级别日志（带源码位置）
  */
 template <typename... Args>
-void logInfoAt(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
-    logAt<LogLevel::kInfo>(source, fmt, std::forward<Args>(args)...);
+void log_info_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
+    log_at<LogLevel::kInfo>(source, fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 信息级别日志（带源码位置和显式上下文）
  */
 template <typename... Args>
-void logInfoWithContextAt(
+void log_info_with_context_at(
     SourceLocation source,
     std::optional<TraceContext> context,
     std::format_string<Args...> fmt,
     Args&&... args) {
-    logWithContextAt<LogLevel::kInfo>(source, std::move(context), fmt, std::forward<Args>(args)...);
+    log_with_context_at<LogLevel::kInfo>(source, std::move(context), fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 警告级别日志（带源码位置）
  */
 template <typename... Args>
-void logWarnAt(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
-    logAt<LogLevel::kWarn>(source, fmt, std::forward<Args>(args)...);
+void log_warn_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
+    log_at<LogLevel::kWarn>(source, fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 警告级别日志（带源码位置和显式上下文）
  */
 template <typename... Args>
-void logWarnWithContextAt(
+void log_warn_with_context_at(
     SourceLocation source,
     std::optional<TraceContext> context,
     std::format_string<Args...> fmt,
     Args&&... args) {
-    logWithContextAt<LogLevel::kWarn>(source, std::move(context), fmt, std::forward<Args>(args)...);
+    log_with_context_at<LogLevel::kWarn>(source, std::move(context), fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 错误级别日志（带源码位置）
  */
 template <typename... Args>
-void logErrorAt(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
-    logAt<LogLevel::kError>(source, fmt, std::forward<Args>(args)...);
+void log_error_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
+    log_at<LogLevel::kError>(source, fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 错误级别日志（带源码位置和显式上下文）
  */
 template <typename... Args>
-void logErrorWithContextAt(
+void log_error_with_context_at(
     SourceLocation source,
     std::optional<TraceContext> context,
     std::format_string<Args...> fmt,
     Args&&... args) {
-    logWithContextAt<LogLevel::kError>(source, std::move(context), fmt, std::forward<Args>(args)...);
+    log_with_context_at<LogLevel::kError>(source, std::move(context), fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 追踪级别日志（自动捕获源码位置）
  */
 template <typename... Args>
-void logTrace(std::format_string<Args...> fmt, Args&&... args) {
-    logTraceAt(SourceLocation::current(), fmt, std::forward<Args>(args)...);
+void log_trace(std::format_string<Args...> fmt, Args&&... args) {
+    log_trace_at(SourceLocation::current(), fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 调试级别日志（自动捕获源码位置）
  */
 template <typename... Args>
-void logDebug(std::format_string<Args...> fmt, Args&&... args) {
-    logDebugAt(SourceLocation::current(), fmt, std::forward<Args>(args)...);
+void log_debug(std::format_string<Args...> fmt, Args&&... args) {
+    log_debug_at(SourceLocation::current(), fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 信息级别日志（自动捕获源码位置）
  */
 template <typename... Args>
-void logInfo(std::format_string<Args...> fmt, Args&&... args) {
-    logInfoAt(SourceLocation::current(), fmt, std::forward<Args>(args)...);
+void log_info(std::format_string<Args...> fmt, Args&&... args) {
+    log_info_at(SourceLocation::current(), fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 警告级别日志（自动捕获源码位置）
  */
 template <typename... Args>
-void logWarn(std::format_string<Args...> fmt, Args&&... args) {
-    logWarnAt(SourceLocation::current(), fmt, std::forward<Args>(args)...);
+void log_warn(std::format_string<Args...> fmt, Args&&... args) {
+    log_warn_at(SourceLocation::current(), fmt, std::forward<Args>(args)...);
 }
 
 /**
  * @brief 错误级别日志（自动捕获源码位置）
  */
 template <typename... Args>
-void logError(std::format_string<Args...> fmt, Args&&... args) {
-    logErrorAt(SourceLocation::current(), fmt, std::forward<Args>(args)...);
+void log_error(std::format_string<Args...> fmt, Args&&... args) {
+    log_error_at(SourceLocation::current(), fmt, std::forward<Args>(args)...);
 }
 
 } // namespace galay::tracing
 
 #define GALAY_LOG_TRACE(...) \
-    ::galay::tracing::logTraceAt(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, __VA_ARGS__)
+    ::galay::tracing::log_trace_at(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, __VA_ARGS__)
 #define GALAY_LOG_TRACE_CTX(context, ...) \
-    ::galay::tracing::logTraceWithContextAt(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, (context), __VA_ARGS__)
+    ::galay::tracing::log_trace_with_context_at(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, (context), __VA_ARGS__)
 #define GALAY_LOG_DEBUG(...) \
-    ::galay::tracing::logDebugAt(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, __VA_ARGS__)
+    ::galay::tracing::log_debug_at(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, __VA_ARGS__)
 #define GALAY_LOG_DEBUG_CTX(context, ...) \
-    ::galay::tracing::logDebugWithContextAt(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, (context), __VA_ARGS__)
+    ::galay::tracing::log_debug_with_context_at(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, (context), __VA_ARGS__)
 #define GALAY_LOG_INFO(...) \
-    ::galay::tracing::logInfoAt(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, __VA_ARGS__)
+    ::galay::tracing::log_info_at(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, __VA_ARGS__)
 #define GALAY_LOG_INFO_CTX(context, ...) \
-    ::galay::tracing::logInfoWithContextAt(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, (context), __VA_ARGS__)
+    ::galay::tracing::log_info_with_context_at(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, (context), __VA_ARGS__)
 #define GALAY_LOG_WARN(...) \
-    ::galay::tracing::logWarnAt(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, __VA_ARGS__)
+    ::galay::tracing::log_warn_at(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, __VA_ARGS__)
 #define GALAY_LOG_WARN_CTX(context, ...) \
-    ::galay::tracing::logWarnWithContextAt(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, (context), __VA_ARGS__)
+    ::galay::tracing::log_warn_with_context_at(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, (context), __VA_ARGS__)
 #define GALAY_LOG_ERROR(...) \
-    ::galay::tracing::logErrorAt(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, __VA_ARGS__)
+    ::galay::tracing::log_error_at(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, __VA_ARGS__)
 #define GALAY_LOG_ERROR_CTX(context, ...) \
-    ::galay::tracing::logErrorWithContextAt(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, (context), __VA_ARGS__)
+    ::galay::tracing::log_error_with_context_at(::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__}, (context), __VA_ARGS__)
 
 // Rust-like structured event callsite. The level check happens before context
 // and field expressions are evaluated, so disabled events avoid field creation.
@@ -974,8 +974,8 @@ void logError(std::format_string<Args...> fmt, Args&&... args) {
     do {                                                                                                    \
         auto&& galayTracingWriter = (writer);                                                               \
         constexpr auto galayTracingLevel = (level);                                                         \
-        if (galayTracingWriter.isEnabled(galayTracingLevel)) {                                              \
-            ::galay::tracing::detail::writeEventUnchecked<galayTracingLevel>(                               \
+        if (galayTracingWriter.is_enabled(galayTracingLevel)) {                                              \
+            ::galay::tracing::detail::write_event_unchecked<galayTracingLevel>(                               \
                 galayTracingWriter,                                                                         \
                 (context),                                                                                  \
                 ::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__},                             \
@@ -985,10 +985,10 @@ void logError(std::format_string<Args...> fmt, Args&&... args) {
 
 #define GALAY_EVENT_DEFAULT_AT(level, context, name, ...)                                                   \
     do {                                                                                                    \
-        const auto* galayTracingWriter = ::galay::tracing::detail::defaultLogWriterPtr();                   \
+        const auto* galayTracingWriter = ::galay::tracing::detail::default_log_writer_ptr();                   \
         constexpr auto galayTracingLevel = (level);                                                         \
-        if (galayTracingWriter != nullptr && galayTracingWriter->isEnabled(galayTracingLevel)) {            \
-            ::galay::tracing::detail::writeEventUnchecked<galayTracingLevel>(                               \
+        if (galayTracingWriter != nullptr && galayTracingWriter->is_enabled(galayTracingLevel)) {            \
+            ::galay::tracing::detail::write_event_unchecked<galayTracingLevel>(                               \
                 *galayTracingWriter,                                                                        \
                 (context),                                                                                  \
                 ::galay::tracing::SourceLocation{__FILE__, __LINE__, __func__},                             \

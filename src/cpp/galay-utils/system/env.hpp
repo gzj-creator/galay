@@ -31,7 +31,7 @@ public:
      */
     [[nodiscard]] static std::expected<std::optional<std::string>, std::error_code>
     get(const std::string& name) {
-        if (!validName(name)) {
+        if (!valid_name(name)) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
         }
         const char* value = std::getenv(name.c_str());
@@ -48,7 +48,7 @@ public:
      */
     [[nodiscard]] static std::expected<void, std::error_code>
     set(const std::string& name, const std::string& value, bool overwrite = true) {
-        if (!validName(name) || value.find('\0') != std::string::npos) {
+        if (!valid_name(name) || value.find('\0') != std::string::npos) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
         }
 #if defined(_WIN32)
@@ -74,7 +74,7 @@ public:
      */
     [[nodiscard]] static std::expected<void, std::error_code>
     unset(const std::string& name) {
-        if (!validName(name)) {
+        if (!valid_name(name)) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
         }
 #if defined(_WIN32)
@@ -92,7 +92,7 @@ public:
     }
 
 private:
-    static bool validName(const std::string& name) {
+    static bool valid_name(const std::string& name) {
         return !name.empty() && name.find('=') == std::string::npos &&
                name.find('\0') == std::string::npos;
     }

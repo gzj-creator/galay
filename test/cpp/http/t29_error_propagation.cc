@@ -32,34 +32,34 @@ bool check(bool condition, const char* message)
 }
 
 template <typename Result>
-bool hasBusinessError(const Result& result)
+bool has_business_error(const Result& result)
 {
     return result.has_value() && !result.value().has_value();
 }
 
-Task<void> runClientErrorPropagationChecks(TestState* state)
+Task<void> run_client_error_propagation_checks(TestState* state)
 {
     bool ok = true;
 
     try {
         HttpClient http_client;
         auto http_connect = co_await http_client.connect("ftp://127.0.0.1/");
-        ok = check(hasBusinessError(http_connect), "invalid HTTP URL should return an error") && ok;
+        ok = check(has_business_error(http_connect), "invalid HTTP URL should return an error") && ok;
 
-        auto http_session = http_client.getSession();
+        auto http_session = http_client.get_session();
         ok = check(!http_session, "HTTP getSession before connect should return an error") && ok;
 
         auto http_socket = http_client.socket();
         ok = check(!http_socket, "HTTP socket before connect should return an error") && ok;
 
         auto http_close = co_await http_client.close();
-        ok = check(hasBusinessError(http_close), "HTTP close before connect should return an error") && ok;
+        ok = check(has_business_error(http_close), "HTTP close before connect should return an error") && ok;
 
         HttpClient failed_http_client;
         auto failed_http_connect = co_await failed_http_client.connect("http://127.0.0.1:1/");
-        ok = check(hasBusinessError(failed_http_connect), "HTTP connect to a closed port should return an error") && ok;
+        ok = check(has_business_error(failed_http_connect), "HTTP connect to a closed port should return an error") && ok;
 
-        auto failed_http_session = failed_http_client.getSession();
+        auto failed_http_session = failed_http_client.get_session();
         ok = check(!failed_http_session, "HTTP getSession after failed connect should return an error") && ok;
 
         auto failed_http_socket = failed_http_client.socket();
@@ -67,22 +67,22 @@ Task<void> runClientErrorPropagationChecks(TestState* state)
 
         WsClient ws_client;
         auto ws_connect = co_await ws_client.connect("http://127.0.0.1/ws");
-        ok = check(hasBusinessError(ws_connect), "invalid WebSocket URL should return an error") && ok;
+        ok = check(has_business_error(ws_connect), "invalid WebSocket URL should return an error") && ok;
 
-        auto ws_session = ws_client.getSession(WsWriterSetting::byClient());
+        auto ws_session = ws_client.get_session(WsWriterSetting::by_client());
         ok = check(!ws_session, "WS getSession before connect should return an error") && ok;
 
         auto ws_close = co_await ws_client.close();
-        ok = check(hasBusinessError(ws_close), "WS close before connect should return an error") && ok;
+        ok = check(has_business_error(ws_close), "WS close before connect should return an error") && ok;
 
         auto ws_handshake = co_await ws_client.handshake();
-        ok = check(hasBusinessError(ws_handshake), "WS handshake before connect should return an error") && ok;
+        ok = check(has_business_error(ws_handshake), "WS handshake before connect should return an error") && ok;
 
         WsClient failed_ws_client;
         auto failed_ws_connect = co_await failed_ws_client.connect("ws://127.0.0.1:1/ws");
-        ok = check(hasBusinessError(failed_ws_connect), "WS connect to a closed port should return an error") && ok;
+        ok = check(has_business_error(failed_ws_connect), "WS connect to a closed port should return an error") && ok;
 
-        auto failed_ws_session = failed_ws_client.getSession(WsWriterSetting::byClient());
+        auto failed_ws_session = failed_ws_client.get_session(WsWriterSetting::by_client());
         ok = check(!failed_ws_session, "WS getSession after failed connect should return an error") && ok;
 
         WsUrl invalid_upgrader_url;
@@ -90,24 +90,24 @@ Task<void> runClientErrorPropagationChecks(TestState* state)
                                     nullptr,
                                     invalid_upgrader_url,
                                     WsReaderSetting(),
-                                    WsWriterSetting::byClient(),
+                                    WsWriterSetting::by_client(),
                                     nullptr);
         auto invalid_upgrade = co_await invalid_upgrader();
-        ok = check(hasBusinessError(invalid_upgrade), "invalid WsUpgrader should return an error") && ok;
+        ok = check(has_business_error(invalid_upgrade), "invalid WsUpgrader should return an error") && ok;
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
         HttpsClient failed_https_client;
         auto failed_https_connect = co_await failed_https_client.connect("https://127.0.0.1:1/");
-        ok = check(hasBusinessError(failed_https_connect), "HTTPS connect to a closed port should return an error") && ok;
+        ok = check(has_business_error(failed_https_connect), "HTTPS connect to a closed port should return an error") && ok;
 
-        auto failed_https_session = failed_https_client.getSession();
+        auto failed_https_session = failed_https_client.get_session();
         ok = check(!failed_https_session, "HTTPS getSession after failed connect should return an error") && ok;
 
         WssClient failed_wss_client;
         auto failed_wss_connect = co_await failed_wss_client.connect("wss://127.0.0.1:1/ws");
-        ok = check(hasBusinessError(failed_wss_connect), "WSS connect to a closed port should return an error") && ok;
+        ok = check(has_business_error(failed_wss_connect), "WSS connect to a closed port should return an error") && ok;
 
-        auto failed_wss_session = failed_wss_client.getSession(WsWriterSetting::byClient());
+        auto failed_wss_session = failed_wss_client.get_session(WsWriterSetting::by_client());
         ok = check(!failed_wss_session, "WSS getSession after failed connect should return an error") && ok;
 #endif
     } catch (const std::exception& ex) {
@@ -129,12 +129,12 @@ bool test_parser_error_propagation()
         auto huge_range = HttpRangeParser::parse(
             "bytes=999999999999999999999999999999-",
             1024);
-        if (!check(!huge_range.isValid(), "huge Range should be rejected without throwing")) {
+        if (!check(!huge_range.is_valid(), "huge Range should be rejected without throwing")) {
             return false;
         }
 
         auto zero_file_range = HttpRangeParser::parse("bytes=-1", 0);
-        if (!check(!zero_file_range.isValid(), "zero-size file Range should be invalid")) {
+        if (!check(!zero_file_range.is_valid(), "zero-size file Range should be invalid")) {
             return false;
         }
 
@@ -143,7 +143,7 @@ bool test_parser_error_propagation()
         invalid_chunk_iovecs[0].iov_base = invalid_chunk.data();
         invalid_chunk_iovecs[0].iov_len = invalid_chunk.size();
         std::string chunk_output;
-        auto chunk_result = Chunk::fromIOVec(invalid_chunk_iovecs, chunk_output);
+        auto chunk_result = Chunk::from_io_vec(invalid_chunk_iovecs, chunk_output);
         if (!check(!chunk_result, "oversized chunk length should return an error")) {
             return false;
         }
@@ -153,14 +153,14 @@ bool test_parser_error_propagation()
         extension_iovecs[0].iov_base = chunk_with_extension.data();
         extension_iovecs[0].iov_len = chunk_with_extension.size();
         std::string extension_output;
-        auto extension_result = Chunk::fromIOVec(extension_iovecs, extension_output);
+        auto extension_result = Chunk::from_io_vec(extension_iovecs, extension_output);
         if (!check(extension_result && extension_output == "Hello",
                    "valid chunk extension should still parse")) {
             return false;
         }
 
         HttpResponseHeader invalid_status;
-        auto [status_error, consumed] = invalid_status.fromString("HTTP/1.1 200OK\r\n\r\n");
+        auto [status_error, consumed] = invalid_status.from_string("HTTP/1.1 200OK\r\n\r\n");
         if (!check(status_error == kHttpCodeInvalid && consumed == -1,
                    "invalid response status should return kHttpCodeInvalid")) {
             return false;
@@ -184,10 +184,10 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "[T80] missing IO scheduler\n";
         runtime.stop();
@@ -195,7 +195,7 @@ int main()
     }
 
     TestState state;
-    scheduleTask(scheduler, runClientErrorPropagationChecks(&state));
+    schedule_task(scheduler, run_client_error_propagation_checks(&state));
 
     for (int i = 0; i < 100 && !state.done.load(); ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));

@@ -44,8 +44,8 @@ Task<void> test_redis_client_with_timeout(IOScheduler* scheduler)
                           .timeout(std::chrono::seconds(5));
     if (get_result && get_result.value()) {
         auto& values = get_result.value().value();
-        if (!values.empty() && values[0].isString()) {
-            std::cout << "GET command succeeded: " << values[0].toString() << std::endl;
+        if (!values.empty() && values[0].is_string()) {
+            std::cout << "GET command succeeded: " << values[0].to_string() << std::endl;
         }
     } else if (!get_result) {
         std::cerr << "GET command failed: " << get_result.error().message() << std::endl;
@@ -83,10 +83,10 @@ Task<void> test_redis_client_with_timeout(IOScheduler* scheduler)
         std::cout << "Pipeline succeeded, received " << values.size() << " responses" << std::endl;
         for (size_t i = 0; i < values.size(); ++i) {
             std::cout << "  Response " << i << ": ";
-            if (values[i].isString()) {
-                std::cout << values[i].toString() << std::endl;
-            } else if (values[i].isInteger()) {
-                std::cout << values[i].toInteger() << std::endl;
+            if (values[i].is_string()) {
+                std::cout << values[i].to_string() << std::endl;
+            } else if (values[i].is_integer()) {
+                std::cout << values[i].to_integer() << std::endl;
             } else {
                 std::cout << "(other type)" << std::endl;
             }
@@ -105,8 +105,8 @@ Task<void> test_redis_client_with_timeout(IOScheduler* scheduler)
 
         if (incr_result && incr_result.value()) {
             auto& values = incr_result.value().value();
-            if (!values.empty() && values[0].isInteger()) {
-                std::cout << "INCR " << key << " = " << values[0].toInteger() << std::endl;
+            if (!values.empty() && values[0].is_integer()) {
+                std::cout << "INCR " << key << " = " << values[0].to_integer() << std::endl;
             }
         } else if (!incr_result) {
             std::cerr << "INCR " << key << " failed: " << incr_result.error().message() << std::endl;
@@ -167,7 +167,7 @@ int main()
         Runtime runtime;
         runtime.start();
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             std::cerr << "Failed to get IO scheduler" << std::endl;
             return 1;
@@ -175,12 +175,12 @@ int main()
 
         // 测试1: 基本超时功能
         std::cout << "\n### Running basic timeout tests ###\n" << std::endl;
-        scheduleTask(scheduler, test_redis_client_with_timeout(scheduler));
+        schedule_task(scheduler, test_redis_client_with_timeout(scheduler));
 
         // 测试2: 并发客户端
         std::cout << "\n### Running concurrent client tests ###\n" << std::endl;
         for (int i = 0; i < 3; ++i) {
-            scheduleTask(scheduler, test_concurrent_commands(scheduler, i));
+            schedule_task(scheduler, test_concurrent_commands(scheduler, i));
         }
 
         // 等待一段时间让测试完成

@@ -21,16 +21,16 @@ int main() {
     batch.mark(stream, Http2StreamEvent::HeadersReady);
     batch.mark(stream, Http2StreamEvent::DataArrived | Http2StreamEvent::RequestComplete);
 
-    auto ready = batch.takeReady();
+    auto ready = batch.take_ready();
     assert(ready.size() == 1);
-    assert(ready[0]->streamId() == 7);
+    assert(ready[0]->stream_id() == 7);
 
-    auto events = ready[0]->takeEvents();
-    assert(hasHttp2StreamEvent(events, Http2StreamEvent::HeadersReady));
-    assert(hasHttp2StreamEvent(events, Http2StreamEvent::DataArrived));
-    assert(hasHttp2StreamEvent(events, Http2StreamEvent::RequestComplete));
+    auto events = ready[0]->take_events();
+    assert(has_http2_stream_event(events, Http2StreamEvent::HeadersReady));
+    assert(has_http2_stream_event(events, Http2StreamEvent::DataArrived));
+    assert(has_http2_stream_event(events, Http2StreamEvent::RequestComplete));
 
-    auto empty = batch.takeReady();
+    auto empty = batch.take_ready();
     assert(empty.empty());
 
     std::cout << "T50-H2ActiveBatchFlush PASS\n";

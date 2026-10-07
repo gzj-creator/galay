@@ -520,3 +520,49 @@ CMake、Bazel 与 mcpp 版本元数据统一为 `6.0.0`。
 - **HTTP/1 错误与生命周期**：修复未匹配 HTTP 路由返回真实 404；显式处理 Task 调度错误、业务错误、编码、发送及失败清理，保持错误文档与实际响应一致。builder build 后冻结，路由、handler、文档和资源在 builder/PreparedApi 销毁后仍自持；HEAD、NoContent、204/205 不发送 body 或错误 Content-Type。
 - **命名约束**：在 `AGENTS.md` 固定 Galay 自有函数 `snake_case`、类型 `PascalCase`；新增 `ApiServer::is_running` 同步测试、安装消费、示例和文档，不保留旧名包装，也不把规则落盘视为完成全仓历史迁移。
 - **构建、示例和验证**：CMake、Bazel、mcpp 版本元数据统一为 `6.1.0`，API 默认关闭且开启时明确要求 HTTP 与 serde；新增 Users GET/POST 示例、`--export` 离线导出、安装后独立消费和 serde v0.4.0 字段契约示例/测试。实际验收范围为 GCC14、C++23 include、Linux epoll、共享库：API 12/12、HTTP/serde 定向回归 21/21、ASan/UBSan/泄漏检查 9/9、安装消费 3/3、OpenAPI 3.1 与 45 个 JSON Schema 边界、桌面/移动离线浏览器通过；九个服务资源逐字节一致，七项上游 SHA256 均正确。Bazel、mcpp/native modules、Clang、io_uring、静态库及其他平台组合未实际运行，本次未重新执行全仓回归或性能测量；HTTP/2、HTTPS typed 路由与 WS/AsyncAPI 不实施。
+
+## v6.2.0 - 2026-10-07
+
+- **版本级别**：次版本（minor，中版本）
+- **Git 提交消息**：`refactor: 统一函数蛇形命名并复核优化取舍发布 v6.2.0`
+- **Git tag**：`v6.2.0`
+
+### 变更摘要
+
+本版本收束自 `v6.1.0` 以来的 API 错误码命名提交与本次全仓函数命名迁移，
+同步 CMake、Bazel、mcpp 版本为 `6.2.0`。按用户指定的小/中版本范围选择中版本，
+**不代表源码或 C++ ABI 兼容**：旧函数名不再存在，消费者必须修改调用并重新编译，
+不可混用旧 C++ 共享库。第三方依赖及 serde v0.4.0 的 gitlink 不变。
+
+- **函数统一蛇形命名**：Galay 自有公开/私有成员、静态/模板方法、自由函数、内部
+  helper 和命名回调统一为 `snake_case`；同步 C/C++ 桥接、模块消费、测试、示例、
+  benchmark、当前文档及使用 skill。典型接口为 `get_next_io_scheduler`、`block_on_io`、
+  `io_scheduler_count`、`add_handler`、`is_running`、`handle_non_block`、`base64_encode`。
+  不保留别名、包装或 fallback；类型名称、C API 前缀、标准/外部契约、协议字段和
+  稳定错误字符串保持不变。`Deadline::deadline_time` 与 blacklist 的两个 `set_*`
+  接口避免既有别名/字段重名；新增正向及旧名不存在的回归。
+- **累计 API 错误码迁移**：全部 16 个 `ApiErrorCode` 枚举项改为 `k` 前缀加
+  `PascalCase`，同步实现、消费与命名准则；枚举值、HTTP 状态、JSON/日志错误码字符串
+  不变。覆盖稳定名称、JSON 编码、默认 Bad Request 和未知枚举诊断。
+- **优化评估而非性能承诺**：IO 配置模板、预设测试/示例与公共调度逻辑已完成，
+  Timer 已可配置 tick 并在启动前替换管理器。保留 `std::expected`，不增加错误码/out
+  传播协议、Timer 模板/插件层或没有生产消费点的并行配置入口。
+  原计划 5-15% / 3-8% 数字没有真实负载成对测量依据，撤销这些预期；
+  `IOError(kDisconnectError, 0).code()` 为零也不能用作成功哨兵。本轮没有性能对比，
+  不宣称吞吐或延迟改善。正式依据见 `docs/cpp/modules/kernel/21-重构评估.md`，
+  根目录两份已忽略的中间文档仅更新本地，历史 release 和原始性能证据不改写。
+- **测试修复**：安装消费者文件改为既有 `tNN_<scenario>.cc` 规范。修复 API policy
+  的 procfs 线程基线竞态，只在捕获下一场景基线前等待上一 Runtime 线程退出；
+  启动/安装后的资源断言仍立即严格比较。迁移前 sanitizer 程序可复现，修复后
+  开启泄漏检查连续 30 次通过，不改变生产 Runtime 生命周期。
+- **构建与回归**：Linux x86_64 / GCC 14 / C++23 / epoll / Release 共享库启用全部
+  模块、可选 API、C ABI、示例、benchmark 与 RPC etcd 接入，全量构建通过。
+  最终串行 CTest 共 642 项：601 通过、36 跳过、5 禁用、0 失败；io_uring 定向 6/6、
+  ASan/UBSan/泄漏检查 16/16、移动安装前缀的 API 消费者 3/3 通过。
+  mcpp / LLVM 22.1.8 `full` Release 原生模块构建通过，21 个程序中 19 通过、
+  2 个后端条件跳过；14 个模块 prelude 校验与语法树命名审计通过。
+- **验证边界与剩余风险**：前一轮并行回归的 `rpc.t30.deadline.cancel` 因 PID 派生
+  端口占用返回 `EADDRINUSE`，当轮 600 通过、36 跳过、5 禁用、1 失败；该用例连续
+  20 次通过后完整串行验证得到上述最终计数，仍保留既有测试端口碰撞风险。
+  Bazel、原生 macOS/BSD kqueue、Windows、可选 API 原生模块及全部后端/链接方式
+  组合未实跑；外部数据库/集群门控项保持跳过，跳过、禁用和未运行项不计作通过。

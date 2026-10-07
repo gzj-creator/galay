@@ -14,7 +14,7 @@ using namespace galay::kernel;
 
 namespace {
 
-Task<void> pendingTask() {
+Task<void> pending_task() {
     co_return;
 }
 
@@ -24,28 +24,28 @@ public:
     void stop() {}
 
     bool schedule(TaskRef task) noexcept {
-        if (task.isValid()) {
+        if (task.is_valid()) {
             ++schedule_calls;
         }
         return true;
     }
 
-    bool scheduleResume(TaskRef task) noexcept {
+    bool schedule_resume(TaskRef task) noexcept {
         return schedule(std::move(task));
     }
 
-    bool scheduleDeferred(TaskRef task) noexcept {
+    bool schedule_deferred(TaskRef task) noexcept {
         return schedule(std::move(task));
     }
 
-    bool scheduleImmediately(TaskRef task) noexcept {
-        if (task.isValid()) {
+    bool schedule_immediately(TaskRef task) noexcept {
+        if (task.is_valid()) {
             ++schedule_immediately_calls;
         }
         return true;
     }
 
-    bool addTimer(Timer::ptr) { return true; }
+    bool add_timer(Timer::ptr) { return true; }
 
     SchedulerType type() {
         return kIOScheduler;
@@ -55,13 +55,13 @@ public:
     int schedule_immediately_calls = 0;
 };
 
-bool verifyWakerUsesTaskRefSchedule() {
+bool verify_waker_uses_task_ref_schedule() {
     CaptureScheduler scheduler;
-    Task<void> task = pendingTask();
-    detail::setTaskScheduler(detail::TaskAccess::taskRef(task), &scheduler);
+    Task<void> task = pending_task();
+    detail::set_task_scheduler(detail::TaskAccess::task_ref(task), &scheduler);
 
-    Waker waker(detail::TaskAccess::taskRef(task));
-    waker.wakeUp();
+    Waker waker(detail::TaskAccess::task_ref(task));
+    waker.wake_up();
 
     if (scheduler.schedule_calls != 1) {
         std::cerr << "[T36] expected Waker::wakeUp to call schedule once, got "
@@ -76,12 +76,12 @@ bool verifyWakerUsesTaskRefSchedule() {
     return true;
 }
 
-bool verifyTaskResumeHelperUsesTaskRefSchedule() {
+bool verify_task_resume_helper_uses_task_ref_schedule() {
     CaptureScheduler scheduler;
-    Task<void> task = pendingTask();
-    detail::setTaskScheduler(detail::TaskAccess::taskRef(task), &scheduler);
+    Task<void> task = pending_task();
+    detail::set_task_scheduler(detail::TaskAccess::task_ref(task), &scheduler);
 
-    if (!detail::requestTaskResume(detail::TaskAccess::taskRef(task))) {
+    if (!detail::request_task_resume(detail::TaskAccess::task_ref(task))) {
         std::cerr << "[T36] expected requestTaskResume to schedule pending task\n";
         return false;
     }
@@ -102,10 +102,10 @@ bool verifyTaskResumeHelperUsesTaskRefSchedule() {
 }  // namespace
 
 int main() {
-    if (!verifyWakerUsesTaskRefSchedule()) {
+    if (!verify_waker_uses_task_ref_schedule()) {
         return 1;
     }
-    if (!verifyTaskResumeHelperUsesTaskRefSchedule()) {
+    if (!verify_task_resume_helper_uses_task_ref_schedule()) {
         return 1;
     }
 

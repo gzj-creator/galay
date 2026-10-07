@@ -51,7 +51,7 @@ enum class ParseError : uint8_t {
     kUnknownOption,
 };
 
-[[nodiscard]] const char* parseErrorName(ParseError error) noexcept
+[[nodiscard]] const char* parse_error_name(ParseError error) noexcept
 {
     switch (error) {
     case ParseError::kMissingValue:
@@ -67,7 +67,7 @@ enum class ParseError : uint8_t {
 }
 
 [[nodiscard]] std::expected<uint64_t, ParseError>
-parseUnsigned(std::string_view text) noexcept
+parse_unsigned(std::string_view text) noexcept
 {
     uint64_t value = 0;
     const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
@@ -78,7 +78,7 @@ parseUnsigned(std::string_view text) noexcept
 }
 
 [[nodiscard]] std::expected<Config, ParseError>
-parseArguments(int argc, char** argv) noexcept
+parse_arguments(int argc, char** argv) noexcept
 {
     Config config;
     for (int index = 1; index < argc; ++index) {
@@ -86,7 +86,7 @@ parseArguments(int argc, char** argv) noexcept
         if (index + 1 >= argc) {
             return std::unexpected(ParseError::kMissingValue);
         }
-        const auto parsed = parseUnsigned(argv[++index]);
+        const auto parsed = parse_unsigned(argv[++index]);
         if (!parsed.has_value()) {
             return std::unexpected(parsed.error());
         }
@@ -130,7 +130,7 @@ static_assert(sizeof(Payload<1>) == 8);
 static_assert(sizeof(Payload<8>) == 64);
 
 template <size_t Words>
-[[nodiscard]] Payload<Words> makePayload(uint64_t sequence) noexcept
+[[nodiscard]] Payload<Words> make_payload(uint64_t sequence) noexcept
 {
     if constexpr (Words == 1) {
         return sequence;
@@ -143,7 +143,7 @@ template <size_t Words>
     }
 }
 
-[[nodiscard]] uint64_t triangularChecksum(uint64_t count) noexcept
+[[nodiscard]] uint64_t triangular_checksum(uint64_t count) noexcept
 {
     return (count & 1U) == 0
         ? (count / 2) * (count - 1)
@@ -151,10 +151,10 @@ template <size_t Words>
 }
 
 template <size_t Words>
-[[nodiscard]] uint64_t expectedChecksum(uint64_t messages) noexcept
+[[nodiscard]] uint64_t expected_checksum(uint64_t messages) noexcept
 {
     constexpr uint64_t kWordOffsetSum = Words * (Words - 1) / 2;
-    return static_cast<uint64_t>(Words) * triangularChecksum(messages) +
+    return static_cast<uint64_t>(Words) * triangular_checksum(messages) +
         messages * kWordOffsetSum;
 }
 
@@ -179,7 +179,7 @@ struct Measurement
 };
 
 template <size_t Words, typename Channel>
-[[nodiscard]] Measurement runPair(Channel& channel, uint64_t messages)
+[[nodiscard]] Measurement run_pair(Channel& channel, uint64_t messages)
 {
     std::atomic<size_t> ready{0};
     std::atomic<bool> start{false};
@@ -188,7 +188,7 @@ template <size_t Words, typename Channel>
     bool consumerReadyOk = false;
 
     std::thread producer([&]() {
-        measurement.producerPlacement = galay::benchmark::pinCurrentThread(0);
+        measurement.producerPlacement = galay::benchmark::pin_current_thread(0);
         const size_t readyCount = ready.fetch_add(1, std::memory_order_release) + 1;
         producerReadyOk = readyCount <= 2;
         while (!start.load(std::memory_order_acquire)) {
@@ -196,8 +196,8 @@ template <size_t Words, typename Channel>
         }
         uint64_t retries = 0;
         for (uint64_t sequence = 0; sequence < messages; ++sequence) {
-            Payload<Words> pending = makePayload<Words>(sequence);
-            while (!channel.trySend(std::move(pending))) {
+            Payload<Words> pending = make_payload<Words>(sequence);
+            while (!channel.try_send(std::move(pending))) {
                 ++retries;
                 std::this_thread::yield();
             }
@@ -206,7 +206,7 @@ template <size_t Words, typename Channel>
     });
 
     std::thread consumer([&]() {
-        measurement.consumerPlacement = galay::benchmark::pinCurrentThread(1);
+        measurement.consumerPlacement = galay::benchmark::pin_current_thread(1);
         const size_t readyCount = ready.fetch_add(1, std::memory_order_release) + 1;
         consumerReadyOk = readyCount <= 2;
         while (!start.load(std::memory_order_acquire)) {
@@ -219,7 +219,7 @@ template <size_t Words, typename Channel>
         bool fifoOk = true;
         bool contentOk = true;
         while (received < messages) {
-            auto value = channel.tryRecv();
+            auto value = channel.try_recv();
             if (!value.has_value()) {
                 ++retries;
                 std::this_thread::yield();
@@ -258,11 +258,11 @@ template <size_t Words, typename Channel>
     const auto elapsedNs =
         std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
 
-    measurement.extraMessage = channel.tryRecv().has_value();
+    measurement.extraMessage = channel.try_recv().has_value();
     measurement.elapsedNs =
         elapsedNs > 0 ? static_cast<uint64_t>(elapsedNs) : 0;
     measurement.readyOk = producerReadyOk && consumerReadyOk;
-    measurement.expected = expectedChecksum<Words>(messages);
+    measurement.expected = expected_checksum<Words>(messages);
     measurement.messagesPerSecond = measurement.elapsedNs > 0
         ? static_cast<double>(messages) * 1'000'000'000.0 /
             static_cast<double>(measurement.elapsedNs)
@@ -275,27 +275,27 @@ template <size_t Words, typename Channel>
 }
 
 template <size_t Words, size_t Capacity>
-[[nodiscard]] Measurement runDynamic(uint64_t messages)
+[[nodiscard]] Measurement run_dynamic(uint64_t messages)
 {
     galay::spsc::BoundedChannel<Payload<Words>> channel(Capacity);
     if (channel.error() != galay::spsc::RingError::kNone) {
         return {};
     }
-    return runPair<Words>(channel, messages);
+    return run_pair<Words>(channel, messages);
 }
 
 template <size_t Words, size_t Capacity>
-[[nodiscard]] Measurement runStatic(uint64_t messages)
+[[nodiscard]] Measurement run_static(uint64_t messages)
 {
     using Channel = galay::spsc::BoundedChannel<Payload<Words>, Capacity>;
     // Capacity=4096 and a 64-byte payload make the inline slots hundreds of
     // KiB. Keep that benchmark fixture off the stack; allocation remains
-    // outside runPair's timed interval.
+    // outside run_pair's timed interval.
     std::unique_ptr<Channel> channel(new (std::nothrow) Channel());
     if (!channel || channel->error() != galay::spsc::RingError::kNone) {
         return {};
     }
-    return runPair<Words>(*channel, messages);
+    return run_pair<Words>(*channel, messages);
 }
 
 [[nodiscard]] double median(const std::vector<double>& samples)
@@ -311,7 +311,7 @@ template <size_t Words, size_t Capacity>
         : (sorted[middle - 1] + sorted[middle]) / 2.0;
 }
 
-[[nodiscard]] double coefficientOfVariation(const std::vector<double>& samples)
+[[nodiscard]] double coefficient_of_variation(const std::vector<double>& samples)
 {
     if (samples.size() < 2) {
         return 0.0;
@@ -335,13 +335,13 @@ template <size_t Words, size_t Capacity>
 }
 
 template <size_t Words, size_t Capacity>
-[[nodiscard]] bool runCase(const Config& config)
+[[nodiscard]] bool run_case(const Config& config)
 {
     const std::array warmups{
-        runDynamic<Words, Capacity>(config.warmupMessages),
-        runStatic<Words, Capacity>(config.warmupMessages),
-        runStatic<Words, Capacity>(config.warmupMessages),
-        runDynamic<Words, Capacity>(config.warmupMessages),
+        run_dynamic<Words, Capacity>(config.warmupMessages),
+        run_static<Words, Capacity>(config.warmupMessages),
+        run_static<Words, Capacity>(config.warmupMessages),
+        run_dynamic<Words, Capacity>(config.warmupMessages),
     };
     for (const Measurement& warmup : warmups) {
         if (!warmup.valid) {
@@ -360,13 +360,13 @@ template <size_t Words, size_t Capacity>
 
     for (size_t round = 0; round < config.rounds; ++round) {
         const Measurement dynamicFirst =
-            runDynamic<Words, Capacity>(config.messages);
+            run_dynamic<Words, Capacity>(config.messages);
         const Measurement staticFirst =
-            runStatic<Words, Capacity>(config.messages);
+            run_static<Words, Capacity>(config.messages);
         const Measurement staticSecond =
-            runStatic<Words, Capacity>(config.messages);
+            run_static<Words, Capacity>(config.messages);
         const Measurement dynamicSecond =
-            runDynamic<Words, Capacity>(config.messages);
+            run_dynamic<Words, Capacity>(config.messages);
         const std::array samples{
             std::pair{"dynamic", &dynamicFirst},
             std::pair{"static", &staticFirst},
@@ -388,10 +388,10 @@ template <size_t Words, size_t Capacity>
                       << " full_retries=" << sample->fullRetries
                       << " empty_retries=" << sample->emptyRetries
                       << " producer_placement="
-                      << galay::benchmark::threadPlacementName(
+                      << galay::benchmark::thread_placement_name(
                              sample->producerPlacement)
                       << " consumer_placement="
-                      << galay::benchmark::threadPlacementName(
+                      << galay::benchmark::thread_placement_name(
                              sample->consumerPlacement)
                       << " valid=" << std::boolalpha << sample->valid << '\n';
             if (!sample->valid) {
@@ -416,9 +416,9 @@ template <size_t Words, size_t Capacity>
               << " payload_bytes=" << sizeof(Payload<Words>)
               << " samples_per_variant=" << dynamicSamples.size()
               << " dynamic_median_msg_s=" << dynamicMedian
-              << " dynamic_cv_pct=" << coefficientOfVariation(dynamicSamples)
+              << " dynamic_cv_pct=" << coefficient_of_variation(dynamicSamples)
               << " static_median_msg_s=" << staticMedian
-              << " static_cv_pct=" << coefficientOfVariation(staticSamples)
+              << " static_cv_pct=" << coefficient_of_variation(staticSamples)
               << " median_throughput_ratio="
               << (dynamicMedian > 0.0 ? staticMedian / dynamicMedian : 0.0)
               << " paired_median_ratio=" << median(pairedRatios)
@@ -430,31 +430,31 @@ template <size_t Words, size_t Capacity>
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    const auto config = parseArguments(argc, argv);
+    const auto config = parse_arguments(argc, argv);
     if (!config.has_value()) {
-        std::cerr << "b27 argument error: " << parseErrorName(config.error()) << '\n';
+        std::cerr << "b27 argument error: " << parse_error_name(config.error()) << '\n';
         return 2;
     }
 
     bool valid = true;
     if (config->payloadBytes == 0 || config->payloadBytes == 8) {
         if (config->capacity == 0 || config->capacity == 256) {
-            valid = runCase<1, 256>(*config) && valid;
+            valid = run_case<1, 256>(*config) && valid;
         }
         if (config->capacity == 0 || config->capacity == 4096) {
-            valid = runCase<1, 4096>(*config) && valid;
+            valid = run_case<1, 4096>(*config) && valid;
         }
     }
     if (config->payloadBytes == 0 || config->payloadBytes == 64) {
         if (config->capacity == 0 || config->capacity == 256) {
-            valid = runCase<8, 256>(*config) && valid;
+            valid = run_case<8, 256>(*config) && valid;
         }
         if (config->capacity == 0 || config->capacity == 4096) {
-            valid = runCase<8, 4096>(*config) && valid;
+            valid = run_case<8, 4096>(*config) && valid;
         }
     }
     if (!std::cout.good()) {

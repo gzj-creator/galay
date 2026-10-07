@@ -57,7 +57,7 @@ void fail(TestState* state, std::string message)
     }
 }
 
-int createListenSocket(uint16_t* port_out)
+int create_listen_socket(uint16_t* port_out)
 {
     int listen_fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd < 0) {
@@ -91,7 +91,7 @@ int createListenSocket(uint16_t* port_out)
     return listen_fd;
 }
 
-void acceptAll(int listen_fd, TestState* state)
+void accept_all(int listen_fd, TestState* state)
 {
     for (int i = 0; i < kConnections; ++i) {
         int client_fd = ::accept(listen_fd, nullptr, nullptr);
@@ -104,10 +104,10 @@ void acceptAll(int listen_fd, TestState* state)
     }
 }
 
-Task<void> connectTask(TestState* state, uint16_t port)
+Task<void> connect_task(TestState* state, uint16_t port)
 {
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     auto result = co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", port));
     if (!result) {
@@ -120,7 +120,7 @@ Task<void> connectTask(TestState* state, uint16_t port)
     state->done.fetch_add(1, std::memory_order_relaxed);
 }
 
-void waitForState(TestState& state)
+void wait_for_state(TestState& state)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (state.done.load(std::memory_order_relaxed) < kConnections) {
@@ -145,20 +145,20 @@ void waitForState(TestState& state)
 int main()
 {
     uint16_t port = 0;
-    int listen_fd = createListenSocket(&port);
+    int listen_fd = create_listen_socket(&port);
     if (listen_fd < 0) {
         std::cerr << "[T116] createListenSocket failed: " << std::strerror(errno) << "\n";
         return 1;
     }
 
     TestState state;
-    std::thread accept_thread(acceptAll, listen_fd, &state);
+    std::thread accept_thread(accept_all, listen_fd, &state);
 
     TestScheduler scheduler;
     scheduler.start();
 
     for (int i = 0; i < kConnections; ++i) {
-        if (!scheduleTask(scheduler, connectTask(&state, port))) {
+        if (!schedule_task(scheduler, connect_task(&state, port))) {
             scheduler.stop();
             accept_thread.join();
             ::close(listen_fd);
@@ -169,7 +169,7 @@ int main()
 
     int rc = 0;
     try {
-        waitForState(state);
+        wait_for_state(state);
     } catch (const std::exception& ex) {
         std::cerr << "[T116] " << ex.what() << "\n";
         rc = 1;

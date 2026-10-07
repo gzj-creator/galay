@@ -17,18 +17,18 @@ using namespace galay::kernel;
 
 static std::atomic<bool> g_running{true};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
-Task<void> handleStream(Http2Stream::ptr stream) {
+Task<void> handle_stream(Http2Stream::ptr stream) {
     while (true) {
-        auto frame_result = co_await stream->getFrame();
+        auto frame_result = co_await stream->get_frame();
         if (!frame_result || !frame_result.value()) {
             co_return;
         }
         auto frame = std::move(frame_result.value());
-        if ((frame->isHeaders() || frame->isData()) && frame->isEndStream()) {
+        if ((frame->is_headers() || frame->is_data()) && frame->is_end_stream()) {
             break;
         }
     }
@@ -38,16 +38,16 @@ Task<void> handleStream(Http2Stream::ptr stream) {
         co_return;
     }
 
-    std::string body = req.body.empty() ? "Echo: (empty)" : ("Echo: " + req.coalescedBody());
-    co_await stream->replyHeader(
+    std::string body = req.body.empty() ? "Echo: (empty)" : ("Echo: " + req.coalesced_body());
+    co_await stream->reply_header(
         Http2Headers()
             .status(200)
-            .contentType("text/plain")
+            .content_type("text/plain")
             .server("Galay-H2-Import/1.0")
-            .contentLength(body.size()),
+            .content_length(body.size()),
         body.empty());
     if (!body.empty()) {
-        co_await stream->replyData(body, true);
+        co_await stream->reply_data(body, true);
     }
     co_return;
 }
@@ -67,20 +67,20 @@ int main(int argc, char* argv[]) {
         key_path = argv[3];
     }
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
         H2Server server(H2ServerBuilder()
             .host("0.0.0.0")
             .port(port)
-            .certPath(cert_path)
-            .keyPath(key_path)
-            .ioSchedulerCount(2)
-            .maxConcurrentStreams(100)
+            .cert_path(cert_path)
+            .key_path(key_path)
+            .io_scheduler_count(2)
+            .max_concurrent_streams(100)
             .build());
         std::cout << "Import h2 server: https://127.0.0.1:" << port << "\n";
-        server.start(handleStream);
+        server.start(handle_stream);
 
         while (g_running) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));

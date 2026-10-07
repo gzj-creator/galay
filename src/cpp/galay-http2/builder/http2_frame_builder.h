@@ -30,28 +30,28 @@ public:
                                                       std::string header_block,
                                                       bool end_stream = false,
                                                       bool end_headers = true);
-    static std::unique_ptr<Http2RstStreamFrame> rstStream(uint32_t stream_id, Http2ErrorCode error);
+    static std::unique_ptr<Http2RstStreamFrame> rst_stream(uint32_t stream_id, Http2ErrorCode error);
 
-    static std::array<char, kHttp2FrameHeaderLength> dataHeaderBytes(uint32_t stream_id,
+    static std::array<char, kHttp2FrameHeaderLength> data_header_bytes(uint32_t stream_id,
                                                                      size_t payload_length,
                                                                      bool end_stream = false);
-    static std::array<char, kHttp2FrameHeaderLength> headersHeaderBytes(uint32_t stream_id,
+    static std::array<char, kHttp2FrameHeaderLength> headers_header_bytes(uint32_t stream_id,
                                                                         size_t header_block_length,
                                                                         bool end_stream = false,
                                                                         bool end_headers = true);
-    static std::array<char, kHttp2FrameHeaderLength> continuationHeaderBytes(uint32_t stream_id,
+    static std::array<char, kHttp2FrameHeaderLength> continuation_header_bytes(uint32_t stream_id,
                                                                              size_t header_block_length,
                                                                              bool end_headers = true);
 
-    static std::string dataBytes(uint32_t stream_id, std::string_view payload, bool end_stream = false);
-    static std::string headersBytes(uint32_t stream_id,
+    static std::string data_bytes(uint32_t stream_id, std::string_view payload, bool end_stream = false);
+    static std::string headers_bytes(uint32_t stream_id,
                                     std::string_view header_block,
                                     bool end_stream = false,
                                     bool end_headers = true);
-    static std::string continuationBytes(uint32_t stream_id,
+    static std::string continuation_bytes(uint32_t stream_id,
                                          std::string_view header_block,
                                          bool end_headers = true);
-    static std::string rstStreamBytes(uint32_t stream_id, Http2ErrorCode error);
+    static std::string rst_stream_bytes(uint32_t stream_id, Http2ErrorCode error);
 };
 
 } // namespace galay::http2

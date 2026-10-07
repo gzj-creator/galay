@@ -19,7 +19,7 @@ namespace {
 
 std::atomic<int> g_detachedFinished{0};
 
-Task<int> sumTask(int id, int limit)
+Task<int> sum_task(int id, int limit)
 {
     LogInfo("Task {} started", id);
 
@@ -32,7 +32,7 @@ Task<int> sumTask(int id, int limit)
     co_return sum;
 }
 
-Task<void> detachedTask(int id)
+Task<void> detached_task(int id)
 {
     LogInfo("Detached task {} started", id);
     co_yield true;
@@ -41,19 +41,19 @@ Task<void> detachedTask(int id)
     co_return;
 }
 
-Task<void> spawnFromCurrentRuntime()
+Task<void> spawn_from_current_runtime()
 {
     LogInfo("Spawning detached tasks through RuntimeHandle::current()");
     auto runtimeHandle = RuntimeHandle::current();
     assert(runtimeHandle.has_value());
-    auto first = runtimeHandle->spawnCpu(detachedTask(1));
-    auto second = runtimeHandle->spawnCpu(detachedTask(2));
+    auto first = runtimeHandle->spawn_cpu(detached_task(1));
+    auto second = runtimeHandle->spawn_cpu(detached_task(2));
     assert(first.has_value());
     assert(second.has_value());
     co_return;
 }
 
-Task<void> waitForDetachedTasks()
+Task<void> wait_for_detached_tasks()
 {
     for (int i = 0; i < 1024 && g_detachedFinished.load(std::memory_order_acquire) < 2; ++i) {
         co_yield true;
@@ -63,12 +63,12 @@ Task<void> waitForDetachedTasks()
     co_return;
 }
 
-Task<void> spawnBlockingDemo()
+Task<void> spawn_blocking_demo()
 {
     auto runtimeHandle = RuntimeHandle::current();
     assert(runtimeHandle.has_value());
 
-    auto blocking = runtimeHandle->spawnBlocking([]() {
+    auto blocking = runtimeHandle->spawn_blocking([]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         return 7;
     });
@@ -89,17 +89,17 @@ int main()
     LogInfo("=== Runtime Task API Basic Example ===");
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(0)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(0)
+        .parallel_scheduler_count(1)
         .build();
 
     LogInfo("\n--- Example 1: blockOnCpu(Task<int>) ---");
-    auto rootValue = runtime.blockOnCpu(sumTask(1, 1000));
+    auto rootValue = runtime.block_on_cpu(sum_task(1, 1000));
     assert(rootValue.has_value());
     LogInfo("blockOnCpu returned {}", *rootValue);
 
     LogInfo("\n--- Example 2: spawnCpu(Task<int>) -> JoinHandle<int> ---");
-    auto handle = runtime.spawnCpu(sumTask(2, 2000));
+    auto handle = runtime.spawn_cpu(sum_task(2, 2000));
     assert(handle.has_value());
     auto handleWait = handle->wait();
     assert(handleWait.has_value());
@@ -108,13 +108,13 @@ int main()
     LogInfo("spawnCpu().join() returned {}", *handleValue);
 
     LogInfo("\n--- Example 3: RuntimeHandle::current().spawnCpu(...) ---");
-    auto spawnResult = runtime.blockOnCpu(spawnFromCurrentRuntime());
+    auto spawnResult = runtime.block_on_cpu(spawn_from_current_runtime());
     assert(spawnResult.has_value());
-    auto waitResult = runtime.blockOnCpu(waitForDetachedTasks());
+    auto waitResult = runtime.block_on_cpu(wait_for_detached_tasks());
     assert(waitResult.has_value());
 
     LogInfo("\n--- Example 4: RuntimeHandle::spawnBlocking(...) ---");
-    auto blockingResult = runtime.blockOnCpu(spawnBlockingDemo());
+    auto blockingResult = runtime.block_on_cpu(spawn_blocking_demo());
     assert(blockingResult.has_value());
 
     LogInfo("\n=== Example Completed ===");

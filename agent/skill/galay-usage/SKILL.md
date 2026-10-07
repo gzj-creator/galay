@@ -31,7 +31,7 @@ galay 是一个基于 **C++23 协程** 的高性能异步网络与协议框架�
 
 ## 核心心智模型
 
-1. **Runtime 是入口。** 创建 `Runtime`（或 `RuntimeBuilder`），把 IO 根协程用 `blockOnIO` / `spawnIO` 提交，把纯计算根协程用 `blockOnCpu` / `spawnCpu` 提交。Runtime 管理 IO 调度器、compute 调度器、阻塞线程池。
+1. **Runtime 是入口。** 创建 `Runtime`（或 `RuntimeBuilder`），把 IO 根协程用 `block_on_io` / `spawn_io` 提交，把纯计算根协程用 `block_on_cpu` / `spawn_cpu` 提交。Runtime 管理 IO 调度器、compute 调度器、阻塞线程池。
 2. **业务逻辑写成 `Task<T>` 协程。** IO 操作返回 awaitable，用 `co_await` 取 `std::expected<...>`；判 `if (!result)` 处理失败，`result.error().message()` 拿原因。
 3. **不抛异常。** C++ 可恢复错误一律 `std::expected<T, E>`；C 一律 `galay_status_t` / `C_IOResult`。所有非 void 返回值必须处理（见仓库 `CLAUDE.md` 准则 5、6）。
 4. **禁止把协程逻辑拆成返回 `Task`/`Task<T>` 的 helper**（会产生额外协程帧/调度点）；关键控制流留在调用点附近（准则 7）。
@@ -49,7 +49,7 @@ using namespace galay::async;
 Task<int> fetch() {
     auto sock = AsyncTcpSocket::create();                 // std::expected<AsyncTcpSocket, IOError>
     if (!sock) co_return -1;
-    sock->option().handleNonBlock();
+    sock->option().handle_non_block();
     if (auto c = co_await sock->connect(Host(IPType::IPV4, "127.0.0.1", 8080)); !c)
         co_return -1;
     co_await sock->send("ping", 4);
@@ -60,8 +60,8 @@ Task<int> fetch() {
 }
 
 int main() {
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).build();
-    auto r = rt.blockOnIO(fetch());                   // std::expected<int, RuntimeError>
+    Runtime rt = RuntimeBuilder().io_scheduler_count(1).build();
+    auto r = rt.block_on_io(fetch());                   // std::expected<int, RuntimeError>
     return r.value_or(-1) >= 0 ? 0 : 1;
 }
 ```

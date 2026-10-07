@@ -23,12 +23,12 @@ public:
     ReconnectService()
         : RpcService("ReconnectService")
     {
-        registerMethod("echo", &ReconnectService::echo);
+        register_method("echo", &ReconnectService::echo);
     }
 
     Task<void> echo(RpcContext& ctx)
     {
-        ctx.setPayload(ctx.request().payloadView());
+        ctx.set_payload(ctx.request().payload_view());
         co_return;
     }
 };
@@ -39,22 +39,22 @@ struct TestState {
     std::string error;
 };
 
-uint16_t loopbackPort()
+uint16_t loopback_port()
 {
     return static_cast<uint16_t>(35000 + (::getpid() % 7000));
 }
 
 template<typename AwaitResult>
-bool callPayloadEquals(const AwaitResult& result, const std::string& expected)
+bool call_payload_equals(const AwaitResult& result, const std::string& expected)
 {
     if (!result.has_value() || !result->has_value() || !result->value().has_value()) {
         return false;
     }
     const auto& payload = result->value()->payload();
-    return result->value()->isOk() && std::string(payload.begin(), payload.end()) == expected;
+    return result->value()->is_ok() && std::string(payload.begin(), payload.end()) == expected;
 }
 
-Task<void> startServerLater(uint16_t port,
+Task<void> start_server_later(uint16_t port,
                             std::shared_ptr<RpcServer>* server_slot,
                             ReconnectService* service,
                             TestState* state)
@@ -63,10 +63,10 @@ Task<void> startServerLater(uint16_t port,
     auto server = std::make_shared<RpcServer>(RpcServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
-        .buildConfig());
-    auto registered = server->registerService(*service);
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
+        .build_config());
+    auto registered = server->register_service(*service);
     if (!registered.has_value()) {
         state->ok = false;
         state->error = registered.error().message();
@@ -84,14 +84,14 @@ Task<void> startServerLater(uint16_t port,
     co_return;
 }
 
-Task<void> runReconnectClient(uint16_t port, TestState* state)
+Task<void> run_reconnect_client(uint16_t port, TestState* state)
 {
     RpcReconnectPolicy policy;
     policy.max_attempts = 20;
     policy.backoff = std::chrono::milliseconds(10);
 
     RpcClient client;
-    client.reconnectPolicy(policy);
+    client.reconnect_policy(policy);
     auto connect_result = co_await client.connect("127.0.0.1", port);
     if (!connect_result.has_value()) {
         state->ok = false;
@@ -101,7 +101,7 @@ Task<void> runReconnectClient(uint16_t port, TestState* state)
     }
 
     auto first = co_await client.call("ReconnectService", "echo", "first");
-    if (!callPayloadEquals(first, "first")) {
+    if (!call_payload_equals(first, "first")) {
         state->ok = false;
         state->error = "first call failed after reconnect connect";
         co_await client.close();
@@ -111,7 +111,7 @@ Task<void> runReconnectClient(uint16_t port, TestState* state)
 
     co_await client.close();
     auto second = co_await client.call("ReconnectService", "echo", "second");
-    if (!callPayloadEquals(second, "second")) {
+    if (!call_payload_equals(second, "second")) {
         state->ok = false;
         state->error = "next call did not reconnect after local close";
         state->done.store(true, std::memory_order_release);
@@ -127,8 +127,8 @@ Task<void> runReconnectClient(uint16_t port, TestState* state)
 
 int main()
 {
-    const uint16_t port = loopbackPort();
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    const uint16_t port = loopback_port();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         std::cerr << "failed to start reconnect runtime: "
@@ -139,8 +139,8 @@ int main()
     std::shared_ptr<RpcServer> server;
     ReconnectService service;
     TestState state;
-    auto starter = runtime.spawnIO(startServerLater(port, &server, &service, &state));
-    auto client = runtime.spawnIO(runReconnectClient(port, &state));
+    auto starter = runtime.spawn_io(start_server_later(port, &server, &service, &state));
+    auto client = runtime.spawn_io(run_reconnect_client(port, &state));
     if (!starter.has_value() || !client.has_value()) {
         runtime.stop();
         std::cerr << "failed to schedule reconnect tasks\n";

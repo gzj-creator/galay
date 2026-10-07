@@ -15,7 +15,7 @@ struct MicroOptions {
     std::string_view sample;
     bool diagnostics = false;
 };
-inline bool parseMicroOptions(int argc, char** argv, MicroOptions& options) {
+inline bool parse_micro_options(int argc, char** argv, MicroOptions& options) {
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
         if (arg == "--diagnostics") { options.diagnostics = true; continue; }

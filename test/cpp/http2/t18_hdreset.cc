@@ -26,29 +26,29 @@ int main()
     };
 
     HttpRequestHeader header;
-    const auto result = header.fromIOVec(iovecs);
+    const auto result = header.from_io_vec(iovecs);
     if (result.first != kNoError || result.second != static_cast<ssize_t>(sizeof(kRequest) - 1)) {
         std::cerr << "[T72] request should parse successfully before reset\n";
         return 1;
     }
-    if (!header.headerPairs().hasCommonHeader(CommonHeaderIndex::Host) ||
-        !header.headerPairs().hasCommonHeader(CommonHeaderIndex::Connection)) {
+    if (!header.header_pairs().has_common_header(CommonHeaderIndex::Host) ||
+        !header.header_pairs().has_common_header(CommonHeaderIndex::Connection)) {
         std::cerr << "[T72] parsed request should populate common header fast-path storage\n";
         return 1;
     }
 
     header.reset();
 
-    if (header.headerPairs().hasCommonHeader(CommonHeaderIndex::Host) ||
-        header.headerPairs().hasCommonHeader(CommonHeaderIndex::Connection)) {
+    if (header.header_pairs().has_common_header(CommonHeaderIndex::Host) ||
+        header.header_pairs().has_common_header(CommonHeaderIndex::Connection)) {
         std::cerr << "[T72] reset should clear common header fast-path state\n";
         return 1;
     }
-    if (header.headerPairs().hasKey("host") || header.headerPairs().hasKey("connection")) {
+    if (header.header_pairs().has_key("host") || header.header_pairs().has_key("connection")) {
         std::cerr << "[T72] reset should hide common headers from lookup API\n";
         return 1;
     }
-    if (header.headerPairs().getValue("host") != "" || header.headerPairs().getValue("connection") != "") {
+    if (header.header_pairs().get_value("host") != "" || header.header_pairs().get_value("connection") != "") {
         std::cerr << "[T72] reset should clear common header values\n";
         return 1;
     }

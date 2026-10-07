@@ -16,22 +16,22 @@ namespace {
 
 constexpr std::size_t kIterations = 500000;
 
-std::optional<std::string_view> getHeader(const galay::http::HeaderPair& headers, std::string_view name) {
-    const auto* value = headers.getValuePtr(std::string(name));
+std::optional<std::string_view> get_header(const galay::http::HeaderPair& headers, std::string_view name) {
+    const auto* value = headers.get_value_ptr(std::string(name));
     if (value == nullptr) {
         return std::nullopt;
     }
     return std::string_view(*value);
 }
 
-void setHeader(galay::http::HeaderPair& headers, std::string_view name, std::string value) {
-    static_cast<void>(headers.addHeaderPair(std::string(name), value));
+void set_header(galay::http::HeaderPair& headers, std::string_view name, std::string value) {
+    static_cast<void>(headers.add_header_pair(std::string(name), value));
 }
 
-galay::tracing::TraceContext makeContext() {
+galay::tracing::TraceContext make_context() {
     return galay::tracing::TraceContext(
-        galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
-        galay::tracing::SpanId::fromHex("00f067aa0ba902b7"),
+        galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"),
+        galay::tracing::SpanId::from_hex("00f067aa0ba902b7"),
         0x01,
         "vendor=value");
 }
@@ -39,25 +39,25 @@ galay::tracing::TraceContext makeContext() {
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    const auto context = makeContext();
+    const auto context = make_context();
     std::size_t propagated = 0;
 
     const auto start = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < kIterations; ++i) {
         galay::http::HeaderPair headers(galay::http::HeaderPair::Mode::ServerSide);
-        const bool injected = galay::tracing::injectTraceContextToHeaders(context, [&](std::string_view name, std::string value) {
-            setHeader(headers, name, std::move(value));
+        const bool injected = galay::tracing::inject_trace_context_to_headers(context, [&](std::string_view name, std::string value) {
+            set_header(headers, name, std::move(value));
         });
 
-        auto extracted = galay::tracing::extractTraceContextFromHeaders([&](std::string_view name) {
-            return getHeader(headers, name);
+        auto extracted = galay::tracing::extract_trace_context_from_headers([&](std::string_view name) {
+            return get_header(headers, name);
         });
 
-        if (injected && extracted.has_value() && extracted->traceId() == context.traceId()) {
+        if (injected && extracted.has_value() && extracted->trace_id() == context.trace_id()) {
             ++propagated;
         }
     }

@@ -43,7 +43,7 @@ class EtcdClient;
  * @code
  * auto client = EtcdClientBuilder()
  *     .endpoint("http://127.0.0.1:2379")
- *     .requestTimeout(std::chrono::seconds(5))
+ *     .request_timeout(std::chrono::seconds(5))
  *     .build();
  * @endcode
  */
@@ -70,7 +70,7 @@ public:
      * @param prefix 路径前缀，如 "/v3"
      * @return 构建器引用，支持链式调用
      */
-    EtcdClientBuilder& apiPrefix(std::string prefix)
+    EtcdClientBuilder& api_prefix(std::string prefix)
     {
         m_config.api_prefix = std::move(prefix);
         return *this;
@@ -83,7 +83,7 @@ public:
      * @note 当前仅保存配置并在 endpoints 非空时同步首个 endpoint，
      *       不改变现有单端点请求行为。
      */
-    EtcdClientBuilder& productionConfig(EtcdProductionConfig config)
+    EtcdClientBuilder& production_config(EtcdProductionConfig config)
     {
         if (!config.endpoints.empty()) {
             m_config.endpoint = config.endpoints.front();
@@ -97,7 +97,7 @@ public:
      * @param timeout 超时时间
      * @return 构建器引用，支持链式调用
      */
-    EtcdClientBuilder& requestTimeout(std::chrono::milliseconds timeout)
+    EtcdClientBuilder& request_timeout(std::chrono::milliseconds timeout)
     {
         m_config.request_timeout = timeout;
         return *this;
@@ -108,7 +108,7 @@ public:
      * @param size 缓冲区大小（字节）
      * @return 构建器引用，支持链式调用
      */
-    EtcdClientBuilder& bufferSize(size_t size)
+    EtcdClientBuilder& buffer_size(size_t size)
     {
         m_config.buffer_size = size;
         return *this;
@@ -119,7 +119,7 @@ public:
      * @param enabled 是否启用
      * @return 构建器引用，支持链式调用
      */
-    EtcdClientBuilder& keepAlive(bool enabled)
+    EtcdClientBuilder& keep_alive(bool enabled)
     {
         m_config.keepalive = enabled;
         return *this;
@@ -130,7 +130,7 @@ public:
      * @param enabled true 表示启用 TCP_NODELAY；false 表示保留系统默认
      * @return 构建器引用，支持链式调用
      */
-    EtcdClientBuilder& tcpNoDelay(bool enabled)
+    EtcdClientBuilder& tcp_no_delay(bool enabled)
     {
         m_config.tcp_no_delay = enabled;
         return *this;
@@ -166,7 +166,7 @@ public:
      * @brief 仅构建配置对象而不创建客户端
      * @return 配置好的 EtcdConfig 实例
      */
-    EtcdConfig& buildConfig()
+    EtcdConfig& build_config()
     {
         return m_config;
     }
@@ -175,7 +175,7 @@ public:
      * @brief 仅查看构建配置对象而不创建客户端
      * @return 当前配置引用
      */
-    const EtcdConfig& buildConfig() const
+    const EtcdConfig& build_config() const
     {
         return m_config;
     }
@@ -260,14 +260,14 @@ public:
      * @param ttl_seconds 租约存活时间（秒）
      * @return 成功返回租约 ID，失败返回 EtcdError
      */
-    EtcdLeaseGrantResult grantLease(int64_t ttl_seconds);
+    EtcdLeaseGrantResult grant_lease(int64_t ttl_seconds);
 
     /**
      * @brief 同步发送一次租约续期请求
      * @param lease_id 需要续期的租约 ID
      * @return 成功返回租约 ID，失败返回 EtcdError
      */
-    EtcdLeaseGrantResult keepAliveOnce(int64_t lease_id);
+    EtcdLeaseGrantResult keep_alive_once(int64_t lease_id);
 
     /**
      * @brief 同步执行 Pipeline 事务（span 版本）
@@ -295,17 +295,17 @@ public:
      *          返回值用于锁定公开 API 形状，后续生产 wrapper 会补齐计数。
      * @return 当前统计快照
      */
-    [[nodiscard]] EtcdClientStats getStats() const
+    [[nodiscard]] EtcdClientStats get_stats() const
     {
         return m_stats;
     }
 
 private:
-    void resetLastOperation();
-    void setError(EtcdErrorType type, const std::string& message);
-    void setError(EtcdError error);
-    EtcdVoidResult applySocketTimeout(std::optional<std::chrono::milliseconds> timeout);
-    std::expected<std::string, EtcdError> postJsonInternal(
+    void reset_last_operation();
+    void set_error(EtcdErrorType type, const std::string& message);
+    void set_error(EtcdError error);
+    EtcdVoidResult apply_socket_timeout(std::optional<std::chrono::milliseconds> timeout);
+    std::expected<std::string, EtcdError> post_json_internal(
         const std::string& api_path,
         std::string body,
         std::optional<std::chrono::milliseconds> force_timeout = std::nullopt);

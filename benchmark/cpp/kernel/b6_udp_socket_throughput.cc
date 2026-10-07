@@ -72,7 +72,7 @@ constexpr char kWarmupMarker = 'W';
 constexpr char kMeasuredMarker = 'M';
 std::atomic<Phase> g_phase{Phase::stopped};
 
-bool countTraffic(Phase phase) noexcept {
+bool count_traffic(Phase phase) noexcept {
     return phase == Phase::measured || phase == Phase::drain;
 }
 
@@ -88,14 +88,14 @@ struct UdpStatsSnapshot {
     uint64_t errors = 0;
 };
 
-void addCounter(std::atomic<uint64_t>& counter, uint64_t value = 1) noexcept {
+void add_counter(std::atomic<uint64_t>& counter, uint64_t value = 1) noexcept {
     const uint64_t previous = counter.fetch_add(value, std::memory_order_relaxed);
     if (previous > std::numeric_limits<uint64_t>::max() - value) {
         counter.store(std::numeric_limits<uint64_t>::max(), std::memory_order_relaxed);
     }
 }
 
-UdpStatsSnapshot snapshotStats() {
+UdpStatsSnapshot snapshot_stats() {
     return {
         .client_sent = g_client_sent.load(std::memory_order_relaxed),
         .client_received = g_client_received.load(std::memory_order_relaxed),
@@ -112,7 +112,7 @@ UdpStatsSnapshot snapshotStats() {
 // A successful UDP pressure run is only publishable after the fixed drain
 // window has reconciled every measured request and reply.  The measurement
 // window itself may legitimately end with packets still in flight.
-bool settledCountersMatch(const UdpStatsSnapshot& values) noexcept {
+bool settled_counters_match(const UdpStatsSnapshot& values) noexcept {
     return values.client_sent == values.client_received &&
            values.client_received == values.server_received &&
            values.server_received == values.server_sent &&
@@ -121,7 +121,7 @@ bool settledCountersMatch(const UdpStatsSnapshot& values) noexcept {
            values.server_bytes_received == values.server_bytes_sent;
 }
 
-void resetStats() noexcept {
+void reset_stats() noexcept {
     g_client_sent.store(0, std::memory_order_relaxed);
     g_client_received.store(0, std::memory_order_relaxed);
     g_client_bytes_sent.store(0, std::memory_order_relaxed);
@@ -133,11 +133,11 @@ void resetStats() noexcept {
     g_errors.store(0, std::memory_order_relaxed);
 }
 
-void markClientStartupFailed() noexcept {
+void mark_client_startup_failed() noexcept {
     g_client_workers_failed.fetch_add(1, std::memory_order_release);
 }
 
-bool waitForClientsReady(std::chrono::seconds timeout) {
+bool wait_for_clients_ready(std::chrono::seconds timeout) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     do {
         const uint32_t ready = g_client_workers_ready.load(std::memory_order_acquire);
@@ -151,10 +151,10 @@ bool waitForClientsReady(std::chrono::seconds timeout) {
 }
 
 // UDP Echo服务器工作协程 - 多协程并发处理
-Task<void> udpServerWorker(int worker_id) {
+Task<void> udp_server_worker(int worker_id) {
     auto socket_result = AsyncUdpSocket::create();
     if (!socket_result) {
-        addCounter(g_errors);
+        add_counter(g_errors);
         if (g_server_completion) {
             g_server_completion->arrive();
         }
@@ -162,11 +162,11 @@ Task<void> udpServerWorker(int worker_id) {
     }
     AsyncUdpSocket socket = std::move(*socket_result);
 
-    const auto reuse_addr = socket.option().handleReuseAddr();
-    const auto reuse_port = socket.option().handleReusePort();
-    const auto non_block = socket.option().handleNonBlock();
+    const auto reuse_addr = socket.option().handle_reuse_addr();
+    const auto reuse_port = socket.option().handle_reuse_port();
+    const auto non_block = socket.option().handle_non_block();
     if (!reuse_addr || !reuse_port || !non_block) {
-        addCounter(g_errors);
+        add_counter(g_errors);
         if (g_server_completion) {
             g_server_completion->arrive();
         }
@@ -177,7 +177,7 @@ Task<void> udpServerWorker(int worker_id) {
     int recv_buf_size = 8 * 1024 * 1024; // 8MB
     if (setsockopt(socket.handle().fd, SOL_SOCKET, SO_RCVBUF,
                    &recv_buf_size, sizeof(recv_buf_size)) != 0) {
-        addCounter(g_errors);
+        add_counter(g_errors);
         if (g_server_completion) {
             g_server_completion->arrive();
         }
@@ -188,7 +188,7 @@ Task<void> udpServerWorker(int worker_id) {
     auto bindResult = socket.bind(bindHost);
     if (!bindResult) {
         LogError("Worker {}: Failed to bind: {}", worker_id, bindResult.error().message());
-        addCounter(g_errors);
+        add_counter(g_errors);
         if (g_server_completion) {
             g_server_completion->arrive();
         }
@@ -214,34 +214,34 @@ Task<void> udpServerWorker(int worker_id) {
             if (IOError::contains(recvResult.error().code(), kTimeout)) {
                 continue;
             }
-            addCounter(g_errors);
+            add_counter(g_errors);
             break;
         }
 
         size_t bytes = recvResult.value();
         const bool measured_packet = bytes == MESSAGE_SIZE &&
                                      buffer[0] == kMeasuredMarker &&
-                                     countTraffic(g_phase.load(std::memory_order_acquire));
-        if (measured_packet && countTraffic(g_phase.load(std::memory_order_acquire))) {
-            addCounter(g_server_received);
-            addCounter(g_server_bytes_received, bytes);
+                                     count_traffic(g_phase.load(std::memory_order_acquire));
+        if (measured_packet && count_traffic(g_phase.load(std::memory_order_acquire))) {
+            add_counter(g_server_received);
+            add_counter(g_server_bytes_received, bytes);
         }
 
         // Echo回发送方
         auto sendResult = co_await socket.sendto(buffer, bytes, from);
         if (!sendResult || sendResult.value() != bytes) {
-            addCounter(g_errors);
+            add_counter(g_errors);
             continue;
         }
         if (measured_packet) {
-            addCounter(g_server_sent);
-            addCounter(g_server_bytes_sent, sendResult.value());
+            add_counter(g_server_sent);
+            add_counter(g_server_bytes_sent, sendResult.value());
         }
     }
 
     const auto closed = co_await socket.close();
     if (!closed) {
-        addCounter(g_errors);
+        add_counter(g_errors);
     }
     if (g_server_completion) {
         g_server_completion->arrive();
@@ -250,11 +250,11 @@ Task<void> udpServerWorker(int worker_id) {
 }
 
 // UDP客户端协程 - 流水线模式
-Task<void> udpBenchmarkClient(int client_id) {
+Task<void> udp_benchmark_client(int client_id) {
     auto socket_result = AsyncUdpSocket::create();
     if (!socket_result) {
-        addCounter(g_errors);
-        markClientStartupFailed();
+        add_counter(g_errors);
+        mark_client_startup_failed();
         if (g_client_completion) {
             g_client_completion->arrive();
         }
@@ -262,10 +262,10 @@ Task<void> udpBenchmarkClient(int client_id) {
     }
     AsyncUdpSocket socket = std::move(*socket_result);
 
-    const auto non_block = socket.option().handleNonBlock();
+    const auto non_block = socket.option().handle_non_block();
     if (!non_block) {
-        addCounter(g_errors);
-        markClientStartupFailed();
+        add_counter(g_errors);
+        mark_client_startup_failed();
         if (g_client_completion) {
             g_client_completion->arrive();
         }
@@ -276,8 +276,8 @@ Task<void> udpBenchmarkClient(int client_id) {
     int send_buf_size = 2 * 1024 * 1024; // 2MB
     if (setsockopt(socket.handle().fd, SOL_SOCKET, SO_SNDBUF,
                    &send_buf_size, sizeof(send_buf_size)) != 0) {
-        addCounter(g_errors);
-        markClientStartupFailed();
+        add_counter(g_errors);
+        mark_client_startup_failed();
         if (g_client_completion) {
             g_client_completion->arrive();
         }
@@ -291,8 +291,8 @@ Task<void> udpBenchmarkClient(int client_id) {
     const int message_length = snprintf(
         message.data(), message.size(), "Client-%d-Message", client_id);
     if (message_length < 0 || static_cast<size_t>(message_length) >= message.size()) {
-        addCounter(g_errors);
-        markClientStartupFailed();
+        add_counter(g_errors);
+        mark_client_startup_failed();
         if (g_client_completion) {
             g_client_completion->arrive();
         }
@@ -322,13 +322,13 @@ Task<void> udpBenchmarkClient(int client_id) {
             }
             auto sendResult = co_await socket.sendto(message.data(), MESSAGE_SIZE, serverHost);
             if (!sendResult || sendResult.value() != MESSAGE_SIZE) {
-                addCounter(g_errors);
+                add_counter(g_errors);
                 continue;
             }
             if (phase == Phase::measured) {
                 ++measured_sent;
-                addCounter(g_client_sent);
-                addCounter(g_client_bytes_sent, sendResult.value());
+                add_counter(g_client_sent);
+                add_counter(g_client_bytes_sent, sendResult.value());
             }
         }
 
@@ -343,14 +343,14 @@ Task<void> udpBenchmarkClient(int client_id) {
             if (recvResult) {
                 const size_t bytes = recvResult.value();
                 if (bytes == MESSAGE_SIZE && recv_buffer[0] == kMeasuredMarker &&
-                    countTraffic(g_phase.load(std::memory_order_acquire))) {
+                    count_traffic(g_phase.load(std::memory_order_acquire))) {
                     ++measured_received;
-                    addCounter(g_client_received);
-                    addCounter(g_client_bytes_received, bytes);
+                    add_counter(g_client_received);
+                    add_counter(g_client_bytes_received, bytes);
                 }
             } else if (!IOError::contains(recvResult.error().code(), kTimeout)) {
                 if (g_phase.load(std::memory_order_acquire) != Phase::stopped) {
-                    addCounter(g_errors);
+                    add_counter(g_errors);
                 }
             }
         }
@@ -365,22 +365,22 @@ Task<void> udpBenchmarkClient(int client_id) {
         if (!recvResult) {
             if (!IOError::contains(recvResult.error().code(), kTimeout) &&
                 g_phase.load(std::memory_order_acquire) != Phase::stopped) {
-                addCounter(g_errors);
+                add_counter(g_errors);
             }
             continue;
         }
         const size_t bytes = recvResult.value();
         if (bytes == MESSAGE_SIZE && recv_buffer[0] == kMeasuredMarker &&
-            countTraffic(g_phase.load(std::memory_order_acquire))) {
+            count_traffic(g_phase.load(std::memory_order_acquire))) {
             ++measured_received;
-            addCounter(g_client_received);
-            addCounter(g_client_bytes_received, bytes);
+            add_counter(g_client_received);
+            add_counter(g_client_bytes_received, bytes);
         }
     }
 
     const auto closed = co_await socket.close();
     if (!closed) {
-        addCounter(g_errors);
+        add_counter(g_errors);
     }
     if (g_client_completion) {
         g_client_completion->arrive();
@@ -388,7 +388,7 @@ Task<void> udpBenchmarkClient(int client_id) {
     co_return;
 }
 
-void printBenchmarkResults(std::chrono::steady_clock::time_point measurement_start,
+void print_benchmark_results(std::chrono::steady_clock::time_point measurement_start,
                            std::chrono::steady_clock::time_point measurement_end,
                            const UdpStatsSnapshot& measured,
                            const UdpStatsSnapshot& settled,
@@ -485,7 +485,7 @@ void printBenchmarkResults(std::chrono::steady_clock::time_point measurement_sta
 }
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -536,17 +536,17 @@ int main() {
 
     // 启动多个服务器工作协程
     for (int i = 0; i < NUM_SERVER_WORKERS; ++i) {
-        if (!scheduleTask(scheduler, udpServerWorker(i))) {
-            addCounter(g_errors);
+        if (!schedule_task(scheduler, udp_server_worker(i))) {
+            add_counter(g_errors);
             server_completion.arrive();
         }
     }
     LogInfo("Started {} server workers", NUM_SERVER_WORKERS);
 
-    if (!galay::benchmark::waitForFlag(g_server_ready, std::chrono::seconds(2))) {
+    if (!galay::benchmark::wait_for_flag(g_server_ready, std::chrono::seconds(2))) {
         LogError("Server workers did not become ready before client start");
         g_phase.store(Phase::stopped, std::memory_order_release);
-        const bool servers_stopped = server_completion.waitFor(std::chrono::seconds(2));
+        const bool servers_stopped = server_completion.wait_for(std::chrono::seconds(2));
         if (!servers_stopped) {
             LogError("Server workers did not stop before shutdown");
         }
@@ -557,17 +557,17 @@ int main() {
     // 启动多个客户端
     LogInfo("Starting {} clients...", NUM_CLIENTS);
     for (int i = 0; i < NUM_CLIENTS; ++i) {
-        if (!scheduleTask(scheduler, udpBenchmarkClient(i))) {
-            markClientStartupFailed();
+        if (!schedule_task(scheduler, udp_benchmark_client(i))) {
+            mark_client_startup_failed();
             client_completion.arrive();
         }
     }
 
-    if (!waitForClientsReady(std::chrono::seconds(2))) {
+    if (!wait_for_clients_ready(std::chrono::seconds(2))) {
         LogError("Clients did not become ready before warmup");
         g_phase.store(Phase::stopped, std::memory_order_release);
-        const bool clients_stopped = client_completion.waitFor(std::chrono::seconds(3));
-        const bool servers_stopped = server_completion.waitFor(std::chrono::seconds(3));
+        const bool clients_stopped = client_completion.wait_for(std::chrono::seconds(3));
+        const bool servers_stopped = server_completion.wait_for(std::chrono::seconds(3));
         scheduler.stop();
         g_client_completion = nullptr;
         g_server_completion = nullptr;
@@ -583,8 +583,8 @@ int main() {
     if (g_errors.load(std::memory_order_relaxed) != 0) {
         LogError("UDP workers reported errors during warmup");
         g_phase.store(Phase::stopped, std::memory_order_release);
-        const bool clients_stopped = client_completion.waitFor(std::chrono::seconds(3));
-        const bool servers_stopped = server_completion.waitFor(std::chrono::seconds(3));
+        const bool clients_stopped = client_completion.wait_for(std::chrono::seconds(3));
+        const bool servers_stopped = server_completion.wait_for(std::chrono::seconds(3));
         scheduler.stop();
         g_client_completion = nullptr;
         g_server_completion = nullptr;
@@ -593,30 +593,30 @@ int main() {
         }
         return 1;
     }
-    resetStats();
+    reset_stats();
     g_phase.store(Phase::measured, std::memory_order_release);
     const auto measurement_start = std::chrono::steady_clock::now();
     LogInfo("Benchmark running for {} seconds...", TEST_DURATION_SEC);
     std::this_thread::sleep_for(std::chrono::seconds(TEST_DURATION_SEC));
 
     const auto measurement_end = std::chrono::steady_clock::now();
-    const auto measured = snapshotStats();
+    const auto measured = snapshot_stats();
     g_phase.store(Phase::drain, std::memory_order_release);
     std::this_thread::sleep_for(CLIENT_DRAIN_TIMEOUT);
     g_phase.store(Phase::stopped, std::memory_order_release);
-    const bool clients_completed = client_completion.waitFor(std::chrono::seconds(3));
-    const bool servers_completed = server_completion.waitFor(std::chrono::seconds(3));
+    const bool clients_completed = client_completion.wait_for(std::chrono::seconds(3));
+    const bool servers_completed = server_completion.wait_for(std::chrono::seconds(3));
 
     scheduler.stop();
     LogInfo("Scheduler stopped");
 
-    const auto settled = snapshotStats();
+    const auto settled = snapshot_stats();
     const bool benchmark_ok = clients_completed && servers_completed &&
                               g_client_workers_ready.load(std::memory_order_acquire) == NUM_CLIENTS &&
                               g_server_workers_ready.load(std::memory_order_acquire) == NUM_SERVER_WORKERS &&
                               g_errors.load(std::memory_order_relaxed) == 0 &&
-                              settledCountersMatch(settled);
-    printBenchmarkResults(measurement_start, measurement_end, measured, settled,
+                              settled_counters_match(settled);
+    print_benchmark_results(measurement_start, measurement_end, measured, settled,
                           benchmark_ok);
 
     g_client_completion = nullptr;

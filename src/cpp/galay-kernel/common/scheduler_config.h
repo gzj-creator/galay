@@ -4,8 +4,8 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 提供编译期配置模板，替代运行时配置参数以获得更好的性能。
- * 通过模板参数化配置，编译器可以进行常量传播、循环展开等优化。
+ * @details 提供编译期容量选择和范围检查；配置传入共享后端实现。
+ * 不特化事件循环，预设的吞吐与延迟取舍需由实际负载验证。
  */
 
 #ifndef GALAY_KERNEL_SCHEDULER_CONFIG_H
@@ -48,13 +48,13 @@ using DefaultIOSchedulerConfig = IOSchedulerConfig<>;
 
 /**
  * @brief 高性能 IO 调度器配置
- * @details 更大的事件和批处理容量，适用于高吞吐场景
+ * @details 更大的事件和批处理容量，供高吞吐负载测量选择
  */
 using HighPerformanceIOSchedulerConfig = IOSchedulerConfig<2048, 512, 8192>;
 
 /**
  * @brief 低延迟 IO 调度器配置
- * @details 更小的批处理大小，降低延迟
+ * @details 更小的批处理大小，供低延迟负载测量选择
  */
 using LowLatencyIOSchedulerConfig = IOSchedulerConfig<512, 64, 2048>;
 

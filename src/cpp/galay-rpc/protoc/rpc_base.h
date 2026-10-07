@@ -22,7 +22,7 @@ namespace galay::rpc
 /**
  * @brief 跨平台字节序转换（使用编译器内置，GCC/Clang/AppleClang 均支持）
  */
-inline uint32_t rpcBswap32(uint32_t v) {
+inline uint32_t rpc_bswap32(uint32_t v) {
     if constexpr (std::endian::native == std::endian::big) {
         return v;
     } else {
@@ -35,7 +35,7 @@ inline uint32_t rpcBswap32(uint32_t v) {
  * @param v 需要交换的16位值
  * @return 字节序交换后的值
  */
-inline uint16_t rpcBswap16(uint16_t v) {
+inline uint16_t rpc_bswap16(uint16_t v) {
     if constexpr (std::endian::native == std::endian::big) {
         return v;
     } else {
@@ -44,13 +44,13 @@ inline uint16_t rpcBswap16(uint16_t v) {
 }
 
 /// @brief 32位主机字节序转网络字节序
-inline uint32_t rpcHtonl(uint32_t host) { return rpcBswap32(host); }
+inline uint32_t rpc_htonl(uint32_t host) { return rpc_bswap32(host); }
 /// @brief 32位网络字节序转主机字节序
-inline uint32_t rpcNtohl(uint32_t net)  { return rpcBswap32(net); }
+inline uint32_t rpc_ntohl(uint32_t net)  { return rpc_bswap32(net); }
 /// @brief 16位主机字节序转网络字节序
-inline uint16_t rpcHtons(uint16_t host) { return rpcBswap16(host); }
+inline uint16_t rpc_htons(uint16_t host) { return rpc_bswap16(host); }
 /// @brief 16位网络字节序转主机字节序
-inline uint16_t rpcNtohs(uint16_t net)  { return rpcBswap16(net); }
+inline uint16_t rpc_ntohs(uint16_t net)  { return rpc_bswap16(net); }
 
 /**
  * @brief RPC消息类型
@@ -93,7 +93,7 @@ inline constexpr uint8_t RPC_RESERVED_KNOWN_MASK = RPC_RESERVED_METADATA; ///< �
  * @param end_stream 是否为流的最后一帧
  * @return 编码后的flags字节
  */
-inline uint8_t rpcEncodeFlags(RpcCallMode mode, bool end_stream) {
+inline uint8_t rpc_encode_flags(RpcCallMode mode, bool end_stream) {
     uint8_t flags = static_cast<uint8_t>(mode) & RPC_FLAG_MODE_MASK;
     if (end_stream) {
         flags |= RPC_FLAG_END_STREAM;
@@ -106,7 +106,7 @@ inline uint8_t rpcEncodeFlags(RpcCallMode mode, bool end_stream) {
  * @param flags 编码后的flags字节
  * @return 调用模式
  */
-inline RpcCallMode rpcDecodeCallMode(uint8_t flags) {
+inline RpcCallMode rpc_decode_call_mode(uint8_t flags) {
     return static_cast<RpcCallMode>(flags & RPC_FLAG_MODE_MASK);
 }
 
@@ -115,7 +115,7 @@ inline RpcCallMode rpcDecodeCallMode(uint8_t flags) {
  * @param flags 编码后的flags字节
  * @return 是否为流结束
  */
-inline bool rpcIsEndStream(uint8_t flags) {
+inline bool rpc_is_end_stream(uint8_t flags) {
     return (flags & RPC_FLAG_END_STREAM) != 0;
 }
 
@@ -125,7 +125,7 @@ inline bool rpcIsEndStream(uint8_t flags) {
  * @param end_stream 是否设置流结束
  * @return 修改后的flags字节
  */
-inline uint8_t rpcSetEndStreamFlag(uint8_t flags, bool end_stream) {
+inline uint8_t rpc_set_end_stream_flag(uint8_t flags, bool end_stream) {
     if (end_stream) {
         return static_cast<uint8_t>(flags | RPC_FLAG_END_STREAM);
     }
@@ -160,7 +160,7 @@ enum class RpcErrorCode : uint16_t {
 /**
  * @brief 获取错误码描述
  */
-inline const char* rpcErrorCodeToString(RpcErrorCode code) {
+inline const char* rpc_error_code_to_string(RpcErrorCode code) {
     switch (code) {
         case RpcErrorCode::OK: return "OK";
         case RpcErrorCode::UNKNOWN_ERROR: return "Unknown error";

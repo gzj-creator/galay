@@ -54,14 +54,14 @@ public:
      * @param stream_id stream ID
      * @return 成功或窗口错误
      */
-    std::expected<void, H2FlowControlError> ensureStream(uint32_t stream_id);
+    std::expected<void, H2FlowControlError> ensure_stream(uint32_t stream_id);
 
     /**
      * @brief 应用连接级 WINDOW_UPDATE
      * @param increment 窗口增量
      * @return 成功或窗口溢出错误
      */
-    std::expected<void, H2FlowControlError> applyConnectionWindowUpdate(uint32_t increment);
+    std::expected<void, H2FlowControlError> apply_connection_window_update(uint32_t increment);
 
     /**
      * @brief 应用 stream 级 WINDOW_UPDATE
@@ -69,7 +69,7 @@ public:
      * @param increment 窗口增量
      * @return 成功、未知 stream 或窗口溢出错误
      */
-    std::expected<void, H2FlowControlError> applyStreamWindowUpdate(uint32_t stream_id,
+    std::expected<void, H2FlowControlError> apply_stream_window_update(uint32_t stream_id,
                                                                    uint32_t increment);
 
     /**
@@ -77,7 +77,7 @@ public:
      * @param new_size 新 stream 初始窗口
      * @return 成功或任一既有 stream 更新后溢出
      */
-    std::expected<void, H2FlowControlError> applyInitialStreamWindowSize(uint32_t new_size);
+    std::expected<void, H2FlowControlError> apply_initial_stream_window_size(uint32_t new_size);
 
     /**
      * @brief 计算当前可发送 DATA 字节数
@@ -86,7 +86,7 @@ public:
      * @param max_frame_size 单帧最大载荷
      * @return 受连接窗口、stream 窗口、请求大小和最大帧大小共同限制的字节数
      */
-    size_t availableToSend(uint32_t stream_id,
+    size_t available_to_send(uint32_t stream_id,
                            size_t requested,
                            uint32_t max_frame_size) const;
 
@@ -96,7 +96,7 @@ public:
      * @param bytes 已选择发送的 DATA 字节数
      * @return 成功、未知 stream 或窗口不足错误
      */
-    std::expected<void, H2FlowControlError> consumeSendWindow(uint32_t stream_id,
+    std::expected<void, H2FlowControlError> consume_send_window(uint32_t stream_id,
                                                              size_t bytes);
 
 private:

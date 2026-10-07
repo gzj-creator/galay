@@ -20,7 +20,7 @@ namespace galay::ssl
  * @param pem_public_key PEM-encoded public key.
  * @return Ciphertext bytes, or an error message describing the OpenSSL failure.
  */
-std::expected<std::string, std::string> rsaOaepEncryptWithPemPublicKey(
+std::expected<std::string, std::string> rsa_oaep_encrypt_with_pem_public_key(
     std::string_view payload,
     std::string_view pem_public_key);
 
@@ -30,7 +30,7 @@ std::expected<std::string, std::string> rsaOaepEncryptWithPemPublicKey(
  * This variant is required by wire protocols such as MySQL
  * caching_sha2_password full authentication.
  */
-std::expected<std::string, std::string> rsaOaepSha1EncryptWithPemPublicKey(
+std::expected<std::string, std::string> rsa_oaep_sha1_encrypt_with_pem_public_key(
     std::string_view payload,
     std::string_view pem_public_key);
 

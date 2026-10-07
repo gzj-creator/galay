@@ -11,10 +11,10 @@
 namespace galay::mcp::v2 {
 
 namespace {
-std::expected<json::Json, McpError> objectParams(const ParsedRequest& request)
+std::expected<json::Json, McpError> object_params(const ParsedRequest& request)
 {
     if (!request.request.params.is_object()) {
-        return std::unexpected(McpError::invalidParams("params must be an object"));
+        return std::unexpected(McpError::invalid_params("params must be an object"));
     }
     return request.request.params;
 }
@@ -23,27 +23,27 @@ std::expected<std::string, McpError> required(const json::Json& object, const ch
 {
     auto value = object.at(key).as_string();
     if (!value) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             std::string("missing or invalid ") + key));
     }
     return std::string(*value);
 }
 
-std::expected<json::Json, McpError> optionalObject(const json::Json& object,
+std::expected<json::Json, McpError> optional_object(const json::Json& object,
                                                     const char* key)
 {
     const json::Json value = object.at(key);
     if (!value.valid()) {
-        return galay::mcp::emptyJsonObject();
+        return galay::mcp::empty_json_object();
     }
     if (!value.is_object()) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             std::string(key) + " must be an object"));
     }
     return value;
 }
 
-bool headerValueMatches(std::string_view expected,
+bool header_value_matches(std::string_view expected,
                         std::string_view actual,
                         std::string_view type)
 {
@@ -63,9 +63,9 @@ bool headerValueMatches(std::string_view expected,
            actualValue == expectedValue;
 }
 
-std::string promptResult(std::string_view value)
+std::string prompt_result(std::string_view value)
 {
-    auto parsed = parseResult(value);
+    auto parsed = parse_result(value);
     if (parsed) {
         return std::string(value);
     }
@@ -78,7 +78,7 @@ std::string promptResult(std::string_view value)
     }
     const json::Json& object = document->root();
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     std::string raw;
     (void)writer.start_object();
@@ -117,26 +117,26 @@ McpHttpServer::McpHttpServer(std::string host,
                              bool tcpNoDelay)
     : m_httpServer(http::HttpServerBuilder().host(std::move(host))
                        .port(static_cast<uint16_t>(port))
-                       .backlog(128).ioSchedulerCount(ioSchedulers)
-                       .parallelSchedulerCount(parallelSchedulers)
-                       .tcpNoDelay(tcpNoDelay).buildConfig())
+                       .backlog(128).io_scheduler_count(ioSchedulers)
+                       .parallel_scheduler_count(parallelSchedulers)
+                       .tcp_no_delay(tcpNoDelay).build_config())
 {
 }
 
 McpHttpServer::~McpHttpServer() { stop(); }
 
-void McpHttpServer::setServerInfo(std::string name, std::string version)
+void McpHttpServer::set_server_info(std::string name, std::string version)
 {
     m_serverName = std::move(name);
     m_serverVersion = std::move(version);
 }
 
-void McpHttpServer::setProductionPolicy(McpProductionPolicy policy)
+void McpHttpServer::set_production_policy(McpProductionPolicy policy)
 {
     m_policy = std::move(policy);
 }
 
-void McpHttpServer::addTool(std::string name,
+void McpHttpServer::add_tool(std::string name,
                             std::string description,
                             std::string inputSchema,
                             ToolHandler handler)
@@ -149,7 +149,7 @@ void McpHttpServer::addTool(std::string name,
     m_tools.insert_or_assign(entry.tool.name, std::move(entry));
 }
 
-void McpHttpServer::addResource(std::string uri,
+void McpHttpServer::add_resource(std::string uri,
                                 std::string name,
                                 std::string description,
                                 std::string mimeType,
@@ -164,7 +164,7 @@ void McpHttpServer::addResource(std::string uri,
     m_resources.insert_or_assign(entry.resource.uri, std::move(entry));
 }
 
-void McpHttpServer::addPrompt(std::string name,
+void McpHttpServer::add_prompt(std::string name,
                               std::string description,
                               std::vector<PromptArgument> arguments,
                               PromptGetter getter)
@@ -199,22 +199,22 @@ McpHttpServer::Operation::~Operation()
     }
 }
 
-std::expected<void, McpError> McpHttpServer::notifyToolsListChanged()
+std::expected<void, McpError> McpHttpServer::notify_tools_list_changed()
 {
     return submit(Command{CommandKind::Tools});
 }
 
-std::expected<void, McpError> McpHttpServer::notifyResourcesListChanged()
+std::expected<void, McpError> McpHttpServer::notify_resources_list_changed()
 {
     return submit(Command{CommandKind::Resources});
 }
 
-std::expected<void, McpError> McpHttpServer::notifyPromptsListChanged()
+std::expected<void, McpError> McpHttpServer::notify_prompts_list_changed()
 {
     return submit(Command{CommandKind::Prompts});
 }
 
-std::expected<void, McpError> McpHttpServer::notifyResourceUpdated(std::string uri)
+std::expected<void, McpError> McpHttpServer::notify_resource_updated(std::string uri)
 {
     return submit(Command{CommandKind::Resource, std::move(uri)});
 }
@@ -222,26 +222,26 @@ std::expected<void, McpError> McpHttpServer::notifyResourceUpdated(std::string u
 std::expected<void, McpError> McpHttpServer::submit(Command command)
 {
     auto operation = Operation::acquire(m_admission);
-    if (!operation) return std::unexpected(McpError::connectionClosed("HTTP server is not accepting commands"));
+    if (!operation) return std::unexpected(McpError::connection_closed("HTTP server is not accepting commands"));
     if (!m_commands.send(std::move(command))) {
         return std::unexpected(McpError::overload("HTTP owner command queue allocation failed"));
     }
-    wakeOwner();
+    wake_owner();
     return {};
 }
 
-void McpHttpServer::wakeOwner() noexcept
+void McpHttpServer::wake_owner() noexcept
 {
     m_wakeSequence.fetch_add(1, std::memory_order_release);
     m_wakeSequence.notify_one();
 }
 
-bool McpHttpServer::processCommands()
+bool McpHttpServer::process_commands()
 {
     // Bound each pass so a busy producer cannot starve shutdown or release.
     std::size_t processed = 0;
     while (processed != 256) {
-        auto command = m_commands.tryRecv();
+        auto command = m_commands.try_recv();
         if (!command) break;
         ++processed;
         if (command->kind == CommandKind::Register) {
@@ -286,11 +286,11 @@ void McpHttpServer::publish(CommandKind notification, const std::string& uri)
             method = NotificationMethods::RESOURCES_UPDATED;
             break;
         }
-        auto message = makeSubscriptionNotification(
+        auto message = make_subscription_notification(
             method, subscription->id, notification == CommandKind::Resource
                 ? std::optional<std::string_view>(uri) : std::nullopt);
         // Preserve the bounded subscriber queue: overload drops this event.
-        if (!subscription->events.trySend(std::move(message))) continue;
+        if (!subscription->events.try_send(std::move(message))) continue;
     }
 }
 
@@ -300,7 +300,7 @@ McpHttpServer::HttpResult McpHttpServer::error(const std::optional<RequestId>& i
                                                std::optional<std::string_view> data,
                                                int status) const
 {
-    return HttpResult{status, makeErrorResponse(id, code, message, data)};
+    return HttpResult{status, make_error_response(id, code, message, data)};
 }
 
 McpHttpServer::HttpResult McpHttpServer::error(const std::optional<RequestId>& id,
@@ -308,7 +308,7 @@ McpHttpServer::HttpResult McpHttpServer::error(const std::optional<RequestId>& i
                                                int status) const
 {
     return error(id,
-                 value.toJsonRpcErrorCode(),
+                 value.to_json_rpc_error_code(),
                  value.message(),
                  value.details().empty()
                      ? std::nullopt
@@ -316,87 +316,87 @@ McpHttpServer::HttpResult McpHttpServer::error(const std::optional<RequestId>& i
                  status);
 }
 
-std::expected<std::string, McpError> McpHttpServer::headerName(
+std::expected<std::string, McpError> McpHttpServer::header_name(
     http::HttpRequest& request,
     const ParsedRequest& parsed) const
 {
-    const std::string method = request.header().headerPairs().getValue("Mcp-Method");
+    const std::string method = request.header().header_pairs().get_value("Mcp-Method");
     if (method.empty() || method != parsed.request.method) {
-        return std::unexpected(McpError::protocolError("Mcp-Method header mismatch"));
+        return std::unexpected(McpError::protocol_error("Mcp-Method header mismatch"));
     }
     if (parsed.request.method != Methods::TOOLS_CALL &&
         parsed.request.method != Methods::RESOURCES_READ &&
         parsed.request.method != Methods::PROMPTS_GET) {
         return std::string{};
     }
-    auto name = decodeHeaderValue(request.header().headerPairs().getValue("Mcp-Name"));
+    auto name = decode_header_value(request.header().header_pairs().get_value("Mcp-Name"));
     if (!name || name->empty()) {
-        return std::unexpected(McpError::protocolError("missing Mcp-Name header"));
+        return std::unexpected(McpError::protocol_error("missing Mcp-Name header"));
     }
     return name.value();
 }
 
-std::expected<void, McpError> McpHttpServer::validateHeaders(
+std::expected<void, McpError> McpHttpServer::validate_headers(
     http::HttpRequest& request,
     const ParsedRequest& parsed) const
 {
-    const auto& headers = request.header().headerPairs();
-    const std::string accept = headers.getValue("Accept");
+    const auto& headers = request.header().header_pairs();
+    const std::string accept = headers.get_value("Accept");
     if (accept.find("application/json") == std::string::npos ||
         accept.find("text/event-stream") == std::string::npos) {
-        return std::unexpected(McpError::protocolError("Accept must include JSON and SSE"));
+        return std::unexpected(McpError::protocol_error("Accept must include JSON and SSE"));
     }
-    const std::string version = headers.getValue("MCP-Protocol-Version");
+    const std::string version = headers.get_value("MCP-Protocol-Version");
     if (version.empty() || version != parsed.request.meta.protocolVersion) {
-        return std::unexpected(McpError::protocolError("MCP-Protocol-Version header mismatch"));
+        return std::unexpected(McpError::protocol_error("MCP-Protocol-Version header mismatch"));
     }
-    auto name = headerName(request, parsed);
+    auto name = header_name(request, parsed);
     if (!name) {
         return std::unexpected(name.error());
     }
     if (!name->empty()) {
-        auto params = objectParams(parsed);
+        auto params = object_params(parsed);
         if (!params) {
             return std::unexpected(params.error());
         }
         const char* key = parsed.request.method == Methods::RESOURCES_READ ? "uri" : "name";
         auto bodyName = required(params.value(), key);
         if (!bodyName || bodyName.value() != name.value()) {
-            return std::unexpected(McpError::protocolError("Mcp-Name header mismatch"));
+            return std::unexpected(McpError::protocol_error("Mcp-Name header mismatch"));
         }
         if (parsed.request.method == Methods::TOOLS_CALL) {
             json::Json arguments = params.value().at("arguments");
             if (!arguments.valid()) {
-                arguments = galay::mcp::emptyJsonObject();
+                arguments = galay::mcp::empty_json_object();
             }
             Tool tool;
             auto it = m_tools.find(name.value());
             if (it == m_tools.end()) return {};
             tool = it->second.tool;
-            auto annotations = toolHeaderAnnotations(tool);
+            auto annotations = tool_header_annotations(tool);
             if (!annotations) return std::unexpected(annotations.error());
-            const auto& headerPairs = request.header().headerPairs();
+            const auto& header_pairs = request.header().header_pairs();
             for (const auto& annotation : annotations.value()) {
-                auto bodyValue = argumentHeaderValue(arguments, annotation);
+                auto bodyValue = argument_header_value(arguments, annotation);
                 if (!bodyValue) return std::unexpected(bodyValue.error());
                 const std::string headerName = "Mcp-Param-" + annotation.name;
-                const bool hasHeader = headerPairs.hasKey(headerName);
+                const bool hasHeader = header_pairs.has_key(headerName);
                 if (!bodyValue.value()) {
                     if (hasHeader) {
-                        return std::unexpected(McpError::protocolError(
+                        return std::unexpected(McpError::protocol_error(
                             "unexpected " + headerName + " header"));
                     }
                     continue;
                 }
                 if (!hasHeader) {
-                    return std::unexpected(McpError::protocolError(
+                    return std::unexpected(McpError::protocol_error(
                         "missing " + headerName + " header"));
                 }
-                auto headerValue = decodeHeaderValue(headerPairs.getValue(headerName));
-                if (!headerValue || !headerValueMatches(*bodyValue.value(),
+                auto headerValue = decode_header_value(header_pairs.get_value(headerName));
+                if (!headerValue || !header_value_matches(*bodyValue.value(),
                                                          headerValue.value(),
                                                          annotation.type)) {
-                    return std::unexpected(McpError::protocolError(
+                    return std::unexpected(McpError::protocol_error(
                         headerName + " header mismatch"));
                 }
             }
@@ -409,10 +409,10 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
     const ParsedRequest& parsed)
 {
     if (parsed.request.meta.protocolVersion != MCP_VERSION) {
-        co_return HttpResult{400, makeUnsupportedProtocolVersionResponse(
+        co_return HttpResult{400, make_unsupported_protocol_version_response(
             parsed.request.id, parsed.request.meta.protocolVersion, {MCP_VERSION})};
     }
-    auto params = objectParams(parsed);
+    auto params = object_params(parsed);
     if (!params) {
         co_return error(parsed.request.id, params.error());
     }
@@ -429,7 +429,7 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         result.capabilities.resourcesListChanged = !m_resources.empty();
         result.capabilities.resourceSubscriptions = !m_resources.empty();
         result.capabilities.promptsListChanged = !m_prompts.empty();
-        co_return HttpResult{200, makeResultResponse(id, result.toJson())};
+        co_return HttpResult{200, make_result_response(id, result.to_json())};
     }
 
     if (parsed.request.method == Methods::TOOLS_LIST ||
@@ -439,19 +439,19 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         result.field = parsed.request.method == Methods::TOOLS_LIST
             ? "tools" : parsed.request.method == Methods::RESOURCES_LIST ? "resources" : "prompts";
         if (result.field == "tools") {
-            for (const auto& [unused, entry] : m_tools) result.items.push_back(entry.tool.toJson());
+            for (const auto& [unused, entry] : m_tools) result.items.push_back(entry.tool.to_json());
         } else if (result.field == "resources") {
-            for (const auto& [unused, entry] : m_resources) result.items.push_back(entry.resource.toJson());
+            for (const auto& [unused, entry] : m_resources) result.items.push_back(entry.resource.to_json());
         } else {
-            for (const auto& [unused, entry] : m_prompts) result.items.push_back(entry.prompt.toJson());
+            for (const auto& [unused, entry] : m_prompts) result.items.push_back(entry.prompt.to_json());
         }
-        co_return HttpResult{200, makeResultResponse(id, result.toJson())};
+        co_return HttpResult{200, make_result_response(id, result.to_json())};
     }
 
     if (parsed.request.method == Methods::TOOLS_CALL) {
         auto name = required(object, "name");
         if (!name) { co_return error(id, name.error()); }
-        auto arguments = optionalObject(object, "arguments");
+        auto arguments = optional_object(object, "arguments");
         if (!arguments) { co_return error(id, arguments.error()); }
         ToolHandler handler;
         auto it = m_tools.find(name.value());
@@ -460,7 +460,7 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         std::expected<std::string, McpError> value;
         co_await handler(arguments.value(), value);
         if (!value) co_return error(id, value.error());
-        co_return HttpResult{200, makeResultResponse(id, ToolCallResult::text(value.value()).toJson())};
+        co_return HttpResult{200, make_result_response(id, ToolCallResult::text(value.value()).to_json())};
     }
 
     if (parsed.request.method == Methods::RESOURCES_READ) {
@@ -475,13 +475,13 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         std::expected<std::string, McpError> value;
         co_await reader(uri.value(), value);
         if (!value) co_return error(id, value.error());
-        co_return HttpResult{200, makeResultResponse(id, ReadResourceResult::text(uri.value(), value.value(), mimeType).toJson())};
+        co_return HttpResult{200, make_result_response(id, ReadResourceResult::text(uri.value(), value.value(), mimeType).to_json())};
     }
 
     if (parsed.request.method == Methods::PROMPTS_GET) {
         auto name = required(object, "name");
         if (!name) { co_return error(id, name.error()); }
-        auto arguments = optionalObject(object, "arguments");
+        auto arguments = optional_object(object, "arguments");
         if (!arguments) { co_return error(id, arguments.error()); }
         PromptGetter getter;
         auto it = m_prompts.find(name.value());
@@ -490,15 +490,15 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         std::expected<std::string, McpError> value;
         co_await getter(name.value(), arguments.value(), value);
         if (!value) co_return error(id, value.error());
-        co_return HttpResult{200, makeResultResponse(id, promptResult(value.value()))};
+        co_return HttpResult{200, make_result_response(id, prompt_result(value.value()))};
     }
 
     co_return error(id, ErrorCodes::METHOD_NOT_FOUND, "Method not found", parsed.request.method, 404);
 }
 
-bool McpHttpServer::validOrigin(http::HttpRequest& request) const
+bool McpHttpServer::valid_origin(http::HttpRequest& request) const
 {
-    const std::string origin = request.header().headerPairs().getValue("Origin");
+    const std::string origin = request.header().header_pairs().get_value("Origin");
     if (origin.empty()) {
         return true;
     }
@@ -506,7 +506,7 @@ bool McpHttpServer::validOrigin(http::HttpRequest& request) const
            origin == "https://localhost" || origin == "https://127.0.0.1";
 }
 
-SubscriptionFilter McpHttpServer::acceptedFilter(
+SubscriptionFilter McpHttpServer::accepted_filter(
     const SubscriptionFilter& requested) const
 {
     SubscriptionFilter accepted;
@@ -526,7 +526,7 @@ SubscriptionFilter McpHttpServer::acceptedFilter(
     return accepted;
 }
 
-void McpHttpServer::reapSubscriptions()
+void McpHttpServer::reap_subscriptions()
 {
     auto* link = &m_subscriptions;
     while (auto* subscription = link->get()) {
@@ -539,7 +539,7 @@ void McpHttpServer::reapSubscriptions()
     }
 }
 
-void McpHttpServer::closeSubscriptions()
+void McpHttpServer::close_subscriptions()
 {
     for (auto* subscription = m_subscriptions.get(); subscription; subscription = subscription->next.get()) {
         subscription->events.close();
@@ -550,21 +550,21 @@ galay::kernel::Task<void> McpHttpServer::listen(
     http::HttpConn& conn,
     const ParsedRequest& request)
 {
-    auto params = objectParams(request);
+    auto params = object_params(request);
     if (!params) {
-        co_await sendResponse(conn, error(request.request.id, params.error()));
+        co_await send_response(conn, error(request.request.id, params.error()));
         co_return;
     }
     const json::Json notifications = params.value().at("notifications");
     if (!notifications.valid()) {
-        co_await sendResponse(
+        co_await send_response(
             conn, error(request.request.id,
-                        McpError::invalidParams("missing notifications")));
+                        McpError::invalid_params("missing notifications")));
         co_return;
     }
-    auto requested = SubscriptionFilter::fromJson(notifications);
+    auto requested = SubscriptionFilter::from_json(notifications);
     if (!requested) {
-        co_await sendResponse(conn, error(request.request.id, requested.error()));
+        co_await send_response(conn, error(request.request.id, requested.error()));
         co_return;
     }
 
@@ -573,42 +573,42 @@ galay::kernel::Task<void> McpHttpServer::listen(
     // The channel requires cache-line alignment, beyond the Task frame contract.
     // Transfer aligned storage to the owner; the listener only borrows it.
     auto state = std::unique_ptr<Subscription>(new (std::nothrow) Subscription{
-        request.request.id, acceptedFilter(requested.value())});
+        request.request.id, accepted_filter(requested.value())});
     if (!state) {
-        co_await sendResponse(conn, error(request.request.id,
+        co_await send_response(conn, error(request.request.id,
             McpError::overload("subscription allocation failed")));
         co_return;
     }
     auto* subscription = state.get();
     auto submitted = submit(Command{CommandKind::Register, {}, std::move(state)});
     if (!submitted) {
-        co_await sendResponse(conn, error(request.request.id, submitted.error()));
+        co_await send_response(conn, error(request.request.id, submitted.error()));
         co_return;
     }
     const auto registered = co_await subscription->registered.wait();
     // No timeout: the owner retains the node through registration and listening.
     if (!registered || !*registered) {
         subscription->finished.store(true, std::memory_order_release);
-        wakeOwner();
+        wake_owner();
         co_return;
     }
 
     http::HttpResponseHeader header;
     header.version() = http::HttpVersion::HttpVersion_1_1;
     header.code() = http::HttpStatusCode::OK_200;
-    header.headerPairs().addHeaderPair("Content-Type", "text/event-stream");
-    header.headerPairs().addHeaderPair("Cache-Control", "no-cache");
-    header.headerPairs().addHeaderPair("Transfer-Encoding", "chunked");
-    header.headerPairs().addHeaderPair("Connection", "close");
-    header.headerPairs().addHeaderPair("X-Accel-Buffering", "no");
-    auto writer = conn.getWriter();
+    header.header_pairs().add_header_pair("Content-Type", "text/event-stream");
+    header.header_pairs().add_header_pair("Cache-Control", "no-cache");
+    header.header_pairs().add_header_pair("Transfer-Encoding", "chunked");
+    header.header_pairs().add_header_pair("Connection", "close");
+    header.header_pairs().add_header_pair("X-Accel-Buffering", "no");
+    auto writer = conn.get_writer();
 
     do {
-        auto sendHeader = co_await writer.sendHeader(std::move(header));
+        auto sendHeader = co_await writer.send_header(std::move(header));
         if (!sendHeader || !sendHeader.value()) break;
-        const auto acknowledged = encodeSseEvent(
-            makeSubscriptionAcknowledgedNotification(subscription->id, subscription->filter));
-        auto sendAcknowledged = co_await writer.sendChunk(acknowledged);
+        const auto acknowledged = encode_sse_event(
+            make_subscription_acknowledged_notification(subscription->id, subscription->filter));
+        auto sendAcknowledged = co_await writer.send_chunk(acknowledged);
         if (!sendAcknowledged || !sendAcknowledged.value()) break;
 
         while (true) {
@@ -617,13 +617,13 @@ galay::kernel::Task<void> McpHttpServer::listen(
             if (!event) {
                 if (galay::kernel::IOError::contains(
                         event.error().code(), galay::kernel::kTimeout)) {
-                    auto keepAlive = co_await writer.sendChunk(": keep-alive\n\n");
+                    auto keepAlive = co_await writer.send_chunk(": keep-alive\n\n");
                     if (keepAlive && keepAlive.value()) continue;
                 }
                 break;
             }
-            auto encoded = encodeSseEvent(event.value());
-            auto sent = co_await writer.sendChunk(encoded);
+            auto encoded = encode_sse_event(event.value());
+            auto sent = co_await writer.send_chunk(encoded);
             if (!sent || !sent.value()) {
                 subscription->events.close();
                 break;
@@ -631,20 +631,20 @@ galay::kernel::Task<void> McpHttpServer::listen(
         }
 
         if (m_running.load(std::memory_order_acquire)) break;
-        auto complete = encodeSseEvent(makeSubscriptionCompleteResponse(subscription->id));
-        auto completeSent = co_await writer.sendChunk(complete);
+        auto complete = encode_sse_event(make_subscription_complete_response(subscription->id));
+        auto completeSent = co_await writer.send_chunk(complete);
         if (completeSent && completeSent.value()) {
-            auto finalSent = co_await writer.sendChunk(std::string{}, true);
+            auto finalSent = co_await writer.send_chunk(std::string{}, true);
             if (!finalSent || !*finalSent) subscription->events.close();
         }
     } while (false);
     // Last node access: the owner may reclaim it as soon as finished is visible.
-    // The operation lease keeps the server alive through wakeOwner().
+    // The operation lease keeps the server alive through wake_owner().
     subscription->finished.store(true, std::memory_order_release);
-    wakeOwner();
+    wake_owner();
 }
 
-galay::kernel::Task<void> McpHttpServer::sendResponse(http::HttpConn& conn,
+galay::kernel::Task<void> McpHttpServer::send_response(http::HttpConn& conn,
                                                       const HttpResult& result)
 {
     const std::string body = result.body;
@@ -660,7 +660,7 @@ galay::kernel::Task<void> McpHttpServer::sendResponse(http::HttpConn& conn,
     wire += std::to_string(body.size());
     wire += "\r\n\r\n";
     wire += body;
-    auto writer = conn.getWriter();
+    auto writer = conn.get_writer();
     while (true) {
         auto sent = co_await writer.send(std::move(wire));
         if (!sent || sent.value()) break;
@@ -671,19 +671,19 @@ galay::kernel::Task<void> McpHttpServer::sendResponse(http::HttpConn& conn,
 galay::kernel::Task<void> McpHttpServer::process(http::HttpConn& conn,
                                                  http::HttpRequest& request)
 {
-    if (!validOrigin(request)) {
-        co_await sendResponse(conn, error(std::nullopt, ErrorCodes::INVALID_REQUEST,
+    if (!valid_origin(request)) {
+        co_await send_response(conn, error(std::nullopt, ErrorCodes::INVALID_REQUEST,
                                          "Invalid Origin", std::nullopt, 403));
         co_return;
     }
-    auto parsed = parseRequest(request.bodyStr());
+    auto parsed = parse_request(request.body_str());
     if (!parsed) {
-        co_await sendResponse(conn, error(std::nullopt, parsed.error()));
+        co_await send_response(conn, error(std::nullopt, parsed.error()));
         co_return;
     }
-    auto headerValidation = validateHeaders(request, parsed.value());
+    auto headerValidation = validate_headers(request, parsed.value());
     if (!headerValidation) {
-        co_await sendResponse(conn, error(parsed->request.id,
+        co_await send_response(conn, error(parsed->request.id,
                                          ErrorCodes::HEADER_MISMATCH,
                                          "Header mismatch",
                                          headerValidation.error().details(),
@@ -691,8 +691,8 @@ galay::kernel::Task<void> McpHttpServer::process(http::HttpConn& conn,
         co_return;
     }
     if (parsed->request.meta.protocolVersion != MCP_VERSION) {
-        co_await sendResponse(conn, HttpResult{
-            400, makeUnsupportedProtocolVersionResponse(
+        co_await send_response(conn, HttpResult{
+            400, make_unsupported_protocol_version_response(
                      parsed->request.id,
                      parsed->request.meta.protocolVersion,
                      {MCP_VERSION})});
@@ -712,7 +712,7 @@ galay::kernel::Task<void> McpHttpServer::process(http::HttpConn& conn,
     if (result.body.size() > m_policy.transport.max_response_bytes) {
         result = error(std::nullopt, ErrorCodes::INVALID_REQUEST, "Payload too large", std::nullopt, 400);
     }
-    co_await sendResponse(conn, result);
+    co_await send_response(conn, result);
 }
 
 void McpHttpServer::start()
@@ -725,17 +725,17 @@ void McpHttpServer::start()
     }
     http::HttpRouter router;
     auto* server = this;
-    router.addHandler<http::HttpMethod::POST>("/mcp",
+    router.add_handler<http::HttpMethod::POST>("/mcp",
         [server](http::HttpConn& conn, http::HttpRequest request) -> galay::kernel::Task<void> {
-            if (request.bodyStr().size() > server->m_policy.transport.max_http_body_bytes) {
-                co_await server->sendResponse(conn, server->error(std::nullopt,
+            if (request.body_str().size() > server->m_policy.transport.max_http_body_bytes) {
+                co_await server->send_response(conn, server->error(std::nullopt,
                     ErrorCodes::INVALID_REQUEST, "Payload too large", std::nullopt, 400));
                 co_return;
             }
             co_await server->process(conn, request);
         });
     m_httpServer.start(std::move(router));
-    if (!m_httpServer.isRunning()) {
+    if (!m_httpServer.is_running()) {
         m_httpServer.stop();
         m_lifecycle.store(LifecycleState::kStopped, std::memory_order_release);
         m_lifecycle.notify_all();
@@ -748,8 +748,8 @@ void McpHttpServer::start()
     m_lifecycle.notify_all();
     while (m_lifecycle.load(std::memory_order_acquire) == LifecycleState::kRunning) {
         const auto sequence = m_wakeSequence.load(std::memory_order_acquire);
-        const bool processed = processCommands();
-        reapSubscriptions();
+        const bool processed = process_commands();
+        reap_subscriptions();
         if (!processed && m_lifecycle.load(std::memory_order_acquire) == LifecycleState::kRunning) {
             m_wakeSequence.wait(sequence, std::memory_order_acquire);
         }
@@ -764,11 +764,11 @@ void McpHttpServer::start()
         m_admission.wait(active, std::memory_order_acquire);
         active = m_admission.load(std::memory_order_acquire);
     }
-    while (processCommands()) { reapSubscriptions(); }
-    closeSubscriptions();
+    while (process_commands()) { reap_subscriptions(); }
+    close_subscriptions();
     while (m_subscriptions != nullptr) {
         const auto sequence = m_wakeSequence.load(std::memory_order_acquire);
-        reapSubscriptions();
+        reap_subscriptions();
         if (m_subscriptions != nullptr) m_wakeSequence.wait(sequence, std::memory_order_acquire);
     }
     active = m_activeSubscriptions.load(std::memory_order_acquire);
@@ -793,7 +793,7 @@ void McpHttpServer::stop()
                                             std::memory_order_acq_rel,
                                             std::memory_order_acquire)) {
         m_lifecycle.notify_all();
-        wakeOwner();
+        wake_owner();
         state = LifecycleState::kStopping;
     }
     while (state == LifecycleState::kStopping) {
@@ -802,6 +802,6 @@ void McpHttpServer::stop()
     }
 }
 
-bool McpHttpServer::isRunning() const noexcept { return m_running.load(); }
+bool McpHttpServer::is_running() const noexcept { return m_running.load(); }
 
 } // namespace galay::mcp::v2

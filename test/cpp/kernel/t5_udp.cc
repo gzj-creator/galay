@@ -31,33 +31,33 @@ using namespace galay::kernel;
 
 namespace {
 
-uint16_t udpTestPort() {
-    return galay::test::resolvePortFromEnv("GALAY_TEST_UDP_PORT", 8080);
+uint16_t udp_test_port() {
+    return galay::test::resolve_port_from_env("GALAY_TEST_UDP_PORT", 8080);
 }
 
 }
 
 // UDP Echo服务器协程
-Task<void> udpEchoServer() {
+Task<void> udp_echo_server() {
     LogInfo("UDP Server starting...");
     AsyncUdpSocket socket;
     LogDebug("Socket created, fd={}", socket.handle().fd);
 
     // 设置选项
-    auto optResult = socket.option().handleReuseAddr();
+    auto optResult = socket.option().handle_reuse_addr();
     if (!optResult) {
         LogError("Failed to set reuse addr: {}", optResult.error().message());
         co_return;
     }
 
-    optResult = socket.option().handleNonBlock();
+    optResult = socket.option().handle_non_block();
     if (!optResult) {
         LogError("Failed to set non-block: {}", optResult.error().message());
         co_return;
     }
 
     // 绑定地址
-    Host bindHost(IPType::IPV4, "127.0.0.1", udpTestPort());
+    Host bindHost(IPType::IPV4, "127.0.0.1", udp_test_port());
     auto bindResult = socket.bind(bindHost);
     if (!bindResult) {
         LogError("Failed to bind: {}", bindResult.error().message());
@@ -65,7 +65,7 @@ Task<void> udpEchoServer() {
     }
     LogDebug("Bind successful");
 
-    LogInfo("UDP Server listening on 127.0.0.1:{}", udpTestPort());
+    LogInfo("UDP Server listening on 127.0.0.1:{}", udp_test_port());
 
     // Echo循环 - 接收并回显3个数据报
     char buffer[65536];
@@ -96,15 +96,15 @@ Task<void> udpEchoServer() {
 }
 
 // UDP客户端协程
-Task<void> udpEchoClient() {
+Task<void> udp_echo_client() {
     LogInfo("UDP Client starting...");
     AsyncUdpSocket socket;
     LogDebug("Client socket created, fd={}", socket.handle().fd);
 
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     // 服务器地址
-    Host serverHost(IPType::IPV4, "127.0.0.1", udpTestPort());
+    Host serverHost(IPType::IPV4, "127.0.0.1", udp_test_port());
 
     // 发送3条消息
     const char* messages[] = {
@@ -152,14 +152,14 @@ int main() {
     LogDebug("Scheduler started");
 
     // 启动服务器
-    scheduleTask(scheduler, udpEchoServer());
+    schedule_task(scheduler, udp_echo_server());
     LogDebug("Server coroutine spawned");
 
     // 等待一下让服务器启动
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // 启动客户端
-    scheduleTask(scheduler, udpEchoClient());
+    schedule_task(scheduler, udp_echo_client());
     LogDebug("Client coroutine spawned");
 
     // 运行一段时间
@@ -174,14 +174,14 @@ int main() {
     LogDebug("Scheduler started");
 
     // 启动服务器
-    scheduleTask(scheduler, udpEchoServer());
+    schedule_task(scheduler, udp_echo_server());
     LogDebug("Server coroutine spawned");
 
     // 等待一下让服务器启动
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // 启动客户端
-    scheduleTask(scheduler, udpEchoClient());
+    schedule_task(scheduler, udp_echo_client());
     LogDebug("Client coroutine spawned");
 
     // 运行一段时间
@@ -196,14 +196,14 @@ int main() {
     LogDebug("Scheduler started");
 
     // 启动服务器
-    scheduleTask(scheduler, udpEchoServer());
+    schedule_task(scheduler, udp_echo_server());
     LogDebug("Server coroutine spawned");
 
     // 等待一下让服务器启动
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // 启动客户端
-    scheduleTask(scheduler, udpEchoClient());
+    schedule_task(scheduler, udp_echo_client());
     LogDebug("Client coroutine spawned");
 
     // 运行一段时间

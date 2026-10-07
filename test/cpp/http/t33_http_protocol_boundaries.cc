@@ -43,7 +43,7 @@ void check(bool condition, const std::string& message)
     }
 }
 
-std::vector<iovec> oneIovec(std::string& text)
+std::vector<iovec> one_iovec(std::string& text)
 {
     return {
         iovec{
@@ -53,37 +53,37 @@ std::vector<iovec> oneIovec(std::string& text)
     };
 }
 
-void expectRequestError(std::string raw, HttpErrorCode expected, const std::string& label)
+void expect_request_error(std::string raw, HttpErrorCode expected, const std::string& label)
 {
     HttpRequest request;
-    auto iovecs = oneIovec(raw);
-    const auto [err, consumed] = request.fromIOVec(iovecs);
+    auto iovecs = one_iovec(raw);
+    const auto [err, consumed] = request.from_io_vec(iovecs);
     check(err == expected,
           label + " expected error " + std::to_string(expected) +
               " but got " + std::to_string(err) +
               " consumed=" + std::to_string(consumed));
 }
 
-void testIncompleteHeaderPreservesIncomplete()
+void test_incomplete_header_preserves_incomplete()
 {
     std::string raw =
         "GET / HTTP/1.1\r\n"
         "Host: example.com\r\n"
         "X-Long: ";
     HttpRequest request;
-    auto iovecs = oneIovec(raw);
-    const auto [err, consumed] = request.fromIOVec(iovecs);
+    auto iovecs = one_iovec(raw);
+    const auto [err, consumed] = request.from_io_vec(iovecs);
 
     check(err == kNoError, "partial direct parser keeps legacy kNoError contract");
     check(consumed == static_cast<ssize_t>(raw.size()), "incomplete header should report consumed bytes");
-    check(!request.isComplete(), "incomplete header must not complete the request");
+    check(!request.is_complete(), "incomplete header must not complete the request");
 }
 
-void testReaderRejectsOversizedIncompleteHeader()
+void test_reader_rejects_oversized_incomplete_header()
 {
     RingBuffer ring_buffer{256};
     HttpReaderSetting setting;
-    setting.setMaxHeaderSize(48);
+    setting.set_max_header_size(48);
     HttpRequest request;
     galay::http::detail::HttpRequestReadState state(ring_buffer, setting, request);
 
@@ -92,20 +92,20 @@ void testReaderRejectsOversizedIncompleteHeader()
         "Host: example.com\r\n"
         "X-Oversized: " + std::string(80, 'a');
 
-    check(ring_buffer.tryWriteBatch(raw.data(), raw.size()) == raw.size(),
+    check(ring_buffer.try_write_batch(raw.data(), raw.size()) == raw.size(),
           "failed to seed ring buffer");
-    state.onBytesReceived(raw.size());
+    state.on_bytes_received(raw.size());
 
-    check(state.parseFromRingBuffer(), "oversized incomplete header should complete with an error");
-    const auto result = state.takeResult();
+    check(state.parse_from_ring_buffer(), "oversized incomplete header should complete with an error");
+    const auto result = state.take_result();
     check(!result.has_value(), "oversized incomplete header should not parse successfully");
     check(result.error().code() == kHeaderTooLarge,
           "oversized incomplete header should return kHeaderTooLarge");
 }
 
-void testFramingHeadersAreRejected()
+void test_framing_headers_are_rejected()
 {
-    expectRequestError(
+    expect_request_error(
         "POST /upload HTTP/1.1\r\n"
         "Host: example.com\r\n"
         "Transfer-Encoding: chunked\r\n"
@@ -115,7 +115,7 @@ void testFramingHeadersAreRejected()
         kBadRequest,
         "TE+CL request");
 
-    expectRequestError(
+    expect_request_error(
         "POST /upload HTTP/1.1\r\n"
         "Host: example.com\r\n"
         "Transfer-Encoding: gzip\r\n"
@@ -125,7 +125,7 @@ void testFramingHeadersAreRejected()
         kBadRequest,
         "duplicate Transfer-Encoding request");
 
-    expectRequestError(
+    expect_request_error(
         "POST /upload HTTP/1.1\r\n"
         "Host: example.com\r\n"
         "Content-Length: 0\r\n"
@@ -135,20 +135,20 @@ void testFramingHeadersAreRejected()
         "duplicate Content-Length request");
 }
 
-void testTruncatedUriEscapesAreRejected()
+void test_truncated_uri_escapes_are_rejected()
 {
-    expectRequestError("GET /bad% HTTP/1.1\r\nHost: example.com\r\n\r\n",
+    expect_request_error("GET /bad% HTTP/1.1\r\nHost: example.com\r\n\r\n",
                        kUriEncodeError,
                        "trailing percent URI");
-    expectRequestError("GET /bad%A HTTP/1.1\r\nHost: example.com\r\n\r\n",
+    expect_request_error("GET /bad%A HTTP/1.1\r\nHost: example.com\r\n\r\n",
                        kUriEncodeError,
                        "truncated hex URI");
-    expectRequestError("GET /bad%u1 HTTP/1.1\r\nHost: example.com\r\n\r\n",
+    expect_request_error("GET /bad%u1 HTTP/1.1\r\nHost: example.com\r\n\r\n",
                        kUriEncodeError,
                        "truncated unicode URI");
 }
 
-void testRangeAmplificationCaps()
+void test_range_amplification_caps()
 {
     std::string too_many = "bytes=";
     for (size_t i = 0; i < 20; ++i) {
@@ -159,10 +159,10 @@ void testRangeAmplificationCaps()
     }
 
     auto too_many_result = HttpRangeParser::parse(too_many, 1024);
-    check(!too_many_result.isValid(), "Range parser should reject too many ranges");
+    check(!too_many_result.is_valid(), "Range parser should reject too many ranges");
 
     auto merged = HttpRangeParser::parse("bytes=0-9,5-14,15-19", 100);
-    check(merged.isValid(), "overlapping ranges should still be valid after merge");
+    check(merged.is_valid(), "overlapping ranges should still be valid after merge");
     check(merged.ranges.size() == 1, "overlapping/adjacent ranges should merge into one range");
     check(merged.ranges[0].start == 0 && merged.ranges[0].end == 19,
           "merged range should cover bytes 0-19");
@@ -177,14 +177,14 @@ void testRangeAmplificationCaps()
         too_large += std::to_string(start) + "-" + std::to_string(start + one_mib - 1);
     }
     auto too_large_result = HttpRangeParser::parse(too_large, 16 * one_mib);
-    check(!too_large_result.isValid(), "multipart Range parser should cap aggregate output bytes");
+    check(!too_large_result.is_valid(), "multipart Range parser should cap aggregate output bytes");
 }
 
-void testSessionRejectsOversizedResponseBody()
+void test_session_rejects_oversized_response_body()
 {
     AsyncTcpSocket socket;
     HttpReaderSetting setting;
-    setting.setMaxBodySize(4);
+    setting.set_max_body_size(4);
     HttpSession session(socket, 1024, setting);
     galay::http::detail::HttpSessionState<galay::async::AsyncTcpSocket> state(
         session, std::string("GET / HTTP/1.1\r\n\r\n"));
@@ -195,19 +195,19 @@ void testSessionRejectsOversizedResponseBody()
         "\r\n"
         "12345";
 
-    check(session.getRingBuffer().tryWriteBatch(raw.data(), raw.size()) ==
+    check(session.get_ring_buffer().try_write_batch(raw.data(), raw.size()) ==
               raw.size(),
           "failed to seed oversized response body");
-    state.onBytesReceived(raw.size());
+    state.on_bytes_received(raw.size());
 
-    check(state.parseFromRingBuffer(), "oversized response body should complete with an error");
-    const auto result = state.takeResult();
+    check(state.parse_from_ring_buffer(), "oversized response body should complete with an error");
+    const auto result = state.take_result();
     check(!result.has_value(), "oversized response body should not parse successfully");
     check(result.error().code() == kRequestEntityTooLarge,
           "oversized response body should return kRequestEntityTooLarge");
 }
 
-uint16_t reserveFreePort()
+uint16_t reserve_free_port()
 {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -234,7 +234,7 @@ uint16_t reserveFreePort()
     return port;
 }
 
-int connectWithRetry(uint16_t port)
+int connect_with_retry(uint16_t port)
 {
     for (int attempt = 0; attempt < 100; ++attempt) {
         const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -262,9 +262,9 @@ int connectWithRetry(uint16_t port)
     fail("could not connect to static HEAD test server");
 }
 
-std::string requestHead(uint16_t port)
+std::string request_head(uint16_t port)
 {
-    const int fd = connectWithRetry(port);
+    const int fd = connect_with_retry(port);
     const std::string request =
         "HEAD /static/head.txt HTTP/1.1\r\n"
         "Host: 127.0.0.1\r\n"
@@ -294,7 +294,7 @@ std::string requestHead(uint16_t port)
     return response;
 }
 
-void testStaticHeadDoesNotSendBody()
+void test_static_head_does_not_send_body()
 {
     namespace fs = std::filesystem;
     const fs::path dir =
@@ -308,21 +308,21 @@ void testStaticHeadDoesNotSendBody()
     }
 
     StaticFileSetting setting;
-    setting.setTransferMode(FileTransferMode::MEMORY);
+    setting.set_transfer_mode(FileTransferMode::MEMORY);
 
     HttpRouter router;
     router.mount("/static", dir.string(), setting);
 
-    const uint16_t port = reserveFreePort();
+    const uint16_t port = reserve_free_port();
     auto server = HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
     server.start(std::move(router));
 
-    const std::string response = requestHead(port);
+    const std::string response = request_head(port);
     server.stop();
     fs::remove_all(dir);
 
@@ -333,7 +333,7 @@ void testStaticHeadDoesNotSendBody()
     check(body.empty(), "static HEAD response must not send a body");
 }
 
-void testMountHardlyRegistersHead()
+void test_mount_hardly_registers_head()
 {
     namespace fs = std::filesystem;
     const fs::path dir =
@@ -347,12 +347,12 @@ void testMountHardlyRegistersHead()
     }
 
     HttpRouter router;
-    router.mountHardly("/hard", dir.string());
+    router.mount_hardly("/hard", dir.string());
     fs::remove_all(dir);
 
-    check(router.findHandler(HttpMethod::GET, "/hard/hard.txt").handler != nullptr,
+    check(router.find_handler(HttpMethod::GET, "/hard/hard.txt").handler != nullptr,
           "mountHardly should register GET");
-    check(router.findHandler(HttpMethod::HEAD, "/hard/hard.txt").handler != nullptr,
+    check(router.find_handler(HttpMethod::HEAD, "/hard/hard.txt").handler != nullptr,
           "mountHardly should register HEAD");
 }
 
@@ -360,14 +360,14 @@ void testMountHardlyRegistersHead()
 
 int main()
 {
-    testIncompleteHeaderPreservesIncomplete();
-    testReaderRejectsOversizedIncompleteHeader();
-    testFramingHeadersAreRejected();
-    testTruncatedUriEscapesAreRejected();
-    testRangeAmplificationCaps();
-    testSessionRejectsOversizedResponseBody();
-    testMountHardlyRegistersHead();
-    testStaticHeadDoesNotSendBody();
+    test_incomplete_header_preserves_incomplete();
+    test_reader_rejects_oversized_incomplete_header();
+    test_framing_headers_are_rejected();
+    test_truncated_uri_escapes_are_rejected();
+    test_range_amplification_caps();
+    test_session_rejects_oversized_response_body();
+    test_mount_hardly_registers_head();
+    test_static_head_does_not_send_body();
 
     std::cout << "T33-HttpProtocolBoundaries PASS\n";
     return 0;

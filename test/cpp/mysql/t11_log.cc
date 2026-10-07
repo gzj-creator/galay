@@ -31,12 +31,12 @@ public:
         m_functions.emplace_back(function);
     }
 
-    galay::kernel::LogLevel minLevel() const override
+    galay::kernel::LogLevel min_level() const override
     {
         return m_min_level;
     }
 
-    void setMinLevel(galay::kernel::LogLevel level)
+    void set_min_level(galay::kernel::LogLevel level)
     {
         m_min_level = level;
     }
@@ -46,12 +46,12 @@ public:
         return m_messages.size();
     }
 
-    const std::string& tagAt(size_t index) const
+    const std::string& tag_at(size_t index) const
     {
         return m_tags[index];
     }
 
-    const std::string& messageAt(size_t index) const
+    const std::string& message_at(size_t index) const
     {
         return m_messages[index];
     }
@@ -66,7 +66,7 @@ private:
     std::vector<std::string> m_functions;
 };
 
-int buildLogValue(int& call_count)
+int build_log_value(int& call_count)
 {
     ++call_count;
     return 42;
@@ -79,27 +79,27 @@ int main()
     galay::mysql::log::set(nullptr);
 
     int disabled_argument_count = 0;
-    MYSQL_LOG_ERROR("[disabled]", "value={}", buildLogValue(disabled_argument_count));
+    MYSQL_LOG_ERROR("[disabled]", "value={}", build_log_value(disabled_argument_count));
     if (disabled_argument_count != 0 || MYSQL_LOG_ENABLED(galay::kernel::LogLevel::kError)) {
         return EXIT_FAILURE;
     }
 
     auto logger = std::make_unique<CollectingLogger>();
     auto* raw_logger = logger.get();
-    raw_logger->setMinLevel(galay::kernel::LogLevel::kWarn);
+    raw_logger->set_min_level(galay::kernel::LogLevel::kWarn);
     galay::mysql::log::set(std::move(logger));
 
     int filtered_argument_count = 0;
-    MYSQL_LOG_DEBUG("[filtered]", "value={}", buildLogValue(filtered_argument_count));
+    MYSQL_LOG_DEBUG("[filtered]", "value={}", build_log_value(filtered_argument_count));
     if (filtered_argument_count != 0 || raw_logger->size() != 0) {
         return EXIT_FAILURE;
     }
 
-    MYSQL_LOG_WARN("[enabled]", "value={}", buildLogValue(filtered_argument_count));
+    MYSQL_LOG_WARN("[enabled]", "value={}", build_log_value(filtered_argument_count));
     if (filtered_argument_count != 1 ||
         raw_logger->size() != 1 ||
-        raw_logger->tagAt(0) != "[mysql] [enabled]" ||
-        raw_logger->messageAt(0) != "value=42") {
+        raw_logger->tag_at(0) != "[mysql] [enabled]" ||
+        raw_logger->message_at(0) != "value=42") {
         return EXIT_FAILURE;
     }
 

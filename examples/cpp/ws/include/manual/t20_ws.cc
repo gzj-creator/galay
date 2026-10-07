@@ -36,7 +36,7 @@ Task<void> test_web_socket_client(IOScheduler* scheduler) {
 
     // 创建 socket 并连接
     AsyncTcpSocket socket(IPType::IPV4);
-    auto nonblock_result = socket.option().handleNonBlock();
+    auto nonblock_result = socket.option().handle_non_block();
     if (!nonblock_result) {
         co_return;
     }
@@ -49,7 +49,7 @@ Task<void> test_web_socket_client(IOScheduler* scheduler) {
 
 
     // 创建 HTTP 客户端
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
     // 构建 WebSocket 升级请求
     auto request = Http1_1RequestBuilder::get("/ws")
@@ -61,7 +61,7 @@ Task<void> test_web_socket_client(IOScheduler* scheduler) {
         .build();
 
 
-    auto session_result = client.getSession();
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -69,19 +69,19 @@ Task<void> test_web_socket_client(IOScheduler* scheduler) {
     auto& session = *session_result.value();
 
     // 发送升级请求
-    auto writer = session.getWriter();
-    auto send_result = co_await writer.sendRequest(request);
+    auto writer = session.get_writer();
+    auto send_result = co_await writer.send_request(request);
     if (!send_result) {
         co_await client.close();
         co_return;
     }
 
     // 读取升级响应
-    auto reader = session.getReader();
+    auto reader = session.get_reader();
     HttpResponse response;
     bool complete = false;
     while (!complete) {
-        auto read_result = co_await reader.getResponse(response);
+        auto read_result = co_await reader.get_response(response);
         if (!read_result) {
             co_await client.close();
             co_return;
@@ -101,7 +101,7 @@ Task<void> test_web_socket_client(IOScheduler* scheduler) {
     reader_setting.max_frame_size = 1024 * 1024;
     reader_setting.max_message_size = 10 * 1024 * 1024;
 
-    WsWriterSetting writer_setting = WsWriterSetting::byClient();
+    WsWriterSetting writer_setting = WsWriterSetting::by_client();
 
     auto client_socket = client.socket();
     if (!client_socket) {
@@ -114,13 +114,13 @@ Task<void> test_web_socket_client(IOScheduler* scheduler) {
         false  // is_server = false (客户端)
     );
 
-    auto ws_reader = ws_conn.getReader(reader_setting);
-    auto ws_writer = ws_conn.getWriter(writer_setting);
+    auto ws_reader = ws_conn.get_reader(reader_setting);
+    auto ws_writer = ws_conn.get_writer(writer_setting);
 
     // 读取欢迎消息
     std::string welcome_msg;
     WsOpcode welcome_opcode;
-    auto welcome_result = co_await ws_reader.getMessage(welcome_msg, welcome_opcode);
+    auto welcome_result = co_await ws_reader.get_message(welcome_msg, welcome_opcode);
     if (welcome_result.has_value() && welcome_result.value()) {
     }
 
@@ -135,7 +135,7 @@ Task<void> test_web_socket_client(IOScheduler* scheduler) {
         frame.payload = test_msg;
         frame.header.payload_length = test_msg.size();
 
-        auto send_result = co_await ws_writer.sendFrame(frame);
+        auto send_result = co_await ws_writer.send_frame(frame);
         if (!send_result) {
             break;
         }
@@ -143,7 +143,7 @@ Task<void> test_web_socket_client(IOScheduler* scheduler) {
         // 读取回显消息
         std::string echo_msg;
         WsOpcode echo_opcode;
-        auto echo_result = co_await ws_reader.getMessage(echo_msg, echo_opcode);
+        auto echo_result = co_await ws_reader.get_message(echo_msg, echo_opcode);
         if (echo_result.has_value() && echo_result.value()) {
         } else {
             break;
@@ -166,12 +166,12 @@ int main() {
     rt.start();
 
     // 获取 IO 调度器并启动测试协程
-    auto* scheduler = rt.getNextIOScheduler();
+    auto* scheduler = rt.get_next_io_scheduler();
     if (!scheduler) {
         return 1;
     }
 
-    scheduleTask(scheduler, test_web_socket_client(scheduler));
+    schedule_task(scheduler, test_web_socket_client(scheduler));
 
     // 等待测试完成（这里简单地等待一段时间）
     std::this_thread::sleep_for(std::chrono::seconds(30));

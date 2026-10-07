@@ -17,21 +17,21 @@ using namespace galay::kernel;
 static std::atomic<bool> g_running{true};
 static std::atomic<uint64_t> g_requests{0};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
 // HTTPS 请求处理器 (支持 Keep-Alive)
-Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
-    auto reader = conn.getReader();
-    auto writer = conn.getWriter();
+Task<void> https_handler(HttpConnImpl<galay::ssl::SslSocket> conn) {
+    auto reader = conn.get_reader();
+    auto writer = conn.get_writer();
 
     while (true) {
         HttpRequest request;
 
         // 读取请求
         while (true) {
-            auto r = co_await reader.getRequest(request);
+            auto r = co_await reader.get_request(request);
             if (!r) {
                 auto close_result = co_await conn.close();
                 if (!close_result) {
@@ -46,14 +46,14 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
 
         // 检查 keep-alive
         bool keep_alive = true;
-        auto conn_header = request.header().headerPairs().getValue("Connection");
+        auto conn_header = request.header().header_pairs().get_value("Connection");
         if (conn_header == "close") {
             keep_alive = false;
         }
 
         // 根据 URI 返回不同响应
         std::string uri = request.header().uri();
-        std::string body = request.getBodyStr();
+        std::string body = request.get_body_str();
         std::string html = R"(<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><title>HTTPS Server</title></head>
@@ -77,7 +77,7 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
                 .build();
 
         // 发送响应
-        auto result = co_await writer.sendResponse(response);
+        auto result = co_await writer.send_response(response);
         if (!result) {
             std::cerr << "Failed to send response: " << result.error().message() << "\n";
         }
@@ -106,16 +106,16 @@ int main(int argc, char* argv[]) {
     std::cout << "HTTPS Server Example\n";
     std::cout << "========================================\n";
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
         HttpsServer server(HttpsServerBuilder()
             .host("0.0.0.0")
             .port(static_cast<uint16_t>(port))
-            .certPath(cert_path)
-            .keyPath(key_path)
-            .ioSchedulerCount(4)
+            .cert_path(cert_path)
+            .key_path(key_path)
+            .io_scheduler_count(4)
             .build());
 
         std::cout << "Server running on https://0.0.0.0:" << port << "\n";
@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Press Ctrl+C to stop\n";
         std::cout << "========================================\n";
 
-        server.start(httpsHandler);
+        server.start(https_handler);
 
         while (g_running) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));

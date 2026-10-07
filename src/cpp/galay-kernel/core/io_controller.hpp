@@ -173,7 +173,7 @@ struct SqeHandleArena {
      * @brief 返回持久 UDP recvmsg 使用的稳定 msghdr
      * @return arena 生命周期内地址稳定的 msghdr；只允许所属 READ handle 在 in-flight 期间使用
      */
-    msghdr* recvFromMessage() noexcept { return &m_recvfrom_message; }
+    msghdr* recv_from_message() noexcept { return &m_recvfrom_message; }
 
 private:
     struct Block {
@@ -225,14 +225,14 @@ struct ReadyRecvChunk {
 
     ReadyRecvChunk(ReadyRecvChunk&& other) noexcept
     {
-        moveFrom(std::move(other));
+        move_from(std::move(other));
     }
 
     ReadyRecvChunk& operator=(ReadyRecvChunk&& other) noexcept
     {
         if (this != &other) {
             release();
-            moveFrom(std::move(other));
+            move_from(std::move(other));
         }
         return *this;
     }
@@ -262,7 +262,7 @@ private:
     ReadyRecvChunk(const ReadyRecvChunk&) = delete;
     ReadyRecvChunk& operator=(const ReadyRecvChunk&) = delete;
 
-    void moveFrom(ReadyRecvChunk&& other) noexcept
+    void move_from(ReadyRecvChunk&& other) noexcept
     {
         owner = std::move(other.owner);
         data = other.data;
@@ -298,14 +298,14 @@ struct ReadyRecvDatagram {
 
     ReadyRecvDatagram(ReadyRecvDatagram&& other) noexcept
     {
-        moveFrom(std::move(other));
+        move_from(std::move(other));
     }
 
     ReadyRecvDatagram& operator=(ReadyRecvDatagram&& other) noexcept
     {
         if (this != &other) {
             release();
-            moveFrom(std::move(other));
+            move_from(std::move(other));
         }
         return *this;
     }
@@ -335,7 +335,7 @@ private:
     ReadyRecvDatagram(const ReadyRecvDatagram&) = delete;
     ReadyRecvDatagram& operator=(const ReadyRecvDatagram&) = delete;
 
-    void moveFrom(ReadyRecvDatagram&& other) noexcept
+    void move_from(ReadyRecvDatagram&& other) noexcept
     {
         source = other.source;
         owner = std::move(other.owner);
@@ -394,10 +394,10 @@ struct IOController {
      */
     ~IOController() {
 #if defined(USE_EPOLL) || defined(USE_KQUEUE)
-        releaseRegistrationOwnerSlot();
+        release_registration_owner_slot();
 #endif
 #ifdef USE_IOURING
-        clearSqeState();
+        clear_sqe_state();
 #endif
     }
 
@@ -414,7 +414,7 @@ struct IOController {
      * @brief 绑定 reactor 稳定注册入口中的 controller 槽位
      * @note 仅在所属 IO 调度器线程调用；无需原子或锁。
      */
-    void bindRegistrationOwnerSlot(IOController** owner_slot) noexcept {
+    void bind_registration_owner_slot(IOController** owner_slot) noexcept {
         if (m_registration_owner_slot == owner_slot) {
             if (owner_slot != nullptr) {
                 *owner_slot = this;
@@ -422,7 +422,7 @@ struct IOController {
             return;
         }
 
-        releaseRegistrationOwnerSlot();
+        release_registration_owner_slot();
         if (owner_slot != nullptr) {
             auto* previous_owner = *owner_slot;
             if (previous_owner != nullptr && previous_owner != this) {
@@ -436,7 +436,7 @@ struct IOController {
     /**
      * @brief 解除 reactor 稳定注册入口对当前 controller 的引用
      */
-    void releaseRegistrationOwnerSlot() noexcept {
+    void release_registration_owner_slot() noexcept {
         if (m_registration_owner_slot != nullptr) {
             if (*m_registration_owner_slot == this) {
                 *m_registration_owner_slot = nullptr;
@@ -450,9 +450,9 @@ struct IOController {
      * @brief 将 moved-from 对象重置到安全空状态
      * @note 供移动构造/赋值后清理源对象使用
      */
-    void resetMovedFrom() noexcept {
+    void reset_moved_from() noexcept {
 #if defined(USE_EPOLL) || defined(USE_KQUEUE)
-        releaseRegistrationOwnerSlot();
+        release_registration_owner_slot();
 #endif
         m_handle = GHandle::invalid();
         m_type = IOEventType::INVALID;
@@ -471,7 +471,7 @@ struct IOController {
         m_registered_events = 0;
 #endif
 #ifdef USE_IOURING
-        clearSqeState();
+        clear_sqe_state();
         m_sqe_handle_pool[READ] = std::make_shared<SqeHandleArena>(this, READ);
         m_sqe_handle_pool[WRITE] = std::make_shared<SqeHandleArena>(this, WRITE);
         m_sqe_state[READ] = m_sqe_handle_pool[READ]->state();
@@ -496,7 +496,7 @@ struct IOController {
      * @param slot READ 或 WRITE 槽位
      * @return 成功时返回池内稳定地址请求句柄；池缺失、状态缺失或扩容失败时返回 nullptr
      */
-    SqeRequestHandle* makeSqeRequest(Index slot) const {
+    SqeRequestHandle* make_sqe_request(Index slot) const {
         auto* state = m_sqe_state[slot];
         const auto& arena = m_sqe_handle_pool[slot];
         if (state == nullptr || !arena) {
@@ -510,7 +510,7 @@ struct IOController {
      * @param slot READ 或 WRITE 槽位
      * @note 在替换 awaitable 或重绑 owner 时调用，用于让旧 CQE 自动失效
      */
-    void advanceSqeGeneration(Index slot) noexcept {
+    void advance_sqe_generation(Index slot) noexcept {
         if (auto* state = m_sqe_state[slot]; state != nullptr) {
             state->generation.fetch_add(1, std::memory_order_acq_rel);
             state->owner.store(this, std::memory_order_release);
@@ -520,21 +520,21 @@ struct IOController {
     /**
      * @brief 使当前控制器上所有历史 SQE 请求失效
      */
-    void invalidateSqeRequests() noexcept {
-        clearSqeState();
+    void invalidate_sqe_requests() noexcept {
+        clear_sqe_state();
     }
 
     /**
      * @brief 将 accepted fd 缓存到 controller 侧队列
      * @param handle 新接受到的连接句柄
      */
-    void enqueueAcceptedHandle(GHandle handle) {
+    void enqueue_accepted_handle(GHandle handle) {
         m_ready_accepts.push_back(handle);
     }
 
     /** @brief 移交一个资源侧缓存的 accepted fd；调用者立即接管所有权。
      *  @return nullopt 表示队列为空；不涉及单次用户 accept 的完成裁决。 */
-    std::optional<GHandle> takeAcceptedHandle() {
+    std::optional<GHandle> take_accepted_handle() {
         if (m_ready_accepts.empty()) { return std::nullopt; }
         const GHandle handle = m_ready_accepts.front();
         m_ready_accepts.pop_front();
@@ -544,7 +544,7 @@ struct IOController {
     /**
      * @brief 清理 controller 内缓存但尚未交付的 accepted fd
      */
-    void clearAcceptedHandles() noexcept {
+    void clear_accepted_handles() noexcept {
         while (!m_ready_accepts.empty()) {
             const GHandle handle = m_ready_accepts.front();
             m_ready_accepts.pop_front();
@@ -558,7 +558,7 @@ struct IOController {
      * @brief 将 recv CQE 对应的内部 buffer 片段缓存到 controller 侧队列
      * @param chunk 已完成但尚未交付给用户的内部 recv 片段
      */
-    void enqueueReadyRecv(ReadyRecvChunk&& chunk) {
+    void enqueue_ready_recv(ReadyRecvChunk&& chunk) {
         m_ready_recvs.push_back(std::move(chunk));
     }
 
@@ -569,7 +569,7 @@ struct IOController {
      * @param result 输出 recv 结果
      * @return true 表示已消费一个 ready recv 结果；false 表示队列为空
      */
-    bool tryConsumeReadyRecv(char* buffer,
+    bool try_consume_ready_recv(char* buffer,
                              size_t capacity,
                              std::expected<size_t, IOError>& result) {
         if (m_ready_recvs.empty()) {
@@ -621,7 +621,7 @@ struct IOController {
     /**
      * @brief 清理 controller 内缓存但尚未交付的 recv 片段
      */
-    void clearReadyRecvs() noexcept {
+    void clear_ready_recvs() noexcept {
         while (!m_ready_recvs.empty()) {
             m_ready_recvs.front().release();
             m_ready_recvs.pop_front();
@@ -632,7 +632,7 @@ struct IOController {
      * @brief 将完整 UDP 数据报缓存到 controller 侧队列
      * @param datagram 已完成但尚未交付给用户的内部数据报
      */
-    void enqueueReadyRecvFrom(ReadyRecvDatagram&& datagram)
+    void enqueue_ready_recv_from(ReadyRecvDatagram&& datagram)
     {
         m_ready_recvfrom.push_back(std::move(datagram));
     }
@@ -645,7 +645,7 @@ struct IOController {
      * @param result 输出复制字节数或错误
      * @return true 表示消费了一个完整数据报或错误；false 表示队列为空
      */
-    bool tryConsumeReadyRecvFrom(char* buffer,
+    bool try_consume_ready_recv_from(char* buffer,
                                  size_t capacity,
                                  Host* from,
                                  std::expected<size_t, IOError>& result)
@@ -663,7 +663,7 @@ struct IOController {
                 std::memcpy(buffer, datagram.data, bytes);
             }
             if (from != nullptr) {
-                *from = Host::fromSockAddr(datagram.source);
+                *from = Host::from_sock_addr(datagram.source);
             }
             result = bytes;
         }
@@ -675,7 +675,7 @@ struct IOController {
     /**
      * @brief 归还所有尚未交付的 UDP provided buffers
      */
-    void clearReadyRecvFrom() noexcept
+    void clear_ready_recv_from() noexcept
     {
         while (!m_ready_recvfrom.empty()) {
             m_ready_recvfrom.front().release();
@@ -690,13 +690,13 @@ struct IOController {
      * @param awaitable 对应的Awaitable对象指针
      * @return true 填充成功；false 事件类型不受支持
      */
-    bool fillAwaitable(IOEventType type, void* awaitable);
+    bool fill_awaitable(IOEventType type, void* awaitable);
 
     /**
      * @brief 清除Awaitable信息（支持 RECVWITHSEND 状态机）
      * @param type IO事件类型
      */
-    void removeAwaitable(IOEventType type);
+    void remove_awaitable(IOEventType type);
 
     GHandle m_handle = GHandle::invalid();  ///< 关联的底层句柄
     IOEventType m_type = IOEventType::INVALID;  ///< 当前IO事件类型
@@ -738,14 +738,14 @@ struct IOController {
      * @note 具体事件类型的显式特化定义位于本头文件末尾
      */
     template<typename T>
-    T* getAwaitable() { return nullptr; }
+    T* get_awaitable() { return nullptr; }
 
 #ifdef USE_IOURING
 private:
-    void clearSqeState() noexcept {
-        clearAcceptedHandles();
-        clearReadyRecvs();
-        clearReadyRecvFrom();
+    void clear_sqe_state() noexcept {
+        clear_accepted_handles();
+        clear_ready_recvs();
+        clear_ready_recv_from();
         m_accept_multishot_handle = nullptr;
         m_recv_multishot_handle = nullptr;
         m_recvfrom_multishot_handle = nullptr;
@@ -763,7 +763,7 @@ private:
         }
     }
 
-    void rebindSqeState() noexcept {
+    void rebind_sqe_state() noexcept {
         for (auto* state : m_sqe_state) {
             if (state == nullptr) {
                 continue;
@@ -775,7 +775,7 @@ private:
 
 #if defined(USE_EPOLL) || defined(USE_KQUEUE)
 private:
-    void adoptRegistrationOwnerSlot(IOController& other) noexcept {
+    void adopt_registration_owner_slot(IOController& other) noexcept {
         m_registration_owner_slot = other.m_registration_owner_slot;
         if (m_registration_owner_slot != nullptr) {
             if (*m_registration_owner_slot == &other) {
@@ -790,72 +790,72 @@ private:
 };
 
 /**
- * @brief IOController::getAwaitable 的显式特化集合
+ * @brief IOController::get_awaitable 的显式特化集合
  * @details 这些访问器把 READ/WRITE 槽位上的 `void*` awaitable 安全转换为具体类型。
  */
 
 template<>
-inline auto IOController::getAwaitable() -> AcceptAwaitable* {
+inline auto IOController::get_awaitable() -> AcceptAwaitable* {
     return static_cast<AcceptAwaitable*>(m_awaitable[READ]);
 }
 
 template<>
-inline auto IOController::getAwaitable() -> RecvAwaitable* {
+inline auto IOController::get_awaitable() -> RecvAwaitable* {
     return static_cast<RecvAwaitable*>(m_awaitable[READ]);
 }
 
 template<>
-inline auto IOController::getAwaitable() -> SendAwaitable* {
+inline auto IOController::get_awaitable() -> SendAwaitable* {
     return static_cast<SendAwaitable*>(m_awaitable[WRITE]);
 }
 
 template<>
-inline auto IOController::getAwaitable() -> ConnectAwaitable* {
+inline auto IOController::get_awaitable() -> ConnectAwaitable* {
     return static_cast<ConnectAwaitable*>(m_awaitable[WRITE]);
 }
 
 template<>
-inline auto IOController::getAwaitable() -> RecvFromAwaitable* {
+inline auto IOController::get_awaitable() -> RecvFromAwaitable* {
     return static_cast<RecvFromAwaitable*>(m_awaitable[READ]);
 }
 
 template<>
-inline auto IOController::getAwaitable() -> SendToAwaitable* {
+inline auto IOController::get_awaitable() -> SendToAwaitable* {
     return static_cast<SendToAwaitable*>(m_awaitable[WRITE]);
 }
 
 template<>
-inline auto IOController::getAwaitable() -> FileReadAwaitable* {
+inline auto IOController::get_awaitable() -> FileReadAwaitable* {
     return static_cast<FileReadAwaitable*>(m_awaitable[READ]);
 }
 
 template<>
-inline auto IOController::getAwaitable() -> FileWriteAwaitable* {
+inline auto IOController::get_awaitable() -> FileWriteAwaitable* {
     return static_cast<FileWriteAwaitable*>(m_awaitable[WRITE]);
 }
 
 template<>
-inline auto IOController::getAwaitable() -> FileWatchAwaitable* {
+inline auto IOController::get_awaitable() -> FileWatchAwaitable* {
     return static_cast<FileWatchAwaitable*>(m_awaitable[READ]);
 }
 
 template<>
-inline auto IOController::getAwaitable() -> ReadvAwaitable* {
+inline auto IOController::get_awaitable() -> ReadvAwaitable* {
     return static_cast<ReadvAwaitable*>(m_awaitable[READ]);
 }
 
 template<>
-inline auto IOController::getAwaitable() -> WritevAwaitable* {
+inline auto IOController::get_awaitable() -> WritevAwaitable* {
     return static_cast<WritevAwaitable*>(m_awaitable[WRITE]);
 }
 
 template<>
-inline auto IOController::getAwaitable() -> SendFileAwaitable* {
+inline auto IOController::get_awaitable() -> SendFileAwaitable* {
     return static_cast<SendFileAwaitable*>(m_awaitable[WRITE]);
 }
 
 
-inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
+inline bool IOController::fill_awaitable(IOEventType type, void* awaitable) {
     constexpr uint32_t kReadSlotMask =
         static_cast<uint32_t>(IOEventType::ACCEPT) |
         static_cast<uint32_t>(IOEventType::RECV) |
@@ -889,7 +889,7 @@ inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
             static_cast<uint32_t>(type));
         m_awaitable[READ] = awaitable;
 #ifdef USE_IOURING
-        advanceSqeGeneration(READ);
+        advance_sqe_generation(READ);
 #endif
         break;
     case IOEventType::RECVFROM:
@@ -899,7 +899,7 @@ inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
         m_awaitable[READ] = awaitable;
 #ifdef USE_IOURING
         if (!m_recvfrom_multishot_armed) {
-            advanceSqeGeneration(READ);
+            advance_sqe_generation(READ);
         }
         m_recvfrom_result_assigned = false;
 #endif
@@ -914,7 +914,7 @@ inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
         m_type |= type;
 #ifdef USE_IOURING
         m_awaitable[READ] = awaitable;
-        advanceSqeGeneration(READ);
+        advance_sqe_generation(READ);
 #endif
         break;
     case IOEventType::SEND:
@@ -928,7 +928,7 @@ inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
             static_cast<uint32_t>(type));
         m_awaitable[WRITE] = awaitable;
 #ifdef USE_IOURING
-        advanceSqeGeneration(WRITE);
+        advance_sqe_generation(WRITE);
 #endif
         break;
     default:
@@ -937,7 +937,7 @@ inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
     return true;
 }
 
-inline void IOController::removeAwaitable(IOEventType type) {
+inline void IOController::remove_awaitable(IOEventType type) {
     m_type &= ~type;
     switch (type) {
     case IOEventType::RECV:
@@ -951,14 +951,14 @@ inline void IOController::removeAwaitable(IOEventType type) {
     case IOEventType::FILEWATCH:
         m_awaitable[READ] = nullptr;
 #ifdef USE_IOURING
-        advanceSqeGeneration(READ);
+        advance_sqe_generation(READ);
 #endif
         break;
     case IOEventType::RECVFROM:
         m_awaitable[READ] = nullptr;
 #ifdef USE_IOURING
         if (!m_recvfrom_multishot_armed) {
-            advanceSqeGeneration(READ);
+            advance_sqe_generation(READ);
         }
         m_recvfrom_result_assigned = false;
 #endif
@@ -969,7 +969,7 @@ inline void IOController::removeAwaitable(IOEventType type) {
     case IOEventType::SEQUENCE:
 #ifdef USE_IOURING
         m_awaitable[READ] = nullptr;
-        advanceSqeGeneration(READ);
+        advance_sqe_generation(READ);
 #endif
         break;
     case IOEventType::SEND:
@@ -980,7 +980,7 @@ inline void IOController::removeAwaitable(IOEventType type) {
     case IOEventType::CONNECT:
         m_awaitable[WRITE] = nullptr;
 #ifdef USE_IOURING
-        advanceSqeGeneration(WRITE);
+        advance_sqe_generation(WRITE);
 #endif
         break;
     default:

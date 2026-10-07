@@ -91,38 +91,38 @@ struct HttpRingBufferTcpReadMachine {
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (m_state->parseFromRingBuffer()) {
-            m_result = m_state->takeResult();
+        if (m_state->parse_from_ring_buffer()) {
+            m_result = m_state->take_result();
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (!m_state->prepareRecvWindow()) {
-            m_result = m_state->takeResult();
+        if (!m_state->prepare_recv_window()) {
+            m_result = m_state->take_result();
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        return MachineAction<result_type>::waitReadv(
-            m_state->recvIovecsData(),
-            m_state->recvIovecsCount());
+        return MachineAction<result_type>::wait_readv(
+            m_state->recv_iovecs_data(),
+            m_state->recv_iovecs_count());
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
-            m_state->setRecvError(result.error());
-            m_result = m_state->takeResult();
+            m_state->set_recv_error(result.error());
+            m_result = m_state->take_result();
             return;
         }
 
         if (result.value() == 0) {
-            m_state->onPeerClosed();
-            m_result = m_state->takeResult();
+            m_state->on_peer_closed();
+            m_result = m_state->take_result();
             return;
         }
 
-        m_state->onBytesReceived(result.value());
+        m_state->on_bytes_received(result.value());
     }
 
-    void onWrite(std::expected<size_t, IOError>) {}
+    void on_write(std::expected<size_t, IOError>) {}
 
     std::shared_ptr<StateT> m_state;
     std::optional<result_type> m_result;
@@ -147,43 +147,43 @@ struct HttpRingBufferSslReadMachine {
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (m_state->parseFromRingBuffer()) {
-            m_result = m_state->takeResult();
+        if (m_state->parse_from_ring_buffer()) {
+            m_result = m_state->take_result();
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
 
         char* recv_buffer = nullptr;
         size_t recv_length = 0;
-        if (!m_state->prepareRecvWindow(recv_buffer, recv_length)) {
-            m_result = m_state->takeResult();
+        if (!m_state->prepare_recv_window(recv_buffer, recv_length)) {
+            m_result = m_state->take_result();
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
 
         return galay::ssl::SslMachineAction<result_type>::recv(recv_buffer, recv_length);
     }
 
-    void onHandshake(std::expected<void, galay::ssl::SslError>) {}
+    void on_handshake(std::expected<void, galay::ssl::SslError>) {}
 
-    void onRecv(std::expected<Bytes, galay::ssl::SslError> result) {
+    void on_recv(std::expected<Bytes, galay::ssl::SslError> result) {
         if (!result) {
-            m_state->setSslRecvError(result.error());
-            m_result = m_state->takeResult();
+            m_state->set_ssl_recv_error(result.error());
+            m_result = m_state->take_result();
             return;
         }
 
         const size_t recv_bytes = result.value().size();
         if (recv_bytes == 0) {
-            m_state->onPeerClosed();
-            m_result = m_state->takeResult();
+            m_state->on_peer_closed();
+            m_result = m_state->take_result();
             return;
         }
 
-        m_state->onBytesReceived(recv_bytes);
+        m_state->on_bytes_received(recv_bytes);
     }
 
-    void onSend(std::expected<size_t, galay::ssl::SslError>) {}
+    void on_send(std::expected<size_t, galay::ssl::SslError>) {}
 
-    void onShutdown(std::expected<void, galay::ssl::SslError>) {}
+    void on_shutdown(std::expected<void, galay::ssl::SslError>) {}
 
     std::shared_ptr<StateT> m_state;
     std::optional<result_type> m_result;
@@ -215,7 +215,7 @@ struct HttpRequestReadState {
      * @brief 重置状态用于下一次读取
      * @param request 新的 HTTP 请求对象
      */
-    void resetForNextRead(HttpRequest& request) {
+    void reset_for_next_read(HttpRequest& request) {
         m_request = &request;
         m_request->reset();
         m_total_received = 0;
@@ -228,35 +228,35 @@ struct HttpRequestReadState {
 
     /**
      * @brief 从 RingBuffer 中尝试解析 HTTP 请求
-     * @return 解析完成返回 true，数据不足返回 false，出错时也返回 true（通过 takeResult 获取错误）
+     * @return 解析完成返回 true，数据不足返回 false，出错时也返回 true（通过 take_result 获取错误）
      */
-    bool parseFromRingBuffer() {
-        auto read_iovecs = borrowReadIovecs(*m_ring_buffer);
+    bool parse_from_ring_buffer() {
+        auto read_iovecs = borrow_read_iovecs(*m_ring_buffer);
         if (read_iovecs.empty()) {
             return false;
         }
 
-        m_request->header().setParseLimits(m_setting->getMaxHeaderCount(),
-                                           m_setting->getMaxHeaderLineSize(),
-                                           m_setting->getMaxUriSize());
+        m_request->header().set_parse_limits(m_setting->get_max_header_count(),
+                                           m_setting->get_max_header_line_size(),
+                                           m_setting->get_max_uri_size());
 
-        if (IoVecWindow::buildWindow(read_iovecs, m_parse_iovecs) == 0) {
+        if (IoVecWindow::build_window(read_iovecs, m_parse_iovecs) == 0) {
             return false;
         }
 
         auto [error_code, consumed] =
-            m_request->fromIOVec(m_parse_iovecs, m_setting->getMaxBodySize());
+            m_request->from_io_vec(m_parse_iovecs, m_setting->get_max_body_size());
         if (consumed > 0) {
             m_ring_buffer->consume(consumed);
         }
 
-        if (checkBodyLimitExceeded(m_request->header(), m_request->bodyStr())) {
+        if (check_body_limit_exceeded(m_request->header(), m_request->body_str())) {
             return true;
         }
 
-        if (!m_request->header().isHeaderComplete() &&
-            m_total_received >= m_setting->getMaxHeaderSize()) {
-            setParseError(HttpError(kHeaderTooLarge));
+        if (!m_request->header().is_header_complete() &&
+            m_total_received >= m_setting->get_max_header_size()) {
+            set_parse_error(HttpError(kHeaderTooLarge));
             return true;
         }
 
@@ -265,45 +265,45 @@ struct HttpRequestReadState {
         }
 
         if (error_code != kNoError) {
-            setParseError(HttpError(error_code));
+            set_parse_error(HttpError(error_code));
             return true;
         }
 
-        if (!m_request->isComplete()) {
+        if (!m_request->is_complete()) {
             return false;
         }
 
         auto& header = m_request->header();
-        const std::string host = header.headerPairs().getValue("host");
+        const std::string host = header.header_pairs().get_value("host");
         return true;
     }
 
-    bool checkBodyLimitExceeded(HttpRequestHeader& header, const std::string& body) {
-        const size_t max_body_size = m_setting->getMaxBodySize();
+    bool check_body_limit_exceeded(HttpRequestHeader& header, const std::string& body) {
+        const size_t max_body_size = m_setting->get_max_body_size();
         if (max_body_size == 0) {
             return false;
         }
 
         const auto* transfer_encoding =
-            detail::getHeaderValuePtrLoose(header.headerPairs(), "transfer-encoding");
+            detail::get_header_value_ptr_loose(header.header_pairs(), "transfer-encoding");
         const bool is_chunked =
             transfer_encoding != nullptr &&
-            detail::headerValueContainsToken(*transfer_encoding, "chunked");
+            detail::header_value_contains_token(*transfer_encoding, "chunked");
 
         if (!is_chunked) {
             const auto* content_length =
-                detail::getHeaderValuePtrLoose(header.headerPairs(), "content-length");
+                detail::get_header_value_ptr_loose(header.header_pairs(), "content-length");
             if (content_length != nullptr && !content_length->empty()) {
-                auto parsed_length = detail::parseSizeTStrict(*content_length);
+                auto parsed_length = detail::parse_size_t_strict(*content_length);
                 if (parsed_length.has_value() && *parsed_length > max_body_size) {
-                    setParseError(HttpError(kRequestEntityTooLarge, "Content-Length exceeds max body size"));
+                    set_parse_error(HttpError(kRequestEntityTooLarge, "Content-Length exceeds max body size"));
                     return true;
                 }
             }
         }
 
         if (body.size() > max_body_size) {
-            setParseError(HttpError(kRequestEntityTooLarge, "HTTP body exceeds max body size"));
+            set_parse_error(HttpError(kRequestEntityTooLarge, "HTTP body exceeds max body size"));
             return true;
         }
 
@@ -314,32 +314,32 @@ struct HttpRequestReadState {
      * @brief 准备接收窗口（用于 readv）
      * @return 成功返回 true，缓冲区满返回 false
      */
-    bool prepareRecvWindow() {
-        m_write_iovecs = borrowWriteIovecs(*m_ring_buffer);
+    bool prepare_recv_window() {
+        m_write_iovecs = borrow_write_iovecs(*m_ring_buffer);
         if (m_write_iovecs.empty()) {
-            setParseError(HttpError(kHeaderTooLarge));
+            set_parse_error(HttpError(kHeaderTooLarge));
             return false;
         }
         return true;
     }
 
-    bool prepareRecvWindow(char*& buffer, size_t& length) {
-        if (!prepareRecvWindow()) {
+    bool prepare_recv_window(char*& buffer, size_t& length) {
+        if (!prepare_recv_window()) {
             buffer = nullptr;
             length = 0;
             return false;
         }
-        if (!IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
-            setParseError(HttpError(kHeaderTooLarge));
+        if (!IoVecWindow::bind_first_non_empty(m_write_iovecs, buffer, length)) {
+            set_parse_error(HttpError(kHeaderTooLarge));
             return false;
         }
         return true;
     }
 
-    const struct iovec* recvIovecsData() const { return m_write_iovecs.data(); }
-    size_t recvIovecsCount() const { return m_write_iovecs.size(); }
+    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); }
+    size_t recv_iovecs_count() const { return m_write_iovecs.size(); }
 
-    void setRecvError(const IOError& io_error) {
+    void set_recv_error(const IOError& io_error) {
         if (IOError::contains(io_error.code(), kTimeout)) {
             m_http_error = HttpError(kRecvTimeOut, io_error.message());
             return;
@@ -356,29 +356,29 @@ struct HttpRequestReadState {
      * @brief 设置 SSL 接收错误
      * @param error SSL 错误
      */
-    void setSslRecvError(const galay::ssl::SslError& error) {
+    void set_ssl_recv_error(const galay::ssl::SslError& error) {
         m_http_error = HttpError(error);
     }
 #endif
 
-    void onPeerClosed() { m_http_error = HttpError(kConnectionClose); } ///< 对端关闭连接
+    void on_peer_closed() { m_http_error = HttpError(kConnectionClose); } ///< 对端关闭连接
 
     /**
      * @brief 处理接收到的字节数
      * @param recv_bytes 接收字节数
      */
-    void onBytesReceived(size_t recv_bytes) {
+    void on_bytes_received(size_t recv_bytes) {
         m_ring_buffer->produce(recv_bytes);
         m_total_received += recv_bytes;
     }
 
-    void setParseError(HttpError&& error) { m_http_error = std::move(error); } ///< 设置解析错误
+    void set_parse_error(HttpError&& error) { m_http_error = std::move(error); } ///< 设置解析错误
 
     /**
      * @brief 获取读取结果
      * @return std::expected<bool, HttpError>；成功值为 true，失败时 error() 为 HttpError
      */
-    ResultType takeResult() {
+    ResultType take_result() {
         if (m_http_error.has_value()) {
             return std::unexpected(std::move(*m_http_error));
         }
@@ -420,29 +420,29 @@ struct HttpResponseReadState {
      * @brief 从 RingBuffer 中尝试解析 HTTP 响应
      * @return 解析完成返回 true，数据不足返回 false
      */
-    bool parseFromRingBuffer() {
-        auto read_iovecs = borrowReadIovecs(*m_ring_buffer);
+    bool parse_from_ring_buffer() {
+        auto read_iovecs = borrow_read_iovecs(*m_ring_buffer);
         if (read_iovecs.empty()) {
             return false;
         }
 
-        if (IoVecWindow::buildWindow(read_iovecs, m_parse_iovecs) == 0) {
+        if (IoVecWindow::build_window(read_iovecs, m_parse_iovecs) == 0) {
             return false;
         }
 
         auto [error_code, consumed] =
-            m_response->fromIOVec(m_parse_iovecs, m_setting->getMaxBodySize());
+            m_response->from_io_vec(m_parse_iovecs, m_setting->get_max_body_size());
         if (consumed > 0) {
             m_ring_buffer->consume(consumed);
         }
 
-        if (checkBodyLimitExceeded(m_response->header(), m_response->bodyStr())) {
+        if (check_body_limit_exceeded(m_response->header(), m_response->body_str())) {
             return true;
         }
 
-        if (!m_response->header().isHeaderComplete() &&
-            m_total_received >= m_setting->getMaxHeaderSize()) {
-            setParseError(HttpError(kHeaderTooLarge));
+        if (!m_response->header().is_header_complete() &&
+            m_total_received >= m_setting->get_max_header_size()) {
+            set_parse_error(HttpError(kHeaderTooLarge));
             return true;
         }
 
@@ -451,39 +451,39 @@ struct HttpResponseReadState {
         }
 
         if (error_code != kNoError) {
-            setParseError(HttpError(error_code));
+            set_parse_error(HttpError(error_code));
             return true;
         }
 
-        return m_response->isComplete();
+        return m_response->is_complete();
     }
 
-    bool checkBodyLimitExceeded(HttpResponseHeader& header, const std::string& body) {
-        const size_t max_body_size = m_setting->getMaxBodySize();
+    bool check_body_limit_exceeded(HttpResponseHeader& header, const std::string& body) {
+        const size_t max_body_size = m_setting->get_max_body_size();
         if (max_body_size == 0) {
             return false;
         }
 
         const auto* transfer_encoding =
-            detail::getHeaderValuePtrLoose(header.headerPairs(), "transfer-encoding");
+            detail::get_header_value_ptr_loose(header.header_pairs(), "transfer-encoding");
         const bool is_chunked =
             transfer_encoding != nullptr &&
-            detail::headerValueContainsToken(*transfer_encoding, "chunked");
+            detail::header_value_contains_token(*transfer_encoding, "chunked");
 
         if (!is_chunked) {
             const auto* content_length =
-                detail::getHeaderValuePtrLoose(header.headerPairs(), "content-length");
+                detail::get_header_value_ptr_loose(header.header_pairs(), "content-length");
             if (content_length != nullptr && !content_length->empty()) {
-                auto parsed_length = detail::parseSizeTStrict(*content_length);
+                auto parsed_length = detail::parse_size_t_strict(*content_length);
                 if (parsed_length.has_value() && *parsed_length > max_body_size) {
-                    setParseError(HttpError(kRequestEntityTooLarge, "Content-Length exceeds max body size"));
+                    set_parse_error(HttpError(kRequestEntityTooLarge, "Content-Length exceeds max body size"));
                     return true;
                 }
             }
         }
 
         if (body.size() > max_body_size) {
-            setParseError(HttpError(kRequestEntityTooLarge, "HTTP body exceeds max body size"));
+            set_parse_error(HttpError(kRequestEntityTooLarge, "HTTP body exceeds max body size"));
             return true;
         }
 
@@ -494,10 +494,10 @@ struct HttpResponseReadState {
      * @brief 准备接收窗口
      * @return 成功返回 true
      */
-    bool prepareRecvWindow() {
-        m_write_iovecs = borrowWriteIovecs(*m_ring_buffer);
+    bool prepare_recv_window() {
+        m_write_iovecs = borrow_write_iovecs(*m_ring_buffer);
         if (m_write_iovecs.empty()) {
-            setParseError(HttpError(kHeaderTooLarge));
+            set_parse_error(HttpError(kHeaderTooLarge));
             return false;
         }
         return true;
@@ -509,27 +509,27 @@ struct HttpResponseReadState {
      * @param[out] length 输出缓冲区长度
      * @return 成功返回 true
      */
-    bool prepareRecvWindow(char*& buffer, size_t& length) {
-        if (!prepareRecvWindow()) {
+    bool prepare_recv_window(char*& buffer, size_t& length) {
+        if (!prepare_recv_window()) {
             buffer = nullptr;
             length = 0;
             return false;
         }
-        if (!IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
-            setParseError(HttpError(kHeaderTooLarge));
+        if (!IoVecWindow::bind_first_non_empty(m_write_iovecs, buffer, length)) {
+            set_parse_error(HttpError(kHeaderTooLarge));
             return false;
         }
         return true;
     }
 
-    const struct iovec* recvIovecsData() const { return m_write_iovecs.data(); } ///< 获取接收 iovec 数据指针
-    size_t recvIovecsCount() const { return m_write_iovecs.size(); } ///< 获取接收 iovec 数量
+    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); } ///< 获取接收 iovec 数据指针
+    size_t recv_iovecs_count() const { return m_write_iovecs.size(); } ///< 获取接收 iovec 数量
 
     /**
      * @brief 设置 TCP 接收错误
      * @param io_error IO 错误
      */
-    void setRecvError(const IOError& io_error) {
+    void set_recv_error(const IOError& io_error) {
         if (IOError::contains(io_error.code(), kTimeout)) {
             m_http_error = HttpError(kRecvTimeOut, io_error.message());
             return;
@@ -546,29 +546,29 @@ struct HttpResponseReadState {
      * @brief 设置 SSL 接收错误
      * @param error SSL 错误
      */
-    void setSslRecvError(const galay::ssl::SslError& error) {
+    void set_ssl_recv_error(const galay::ssl::SslError& error) {
         m_http_error = HttpError(error);
     }
 #endif
 
-    void onPeerClosed() { m_http_error = HttpError(kConnectionClose); } ///< 对端关闭连接
+    void on_peer_closed() { m_http_error = HttpError(kConnectionClose); } ///< 对端关闭连接
 
     /**
      * @brief 处理接收到的字节数
      * @param recv_bytes 接收字节数
      */
-    void onBytesReceived(size_t recv_bytes) {
+    void on_bytes_received(size_t recv_bytes) {
         m_ring_buffer->produce(recv_bytes);
         m_total_received += recv_bytes;
     }
 
-    void setParseError(HttpError&& error) { m_http_error = std::move(error); } ///< 设置解析错误
+    void set_parse_error(HttpError&& error) { m_http_error = std::move(error); } ///< 设置解析错误
 
     /**
      * @brief 获取读取结果
      * @return std::expected<bool, HttpError>；成功值为 true，失败时 error() 为 HttpError
      */
-    ResultType takeResult() {
+    ResultType take_result() {
         if (m_http_error.has_value()) {
             return std::unexpected(std::move(*m_http_error));
         }
@@ -598,15 +598,15 @@ struct HttpResponseHeaderReadState {
         HttpResponseHeader& header)
         : m_ring_buffer(&ring_buffer), m_setting(&setting), m_header(&header) {}
 
-    bool parseFromRingBuffer() {
-        auto read_iovecs = borrowReadIovecs(*m_ring_buffer);
+    bool parse_from_ring_buffer() {
+        auto read_iovecs = borrow_read_iovecs(*m_ring_buffer);
         if (read_iovecs.empty()) return false;
-        if (IoVecWindow::buildWindow(read_iovecs, m_parse_iovecs) == 0) return false;
+        if (IoVecWindow::build_window(read_iovecs, m_parse_iovecs) == 0) return false;
 
-        auto [error_code, consumed] = m_header->fromIOVec(m_parse_iovecs);
+        auto [error_code, consumed] = m_header->from_io_vec(m_parse_iovecs);
         if (consumed > 0) m_ring_buffer->consume(static_cast<size_t>(consumed));
         if (error_code == kIncomplete || error_code == kHeaderInComplete) {
-            if (m_total_received >= m_setting->getMaxHeaderSize()) {
+            if (m_total_received >= m_setting->get_max_header_size()) {
                 m_http_error = HttpError(kHeaderTooLarge);
                 return true;
             }
@@ -616,11 +616,11 @@ struct HttpResponseHeaderReadState {
             m_http_error = HttpError(error_code);
             return true;
         }
-        return m_header->isHeaderComplete();
+        return m_header->is_header_complete();
     }
 
-    bool prepareRecvWindow() {
-        m_write_iovecs = borrowWriteIovecs(*m_ring_buffer);
+    bool prepare_recv_window() {
+        m_write_iovecs = borrow_write_iovecs(*m_ring_buffer);
         if (m_write_iovecs.empty()) {
             m_http_error = HttpError(kHeaderTooLarge);
             return false;
@@ -628,9 +628,9 @@ struct HttpResponseHeaderReadState {
         return true;
     }
 
-    bool prepareRecvWindow(char*& buffer, size_t& length) {
-        if (!prepareRecvWindow() ||
-            !IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
+    bool prepare_recv_window(char*& buffer, size_t& length) {
+        if (!prepare_recv_window() ||
+            !IoVecWindow::bind_first_non_empty(m_write_iovecs, buffer, length)) {
             buffer = nullptr;
             length = 0;
             m_http_error = HttpError(kHeaderTooLarge);
@@ -639,24 +639,24 @@ struct HttpResponseHeaderReadState {
         return true;
     }
 
-    const struct iovec* recvIovecsData() const { return m_write_iovecs.data(); }
-    size_t recvIovecsCount() const { return m_write_iovecs.size(); }
-    void setRecvError(const IOError& error) {
+    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); }
+    size_t recv_iovecs_count() const { return m_write_iovecs.size(); }
+    void set_recv_error(const IOError& error) {
         m_http_error = IOError::contains(error.code(), kTimeout)
             ? HttpError(kRecvTimeOut, error.message())
             : HttpError(kRecvError, error.message());
     }
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    void setSslRecvError(const galay::ssl::SslError& error) {
+    void set_ssl_recv_error(const galay::ssl::SslError& error) {
         m_http_error = HttpError(error);
     }
 #endif
-    void onPeerClosed() { m_http_error = HttpError(kConnectionClose); }
-    void onBytesReceived(size_t bytes) {
+    void on_peer_closed() { m_http_error = HttpError(kConnectionClose); }
+    void on_bytes_received(size_t bytes) {
         m_ring_buffer->produce(bytes);
         m_total_received += bytes;
     }
-    ResultType takeResult() {
+    ResultType take_result() {
         if (m_http_error) return std::unexpected(std::move(*m_http_error));
         return true;
     }
@@ -698,13 +698,13 @@ struct HttpChunkReadState {
      * @brief 从 RingBuffer 中尝试解析 chunked 数据
      * @return 最后一个 chunk 解析完成返回 true
      */
-    bool parseFromRingBuffer() {
-        auto read_iovecs = borrowReadIovecs(*m_ring_buffer);
+    bool parse_from_ring_buffer() {
+        auto read_iovecs = borrow_read_iovecs(*m_ring_buffer);
         if (read_iovecs.empty()) {
             return false;
         }
 
-        if (IoVecWindow::buildWindow(read_iovecs, m_parse_iovecs) == 0) {
+        if (IoVecWindow::build_window(read_iovecs, m_parse_iovecs) == 0) {
             return false;
         }
 
@@ -712,32 +712,32 @@ struct HttpChunkReadState {
         auto result = parser.parse(
             m_parse_iovecs,
             *m_chunk_data,
-            m_setting->getMaxBodySize());
+            m_setting->get_max_body_size());
         if (!result) {
             const auto& error = result.error();
             if (error.code() == kIncomplete) {
                 return false;
             }
-            setParseError(HttpError(error.code(), error.message()));
+            set_parse_error(HttpError(error.code(), error.message()));
             return true;
         }
 
         auto [is_last, consumed] = result.value();
         m_ring_buffer->consume(consumed);
-        if (checkBodyLimitExceeded()) {
+        if (check_body_limit_exceeded()) {
             return true;
         }
         m_is_last = is_last;
         return m_emit_available ? (is_last || !m_chunk_data->empty()) : is_last;
     }
 
-    bool checkBodyLimitExceeded() {
-        const size_t max_body_size = m_setting->getMaxBodySize();
+    bool check_body_limit_exceeded() {
+        const size_t max_body_size = m_setting->get_max_body_size();
         if (max_body_size == 0 || m_chunk_data->size() <= max_body_size) {
             return false;
         }
 
-        setParseError(HttpError(kRequestEntityTooLarge, "chunked body exceeds max body size"));
+        set_parse_error(HttpError(kRequestEntityTooLarge, "chunked body exceeds max body size"));
         return true;
     }
 
@@ -745,10 +745,10 @@ struct HttpChunkReadState {
      * @brief 准备接收窗口
      * @return 成功返回 true
      */
-    bool prepareRecvWindow() {
-        m_write_iovecs = borrowWriteIovecs(*m_ring_buffer);
+    bool prepare_recv_window() {
+        m_write_iovecs = borrow_write_iovecs(*m_ring_buffer);
         if (m_write_iovecs.empty()) {
-            setParseError(HttpError(kRecvError, "RingBuffer is full"));
+            set_parse_error(HttpError(kRecvError, "RingBuffer is full"));
             return false;
         }
         return true;
@@ -760,23 +760,23 @@ struct HttpChunkReadState {
      * @param[out] length 输出缓冲区长度
      * @return 成功返回 true
      */
-    bool prepareRecvWindow(char*& buffer, size_t& length) {
-        if (!prepareRecvWindow()) {
+    bool prepare_recv_window(char*& buffer, size_t& length) {
+        if (!prepare_recv_window()) {
             buffer = nullptr;
             length = 0;
             return false;
         }
-        if (!IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
-            setParseError(HttpError(kRecvError, "RingBuffer is full"));
+        if (!IoVecWindow::bind_first_non_empty(m_write_iovecs, buffer, length)) {
+            set_parse_error(HttpError(kRecvError, "RingBuffer is full"));
             return false;
         }
         return true;
     }
 
-    const struct iovec* recvIovecsData() const { return m_write_iovecs.data(); } ///< 获取接收 iovec 数据指针
-    size_t recvIovecsCount() const { return m_write_iovecs.size(); } ///< 获取接收 iovec 数量
+    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); } ///< 获取接收 iovec 数据指针
+    size_t recv_iovecs_count() const { return m_write_iovecs.size(); } ///< 获取接收 iovec 数量
 
-    void setRecvError(const IOError& io_error) {
+    void set_recv_error(const IOError& io_error) {
         if (IOError::contains(io_error.code(), kTimeout)) {
             m_http_error = HttpError(kRecvTimeOut, io_error.message());
             return;
@@ -793,21 +793,21 @@ struct HttpChunkReadState {
      * @brief 设置 SSL 接收错误
      * @param error SSL 错误
      */
-    void setSslRecvError(const galay::ssl::SslError& error) {
+    void set_ssl_recv_error(const galay::ssl::SslError& error) {
         m_http_error = HttpError(error);
     }
 #endif
 
-    void onPeerClosed() { m_http_error = HttpError(kConnectionClose); } ///< 对端关闭连接
-    void onBytesReceived(size_t recv_bytes) { m_ring_buffer->produce(recv_bytes); } ///< 处理接收到的字节数
-    void setParseError(HttpError&& error) { m_http_error = std::move(error); } ///< 设置解析错误
+    void on_peer_closed() { m_http_error = HttpError(kConnectionClose); } ///< 对端关闭连接
+    void on_bytes_received(size_t recv_bytes) { m_ring_buffer->produce(recv_bytes); } ///< 处理接收到的字节数
+    void set_parse_error(HttpError&& error) { m_http_error = std::move(error); } ///< 设置解析错误
 
     /**
      * @brief 获取读取结果
      * @return std::expected<bool, HttpError>；成功值表示是否为最后一个 chunk，
      *         失败时 error() 为 HttpError
      */
-    ResultType takeResult() {
+    ResultType take_result() {
         if (m_http_error.has_value()) {
             return std::unexpected(std::move(*m_http_error));
         }
@@ -836,11 +836,11 @@ struct HttpChunkReadState {
  *         std::expected<bool, HttpError>
  */
 template<typename SocketType, typename StateT>
-auto buildReadOperation(SocketType& socket, std::shared_ptr<StateT> state) {
+auto build_read_operation(SocketType& socket, std::shared_ptr<StateT> state) {
     using ResultType = typename StateT::ResultType;
     if constexpr (is_ssl_socket_v<SocketType>) {
 #ifdef GALAY_SSL_FEATURE_ENABLED
-        return galay::ssl::SslAwaitableBuilder<ResultType>::fromStateMachine(
+        return galay::ssl::SslAwaitableBuilder<ResultType>::from_state_machine(
                    socket.controller(),
                    &socket,
                    HttpRingBufferSslReadMachine<StateT>(std::move(state)))
@@ -849,7 +849,7 @@ auto buildReadOperation(SocketType& socket, std::shared_ptr<StateT> state) {
         static_assert(!sizeof(SocketType), "SSL support is disabled");
 #endif
     } else {
-        return AwaitableBuilder<ResultType>::fromStateMachine(
+        return AwaitableBuilder<ResultType>::from_state_machine(
                    socket.controller(),
                    HttpRingBufferTcpReadMachine<StateT>(std::move(state)))
             .build();
@@ -920,23 +920,23 @@ public:
             return std::move(*this);
         }
 
-        ReadOperation& bodyTimeout(std::chrono::milliseconds timeout) & {
+        ReadOperation& body_timeout(std::chrono::milliseconds timeout) & {
             m_body_timeout = timeout;
             return *this;
         }
 
-        ReadOperation bodyTimeout(std::chrono::milliseconds timeout) && {
+        ReadOperation body_timeout(std::chrono::milliseconds timeout) && {
             m_body_timeout = timeout;
             return std::move(*this);
         }
 
         auto operator co_await() & {
-            return Awaiter(m_reader->readFromSocket(
+            return Awaiter(m_reader->read_from_socket(
                 m_state, m_generation, m_timeout, m_body_timeout));
         }
 
         auto operator co_await() && {
-            return Awaiter(m_reader->readFromSocket(
+            return Awaiter(m_reader->read_from_socket(
                 std::move(m_state), m_generation, m_timeout, m_body_timeout));
         }
 
@@ -965,8 +965,8 @@ public:
      * @return 可 co_await 的异步操作；co_await 结果为
      *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
-    ReadOperation<detail::HttpRequestReadState> getRequest(HttpRequest& request) {
-        auto state = getReusableRequestReadState(request);
+    ReadOperation<detail::HttpRequestReadState> get_request(HttpRequest& request) {
+        auto state = get_reusable_request_read_state(request);
         const uint64_t generation = state->m_generation;
         return ReadOperation<detail::HttpRequestReadState>(*this, std::move(state), generation);
     }
@@ -977,7 +977,7 @@ public:
      * @return 可 co_await 的异步操作；co_await 结果为
      *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
-    ReadOperation<detail::HttpResponseReadState> getResponse(HttpResponse& response) {
+    ReadOperation<detail::HttpResponseReadState> get_response(HttpResponse& response) {
         return ReadOperation<detail::HttpResponseReadState>(
             *this,
             std::make_shared<detail::HttpResponseReadState>(*m_ring_buffer, m_setting, response));
@@ -988,7 +988,7 @@ public:
      * @param header 待填充的响应头。
      * @return 响应头完成时返回 true，连接、超时或解析失败通过 HttpError 返回。
      */
-    ReadOperation<detail::HttpResponseHeaderReadState> getResponseHeader(
+    ReadOperation<detail::HttpResponseHeaderReadState> get_response_header(
         HttpResponseHeader& header) {
         return ReadOperation<detail::HttpResponseHeaderReadState>(
             *this,
@@ -1003,14 +1003,14 @@ public:
      *         std::expected<bool, HttpError>，成功值表示该 chunk 是否为最后一个，
      *         失败时 error() 为 HttpError
      */
-    ReadOperation<detail::HttpChunkReadState> getChunk(std::string& chunk_data) {
+    ReadOperation<detail::HttpChunkReadState> get_chunk(std::string& chunk_data) {
         return ReadOperation<detail::HttpChunkReadState>(
             *this,
             std::make_shared<detail::HttpChunkReadState>(*m_ring_buffer, m_setting, chunk_data));
     }
 
     /** @brief 增量读取下一个已完整的 chunk，不等待末尾 0 chunk。 */
-    ReadOperation<detail::HttpChunkReadState> getNextChunk(
+    ReadOperation<detail::HttpChunkReadState> get_next_chunk(
         std::string& chunk_data, ChunkParser& parser) {
         return ReadOperation<detail::HttpChunkReadState>(
             *this,
@@ -1021,7 +1021,7 @@ public:
 private:
     using SteadyClock = std::chrono::steady_clock;
 
-    static std::optional<std::chrono::milliseconds> remainingTimeout(
+    static std::optional<std::chrono::milliseconds> remaining_timeout(
         const std::optional<SteadyClock::time_point>& deadline) {
         if (!deadline.has_value()) {
             return std::nullopt;
@@ -1054,7 +1054,7 @@ private:
      *          下一轮再继续解析或读取，因此合法消息可以跨任意多次 I/O 推进。
      */
     template<typename StateT>
-    Task<typename StateT::ResultType> readFromSocket(std::shared_ptr<StateT> state,
+    Task<typename StateT::ResultType> read_from_socket(std::shared_ptr<StateT> state,
                                                      uint64_t generation = 0,
                                                      std::optional<std::chrono::milliseconds> timeout = std::nullopt,
                                                      std::optional<std::chrono::milliseconds> body_timeout = std::nullopt) {
@@ -1077,15 +1077,15 @@ private:
         }
 
         while (true) {
-            if (state->parseFromRingBuffer()) {
-                co_return state->takeResult();
+            if (state->parse_from_ring_buffer()) {
+                co_return state->take_result();
             }
 
             if constexpr (std::is_same_v<StateT, detail::HttpRequestReadState>) {
                 if (!body_timeout_armed &&
                     body_timeout.has_value() &&
-                    state->m_request->header().isHeaderComplete() &&
-                    !state->m_request->isComplete()) {
+                    state->m_request->header().is_header_complete() &&
+                    !state->m_request->is_complete()) {
                     deadline = SteadyClock::now() + *body_timeout;
                     body_timeout_armed = true;
                 }
@@ -1095,11 +1095,11 @@ private:
 #ifdef GALAY_SSL_FEATURE_ENABLED
                 char* recv_buffer = nullptr;
                 size_t recv_length = 0;
-                if (!state->prepareRecvWindow(recv_buffer, recv_length)) {
-                    co_return state->takeResult();
+                if (!state->prepare_recv_window(recv_buffer, recv_length)) {
+                    co_return state->take_result();
                 }
 
-                auto remaining = remainingTimeout(deadline);
+                auto remaining = remaining_timeout(deadline);
                 if (remaining.has_value() && *remaining == std::chrono::milliseconds(0)) {
                     co_return std::unexpected(HttpError(kRecvTimeOut, "HTTP read timeout"));
                 }
@@ -1109,28 +1109,28 @@ private:
                     ? co_await std::move(recv_operation).timeout(*remaining)
                     : co_await std::move(recv_operation);
                 if (!recv_result) {
-                    state->setSslRecvError(recv_result.error());
-                    co_return state->takeResult();
+                    state->set_ssl_recv_error(recv_result.error());
+                    co_return state->take_result();
                 }
 
                 const size_t recv_bytes = recv_result.value().size();
                 if (recv_bytes == 0) {
-                    state->onPeerClosed();
-                    co_return state->takeResult();
+                    state->on_peer_closed();
+                    co_return state->take_result();
                 }
-                state->onBytesReceived(recv_bytes);
+                state->on_bytes_received(recv_bytes);
 #else
                 static_assert(!sizeof(SocketType), "SSL support is disabled");
 #endif
             } else {
-                if (!state->prepareRecvWindow()) {
-                    co_return state->takeResult();
+                if (!state->prepare_recv_window()) {
+                    co_return state->take_result();
                 }
 
                 std::span<const struct iovec> recv_iovecs(
-                    state->recvIovecsData(),
-                    state->recvIovecsCount());
-                auto remaining = remainingTimeout(deadline);
+                    state->recv_iovecs_data(),
+                    state->recv_iovecs_count());
+                auto remaining = remaining_timeout(deadline);
                 if (remaining.has_value() && *remaining == std::chrono::milliseconds(0)) {
                     co_return std::unexpected(HttpError(kRecvTimeOut, "HTTP read timeout"));
                 }
@@ -1140,15 +1140,15 @@ private:
                     ? co_await std::move(recv_operation).timeout(*remaining)
                     : co_await std::move(recv_operation);
                 if (!recv_result) {
-                    state->setRecvError(recv_result.error());
-                    co_return state->takeResult();
+                    state->set_recv_error(recv_result.error());
+                    co_return state->take_result();
                 }
 
                 if (recv_result.value() == 0) {
-                    state->onPeerClosed();
-                    co_return state->takeResult();
+                    state->on_peer_closed();
+                    co_return state->take_result();
                 }
-                state->onBytesReceived(recv_result.value());
+                state->on_bytes_received(recv_result.value());
             }
 
             co_yield true;
@@ -1160,9 +1160,9 @@ private:
      * @param request HTTP 请求对象
      * @return 共享的请求读取状态
      */
-    std::shared_ptr<detail::HttpRequestReadState> getReusableRequestReadState(HttpRequest& request) {
+    std::shared_ptr<detail::HttpRequestReadState> get_reusable_request_read_state(HttpRequest& request) {
         if (m_request_read_state && !m_request_read_state->m_read_active) {
-            m_request_read_state->resetForNextRead(request);
+            m_request_read_state->reset_for_next_read(request);
             return m_request_read_state;
         }
 

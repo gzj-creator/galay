@@ -18,11 +18,11 @@ static_assert(std::is_class_v<RedissClientConfig>);
 
 static_assert(requires(RedissClientBuilder builder, AsyncRedisConfig async_config, RedissClientConfig tls_config) {
     { builder.config(async_config) } -> std::same_as<RedissClientBuilder&>;
-    { builder.tlsConfig(tls_config) } -> std::same_as<RedissClientBuilder&>;
-    { builder.caPath(std::string()) } -> std::same_as<RedissClientBuilder&>;
-    { builder.verifyPeer(true) } -> std::same_as<RedissClientBuilder&>;
-    { builder.verifyDepth(4) } -> std::same_as<RedissClientBuilder&>;
-    { builder.serverName(std::string()) } -> std::same_as<RedissClientBuilder&>;
+    { builder.tls_config(tls_config) } -> std::same_as<RedissClientBuilder&>;
+    { builder.ca_path(std::string()) } -> std::same_as<RedissClientBuilder&>;
+    { builder.verify_peer(true) } -> std::same_as<RedissClientBuilder&>;
+    { builder.verify_depth(4) } -> std::same_as<RedissClientBuilder&>;
+    { builder.server_name(std::string()) } -> std::same_as<RedissClientBuilder&>;
 });
 
 static_assert(requires(RedissClient& client, std::string url) {
@@ -49,7 +49,7 @@ static_assert(std::same_as<
     Task<RedisCommandResult>>);
 
 static_assert(std::same_as<
-    decltype(std::declval<RedisMasterSlaveClient&>().refreshFromSentinel()),
+    decltype(std::declval<RedisMasterSlaveClient&>().refresh_from_sentinel()),
     Task<RedisCommandResult>>);
 
 static_assert(std::same_as<
@@ -61,7 +61,7 @@ static_assert(std::same_as<
     Task<RedisCommandResult>>);
 
 static_assert(std::same_as<
-    decltype(std::declval<RedisClusterClient&>().refreshSlots()),
+    decltype(std::declval<RedisClusterClient&>().refresh_slots()),
     Task<RedisCommandResult>>);
 
 int main()

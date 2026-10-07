@@ -53,7 +53,7 @@ public:
         return std::atomic_load_explicit(&m_body, std::memory_order_acquire);
     }
 
-    bool storeIfEmpty(std::shared_ptr<const std::string> body) noexcept {
+    bool store_if_empty(std::shared_ptr<const std::string> body) noexcept {
         if (!body) {
             return false;
         }
@@ -105,16 +105,16 @@ struct H2StaticFileMount {
     std::shared_ptr<H2StaticFileCache> cache;
 };
 
-H2StaticFileMount makeH2StaticFileMount(std::string prefix, H2StaticFileConfig config);
+H2StaticFileMount make_h2_static_file_mount(std::string prefix, H2StaticFileConfig config);
 
 /**
- * @brief Encode an HTTP/2 static file response header block.
+ * @brief encode an HTTP/2 static file response header block.
  * @param status HTTP response status code.
  * @param headers Already materialized response headers, without `:status`.
  * @return Shared HPACK header block suitable for reuse by static file send paths.
  * @note The encoder is stateless/no-index, so the returned block is connection-independent.
  */
-std::shared_ptr<const std::string> encodeH2StaticFileHeaders(
+std::shared_ptr<const std::string> encode_h2_static_file_headers(
     int status,
     const std::vector<Http2HeaderField>& headers);
 
@@ -128,7 +128,7 @@ public:
     explicit H2StaticFileCache(H2StaticFileConfig config);
 
     H2StaticFileLookup lookup(const H2StaticFileRequest& request);
-    std::optional<H2StaticFileFastLookup> lookupFast200(std::string_view request_path);
+    std::optional<H2StaticFileFastLookup> lookup_fast200(std::string_view request_path);
 
 private:
     struct Entry {
@@ -146,12 +146,12 @@ private:
     };
 
     // 返回指向内部缓存的临时视图；调用方必须在当前同步调用栈内消费，不能保存。
-    Entry* findOrLoadEntry(std::string_view request_path);
-    std::filesystem::path normalizeRequestPath(const std::string& request_path) const;
-    bool isInsideRoot(const std::filesystem::path& path) const;
-    H2StaticFileLookup makeNotFound() const;
-    H2StaticFileLookup makeLookup(const Entry& entry, int status) const;
-    Entry loadEntry(const std::filesystem::path& file_path) const;
+    Entry* find_or_load_entry(std::string_view request_path);
+    std::filesystem::path normalize_request_path(const std::string& request_path) const;
+    bool is_inside_root(const std::filesystem::path& path) const;
+    H2StaticFileLookup make_not_found() const;
+    H2StaticFileLookup make_lookup(const Entry& entry, int status) const;
+    Entry load_entry(const std::filesystem::path& file_path) const;
 
     H2StaticFileConfig m_config;
     std::filesystem::path m_root;

@@ -17,14 +17,14 @@ using namespace galay::mongo;
 namespace
 {
 
-int64_t makeUniqueId()
+int64_t make_unique_id()
 {
     return static_cast<int64_t>(
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count());
 }
 
-MongoDocument makeInsertCommand(const std::string& collection,
+MongoDocument make_insert_command(const std::string& collection,
                                 int64_t id,
                                 int32_t counter)
 {
@@ -43,7 +43,7 @@ MongoDocument makeInsertCommand(const std::string& collection,
     return cmd;
 }
 
-MongoDocument makeFindCommand(const std::string& collection, int64_t id)
+MongoDocument make_find_command(const std::string& collection, int64_t id)
 {
     MongoDocument filter;
     filter.append("_id", id);
@@ -55,7 +55,7 @@ MongoDocument makeFindCommand(const std::string& collection, int64_t id)
     return cmd;
 }
 
-MongoDocument makeUpdateCommand(const std::string& collection,
+MongoDocument make_update_command(const std::string& collection,
                                 int64_t id,
                                 int32_t counter)
 {
@@ -84,7 +84,7 @@ MongoDocument makeUpdateCommand(const std::string& collection,
     return cmd;
 }
 
-MongoDocument makeDeleteCommand(const std::string& collection, int64_t id)
+MongoDocument make_delete_command(const std::string& collection, int64_t id)
 {
     MongoDocument filter;
     filter.append("_id", id);
@@ -116,7 +116,7 @@ struct AsyncClientConfig
     AsyncMongoConfig async;
 };
 
-void setFailure(RunState* state, std::string message)
+void set_failure(RunState* state, std::string message)
 {
     state->ok.store(false, std::memory_order_relaxed);
     state->error = std::move(message);
@@ -130,49 +130,49 @@ Task<void> run(IOScheduler* scheduler,
     auto client = AsyncMongoClientBuilder().scheduler(scheduler).config(cfg.async).build();
 
     const std::string collection = "galay_mongo_example_async_command_crud";
-    const int64_t doc_id = makeUniqueId();
+    const int64_t doc_id = make_unique_id();
 
     const std::expected<bool, MongoError> conn_result =
-        mongo_example::unwrapMongoTaskResult(co_await client.connect(cfg.mongo),
+        mongo_example::unwrap_mongo_task_result(co_await client.connect(cfg.mongo),
                                              MONGO_ERROR_CONNECTION);
     if (!conn_result) {
-        setFailure(state, "connect failed: " + conn_result.error().message());
+        set_failure(state, "connect failed: " + conn_result.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> inserted =
-        mongo_example::unwrapMongoTaskResult(
-            co_await client.command(cfg.mongo.database, makeInsertCommand(collection, doc_id, 1)),
+        mongo_example::unwrap_mongo_task_result(
+            co_await client.command(cfg.mongo.database, make_insert_command(collection, doc_id, 1)),
             MONGO_ERROR_COMMAND);
     if (!inserted) {
-        setFailure(state, "insert failed: " + inserted.error().message());
+        set_failure(state, "insert failed: " + inserted.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> found =
-        mongo_example::unwrapMongoTaskResult(
-            co_await client.command(cfg.mongo.database, makeFindCommand(collection, doc_id)),
+        mongo_example::unwrap_mongo_task_result(
+            co_await client.command(cfg.mongo.database, make_find_command(collection, doc_id)),
             MONGO_ERROR_COMMAND);
     if (!found) {
-        setFailure(state, "find failed: " + found.error().message());
+        set_failure(state, "find failed: " + found.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> updated =
-        mongo_example::unwrapMongoTaskResult(
-            co_await client.command(cfg.mongo.database, makeUpdateCommand(collection, doc_id, 2)),
+        mongo_example::unwrap_mongo_task_result(
+            co_await client.command(cfg.mongo.database, make_update_command(collection, doc_id, 2)),
             MONGO_ERROR_COMMAND);
     if (!updated) {
-        setFailure(state, "update failed: " + updated.error().message());
+        set_failure(state, "update failed: " + updated.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> deleted =
-        mongo_example::unwrapMongoTaskResult(
-            co_await client.command(cfg.mongo.database, makeDeleteCommand(collection, doc_id)),
+        mongo_example::unwrap_mongo_task_result(
+            co_await client.command(cfg.mongo.database, make_delete_command(collection, doc_id)),
             MONGO_ERROR_COMMAND);
     if (!deleted) {
-        setFailure(state, "delete failed: " + deleted.error().message());
+        set_failure(state, "delete failed: " + deleted.error().message());
         co_return;
     }
 
@@ -184,13 +184,13 @@ Task<void> run(IOScheduler* scheduler,
 
 int main()
 {
-    const auto mongo_cfg = mongo_example::loadMongoConfigFromEnv();
-    const auto async_cfg = mongo_example::loadAsyncMongoConfigFromEnv();
+    const auto mongo_cfg = mongo_example::load_mongo_config_from_env();
+    const auto async_cfg = mongo_example::load_async_mongo_config_from_env();
 
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "No scheduler available" << std::endl;
         runtime.stop();
@@ -198,7 +198,7 @@ int main()
     }
 
     RunState state;
-    if (!scheduleTask(scheduler, run(scheduler, &state, AsyncClientConfig{mongo_cfg, async_cfg}))) {
+    if (!schedule_task(scheduler, run(scheduler, &state, AsyncClientConfig{mongo_cfg, async_cfg}))) {
         std::cerr << "Failed to schedule async command CRUD task" << std::endl;
         runtime.stop();
         return 1;

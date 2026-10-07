@@ -36,7 +36,7 @@ struct BatchResult {
     std::int64_t elapsed_us = 0;
 };
 
-Task<void> pressureTask(galay::benchmark::CompletionLatch* completion,
+Task<void> pressure_task(galay::benchmark::CompletionLatch* completion,
                         std::atomic<std::size_t>* completed)
 {
     completed->fetch_add(1, std::memory_order_relaxed);
@@ -45,7 +45,7 @@ Task<void> pressureTask(galay::benchmark::CompletionLatch* completion,
 }
 
 template <typename Submit>
-BatchResult runBatch(Submit&& submit, std::size_t count)
+BatchResult run_batch(Submit&& submit, std::size_t count)
 {
     galay::benchmark::CompletionLatch completion(count);
     std::atomic<std::size_t> completed{0};
@@ -53,7 +53,7 @@ BatchResult runBatch(Submit&& submit, std::size_t count)
 
     const auto started = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < count; ++i) {
-        auto handle = submit(pressureTask(&completion, &completed));
+        auto handle = submit(pressure_task(&completion, &completed));
         if (!handle.has_value()) {
             ++submit_failures;
             completion.arrive();
@@ -73,9 +73,9 @@ BatchResult runBatch(Submit&& submit, std::size_t count)
 }
 
 template <typename Submit>
-bool runMode(std::string_view mode, Submit&& submit)
+bool run_mode(std::string_view mode, Submit&& submit)
 {
-    const auto warmup = runBatch(submit, kWarmupTasks);
+    const auto warmup = run_batch(submit, kWarmupTasks);
     if (!warmup.ok) {
         std::cerr << "runtime_executor_pressure warmup_failed mode=" << mode
                   << " completed=" << warmup.completed
@@ -86,7 +86,7 @@ bool runMode(std::string_view mode, Submit&& submit)
     std::vector<std::int64_t> samples;
     samples.reserve(kSamples);
     for (std::size_t sample = 0; sample < kSamples; ++sample) {
-        const auto result = runBatch(submit, kMeasuredTasks);
+        const auto result = run_batch(submit, kMeasuredTasks);
         if (!result.ok || result.elapsed_us <= 0) {
             std::cerr << "runtime_executor_pressure sample_failed mode=" << mode
                       << " sample=" << sample
@@ -117,11 +117,11 @@ bool runMode(std::string_view mode, Submit&& submit)
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     const auto started = runtime.start();
     if (!started.has_value()) {
         std::cerr << "runtime_executor_pressure runtime_start_failed: "
@@ -129,11 +129,11 @@ int main()
         return 1;
     }
 
-    const bool io_ok = runMode("io", [&runtime](Task<void> task) {
-        return runtime.spawnIO(std::move(task));
+    const bool io_ok = run_mode("io", [&runtime](Task<void> task) {
+        return runtime.spawn_io(std::move(task));
     });
-    const bool cpu_ok = runMode("cpu", [&runtime](Task<void> task) {
-        return runtime.spawnCpu(std::move(task));
+    const bool cpu_ok = run_mode("cpu", [&runtime](Task<void> task) {
+        return runtime.spawn_cpu(std::move(task));
     });
 
     runtime.stop();

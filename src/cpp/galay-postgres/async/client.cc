@@ -21,33 +21,33 @@ AsyncPostgresClientBuilder::config(AsyncPostgresConfig config) noexcept
 }
 
 AsyncPostgresClientBuilder&
-AsyncPostgresClientBuilder::sendTimeout(std::chrono::milliseconds timeout) noexcept
+AsyncPostgresClientBuilder::send_timeout(std::chrono::milliseconds timeout) noexcept
 {
     m_config.send_timeout = timeout;
     return *this;
 }
 
 AsyncPostgresClientBuilder&
-AsyncPostgresClientBuilder::recvTimeout(std::chrono::milliseconds timeout) noexcept
+AsyncPostgresClientBuilder::recv_timeout(std::chrono::milliseconds timeout) noexcept
 {
     m_config.recv_timeout = timeout;
     return *this;
 }
 
-AsyncPostgresClientBuilder& AsyncPostgresClientBuilder::bufferSize(size_t size) noexcept
+AsyncPostgresClientBuilder& AsyncPostgresClientBuilder::buffer_size(size_t size) noexcept
 {
     m_config.buffer_size = size;
     return *this;
 }
 
 AsyncPostgresClientBuilder&
-AsyncPostgresClientBuilder::resultRowReserveHint(size_t hint) noexcept
+AsyncPostgresClientBuilder::result_row_reserve_hint(size_t hint) noexcept
 {
     m_config.result_row_reserve_hint = hint;
     return *this;
 }
 
-AsyncPostgresClientBuilder& AsyncPostgresClientBuilder::tcpNoDelay(bool enabled) noexcept
+AsyncPostgresClientBuilder& AsyncPostgresClientBuilder::tcp_no_delay(bool enabled) noexcept
 {
     m_config.tcp_no_delay = enabled;
     return *this;
@@ -162,7 +162,7 @@ AsyncPostgresClient<Strategy>::pipeline(std::span<const std::string_view> sqls)
     protocol::PostgresCommandBuilder builder;
     builder.reserve(sqls.size(), encoded_bytes);
     for (std::string_view sql : sqls) {
-        builder.appendQuery(sql);
+        builder.append_query(sql);
     }
     return batch(builder.commands());
 }
@@ -205,7 +205,7 @@ AsyncPostgresClient<Strategy>::execute(
 
 template<RingBufferBackendStrategy Strategy>
 typename AsyncPostgresClient<Strategy>::QueryAwaitable
-AsyncPostgresClient<Strategy>::beginTransaction()
+AsyncPostgresClient<Strategy>::begin_transaction()
 {
     return query("BEGIN");
 }
@@ -236,12 +236,12 @@ galay::kernel::Task<PostgresVoidResult> AsyncPostgresClient<Strategy>::close()
     }
 
     std::optional<PostgresError> first_error;
-    const std::string terminate = m_encoder.encodeTerminate();
+    const std::string terminate = m_encoder.encode_terminate();
     size_t sent = 0;
     while (sent < terminate.size()) {
         std::expected<size_t, galay::kernel::IOError> send_result =
             std::unexpected(galay::kernel::IOError(galay::kernel::kNotReady, 0));
-        if (m_config.isSendTimeoutEnabled()) {
+        if (m_config.is_send_timeout_enabled()) {
             send_result = co_await m_socket.send(terminate.data() + sent,
                                                  terminate.size() - sent)
                               .timeout(m_config.send_timeout);
@@ -286,13 +286,13 @@ galay::kernel::Task<PostgresVoidResult> AsyncPostgresClient<Strategy>::close()
 }
 
 template<RingBufferBackendStrategy Strategy>
-void AsyncPostgresClient<Strategy>::setServerParameter(std::string name, std::string value)
+void AsyncPostgresClient<Strategy>::set_server_parameter(std::string name, std::string value)
 {
     m_server_parameters.insert_or_assign(std::move(name), std::move(value));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void AsyncPostgresClient<Strategy>::setBackendKeyData(
+void AsyncPostgresClient<Strategy>::set_backend_key_data(
     protocol::BackendKeyDataInfo data) noexcept
 {
     m_backend_key_data = data;

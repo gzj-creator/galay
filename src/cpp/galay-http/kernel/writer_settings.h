@@ -21,7 +21,7 @@ public:
      * @brief 设置发送超时时间
      * @param timeout_ms 超时时间（毫秒）
      */
-    void setSendTimeout(int timeout_ms) {
+    void set_send_timeout(int timeout_ms) {
         m_send_timeout_ms = timeout_ms;
     }
 
@@ -29,7 +29,7 @@ public:
      * @brief 获取发送超时时间
      * @return 超时时间（毫秒）
      */
-    int getSendTimeout() const {
+    int get_send_timeout() const {
         return m_send_timeout_ms;
     }
 
@@ -37,7 +37,7 @@ public:
      * @brief 设置是否启用缓冲
      * @param enable 是否启用
      */
-    void setBufferingEnabled(bool enable) {
+    void set_buffering_enabled(bool enable) {
         m_buffering_enabled = enable;
     }
 
@@ -45,7 +45,7 @@ public:
      * @brief 获取是否启用缓冲
      * @return 是否启用
      */
-    bool isBufferingEnabled() const {
+    bool is_buffering_enabled() const {
         return m_buffering_enabled;
     }
 
@@ -53,7 +53,7 @@ public:
      * @brief 设置最大响应大小
      * @param max_size 最大响应大小（字节）
      */
-    void setMaxResponseSize(size_t max_size) {
+    void set_max_response_size(size_t max_size) {
         m_max_response_size = max_size;
     }
 
@@ -61,7 +61,7 @@ public:
      * @brief 获取最大响应大小
      * @return 最大响应大小（字节）
      */
-    size_t getMaxResponseSize() const {
+    size_t get_max_response_size() const {
         return m_max_response_size;
     }
 
@@ -70,14 +70,14 @@ public:
      * @details 当 header+body 总长度 <= threshold 时，改为单缓冲 send；
      *          设为 0 表示始终使用 writev。
      */
-    void setWritevCoalesceThreshold(size_t threshold) {
+    void set_writev_coalesce_threshold(size_t threshold) {
         m_writev_coalesce_threshold = threshold;
     }
 
     /**
      * @brief 获取 writev 聚合阈值（字节）
      */
-    size_t getWritevCoalesceThreshold() const {
+    size_t get_writev_coalesce_threshold() const {
         return m_writev_coalesce_threshold;
     }
 

@@ -18,40 +18,40 @@ static std::atomic<uint32_t> g_seen_events{0};
 static std::atomic<bool> g_client_done{false};
 static std::atomic<bool> g_client_ok{false};
 
-Task<void> legacyStreamHandler(Http2Stream::ptr) {
+Task<void> legacy_stream_handler(Http2Stream::ptr) {
     g_stream_handler_calls.fetch_add(1, std::memory_order_relaxed);
     co_return;
 }
 
-Task<void> activeConnHandler(Http2ConnContext& ctx) {
+Task<void> active_conn_handler(Http2ConnContext& ctx) {
     g_active_handler_calls.fetch_add(1, std::memory_order_relaxed);
 
     while (true) {
-        auto streams = co_await ctx.getActiveStreams(16);
+        auto streams = co_await ctx.get_active_streams(16);
         if (!streams) {
             break;
         }
 
         for (auto& stream : *streams) {
             g_active_deliveries.fetch_add(1, std::memory_order_relaxed);
-            auto events = stream->takeEvents();
+            auto events = stream->take_events();
             g_seen_events.fetch_or(static_cast<uint32_t>(events), std::memory_order_relaxed);
 
-            if (!hasHttp2StreamEvent(events, Http2StreamEvent::RequestComplete)) {
+            if (!has_http2_stream_event(events, Http2StreamEvent::RequestComplete)) {
                 continue;
             }
 
-            const size_t body_size = stream->request().bodySize();
-            const size_t body_chunk_count = stream->request().bodyChunkCount();
-            stream->sendHeaders(
-                Http2Headers().status(200).contentType("text/plain").contentLength(body_size),
+            const size_t body_size = stream->request().body_size();
+            const size_t body_chunk_count = stream->request().body_chunk_count();
+            stream->send_headers(
+                Http2Headers().status(200).content_type("text/plain").content_length(body_size),
                 body_size == 0, true);
             if (body_chunk_count == 1) {
-                auto body = stream->request().takeSingleBodyChunk();
-                stream->sendData(std::move(body), true);
+                auto body = stream->request().take_single_body_chunk();
+                stream->send_data(std::move(body), true);
             } else if (body_chunk_count > 1) {
-                auto body_chunks = stream->request().takeBodyChunks();
-                stream->sendDataChunks(std::move(body_chunks), true);
+                auto body_chunks = stream->request().take_body_chunks();
+                stream->send_data_chunks(std::move(body_chunks), true);
             }
         }
     }
@@ -59,7 +59,7 @@ Task<void> activeConnHandler(Http2ConnContext& ctx) {
     co_return;
 }
 
-Task<void> runClient(uint16_t port) {
+Task<void> run_client(uint16_t port) {
     H2cClient<> client(H2cClientBuilder().build());
 
     auto connect_result = co_await client.connect("127.0.0.1", port);
@@ -71,7 +71,7 @@ Task<void> runClient(uint16_t port) {
 
     auto upgrade_result = co_await client.upgrade("/active");
     if (!upgrade_result) {
-        std::cerr << "[T42] client upgrade failed: " << upgrade_result.error().toString() << "\n";
+        std::cerr << "[T42] client upgrade failed: " << upgrade_result.error().to_string() << "\n";
         g_client_done = true;
         co_return;
     }
@@ -83,7 +83,7 @@ Task<void> runClient(uint16_t port) {
         co_return;
     }
 
-    auto response_done = co_await stream->waitResponseComplete();
+    auto response_done = co_await stream->wait_response_complete();
     if (response_done &&
         stream->response().status == 200 &&
         stream->response().body == "ping") {
@@ -107,25 +107,25 @@ int main() {
     H2cServer server(H2cServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
-        .streamHandler(legacyStreamHandler)
-        .activeConnHandler(activeConnHandler)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
+        .stream_handler(legacy_stream_handler)
+        .active_conn_handler(active_conn_handler)
         .build());
 
     server.start();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "[T42] missing IO scheduler\n";
         server.stop();
         return 1;
     }
 
-    scheduleTask(scheduler, runClient(port));
+    schedule_task(scheduler, run_client(port));
 
     for (int i = 0; i < 100; ++i) {
         if (g_client_done.load(std::memory_order_acquire)) {
@@ -160,9 +160,9 @@ int main() {
     }
 
     const auto seen = static_cast<Http2StreamEvent>(g_seen_events.load(std::memory_order_acquire));
-    if (!hasHttp2StreamEvent(seen, Http2StreamEvent::HeadersReady) ||
-        !hasHttp2StreamEvent(seen, Http2StreamEvent::DataArrived) ||
-        !hasHttp2StreamEvent(seen, Http2StreamEvent::RequestComplete)) {
+    if (!has_http2_stream_event(seen, Http2StreamEvent::HeadersReady) ||
+        !has_http2_stream_event(seen, Http2StreamEvent::DataArrived) ||
+        !has_http2_stream_event(seen, Http2StreamEvent::RequestComplete)) {
         std::cerr << "[T42] active handler did not observe expected request events\n";
         return 1;
     }

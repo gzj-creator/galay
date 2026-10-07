@@ -29,7 +29,7 @@ namespace galay::redis
 
     namespace detail
     {
-        RedisError mapIoErrorToRedisError(const IOError& io_error, RedisErrorType fallback)
+        RedisError map_io_error_to_redis_error(const IOError& io_error, RedisErrorType fallback)
         {
             if (IOError::contains(io_error.code(), galay::kernel::kTimeout)) {
                 return RedisError(RedisErrorType::REDIS_ERROR_TYPE_TIMEOUT_ERROR, io_error.message());
@@ -40,7 +40,7 @@ namespace galay::redis
             return RedisError(fallback, io_error.message());
         }
 
-        size_t decimalDigits(size_t value)
+        size_t decimal_digits(size_t value)
         {
             size_t digits = 1;
             while (value >= 10) {
@@ -50,12 +50,12 @@ namespace galay::redis
             return digits;
         }
 
-        size_t estimateRespCommandBytes(std::string_view cmd, std::span<const std::string_view> args)
+        size_t estimate_resp_command_bytes(std::string_view cmd, std::span<const std::string_view> args)
         {
-            size_t total = 1 + decimalDigits(1 + args.size()) + 2;
-            total += 1 + decimalDigits(cmd.size()) + 2 + cmd.size() + 2;
+            size_t total = 1 + decimal_digits(1 + args.size()) + 2;
+            total += 1 + decimal_digits(cmd.size()) + 2 + cmd.size() + 2;
             for (const auto& arg : args) {
-                total += 1 + decimalDigits(arg.size()) + 2 + arg.size() + 2;
+                total += 1 + decimal_digits(arg.size()) + 2 + arg.size() + 2;
             }
             return total;
         }
@@ -73,7 +73,7 @@ namespace galay::redis
             ParseChunkState state = ParseChunkState::NeedMore;
         };
 
-        ParseChunkResult parseRepliesFromChunk(protocol::RespParser& parser,
+        ParseChunkResult parse_replies_from_chunk(protocol::RespParser& parser,
                                                const char* data,
                                                size_t len,
                                                size_t expected_replies,
@@ -83,7 +83,7 @@ namespace galay::redis
             while (values.size() < expected_replies && result.consumed < len) {
                 protocol::RedisReply reply;
                 auto parse_result =
-                    parser.parseFast(data + result.consumed, len - result.consumed, &reply);
+                    parser.parse_fast(data + result.consumed, len - result.consumed, &reply);
                 if (parse_result) {
                     result.consumed += parse_result.value();
                     values.emplace_back(std::move(reply));
@@ -105,7 +105,7 @@ namespace galay::redis
         }
 
         template<RingBufferBackendStrategy Strategy>
-        bool parseRepliesFromRingBuffer(galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
+        bool parse_replies_from_ring_buffer(galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                                         protocol::RespParser& parser,
                                         std::string& parse_buffer,
                                         size_t expected_replies,
@@ -114,7 +114,7 @@ namespace galay::redis
         {
             struct iovec read_iovecs[2];
             while (values.size() < expected_replies) {
-                const size_t read_iovec_count = ring_buffer.getReadIovecs(read_iovecs, 2);
+                const size_t read_iovec_count = ring_buffer.get_read_iovecs(read_iovecs, 2);
                 if (read_iovec_count == 0) {
                     return false;
                 }
@@ -126,7 +126,7 @@ namespace galay::redis
                 }
 
                 const auto first_chunk =
-                    parseRepliesFromChunk(parser, first_data, first_len, expected_replies, values);
+                    parse_replies_from_chunk(parser, first_data, first_len, expected_replies, values);
                 if (first_chunk.consumed > 0) {
                     ring_buffer.consume(first_chunk.consumed);
                 }
@@ -161,7 +161,7 @@ namespace galay::redis
                 parse_buffer.append(first_data + first_tail_offset, first_tail_len);
                 parse_buffer.append(second_data, second_len);
 
-                const auto stitched_chunk = parseRepliesFromChunk(parser,
+                const auto stitched_chunk = parse_replies_from_chunk(parser,
                                                                   parse_buffer.data(),
                                                                   parse_buffer.size(),
                                                                   expected_replies,
@@ -232,21 +232,21 @@ namespace galay::redis
             std::move(command_packet.encoded),
             command_packet.expected_replies,
             false);
-        return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::fromStateMachine(
+        return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::from_state_machine(
                    m_socket.controller(),
                    detail::RedisExchangeMachine<Strategy>(std::move(state)))
             .build();
     }
 
     template<RingBufferBackendStrategy Strategy>
-    RedisExchangeOperationFor<Strategy> RedisClient<Strategy>::commandBorrowed(const RedisBorrowedCommand& packet)
+    RedisExchangeOperationFor<Strategy> RedisClient<Strategy>::command_borrowed(const RedisBorrowedCommand& packet)
     {
         auto state = std::make_shared<detail::RedisExchangeSharedState<Strategy>>(
             *this,
             packet.encoded(),
-            packet.expectedReplies(),
+            packet.expected_replies(),
             false);
-        return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::fromStateMachine(
+        return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::from_state_machine(
                    m_socket.controller(),
                    detail::RedisExchangeMachine<Strategy>(std::move(state)))
             .build();
@@ -260,7 +260,7 @@ namespace galay::redis
             std::string(),
             expected_replies,
             true);
-        return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::fromStateMachine(
+        return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::from_state_machine(
                    m_socket.controller(),
                    detail::RedisExchangeMachine<Strategy>(std::move(state)))
             .build();
@@ -270,14 +270,14 @@ namespace galay::redis
     RedisExchangeOperationFor<Strategy> RedisClient<Strategy>::batch(std::span<const RedisCommandView> commands)
     {
         auto state = std::make_shared<detail::RedisExchangeSharedState<Strategy>>(*this, commands);
-        return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::fromStateMachine(
+        return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::from_state_machine(
                    m_socket.controller(),
                    detail::RedisExchangeMachine<Strategy>(std::move(state)))
             .build();
     }
 
     template<RingBufferBackendStrategy Strategy>
-    RedisExchangeOperationFor<Strategy> RedisClient<Strategy>::batchBorrowed(const std::string& encoded,
+    RedisExchangeOperationFor<Strategy> RedisClient<Strategy>::batch_borrowed(const std::string& encoded,
                                                                             size_t expected_replies)
     {
         auto state = std::make_shared<detail::RedisExchangeSharedState<Strategy>>(
@@ -285,7 +285,7 @@ namespace galay::redis
             std::string_view(encoded),
             expected_replies,
             false);
-        return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::fromStateMachine(
+        return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::from_state_machine(
                    m_socket.controller(),
                    detail::RedisExchangeMachine<Strategy>(std::move(state)))
             .build();
@@ -333,7 +333,7 @@ namespace galay::redis
         using namespace galay::utils;
         std::string ip;
         int version = 2;
-        switch (System::checkAddressType(host)) {
+        switch (System::check_address_type(host)) {
         case System::AddressType::IPv4:
             ip = host;
             version = 2;
@@ -344,10 +344,10 @@ namespace galay::redis
             break;
         case System::AddressType::Domain:
         case System::AddressType::Invalid:
-            ip = System::resolveHostIPv4(host);
+            ip = System::resolve_host_ipv4(host);
             version = 2;
             if (ip.empty()) {
-                ip = System::resolveHostIPv6(host);
+                ip = System::resolve_host_ipv6(host);
                 version = ip.empty() ? 2 : 6;
             }
             break;
@@ -378,15 +378,15 @@ namespace galay::redis
             options.db_index,
             options.version);
         if (m_config.tcp_no_delay) {
-            auto nodelay_result = m_socket.option().handleTcpNoDelay();
+            auto nodelay_result = m_socket.option().handle_tcp_no_delay();
             if (!nodelay_result) {
-                state->result = std::unexpected(detail::mapIoErrorToRedisError(
+                state->result = std::unexpected(detail::map_io_error_to_redis_error(
                     nodelay_result.error(),
                     RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR));
                 state->phase = detail::RedisConnectSharedState<Strategy>::Phase::Invalid;
             }
         }
-        return galay::kernel::AwaitableBuilder<RedisVoidResult>::fromStateMachine(
+        return galay::kernel::AwaitableBuilder<RedisVoidResult>::from_state_machine(
                    m_socket.controller(),
                    detail::RedisConnectMachine<Strategy>(std::move(state)))
             .build();
@@ -412,7 +412,7 @@ namespace galay::redis
 #ifdef GALAY_SSL_FEATURE_ENABLED
     namespace detail
     {
-        RedisError mapIoErrorToRedisErrorLocal(const IOError& io_error, RedisErrorType fallback)
+        RedisError map_io_error_to_redis_error_local(const IOError& io_error, RedisErrorType fallback)
         {
             if (IOError::contains(io_error.code(), galay::kernel::kTimeout)) {
                 return RedisError(RedisErrorType::REDIS_ERROR_TYPE_TIMEOUT_ERROR, io_error.message());
@@ -424,7 +424,7 @@ namespace galay::redis
         }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-        static size_t redissDecimalDigits(size_t value)
+        static size_t rediss_decimal_digits(size_t value)
         {
             size_t digits = 1;
             while (value >= 10) {
@@ -434,12 +434,12 @@ namespace galay::redis
             return digits;
         }
 
-        static size_t redissEstimateRespCommandBytes(std::string_view cmd, std::span<const std::string_view> args)
+        static size_t rediss_estimate_resp_command_bytes(std::string_view cmd, std::span<const std::string_view> args)
         {
-            size_t total = 1 + redissDecimalDigits(1 + args.size()) + 2;
-            total += 1 + redissDecimalDigits(cmd.size()) + 2 + cmd.size() + 2;
+            size_t total = 1 + rediss_decimal_digits(1 + args.size()) + 2;
+            total += 1 + rediss_decimal_digits(cmd.size()) + 2 + cmd.size() + 2;
             for (const auto& arg : args) {
-                total += 1 + redissDecimalDigits(arg.size()) + 2 + arg.size() + 2;
+                total += 1 + rediss_decimal_digits(arg.size()) + 2 + arg.size() + 2;
             }
             return total;
         }
@@ -457,7 +457,7 @@ namespace galay::redis
             RedissParseChunkState state = RedissParseChunkState::NeedMore;
         };
 
-        static RedissParseChunkResult redissParseRepliesFromChunk(protocol::RespParser& parser,
+        static RedissParseChunkResult rediss_parse_replies_from_chunk(protocol::RespParser& parser,
                                                       const char* data,
                                                       size_t len,
                                                       size_t expected_replies,
@@ -467,7 +467,7 @@ namespace galay::redis
             while (values.size() < expected_replies && result.consumed < len) {
                 protocol::RedisReply reply;
                 auto parse_result =
-                    parser.parseFast(data + result.consumed, len - result.consumed, &reply);
+                    parser.parse_fast(data + result.consumed, len - result.consumed, &reply);
                 if (parse_result) {
                     result.consumed += parse_result.value();
                     values.emplace_back(std::move(reply));
@@ -488,7 +488,7 @@ namespace galay::redis
             return result;
         }
 
-        static bool redissParseRepliesFromRingBuffer(galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer,
+        static bool rediss_parse_replies_from_ring_buffer(galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer,
                                                protocol::RespParser& parser,
                                                std::string& parse_buffer,
                                                size_t expected_replies,
@@ -497,7 +497,7 @@ namespace galay::redis
         {
             struct iovec read_iovecs[2];
             while (values.size() < expected_replies) {
-                const size_t read_iovec_count = ring_buffer.getReadIovecs(read_iovecs, 2);
+                const size_t read_iovec_count = ring_buffer.get_read_iovecs(read_iovecs, 2);
                 if (read_iovec_count == 0) {
                     return false;
                 }
@@ -509,7 +509,7 @@ namespace galay::redis
                 }
 
                 const auto first_chunk =
-                    redissParseRepliesFromChunk(parser, first_data, first_len, expected_replies, values);
+                    rediss_parse_replies_from_chunk(parser, first_data, first_len, expected_replies, values);
                 if (first_chunk.consumed > 0) {
                     ring_buffer.consume(first_chunk.consumed);
                 }
@@ -543,7 +543,7 @@ namespace galay::redis
                 std::memcpy(parse_buffer.data(), first_data + first_tail_offset, first_tail_len);
                 std::memcpy(parse_buffer.data() + first_tail_len, second_data, second_len);
 
-                const auto stitched_chunk = redissParseRepliesFromChunk(parser,
+                const auto stitched_chunk = rediss_parse_replies_from_chunk(parser,
                                                                   parse_buffer.data(),
                                                                   parse_buffer.size(),
                                                                   expected_replies,
@@ -566,7 +566,7 @@ namespace galay::redis
             return true;
         }
 
-        std::string encodePipelineBuffer(std::span<const RedisCommandView> commands)
+        std::string encode_pipeline_buffer(std::span<const RedisCommandView> commands)
         {
             protocol::RespEncoder encoder;
             std::string encoded;
@@ -574,7 +574,7 @@ namespace galay::redis
             for (const auto& cmd_view : commands) {
                 encoded_bytes += !cmd_view.encoded.empty()
                                      ? cmd_view.encoded.size()
-                                     : redissEstimateRespCommandBytes(cmd_view.command, cmd_view.args);
+                                     : rediss_estimate_resp_command_bytes(cmd_view.command, cmd_view.args);
             }
             encoded.reserve(encoded_bytes);
 
@@ -582,7 +582,7 @@ namespace galay::redis
                 if (!cmd_view.encoded.empty()) {
                     encoded.append(cmd_view.encoded.data(), cmd_view.encoded.size());
                 } else {
-                    encoder.appendCommandFast(encoded, cmd_view.command, cmd_view.args);
+                    encoder.append_command_fast(encoded, cmd_view.command, cmd_view.args);
                 }
             }
             return encoded;
@@ -597,25 +597,25 @@ namespace galay::redis
             RedisConnectOptions options;
         };
 
-        bool resolveRedisHost(std::string_view host, std::string* resolved_host, int* version)
+        bool resolve_redis_host(std::string_view host, std::string* resolved_host, int* version)
         {
             if (!resolved_host || !version) {
                 return false;
             }
 
             using galay::utils::System;
-            *resolved_host = System::resolveHostIPv4(std::string(host));
+            *resolved_host = System::resolve_host_ipv4(std::string(host));
             *version = 2;
             if (!resolved_host->empty()) {
                 return true;
             }
 
-            *resolved_host = System::resolveHostIPv6(std::string(host));
+            *resolved_host = System::resolve_host_ipv6(std::string(host));
             *version = resolved_host->empty() ? 2 : 6;
             return !resolved_host->empty();
         }
 
-        std::expected<ParsedRedisEndpoint, RedisError> parseRedisUrl(const std::string& url,
+        std::expected<ParsedRedisEndpoint, RedisError> parse_redis_url(const std::string& url,
                                                                      std::string_view expected_scheme,
                                                                      int32_t default_port)
         {
@@ -677,7 +677,7 @@ namespace galay::redis
             }
 
             using galay::utils::System;
-            switch (System::checkAddressType(parsed.original_host)) {
+            switch (System::check_address_type(parsed.original_host)) {
             case System::AddressType::IPv4:
                 parsed.resolved_host = parsed.original_host;
                 parsed.version = 2;
@@ -688,7 +688,7 @@ namespace galay::redis
                 break;
             case System::AddressType::Domain:
             case System::AddressType::Invalid:
-                if (!resolveRedisHost(parsed.original_host, &parsed.resolved_host, &parsed.version)) {
+                if (!resolve_redis_host(parsed.original_host, &parsed.resolved_host, &parsed.version)) {
                     return std::unexpected(RedisError(
                         RedisErrorType::REDIS_ERROR_TYPE_HOST_INVALID_ERROR,
                         "Failed to resolve redis host"));
@@ -700,13 +700,13 @@ namespace galay::redis
             return parsed;
         }
 
-        bool prepareReadWindow(galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer,
+        bool prepare_read_window(galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer,
                                std::array<struct iovec, 2>& read_iovecs,
                                size_t& read_iov_count,
                                char*& read_buffer,
                                size_t& read_length)
         {
-            read_iov_count = ring_buffer.getWriteIovecs(read_iovecs.data(), read_iovecs.size());
+            read_iov_count = ring_buffer.get_write_iovecs(read_iovecs.data(), read_iovecs.size());
             if (read_iov_count == 0) {
                 return false;
             }
@@ -733,7 +733,7 @@ namespace galay::redis
                 , ready_socket(IPType::IPV4)
                 , ssl_context(galay::ssl::SslMethod::TLS_Client)
             {
-                if (!ssl_context.isValid()) {
+                if (!ssl_context.is_valid()) {
                     boot_error = RedisError(
                         RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR,
                         ssl_context.error().message());
@@ -741,13 +741,13 @@ namespace galay::redis
                 }
 
                 if (!tls_config.ca_path.empty()) {
-                    const auto load_ca = ssl_context.loadCACertificate(tls_config.ca_path);
+                    const auto load_ca = ssl_context.load_ca_certificate(tls_config.ca_path);
                     if (!load_ca) {
                         boot_error = RedisError(load_ca.error());
                         return;
                     }
                 } else if (tls_config.verify_peer) {
-                    const auto load_default_ca = ssl_context.useDefaultCA();
+                    const auto load_default_ca = ssl_context.use_default_ca();
                     if (!load_default_ca) {
                         boot_error = RedisError(load_default_ca.error());
                         return;
@@ -755,20 +755,20 @@ namespace galay::redis
                 }
 
                 if (tls_config.verify_peer) {
-                    ssl_context.setVerifyMode(galay::ssl::SslVerifyMode::Peer);
-                    ssl_context.setVerifyDepth(tls_config.verify_depth);
+                    ssl_context.set_verify_mode(galay::ssl::SslVerifyMode::Peer);
+                    ssl_context.set_verify_depth(tls_config.verify_depth);
                 } else {
-                    ssl_context.setVerifyMode(galay::ssl::SslVerifyMode::None);
+                    ssl_context.set_verify_mode(galay::ssl::SslVerifyMode::None);
                 }
             }
 
-            void resetProtocolState()
+            void reset_protocol_state()
             {
                 parser = protocol::RespParser();
                 ring_buffer->clear();
             }
 
-            std::expected<void, RedisError> resetSocket(int version, std::string_view server_name)
+            std::expected<void, RedisError> reset_socket(int version, std::string_view server_name)
             {
                 const auto ip_type = version == 6 ? IPType::IPV6 : IPType::IPV4;
                 try {
@@ -780,23 +780,23 @@ namespace galay::redis
                         e.what()));
                 }
 
-                const auto non_block = socket->option().handleNonBlock();
+                const auto non_block = socket->option().handle_non_block();
                 if (!non_block) {
-                    return std::unexpected(mapIoErrorToRedisErrorLocal(
+                    return std::unexpected(map_io_error_to_redis_error_local(
                         non_block.error(),
                         RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR));
                 }
                 if (config.tcp_no_delay) {
-                    const auto nodelay = socket->option().handleTcpNoDelay();
+                    const auto nodelay = socket->option().handle_tcp_no_delay();
                     if (!nodelay) {
-                        return std::unexpected(mapIoErrorToRedisErrorLocal(
+                        return std::unexpected(map_io_error_to_redis_error_local(
                             nodelay.error(),
                             RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR));
                     }
                 }
 
                 if (!server_name.empty()) {
-                    const auto sni_result = socket->setHostname(std::string(server_name));
+                    const auto sni_result = socket->set_hostname(std::string(server_name));
                     if (!sni_result) {
                         REDIS_LOG_WARN("[client]", "Failed to set TLS SNI to {}: {}",
                                      server_name,
@@ -804,20 +804,20 @@ namespace galay::redis
                     }
                 }
 
-                resetProtocolState();
+                reset_protocol_state();
                 is_closed = true;
                 return {};
             }
 
-            galay::ssl::SslSocket& socketRef()
+            galay::ssl::SslSocket& socket_ref()
             {
                 return *socket;
             }
 
-            galay::kernel::IOController* readyController()
+            galay::kernel::IOController* ready_controller()
             {
                 if (socket.has_value()) {
-                    return socketRef().controller();
+                    return socket_ref().controller();
                 }
                 return ready_socket.controller();
             }
@@ -850,7 +850,7 @@ namespace galay::redis
                     "galay-redis was built without SSL support");
             }
 
-            void resetProtocolState()
+            void reset_protocol_state()
             {
                 ring_buffer->clear();
             }
@@ -900,30 +900,30 @@ namespace galay::redis
         {
         }
 
-        void RedissExchangeMachine::setError(RedisError error) noexcept
+        void RedissExchangeMachine::set_error(RedisError error) noexcept
         {
             m_state->result = std::unexpected(std::move(error));
             m_state->phase = RedissExchangeSharedState::Phase::Invalid;
         }
 
-        void RedissExchangeMachine::setSendError(const galay::ssl::SslError& ssl_error) noexcept
+        void RedissExchangeMachine::set_send_error(const galay::ssl::SslError& ssl_error) noexcept
         {
-            setError(RedisError(ssl_error));
+            set_error(RedisError(ssl_error));
         }
 
-        void RedissExchangeMachine::setRecvError(const galay::ssl::SslError& ssl_error) noexcept
+        void RedissExchangeMachine::set_recv_error(const galay::ssl::SslError& ssl_error) noexcept
         {
-            setError(RedisError(ssl_error));
+            set_error(RedisError(ssl_error));
         }
 
-        bool RedissExchangeMachine::prepareReadWindow()
+        bool RedissExchangeMachine::prepare_read_window()
         {
-            if (!::galay::redis::detail::prepareReadWindow(*m_state->impl->ring_buffer,
+            if (!::galay::redis::detail::prepare_read_window(*m_state->impl->ring_buffer,
                                                            m_state->read_iovecs,
                                                            m_state->read_iov_count,
                                                            m_state->read_buffer,
                                                            m_state->read_length)) {
-                setError(RedisError(
+                set_error(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_BUFFER_OVERFLOW_ERROR,
                     "Ring buffer exhausted before parsing complete response"));
                 return false;
@@ -931,10 +931,10 @@ namespace galay::redis
             return true;
         }
 
-        std::expected<bool, RedisError> RedissExchangeMachine::tryParseReplies()
+        std::expected<bool, RedisError> RedissExchangeMachine::try_parse_replies()
         {
             bool parse_error = false;
-            const bool done = redissParseRepliesFromRingBuffer(*m_state->impl->ring_buffer,
+            const bool done = rediss_parse_replies_from_ring_buffer(*m_state->impl->ring_buffer,
                                                          m_state->impl->parser,
                                                          m_state->parse_buffer,
                                                         m_state->expected_replies,
@@ -963,7 +963,7 @@ namespace galay::redis
 
             switch (m_state->phase) {
             case RedissExchangeSharedState::Phase::Invalid:
-                setError(RedisError(
+                set_error(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                     "Rediss exchange machine in invalid state"));
                 return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_state->result));
@@ -986,9 +986,9 @@ namespace galay::redis
                     m_state->encoded_cmd.data() + m_state->sent,
                     m_state->encoded_cmd.size() - m_state->sent);
             case RedissExchangeSharedState::Phase::Parse: {
-                auto parsed = tryParseReplies();
+                auto parsed = try_parse_replies();
                 if (!parsed.has_value()) {
-                    setError(std::move(parsed.error()));
+                    set_error(std::move(parsed.error()));
                     return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_state->result));
                 }
                 if (parsed.value()) {
@@ -996,7 +996,7 @@ namespace galay::redis
                     m_state->phase = RedissExchangeSharedState::Phase::Done;
                     return galay::ssl::SslMachineAction<result_type>::continue_();
                 }
-                if (!prepareReadWindow()) {
+                if (!prepare_read_window()) {
                     return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_state->result));
                 }
                 return galay::ssl::SslMachineAction<result_type>::recv(
@@ -1007,27 +1007,27 @@ namespace galay::redis
                 return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_state->result));
             }
 
-            setError(RedisError(
+            set_error(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                 "Unknown rediss exchange state"));
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_state->result));
         }
 
-        void RedissExchangeMachine::onHandshake(std::expected<void, galay::ssl::SslError>)
+        void RedissExchangeMachine::on_handshake(std::expected<void, galay::ssl::SslError>)
         {
         }
 
-        void RedissExchangeMachine::onRecv(std::expected<galay::utils::Bytes, galay::ssl::SslError> result)
+        void RedissExchangeMachine::on_recv(std::expected<galay::utils::Bytes, galay::ssl::SslError> result)
         {
             if (!m_state || m_state->result.has_value()) {
                 return;
             }
             if (!result) {
-                setRecvError(result.error());
+                set_recv_error(result.error());
                 return;
             }
             if (result->empty()) {
-                setError(RedisError(
+                set_error(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_CLOSED,
                     "TLS redis connection closed"));
                 return;
@@ -1037,17 +1037,17 @@ namespace galay::redis
             m_state->phase = RedissExchangeSharedState::Phase::Parse;
         }
 
-        void RedissExchangeMachine::onSend(std::expected<size_t, galay::ssl::SslError> result)
+        void RedissExchangeMachine::on_send(std::expected<size_t, galay::ssl::SslError> result)
         {
             if (!m_state || m_state->result.has_value()) {
                 return;
             }
             if (!result) {
-                setSendError(result.error());
+                set_send_error(result.error());
                 return;
             }
             if (result.value() == 0) {
-                setError(RedisError(
+                set_error(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_SEND_ERROR,
                     "Send returned 0"));
                 return;
@@ -1059,7 +1059,7 @@ namespace galay::redis
             }
         }
 
-        void RedissExchangeMachine::onShutdown(std::expected<void, galay::ssl::SslError>)
+        void RedissExchangeMachine::on_shutdown(std::expected<void, galay::ssl::SslError>)
         {
         }
 
@@ -1082,50 +1082,50 @@ namespace galay::redis
                 return;
             }
 
-            impl->resetProtocolState();
+            impl->reset_protocol_state();
             impl->is_closed = true;
         }
 
         RedissConnectMachine::RedissConnectMachine(std::shared_ptr<RedissConnectSharedState> state)
             : m_state(std::move(state))
             , m_driver((m_state && m_state->impl && m_state->impl->socket.has_value())
-                           ? &m_state->impl->socketRef()
+                           ? &m_state->impl->socket_ref()
                            : nullptr)
         {
         }
 
-        void RedissConnectMachine::setError(RedisError error) noexcept
+        void RedissConnectMachine::set_error(RedisError error) noexcept
         {
             m_state->result = std::unexpected(std::move(error));
             m_state->phase = RedissConnectSharedState::Phase::Invalid;
             m_ssl_active = false;
         }
 
-        void RedissConnectMachine::setConnectError(const IOError& io_error) noexcept
+        void RedissConnectMachine::set_connect_error(const IOError& io_error) noexcept
         {
-            setError(mapIoErrorToRedisErrorLocal(
+            set_error(map_io_error_to_redis_error_local(
                 io_error,
                 RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR));
         }
 
-        void RedissConnectMachine::setSendError(const galay::ssl::SslError& ssl_error) noexcept
+        void RedissConnectMachine::set_send_error(const galay::ssl::SslError& ssl_error) noexcept
         {
-            setError(RedisError(ssl_error));
+            set_error(RedisError(ssl_error));
         }
 
-        void RedissConnectMachine::setRecvError(const galay::ssl::SslError& ssl_error) noexcept
+        void RedissConnectMachine::set_recv_error(const galay::ssl::SslError& ssl_error) noexcept
         {
-            setError(RedisError(ssl_error));
+            set_error(RedisError(ssl_error));
         }
 
-        bool RedissConnectMachine::prepareReadWindow()
+        bool RedissConnectMachine::prepare_read_window()
         {
-            if (!::galay::redis::detail::prepareReadWindow(*m_state->impl->ring_buffer,
+            if (!::galay::redis::detail::prepare_read_window(*m_state->impl->ring_buffer,
                                                            m_state->read_iovecs,
                                                            m_state->read_iov_count,
                                                            m_state->read_buffer,
                                                            m_state->read_length)) {
-                setError(RedisError(
+                set_error(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_BUFFER_OVERFLOW_ERROR,
                     "No writable TLS read window for response"));
                 return false;
@@ -1133,7 +1133,7 @@ namespace galay::redis
             return true;
         }
 
-        bool RedissConnectMachine::prepareNextCommand()
+        bool RedissConnectMachine::prepare_next_command()
         {
             RedisCommandBuilder builder;
             if (!m_state->auth_sent &&
@@ -1160,10 +1160,10 @@ namespace galay::redis
             return false;
         }
 
-        std::expected<bool, RedisError> RedissConnectMachine::tryParseReply()
+        std::expected<bool, RedisError> RedissConnectMachine::try_parse_reply()
         {
             bool parse_error = false;
-            const bool done = redissParseRepliesFromRingBuffer(*m_state->impl->ring_buffer,
+            const bool done = rediss_parse_replies_from_ring_buffer(*m_state->impl->ring_buffer,
                                                          m_state->impl->parser,
                                                          m_state->parse_buffer,
                                                         1,
@@ -1186,15 +1186,15 @@ namespace galay::redis
 
             RedisValue reply = std::move(m_state->values.front());
             m_state->values.clear();
-            if (reply.isError()) {
+            if (reply.is_error()) {
                 const auto error_type =
                     m_state->pending_command == RedissConnectSharedState::PendingCommand::Auth
                         ? RedisErrorType::REDIS_ERROR_TYPE_AUTH_ERROR
                         : RedisErrorType::REDIS_ERROR_TYPE_INVALID_ERROR;
-                return std::unexpected(RedisError(error_type, reply.toError()));
+                return std::unexpected(RedisError(error_type, reply.to_error()));
             }
 
-            if (prepareNextCommand()) {
+            if (prepare_next_command()) {
                 m_state->phase = RedissConnectSharedState::Phase::Send;
             } else {
                 m_state->phase = RedissConnectSharedState::Phase::Done;
@@ -1205,18 +1205,18 @@ namespace galay::redis
         }
 
         galay::kernel::MachineAction<RedissConnectMachine::result_type>
-        RedissConnectMachine::advanceSsl()
+        RedissConnectMachine::advance_ssl()
         {
             auto wait = m_driver.poll();
             if (m_driver.completed()) {
                 if (m_state->phase == RedissConnectSharedState::Phase::Handshake) {
-                    handleHandshakeResult(m_driver.takeHandshakeResult());
+                    handle_handshake_result(m_driver.take_handshake_result());
                 } else if (m_state->phase == RedissConnectSharedState::Phase::Send) {
-                    handleSendResult(m_driver.takeSendResult());
+                    handle_send_result(m_driver.take_send_result());
                 } else if (m_state->phase == RedissConnectSharedState::Phase::Parse) {
-                    handleRecvResult(m_driver.takeRecvResult());
+                    handle_recv_result(m_driver.take_recv_result());
                 } else {
-                    setError(RedisError(
+                    set_error(RedisError(
                         RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                         "Unexpected TLS connect driver phase"));
                 }
@@ -1224,31 +1224,31 @@ namespace galay::redis
             }
 
             if (wait.kind == galay::ssl::SslOperationDriver::WaitKind::kRead) {
-                return galay::kernel::MachineAction<result_type>::waitRead(
-                    m_driver.recvContext().m_buffer,
-                    m_driver.recvContext().m_length);
+                return galay::kernel::MachineAction<result_type>::wait_read(
+                    m_driver.recv_context().m_buffer,
+                    m_driver.recv_context().m_length);
             }
             if (wait.kind == galay::ssl::SslOperationDriver::WaitKind::kWrite) {
-                return galay::kernel::MachineAction<result_type>::waitWrite(
-                    m_driver.sendContext().m_buffer,
-                    m_driver.sendContext().m_length);
+                return galay::kernel::MachineAction<result_type>::wait_write(
+                    m_driver.send_context().m_buffer,
+                    m_driver.send_context().m_length);
             }
 
-            setError(RedisError(
+            set_error(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                 "TLS connect driver returned no wait action"));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
 
-        void RedissConnectMachine::handleHandshakeResult(std::expected<void, galay::ssl::SslError> result)
+        void RedissConnectMachine::handle_handshake_result(std::expected<void, galay::ssl::SslError> result)
         {
             m_ssl_active = false;
             if (!result) {
-                setError(RedisError(result.error()));
+                set_error(RedisError(result.error()));
                 return;
             }
 
-            if (prepareNextCommand()) {
+            if (prepare_next_command()) {
                 m_state->phase = RedissConnectSharedState::Phase::Send;
             } else {
                 m_state->phase = RedissConnectSharedState::Phase::Done;
@@ -1257,15 +1257,15 @@ namespace galay::redis
             }
         }
 
-        void RedissConnectMachine::handleSendResult(std::expected<size_t, galay::ssl::SslError> result)
+        void RedissConnectMachine::handle_send_result(std::expected<size_t, galay::ssl::SslError> result)
         {
             m_ssl_active = false;
             if (!result) {
-                setSendError(result.error());
+                set_send_error(result.error());
                 return;
             }
             if (result.value() == 0) {
-                setError(RedisError(
+                set_error(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_SEND_ERROR,
                     "Send returned 0"));
                 return;
@@ -1277,15 +1277,15 @@ namespace galay::redis
             }
         }
 
-        void RedissConnectMachine::handleRecvResult(std::expected<galay::utils::Bytes, galay::ssl::SslError> result)
+        void RedissConnectMachine::handle_recv_result(std::expected<galay::utils::Bytes, galay::ssl::SslError> result)
         {
             m_ssl_active = false;
             if (!result) {
-                setRecvError(result.error());
+                set_recv_error(result.error());
                 return;
             }
             if (result->empty()) {
-                setError(RedisError(
+                set_error(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_CLOSED,
                     "TLS redis connection closed"));
                 return;
@@ -1310,18 +1310,18 @@ namespace galay::redis
 
             switch (m_state->phase) {
             case RedissConnectSharedState::Phase::Invalid:
-                setError(RedisError(
+                set_error(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                     "Rediss connect machine in invalid state"));
                 return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
             case RedissConnectSharedState::Phase::Connect:
-                return galay::kernel::MachineAction<result_type>::waitConnect(m_state->host);
+                return galay::kernel::MachineAction<result_type>::wait_connect(m_state->host);
             case RedissConnectSharedState::Phase::Handshake:
                 if (!m_ssl_active) {
-                    m_driver.startHandshake();
+                    m_driver.start_handshake();
                     m_ssl_active = true;
                 }
-                return advanceSsl();
+                return advance_ssl();
             case RedissConnectSharedState::Phase::Send:
                 if (m_state->sent >= m_state->encoded_cmd.size()) {
                     m_state->phase = RedissConnectSharedState::Phase::Parse;
@@ -1329,28 +1329,28 @@ namespace galay::redis
                     return galay::kernel::MachineAction<result_type>::continue_();
                 }
                 if (!m_ssl_active) {
-                    m_driver.startSend(m_state->encoded_cmd.data() + m_state->sent,
+                    m_driver.start_send(m_state->encoded_cmd.data() + m_state->sent,
                                        m_state->encoded_cmd.size() - m_state->sent);
                     m_ssl_active = true;
                 }
-                return advanceSsl();
+                return advance_ssl();
             case RedissConnectSharedState::Phase::Parse: {
-                auto parsed = tryParseReply();
+                auto parsed = try_parse_reply();
                 if (!parsed.has_value()) {
-                    setError(std::move(parsed.error()));
+                    set_error(std::move(parsed.error()));
                     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
                 }
                 if (parsed.value()) {
                     return galay::kernel::MachineAction<result_type>::continue_();
                 }
-                if (!prepareReadWindow()) {
+                if (!prepare_read_window()) {
                     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
                 }
                 if (!m_ssl_active) {
-                    m_driver.startRecv(m_state->read_buffer, m_state->read_length);
+                    m_driver.start_recv(m_state->read_buffer, m_state->read_length);
                     m_ssl_active = true;
                 }
-                return advanceSsl();
+                return advance_ssl();
             }
             case RedissConnectSharedState::Phase::Done:
                 if (!m_state->result.has_value()) {
@@ -1359,62 +1359,62 @@ namespace galay::redis
                 return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
             }
 
-            setError(RedisError(
+            set_error(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                 "Unknown rediss connect state"));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
 
-        void RedissConnectMachine::onConnect(std::expected<void, IOError> result)
+        void RedissConnectMachine::on_connect(std::expected<void, IOError> result)
         {
             if (m_state->result.has_value()) {
                 return;
             }
             if (!result.has_value()) {
-                setConnectError(result.error());
+                set_connect_error(result.error());
                 return;
             }
 
             m_state->phase = RedissConnectSharedState::Phase::Handshake;
         }
 
-        void RedissConnectMachine::onRead(std::expected<size_t, IOError> result)
+        void RedissConnectMachine::on_read(std::expected<size_t, IOError> result)
         {
             if (m_state->result.has_value()) {
                 return;
             }
-            m_driver.onRead(std::move(result));
+            m_driver.on_read(std::move(result));
         }
 
-        void RedissConnectMachine::onWrite(std::expected<size_t, IOError> result)
+        void RedissConnectMachine::on_write(std::expected<size_t, IOError> result)
         {
             if (m_state->result.has_value()) {
                 return;
             }
-            m_driver.onWrite(std::move(result));
+            m_driver.on_write(std::move(result));
         }
 
-        RedissExchangeOperation makeReadyExchangeOperation(galay::kernel::IOController* controller,
+        RedissExchangeOperation make_ready_exchange_operation(galay::kernel::IOController* controller,
                                                            galay::ssl::SslSocket* socket,
                                                            RedissCommandResult result)
         {
             auto state = std::make_shared<RedissExchangeSharedState>(nullptr, std::string(), 0, false);
             state->result = std::move(result);
             state->phase = RedissExchangeSharedState::Phase::Done;
-            return galay::ssl::SslAwaitableBuilder<RedissCommandResult>::fromStateMachine(
+            return galay::ssl::SslAwaitableBuilder<RedissCommandResult>::from_state_machine(
                        controller,
                        socket,
                        RedissExchangeMachine(std::move(state)))
                 .build();
         }
 
-        RedissConnectOperation makeReadyConnectOperation(galay::kernel::IOController* controller,
+        RedissConnectOperation make_ready_connect_operation(galay::kernel::IOController* controller,
                                                          RedisVoidResult result)
         {
             auto state = std::make_shared<RedissConnectSharedState>(nullptr, std::string(), 0, RedisConnectOptions{});
             state->result = std::move(result);
             state->phase = RedissConnectSharedState::Phase::Done;
-            return galay::kernel::AwaitableBuilder<RedisVoidResult>::fromStateMachine(
+            return galay::kernel::AwaitableBuilder<RedisVoidResult>::from_state_machine(
                        controller,
                        RedissConnectMachine(std::move(state)))
                 .build();
@@ -1440,32 +1440,32 @@ namespace galay::redis
     {
 #ifdef GALAY_SSL_FEATURE_ENABLED
         if (!m_impl) {
-            return detail::makeReadyConnectOperation(
+            return detail::make_ready_connect_operation(
                 nullptr,
                 std::unexpected(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                     "Rediss client impl is null")));
         }
         if (m_impl->boot_error.has_value()) {
-            return detail::makeReadyConnectOperation(
-                m_impl->readyController(),
+            return detail::make_ready_connect_operation(
+                m_impl->ready_controller(),
                 std::unexpected(*m_impl->boot_error));
         }
 
-        auto parsed = detail::parseRedisUrl(url, "rediss", 6380);
+        auto parsed = detail::parse_redis_url(url, "rediss", 6380);
         if (!parsed.has_value()) {
-            return detail::makeReadyConnectOperation(
-                m_impl->readyController(),
+            return detail::make_ready_connect_operation(
+                m_impl->ready_controller(),
                 std::unexpected(parsed.error()));
         }
 
         const std::string server_name = !m_impl->tls_config.server_name.empty()
             ? m_impl->tls_config.server_name
             : parsed->original_host;
-        const auto reset_socket = m_impl->resetSocket(parsed->version, server_name);
+        const auto reset_socket = m_impl->reset_socket(parsed->version, server_name);
         if (!reset_socket) {
-            return detail::makeReadyConnectOperation(
-                m_impl->readyController(),
+            return detail::make_ready_connect_operation(
+                m_impl->ready_controller(),
                 std::unexpected(reset_socket.error()));
         }
 
@@ -1474,8 +1474,8 @@ namespace galay::redis
             parsed->resolved_host,
             parsed->port,
             parsed->options);
-        return galay::kernel::AwaitableBuilder<RedisVoidResult>::fromStateMachine(
-                   m_impl->socketRef().controller(),
+        return galay::kernel::AwaitableBuilder<RedisVoidResult>::from_state_machine(
+                   m_impl->socket_ref().controller(),
                    detail::RedissConnectMachine(std::move(state)))
             .build();
 #else
@@ -1493,22 +1493,22 @@ namespace galay::redis
     {
 #ifdef GALAY_SSL_FEATURE_ENABLED
         if (!m_impl) {
-            return detail::makeReadyConnectOperation(
+            return detail::make_ready_connect_operation(
                 nullptr,
                 std::unexpected(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                     "Rediss client impl is null")));
         }
         if (m_impl->boot_error.has_value()) {
-            return detail::makeReadyConnectOperation(
-                m_impl->readyController(),
+            return detail::make_ready_connect_operation(
+                m_impl->ready_controller(),
                 std::unexpected(*m_impl->boot_error));
         }
 
-        const auto reset_socket = m_impl->resetSocket(options.version, m_impl->tls_config.server_name);
+        const auto reset_socket = m_impl->reset_socket(options.version, m_impl->tls_config.server_name);
         if (!reset_socket) {
-            return detail::makeReadyConnectOperation(
-                m_impl->readyController(),
+            return detail::make_ready_connect_operation(
+                m_impl->ready_controller(),
                 std::unexpected(reset_socket.error()));
         }
 
@@ -1517,8 +1517,8 @@ namespace galay::redis
             ip,
             port,
             std::move(options));
-        return galay::kernel::AwaitableBuilder<RedisVoidResult>::fromStateMachine(
-                   m_impl->socketRef().controller(),
+        return galay::kernel::AwaitableBuilder<RedisVoidResult>::from_state_machine(
+                   m_impl->socket_ref().controller(),
                    detail::RedissConnectMachine(std::move(state)))
             .build();
 #else
@@ -1536,7 +1536,7 @@ namespace galay::redis
     {
 #ifdef GALAY_SSL_FEATURE_ENABLED
         if (!m_impl) {
-            return detail::makeReadyExchangeOperation(
+            return detail::make_ready_exchange_operation(
                 nullptr,
                 nullptr,
                 std::unexpected(RedisError(
@@ -1544,15 +1544,15 @@ namespace galay::redis
                     "Rediss client impl is null")));
         }
         if (m_impl->boot_error.has_value()) {
-            return detail::makeReadyExchangeOperation(
-                m_impl->readyController(),
-                m_impl->socket.has_value() ? &m_impl->socketRef() : nullptr,
+            return detail::make_ready_exchange_operation(
+                m_impl->ready_controller(),
+                m_impl->socket.has_value() ? &m_impl->socket_ref() : nullptr,
                 std::unexpected(*m_impl->boot_error));
         }
         if (m_impl->is_closed) {
-            return detail::makeReadyExchangeOperation(
-                m_impl->readyController(),
-                m_impl->socket.has_value() ? &m_impl->socketRef() : nullptr,
+            return detail::make_ready_exchange_operation(
+                m_impl->ready_controller(),
+                m_impl->socket.has_value() ? &m_impl->socket_ref() : nullptr,
                 std::unexpected(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_CLOSED,
                     "Rediss client is not connected")));
@@ -1563,9 +1563,9 @@ namespace galay::redis
             std::move(command_packet.encoded),
             command_packet.expected_replies,
             false);
-        return galay::ssl::SslAwaitableBuilder<detail::RedissCommandResult>::fromStateMachine(
-                   m_impl->socketRef().controller(),
-                   &m_impl->socketRef(),
+        return galay::ssl::SslAwaitableBuilder<detail::RedissCommandResult>::from_state_machine(
+                   m_impl->socket_ref().controller(),
+                   &m_impl->socket_ref(),
                    detail::RedissExchangeMachine(std::move(state)))
             .build();
 #else
@@ -1581,7 +1581,7 @@ namespace galay::redis
     {
 #ifdef GALAY_SSL_FEATURE_ENABLED
         if (!m_impl) {
-            return detail::makeReadyExchangeOperation(
+            return detail::make_ready_exchange_operation(
                 nullptr,
                 nullptr,
                 std::unexpected(RedisError(
@@ -1589,15 +1589,15 @@ namespace galay::redis
                     "Rediss client impl is null")));
         }
         if (m_impl->boot_error.has_value()) {
-            return detail::makeReadyExchangeOperation(
-                m_impl->readyController(),
-                m_impl->socket.has_value() ? &m_impl->socketRef() : nullptr,
+            return detail::make_ready_exchange_operation(
+                m_impl->ready_controller(),
+                m_impl->socket.has_value() ? &m_impl->socket_ref() : nullptr,
                 std::unexpected(*m_impl->boot_error));
         }
         if (m_impl->is_closed) {
-            return detail::makeReadyExchangeOperation(
-                m_impl->readyController(),
-                m_impl->socket.has_value() ? &m_impl->socketRef() : nullptr,
+            return detail::make_ready_exchange_operation(
+                m_impl->ready_controller(),
+                m_impl->socket.has_value() ? &m_impl->socket_ref() : nullptr,
                 std::unexpected(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_CLOSED,
                     "Rediss client is not connected")));
@@ -1608,9 +1608,9 @@ namespace galay::redis
             std::string(),
             expected_replies,
             true);
-        return galay::ssl::SslAwaitableBuilder<detail::RedissCommandResult>::fromStateMachine(
-                   m_impl->socketRef().controller(),
-                   &m_impl->socketRef(),
+        return galay::ssl::SslAwaitableBuilder<detail::RedissCommandResult>::from_state_machine(
+                   m_impl->socket_ref().controller(),
+                   &m_impl->socket_ref(),
                    detail::RedissExchangeMachine(std::move(state)))
             .build();
 #else
@@ -1626,7 +1626,7 @@ namespace galay::redis
     {
 #ifdef GALAY_SSL_FEATURE_ENABLED
         if (!m_impl) {
-            return detail::makeReadyExchangeOperation(
+            return detail::make_ready_exchange_operation(
                 nullptr,
                 nullptr,
                 std::unexpected(RedisError(
@@ -1634,15 +1634,15 @@ namespace galay::redis
                     "Rediss client impl is null")));
         }
         if (m_impl->boot_error.has_value()) {
-            return detail::makeReadyExchangeOperation(
-                m_impl->readyController(),
-                m_impl->socket.has_value() ? &m_impl->socketRef() : nullptr,
+            return detail::make_ready_exchange_operation(
+                m_impl->ready_controller(),
+                m_impl->socket.has_value() ? &m_impl->socket_ref() : nullptr,
                 std::unexpected(*m_impl->boot_error));
         }
         if (m_impl->is_closed) {
-            return detail::makeReadyExchangeOperation(
-                m_impl->readyController(),
-                m_impl->socket.has_value() ? &m_impl->socketRef() : nullptr,
+            return detail::make_ready_exchange_operation(
+                m_impl->ready_controller(),
+                m_impl->socket.has_value() ? &m_impl->socket_ref() : nullptr,
                 std::unexpected(RedisError(
                     RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_CLOSED,
                     "Rediss client is not connected")));
@@ -1650,12 +1650,12 @@ namespace galay::redis
 
         auto state = std::make_shared<detail::RedissExchangeSharedState>(
             m_impl.get(),
-            detail::encodePipelineBuffer(commands),
+            detail::encode_pipeline_buffer(commands),
             commands.size(),
             false);
-        return galay::ssl::SslAwaitableBuilder<detail::RedissCommandResult>::fromStateMachine(
-                   m_impl->socketRef().controller(),
-                   &m_impl->socketRef(),
+        return galay::ssl::SslAwaitableBuilder<detail::RedissCommandResult>::from_state_machine(
+                   m_impl->socket_ref().controller(),
+                   &m_impl->socket_ref(),
                    detail::RedissExchangeMachine(std::move(state)))
             .build();
 #else
@@ -1667,22 +1667,22 @@ namespace galay::redis
 #endif
     }
 
-    const AsyncRedisConfig& RedissClient::asyncConfig() const
+    const AsyncRedisConfig& RedissClient::async_config() const
     {
         return m_impl->config;
     }
 
-    const RedissClientConfig& RedissClient::tlsConfig() const
+    const RedissClientConfig& RedissClient::tls_config() const
     {
         return m_impl->tls_config;
     }
 
-    bool RedissClient::isClosed() const
+    bool RedissClient::is_closed() const
     {
         return !m_impl || m_impl->is_closed;
     }
 
-    void RedissClient::setClosed(bool closed)
+    void RedissClient::set_closed(bool closed)
     {
         if (m_impl) {
             m_impl->is_closed = closed;
@@ -1692,12 +1692,12 @@ namespace galay::redis
     galay::kernel::CloseAwaitable RedissClient::close()
     {
         m_impl->is_closed = true;
-        m_impl->resetProtocolState();
+        m_impl->reset_protocol_state();
 #ifdef GALAY_SSL_FEATURE_ENABLED
         if (!m_impl->socket.has_value()) {
-            (void)m_impl->resetSocket(2, std::string_view{});
+            (void)m_impl->reset_socket(2, std::string_view{});
         }
-        return m_impl->socketRef().close();
+        return m_impl->socket_ref().close();
 #else
         return m_impl->ready_socket.close();
 #endif

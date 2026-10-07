@@ -36,71 +36,71 @@ struct DefaultLogWriterSnapshot {
 std::mutex g_defaultWriterConfigMutex;
 std::vector<std::unique_ptr<DefaultLogWriterSnapshot>> g_defaultWriterSnapshots;
 
-[[nodiscard]] detail::ErasedLogWriter loggerWriterRef(Logger& logger) noexcept {
+[[nodiscard]] detail::ErasedLogWriter logger_writer_ref(Logger& logger) noexcept {
     return detail::ErasedLogWriter{
         .object = &logger,
-        .isEnabledFn = [](const void* object, LogLevel level) noexcept {
-            return static_cast<const Logger*>(object)->isEnabled(level);
+        .is_enabled_fn = [](const void* object, LogLevel level) noexcept {
+            return static_cast<const Logger*>(object)->is_enabled(level);
         },
-        .writeFn = [](void* object, LogRecord record) {
+        .write_fn = [](void* object, LogRecord record) {
             static_cast<Logger*>(object)->write(std::move(record));
         },
-        .writeStructuredFn = [](void* object, StructuredLogRecord record) {
+        .write_structured_fn = [](void* object, StructuredLogRecord record) {
             static_cast<Logger*>(object)->write(record);
         },
     };
 }
 
-[[nodiscard]] Logger& builtInDefaultLogger() {
+[[nodiscard]] Logger& built_in_default_logger() {
     static Logger logger;
     static const bool configured = [] {
-        logger.addSink(std::make_shared<ConsoleSink>());
+        logger.add_sink(std::make_shared<ConsoleSink>());
         return true;
     }();
     (void)configured;
     return logger;
 }
 
-[[nodiscard]] const DefaultLogWriterSnapshot& builtInDefaultWriterSnapshot() {
-    static const DefaultLogWriterSnapshot snapshot{loggerWriterRef(builtInDefaultLogger())};
+[[nodiscard]] const DefaultLogWriterSnapshot& built_in_default_writer_snapshot() {
+    static const DefaultLogWriterSnapshot snapshot{logger_writer_ref(built_in_default_logger())};
     return snapshot;
 }
 
-void appendFieldValue(std::string& message, const LogFieldValue& value) {
+void append_field_value(std::string& message, const LogFieldValue& value) {
     std::array<char, 32> buffer{};
     switch (value.type()) {
     case LogFieldType::kInt64: {
-        auto [end, error] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value.asInt64());
+        auto [end, error] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value.as_int64());
         if (error == std::errc{}) {
             message.append(buffer.data(), static_cast<std::size_t>(end - buffer.data()));
         }
         break;
     }
     case LogFieldType::kUInt64: {
-        auto [end, error] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value.asUInt64());
+        auto [end, error] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value.as_uint64());
         if (error == std::errc{}) {
             message.append(buffer.data(), static_cast<std::size_t>(end - buffer.data()));
         }
         break;
     }
     case LogFieldType::kDouble:
-        message.append(std::to_string(value.asDouble()));
+        message.append(std::to_string(value.as_double()));
         break;
     case LogFieldType::kBool:
-        message.append(value.asBool() ? "true" : "false");
+        message.append(value.as_bool() ? "true" : "false");
         break;
     case LogFieldType::kString:
-        message.append(value.asString());
+        message.append(value.as_string());
         break;
     }
 }
 
-[[nodiscard]] LogRecord makeLogRecord(StructuredLogRecord record) {
+[[nodiscard]] LogRecord make_log_record(StructuredLogRecord record) {
     std::size_t estimatedSize = record.name.size();
     for (const auto& field : record.fields) {
         estimatedSize += field.name.size() + 2;
         if (field.value.type() == LogFieldType::kString) {
-            estimatedSize += field.value.asString().size();
+            estimatedSize += field.value.as_string().size();
         } else {
             estimatedSize += 24;
         }
@@ -112,7 +112,7 @@ void appendFieldValue(std::string& message, const LogFieldValue& value) {
         message.push_back(' ');
         message.append(field.name);
         message.push_back('=');
-        appendFieldValue(message, field.value);
+        append_field_value(message, field.value);
     }
 
     return LogRecord(
@@ -128,17 +128,17 @@ namespace detail {
 
 std::atomic<const ErasedLogWriter*> g_defaultLogWriterPtr{nullptr};
 
-void ErasedLogWriter::writeStructuredFallback(StructuredLogRecord record) const {
-    if (writeFn != nullptr) {
-        writeFn(object, makeLogRecord(std::move(record)));
+void ErasedLogWriter::write_structured_fallback(StructuredLogRecord record) const {
+    if (write_fn != nullptr) {
+        write_fn(object, make_log_record(std::move(record)));
     }
 }
 
-const ErasedLogWriter* builtInDefaultLogWriterPtr() noexcept {
-    return &builtInDefaultWriterSnapshot().writer;
+const ErasedLogWriter* built_in_default_log_writer_ptr() noexcept {
+    return &built_in_default_writer_snapshot().writer;
 }
 
-void setDefaultLogWriterRef(ErasedLogWriter writer) noexcept {
+void set_default_log_writer_ref(ErasedLogWriter writer) noexcept {
     if (writer.object == nullptr) {
         g_defaultLogWriterPtr.store(nullptr, std::memory_order_release);
         return;
@@ -155,12 +155,12 @@ void setDefaultLogWriterRef(ErasedLogWriter writer) noexcept {
     g_defaultLogWriterPtr.store(&snapshot->writer, std::memory_order_release);
 }
 
-ErasedLogWriter defaultLogWriterRef() noexcept {
-    return *defaultLogWriterPtr();
+ErasedLogWriter default_log_writer_ref() noexcept {
+    return *default_log_writer_ptr();
 }
 
-DefaultLogWriter defaultLogWriter() noexcept {
-    return DefaultLogWriter(defaultLogWriterPtr());
+DefaultLogWriter default_log_writer() noexcept {
+    return DefaultLogWriter(default_log_writer_ptr());
 }
 
 } // namespace detail
@@ -173,7 +173,7 @@ Logger::Logger(LogLevel level) noexcept
     m_sinkSnapshot.store(snapshotPtr, std::memory_order_release);
 }
 
-void Logger::setLevel(LogLevel level) noexcept {
+void Logger::set_level(LogLevel level) noexcept {
     m_level.store(level, std::memory_order_relaxed);
 }
 
@@ -181,12 +181,12 @@ LogLevel Logger::level() const noexcept {
     return m_level.load(std::memory_order_relaxed);
 }
 
-bool Logger::isEnabled(LogLevel recordLevel) const noexcept {
+bool Logger::is_enabled(LogLevel recordLevel) const noexcept {
     const auto threshold = level();
     return threshold != LogLevel::kOff && static_cast<int>(recordLevel) >= static_cast<int>(threshold);
 }
 
-void Logger::addSink(std::shared_ptr<LogSink> sink) {
+void Logger::add_sink(std::shared_ptr<LogSink> sink) {
     if (!sink) {
         return;
     }
@@ -202,7 +202,7 @@ void Logger::addSink(std::shared_ptr<LogSink> sink) {
     m_sinkSnapshot.store(snapshotPtr, std::memory_order_release);
 }
 
-void Logger::clearSinks() {
+void Logger::clear_sinks() {
     std::lock_guard lock(m_mutex);
     auto next = std::make_unique<SinkSnapshot>();
     auto* snapshotPtr = next.get();
@@ -217,7 +217,7 @@ void Logger::write(LogRecord record) {
 }
 
 void Logger::write(StructuredLogRecord record) {
-    publish(makeLogRecord(std::move(record)));
+    publish(make_log_record(std::move(record)));
 }
 
 void Logger::publish(LogRecord record) {
@@ -231,20 +231,20 @@ void Logger::publish(LogRecord record) {
     }
 }
 
-Logger& defaultLogger() noexcept {
+Logger& default_logger() noexcept {
     if (auto* logger = g_defaultLogger.load(std::memory_order_acquire); logger != nullptr) {
         return *logger;
     }
-    return builtInDefaultLogger();
+    return built_in_default_logger();
 }
 
-void setDefaultLogger(Logger* logger) noexcept {
+void set_default_logger(Logger* logger) noexcept {
     g_defaultLogger.store(logger, std::memory_order_release);
-    setDefaultLogWriter(logger);
+    set_default_log_writer(logger);
 }
 
-void setDefaultLogWriter(std::nullptr_t) noexcept {
-    detail::setDefaultLogWriterRef({});
+void set_default_log_writer(std::nullptr_t) noexcept {
+    detail::set_default_log_writer_ref({});
 }
 
 } // namespace galay::tracing

@@ -37,7 +37,7 @@ void require(bool condition, const char* message)
     }
 }
 
-void testBuilderCloneOwnsIndependentFrame()
+void test_builder_clone_owns_independent_frame()
 {
     const std::string payload(4096, 'x');
 
@@ -46,8 +46,8 @@ void testBuilderCloneOwnsIndependentFrame()
     WsFrameBuilder cloned = source.clone();
     WsFrameBuilder moved = std::move(source);
 
-    WsFrame clone_frame = cloned.buildMove();
-    WsFrame moved_frame = moved.buildMove();
+    WsFrame clone_frame = cloned.build_move();
+    WsFrame moved_frame = moved.build_move();
 
     require(clone_frame.payload == payload, "builder clone should preserve payload");
     require(moved_frame.payload == payload, "moving builder should preserve source payload");
@@ -204,7 +204,7 @@ static_assert(std::is_copy_assignable_v<WssClientConfig>);
 
 int main()
 {
-    testBuilderCloneOwnsIndependentFrame();
+    test_builder_clone_owns_independent_frame();
     std::cout << "T10-WsMoveOnlyContract PASS\n";
     return 0;
 }

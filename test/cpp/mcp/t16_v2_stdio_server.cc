@@ -25,7 +25,7 @@ std::string request(int id, std::string_view method, std::string_view fields = "
 {
     v2::RequestMeta meta;
     meta.clientInfo = v2::Implementation{.name = "t16", .version = "1"};
-    auto params = v2::makeRequestParams(meta, fields);
+    auto params = v2::make_request_params(meta, fields);
     if (!params) {
         return {};
     }
@@ -33,7 +33,7 @@ std::string request(int id, std::string_view method, std::string_view fields = "
     message.id = id;
     message.method = std::string(method);
     message.params = std::move(params.value());
-    return message.toJson();
+    return message.to_json();
 }
 
 } // namespace
@@ -50,20 +50,20 @@ int main()
     std::ostringstream output;
 
     v2::McpStdioServer server;
-    server.setServerInfo("t16-server", "2.0.0");
-    server.addTool("echo", "Echo text", R"({"type":"object"})",
+    server.set_server_info("t16-server", "2.0.0");
+    server.add_tool("echo", "Echo text", R"({"type":"object"})",
                    [](const json::Json&) -> std::expected<std::string, McpError> {
                        return std::string("hello");
                    });
-    server.addResource("mem://hello", "hello", "Hello", "text/plain",
+    server.add_resource("mem://hello", "hello", "Hello", "text/plain",
                        [](const std::string&) -> std::expected<std::string, McpError> {
                            return std::string("hello");
                        });
-    server.addPrompt("review", "Review", {},
+    server.add_prompt("review", "Review", {},
                      [](const std::string&, const json::Json&) -> std::expected<std::string, McpError> {
                          return std::string(R"({"messages":[{"role":"user","content":{"type":"text","text":"Review"}}]})");
                      });
-    server.setStreams(input, output);
+    server.set_streams(input, output);
     server.run();
 
     std::string line;
@@ -76,7 +76,7 @@ int main()
     bool sawPrompt = false;
     while (std::getline(responses, line)) {
         ++count;
-        auto parsed = v2::parseResponse(line);
+        auto parsed = v2::parse_response(line);
         if (!require(parsed.has_value(), "v2 stdio response was invalid")) {
             return 1;
         }

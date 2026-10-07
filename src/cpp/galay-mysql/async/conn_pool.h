@@ -51,8 +51,8 @@ struct MysqlPoolWaiter {
  */
 struct MysqlConnectionPoolConfig
 {
-    MysqlConfig mysql_config = MysqlConfig::defaultConfig();   ///< MySQL连接配置
-    AsyncMysqlConfig async_config = AsyncMysqlConfig::noTimeout(); ///< 异步配置
+    MysqlConfig mysql_config = MysqlConfig::default_config();   ///< MySQL连接配置
+    AsyncMysqlConfig async_config = AsyncMysqlConfig::no_timeout(); ///< 异步配置
     size_t min_connections = 2;  ///< 最小连接数
     size_t max_connections = 10; ///< 最大连接数
 };
@@ -123,7 +123,7 @@ public:
      * @brief 获取一个RAII连接租约
      * @return 连接租约获取等待体
      */
-    LeaseAwaitable acquireLease();
+    LeaseAwaitable acquire_lease();
 
     /**
      * @brief 归还连接到池中
@@ -141,15 +141,15 @@ public:
      * @brief 获取空闲连接数
      * @return 空闲连接数
      */
-    size_t idleCount() const;
+    size_t idle_count() const;
 
 private:
     friend class AcquireAwaitable;
 
-    AsyncMysqlClient<>* tryAcquire();  ///< 尝试从空闲队列获取连接
-    AsyncMysqlClient<>* createClient(); ///< 创建新的客户端连接
-    bool enqueueWaiter(std::shared_ptr<detail::MysqlPoolWaiter> waiter); ///< 注册等待连接的协程
-    bool wakeOneWaiter(); ///< 唤醒一个仍然有效的等待协程
+    AsyncMysqlClient<>* try_acquire();  ///< 尝试从空闲队列获取连接
+    AsyncMysqlClient<>* create_client(); ///< 创建新的客户端连接
+    bool enqueue_waiter(std::shared_ptr<detail::MysqlPoolWaiter> waiter); ///< 注册等待连接的协程
+    bool wake_one_waiter(); ///< 唤醒一个仍然有效的等待协程
 
     galay::kernel::IOScheduler* m_scheduler;        ///< IO调度器指针
     MysqlConfig m_mysql_config;                      ///< MySQL连接配置

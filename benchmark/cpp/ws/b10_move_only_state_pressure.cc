@@ -26,7 +26,7 @@ void require(bool condition, const char* message)
     }
 }
 
-size_t parseIterations(int argc, char** argv)
+size_t parse_iterations(int argc, char** argv)
 {
     constexpr size_t kDefaultIterations = 10000;
     if (argc < 2) {
@@ -44,7 +44,7 @@ size_t parseIterations(int argc, char** argv)
 }
 
 template <typename Func>
-void runBench(const char* name, size_t iterations, Func&& func)
+void run_bench(const char* name, size_t iterations, Func&& func)
 {
     const auto start = std::chrono::steady_clock::now();
     size_t accepted = 0;
@@ -58,7 +58,7 @@ void runBench(const char* name, size_t iterations, Func&& func)
               << accepted << "\n";
 }
 
-WsUrl makeLocalUrl()
+WsUrl make_local_url()
 {
     WsUrl url;
     url.scheme = "ws";
@@ -69,7 +69,7 @@ WsUrl makeLocalUrl()
     return url;
 }
 
-bool exerciseBuilderCloneMove(size_t iteration)
+bool exercise_builder_clone_move(size_t iteration)
 {
     std::string payload(256 + (iteration % 31), 'a');
     payload[0] = static_cast<char>('a' + (iteration % 26));
@@ -79,14 +79,14 @@ bool exerciseBuilderCloneMove(size_t iteration)
     WsFrameBuilder cloned = source.clone();
     WsFrameBuilder moved = std::move(source);
 
-    WsFrame clone_frame = cloned.buildMove();
-    WsFrame moved_frame = moved.buildMove();
+    WsFrame clone_frame = cloned.build_move();
+    WsFrame moved_frame = moved.build_move();
     return clone_frame.payload == payload &&
            moved_frame.payload == payload &&
            clone_frame.payload.data() != moved_frame.payload.data();
 }
 
-bool exerciseReaderWriterMove(size_t iteration)
+bool exercise_reader_writer_move(size_t iteration)
 {
     AsyncTcpSocket socket;
     RingBuffer ring(4096);
@@ -96,24 +96,24 @@ bool exerciseReaderWriterMove(size_t iteration)
     WsReaderImpl<AsyncTcpSocket> moved_reader(std::move(reader));
 
     const std::string payload(64 + (iteration % 17), 'x');
-    WsWriterImpl<AsyncTcpSocket> writer(WsWriterSetting::byServer(), socket);
-    auto send_operation = writer.sendText(payload);
+    WsWriterImpl<AsyncTcpSocket> writer(WsWriterSetting::by_server(), socket);
+    auto send_operation = writer.send_text(payload);
     const bool operation_ready = send_operation.await_ready();
     WsWriterImpl<AsyncTcpSocket> moved_writer(std::move(writer));
 
     return !operation_ready &&
-           moved_writer.getRemainingBytes() >= payload.size() &&
-           moved_writer.getIovecsData() != nullptr &&
-           moved_writer.getIovecsCount() > 0;
+           moved_writer.get_remaining_bytes() >= payload.size() &&
+           moved_writer.get_iovecs_data() != nullptr &&
+           moved_writer.get_iovecs_count() > 0;
 }
 
-bool exerciseSessionAndUpgraderState(size_t)
+bool exercise_session_and_upgrader_state(size_t)
 {
     AsyncTcpSocket socket;
     RingBuffer ring(4096);
-    WsUrl url = makeLocalUrl();
+    WsUrl url = make_local_url();
     WsReaderSetting reader_setting;
-    WsWriterSetting writer_setting = WsWriterSetting::byClient();
+    WsWriterSetting writer_setting = WsWriterSetting::by_client();
     std::unique_ptr<WsConnImpl<AsyncTcpSocket>> ws_conn;
 
     WsSessionImpl<AsyncTcpSocket> session(socket, url, writer_setting, 4096, reader_setting);
@@ -129,26 +129,26 @@ bool exerciseSessionAndUpgraderState(size_t)
         &ws_conn);
     WsUpgraderImpl<AsyncTcpSocket> moved_client_upgrader(std::move(client_upgrader));
 
-    return !session.isUpgraded();
+    return !session.is_upgraded();
 }
 
 } // namespace
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    const size_t iterations = parseIterations(argc, argv);
+    const size_t iterations = parse_iterations(argc, argv);
 
-    require(exerciseBuilderCloneMove(0), "builder clone/move fixture should pass");
-    require(exerciseReaderWriterMove(0), "reader/writer move fixture should pass");
-    require(exerciseSessionAndUpgraderState(0), "session/upgrader fixture should pass");
+    require(exercise_builder_clone_move(0), "builder clone/move fixture should pass");
+    require(exercise_reader_writer_move(0), "reader/writer move fixture should pass");
+    require(exercise_session_and_upgrader_state(0), "session/upgrader fixture should pass");
 
-    runBench("BM_BuilderCloneMove", iterations, exerciseBuilderCloneMove);
-    runBench("BM_ReaderWriterMove", iterations, exerciseReaderWriterMove);
-    runBench("BM_SessionUpgraderState", iterations, exerciseSessionAndUpgraderState);
+    run_bench("BM_BuilderCloneMove", iterations, exercise_builder_clone_move);
+    run_bench("BM_ReaderWriterMove", iterations, exercise_reader_writer_move);
+    run_bench("BM_SessionUpgraderState", iterations, exercise_session_and_upgrader_state);
 
     return 0;
 }

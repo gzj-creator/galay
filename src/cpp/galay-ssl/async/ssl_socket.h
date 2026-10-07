@@ -42,10 +42,10 @@ using namespace galay::kernel;
  * @example
  * @code
  * // SSL 服务端
- * Task<void> sslServer(SslContext* ctx) {
+ * Task<void> ssl_server(SslContext* ctx) {
  *     SslSocket listener(ctx);
- *     listener.option().handleReuseAddr();
- *     listener.option().handleNonBlock();
+ *     listener.option().handle_reuse_addr();
+ *     listener.option().handle_non_block();
  *     listener.bind(Host(IPType::IPV4, "0.0.0.0", 8443));
  *     listener.listen(1024);
  *
@@ -59,9 +59,9 @@ using namespace galay::kernel;
  * }
  *
  * // SSL 客户端
- * Task<void> sslClient(SslContext* ctx) {
+ * Task<void> ssl_client(SslContext* ctx) {
  *     SslSocket socket(ctx);
- *     socket.option().handleNonBlock();
+ *     socket.option().handle_non_block();
  *
  *     co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", 8443));
  *     co_await socket.handshake();
@@ -143,12 +143,12 @@ public:
     /**
      * @brief 检查 socket 是否有效
      */
-    bool isValid() const { return handle().fd >= 0 && m_engine.isValid(); }
+    bool is_valid() const { return handle().fd >= 0 && m_engine.is_valid(); }
 
     /**
      * @brief 检查 SSL 握手是否完成
      */
-    bool isHandshakeCompleted() const { return m_engine.isHandshakeCompleted(); }
+    bool is_handshake_completed() const { return m_engine.is_handshake_completed(); }
 
     /**
      * @brief 绑定本地地址
@@ -177,7 +177,7 @@ public:
      * @param hostname 服务器主机名
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> setHostname(const std::string& hostname);
+    std::expected<void, SslError> set_hostname(const std::string& hostname);
 
     /**
      * @brief 异步接受新连接
@@ -252,53 +252,53 @@ public:
      * @brief 获取对端证书
      * @return X509 证书指针，需要调用者释放
      */
-    X509* getPeerCertificate() const { return m_engine.getPeerCertificate(); }
+    X509* get_peer_certificate() const { return m_engine.get_peer_certificate(); }
 
     /**
      * @brief 获取证书验证结果
      */
-    long getVerifyResult() const { return m_engine.getVerifyResult(); }
+    long get_verify_result() const { return m_engine.get_verify_result(); }
 
     /**
      * @brief 获取协商的协议版本
      */
-    std::string getProtocolVersion() const { return m_engine.getProtocolVersion(); }
+    std::string get_protocol_version() const { return m_engine.get_protocol_version(); }
 
     /**
      * @brief 获取协商的密码套件
      */
-    std::string getCipher() const { return m_engine.getCipher(); }
+    std::string get_cipher() const { return m_engine.get_cipher(); }
 
     /**
      * @brief 获取协商的 ALPN 协议
      */
-    std::string getALPNProtocol() const { return m_engine.getALPNProtocol(); }
+    std::string get_alpn_protocol() const { return m_engine.get_alpn_protocol(); }
 
     /**
      * @brief 设置 Session（用于客户端 Session 复用）
      * @param session SSL_SESSION 指针
      * @return 成功返回 true
      */
-    bool setSession(SSL_SESSION* session) { return m_engine.setSession(session); }
+    bool set_session(SSL_SESSION* session) { return m_engine.set_session(session); }
 
     /**
      * @brief 获取当前 Session（握手完成后调用）
      * @return SSL_SESSION 指针，调用者需要 SSL_SESSION_free
      */
-    SSL_SESSION* getSession() const { return m_engine.getSession(); }
+    SSL_SESSION* get_session() const { return m_engine.get_session(); }
 
     /**
      * @brief 检查是否复用了 Session
      * @return 是否复用
      */
-    bool isSessionReused() const { return m_engine.isSessionReused(); }
+    bool is_session_reused() const { return m_engine.is_session_reused(); }
 
 private:
     /**
      * @brief 初始化 SSL 引擎
      * @return 成功返回 true
      */
-    bool initEngine();
+    bool init_engine();
 
 private:
     friend class SslOperationDriver;

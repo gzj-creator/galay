@@ -35,7 +35,7 @@ int main()
     idempotent.idempotent(true);
 
     int attempts = 0;
-    auto succeeds_on_second = RpcRetryController::runSync<RetryResult>(
+    auto succeeds_on_second = RpcRetryController::run_sync<RetryResult>(
         policy,
         idempotent,
         [&]() -> RetryResult {
@@ -55,7 +55,7 @@ int main()
 
     RpcCallOptions non_idempotent;
     attempts = 0;
-    auto non_idempotent_result = RpcRetryController::runSync<RetryResult>(
+    auto non_idempotent_result = RpcRetryController::run_sync<RetryResult>(
         policy,
         non_idempotent,
         [&]() -> RetryResult {
@@ -74,7 +74,7 @@ int main()
     RpcCallOptions deadline_options;
     deadline_options.idempotent(true).deadline(RpcClock::now());
     attempts = 0;
-    auto deadline_result = RpcRetryController::runSync<RetryResult>(
+    auto deadline_result = RpcRetryController::run_sync<RetryResult>(
         policy,
         deadline_options,
         [&]() -> RetryResult {
@@ -91,9 +91,9 @@ int main()
     }
 
     RpcCallOptions override_attempts;
-    override_attempts.idempotent(true).maxAttempts(2);
+    override_attempts.idempotent(true).max_attempts(2);
     attempts = 0;
-    auto exact_attempts = RpcRetryController::runSync<RetryResult>(
+    auto exact_attempts = RpcRetryController::run_sync<RetryResult>(
         policy,
         override_attempts,
         [&]() -> RetryResult {

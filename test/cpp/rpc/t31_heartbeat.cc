@@ -21,13 +21,13 @@ public:
         : RpcService("HeartbeatService")
         , m_calls(calls)
     {
-        registerMethod("echo", &HeartbeatService::echo);
+        register_method("echo", &HeartbeatService::echo);
     }
 
     Task<void> echo(RpcContext& ctx)
     {
         m_calls->fetch_add(1, std::memory_order_relaxed);
-        ctx.setPayload(ctx.request().payloadView());
+        ctx.set_payload(ctx.request().payload_view());
         co_return;
     }
 
@@ -41,13 +41,13 @@ struct TestState {
     std::string error;
 };
 
-uint16_t loopbackPort()
+uint16_t loopback_port()
 {
     return static_cast<uint16_t>(33000 + (::getpid() % 9000));
 }
 
 template<typename AwaitResult>
-bool okResult(const AwaitResult& result)
+bool ok_result(const AwaitResult& result)
 {
     if (!result.has_value()) {
         return false;
@@ -56,7 +56,7 @@ bool okResult(const AwaitResult& result)
     return call_result.has_value();
 }
 
-Task<void> runHeartbeatClient(uint16_t port, TestState* state, std::atomic<int>* route_calls)
+Task<void> run_heartbeat_client(uint16_t port, TestState* state, std::atomic<int>* route_calls)
 {
     RpcClient client;
     bool connected = false;
@@ -75,8 +75,8 @@ Task<void> runHeartbeatClient(uint16_t port, TestState* state, std::atomic<int>*
         co_return;
     }
 
-    auto heartbeat = co_await client.sendHeartbeat();
-    if (!okResult(heartbeat)) {
+    auto heartbeat = co_await client.send_heartbeat();
+    if (!ok_result(heartbeat)) {
         state->ok = false;
         state->error = "heartbeat did not receive pong";
         co_await client.close();
@@ -92,7 +92,7 @@ Task<void> runHeartbeatClient(uint16_t port, TestState* state, std::atomic<int>*
     }
 
     auto echo = co_await client.call("HeartbeatService", "echo", "ok");
-    if (!okResult(echo) || route_calls->load(std::memory_order_acquire) != 1) {
+    if (!ok_result(echo) || route_calls->load(std::memory_order_acquire) != 1) {
         state->ok = false;
         state->error = "normal call failed after heartbeat";
         co_await client.close();
@@ -109,17 +109,17 @@ Task<void> runHeartbeatClient(uint16_t port, TestState* state, std::atomic<int>*
 
 int main()
 {
-    const uint16_t port = loopbackPort();
+    const uint16_t port = loopback_port();
     std::atomic<int> route_calls{0};
 
     auto server = RpcServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     HeartbeatService service(&route_calls);
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register heartbeat service: "
                   << registered.error().message() << "\n";
@@ -132,7 +132,7 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(2).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(2).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();
@@ -142,7 +142,7 @@ int main()
     }
 
     TestState state;
-    auto root = runtime.spawnIO(runHeartbeatClient(port, &state, &route_calls));
+    auto root = runtime.spawn_io(run_heartbeat_client(port, &state, &route_calls));
     if (!root.has_value()) {
         runtime.stop();
         server.stop();

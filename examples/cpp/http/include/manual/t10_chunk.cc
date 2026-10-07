@@ -39,7 +39,7 @@ std::atomic<bool> g_test_done{false};
 std::atomic<bool> g_test_passed{false};
 
 // 发送chunked请求并接收响应
-Task<void> sendChunkedRequest() {
+Task<void> send_chunked_request() {
     auto fail = [] {
         g_test_passed = false;
         g_test_done = true;
@@ -49,7 +49,7 @@ Task<void> sendChunkedRequest() {
     AsyncTcpSocket client;
 
     // 设置非阻塞
-    auto optResult = client.option().handleNonBlock();
+    auto optResult = client.option().handle_non_block();
     if (!optResult) {
         fail();
         co_return;
@@ -76,12 +76,12 @@ Task<void> sendChunkedRequest() {
     reqHeader.method() = HttpMethod::POST;
     reqHeader.uri() = "/test";
     reqHeader.version() = HttpVersion::HttpVersion_1_1;
-    reqHeader.headerPairs().addHeaderPair("Host", "127.0.0.1:9999");
-    reqHeader.headerPairs().addHeaderPair("Transfer-Encoding", "chunked");
-    reqHeader.headerPairs().addHeaderPair("User-Agent", "galay-http-chunked-client/1.0");
+    reqHeader.header_pairs().add_header_pair("Host", "127.0.0.1:9999");
+    reqHeader.header_pairs().add_header_pair("Transfer-Encoding", "chunked");
+    reqHeader.header_pairs().add_header_pair("User-Agent", "galay-http-chunked-client/1.0");
 
     // 发送请求头
-    auto headerResult = co_await writer.sendHeader(std::move(reqHeader));
+    auto headerResult = co_await writer.send_header(std::move(reqHeader));
     if (!headerResult) {
         co_await client.close();
         fail();
@@ -90,7 +90,7 @@ Task<void> sendChunkedRequest() {
 
     // 发送多个chunk
     std::string chunk1 = "Hello ";
-    auto chunk1Result = co_await writer.sendChunk(chunk1, false);
+    auto chunk1Result = co_await writer.send_chunk(chunk1, false);
     if (!chunk1Result) {
         co_await client.close();
         fail();
@@ -98,7 +98,7 @@ Task<void> sendChunkedRequest() {
     }
 
     std::string chunk2 = "from ";
-    auto chunk2Result = co_await writer.sendChunk(chunk2, false);
+    auto chunk2Result = co_await writer.send_chunk(chunk2, false);
     if (!chunk2Result) {
         co_await client.close();
         fail();
@@ -106,7 +106,7 @@ Task<void> sendChunkedRequest() {
     }
 
     std::string chunk3 = "chunked ";
-    auto chunk3Result = co_await writer.sendChunk(chunk3, false);
+    auto chunk3Result = co_await writer.send_chunk(chunk3, false);
     if (!chunk3Result) {
         co_await client.close();
         fail();
@@ -114,7 +114,7 @@ Task<void> sendChunkedRequest() {
     }
 
     std::string chunk4 = "client!";
-    auto chunk4Result = co_await writer.sendChunk(chunk4, false);
+    auto chunk4Result = co_await writer.send_chunk(chunk4, false);
     if (!chunk4Result) {
         co_await client.close();
         fail();
@@ -123,7 +123,7 @@ Task<void> sendChunkedRequest() {
 
     // 发送最后一个chunk
     std::string emptyChunk;
-    auto lastChunkResult = co_await writer.sendChunk(emptyChunk, true);
+    auto lastChunkResult = co_await writer.send_chunk(emptyChunk, true);
     if (!lastChunkResult) {
         co_await client.close();
         fail();
@@ -136,7 +136,7 @@ Task<void> sendChunkedRequest() {
     bool responseHeaderComplete = false;
 
     while (!responseHeaderComplete) {
-        auto result = co_await reader.getResponse(response);
+        auto result = co_await reader.get_response(response);
 
         if (!result) {
             auto& error = result.error();
@@ -152,8 +152,8 @@ Task<void> sendChunkedRequest() {
     }
 
 
-    // `getResponse()` 会把 chunked 响应聚合成完整 body 再返回。
-    const std::string responseBody = response.getBodyStr();
+    // `get_response()` 会把 chunked 响应聚合成完整 body 再返回。
+    const std::string responseBody = response.get_body_str();
 
     const std::string expected = "Decoded body bytes: 26\nEcho: Hello from chunked client!";
     if (responseBody != expected) {
@@ -170,17 +170,17 @@ Task<void> sendChunkedRequest() {
 int main() {
 
 #if defined(USE_KQUEUE) || defined(USE_EPOLL) || defined(USE_IOURING)
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     rt.start();
 
-    auto* scheduler = rt.getNextIOScheduler();
+    auto* scheduler = rt.get_next_io_scheduler();
     if (!scheduler) {
         rt.stop();
         return 1;
     }
 
     // 启动客户端
-    scheduleTask(scheduler, sendChunkedRequest());
+    schedule_task(scheduler, send_chunked_request());
 
     constexpr auto kTimeout = std::chrono::seconds(5);
     const auto deadline = std::chrono::steady_clock::now() + kTimeout;

@@ -70,12 +70,12 @@ constexpr uint8_t RPC_VERSION = 0x01;                    // 协议版本
 constexpr size_t RPC_HEADER_SIZE = 16;                   // 固定消息头长度
 constexpr size_t RPC_MAX_BODY_SIZE = 16 * 1024 * 1024;  // 最大消息体 16 MB
 
-uint32_t rpcBswap32(uint32_t v);
-uint16_t rpcBswap16(uint16_t v);
-uint32_t rpcHtonl(uint32_t host);
-uint32_t rpcNtohl(uint32_t net);
-uint16_t rpcHtons(uint16_t host);
-uint16_t rpcNtohs(uint16_t net);
+uint32_t rpc_bswap32(uint32_t v);
+uint16_t rpc_bswap16(uint16_t v);
+uint32_t rpc_htonl(uint32_t host);
+uint32_t rpc_ntohl(uint32_t net);
+uint16_t rpc_htons(uint16_t host);
+uint16_t rpc_ntohs(uint16_t net);
 
 }
 ```
@@ -117,10 +117,10 @@ enum class RpcCallMode : uint8_t {
 constexpr uint8_t RPC_FLAG_MODE_MASK = 0x03;
 constexpr uint8_t RPC_FLAG_END_STREAM = 0x04;
 
-uint8_t rpcEncodeFlags(RpcCallMode call_mode, bool end_of_stream);
-RpcCallMode rpcDecodeCallMode(uint8_t flags);
-bool rpcIsEndStream(uint8_t flags);
-uint8_t rpcSetEndStreamFlag(uint8_t flags, bool end_of_stream);
+uint8_t rpc_encode_flags(RpcCallMode call_mode, bool end_of_stream);
+RpcCallMode rpc_decode_call_mode(uint8_t flags);
+bool rpc_is_end_stream(uint8_t flags);
+uint8_t rpc_set_end_stream_flag(uint8_t flags, bool end_of_stream);
 ```
 
 `RpcHeader::m_flags` 的低 2 位编码 `RpcCallMode`，第 3 位编码 `END_STREAM`。
@@ -145,10 +145,10 @@ enum class RpcErrorCode : uint16_t {
 };
 ```
 
-#### rpcErrorCodeToString
+#### rpc_error_code_to_string
 
 ```cpp
-const char* rpcErrorCodeToString(RpcErrorCode code);
+const char* rpc_error_code_to_string(RpcErrorCode code);
 ```
 
 将错误码转换为可读字符串。
@@ -173,7 +173,7 @@ struct RpcPayloadView {
 };
 ```
 
-这是零拷贝 payload 视图：不拥有内存，只借用外部 buffer。`RpcRequest::payloadView()` / `RpcResponse::payloadView()` 也遵循同样语义。
+这是零拷贝 payload 视图：不拥有内存，只借用外部 buffer。`RpcRequest::payload_view()` / `RpcResponse::payload_view()` 也遵循同样语义。
 
 #### RpcHeader
 
@@ -207,34 +207,34 @@ public:
     RpcRequest();
     RpcRequest(uint32_t request_id, std::string_view service, std::string_view method);
 
-    uint32_t requestId() const;
-    void requestId(uint32_t id);
-    RpcCallMode callMode() const;
-    void callMode(RpcCallMode mode);
-    bool endOfStream() const;
-    void endOfStream(bool end);
+    uint32_t request_id() const;
+    void request_id(uint32_t id);
+    RpcCallMode call_mode() const;
+    void call_mode(RpcCallMode mode);
+    bool end_of_stream() const;
+    void end_of_stream(bool end);
 
-    const std::string& serviceName() const;
-    void serviceName(std::string_view name);
-    void serviceName(std::string&& name);
+    const std::string& service_name() const;
+    void service_name(std::string_view name);
+    void service_name(std::string&& name);
 
-    const std::string& methodName() const;
-    void methodName(std::string_view name);
-    void methodName(std::string&& name);
+    const std::string& method_name() const;
+    void method_name(std::string_view name);
+    void method_name(std::string&& name);
 
     const std::vector<char>& payload() const;
-    size_t payloadSize() const;
-    RpcPayloadView payloadView() const;
+    size_t payload_size() const;
+    RpcPayloadView payload_view() const;
     void payload(const char* data, size_t len);
     void payload(std::vector<char>&& data);
-    void payloadView(const RpcPayloadView& view);
+    void payload_view(const RpcPayloadView& view);
 
     std::vector<char> serialize() const;
-    bool deserializeBody(const char* body, size_t length);
+    bool deserialize_body(const char* body, size_t length);
 };
 ```
 
-`payload()` 在借用模式下会按需 materialize 到内部 `std::vector<char>`；若只需要长度或双段 buffer，请优先使用 `payloadSize()` / `payloadView()`。
+`payload()` 在借用模式下会按需 materialize 到内部 `std::vector<char>`；若只需要长度或双段 buffer，请优先使用 `payload_size()` / `payload_view()`。
 
 #### RpcResponse
 
@@ -246,26 +246,26 @@ public:
     RpcResponse();
     RpcResponse(uint32_t request_id, RpcErrorCode error_code = RpcErrorCode::OK);
 
-    uint32_t requestId() const;
-    void requestId(uint32_t id);
-    RpcCallMode callMode() const;
-    void callMode(RpcCallMode mode);
-    bool endOfStream() const;
-    void endOfStream(bool end);
+    uint32_t request_id() const;
+    void request_id(uint32_t id);
+    RpcCallMode call_mode() const;
+    void call_mode(RpcCallMode mode);
+    bool end_of_stream() const;
+    void end_of_stream(bool end);
 
-    RpcErrorCode errorCode() const;
-    void errorCode(RpcErrorCode code);
+    RpcErrorCode error_code() const;
+    void error_code(RpcErrorCode code);
 
     const std::vector<char>& payload() const;
-    size_t payloadSize() const;
-    RpcPayloadView payloadView() const;
+    size_t payload_size() const;
+    RpcPayloadView payload_view() const;
     void payload(const char* data, size_t len);
     void payload(std::vector<char>&& data);
-    void payloadView(const RpcPayloadView& view);
+    void payload_view(const RpcPayloadView& view);
 
-    bool isOk() const;
+    bool is_ok() const;
     std::vector<char> serialize() const;
-    bool deserializeBody(const char* body, size_t length);
+    bool deserialize_body(const char* body, size_t length);
 };
 ```
 
@@ -291,16 +291,16 @@ enum class DecodeResult {
 class RpcCodec {
 public:
     // 解码消息头
-    static DecodeResult decodeHeader(const char* data, size_t length, RpcHeader& header);
+    static DecodeResult decode_header(const char* data, size_t length, RpcHeader& header);
 
     // 解码请求消息（含头部）
-    static std::expected<RpcRequest, RpcError> decodeRequest(const char* data, size_t length);
+    static std::expected<RpcRequest, RpcError> decode_request(const char* data, size_t length);
 
     // 解码响应消息（含头部）
-    static std::expected<RpcResponse, RpcError> decodeResponse(const char* data, size_t length);
+    static std::expected<RpcResponse, RpcError> decode_response(const char* data, size_t length);
 
     // 计算完整消息长度，数据不足返回 0
-    static size_t messageLength(const char* data, size_t length);
+    static size_t message_length(const char* data, size_t length);
 };
 ```
 
@@ -321,12 +321,12 @@ public:
 
     RpcErrorCode code() const;
     const std::string& message() const;
-    bool isOk() const;
+    bool is_ok() const;
 
     explicit operator bool() const;  // true 表示有错误
     static RpcError from(const kernel::IOError& io_error,
                          RpcErrorCode default_code = RpcErrorCode::INTERNAL_ERROR);
-    std::string toString() const;
+    std::string to_string() const;
 };
 ```
 
@@ -366,47 +366,47 @@ public:
     const std::string& name() const;
 
     // 查找方法处理器，未找到返回 nullptr
-    RpcMethodHandler* findMethod(const std::string& method);
-    RpcMethodHandler* findMethod(const std::string& method, RpcCallMode mode);
+    RpcMethodHandler* find_method(const std::string& method);
+    RpcMethodHandler* find_method(const std::string& method, RpcCallMode mode);
 
     // 查找真实流方法（STREAM_* 会话）
-    RpcStreamHandler* findStreamMethod(const std::string& method);
+    RpcStreamHandler* find_stream_method(const std::string& method);
 
     // 获取所有方法名
-    std::vector<std::string> methodNames() const;
+    std::vector<std::string> method_names() const;
 
 protected:
     // 兼容旧接口：注册一元方法
-    void registerMethod(std::string_view name, RpcMethodHandler handler);
+    void register_method(std::string_view name, RpcMethodHandler handler);
     template<typename T>
-    void registerMethod(std::string_view name, Task<void> (T::*method)(RpcContext&));
+    void register_method(std::string_view name, Task<void> (T::*method)(RpcContext&));
 
     // 显式注册四种 RPC 模式
-    void registerUnaryMethod(std::string_view name, RpcMethodHandler handler);
-    void registerClientStreamingMethod(std::string_view name, RpcMethodHandler handler);
-    void registerServerStreamingMethod(std::string_view name, RpcMethodHandler handler);
-    void registerBidiStreamingMethod(std::string_view name, RpcMethodHandler handler);
+    void register_unary_method(std::string_view name, RpcMethodHandler handler);
+    void register_client_streaming_method(std::string_view name, RpcMethodHandler handler);
+    void register_server_streaming_method(std::string_view name, RpcMethodHandler handler);
+    void register_bidi_streaming_method(std::string_view name, RpcMethodHandler handler);
     template<typename T>
-    void registerUnaryMethod(std::string_view name, Task<void> (T::*method)(RpcContext&));
+    void register_unary_method(std::string_view name, Task<void> (T::*method)(RpcContext&));
     template<typename T>
-    void registerClientStreamingMethod(std::string_view name, Task<void> (T::*method)(RpcContext&));
+    void register_client_streaming_method(std::string_view name, Task<void> (T::*method)(RpcContext&));
     template<typename T>
-    void registerServerStreamingMethod(std::string_view name, Task<void> (T::*method)(RpcContext&));
+    void register_server_streaming_method(std::string_view name, Task<void> (T::*method)(RpcContext&));
     template<typename T>
-    void registerBidiStreamingMethod(std::string_view name, Task<void> (T::*method)(RpcContext&));
+    void register_bidi_streaming_method(std::string_view name, Task<void> (T::*method)(RpcContext&));
 
     // 注册真实流方法（STREAM_* 协议）
-    void registerStreamMethod(std::string_view name, RpcStreamHandler handler);
+    void register_stream_method(std::string_view name, RpcStreamHandler handler);
     template<typename T>
-    void registerStreamMethod(std::string_view name, Task<void> (T::*method)(RpcStream&));
+    void register_stream_method(std::string_view name, Task<void> (T::*method)(RpcStream&));
 };
 ```
 
 补充说明：
 
-- `registerMethod(...)` / `registerMethod<T>(...)` 是 `unary` 模式的兼容别名。
-- `findMethod(method, mode)` 会按 `RpcCallMode` 精确选择 `unary` / `client_stream` / `server_stream` / `bidi` 对应的处理器。
-- `registerStreamMethod(...)` 用于真实流协议，会把 `STREAM_INIT` 建立出的 `RpcStream` 会话交给业务层处理。
+- `register_method(...)` / `register_method<T>(...)` 是 `unary` 模式的兼容别名。
+- `find_method(method, mode)` 会按 `RpcCallMode` 精确选择 `unary` / `client_stream` / `server_stream` / `bidi` 对应的处理器。
+- `register_stream_method(...)` 用于真实流协议，会把 `STREAM_INIT` 建立出的 `RpcStream` 会话交给业务层处理。
 - 头文件里的 `RpcMethodSlots` 是 `RpcService` 私有注册表槽位：内部用 `handlers[] + registered[]` 保存三种 streaming handler；它不是扩展点，也不会单独暴露给业务层。
 
 **使用示例：**
@@ -415,12 +415,12 @@ protected:
 class EchoService : public RpcService {
 public:
     EchoService() : RpcService("EchoService") {
-        registerMethod("echo", &EchoService::echo);
+        register_method("echo", &EchoService::echo);
     }
 
     Task<void> echo(RpcContext& ctx) {
         auto& req = ctx.request();
-        ctx.setPayload(req.payload().data(), req.payload().size());
+        ctx.set_payload(req.payload().data(), req.payload().size());
         co_return;
     }
 };
@@ -444,13 +444,13 @@ public:
     const RpcResponse& response() const;
 
     // 设置错误码
-    void setError(RpcErrorCode code);
+    void set_error(RpcErrorCode code);
 
     // 设置响应数据
-    void setPayload(const char* data, size_t len);
-    void setPayload(const std::string& data);
-    void setPayload(std::vector<char>&& data);
-    void setPayload(const RpcPayloadView& view);
+    void set_payload(const char* data, size_t len);
+    void set_payload(const std::string& data);
+    void set_payload(std::vector<char>&& data);
+    void set_payload(const RpcPayloadView& view);
 };
 ```
 
@@ -466,13 +466,13 @@ public:
 
 ```cpp
 namespace detail {
-    std::array<struct iovec, 1>& emptyIovecs();
-    void consumeWritevIovecs(std::vector<iovec>& iovecs, size_t consumed);
+    std::array<struct iovec, 1>& empty_iovecs();
+    void consume_writev_iovecs(std::vector<iovec>& iovecs, size_t consumed);
 }
 ```
 
-- `emptyIovecs()`：为 `readv/writev` 基类提供空 `iovec` 占位
-- `consumeWritevIovecs(...)`：在部分写完成后推进 `iovec` 视图，支撑可续写等待体
+- `empty_iovecs()`：为 `readv/writev` 基类提供空 `iovec` 占位
+- `consume_writev_iovecs(...)`：在部分写完成后推进 `iovec` 视图，支撑可续写等待体
 
 #### `RingBufferReadAwaitable<Derived, SocketType>`
 
@@ -492,7 +492,7 @@ public:
 ```
 
 - 以 CRTP 方式复用 “先解析 RingBuffer、再按需继续 `readv`” 的共同行为
-- `Derived` 需要提供 `parseFromRingBuffer()`，返回：
+- `Derived` 需要提供 `parse_from_ring_buffer()`，返回：
   - `true`：消息已完整解析
   - `false`：数据仍不足，需要继续异步读取
   - `unexpected(RpcError)`：解析失败
@@ -546,16 +546,16 @@ public:
 
     // 获取 RPC 请求（服务端使用）
     // 返回 Awaitable: true=解析完成, false=需要继续读取
-    GetRpcRequestAwaitable<AsyncTcpSocket> getRequest(RpcRequest& request);
+    GetRpcRequestAwaitable<AsyncTcpSocket> get_request(RpcRequest& request);
 
     // 获取 RPC 响应（客户端使用）
-    GetRpcResponseAwaitable<AsyncTcpSocket> getResponse(RpcResponse& response);
+    GetRpcResponseAwaitable<AsyncTcpSocket> get_response(RpcResponse& response);
 
     // 获取消息头（流式传输使用）
-    GetRpcHeaderAwaitable<AsyncTcpSocket> getHeader(RpcHeader& header);
+    GetRpcHeaderAwaitable<AsyncTcpSocket> get_header(RpcHeader& header);
 
     // 获取消息体（流式传输使用）
-    GetRpcBodyAwaitable<AsyncTcpSocket> getBody(char* body, size_t body_len);
+    GetRpcBodyAwaitable<AsyncTcpSocket> get_body(char* body, size_t body_len);
 };
 ```
 
@@ -572,19 +572,19 @@ public:
     RpcWriter(const RpcWriterSetting& setting, AsyncTcpSocket& socket);
 
     // 发送 RPC 请求
-    SendRpcRequestAwaitable<AsyncTcpSocket> sendRequest(const RpcRequest& request);
+    SendRpcRequestAwaitable<AsyncTcpSocket> send_request(const RpcRequest& request);
 
     // 发送 RPC 响应
-    SendRpcResponseAwaitable<AsyncTcpSocket> sendResponse(const RpcResponse& response);
+    SendRpcResponseAwaitable<AsyncTcpSocket> send_response(const RpcResponse& response);
 
     // 发送原始数据（流式传输使用）
-    SendRawDataAwaitable<AsyncTcpSocket> sendRaw(const char* data, size_t len);
+    SendRawDataAwaitable<AsyncTcpSocket> send_raw(const char* data, size_t len);
 };
 ```
 
 补充公开别名：
 
-- `SendRawAwaitable = SendRawDataAwaitable<AsyncTcpSocket>`：`sendRaw(const char*, size_t)` 会先把数据复制进内部 `std::vector<char>`；`len == 0` 时 `await_ready()` 直接为 `true`
+- `SendRawAwaitable = SendRawDataAwaitable<AsyncTcpSocket>`：`send_raw(const char*, size_t)` 会先把数据复制进内部 `std::vector<char>`；`len == 0` 时 `await_ready()` 直接为 `true`
 
 #### RpcConn (RpcConnImpl\<AsyncTcpSocket\>)
 
@@ -605,8 +605,8 @@ public:
     ConnectAwaitable connect(const Host& host);
 
     // 获取读取器/写入器
-    RpcReader getReader();
-    RpcWriter getWriter();
+    RpcReader get_reader();
+    RpcWriter get_writer();
 
     // 获取底层 socket
     AsyncTcpSocket& socket();
@@ -631,7 +631,7 @@ public:
 ```cpp
 // 循环等待完成
 while (true) {
-    auto result = co_await reader.getRequest(request);
+    auto result = co_await reader.get_request(request);
     if (!result) {
         // 错误处理
         break;
@@ -674,13 +674,13 @@ public:
     RpcServerBuilder& host(std::string value);
     RpcServerBuilder& port(uint16_t value);
     RpcServerBuilder& backlog(int value);
-    RpcServerBuilder& ioSchedulerCount(size_t value);
-    RpcServerBuilder& parallelSchedulerCount(size_t value);
-    RpcServerBuilder& sequentialAffinity(size_t io_count, size_t parallel_count);
-    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus);
-    RpcServerBuilder& ringBufferSize(size_t value);
+    RpcServerBuilder& io_scheduler_count(size_t value);
+    RpcServerBuilder& parallel_scheduler_count(size_t value);
+    RpcServerBuilder& sequential_affinity(size_t io_count, size_t parallel_count);
+    bool custom_affinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus);
+    RpcServerBuilder& ring_buffer_size(size_t value);
     RpcServer build() const;
-    RpcServerConfig buildConfig() const;
+    RpcServerConfig build_config() const;
 };
 ```
 
@@ -694,7 +694,7 @@ public:
     ~RpcServer();  // 自动调用 stop()
 
     // 注册借用的服务实例（启动前调用，不执行堆分配）
-    std::expected<void, RpcError> registerService(RpcService& service);
+    std::expected<void, RpcError> register_service(RpcService& service);
 
     // 完成 Runtime/socket/bind/listen 后启动 accept 循环
     std::expected<void, RpcError> start();
@@ -703,20 +703,20 @@ public:
     void stop();
 
     // 检查是否运行中
-    bool isRunning() const;
+    bool is_running() const;
 
     // 获取内部 Runtime
     Runtime& runtime();
 
     // 获取最近一次异步运行错误；启动失败读取 start() 返回值
-    std::optional<RpcError> lastError() const;
+    std::optional<RpcError> last_error() const;
 };
 ```
 
 补充说明：
 
 - 头文件中的 `RouteCacheEntry` 是 `RpcServer` 私有路由缓存项，只用于最近命中优化；它不会出现在注册 / 调用公共接口里，也不应被业务代码持有。
-- `registerService` 不取得所有权，服务实例必须存活到服务器停止之后；服务名为空、重复或超过 64 个时通过 `std::expected` 返回错误。
+- `register_service` 不取得所有权，服务实例必须存活到服务器停止之后；服务名为空、重复或超过 64 个时通过 `std::expected` 返回错误。
 - `start()` 返回成功时监听 socket 已完成 `bind/listen`；runtime、socket、bind、listen 或 accept-loop 调度失败会直接返回 `RpcError`。
 
 **使用示例：**
@@ -729,7 +729,7 @@ config.host = "0.0.0.0";
 config.port = 9000;
 
 RpcServer server(config);
-if (auto registered = server.registerService(service); !registered) {
+if (auto registered = server.register_service(service); !registered) {
     return 1;
 }
 if (auto started = server.start(); !started) {
@@ -737,7 +737,7 @@ if (auto started = server.start(); !started) {
 }
 
 // 等待停止信号
-while (server.isRunning()) {
+while (server.is_running()) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
@@ -765,11 +765,11 @@ struct RpcClientConfig {
 ```cpp
 class RpcClientBuilder {
 public:
-    RpcClientBuilder& readerSetting(RpcReaderSetting setting);
-    RpcClientBuilder& writerSetting(RpcWriterSetting setting);
-    RpcClientBuilder& ringBufferSize(size_t size);
+    RpcClientBuilder& reader_setting(RpcReaderSetting setting);
+    RpcClientBuilder& writer_setting(RpcWriterSetting setting);
+    RpcClientBuilder& ring_buffer_size(size_t size);
     RpcClient build() const;
-    RpcClientConfig buildConfig() const;
+    RpcClientConfig build_config() const;
 };
 ```
 
@@ -790,7 +790,7 @@ public:
                           const std::string& payload);
     RpcCallAwaitable call(const std::string& service, const std::string& method);
 
-    RpcCallAwaitable callWithMode(const std::string& service,
+    RpcCallAwaitable call_with_mode(const std::string& service,
                                   const std::string& method,
                                   RpcCallMode mode,
                                   bool end_of_stream,
@@ -798,25 +798,25 @@ public:
                                   size_t payload_len);
 
     // 模式化流式 RPC 帧调用
-    RpcCallAwaitable callClientStreamFrame(const std::string& service,
+    RpcCallAwaitable call_client_stream_frame(const std::string& service,
                                            const std::string& method,
                                            const char* payload,
                                            size_t payload_len,
                                            bool end_of_stream);
-    RpcCallAwaitable callServerStreamRequest(const std::string& service,
+    RpcCallAwaitable call_server_stream_request(const std::string& service,
                                              const std::string& method,
                                              const char* payload,
                                              size_t payload_len);
-    RpcCallAwaitable callBidiStreamFrame(const std::string& service,
+    RpcCallAwaitable call_bidi_stream_frame(const std::string& service,
                                          const std::string& method,
                                          const char* payload,
                                          size_t payload_len,
                                          bool end_of_stream);
 
     // 创建真实流会话（STREAM_*）
-    std::expected<RpcStream, RpcError> createStream(const std::string& service,
+    std::expected<RpcStream, RpcError> create_stream(const std::string& service,
                                                     const std::string& method);
-    std::expected<RpcStream, RpcError> createStream(uint32_t stream_id,
+    std::expected<RpcStream, RpcError> create_stream(uint32_t stream_id,
                                                     const std::string& service = {},
                                                     const std::string& method = {});
 
@@ -824,22 +824,22 @@ public:
     CloseAwaitable close();
 
     // 获取读取器/写入器（高级用法）
-    RpcReader getReader();
-    RpcWriter getWriter();
+    RpcReader get_reader();
+    RpcWriter get_writer();
 
     // 获取底层 socket 和 RingBuffer（高级扩展/自定义协议桥接）
     AsyncTcpSocket& socket();
-    RingBuffer& ringBuffer();
+    RingBuffer& ring_buffer();
 };
 ```
 
 补充说明：
 
-- `call(...)` / `callClientStreamFrame(...)` / `callServerStreamRequest(...)` / `callBidiStreamFrame(...)` 都返回 `RpcCallAwaitable` **值对象**，不是引用。
+- `call(...)` / `call_client_stream_frame(...)` / `call_server_stream_request(...)` / `call_bidi_stream_frame(...)` 都返回 `RpcCallAwaitable` **值对象**，不是引用。
 - 因为返回值是 awaitable 对象，所以可以直接链式调用 `.timeout(std::chrono::milliseconds(...))`。
-- `callWithMode(...)` 是底层公开入口：它会显式设置 `RpcCallMode` 与 `end_of_stream` flag，然后构造 `RpcRequest` 并返回同一个 `RpcCallAwaitable`。
-- `callClientStreamFrame(...)` 和 `callBidiStreamFrame(...)` 需要显式传入 `end_of_stream`；`callServerStreamRequest(...)` 固定以单请求触发服务端流响应。
-- `createStream(...)` 只创建 `RpcStream` 会话对象，不会自动发送 `STREAM_INIT`；必须再显式调用 `sendInit()`。
+- `call_with_mode(...)` 是底层公开入口：它会显式设置 `RpcCallMode` 与 `end_of_stream` flag，然后构造 `RpcRequest` 并返回同一个 `RpcCallAwaitable`。
+- `call_client_stream_frame(...)` 和 `call_bidi_stream_frame(...)` 需要显式传入 `end_of_stream`；`call_server_stream_request(...)` 固定以单请求触发服务端流响应。
+- `create_stream(...)` 只创建 `RpcStream` 会话对象，不会自动发送 `STREAM_INIT`；必须再显式调用 `send_init()`。
 
 #### `RecvRpcResponseChainAwaitable<SocketType>`
 
@@ -928,22 +928,22 @@ public:
     StreamMessage();
     StreamMessage(uint32_t stream_id, const char* data, size_t len);
 
-    uint32_t streamId() const;
-    void streamId(uint32_t id);
+    uint32_t stream_id() const;
+    void stream_id(uint32_t id);
 
     const std::vector<char>& payload() const;
-    std::string payloadStr() const;
+    std::string payload_str() const;
     void payload(const char* data, size_t len);
     void payload(const std::string& data);
 
-    bool isEnd() const;
-    void setEnd(bool end = true);
+    bool is_end() const;
+    void set_end(bool end = true);
 
-    RpcMessageType messageType() const;
-    void messageType(RpcMessageType type);
+    RpcMessageType message_type() const;
+    void message_type(RpcMessageType type);
 
     std::vector<char> serialize(RpcMessageType type) const;
-    bool deserializeBody(const char* body, size_t length);
+    bool deserialize_body(const char* body, size_t length);
 };
 ```
 
@@ -957,12 +957,12 @@ public:
     StreamInitRequest();
     StreamInitRequest(uint32_t stream_id, std::string_view service, std::string_view method);
 
-    uint32_t streamId() const;
-    const std::string& serviceName() const;
-    const std::string& methodName() const;
+    uint32_t stream_id() const;
+    const std::string& service_name() const;
+    const std::string& method_name() const;
 
     std::vector<char> serialize() const;
-    bool deserializeBody(const char* body, size_t length);
+    bool deserialize_body(const char* body, size_t length);
 };
 ```
 
@@ -975,13 +975,13 @@ public:
 
     // 获取流消息
     // 返回 Awaitable: true=接收完成, false=需要继续
-    GetStreamMessageAwaitable<AsyncTcpSocket> getMessage(StreamMessage& msg);
+    GetStreamMessageAwaitable<AsyncTcpSocket> get_message(StreamMessage& msg);
 };
 ```
 
 补充公开名词：
 
-- `GetStreamMessageAwaitable<AsyncTcpSocket>` 是 `StreamReader::getMessage(...)` 的真实等待体类型
+- `GetStreamMessageAwaitable<AsyncTcpSocket>` 是 `StreamReader::get_message(...)` 的真实等待体类型
 - 其内部私有状态机 `State { ReadHeader, ReadBody }` 只用于跨多次 `co_await` 保留解析进度，不是业务侧可以设置的流模式
 
 #### StreamWriter (StreamWriterImpl\<AsyncTcpSocket\>)
@@ -992,20 +992,20 @@ public:
     StreamWriter(AsyncTcpSocket& socket, uint32_t stream_id);
 
     // 发送流数据
-    SendStreamDataAwaitable<AsyncTcpSocket> sendData(const char* data, size_t len);
-    SendStreamDataAwaitable<AsyncTcpSocket> sendData(const std::string& data);
+    SendStreamDataAwaitable<AsyncTcpSocket> send_data(const char* data, size_t len);
+    SendStreamDataAwaitable<AsyncTcpSocket> send_data(const std::string& data);
 
     // 发送流初始化请求
-    SendStreamDataAwaitable<AsyncTcpSocket> sendInit(const std::string& service, const std::string& method);
+    SendStreamDataAwaitable<AsyncTcpSocket> send_init(const std::string& service, const std::string& method);
 
     // 发送流初始化确认
-    SendStreamDataAwaitable<AsyncTcpSocket> sendInitAck();
+    SendStreamDataAwaitable<AsyncTcpSocket> send_init_ack();
 
     // 发送流结束
-    SendStreamDataAwaitable<AsyncTcpSocket> sendEnd();
+    SendStreamDataAwaitable<AsyncTcpSocket> send_end();
 
     // 发送流取消
-    SendStreamDataAwaitable<AsyncTcpSocket> sendCancel();
+    SendStreamDataAwaitable<AsyncTcpSocket> send_cancel();
 };
 ```
 
@@ -1017,35 +1017,35 @@ public:
     RpcStream(AsyncTcpSocket& socket, RingBuffer& ring_buffer, uint32_t stream_id,
               std::string service_name = {}, std::string method_name = {});
 
-    uint32_t streamId() const;
-    const std::string& serviceName() const;
-    const std::string& methodName() const;
-    void setRoute(std::string service_name, std::string method_name);
+    uint32_t stream_id() const;
+    const std::string& service_name() const;
+    const std::string& method_name() const;
+    void set_route(std::string service_name, std::string method_name);
 
-    StreamReader& getReader();
-    StreamWriter& getWriter();
+    StreamReader& get_reader();
+    StreamWriter& get_writer();
 
     GetStreamMessageAwaitable<AsyncTcpSocket> read(StreamMessage& msg);
-    SendStreamDataAwaitable<AsyncTcpSocket> sendInit();
-    SendStreamDataAwaitable<AsyncTcpSocket> sendInit(const std::string& service, const std::string& method);
-    SendStreamDataAwaitable<AsyncTcpSocket> sendInitAck();
-    SendStreamDataAwaitable<AsyncTcpSocket> sendData(const char* data, size_t len);
-    SendStreamDataAwaitable<AsyncTcpSocket> sendData(const std::string& data);
-    SendStreamDataAwaitable<AsyncTcpSocket> sendEnd();
-    SendStreamDataAwaitable<AsyncTcpSocket> sendCancel();
+    SendStreamDataAwaitable<AsyncTcpSocket> send_init();
+    SendStreamDataAwaitable<AsyncTcpSocket> send_init(const std::string& service, const std::string& method);
+    SendStreamDataAwaitable<AsyncTcpSocket> send_init_ack();
+    SendStreamDataAwaitable<AsyncTcpSocket> send_data(const char* data, size_t len);
+    SendStreamDataAwaitable<AsyncTcpSocket> send_data(const std::string& data);
+    SendStreamDataAwaitable<AsyncTcpSocket> send_end();
+    SendStreamDataAwaitable<AsyncTcpSocket> send_cancel();
 
     AsyncTcpSocket& socket();
-    RingBuffer& ringBuffer();
+    RingBuffer& ring_buffer();
 };
 ```
 
 **使用示例：**
 
 ```cpp
-Task<void> biStreamExample(RpcStream& stream) {
+Task<void> bi_stream_example(RpcStream& stream) {
     // 发送数据
     while (true) {
-        auto result = co_await stream.sendData("Hello");
+        auto result = co_await stream.send_data("Hello");
         if (!result || result.value()) break;
     }
 
@@ -1055,11 +1055,11 @@ Task<void> biStreamExample(RpcStream& stream) {
         auto result = co_await stream.read(msg);
         if (!result || result.value()) break;
     }
-    // msg.payloadStr() 获取数据
+    // msg.payload_str() 获取数据
 
     // 结束流
     while (true) {
-        auto result = co_await stream.sendEnd();
+        auto result = co_await stream.send_end();
         if (!result || result.value()) break;
     }
 }
@@ -1067,7 +1067,7 @@ Task<void> biStreamExample(RpcStream& stream) {
 
 ### streamsvc.h
 
-流式服务器，按 `STREAM_INIT` 的 `service/method` 路由到 `RpcService::registerStreamMethod`。
+流式服务器，按 `STREAM_INIT` 的 `service/method` 路由到 `RpcService::register_stream_method`。
 
 ```cpp
 struct RpcStreamServerConfig {
@@ -1085,13 +1085,13 @@ public:
     RpcStreamServerBuilder& host(std::string value);
     RpcStreamServerBuilder& port(uint16_t value);
     RpcStreamServerBuilder& backlog(int value);
-    RpcStreamServerBuilder& ioSchedulerCount(size_t value);
-    RpcStreamServerBuilder& parallelSchedulerCount(size_t value);
-    RpcStreamServerBuilder& sequentialAffinity(size_t io_count, size_t parallel_count);
-    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus);
-    RpcStreamServerBuilder& ringBufferSize(size_t value);
+    RpcStreamServerBuilder& io_scheduler_count(size_t value);
+    RpcStreamServerBuilder& parallel_scheduler_count(size_t value);
+    RpcStreamServerBuilder& sequential_affinity(size_t io_count, size_t parallel_count);
+    bool custom_affinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus);
+    RpcStreamServerBuilder& ring_buffer_size(size_t value);
     RpcStreamServer build() const;
-    RpcStreamServerConfig buildConfig() const;
+    RpcStreamServerConfig build_config() const;
 };
 
 class RpcStreamServer {
@@ -1099,12 +1099,12 @@ public:
     static constexpr size_t kMaxRegisteredServices = 64;
     explicit RpcStreamServer(const RpcStreamServerConfig& config);
     ~RpcStreamServer();
-    std::expected<void, RpcError> registerService(RpcService& service);
+    std::expected<void, RpcError> register_service(RpcService& service);
     std::expected<void, RpcError> start();
     void stop();
-    bool isRunning() const;
+    bool is_running() const;
     Runtime& runtime();
-    std::optional<RpcError> lastError() const;
+    std::optional<RpcError> last_error() const;
 };
 ```
 
@@ -1147,7 +1147,7 @@ struct DiscoveryError {
     Code code = OK;
     std::string message;
 
-    bool isOk() const;
+    bool is_ok() const;
     explicit operator bool() const;  // true 表示有错误
 };
 ```
@@ -1175,15 +1175,15 @@ concept ServiceRegistry = requires(T registry,
                                    const std::string& service_name,
                                    const ServiceEndpoint& endpoint,
                                    ServiceWatchCallback callback) {
-    { registry.registerService(endpoint) }
+    { registry.register_service(endpoint) }
         -> std::same_as<std::expected<void, DiscoveryError>>;
-    { registry.deregisterService(endpoint) }
+    { registry.deregister_service(endpoint) }
         -> std::same_as<std::expected<void, DiscoveryError>>;
-    { registry.discoverService(service_name) }
+    { registry.discover_service(service_name) }
         -> std::same_as<std::expected<std::vector<ServiceEndpoint>, DiscoveryError>>;
-    { registry.watchService(service_name, callback) }
+    { registry.watch_service(service_name, callback) }
         -> std::same_as<std::expected<void, DiscoveryError>>;
-    { registry.unwatchService(service_name) }
+    { registry.unwatch_service(service_name) }
         -> std::same_as<void>;
 };
 ```
@@ -1198,13 +1198,13 @@ concept AsyncServiceRegistry = requires(T registry,
                                         const std::string& service_name,
                                         const ServiceEndpoint& endpoint,
                                         ServiceWatchCallback callback) {
-    { registry.registerServiceAsync(endpoint) }   -> std::same_as<kernel::Task<void>>;
-    { registry.deregisterServiceAsync(endpoint) } -> std::same_as<kernel::Task<void>>;
-    { registry.discoverServiceAsync(service_name) } -> std::same_as<kernel::Task<void>>;
-    { registry.watchServiceAsync(service_name, callback) } -> std::same_as<kernel::Task<void>>;
-    { registry.unwatchServiceAsync(service_name) } -> std::same_as<kernel::Task<void>>;
-    { registry.lastError() }     -> std::same_as<DiscoveryError>;
-    { registry.lastEndpoints() } -> std::same_as<std::vector<ServiceEndpoint>>;
+    { registry.register_service_async(endpoint) }   -> std::same_as<kernel::Task<void>>;
+    { registry.deregister_service_async(endpoint) } -> std::same_as<kernel::Task<void>>;
+    { registry.discover_service_async(service_name) } -> std::same_as<kernel::Task<void>>;
+    { registry.watch_service_async(service_name, callback) } -> std::same_as<kernel::Task<void>>;
+    { registry.unwatch_service_async(service_name) } -> std::same_as<kernel::Task<void>>;
+    { registry.last_error() }     -> std::same_as<DiscoveryError>;
+    { registry.last_endpoints() } -> std::same_as<std::vector<ServiceEndpoint>>;
 };
 ```
 
@@ -1215,13 +1215,13 @@ concept AsyncServiceRegistry = requires(T registry,
 ```cpp
 class LocalServiceRegistry {
 public:
-    std::expected<void, DiscoveryError> registerService(const ServiceEndpoint& endpoint);
-    std::expected<void, DiscoveryError> deregisterService(const ServiceEndpoint& endpoint);
+    std::expected<void, DiscoveryError> register_service(const ServiceEndpoint& endpoint);
+    std::expected<void, DiscoveryError> deregister_service(const ServiceEndpoint& endpoint);
     std::expected<std::vector<ServiceEndpoint>, DiscoveryError>
-        discoverService(const std::string& service_name);
+        discover_service(const std::string& service_name);
     std::expected<void, DiscoveryError>
-        watchService(const std::string& service_name, ServiceWatchCallback callback);
-    void unwatchService(const std::string& service_name);
+        watch_service(const std::string& service_name, ServiceWatchCallback callback);
+    void unwatch_service(const std::string& service_name);
 };
 ```
 
@@ -1232,15 +1232,15 @@ public:
 ```cpp
 class AsyncLocalServiceRegistry {
 public:
-    kernel::Task<void> registerServiceAsync(const ServiceEndpoint& endpoint);
-    kernel::Task<void> deregisterServiceAsync(const ServiceEndpoint& endpoint);
-    kernel::Task<void> discoverServiceAsync(const std::string& service_name);
-    kernel::Task<void> watchServiceAsync(const std::string& service_name,
+    kernel::Task<void> register_service_async(const ServiceEndpoint& endpoint);
+    kernel::Task<void> deregister_service_async(const ServiceEndpoint& endpoint);
+    kernel::Task<void> discover_service_async(const std::string& service_name);
+    kernel::Task<void> watch_service_async(const std::string& service_name,
                                         ServiceWatchCallback callback);
-    kernel::Task<void> unwatchServiceAsync(const std::string& service_name);
+    kernel::Task<void> unwatch_service_async(const std::string& service_name);
 
-    DiscoveryError lastError() const;
-    std::vector<ServiceEndpoint> lastEndpoints() const;
+    DiscoveryError last_error() const;
+    std::vector<ServiceEndpoint> last_endpoints() const;
 };
 ```
 
@@ -1269,7 +1269,7 @@ public:
 
     // 获取服务实例（通过负载均衡选择）
     std::expected<ServiceEndpoint, DiscoveryError>
-        getServiceEndpoint(const std::string& service_name);
+        get_service_endpoint(const std::string& service_name);
 
     // 监听服务变更
     std::expected<void, DiscoveryError>
@@ -1292,12 +1292,12 @@ ep.host = "127.0.0.1";
 ep.port = 9000;
 ep.instance_id = "instance-1";
 ep.weight = 100;
-registry.registerService(ep);
+registry.register_service(ep);
 
 // 使用轮询负载均衡
 ServiceDiscoveryClient<LocalServiceRegistry, RoundRobinSelector> client(registry);
 
-auto result = client.getServiceEndpoint("EchoService");
+auto result = client.get_service_endpoint("EchoService");
 if (result) {
     auto& selected = result.value();
     // selected.host, selected.port

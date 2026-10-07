@@ -1,6 +1,6 @@
 /**
  * @file b15_task_timeout_contention.cc
- * @brief 压测 spawnBlocking join/error 交付与 WithTimeout 裁决热路径。
+ * @brief 压测 spawn_blocking join/error 交付与 WithTimeout 裁决热路径。
  *
  * 关键覆盖点：
  * - blocking callable 在成功和异常路径下的提交、完成、join 吞吐。
@@ -34,7 +34,7 @@ struct Sample {
     double ops_per_sec = 0.0;
 };
 
-Sample makeSample(std::size_t operations,
+Sample make_sample(std::size_t operations,
                   std::chrono::steady_clock::duration elapsed)
 {
     const auto elapsed_ns =
@@ -47,17 +47,17 @@ Sample makeSample(std::size_t operations,
     };
 }
 
-Runtime makeRuntime()
+Runtime make_runtime()
 {
     return RuntimeBuilder()
-        .ioSchedulerCount(0)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(0)
+        .parallel_scheduler_count(1)
         .build();
 }
 
-void benchSpawnBlockingSuccess()
+void bench_spawn_blocking_success()
 {
-    Runtime runtime = makeRuntime();
+    Runtime runtime = make_runtime();
     auto started = runtime.start();
     if (!started.has_value()) {
         throw std::runtime_error("runtime failed to start");
@@ -68,7 +68,7 @@ void benchSpawnBlockingSuccess()
 
     const auto start = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < kBlockingIterations; ++i) {
-        auto handle = runtime.spawnBlocking([i]() {
+        auto handle = runtime.spawn_blocking([i]() {
             return static_cast<int>(i & 0x7f);
         });
         if (!handle.has_value()) {
@@ -85,7 +85,7 @@ void benchSpawnBlockingSuccess()
         }
         ++completed;
     }
-    const auto sample = makeSample(completed, std::chrono::steady_clock::now() - start);
+    const auto sample = make_sample(completed, std::chrono::steady_clock::now() - start);
     runtime.stop();
 
     LogInfo("[SpawnBlockingSuccess] tasks={}, time={}ms, throughput={:.0f} joins/s",
@@ -94,9 +94,9 @@ void benchSpawnBlockingSuccess()
             sample.ops_per_sec);
 }
 
-void benchSpawnBlockingException()
+void bench_spawn_blocking_exception()
 {
-    Runtime runtime = makeRuntime();
+    Runtime runtime = make_runtime();
     auto started = runtime.start();
     if (!started.has_value()) {
         throw std::runtime_error("runtime failed to start");
@@ -107,7 +107,7 @@ void benchSpawnBlockingException()
 
     const auto start = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < kBlockingIterations; ++i) {
-        auto handle = runtime.spawnBlocking([]() -> int {
+        auto handle = runtime.spawn_blocking([]() -> int {
             throw std::runtime_error("expected benchmark exception");
         });
         if (!handle.has_value()) {
@@ -125,7 +125,7 @@ void benchSpawnBlockingException()
         }
         ++completed;
     }
-    const auto sample = makeSample(completed, std::chrono::steady_clock::now() - start);
+    const auto sample = make_sample(completed, std::chrono::steady_clock::now() - start);
     runtime.stop();
 
     LogInfo("[SpawnBlockingException] tasks={}, time={}ms, throughput={:.0f} joins/s",
@@ -134,12 +134,12 @@ void benchSpawnBlockingException()
             sample.ops_per_sec);
 }
 
-auto makeTimedRecv(IOController& controller, char* buffer)
+auto make_timed_recv(IOController& controller, char* buffer)
 {
     return RecvAwaitable(&controller, buffer, 1).timeout(1ms);
 }
 
-void benchTimeoutCompletionWins()
+void bench_timeout_completion_wins()
 {
     std::size_t completed = 0;
     const auto start = std::chrono::steady_clock::now();
@@ -147,15 +147,15 @@ void benchTimeoutCompletionWins()
     for (std::size_t i = 0; i < kTimeoutIterations; ++i) {
         char buffer = 0;
         IOController controller(GHandle{.fd = -1});
-        auto awaitable = makeTimedRecv(controller, &buffer);
-        awaitable.ensureTimer();
+        auto awaitable = make_timed_recv(controller, &buffer);
+        awaitable.ensure_timer();
 
-        if (!controller.fillAwaitable(RECV, &awaitable.m_inner)) {
+        if (!controller.fill_awaitable(RECV, &awaitable.m_inner)) {
             throw std::runtime_error("failed to fill recv awaitable");
         }
         awaitable.m_inner.m_result = size_t{1};
-        controller.removeAwaitable(RECV);
-        awaitable.m_timer->handleTimeout();
+        controller.remove_awaitable(RECV);
+        awaitable.m_timer->handle_timeout();
 
         auto result = awaitable.await_resume();
         if (!result.has_value() || *result != 1) {
@@ -164,14 +164,14 @@ void benchTimeoutCompletionWins()
         ++completed;
     }
 
-    const auto sample = makeSample(completed, std::chrono::steady_clock::now() - start);
+    const auto sample = make_sample(completed, std::chrono::steady_clock::now() - start);
     LogInfo("[TimeoutCompletionWins] iterations={}, time={}ms, throughput={:.0f} ops/s",
             completed,
             sample.elapsed_ms,
             sample.ops_per_sec);
 }
 
-void benchTimeoutWins()
+void bench_timeout_wins()
 {
     std::size_t completed = 0;
     const auto start = std::chrono::steady_clock::now();
@@ -179,13 +179,13 @@ void benchTimeoutWins()
     for (std::size_t i = 0; i < kTimeoutIterations; ++i) {
         char buffer = 0;
         IOController controller(GHandle{.fd = -1});
-        auto awaitable = makeTimedRecv(controller, &buffer);
-        awaitable.ensureTimer();
+        auto awaitable = make_timed_recv(controller, &buffer);
+        awaitable.ensure_timer();
 
-        if (!controller.fillAwaitable(RECV, &awaitable.m_inner)) {
+        if (!controller.fill_awaitable(RECV, &awaitable.m_inner)) {
             throw std::runtime_error("failed to fill recv awaitable");
         }
-        awaitable.m_timer->handleTimeout();
+        awaitable.m_timer->handle_timeout();
 
         auto result = awaitable.await_resume();
         if (result.has_value() || !IOError::contains(result.error().code(), kTimeout)) {
@@ -194,7 +194,7 @@ void benchTimeoutWins()
         ++completed;
     }
 
-    const auto sample = makeSample(completed, std::chrono::steady_clock::now() - start);
+    const auto sample = make_sample(completed, std::chrono::steady_clock::now() - start);
     LogInfo("[TimeoutWins] iterations={}, time={}ms, throughput={:.0f} ops/s",
             completed,
             sample.elapsed_ms,
@@ -205,14 +205,14 @@ void benchTimeoutWins()
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    benchSpawnBlockingSuccess();
-    benchSpawnBlockingException();
-    benchTimeoutCompletionWins();
-    benchTimeoutWins();
+    bench_spawn_blocking_success();
+    bench_spawn_blocking_exception();
+    bench_timeout_completion_wins();
+    bench_timeout_wins();
 
     std::cout << "B15-TaskTimeoutContention PASS\n";
     return 0;

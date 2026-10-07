@@ -2,5 +2,5 @@
 
 int main() {
     auto id = galay::tracing::TraceId::zero();
-    return id.isValid() ? 1 : 0;
+    return id.is_valid() ? 1 : 0;
 }

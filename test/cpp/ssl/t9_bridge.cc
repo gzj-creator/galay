@@ -18,13 +18,13 @@ struct SurfaceMachine {
         return SslMachineAction<result_type>::complete(result_type{0});
     }
 
-    void onHandshake(std::expected<void, SslError>) {}
-    void onRecv(std::expected<Bytes, SslError>) {}
-    void onSend(std::expected<size_t, SslError>) {}
-    void onShutdown(std::expected<void, SslError>) {}
+    void on_handshake(std::expected<void, SslError>) {}
+    void on_recv(std::expected<Bytes, SslError>) {}
+    void on_send(std::expected<size_t, SslError>) {}
+    void on_shutdown(std::expected<void, SslError>) {}
 };
 
-static int runChild(IOErrorCode code)
+static int run_child(IOErrorCode code)
 {
     SslSocket socket(nullptr, IPType::IPV4);
     SslStateMachineAwaitable<SurfaceMachine> awaitable(socket.controller(), &socket, SurfaceMachine{});
@@ -37,7 +37,7 @@ static int runChild(IOErrorCode code)
     return static_cast<int>(result.error().code()) + 1;
 }
 
-static bool expectChildExit(IOErrorCode input, SslErrorCode expected)
+static bool expect_child_exit(IOErrorCode input, SslErrorCode expected)
 {
     const pid_t pid = ::fork();
     if (pid < 0) {
@@ -45,7 +45,7 @@ static bool expectChildExit(IOErrorCode input, SslErrorCode expected)
         return false;
     }
     if (pid == 0) {
-        ::_exit(runChild(input));
+        ::_exit(run_child(input));
     }
 
     int status = 0;
@@ -70,10 +70,10 @@ static bool expectChildExit(IOErrorCode input, SslErrorCode expected)
 
 int main()
 {
-    if (!expectChildExit(kNotReady, SslErrorCode::kUnknown)) {
+    if (!expect_child_exit(kNotReady, SslErrorCode::kUnknown)) {
         return 1;
     }
-    if (!expectChildExit(kTimeout, SslErrorCode::kTimeout)) {
+    if (!expect_child_exit(kTimeout, SslErrorCode::kTimeout)) {
         return 1;
     }
     return 0;

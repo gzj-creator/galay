@@ -88,21 +88,21 @@ public:
      * @param oid 24 字符的十六进制 ObjectId 字符串
      * @return 成功时返回类型为 ObjectId 的 MongoValue；失败时返回错误描述
      */
-    static std::expected<MongoValue, std::string> fromObjectId(std::string oid);
+    static std::expected<MongoValue, std::string> from_object_id(std::string oid);
 
     /**
      * @brief 从毫秒时间戳创建 DateTime 值
      * @param millis UTC 毫秒时间戳
      * @return 类型为 DateTime 的 MongoValue
      */
-    static MongoValue fromDateTime(int64_t millis);
+    static MongoValue from_date_time(int64_t millis);
 
     /**
      * @brief 从时间戳创建 Timestamp 值
      * @param ts MongoDB 内部时间戳
      * @return 类型为 Timestamp 的 MongoValue
      */
-    static MongoValue fromTimestamp(uint64_t ts);
+    static MongoValue from_timestamp(uint64_t ts);
     /// @}
 
     /**
@@ -113,18 +113,18 @@ public:
 
     /// @name 类型判断
     /// @{
-    bool isNull() const;       ///< 判断是否为 Null
-    bool isBool() const;       ///< 判断是否为 Bool
-    bool isInt32() const;      ///< 判断是否为 Int32
-    bool isInt64() const;      ///< 判断是否为 Int64
-    bool isDouble() const;     ///< 判断是否为 Double
-    bool isString() const;     ///< 判断是否为 String
-    bool isBinary() const;     ///< 判断是否为 Binary
-    bool isDocument() const;   ///< 判断是否为 Document
-    bool isArray() const;      ///< 判断是否为 Array
-    bool isObjectId() const;   ///< 判断是否为 ObjectId
-    bool isDateTime() const;   ///< 判断是否为 DateTime
-    bool isTimestamp() const;  ///< 判断是否为 Timestamp
+    bool is_null() const;       ///< 判断是否为 Null
+    bool is_bool() const;       ///< 判断是否为 Bool
+    bool is_int32() const;      ///< 判断是否为 Int32
+    bool is_int64() const;      ///< 判断是否为 Int64
+    bool is_double() const;     ///< 判断是否为 Double
+    bool is_string() const;     ///< 判断是否为 String
+    bool is_binary() const;     ///< 判断是否为 Binary
+    bool is_document() const;   ///< 判断是否为 Document
+    bool is_array() const;      ///< 判断是否为 Array
+    bool is_object_id() const;   ///< 判断是否为 ObjectId
+    bool is_date_time() const;   ///< 判断是否为 DateTime
+    bool is_timestamp() const;  ///< 判断是否为 Timestamp
     /// @}
 
     /// @name 值提取（类型不匹配时返回默认值或空引用）
@@ -134,58 +134,58 @@ public:
      * @param default_value 类型不匹配时的默认值
      * @return 布尔值
      */
-    bool toBool(bool default_value = false) const;
+    bool to_bool(bool default_value = false) const;
 
     /**
      * @brief 提取 32 位整数值
      * @param default_value 类型不匹配时的默认值
      * @return 32 位整数
      */
-    int32_t toInt32(int32_t default_value = 0) const;
+    int32_t to_int32(int32_t default_value = 0) const;
 
     /**
      * @brief 提取 64 位整数值
      * @param default_value 类型不匹配时的默认值
      * @return 64 位整数
      */
-    int64_t toInt64(int64_t default_value = 0) const;
+    int64_t to_int64(int64_t default_value = 0) const;
 
     /**
      * @brief 提取双精度浮点数值
      * @param default_value 类型不匹配时的默认值
      * @return 双精度浮点数
      */
-    double toDouble(double default_value = 0.0) const;
+    double to_double(double default_value = 0.0) const;
 
     /**
      * @brief 提取字符串引用
      * @return 字符串的只读引用；类型不匹配时返回空字符串引用
      */
-    const std::string& toString() const;
+    const std::string& to_string() const;
 
     /**
      * @brief 提取二进制数据引用
      * @return 二进制数据的只读引用；类型不匹配时返回空 Binary 引用
      */
-    const Binary& toBinary() const;
+    const Binary& to_binary() const;
 
     /**
      * @brief 提取嵌套文档引用
      * @return 文档的只读引用
      */
-    const MongoDocument& toDocument() const;
+    const MongoDocument& to_document() const;
 
     /**
      * @brief 提取数组引用
      * @return 数组的只读引用
      */
-    const MongoArray& toArray() const;
+    const MongoArray& to_array() const;
     /// @}
 
     /// @name 可变引用访问（类型不匹配时行为未定义）
     /// @{
-    MongoDocument& asDocument();  ///< 获取文档的可变引用
-    MongoArray& asArray();        ///< 获取数组的可变引用
+    MongoDocument& as_document();  ///< 获取文档的可变引用
+    MongoArray& as_array();        ///< 获取数组的可变引用
     /// @}
 
 private:
@@ -368,11 +368,11 @@ public:
 
     /// @name 便捷取值方法（键不存在或类型不匹配时返回默认值）
     /// @{
-    std::string getString(const std::string& key, std::string default_value = "") const;     ///< 获取字符串值
-    int32_t getInt32(const std::string& key, int32_t default_value = 0) const;               ///< 获取 32 位整数值
-    int64_t getInt64(const std::string& key, int64_t default_value = 0) const;               ///< 获取 64 位整数值
-    double getDouble(const std::string& key, double default_value = 0.0) const;              ///< 获取双精度浮点数值
-    bool getBool(const std::string& key, bool default_value = false) const;                  ///< 获取布尔值
+    std::string get_string(const std::string& key, std::string default_value = "") const;     ///< 获取字符串值
+    int32_t get_int32(const std::string& key, int32_t default_value = 0) const;               ///< 获取 32 位整数值
+    int64_t get_int64(const std::string& key, int64_t default_value = 0) const;               ///< 获取 64 位整数值
+    double get_double(const std::string& key, double default_value = 0.0) const;              ///< 获取双精度浮点数值
+    bool get_bool(const std::string& key, bool default_value = false) const;                  ///< 获取布尔值
     /// @}
 
     /**
@@ -451,19 +451,19 @@ public:
      * @brief 判断响应中是否包含命令错误
      * @return 包含错误时返回 true
      */
-    bool hasCommandError() const;
+    bool has_command_error() const;
 
     /**
      * @brief 返回服务端错误码
      * @return 错误码；无错误时返回 0
      */
-    int32_t errorCode() const;
+    int32_t error_code() const;
 
     /**
      * @brief 返回服务端错误消息
      * @return 错误消息字符串
      */
-    std::string errorMessage() const;
+    std::string error_message() const;
 
 private:
     MongoReply(const MongoReply&) = delete;

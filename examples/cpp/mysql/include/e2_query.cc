@@ -6,8 +6,8 @@ using namespace galay::mysql;
 
 int main()
 {
-    const auto cfg = mysql_example::loadDbExampleConfig();
-    mysql_example::printDbExampleConfig(cfg);
+    const auto cfg = mysql_example::load_db_example_config();
+    mysql_example::print_db_example_config(cfg);
 
     MysqlClient session;
     auto conn = session.connect(cfg.host, cfg.port, cfg.user, cfg.password, cfg.database);
@@ -23,8 +23,8 @@ int main()
         return 1;
     }
 
-    if (res->rowCount() > 0) {
-        std::cout << "[E2] NOW() => " << res->row(0).getString(0) << std::endl;
+    if (res->row_count() > 0) {
+        std::cout << "[E2] NOW() => " << res->row(0).get_string(0) << std::endl;
     }
 
     session.close();

@@ -53,9 +53,9 @@ public:
      * @param hex 十六进制字符串视图
      * @return 解析成功返回对应 SpanId，否则返回 zero()
      */
-    [[nodiscard]] static SpanId fromHex(std::string_view hex) noexcept {
+    [[nodiscard]] static SpanId from_hex(std::string_view hex) noexcept {
         SpanId id;
-        if (!detail::parseHex(hex, id.m_bytes.data(), id.m_bytes.size()) || !id.isValid()) {
+        if (!detail::parse_hex(hex, id.m_bytes.data(), id.m_bytes.size()) || !id.is_valid()) {
             return zero();
         }
         return id;
@@ -65,17 +65,17 @@ public:
      * @brief 检查 SpanId 是否有效（非全零）
      * @return 有效返回 true，全零返回 false
      */
-    [[nodiscard]] constexpr bool isValid() const noexcept {
-        return detail::hasNonZeroByte(m_bytes.data(), m_bytes.size());
+    [[nodiscard]] constexpr bool is_valid() const noexcept {
+        return detail::has_non_zero_byte(m_bytes.data(), m_bytes.size());
     }
 
     /**
      * @brief 将 SpanId 转换为十六进制字符串
      * @return 16 个字符的小写十六进制字符串
      */
-    [[nodiscard]] std::string toHex() const {
+    [[nodiscard]] std::string to_hex() const {
         std::string hex(kHexLength, '\0');
-        static_cast<void>(toHex(hex.data(), hex.size()));
+        static_cast<void>(to_hex(hex.data(), hex.size()));
         return hex;
     }
 
@@ -85,17 +85,17 @@ public:
      * @param len 输出缓冲区大小（至少 kHexLength）
      * @return 成功返回 true，缓冲区不足返回 false
      */
-    [[nodiscard]] bool toHex(char* out, std::size_t len) const noexcept {
-        return detail::formatHex(m_bytes.data(), m_bytes.size(), out, len);
+    [[nodiscard]] bool to_hex(char* out, std::size_t len) const noexcept {
+        return detail::format_hex(m_bytes.data(), m_bytes.size(), out, len);
     }
 
     /**
      * @brief 将 SpanId 格式化为固定大小的十六进制字符数组
      * @return 包含 kHexLength 个字符的数组
      */
-    [[nodiscard]] std::array<char, kHexLength> toHexArray() const noexcept {
+    [[nodiscard]] std::array<char, kHexLength> to_hex_array() const noexcept {
         std::array<char, kHexLength> hex{};
-        static_cast<void>(toHex(hex.data(), hex.size()));
+        static_cast<void>(to_hex(hex.data(), hex.size()));
         return hex;
     }
 
@@ -110,7 +110,7 @@ public:
     friend constexpr bool operator==(const SpanId&, const SpanId&) noexcept = default;
 
 private:
-    friend SpanId detail::makeRandomSpanId() noexcept;
+    friend SpanId detail::make_random_span_id() noexcept;
 
     explicit constexpr SpanId(Bytes bytes) noexcept
         : m_bytes(bytes) {

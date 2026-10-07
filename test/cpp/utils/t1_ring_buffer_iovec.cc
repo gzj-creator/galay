@@ -18,19 +18,19 @@ int main()
     const size_t default_capacity = default_buffer.capacity();
 
     std::vector<char> prefix(default_capacity - 2, 'x');
-    if (default_buffer.tryWriteBatch(prefix.data(), prefix.size()) !=
+    if (default_buffer.try_write_batch(prefix.data(), prefix.size()) !=
         prefix.size()) {
         std::cerr << "failed to prepare default mmap prefix\n";
         return 1;
     }
     default_buffer.consume(default_capacity - 4);
-    if (default_buffer.tryWriteBatch("abcdef", 6) != 6) {
+    if (default_buffer.try_write_batch("abcdef", 6) != 6) {
         std::cerr << "failed to prepare default mmap wrapped payload\n";
         return 1;
     }
 
     std::array<iovec, 2> default_read_iovecs{};
-    size_t count = default_buffer.getReadIovecs(default_read_iovecs);
+    size_t count = default_buffer.get_read_iovecs(default_read_iovecs);
     if (count != 1 || default_read_iovecs[0].iov_len != default_buffer.readable()) {
         std::cerr << "default mmap strategy must expose wrapped readable data as one iovec\n";
         return 1;
@@ -39,7 +39,7 @@ int main()
     galay::utils::RingBuffer<RingBufferBackendStrategy::Vector, std::dynamic_extent> buffer(8);
 
     std::array<iovec, 2> write_iovecs{};
-    count = buffer.getWriteIovecs(write_iovecs);
+    count = buffer.get_write_iovecs(write_iovecs);
     if (count != 1 || write_iovecs[0].iov_len != 8) {
         std::cerr << "unexpected initial write iovec layout\n";
         return 1;
@@ -49,7 +49,7 @@ int main()
     buffer.produce(6);
 
     std::array<iovec, 2> read_iovecs{};
-    count = buffer.getReadIovecs(read_iovecs);
+    count = buffer.get_read_iovecs(read_iovecs);
     if (count != 1 || read_iovecs[0].iov_len != 6) {
         std::cerr << "unexpected first read iovec layout\n";
         return 1;
@@ -63,7 +63,7 @@ int main()
 
     buffer.consume(5);
 
-    count = buffer.getWriteIovecs(write_iovecs);
+    count = buffer.get_write_iovecs(write_iovecs);
     if (count != 2) {
         std::cerr << "expected wrapped write iovecs\n";
         return 1;
@@ -73,7 +73,7 @@ int main()
     std::memcpy(write_iovecs[1].iov_base, "ij", 2);
     buffer.produce(4);
 
-    count = buffer.getReadIovecs(read_iovecs);
+    count = buffer.get_read_iovecs(read_iovecs);
     if (count != 2) {
         std::cerr << "expected wrapped read iovecs\n";
         return 1;

@@ -28,10 +28,10 @@ int main()
 {
     RpcRequest empty_route(1, "", "");
     auto empty_wire = empty_route.serialize();
-    auto empty_decoded = RpcCodec::decodeRequest(empty_wire.data(), empty_wire.size());
+    auto empty_decoded = RpcCodec::decode_request(empty_wire.data(), empty_wire.size());
     if (auto rc = expect(empty_decoded.has_value() &&
-                             empty_decoded->serviceName().empty() &&
-                             empty_decoded->methodName().empty(),
+                             empty_decoded->service_name().empty() &&
+                             empty_decoded->method_name().empty(),
                          "empty service/method did not round trip")) {
         return rc;
     }
@@ -39,10 +39,10 @@ int main()
     std::string max_name(255, 'a');
     RpcRequest max_route(2, max_name, max_name);
     auto max_wire = max_route.serialize();
-    auto max_decoded = RpcCodec::decodeRequest(max_wire.data(), max_wire.size());
+    auto max_decoded = RpcCodec::decode_request(max_wire.data(), max_wire.size());
     if (auto rc = expect(max_decoded.has_value() &&
-                             max_decoded->serviceName() == max_name &&
-                             max_decoded->methodName() == max_name,
+                             max_decoded->service_name() == max_name &&
+                             max_decoded->method_name() == max_name,
                          "max service/method length did not round trip")) {
         return rc;
     }
@@ -52,7 +52,7 @@ int main()
     wrong_magic.m_magic = 0;
     wrong_magic.m_type = static_cast<uint8_t>(RpcMessageType::REQUEST);
     wrong_magic.serialize(header_buf);
-    if (auto rc = expect(!RpcCodec::decodeRequest(header_buf, sizeof(header_buf)).has_value(),
+    if (auto rc = expect(!RpcCodec::decode_request(header_buf, sizeof(header_buf)).has_value(),
                          "wrong magic header was accepted")) {
         return rc;
     }
@@ -61,13 +61,13 @@ int main()
     oversized.m_type = static_cast<uint8_t>(RpcMessageType::REQUEST);
     oversized.m_body_length = RPC_MAX_BODY_SIZE + 1;
     oversized.serialize(header_buf);
-    if (auto rc = expect(!RpcCodec::decodeRequest(header_buf, sizeof(header_buf)).has_value(),
+    if (auto rc = expect(!RpcCodec::decode_request(header_buf, sizeof(header_buf)).has_value(),
                          "oversized body header was accepted")) {
         return rc;
     }
 
     RpcClient stream_client;
-    auto stream_before_connect = stream_client.createStream(1, "StreamService", "open");
+    auto stream_before_connect = stream_client.create_stream(1, "StreamService", "open");
     if (auto rc = expect(!stream_before_connect.has_value() &&
                              stream_before_connect.error().code() == RpcErrorCode::CONNECTION_CLOSED,
                          "createStream before connect did not return connection closed")) {
@@ -98,7 +98,7 @@ int main()
 
     auto truncated = max_wire;
     truncated.resize(truncated.size() - 1);
-    if (auto rc = expect(!RpcCodec::decodeRequest(truncated.data(), truncated.size()).has_value(),
+    if (auto rc = expect(!RpcCodec::decode_request(truncated.data(), truncated.size()).has_value(),
                          "truncated request body was accepted")) {
         return rc;
     }
@@ -107,14 +107,14 @@ int main()
     options.max_in_flight = 1;
     options.max_outbound_queue = 1;
     RpcChannelState state(options);
-    auto first = state.registerPending(9);
-    auto duplicate = state.registerPending(9);
+    auto first = state.register_pending(9);
+    auto duplicate = state.register_pending(9);
     if (auto rc = expect(first.has_value() && !duplicate.has_value() &&
                              duplicate.error().code() == RpcErrorCode::RESOURCE_EXHAUSTED,
                          "duplicate/pressure pending boundary did not reject")) {
         return rc;
     }
-    state.failPending(9, RpcError(RpcErrorCode::CANCELLED, "cleanup"));
+    state.fail_pending(9, RpcError(RpcErrorCode::CANCELLED, "cleanup"));
 
     RpcOutboundBackpressure outbound(options);
     auto reserve = outbound.reserve(1);
@@ -132,7 +132,7 @@ int main()
 
     RpcCallOptions expired;
     expired.deadline(RpcClock::now());
-    if (auto rc = expect(expired.effectiveDeadline(RpcClock::now()).has_value(),
+    if (auto rc = expect(expired.effective_deadline(RpcClock::now()).has_value(),
                          "deadline while queued was not representable")) {
         return rc;
     }

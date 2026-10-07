@@ -17,26 +17,26 @@ namespace {
 
 std::atomic<int> g_completed{0};
 
-Task<void> countingTask() {
+Task<void> counting_task() {
     g_completed.fetch_add(1, std::memory_order_relaxed);
     co_return;
 }
 
 template <typename SchedulerT>
-bool verifyInjectedBurstFastPath(const char* label) {
+bool verify_injected_burst_fast_path(const char* label) {
     constexpr int kTaskCount = 300;
 
     g_completed.store(0, std::memory_order_relaxed);
     SchedulerT scheduler;
 
     for (int i = 0; i < kTaskCount; ++i) {
-        if (!scheduler.schedule(detail::TaskAccess::detachTask(countingTask()))) {
+        if (!scheduler.schedule(detail::TaskAccess::detach_task(counting_task()))) {
             std::cerr << "[T41] " << label << " failed to enqueue injected task " << i << "\n";
             return false;
         }
     }
 
-    SchedulerTestAccess::processPending(scheduler);
+    SchedulerTestAccess::process_pending(scheduler);
 
     const int completed_after_first_pass = g_completed.load(std::memory_order_relaxed);
     if (completed_after_first_pass != kTaskCount) {
@@ -49,13 +49,13 @@ bool verifyInjectedBurstFastPath(const char* label) {
     return true;
 }
 
-bool verifyInjectedBurstFastPath() {
+bool verify_injected_burst_fast_path() {
 #if defined(USE_KQUEUE)
-    return verifyInjectedBurstFastPath<KqueueScheduler>("kqueue");
+    return verify_injected_burst_fast_path<KqueueScheduler>("kqueue");
 #elif defined(USE_EPOLL)
-    return verifyInjectedBurstFastPath<EpollScheduler>("epoll");
+    return verify_injected_burst_fast_path<EpollScheduler>("epoll");
 #elif defined(USE_IOURING)
-    return verifyInjectedBurstFastPath<IOUringScheduler>("io_uring");
+    return verify_injected_burst_fast_path<IOUringScheduler>("io_uring");
 #else
     std::cout << "T41-SchedulerInjectedBurstFastPath SKIP\n";
     return true;
@@ -65,7 +65,7 @@ bool verifyInjectedBurstFastPath() {
 }  // namespace
 
 int main() {
-    if (!verifyInjectedBurstFastPath()) {
+    if (!verify_injected_burst_fast_path()) {
         return 1;
     }
 

@@ -36,7 +36,7 @@ struct State
     std::chrono::steady_clock::time_point measurement_finished{};
 };
 
-double percentileMs(const std::vector<uint64_t>& sorted_samples, double fraction)
+double percentile_ms(const std::vector<uint64_t>& sorted_samples, double fraction)
 {
     if (sorted_samples.empty()) {
         return 0.0;
@@ -46,7 +46,7 @@ double percentileMs(const std::vector<uint64_t>& sorted_samples, double fraction
     return static_cast<double>(sorted_samples[index]) / 1e6;
 }
 
-void markWorkerComplete(State* state,
+void mark_worker_complete(State* state,
                         const std::shared_ptr<std::atomic<size_t>>& remaining,
                         const std::shared_ptr<AsyncWaiter<void>>& done_waiter)
 {
@@ -56,7 +56,7 @@ void markWorkerComplete(State* state,
     }
 }
 
-Task<bool> warmPool(PostgresConnectionPool* pool,
+Task<bool> warm_pool(PostgresConnectionPool* pool,
                     const postgres_benchmark::Config& config)
 {
     std::vector<PostgresPoolLease> leases;
@@ -126,7 +126,7 @@ Task<void> worker(PostgresConnectionPool* pool,
                                  local_samples.begin(),
                                  local_samples.end());
     }
-    markWorkerComplete(state, remaining, done_waiter);
+    mark_worker_complete(state, remaining, done_waiter);
 }
 
 Task<bool> run(IOScheduler* scheduler,
@@ -137,19 +137,19 @@ Task<bool> run(IOScheduler* scheduler,
     pool_config.postgres_config = PostgresConfig::create(config.host, config.port,
                                                          config.user, config.password,
                                                          config.database);
-    pool_config.async_config = AsyncPostgresConfig::withTimeout(5s, 5s);
+    pool_config.async_config = AsyncPostgresConfig::with_timeout(5s, 5s);
     pool_config.min_connections = 0;
     pool_config.max_connections = config.pool_size;
     auto pool = std::make_shared<PostgresConnectionPool>(scheduler, std::move(pool_config));
 
-    if (!(co_await warmPool(pool.get(), config))) {
+    if (!(co_await warm_pool(pool.get(), config))) {
         co_return false;
     }
 
     auto remaining = std::make_shared<std::atomic<size_t>>(config.clients);
     auto done_waiter = std::make_shared<AsyncWaiter<void>>();
     for (size_t index = 0; index < config.clients; ++index) {
-        if (!scheduleTask(scheduler, worker(pool.get(), state, remaining, done_waiter, config))) {
+        if (!schedule_task(scheduler, worker(pool.get(), state, remaining, done_waiter, config))) {
             state->failed.fetch_add(config.queries, std::memory_order_relaxed);
             state->schedule_failures.fetch_add(1, std::memory_order_relaxed);
             (void)remaining->fetch_sub(1, std::memory_order_acq_rel);
@@ -169,24 +169,24 @@ Task<bool> run(IOScheduler* scheduler,
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    auto config = postgres_benchmark::loadConfig();
-    if (!postgres_benchmark::parseArgs(config, argc, argv)) {
-        postgres_benchmark::printUsage(argv[0]);
+    auto config = postgres_benchmark::load_config();
+    if (!postgres_benchmark::parse_args(config, argc, argv)) {
+        postgres_benchmark::print_usage(argv[0]);
         return 2;
     }
-    postgres_benchmark::printConfig(config);
+    postgres_benchmark::print_config(config);
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     const auto started = runtime.start();
     if (!started) {
         std::cerr << "runtime start failed: " << started.error().message() << '\n';
         return 1;
     }
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         std::cerr << "runtime has no IO scheduler\n";
@@ -195,7 +195,7 @@ int main(int argc, char** argv)
 
     State state;
     state.samples_ns.reserve(config.clients * config.queries);
-    auto completed = runtime.blockOnIO(run(scheduler, &state, config));
+    auto completed = runtime.block_on_io(run(scheduler, &state, config));
     runtime.stop();
     if (!completed || !*completed) {
         std::cerr << (completed ? "pool warmup or completion failed"
@@ -225,9 +225,9 @@ int main(int argc, char** argv)
               << "elapsed_sec: " << seconds << '\n'
               << "qps: " << (seconds > 0.0 ? static_cast<double>(succeeded) / seconds : 0.0)
               << '\n'
-              << "p50_acquire_query_latency_ms: " << percentileMs(state.samples_ns, 0.50) << '\n'
-              << "p95_acquire_query_latency_ms: " << percentileMs(state.samples_ns, 0.95) << '\n'
-              << "p99_acquire_query_latency_ms: " << percentileMs(state.samples_ns, 0.99) << '\n'
-              << "max_acquire_query_latency_ms: " << percentileMs(state.samples_ns, 1.0) << '\n';
+              << "p50_acquire_query_latency_ms: " << percentile_ms(state.samples_ns, 0.50) << '\n'
+              << "p95_acquire_query_latency_ms: " << percentile_ms(state.samples_ns, 0.95) << '\n'
+              << "p99_acquire_query_latency_ms: " << percentile_ms(state.samples_ns, 0.99) << '\n'
+              << "max_acquire_query_latency_ms: " << percentile_ms(state.samples_ns, 1.0) << '\n';
     return failed == 0 ? 0 : 1;
 }

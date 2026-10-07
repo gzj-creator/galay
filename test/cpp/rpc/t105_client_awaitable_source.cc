@@ -11,7 +11,7 @@ namespace {
 
 enum class ReadError { Open, Read, Close, Path };
 
-std::expected<std::string, ReadError> readFile(std::string_view relative)
+std::expected<std::string, ReadError> read_file(std::string_view relative)
 {
     std::string path(__FILE__);
     const std::string marker = "/test/cpp/rpc/";
@@ -67,9 +67,9 @@ bool contains(std::string_view text, std::string_view needle)
 
 int main()
 {
-    const auto client = readFile("/src/cpp/galay-rpc/kernel/rpc_client.h");
-    const auto awaitable = readFile("/src/cpp/galay-rpc/details/client_awaitable.h");
-    const auto implementation = readFile("/src/cpp/galay-rpc/details/client_awaitable.inl");
+    const auto client = read_file("/src/cpp/galay-rpc/kernel/rpc_client.h");
+    const auto awaitable = read_file("/src/cpp/galay-rpc/details/client_awaitable.h");
+    const auto implementation = read_file("/src/cpp/galay-rpc/details/client_awaitable.inl");
     if (!client.has_value() || !awaitable.has_value() || !implementation.has_value()) {
         std::cerr << "failed to read RPC client awaitable source boundary\n";
         return 1;

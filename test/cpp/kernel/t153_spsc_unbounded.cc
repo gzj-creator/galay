@@ -73,24 +73,24 @@ struct ThrowingMoveAssign
 template <typename T>
 concept SupportsCallerOwnedBatch = requires(
     galay::spsc::UnboundedChannel<T>& channel, std::span<T> output) {
-    { channel.tryRecvBatch(output) } -> std::same_as<size_t>;
-    channel.recvBatchTo(output);
+    { channel.try_recv_batch(output) } -> std::same_as<size_t>;
+    channel.recv_batch_to(output);
 };
 
 using UIntChannel = galay::spsc::UnboundedChannel<uint64_t>;
 using UIntBatchToAwaitable = decltype(
-    std::declval<UIntChannel&>().recvBatchTo(std::declval<std::span<uint64_t>>()));
-using UIntBatchAwaitable = decltype(std::declval<UIntChannel&>().recvBatch(2));
-using UIntBatchedAwaitable = decltype(std::declval<UIntChannel&>().recvBatched(2));
+    std::declval<UIntChannel&>().recv_batch_to(std::declval<std::span<uint64_t>>()));
+using UIntBatchAwaitable = decltype(std::declval<UIntChannel&>().recv_batch(2));
+using UIntBatchedAwaitable = decltype(std::declval<UIntChannel&>().recv_batched(2));
 struct AwaitSuspendProbePromise {};
 
 static_assert(galay::spsc::UnboundedValue<ThrowingMoveAssign>);
 static_assert(SupportsCallerOwnedBatch<uint64_t>);
 static_assert(SupportsCallerOwnedBatch<std::unique_ptr<int>>);
 static_assert(!SupportsCallerOwnedBatch<ThrowingMoveAssign>);
-static_assert(noexcept(std::declval<UIntChannel&>().tryRecvBatch(
+static_assert(noexcept(std::declval<UIntChannel&>().try_recv_batch(
     std::declval<std::span<uint64_t>>())));
-static_assert(noexcept(std::declval<UIntChannel&>().recvBatchTo(
+static_assert(noexcept(std::declval<UIntChannel&>().recv_batch_to(
     std::declval<std::span<uint64_t>>())));
 static_assert(noexcept(std::declval<UIntBatchToAwaitable&>().await_ready()));
 static_assert(noexcept(std::declval<UIntBatchToAwaitable&>().await_suspend(
@@ -105,7 +105,7 @@ static_assert(!noexcept(std::declval<UIntBatchedAwaitable&>().await_suspend(
     std::coroutine_handle<AwaitSuspendProbePromise>{})));
 static_assert(!noexcept(std::declval<UIntBatchedAwaitable&>().await_resume()));
 
-bool waitFor(const std::atomic<bool>& flag, std::chrono::milliseconds timeout = 5s)
+bool wait_for(const std::atomic<bool>& flag, std::chrono::milliseconds timeout = 5s)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
@@ -117,7 +117,7 @@ bool waitFor(const std::atomic<bool>& flag, std::chrono::milliseconds timeout = 
     return flag.load(std::memory_order_acquire);
 }
 
-bool testCrossThreadFifo()
+bool test_cross_thread_fifo()
 {
     constexpr uint64_t kMessages = 500'000;
     galay::spsc::UnboundedChannel<uint64_t> channel(galay::spsc::WakeMode::Deferred);
@@ -153,7 +153,7 @@ bool testCrossThreadFifo()
         const auto deadline = std::chrono::steady_clock::now() + 10s;
         uint64_t expected = 0;
         while (expected < kMessages && !failed.load(std::memory_order_acquire)) {
-            auto value = channel.tryRecv();
+            auto value = channel.try_recv();
             if (!value.has_value()) {
                 if (std::chrono::steady_clock::now() >= deadline) {
                     failed.store(true, std::memory_order_release);
@@ -173,7 +173,7 @@ bool testCrossThreadFifo()
         }
     });
 
-    if (!ready.waitFor(2s)) {
+    if (!ready.wait_for(2s)) {
         failed.store(true, std::memory_order_release);
     }
     start.open();
@@ -193,7 +193,7 @@ bool testCrossThreadFifo()
     return passed;
 }
 
-bool testMoveOnlyBatch()
+bool test_move_only_batch()
 {
     galay::spsc::UnboundedChannel<std::unique_ptr<int>> channel;
     std::vector<std::unique_ptr<int>> values;
@@ -201,12 +201,12 @@ bool testMoveOnlyBatch()
     for (int value = 0; value < 10'000; ++value) {
         values.push_back(std::make_unique<int>(value));
     }
-    if (!channel.sendBatch(std::move(values))) {
+    if (!channel.send_batch(std::move(values))) {
         return false;
     }
 
-    auto first = channel.tryRecvBatch(4'321);
-    auto second = channel.tryRecvBatch(10'000);
+    auto first = channel.try_recv_batch(4'321);
+    auto second = channel.try_recv_batch(10'000);
     if (!first.has_value() || !second.has_value() || first->size() != 4'321 ||
         second->size() != 5'679) {
         return false;
@@ -225,13 +225,13 @@ bool testMoveOnlyBatch()
     return channel.empty();
 }
 
-bool testCallerOwnedBatch()
+bool test_caller_owned_batch()
 {
     using Value = std::unique_ptr<int>;
     galay::spsc::UnboundedChannel<Value> channel;
 
     std::span<Value> emptyOutput;
-    auto emptyReceive = channel.recvBatchTo(emptyOutput);
+    auto emptyReceive = channel.recv_batch_to(emptyOutput);
     if (!emptyReceive.await_ready()) {
         return false;
     }
@@ -245,12 +245,12 @@ bool testCallerOwnedBatch()
     for (int value = 0; value < 5; ++value) {
         values.push_back(std::make_unique<int>(value));
     }
-    if (!channel.sendBatch(std::move(values))) {
+    if (!channel.send_batch(std::move(values))) {
         return false;
     }
 
     std::array<Value, 3> first;
-    const size_t firstCount = channel.tryRecvBatch(std::span<Value>(first));
+    const size_t firstCount = channel.try_recv_batch(std::span<Value>(first));
     if (firstCount != first.size()) {
         return false;
     }
@@ -261,7 +261,7 @@ bool testCallerOwnedBatch()
     }
 
     std::array<Value, 3> second;
-    auto secondReceive = channel.recvBatchTo(std::span<Value>(second));
+    auto secondReceive = channel.recv_batch_to(std::span<Value>(second));
     if (!secondReceive.await_ready()) {
         return false;
     }
@@ -271,7 +271,7 @@ bool testCallerOwnedBatch()
         channel.empty();
 }
 
-bool testCallerOwnedBatchAcrossBlocks()
+bool test_caller_owned_batch_across_blocks()
 {
     using Value = std::unique_ptr<int>;
     constexpr size_t kMessages = 2'053;
@@ -283,12 +283,12 @@ bool testCallerOwnedBatchAcrossBlocks()
     for (size_t index = 0; index < kMessages; ++index) {
         values.push_back(std::make_unique<int>(static_cast<int>(index)));
     }
-    if (!channel.sendBatch(std::move(values))) {
+    if (!channel.send_batch(std::move(values))) {
         return false;
     }
 
     std::vector<Value> first(kFirstBatch);
-    const size_t firstCount = channel.tryRecvBatch(std::span<Value>(first));
+    const size_t firstCount = channel.try_recv_batch(std::span<Value>(first));
     if (firstCount != first.size()) {
         return false;
     }
@@ -299,7 +299,7 @@ bool testCallerOwnedBatchAcrossBlocks()
     }
 
     std::array<Value, 8> tail;
-    const size_t tailCount = channel.tryRecvBatch(std::span<Value>(tail));
+    const size_t tailCount = channel.try_recv_batch(std::span<Value>(tail));
     if (tailCount != kMessages - kFirstBatch) {
         return false;
     }
@@ -317,7 +317,7 @@ bool testCallerOwnedBatchAcrossBlocks()
     return channel.empty();
 }
 
-bool testConstructionOomIsRecoverable()
+bool test_construction_oom_is_recoverable()
 {
     g_failNothrowAllocation.store(true, std::memory_order_release);
     galay::spsc::UnboundedQueue<int> queue;
@@ -340,7 +340,7 @@ bool testConstructionOomIsRecoverable()
         return false;
     }
 
-    auto batch = channel.recvBatch(2);
+    auto batch = channel.recv_batch(2);
     if (!batch.await_ready()) {
         return false;
     }
@@ -351,7 +351,7 @@ bool testConstructionOomIsRecoverable()
     }
 
     std::array<int, 2> output{-1, -1};
-    auto batchTo = channel.recvBatchTo(std::span<int>(output));
+    auto batchTo = channel.recv_batch_to(std::span<int>(output));
     if (!batchTo.await_ready()) {
         return false;
     }
@@ -362,7 +362,7 @@ bool testConstructionOomIsRecoverable()
         return false;
     }
 
-    auto batched = channel.recvBatched(2);
+    auto batched = channel.recv_batched(2);
     if (!batched.await_ready()) {
         return false;
     }
@@ -371,14 +371,14 @@ bool testConstructionOomIsRecoverable()
         batchedResult.error().code(), galay::kernel::kOutOfMemory);
 }
 
-bool testQueueGrowthOomIsRecoverable()
+bool test_queue_growth_oom_is_recoverable()
 {
     galay::spsc::UnboundedQueue<size_t> queue;
     if (!queue.valid()) {
         return false;
     }
 
-    const size_t blockCapacity = queue.blockCapacity();
+    const size_t blockCapacity = queue.block_capacity();
     for (size_t value = 0; value < blockCapacity; ++value) {
         size_t pending = value;
         if (!queue.send(std::move(pending))) {
@@ -396,7 +396,7 @@ bool testQueueGrowthOomIsRecoverable()
     }
 
     for (size_t expected = 0; expected < blockCapacity; ++expected) {
-        auto value = queue.tryRecv();
+        auto value = queue.try_recv();
         if (!value.has_value() || *value != expected) {
             return false;
         }
@@ -406,11 +406,11 @@ bool testQueueGrowthOomIsRecoverable()
     if (!queue.send(std::move(recovered))) {
         return false;
     }
-    auto value = queue.tryRecv();
+    auto value = queue.try_recv();
     return value.has_value() && *value == blockCapacity && queue.empty();
 }
 
-bool testConcurrentValidSnapshot()
+bool test_concurrent_valid_snapshot()
 {
     galay::spsc::UnboundedChannel<uint64_t> channel;
     if (!channel.valid()) {
@@ -463,7 +463,7 @@ struct AsyncBatchState
     bool success = false;
 };
 
-galay::kernel::Task<void> receiveAcrossThread(
+galay::kernel::Task<void> receive_across_thread(
     galay::spsc::UnboundedChannel<int>* channel,
     AsyncState* state)
 {
@@ -479,12 +479,12 @@ galay::kernel::Task<void> receiveAcrossThread(
     co_return;
 }
 
-galay::kernel::Task<void> receiveBatchAcrossThread(
+galay::kernel::Task<void> receive_batch_across_thread(
     galay::spsc::UnboundedChannel<int>* channel,
     AsyncBatchState* state)
 {
     state->entered.store(true, std::memory_order_release);
-    auto result = co_await channel->recvBatchTo(std::span<int>(state->values));
+    auto result = co_await channel->recv_batch_to(std::span<int>(state->values));
     if (result.has_value()) {
         state->success = true;
         state->count = *result;
@@ -493,7 +493,7 @@ galay::kernel::Task<void> receiveBatchAcrossThread(
     co_return;
 }
 
-bool testCrossThreadWaiterWake()
+bool test_cross_thread_waiter_wake()
 {
     galay::spsc::UnboundedChannel<int> channel(galay::spsc::WakeMode::Deferred);
     galay::kernel::ParallelScheduler scheduler;
@@ -503,8 +503,8 @@ bool testCrossThreadWaiterWake()
     }
 
     AsyncState state;
-    if (!galay::kernel::scheduleTask(scheduler, receiveAcrossThread(&channel, &state)) ||
-        !waitFor(state.entered)) {
+    if (!galay::kernel::schedule_task(scheduler, receive_across_thread(&channel, &state)) ||
+        !wait_for(state.entered)) {
         scheduler.stop();
         return false;
     }
@@ -516,12 +516,12 @@ bool testCrossThreadWaiterWake()
         }
     });
     producer.join();
-    const bool done = waitFor(state.done);
+    const bool done = wait_for(state.done);
     scheduler.stop();
     return done && state.success && state.value == 42 && channel.empty();
 }
 
-bool testCallerOwnedBatchWaiterWake()
+bool test_caller_owned_batch_waiter_wake()
 {
     galay::spsc::UnboundedChannel<int> channel(galay::spsc::WakeMode::Deferred);
     galay::kernel::ParallelScheduler scheduler;
@@ -531,27 +531,27 @@ bool testCallerOwnedBatchWaiterWake()
     }
 
     AsyncBatchState state;
-    if (!galay::kernel::scheduleTask(
-            scheduler, receiveBatchAcrossThread(&channel, &state)) ||
-        !waitFor(state.entered)) {
+    if (!galay::kernel::schedule_task(
+            scheduler, receive_batch_across_thread(&channel, &state)) ||
+        !wait_for(state.entered)) {
         scheduler.stop();
         return false;
     }
 
     std::vector<int> values{41, 42, 43};
-    const bool sent = channel.sendBatch(std::move(values), true);
-    const bool done = waitFor(state.done);
+    const bool sent = channel.send_batch(std::move(values), true);
+    const bool done = wait_for(state.done);
     scheduler.stop();
     return sent && done && state.success && state.count == 3 &&
         state.values == std::array<int, 4>{41, 42, 43, -1} && channel.empty();
 }
 
-bool testWaiterRegistrationRetainsTaskReference()
+bool test_waiter_registration_retains_task_reference()
 {
     galay::spsc::UnboundedChannel<int> channel(galay::spsc::WakeMode::Inline);
     AsyncState state;
-    auto task = receiveAcrossThread(&channel, &state);
-    galay::kernel::TaskRef keeper = galay::kernel::detail::TaskAccess::taskRef(task);
+    auto task = receive_across_thread(&channel, &state);
+    galay::kernel::TaskRef keeper = galay::kernel::detail::TaskAccess::task_ref(task);
     auto* taskState = keeper.state();
     if (taskState == nullptr || !taskState->m_handle) {
         return false;
@@ -570,17 +570,17 @@ bool testWaiterRegistrationRetainsTaskReference()
         state.done.load(std::memory_order_acquire) && state.success && state.value == 73;
 }
 
-bool testSecondWaiterDoesNotDisturbRegisteredWaiter()
+bool test_second_waiter_does_not_disturb_registered_waiter()
 {
     galay::spsc::UnboundedChannel<int> channel(galay::spsc::WakeMode::Inline);
     AsyncState firstState;
     AsyncState secondState;
-    auto firstTask = receiveAcrossThread(&channel, &firstState);
-    auto secondTask = receiveAcrossThread(&channel, &secondState);
+    auto firstTask = receive_across_thread(&channel, &firstState);
+    auto secondTask = receive_across_thread(&channel, &secondState);
     galay::kernel::TaskRef firstKeeper =
-        galay::kernel::detail::TaskAccess::taskRef(firstTask);
+        galay::kernel::detail::TaskAccess::task_ref(firstTask);
     galay::kernel::TaskRef secondKeeper =
-        galay::kernel::detail::TaskAccess::taskRef(secondTask);
+        galay::kernel::detail::TaskAccess::task_ref(secondTask);
     auto* firstTaskState = firstKeeper.state();
     auto* secondTaskState = secondKeeper.state();
     if (firstTaskState == nullptr || secondTaskState == nullptr ||
@@ -608,30 +608,30 @@ bool testSecondWaiterDoesNotDisturbRegisteredWaiter()
 int main()
 {
     galay::test::TestResultWriter writer("t153_spsc_unbounded");
-    const bool fifoPassed = testCrossThreadFifo();
-    const bool batchPassed = testMoveOnlyBatch();
-    const bool callerOwnedBatchPassed = testCallerOwnedBatch();
-    const bool callerOwnedAcrossBlocksPassed = testCallerOwnedBatchAcrossBlocks();
-    const bool constructionOomPassed = testConstructionOomIsRecoverable();
-    const bool growthOomPassed = testQueueGrowthOomIsRecoverable();
-    const bool concurrentValidPassed = testConcurrentValidSnapshot();
-    const bool wakePassed = testCrossThreadWaiterWake();
-    const bool callerOwnedWakePassed = testCallerOwnedBatchWaiterWake();
-    const bool retainedRefPassed = testWaiterRegistrationRetainsTaskReference();
+    const bool fifoPassed = test_cross_thread_fifo();
+    const bool batchPassed = test_move_only_batch();
+    const bool callerOwnedBatchPassed = test_caller_owned_batch();
+    const bool callerOwnedAcrossBlocksPassed = test_caller_owned_batch_across_blocks();
+    const bool constructionOomPassed = test_construction_oom_is_recoverable();
+    const bool growthOomPassed = test_queue_growth_oom_is_recoverable();
+    const bool concurrentValidPassed = test_concurrent_valid_snapshot();
+    const bool wakePassed = test_cross_thread_waiter_wake();
+    const bool callerOwnedWakePassed = test_caller_owned_batch_waiter_wake();
+    const bool retainedRefPassed = test_waiter_registration_retains_task_reference();
     const bool doubleWaiterPassed =
-        testSecondWaiterDoesNotDisturbRegisteredWaiter();
+        test_second_waiter_does_not_disturb_registered_waiter();
     const bool passed = fifoPassed && batchPassed && callerOwnedBatchPassed &&
         callerOwnedAcrossBlocksPassed && wakePassed && callerOwnedWakePassed &&
         retainedRefPassed && doubleWaiterPassed && constructionOomPassed &&
         growthOomPassed && concurrentValidPassed;
 
-    writer.addTest();
+    writer.add_test();
     if (passed) {
-        writer.addPassed();
+        writer.add_passed();
     } else {
-        writer.addFailed();
+        writer.add_failed();
     }
-    writer.writeResult();
+    writer.write_result();
 
     std::cout << "cross_thread_fifo=" << (fifoPassed ? "PASS" : "FAIL") << '\n'
               << "move_only_batch=" << (batchPassed ? "PASS" : "FAIL") << '\n'

@@ -35,13 +35,13 @@ static_assert(std::is_constructible_v<HttpError, IOError>);
 static_assert(std::is_constructible_v<galay::http2::Http2Error, IOError>);
 static_assert(std::is_constructible_v<galay::websocket::WsError, IOError>);
 static_assert(requires(HttpReader& reader, HttpRequest& request) {
-    reader.getRequest(request).timeout(std::chrono::milliseconds(1));
+    reader.get_request(request).timeout(std::chrono::milliseconds(1));
 });
 static_assert(requires(HttpReader& reader, HttpResponse& response) {
-    reader.getResponse(response).timeout(std::chrono::milliseconds(1));
+    reader.get_response(response).timeout(std::chrono::milliseconds(1));
 });
 static_assert(requires(HttpReader& reader, std::string& chunk_data) {
-    reader.getChunk(chunk_data).timeout(std::chrono::milliseconds(1));
+    reader.get_chunk(chunk_data).timeout(std::chrono::milliseconds(1));
 });
 
 namespace {
@@ -50,7 +50,7 @@ constexpr size_t kBodySize = 8 * 1024 * 1024;
 constexpr size_t kChunkBodySize = 128 * 1024;
 volatile sig_atomic_t g_stage = 0;
 
-void alarmHandler(int)
+void alarm_handler(int)
 {
     const int stage = g_stage;
     const char* message = nullptr;
@@ -88,7 +88,7 @@ void alarmHandler(int)
     std::abort();
 }
 
-std::string makeLargePutRequest()
+std::string make_large_put_request()
 {
     std::string body(kBodySize, '\0');
     for (size_t i = 0; i < body.size(); ++i) {
@@ -107,36 +107,36 @@ std::string makeLargePutRequest()
     return request;
 }
 
-std::string makeLargeChunkStream()
+std::string make_large_chunk_stream()
 {
     std::string body(kBodySize, '\0');
     for (size_t i = 0; i < body.size(); ++i) {
         body[i] = static_cast<char>((i * 17) % 251);
     }
-    return Chunk::toChunk(body, false) + Chunk::toChunk(std::string{}, true);
+    return Chunk::to_chunk(body, false) + Chunk::to_chunk(std::string{}, true);
 }
 
-size_t countReadWindowsForDefaultHttpConn(std::string_view raw_request)
+size_t count_read_windows_for_default_http_conn(std::string_view raw_request)
 {
     RingBuffer ring_buffer{HttpConn::kDefaultRingBufferSize};
     HttpReaderSetting setting;
-    setting.setMaxBodySize(kBodySize + 1024);
+    setting.set_max_body_size(kBodySize + 1024);
     HttpRequest request;
     galay::http::detail::HttpRequestReadState state(ring_buffer, setting, request);
 
     size_t offset = 0;
     size_t read_windows = 0;
     while (true) {
-        if (state.parseFromRingBuffer()) {
-            auto result = state.takeResult();
+        if (state.parse_from_ring_buffer()) {
+            auto result = state.take_result();
             if (!result.has_value()) {
                 fail("request parse returned error: " + result.error().message());
             }
-            if (!request.isComplete()) {
+            if (!request.is_complete()) {
                 fail("request parse completed without a complete request");
             }
-            if (request.bodyStr().size() != kBodySize) {
-                fail("parsed body size mismatch: " + std::to_string(request.bodyStr().size()));
+            if (request.body_str().size() != kBodySize) {
+                fail("parsed body size mismatch: " + std::to_string(request.body_str().size()));
             }
             if (offset != raw_request.size()) {
                 fail("parser completed before all peer bytes were supplied");
@@ -148,11 +148,11 @@ size_t countReadWindowsForDefaultHttpConn(std::string_view raw_request)
             fail("parser still needs bytes after the full request was supplied");
         }
 
-        if (!state.prepareRecvWindow()) {
+        if (!state.prepare_recv_window()) {
             fail("default HttpConn ring buffer cannot provide a receive window");
         }
-        const struct iovec* windows = state.recvIovecsData();
-        const size_t window_count = state.recvIovecsCount();
+        const struct iovec* windows = state.recv_iovecs_data();
+        const size_t window_count = state.recv_iovecs_count();
         if (windows == nullptr || window_count == 0) {
             fail("default HttpConn produced an empty receive window");
         }
@@ -169,7 +169,7 @@ size_t countReadWindowsForDefaultHttpConn(std::string_view raw_request)
             fail("receive window could not accept more request bytes");
         }
 
-        state.onBytesReceived(copied);
+        state.on_bytes_received(copied);
         offset += copied;
         ++read_windows;
         if (read_windows >= 1024) {
@@ -178,7 +178,7 @@ size_t countReadWindowsForDefaultHttpConn(std::string_view raw_request)
     }
 }
 
-void verifyHugeContentLengthReturnsEntityTooLarge()
+void verify_huge_content_length_returns_entity_too_large()
 {
     RingBuffer ring_buffer{HttpConn::kDefaultRingBufferSize};
     HttpReaderSetting setting;
@@ -193,12 +193,12 @@ void verifyHugeContentLengthReturnsEntityTooLarge()
         "Connection: close\r\n"
         "\r\n";
 
-    if (!state.prepareRecvWindow()) {
+    if (!state.prepare_recv_window()) {
         fail("default HttpConn ring buffer cannot accept huge Content-Length header");
     }
 
-    const struct iovec* windows = state.recvIovecsData();
-    const size_t window_count = state.recvIovecsCount();
+    const struct iovec* windows = state.recv_iovecs_data();
+    const size_t window_count = state.recv_iovecs_count();
     size_t copied = 0;
     for (size_t i = 0; i < window_count && copied < header.size(); ++i) {
         const size_t bytes = std::min(windows[i].iov_len, header.size() - copied);
@@ -208,14 +208,14 @@ void verifyHugeContentLengthReturnsEntityTooLarge()
     if (copied != header.size()) {
         fail("default HttpConn ring buffer could not fit huge Content-Length header");
     }
-    state.onBytesReceived(copied);
+    state.on_bytes_received(copied);
 
     try {
-        if (!state.parseFromRingBuffer()) {
+        if (!state.parse_from_ring_buffer()) {
             fail("huge Content-Length header did not complete with an error");
         }
 
-        auto result = state.takeResult();
+        auto result = state.take_result();
         if (result) {
             fail("huge Content-Length header completed successfully");
         }
@@ -229,21 +229,21 @@ void verifyHugeContentLengthReturnsEntityTooLarge()
     }
 }
 
-void verifyChunkReaderReturnsEntityTooLarge()
+void verify_chunk_reader_returns_entity_too_large()
 {
     RingBuffer ring_buffer{HttpConn::kDefaultRingBufferSize};
     HttpReaderSetting setting;
-    setting.setMaxBodySize(4);
+    setting.set_max_body_size(4);
     std::string chunk_data;
     galay::http::detail::HttpChunkReadState state(ring_buffer, setting, chunk_data);
 
     const std::string chunk = "5\r\nHello\r\n";
-    if (!state.prepareRecvWindow()) {
+    if (!state.prepare_recv_window()) {
         fail("chunk reader ring buffer cannot accept chunk data");
     }
 
-    const struct iovec* windows = state.recvIovecsData();
-    const size_t window_count = state.recvIovecsCount();
+    const struct iovec* windows = state.recv_iovecs_data();
+    const size_t window_count = state.recv_iovecs_count();
     size_t copied = 0;
     for (size_t i = 0; i < window_count && copied < chunk.size(); ++i) {
         const size_t bytes = std::min(windows[i].iov_len, chunk.size() - copied);
@@ -253,13 +253,13 @@ void verifyChunkReaderReturnsEntityTooLarge()
     if (copied != chunk.size()) {
         fail("chunk reader ring buffer could not fit chunk data");
     }
-    state.onBytesReceived(copied);
+    state.on_bytes_received(copied);
 
-    if (!state.parseFromRingBuffer()) {
+    if (!state.parse_from_ring_buffer()) {
         fail("oversized chunk did not complete with an error");
     }
 
-    auto result = state.takeResult();
+    auto result = state.take_result();
     if (result) {
         fail("oversized chunk completed successfully");
     }
@@ -268,21 +268,21 @@ void verifyChunkReaderReturnsEntityTooLarge()
     }
 }
 
-void verifyChunkReaderRejectsOversizeFromSizeLine()
+void verify_chunk_reader_rejects_oversize_from_size_line()
 {
     RingBuffer ring_buffer{4096};
     HttpReaderSetting setting;
-    setting.setMaxBodySize(1024);
+    setting.set_max_body_size(1024);
     std::string chunk_data;
     galay::http::detail::HttpChunkReadState state(ring_buffer, setting, chunk_data);
 
     const std::string chunk_header = "800\r\n";
-    if (!state.prepareRecvWindow()) {
+    if (!state.prepare_recv_window()) {
         fail("chunk reader ring buffer cannot accept oversized chunk header");
     }
 
-    const struct iovec* windows = state.recvIovecsData();
-    const size_t window_count = state.recvIovecsCount();
+    const struct iovec* windows = state.recv_iovecs_data();
+    const size_t window_count = state.recv_iovecs_count();
     size_t copied = 0;
     for (size_t i = 0; i < window_count && copied < chunk_header.size(); ++i) {
         const size_t bytes = std::min(windows[i].iov_len, chunk_header.size() - copied);
@@ -292,13 +292,13 @@ void verifyChunkReaderRejectsOversizeFromSizeLine()
     if (copied != chunk_header.size()) {
         fail("chunk reader ring buffer could not fit oversized chunk header");
     }
-    state.onBytesReceived(copied);
+    state.on_bytes_received(copied);
 
-    if (!state.parseFromRingBuffer()) {
+    if (!state.parse_from_ring_buffer()) {
         fail("oversized chunk size line did not complete with an error");
     }
 
-    auto result = state.takeResult();
+    auto result = state.take_result();
     if (result) {
         fail("oversized chunk size line completed successfully");
     }
@@ -310,22 +310,22 @@ void verifyChunkReaderRejectsOversizeFromSizeLine()
     }
 }
 
-void verifyChunkReaderStreamsChunkLargerThanRingBuffer()
+void verify_chunk_reader_streams_chunk_larger_than_ring_buffer()
 {
     RingBuffer ring_buffer{4096};
     HttpReaderSetting setting;
-    setting.setMaxBodySize(kChunkBodySize + 1024);
+    setting.set_max_body_size(kChunkBodySize + 1024);
     std::string chunk_data;
     galay::http::detail::HttpChunkReadState state(ring_buffer, setting, chunk_data);
 
     const std::string body(kChunkBodySize, 'C');
-    const std::string raw = Chunk::toChunk(body, false) + Chunk::toChunk(std::string{}, true);
+    const std::string raw = Chunk::to_chunk(body, false) + Chunk::to_chunk(std::string{}, true);
 
     size_t offset = 0;
     size_t read_windows = 0;
     while (true) {
-        if (state.parseFromRingBuffer()) {
-            auto result = state.takeResult();
+        if (state.parse_from_ring_buffer()) {
+            auto result = state.take_result();
             if (!result) {
                 fail("large chunk parse returned error: " + result.error().message());
             }
@@ -351,12 +351,12 @@ void verifyChunkReaderStreamsChunkLargerThanRingBuffer()
             fail("large chunk parser still needs bytes after full input");
         }
 
-        if (!state.prepareRecvWindow()) {
+        if (!state.prepare_recv_window()) {
             fail("large chunk reader could not provide another receive window");
         }
 
-        const struct iovec* windows = state.recvIovecsData();
-        const size_t window_count = state.recvIovecsCount();
+        const struct iovec* windows = state.recv_iovecs_data();
+        const size_t window_count = state.recv_iovecs_count();
         size_t copied = 0;
         for (size_t i = 0; i < window_count && offset + copied < raw.size(); ++i) {
             const size_t bytes = std::min(
@@ -369,7 +369,7 @@ void verifyChunkReaderStreamsChunkLargerThanRingBuffer()
             fail("large chunk receive window could not accept more bytes");
         }
 
-        state.onBytesReceived(copied);
+        state.on_bytes_received(copied);
         offset += copied;
         ++read_windows;
         if (read_windows >= 1024) {
@@ -378,11 +378,11 @@ void verifyChunkReaderStreamsChunkLargerThanRingBuffer()
     }
 }
 
-void verifyChunkedRequestBodyLargerThanRingBuffer()
+void verify_chunked_request_body_larger_than_ring_buffer()
 {
     RingBuffer ring_buffer{4096};
     HttpReaderSetting setting;
-    setting.setMaxBodySize(kChunkBodySize + 1024);
+    setting.set_max_body_size(kChunkBodySize + 1024);
     HttpRequest request;
     galay::http::detail::HttpRequestReadState state(ring_buffer, setting, request);
 
@@ -393,21 +393,21 @@ void verifyChunkedRequestBodyLargerThanRingBuffer()
         "Transfer-Encoding: chunked\r\n"
         "Connection: close\r\n"
         "\r\n" +
-        Chunk::toChunk(body, false) +
-        Chunk::toChunk(std::string{}, true);
+        Chunk::to_chunk(body, false) +
+        Chunk::to_chunk(std::string{}, true);
 
     size_t offset = 0;
     size_t read_windows = 0;
     while (true) {
-        if (state.parseFromRingBuffer()) {
-            auto result = state.takeResult();
+        if (state.parse_from_ring_buffer()) {
+            auto result = state.take_result();
             if (!result) {
                 fail("large chunked request parse returned error: " + result.error().message());
             }
-            if (!request.isComplete()) {
+            if (!request.is_complete()) {
                 fail("large chunked request did not complete");
             }
-            if (request.bodyStr() != body) {
+            if (request.body_str() != body) {
                 fail("large chunked request body mismatch");
             }
             if (offset != raw.size()) {
@@ -423,12 +423,12 @@ void verifyChunkedRequestBodyLargerThanRingBuffer()
             fail("large chunked request still needs bytes after full input");
         }
 
-        if (!state.prepareRecvWindow()) {
+        if (!state.prepare_recv_window()) {
             fail("large chunked request reader could not provide another receive window");
         }
 
-        const struct iovec* windows = state.recvIovecsData();
-        const size_t window_count = state.recvIovecsCount();
+        const struct iovec* windows = state.recv_iovecs_data();
+        const size_t window_count = state.recv_iovecs_count();
         size_t copied = 0;
         for (size_t i = 0; i < window_count && offset + copied < raw.size(); ++i) {
             const size_t bytes = std::min(
@@ -441,7 +441,7 @@ void verifyChunkedRequestBodyLargerThanRingBuffer()
             fail("large chunked request receive window could not accept more bytes");
         }
 
-        state.onBytesReceived(copied);
+        state.on_bytes_received(copied);
         offset += copied;
         ++read_windows;
         if (read_windows >= 1024) {
@@ -450,21 +450,21 @@ void verifyChunkedRequestBodyLargerThanRingBuffer()
     }
 }
 
-Task<void> largeUploadConnHandler(HttpConn conn)
+Task<void> large_upload_conn_handler(HttpConn conn)
 {
     HttpReaderSetting reader_setting;
-    reader_setting.setMaxBodySize(kBodySize + 1024);
-    auto reader = conn.getReader(reader_setting);
+    reader_setting.set_max_body_size(kBodySize + 1024);
+    auto reader = conn.get_reader(reader_setting);
 
     HttpRequest req;
-    auto read_result = co_await reader.getRequest(req);
+    auto read_result = co_await reader.get_request(req);
     if (!read_result) {
         std::cerr << "[T79] read request failed: " << read_result.error().message() << "\n";
         co_await conn.close();
         co_return;
     }
 
-    const auto& body = req.bodyStr();
+    const auto& body = req.body_str();
     if (body.size() != kBodySize) {
         std::cerr << "[T79] handler received body size " << body.size()
                   << ", expected " << kBodySize << "\n";
@@ -472,10 +472,10 @@ Task<void> largeUploadConnHandler(HttpConn conn)
 
     auto response = Http1_1ResponseBuilder::ok()
         .text("received=" + std::to_string(body.size()))
-        .buildMove();
+        .build_move();
 
-    auto writer = conn.getWriter();
-    auto result = co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    auto result = co_await writer.send_response(response);
     if (!result) {
         std::cerr << "[T79] send response failed: " << result.error().message() << "\n";
     }
@@ -483,22 +483,22 @@ Task<void> largeUploadConnHandler(HttpConn conn)
     co_return;
 }
 
-Task<void> rejectOversizeConnHandler(HttpConn conn)
+Task<void> reject_oversize_conn_handler(HttpConn conn)
 {
     HttpReaderSetting reader_setting;
-    reader_setting.setMaxBodySize(1024);
-    auto reader = conn.getReader(reader_setting);
+    reader_setting.set_max_body_size(1024);
+    auto reader = conn.get_reader(reader_setting);
 
     HttpRequest req;
-    auto read_result = co_await reader.getRequest(req);
-    auto writer = conn.getWriter();
+    auto read_result = co_await reader.get_request(req);
+    auto writer = conn.get_writer();
 
     if (!read_result && read_result.error().code() == kRequestEntityTooLarge) {
         auto response = Http1_1ResponseBuilder()
             .status(HttpStatusCode::PayloadTooLarge_413)
             .text("too large")
-            .buildMove();
-        (void) co_await writer.sendResponse(response);
+            .build_move();
+        (void) co_await writer.send_response(response);
         co_await conn.close();
         co_return;
     }
@@ -506,27 +506,27 @@ Task<void> rejectOversizeConnHandler(HttpConn conn)
     auto response = Http1_1ResponseBuilder()
         .status(HttpStatusCode::InternalServerError_500)
         .text("unexpected read result")
-        .buildMove();
-    (void) co_await writer.sendResponse(response);
+        .build_move();
+    (void) co_await writer.send_response(response);
     co_await conn.close();
     co_return;
 }
 
-Task<void> largeChunkConnHandler(HttpConn conn)
+Task<void> large_chunk_conn_handler(HttpConn conn)
 {
     HttpReaderSetting reader_setting;
-    reader_setting.setMaxBodySize(kBodySize + 1024);
-    auto reader = conn.getReader(reader_setting);
+    reader_setting.set_max_body_size(kBodySize + 1024);
+    auto reader = conn.get_reader(reader_setting);
 
     std::string chunk_data;
-    auto read_result = co_await reader.getChunk(chunk_data);
-    auto writer = conn.getWriter();
+    auto read_result = co_await reader.get_chunk(chunk_data);
+    auto writer = conn.get_writer();
 
     if (read_result && read_result.value() && chunk_data.size() == kBodySize) {
         auto response = Http1_1ResponseBuilder::ok()
             .text("chunked=" + std::to_string(chunk_data.size()))
-            .buildMove();
-        (void) co_await writer.sendResponse(response);
+            .build_move();
+        (void) co_await writer.send_response(response);
         co_await conn.close();
         co_return;
     }
@@ -541,28 +541,28 @@ Task<void> largeChunkConnHandler(HttpConn conn)
     auto response = Http1_1ResponseBuilder()
         .status(HttpStatusCode::InternalServerError_500)
         .text("unexpected chunk result")
-        .buildMove();
-    (void) co_await writer.sendResponse(response);
+        .build_move();
+    (void) co_await writer.send_response(response);
     co_await conn.close();
     co_return;
 }
 
-Task<void> rejectOversizeChunkConnHandler(HttpConn conn)
+Task<void> reject_oversize_chunk_conn_handler(HttpConn conn)
 {
     HttpReaderSetting reader_setting;
-    reader_setting.setMaxBodySize(1024);
-    auto reader = conn.getReader(reader_setting);
+    reader_setting.set_max_body_size(1024);
+    auto reader = conn.get_reader(reader_setting);
 
     std::string chunk_data;
-    auto read_result = co_await reader.getChunk(chunk_data);
-    auto writer = conn.getWriter();
+    auto read_result = co_await reader.get_chunk(chunk_data);
+    auto writer = conn.get_writer();
 
     if (!read_result && read_result.error().code() == kRequestEntityTooLarge) {
         auto response = Http1_1ResponseBuilder()
             .status(HttpStatusCode::PayloadTooLarge_413)
             .text("chunk too large")
-            .buildMove();
-        (void) co_await writer.sendResponse(response);
+            .build_move();
+        (void) co_await writer.send_response(response);
         co_await conn.close();
         co_return;
     }
@@ -570,13 +570,13 @@ Task<void> rejectOversizeChunkConnHandler(HttpConn conn)
     auto response = Http1_1ResponseBuilder()
         .status(HttpStatusCode::InternalServerError_500)
         .text("unexpected chunk read result")
-        .buildMove();
-    (void) co_await writer.sendResponse(response);
+        .build_move();
+    (void) co_await writer.send_response(response);
     co_await conn.close();
     co_return;
 }
 
-uint16_t pickFreePort()
+uint16_t pick_free_port()
 {
     int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -610,7 +610,7 @@ uint16_t pickFreePort()
     return port;
 }
 
-int connectWithRetry(uint16_t port)
+int connect_with_retry(uint16_t port)
 {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -653,7 +653,7 @@ int connectWithRetry(uint16_t port)
     std::abort();
 }
 
-void sendAll(int fd, const std::string& data)
+void send_all(int fd, const std::string& data)
 {
     size_t sent = 0;
     while (sent < data.size()) {
@@ -667,7 +667,7 @@ void sendAll(int fd, const std::string& data)
     }
 }
 
-std::string recvUntilClosed(int fd)
+std::string recv_until_closed(int fd)
 {
     std::string response;
     char buffer[8192];
@@ -686,7 +686,7 @@ std::string recvUntilClosed(int fd)
     return response;
 }
 
-void assertContains(const std::string& text, const std::string& expected)
+void assert_contains(const std::string& text, const std::string& expected)
 {
     if (text.find(expected) == std::string::npos) {
         std::cerr << "[T79] expected substring not found: " << expected << "\n";
@@ -695,21 +695,21 @@ void assertContains(const std::string& text, const std::string& expected)
     }
 }
 
-void verifyCoAwaitRequestReturnsEntityTooLarge()
+void verify_co_await_request_returns_entity_too_large()
 {
-    uint16_t port = pickFreePort();
+    uint16_t port = pick_free_port();
     HttpServer server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build());
 
     g_stage = 2;
-    server.start(rejectOversizeConnHandler);
+    server.start(reject_oversize_conn_handler);
 
     g_stage = 3;
-    int fd = connectWithRetry(port);
+    int fd = connect_with_retry(port);
 
     const std::string request =
         "PUT /upload HTTP/1.1\r\n"
@@ -720,129 +720,129 @@ void verifyCoAwaitRequestReturnsEntityTooLarge()
         "\r\n";
 
     g_stage = 4;
-    sendAll(fd, request);
+    send_all(fd, request);
     g_stage = 5;
-    std::string response = recvUntilClosed(fd);
+    std::string response = recv_until_closed(fd);
     ::close(fd);
 
     g_stage = 6;
     server.stop();
 
-    assertContains(response, "HTTP/1.1 413 Payload Too Large");
-    assertContains(response, "too large");
+    assert_contains(response, "HTTP/1.1 413 Payload Too Large");
+    assert_contains(response, "too large");
 }
 
-void verifyCoAwaitChunkReaderReturnsEntityTooLarge()
+void verify_co_await_chunk_reader_returns_entity_too_large()
 {
-    uint16_t port = pickFreePort();
+    uint16_t port = pick_free_port();
     HttpServer server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build());
 
     g_stage = 2;
-    server.start(rejectOversizeChunkConnHandler);
+    server.start(reject_oversize_chunk_conn_handler);
 
     g_stage = 3;
-    int fd = connectWithRetry(port);
+    int fd = connect_with_retry(port);
 
     g_stage = 4;
-    sendAll(fd, "800\r\n");
+    send_all(fd, "800\r\n");
     g_stage = 5;
-    std::string response = recvUntilClosed(fd);
+    std::string response = recv_until_closed(fd);
     ::close(fd);
 
     g_stage = 6;
     server.stop();
 
-    assertContains(response, "HTTP/1.1 413 Payload Too Large");
-    assertContains(response, "chunk too large");
+    assert_contains(response, "HTTP/1.1 413 Payload Too Large");
+    assert_contains(response, "chunk too large");
 }
 
-void verifyCoAwaitChunkReaderStreamsLargeChunk()
+void verify_co_await_chunk_reader_streams_large_chunk()
 {
-    uint16_t port = pickFreePort();
+    uint16_t port = pick_free_port();
     HttpServer server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build());
 
     g_stage = 2;
-    server.start(largeChunkConnHandler);
+    server.start(large_chunk_conn_handler);
 
     g_stage = 3;
-    int fd = connectWithRetry(port);
+    int fd = connect_with_retry(port);
 
-    std::string chunk_stream = makeLargeChunkStream();
+    std::string chunk_stream = make_large_chunk_stream();
     g_stage = 4;
-    sendAll(fd, chunk_stream);
+    send_all(fd, chunk_stream);
     g_stage = 5;
-    std::string response = recvUntilClosed(fd);
+    std::string response = recv_until_closed(fd);
     ::close(fd);
 
     g_stage = 6;
     server.stop();
 
-    assertContains(response, "HTTP/1.1 200 OK");
-    assertContains(response, "chunked=" + std::to_string(kBodySize));
+    assert_contains(response, "HTTP/1.1 200 OK");
+    assert_contains(response, "chunked=" + std::to_string(kBodySize));
 }
 
 } // namespace
 
 int main()
 {
-    ::signal(SIGALRM, alarmHandler);
+    ::signal(SIGALRM, alarm_handler);
     ::alarm(20);
 
     g_stage = 1;
-    verifyHugeContentLengthReturnsEntityTooLarge();
-    verifyChunkReaderReturnsEntityTooLarge();
-    verifyChunkReaderRejectsOversizeFromSizeLine();
-    verifyChunkReaderStreamsChunkLargerThanRingBuffer();
-    verifyChunkedRequestBodyLargerThanRingBuffer();
-    verifyCoAwaitRequestReturnsEntityTooLarge();
-    verifyCoAwaitChunkReaderReturnsEntityTooLarge();
-    verifyCoAwaitChunkReaderStreamsLargeChunk();
+    verify_huge_content_length_returns_entity_too_large();
+    verify_chunk_reader_returns_entity_too_large();
+    verify_chunk_reader_rejects_oversize_from_size_line();
+    verify_chunk_reader_streams_chunk_larger_than_ring_buffer();
+    verify_chunked_request_body_larger_than_ring_buffer();
+    verify_co_await_request_returns_entity_too_large();
+    verify_co_await_chunk_reader_returns_entity_too_large();
+    verify_co_await_chunk_reader_streams_large_chunk();
 
-    std::string request = makeLargePutRequest();
+    std::string request = make_large_put_request();
     g_stage = 1;
-    const size_t read_windows = countReadWindowsForDefaultHttpConn(request);
+    const size_t read_windows = count_read_windows_for_default_http_conn(request);
     if (read_windows < 64) {
         std::cerr << "[T79] test request only needs " << read_windows
                   << " read windows; it must cross the old 64-read state-machine limit\n";
         std::abort();
     }
 
-    uint16_t port = pickFreePort();
+    uint16_t port = pick_free_port();
 
     HttpServer server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build());
     g_stage = 2;
-    server.start(largeUploadConnHandler);
+    server.start(large_upload_conn_handler);
 
     g_stage = 3;
-    int fd = connectWithRetry(port);
+    int fd = connect_with_retry(port);
 
     g_stage = 4;
-    sendAll(fd, request);
+    send_all(fd, request);
     g_stage = 5;
-    std::string response = recvUntilClosed(fd);
+    std::string response = recv_until_closed(fd);
     ::close(fd);
 
     g_stage = 6;
     server.stop();
     ::alarm(0);
 
-    assertContains(response, "HTTP/1.1 200 OK");
-    assertContains(response, "received=" + std::to_string(kBodySize));
+    assert_contains(response, "HTTP/1.1 200 OK");
+    assert_contains(response, "received=" + std::to_string(kBodySize));
 
     std::cout << "T79-LargePutRequestBody PASS\n";
     return 0;

@@ -26,17 +26,17 @@ private:
         .schedule = [](Scheduler* self, TaskRef task) noexcept {
             return static_cast<Derived*>(self)->schedule(std::move(task));
         },
-        .scheduleResume = [](Scheduler* self, TaskRef task) noexcept {
-            return static_cast<Derived*>(self)->scheduleResume(std::move(task));
+        .schedule_resume = [](Scheduler* self, TaskRef task) noexcept {
+            return static_cast<Derived*>(self)->schedule_resume(std::move(task));
         },
-        .scheduleDeferred = [](Scheduler* self, TaskRef task) noexcept {
-            return static_cast<Derived*>(self)->scheduleDeferred(std::move(task));
+        .schedule_deferred = [](Scheduler* self, TaskRef task) noexcept {
+            return static_cast<Derived*>(self)->schedule_deferred(std::move(task));
         },
-        .scheduleImmediately = [](Scheduler* self, TaskRef task) noexcept {
-            return static_cast<Derived*>(self)->scheduleImmediately(std::move(task));
+        .schedule_immediately = [](Scheduler* self, TaskRef task) noexcept {
+            return static_cast<Derived*>(self)->schedule_immediately(std::move(task));
         },
-        .addTimer = [](Scheduler* self, Timer::ptr timer) {
-            return static_cast<Derived*>(self)->addTimer(std::move(timer));
+        .add_timer = [](Scheduler* self, Timer::ptr timer) {
+            return static_cast<Derived*>(self)->add_timer(std::move(timer));
         },
     };
 };

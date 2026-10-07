@@ -320,13 +320,13 @@ ApiResult<BindingPlan<Input>> InputBinding<Input>::prepare(http::HttpMethod meth
                     return std::unexpected(std::move(checked.error()));
                 }
             }
-            if (!has_body && !request.bodyStr().empty()) {
+            if (!has_body && !request.body_str().empty()) {
                 return std::unexpected(binding_detail::bad_request("this endpoint does not accept a request body"));
             }
             for (const auto& member : members) {
                 std::optional<std::string_view> text;
                 if (member.source == ParameterSource::path) {
-                    const auto& parameters = request.routeParams();
+                    const auto& parameters = request.route_params();
                     const auto found = parameters.find(member.name);
                     if (found != parameters.end()) text = found->second;
                 } else if (member.source == ParameterSource::query) {
@@ -338,17 +338,17 @@ ApiResult<BindingPlan<Input>> InputBinding<Input>::prepare(http::HttpMethod meth
             }
             if constexpr (reflect::StaticReflectable<Input>) {
                 if (has_body) {
-                    const bool absent = request.bodyStr().empty();
+                    const bool absent = request.body_str().empty();
                     if (absent && required) return std::unexpected(binding_detail::bad_request("required JSON body is missing"));
                     if (!absent) {
-                        const auto* type = request.header().headerPairs().getValuePtr("Content-Type");
+                        const auto* type = request.header().header_pairs().get_value_ptr("Content-Type");
                         if (!type || !binding_detail::json_media_type(*type)) {
                             return std::unexpected(ApiError{ApiErrorCode::kUnsupportedMediaType,
                                 "request body requires Content-Type application/json", 415});
                         }
                     }
                     const json::ParseOptions options{.unknown_fields = json::UnknownFieldPolicy::reject};
-                    auto body = json::parse(absent ? std::string_view("{}") : std::string_view(request.bodyStr()), options);
+                    auto body = json::parse(absent ? std::string_view("{}") : std::string_view(request.body_str()), options);
                     if (!body) return std::unexpected(binding_detail::bad_request(std::move(body.error())));
                     const auto selected = [&members](const auto& descriptor) {
                         return std::none_of(members.begin(), members.end(), [&descriptor](const auto& member) {

@@ -1,7 +1,7 @@
 /**
  * @file t84_seqconf.cc
  * @brief 用途：验证同一 controller 上已有 read sequence owner 时，普通 recv awaitable 会被立即拒绝。
- * 关键覆盖点：`suspendRegisteredAwaitable(...)` 与 sequence owner 的同方向互斥策略。
+ * 关键覆盖点：`suspend_registered_awaitable(...)` 与 sequence owner 的同方向互斥策略。
  * 通过条件：read sequence 正常完成；普通 recv 在同方向上立即返回 `kNotReady`。
  */
 
@@ -39,13 +39,13 @@ struct ReadOnlyFlow {
     explicit ReadOnlyFlow(std::atomic<bool>* await_bound)
         : m_await_bound(await_bound) {}
 
-    void onAwaitContext(const AwaitContext&) {
+    void on_await_context(const AwaitContext&) {
         if (m_await_bound != nullptr) {
             m_await_bound->store(true, std::memory_order_release);
         }
     }
 
-    void onRecv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& ctx) {
+    void on_recv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& ctx) {
         ops.complete(std::move(ctx.m_result));
     }
 
@@ -65,17 +65,17 @@ struct SharedState {
     std::atomic<int> ordinary_error{0};
 };
 
-Task<void> sequenceTask(SharedState* state) {
+Task<void> sequence_task(SharedState* state) {
     ReadOnlyFlow flow(&state->sequence_await_bound);
     auto awaitable = AwaitableBuilder<SequenceResult, 4, ReadOnlyFlow>(&state->controller, flow)
-        .recv<&ReadOnlyFlow::onRecv>(&flow.m_byte, 1)
+        .recv<&ReadOnlyFlow::on_recv>(&flow.m_byte, 1)
         .build();
     auto result = co_await awaitable;
     state->sequence_value.store(result ? static_cast<int>(result.value()) : -1, std::memory_order_release);
     state->sequence_done.store(true, std::memory_order_release);
 }
 
-Task<void> ordinaryRecvTask(SharedState* state) {
+Task<void> ordinary_recv_task(SharedState* state) {
     char byte = 0;
     RecvAwaitable awaitable(&state->controller, &byte, 1);
     auto result = co_await awaitable;
@@ -83,7 +83,7 @@ Task<void> ordinaryRecvTask(SharedState* state) {
     state->ordinary_done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -96,12 +96,12 @@ bool waitUntil(auto&& predicate,
     return predicate();
 }
 
-bool setNonBlocking(int fd) {
+bool set_non_blocking(int fd) {
     const int flags = fcntl(fd, F_GETFL, 0);
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool sendByteWithRetry(int fd,
+bool send_byte_with_retry(int fd,
                        char value,
                        std::chrono::milliseconds timeout = 1000ms,
                        std::chrono::milliseconds step = 2ms) {
@@ -131,7 +131,7 @@ int main() {
         std::perror("[T84] socketpair");
         return 1;
     }
-    if (!setNonBlocking(fds[0]) || !setNonBlocking(fds[1])) {
+    if (!set_non_blocking(fds[0]) || !set_non_blocking(fds[1])) {
         std::cerr << "[T84] failed to set non-blocking mode\n";
         close(fds[0]);
         close(fds[1]);
@@ -142,9 +142,9 @@ int main() {
     scheduler.start();
 
     SharedState state(fds[0]);
-    scheduleTask(scheduler, sequenceTask(&state));
+    schedule_task(scheduler, sequence_task(&state));
 
-    const bool sequence_in_position = waitUntil([&]() {
+    const bool sequence_in_position = wait_until([&]() {
         return state.sequence_await_bound.load(std::memory_order_acquire);
     });
     if (!sequence_in_position) {
@@ -155,14 +155,14 @@ int main() {
         return 1;
     }
 
-    scheduleTask(scheduler, ordinaryRecvTask(&state));
+    schedule_task(scheduler, ordinary_recv_task(&state));
 
-    const bool ordinary_failed_fast = waitUntil([&]() {
+    const bool ordinary_failed_fast = wait_until([&]() {
         return state.ordinary_done.load(std::memory_order_acquire);
     }, 150ms);
 
     constexpr char kPayload = 'q';
-    if (!sendByteWithRetry(fds[1], kPayload)) {
+    if (!send_byte_with_retry(fds[1], kPayload)) {
         std::cerr << "[T84] failed to send wake payload\n";
         scheduler.stop();
         close(fds[0]);
@@ -170,7 +170,7 @@ int main() {
         return 1;
     }
 
-    const bool sequence_completed = waitUntil([&]() {
+    const bool sequence_completed = wait_until([&]() {
         return state.sequence_done.load(std::memory_order_acquire);
     });
 

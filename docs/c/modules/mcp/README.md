@@ -46,4 +46,4 @@ slices owned by the parsed handle.
 
 ## Verification
 
-The module tests cover JSON-RPC helpers, stdio initialize/ping/listTools/callTool/disconnect, HTTP loopback for the same client flow, and server handler registration for tools/resources/prompts.
+The module tests cover JSON-RPC helpers, stdio initialize/ping/list_tools/call_tool/disconnect, HTTP loopback for the same client flow, and server handler registration for tools/resources/prompts.

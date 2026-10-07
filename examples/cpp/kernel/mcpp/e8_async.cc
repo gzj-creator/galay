@@ -24,7 +24,7 @@ std::atomic<int> g_worker_done{0};
 std::atomic<bool> g_wait_done{false};
 std::atomic<int> g_compute_value{0};
 
-Task<void> guardedWorker(int iterations) {
+Task<void> guarded_worker(int iterations) {
     for (int i = 0; i < iterations; ++i) {
         auto locked = co_await g_mutex.lock().timeout(200ms);
         if (!locked) {
@@ -40,7 +40,7 @@ Task<void> guardedWorker(int iterations) {
     co_return;
 }
 
-Task<void> computeTask(AsyncWaiter<int>* waiter) {
+Task<void> compute_task(AsyncWaiter<int>* waiter) {
     int sum = 0;
     for (int i = 1; i <= 1000; ++i) {
         sum += i;
@@ -49,7 +49,7 @@ Task<void> computeTask(AsyncWaiter<int>* waiter) {
     co_return;
 }
 
-Task<void> waitComputeResult(AsyncWaiter<int>* waiter) {
+Task<void> wait_compute_result(AsyncWaiter<int>* waiter) {
     auto result = co_await waiter->wait().timeout(1s);
     if (result) {
         g_compute_value.store(result.value(), std::memory_order_release);
@@ -62,18 +62,18 @@ Task<void> waitComputeResult(AsyncWaiter<int>* waiter) {
 int main() {
     constexpr int kIterations = 500;
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
-    auto* io = runtime.getNextIOScheduler();
-    auto* compute = runtime.getNextParallelScheduler();
+    auto* io = runtime.get_next_io_scheduler();
+    auto* compute = runtime.get_next_parallel_scheduler();
 
     AsyncWaiter<int> waiter;
 
-    scheduleTask(io, guardedWorker(kIterations));
-    scheduleTask(io, guardedWorker(kIterations));
-    scheduleTask(io, waitComputeResult(&waiter));
-    scheduleTask(compute, computeTask(&waiter));
+    schedule_task(io, guarded_worker(kIterations));
+    schedule_task(io, guarded_worker(kIterations));
+    schedule_task(io, wait_compute_result(&waiter));
+    schedule_task(compute, compute_task(&waiter));
 
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while ((g_worker_done.load(std::memory_order_acquire) < 2 ||

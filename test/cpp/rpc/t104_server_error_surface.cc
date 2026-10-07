@@ -34,14 +34,14 @@ template<typename Server>
 concept SharedPtrServiceRegistration = requires(
     Server& server,
     std::shared_ptr<RpcService> service) {
-    server.registerService(std::move(service));
+    server.register_service(std::move(service));
 };
 
 static_assert(std::same_as<
-    decltype(std::declval<RpcServer&>().registerService(std::declval<RpcService&>())),
+    decltype(std::declval<RpcServer&>().register_service(std::declval<RpcService&>())),
     std::expected<void, RpcError>>);
 static_assert(std::same_as<
-    decltype(std::declval<RpcStreamServer&>().registerService(std::declval<RpcService&>())),
+    decltype(std::declval<RpcStreamServer&>().register_service(std::declval<RpcService&>())),
     std::expected<void, RpcError>>);
 static_assert(!SharedPtrServiceRegistration<RpcServer>);
 static_assert(!SharedPtrServiceRegistration<RpcStreamServer>);
@@ -52,7 +52,7 @@ static_assert(std::same_as<
     decltype(std::declval<RpcStreamServer&>().start()),
     std::expected<void, RpcError>>);
 
-std::expected<std::pair<AsyncTcpSocket, uint16_t>, std::string> reservePort()
+std::expected<std::pair<AsyncTcpSocket, uint16_t>, std::string> reserve_port()
 {
     auto listener = AsyncTcpSocket::create(IPType::IPV4);
     if (!listener.has_value()) {
@@ -84,31 +84,31 @@ std::expected<std::pair<AsyncTcpSocket, uint16_t>, std::string> reservePort()
         ntohs(address.sin_port));
 }
 
-void testServiceRegistration(test::TestResultWriter& writer)
+void test_service_registration(test::TestResultWriter& writer)
 {
     RpcServer server = RpcServerBuilder().build();
     EmptyService first("duplicate");
     EmptyService second("duplicate");
 
-    auto registered = server.registerService(first);
-    auto duplicate = server.registerService(second);
-    writer.writeTestCase(
+    auto registered = server.register_service(first);
+    auto duplicate = server.register_service(second);
+    writer.write_test_case(
         "RpcServer registration returns explicit duplicate error",
         registered.has_value() &&
             !duplicate.has_value() &&
             duplicate.error().code() == RpcErrorCode::INVALID_REQUEST);
 
     RpcStreamServer stream_server = RpcStreamServerBuilder().build();
-    auto stream_registered = stream_server.registerService(first);
-    auto stream_duplicate = stream_server.registerService(second);
-    writer.writeTestCase(
+    auto stream_registered = stream_server.register_service(first);
+    auto stream_duplicate = stream_server.register_service(second);
+    writer.write_test_case(
         "RpcStreamServer registration returns explicit duplicate error",
         stream_registered.has_value() &&
             !stream_duplicate.has_value() &&
             stream_duplicate.error().code() == RpcErrorCode::INVALID_REQUEST);
 }
 
-void testServiceCapacity(test::TestResultWriter& writer)
+void test_service_capacity(test::TestResultWriter& writer)
 {
     std::array<std::string, RpcServer::kMaxRegisteredServices + 1> names;
     std::array<std::optional<EmptyService>, RpcServer::kMaxRegisteredServices + 1> services;
@@ -120,14 +120,14 @@ void testServiceCapacity(test::TestResultWriter& writer)
     RpcServer server = RpcServerBuilder().build();
     bool unary_registered = true;
     for (size_t i = 0; i < RpcServer::kMaxRegisteredServices; ++i) {
-        auto result = server.registerService(*services[i]);
+        auto result = server.register_service(*services[i]);
         if (!result.has_value()) {
             unary_registered = false;
             break;
         }
     }
-    auto unary_overflow = server.registerService(services.back().value());
-    writer.writeTestCase(
+    auto unary_overflow = server.register_service(services.back().value());
+    writer.write_test_case(
         "RpcServer registration capacity returns resource exhausted",
         unary_registered &&
             !unary_overflow.has_value() &&
@@ -136,25 +136,25 @@ void testServiceCapacity(test::TestResultWriter& writer)
     RpcStreamServer stream_server = RpcStreamServerBuilder().build();
     bool stream_registered = true;
     for (size_t i = 0; i < RpcStreamServer::kMaxRegisteredServices; ++i) {
-        auto result = stream_server.registerService(*services[i]);
+        auto result = stream_server.register_service(*services[i]);
         if (!result.has_value()) {
             stream_registered = false;
             break;
         }
     }
-    auto stream_overflow = stream_server.registerService(services.back().value());
-    writer.writeTestCase(
+    auto stream_overflow = stream_server.register_service(services.back().value());
+    writer.write_test_case(
         "RpcStreamServer registration capacity returns resource exhausted",
         stream_registered &&
             !stream_overflow.has_value() &&
             stream_overflow.error().code() == RpcErrorCode::RESOURCE_EXHAUSTED);
 }
 
-void testBindFailurePropagation(test::TestResultWriter& writer)
+void test_bind_failure_propagation(test::TestResultWriter& writer)
 {
-    auto reserved = reservePort();
+    auto reserved = reserve_port();
     if (!reserved.has_value()) {
-        writer.writeTestCase("reserve occupied port", false);
+        writer.write_test_case("reserve occupied port", false);
         return;
     }
 
@@ -162,24 +162,24 @@ void testBindFailurePropagation(test::TestResultWriter& writer)
     RpcServer server = RpcServerBuilder()
                            .host("127.0.0.1")
                            .port(port)
-                           .ioSchedulerCount(1)
-                           .parallelSchedulerCount(0)
+                           .io_scheduler_count(1)
+                           .parallel_scheduler_count(0)
                            .build();
     auto started = server.start();
-    writer.writeTestCase(
+    writer.write_test_case(
         "RpcServer start returns bind failure and remains stopped",
-        !started.has_value() && !server.isRunning());
+        !started.has_value() && !server.is_running());
 
     RpcStreamServer stream_server = RpcStreamServerBuilder()
                                         .host("127.0.0.1")
                                         .port(port)
-                                        .ioSchedulerCount(1)
-                                        .parallelSchedulerCount(0)
+                                        .io_scheduler_count(1)
+                                        .parallel_scheduler_count(0)
                                         .build();
     auto stream_started = stream_server.start();
-    writer.writeTestCase(
+    writer.write_test_case(
         "RpcStreamServer start returns bind failure and remains stopped",
-        !stream_started.has_value() && !stream_server.isRunning());
+        !stream_started.has_value() && !stream_server.is_running());
 }
 
 } // namespace
@@ -187,9 +187,9 @@ void testBindFailurePropagation(test::TestResultWriter& writer)
 int main()
 {
     test::TestResultWriter writer("t104_server_error_surface.result");
-    testServiceRegistration(writer);
-    testServiceCapacity(writer);
-    testBindFailurePropagation(writer);
-    writer.writeSummary();
+    test_service_registration(writer);
+    test_service_capacity(writer);
+    test_bind_failure_propagation(writer);
+    writer.write_summary();
     return writer.failed() == 0 ? 0 : 1;
 }

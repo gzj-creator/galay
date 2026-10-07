@@ -27,7 +27,7 @@ using namespace galay::kernel;
  */
 AsyncUdpSocket::AsyncUdpSocket(IPType type)
     : m_controller(std::make_shared<IOController>([](IPType socket_type) {
-        auto opened = openHandle(socket_type);
+        auto opened = open_handle(socket_type);
         return opened ? *opened : GHandle::invalid();
     }(type)))
 {
@@ -40,7 +40,7 @@ AsyncUdpSocket::AsyncUdpSocket(IPType type)
  */
 std::expected<AsyncUdpSocket, IOError> AsyncUdpSocket::create(IPType type)
 {
-    auto handle = openHandle(type);
+    auto handle = open_handle(type);
     if (!handle) {
         return std::unexpected(handle.error());
     }
@@ -60,7 +60,7 @@ AsyncUdpSocket::AsyncUdpSocket(GHandle handle)
  * @brief 释放本对象对共享控制器的持有
  * @note 本对象是最后一个持有者且句柄仍有效时才关闭句柄
  */
-void AsyncUdpSocket::releaseSharedOwnership() noexcept
+void AsyncUdpSocket::release_shared_ownership() noexcept
 {
     if (m_controller == nullptr) {
         return;
@@ -77,7 +77,7 @@ void AsyncUdpSocket::releaseSharedOwnership() noexcept
  */
 AsyncUdpSocket::~AsyncUdpSocket()
 {
-    releaseSharedOwnership();
+    release_shared_ownership();
 }
 
 /**
@@ -97,7 +97,7 @@ AsyncUdpSocket::AsyncUdpSocket(AsyncUdpSocket&& other) noexcept
 AsyncUdpSocket& AsyncUdpSocket::operator=(AsyncUdpSocket&& other) noexcept
 {
     if (this != &other) {
-        releaseSharedOwnership();
+        release_shared_ownership();
         m_controller = std::move(other.m_controller);
     }
     return *this;
@@ -110,7 +110,7 @@ AsyncUdpSocket& AsyncUdpSocket::operator=(AsyncUdpSocket&& other) noexcept
  * @param type IP 协议类型（IPV4 映射到 AF_INET，IPV6 映射到 AF_INET6）
  * @return 成功时返回有效的 GHandle，失败时返回无效的 GHandle
  */
-std::expected<GHandle, IOError> AsyncUdpSocket::openHandle(IPType type)
+std::expected<GHandle, IOError> AsyncUdpSocket::open_handle(IPType type)
 {
     int domain = (type == IPType::IPV4) ? AF_INET : AF_INET6;
     int fd = ::socket(domain, SOCK_DGRAM, 0);  // SOCK_DGRAM 用于 UDP
@@ -118,7 +118,7 @@ std::expected<GHandle, IOError> AsyncUdpSocket::openHandle(IPType type)
         return std::unexpected(IOError(kOpenFailed, errno));
     }
     if (type == IPType::IPV6) {
-        auto dual_stack = HandleOption(GHandle{.fd = fd}).handleIPv6Only(false);
+        auto dual_stack = HandleOption(GHandle{.fd = fd}).handle_ipv6_only(false);
         if (!dual_stack) {
             ::close(fd);
             return std::unexpected(dual_stack.error());
@@ -141,7 +141,7 @@ std::expected<void, IOError> AsyncUdpSocket::bind(const Host& host)
     if (!m_controller || m_controller->m_handle == GHandle::invalid()) {
         return std::unexpected(IOError(kClosed, 0));
     }
-    if (::bind(m_controller->m_handle.fd, host.sockAddr(), host.addrLen()) < 0) {
+    if (::bind(m_controller->m_handle.fd, host.sock_addr(), host.addr_len()) < 0) {
         return std::unexpected(IOError(kBindFailed, errno));
     }
     return {};

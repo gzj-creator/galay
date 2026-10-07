@@ -59,7 +59,7 @@ public:
     }
 
     /// 绑定外部 vector，`many()` 模式下写回全部取值
-    Positional& bindAll(std::vector<T>* target) {
+    Positional& bind_all(std::vector<T>* target) {
         m_boundAll = target;
         return *this;
     }
@@ -67,16 +67,16 @@ public:
     [[nodiscard]] const T& value() const noexcept { return m_value; }
     [[nodiscard]] const std::vector<T>& values() const noexcept { return m_values; }
 
-    [[nodiscard]] bool isFlag() const noexcept override { return false; }
-    [[nodiscard]] bool isMulti() const noexcept override { return m_many; }
-    [[nodiscard]] std::string_view typeName() const noexcept override { return CliValue<T>::typeName(); }
+    [[nodiscard]] bool is_flag() const noexcept override { return false; }
+    [[nodiscard]] bool is_multi() const noexcept override { return m_many; }
+    [[nodiscard]] std::string_view type_name() const noexcept override { return CliValue<T>::type_name(); }
     [[nodiscard]] const std::vector<std::string>& choices() const noexcept override { return m_choices; }
 
-    [[nodiscard]] std::string defaultText() const override {
+    [[nodiscard]] std::string default_text() const override {
         if (!m_default.has_value()) {
             return {};
         }
-        return CliValue<T>::toString(*m_default);
+        return CliValue<T>::to_string(*m_default);
     }
 
     std::expected<void, std::string> assign(std::string_view text) override {
@@ -85,7 +85,7 @@ public:
             return std::unexpected(std::move(parsed.error()));
         }
         if (!m_choices.empty()) {
-            const std::string normalized = CliValue<T>::toString(*parsed);
+            const std::string normalized = CliValue<T>::to_string(*parsed);
             bool allowed = false;
             for (const auto& choice : m_choices) {
                 if (choice == normalized || choice == text) {
@@ -99,16 +99,16 @@ public:
         }
         m_value = *parsed;
         m_values.push_back(std::move(*parsed));
-        markSet();
+        mark_set();
         return {};
     }
 
-    std::expected<void, std::string> assignFlag(bool) override {
+    std::expected<void, std::string> assign_flag(bool) override {
         return std::unexpected(std::string("positional argument requires a value"));
     }
 
     void reset() override {
-        clearSet();
+        clear_set();
         m_values.clear();
         m_value = m_default.value_or(T{});
     }

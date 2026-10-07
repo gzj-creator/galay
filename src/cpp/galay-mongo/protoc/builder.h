@@ -34,16 +34,16 @@ public:
     MongoCommandBuilder& append(std::string_view command_name,
                                 MongoValue command_value,
                                 MongoDocument arguments = {});
-    MongoCommandBuilder& appendPing();
+    MongoCommandBuilder& append_ping();
 
     [[nodiscard]] std::span<const MongoDocument> commands() const noexcept;
     [[nodiscard]] size_t size() const noexcept;
     [[nodiscard]] bool empty() const noexcept;
 
-    [[nodiscard]] std::expected<std::string, std::string> encodePipeline(std::string_view database,
+    [[nodiscard]] std::expected<std::string, std::string> encode_pipeline(std::string_view database,
                                                                          int32_t first_request_id,
                                                                          size_t reserve_per_command = 96) const;
-    [[nodiscard]] static std::expected<std::string, std::string> encodePipeline(std::string_view database,
+    [[nodiscard]] static std::expected<std::string, std::string> encode_pipeline(std::string_view database,
                                                                                 int32_t first_request_id,
                                                                                 std::span<const MongoDocument> commands,
                                                                                 size_t reserve_per_command = 96);

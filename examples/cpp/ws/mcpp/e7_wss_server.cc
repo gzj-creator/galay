@@ -20,13 +20,13 @@ using namespace galay::kernel;
 
 static std::atomic<bool> g_running{true};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
-Task<void> handleWssConnection(galay::ssl::SslSocket& socket) {
-    WsFrame welcome_frame = WsFrameParser::createTextFrame("Welcome to import WSS server!");
-    std::string welcome_data = WsFrameParser::toBytes(welcome_frame, false);
+Task<void> handle_wss_connection(galay::ssl::SslSocket& socket) {
+    WsFrame welcome_frame = WsFrameParser::create_text_frame("Welcome to import WSS server!");
+    std::string welcome_data = WsFrameParser::to_bytes(welcome_frame, false);
 
     size_t sent = 0;
     while (sent < welcome_data.size()) {
@@ -58,7 +58,7 @@ Task<void> handleWssConnection(galay::ssl::SslSocket& socket) {
             std::vector<iovec> iovecs;
             iovecs.push_back({const_cast<char*>(accumulated.data()), accumulated.size()});
 
-            auto parse_result = WsFrameParser::fromIOVec(iovecs, frame, true);
+            auto parse_result = WsFrameParser::from_io_vec(iovecs, frame, true);
             if (!parse_result) {
                 if (parse_result.error().code() == kWsIncomplete) {
                     break;
@@ -70,23 +70,23 @@ Task<void> handleWssConnection(galay::ssl::SslSocket& socket) {
             accumulated.erase(0, parse_result.value());
 
             if (frame.header.opcode == WsOpcode::Close) {
-                WsFrame close_frame = WsFrameParser::createCloseFrame(WsCloseCode::Normal);
-                std::string close_data = WsFrameParser::toBytes(close_frame, false);
+                WsFrame close_frame = WsFrameParser::create_close_frame(WsCloseCode::Normal);
+                std::string close_data = WsFrameParser::to_bytes(close_frame, false);
                 (void)co_await socket.send(close_data.data(), close_data.size());
                 (void)co_await socket.close();
                 co_return;
             }
 
             if (frame.header.opcode == WsOpcode::Ping) {
-                WsFrame pong_frame = WsFrameParser::createPongFrame(frame.payload);
-                std::string pong_data = WsFrameParser::toBytes(pong_frame, false);
+                WsFrame pong_frame = WsFrameParser::create_pong_frame(frame.payload);
+                std::string pong_data = WsFrameParser::to_bytes(pong_frame, false);
                 (void)co_await socket.send(pong_data.data(), pong_data.size());
                 continue;
             }
 
             if (frame.header.opcode == WsOpcode::Text || frame.header.opcode == WsOpcode::Binary) {
-                std::string echo_data = WsFrameParser::toBytes(
-                    WsFrameParser::createTextFrame("Echo: " + frame.payload),
+                std::string echo_data = WsFrameParser::to_bytes(
+                    WsFrameParser::create_text_frame("Echo: " + frame.payload),
                     false);
                 size_t echo_sent = 0;
                 while (echo_sent < echo_data.size()) {
@@ -107,12 +107,12 @@ Task<void> handleWssConnection(galay::ssl::SslSocket& socket) {
     co_return;
 }
 
-Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
-    auto reader = conn.getReader();
+Task<void> https_handler(HttpConnImpl<galay::ssl::SslSocket> conn) {
+    auto reader = conn.get_reader();
     HttpRequest request;
 
     while (true) {
-        auto read_result = co_await reader.getRequest(request);
+        auto read_result = co_await reader.get_request(request);
         if (!read_result) {
             (void)co_await conn.close();
             co_return;
@@ -123,10 +123,10 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
     }
 
     if (request.header().uri() == "/ws" || request.header().uri().starts_with("/ws?")) {
-        auto upgrade_result = WsUpgrade::handleUpgrade(request);
-        auto writer = conn.getWriter();
+        auto upgrade_result = WsUpgrade::handle_upgrade(request);
+        auto writer = conn.get_writer();
         while (true) {
-            auto send_result = co_await writer.sendResponse(upgrade_result.response);
+            auto send_result = co_await writer.send_response(upgrade_result.response);
             if (!send_result) {
                 (void)co_await conn.close();
                 co_return;
@@ -140,8 +140,8 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
             co_return;
         }
 
-        auto& socket = conn.getSocket();
-        co_await handleWssConnection(socket);
+        auto& socket = conn.get_socket();
+        co_await handle_wss_connection(socket);
         co_return;
     }
 
@@ -152,9 +152,9 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
             "<p>Connect to <code>wss://127.0.0.1:8443/ws</code>.</p>"
             "</body></html>")
         .build();
-    auto writer = conn.getWriter();
+    auto writer = conn.get_writer();
     while (true) {
-        auto send_result = co_await writer.sendResponse(response);
+        auto send_result = co_await writer.send_response(response);
         if (!send_result) {
             break;
         }
@@ -181,19 +181,19 @@ int main(int argc, char* argv[]) {
         key_path = argv[3];
     }
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
         HttpsServer server(HttpsServerBuilder()
             .host("0.0.0.0")
             .port(port)
-            .certPath(cert_path)
-            .keyPath(key_path)
-            .ioSchedulerCount(2)
+            .cert_path(cert_path)
+            .key_path(key_path)
+            .io_scheduler_count(2)
             .build());
         std::cout << "Import WSS server: wss://127.0.0.1:" << port << "/ws\n";
-        server.start(httpsHandler);
+        server.start(https_handler);
 
         while (g_running) {
             std::this_thread::sleep_for(std::chrono::seconds(1));

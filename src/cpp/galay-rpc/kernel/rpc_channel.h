@@ -92,10 +92,10 @@ public:
      * @param request_id 请求ID
      * @return 成功时返回pending waiter；失败时返回错误
      */
-    std::expected<std::shared_ptr<RpcChannelPendingCall>, RpcError> registerPending(uint32_t request_id) {
+    std::expected<std::shared_ptr<RpcChannelPendingCall>, RpcError> register_pending(uint32_t request_id) {
         auto pending = std::make_shared<RpcChannelPendingCall>();
         pending->request_id = request_id;
-        return registerPending(std::move(pending));
+        return register_pending(std::move(pending));
     }
 
     /**
@@ -103,7 +103,7 @@ public:
      * @param pending 调用方等待的pending对象
      * @return 成功时返回同一pending对象；失败时返回错误
      */
-    std::expected<std::shared_ptr<RpcChannelPendingCall>, RpcError> registerPending(
+    std::expected<std::shared_ptr<RpcChannelPendingCall>, RpcError> register_pending(
         std::shared_ptr<RpcChannelPendingCall> pending) {
         if (!pending) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
@@ -132,8 +132,8 @@ public:
      * @param response 收到的响应
      * @return 成功或INVALID_RESPONSE
      */
-    std::expected<std::shared_ptr<RpcChannelPendingCall>, RpcError> dispatchResponse(RpcResponse response) {
-        auto it = m_pending.find(response.requestId());
+    std::expected<std::shared_ptr<RpcChannelPendingCall>, RpcError> dispatch_response(RpcResponse response) {
+        auto it = m_pending.find(response.request_id());
         if (it == m_pending.end()) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_RESPONSE,
                                             "Response request id has no pending call"));
@@ -163,7 +163,7 @@ public:
      * @param error 要返回给调用方的错误
      * @return 请求存在时返回true
      */
-    bool failPending(uint32_t request_id, const RpcError& error) {
+    bool fail_pending(uint32_t request_id, const RpcError& error) {
         auto it = m_pending.find(request_id);
         if (it == m_pending.end()) {
             return false;
@@ -191,7 +191,7 @@ public:
      * @param error 要返回给每个pending调用的错误
      * @return 被通知的pending数量
      */
-    size_t failAllPending(const RpcError& error) {
+    size_t fail_all_pending(const RpcError& error) {
         std::vector<std::shared_ptr<RpcChannelPendingCall>> pending_calls;
         pending_calls.reserve(m_pending.size());
         for (auto& [_, pending] : m_pending) {
@@ -217,9 +217,9 @@ public:
     }
 
     /// @brief 当前pending请求数量
-    size_t pendingCount() const { return m_pending.size(); }
+    size_t pending_count() const { return m_pending.size(); }
     /// @brief 指定request_id是否仍在pending表中
-    bool containsPending(uint32_t request_id) const { return m_pending.contains(request_id); }
+    bool contains_pending(uint32_t request_id) const { return m_pending.contains(request_id); }
     /// @brief 通道配置
     const RpcChannelOptions& options() const { return m_options; }
 
@@ -247,12 +247,12 @@ public:
      * @return 成功或RESOURCE_EXHAUSTED
      */
     std::expected<void, RpcError> reserve(size_t bytes) {
-        if (!reserveCount()) {
+        if (!reserve_count()) {
             return std::unexpected(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
                                             "RPC outbound queue limit exceeded"));
         }
-        if (!reserveBytes(bytes)) {
-            releaseCount();
+        if (!reserve_bytes(bytes)) {
+            release_count();
             return std::unexpected(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
                                             "RPC outbound byte limit exceeded"));
         }
@@ -261,17 +261,17 @@ public:
 
     /// @brief 释放一次成功预约
     void release(size_t bytes) {
-        releaseBytes(bytes);
-        releaseCount();
+        release_bytes(bytes);
+        release_count();
     }
 
     /// @brief 当前预约元素数
-    size_t queuedCount() const { return m_queued_count.load(std::memory_order_acquire); }
+    size_t queued_count() const { return m_queued_count.load(std::memory_order_acquire); }
     /// @brief 当前预约字节数
-    size_t queuedBytes() const { return m_queued_bytes.load(std::memory_order_acquire); }
+    size_t queued_bytes() const { return m_queued_bytes.load(std::memory_order_acquire); }
 
 private:
-    bool reserveCount() {
+    bool reserve_count() {
         size_t current = m_queued_count.load(std::memory_order_acquire);
         while (current < m_options.max_outbound_queue) {
             if (m_queued_count.compare_exchange_weak(current,
@@ -284,7 +284,7 @@ private:
         return false;
     }
 
-    bool reserveBytes(size_t bytes) {
+    bool reserve_bytes(size_t bytes) {
         size_t current = m_queued_bytes.load(std::memory_order_acquire);
         while (bytes <= m_options.max_outbound_bytes &&
                current <= m_options.max_outbound_bytes - bytes) {
@@ -298,7 +298,7 @@ private:
         return false;
     }
 
-    void releaseCount() {
+    void release_count() {
         auto current = m_queued_count.load(std::memory_order_relaxed);
         while (current > 0) {
             if (m_queued_count.compare_exchange_weak(current,
@@ -310,7 +310,7 @@ private:
         }
     }
 
-    void releaseBytes(size_t bytes) {
+    void release_bytes(size_t bytes) {
         auto current = m_queued_bytes.load(std::memory_order_relaxed);
         while (current >= bytes) {
             if (m_queued_bytes.compare_exchange_weak(current,
@@ -342,7 +342,7 @@ public:
 
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) noexcept {
-        m_scheduler = handle.promise().taskRefView().belongScheduler();
+        m_scheduler = handle.promise().task_ref_view().belong_scheduler();
         return false;
     }
 
@@ -394,14 +394,14 @@ public:
     Task<std::expected<void, IOError>> connect(const std::string& host, uint16_t port) {
         m_socket = std::make_unique<SocketType>(IPType::IPV4);
         m_ring_buffer = std::make_unique<RingBuffer<Strategy, std::dynamic_extent>>(m_ring_buffer_size);
-        auto nonblock_result = m_socket->option().handleNonBlock();
+        auto nonblock_result = m_socket->option().handle_non_block();
         if (!nonblock_result) {
             m_socket.reset();
             m_ring_buffer.reset();
             co_return std::unexpected(nonblock_result.error());
         }
         if (m_tcp_no_delay) {
-            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            auto nodelay_result = m_socket->option().handle_tcp_no_delay();
             if (!nodelay_result) {
                 m_socket.reset();
                 m_ring_buffer.reset();
@@ -427,7 +427,7 @@ public:
      * @note 取消 source 属于调用方 owner，必须活到调用返回；外部线程应向该 owner
      *       投递取消。writer 只访问 pending 的完成标志，不借用取消域。
      */
-    Task<RpcCallResult> callWithMode(const std::string& service,
+    Task<RpcCallResult> call_with_mode(const std::string& service,
                                      const std::string& method,
                                      RpcCallMode mode,
                                      bool end_of_stream,
@@ -439,7 +439,7 @@ public:
                 RpcError(RpcErrorCode::CONNECTION_CLOSED, "RPC channel is not connected")));
         }
 
-        auto cancellation_token = options.cancellationToken();
+        auto cancellation_token = options.cancellation_token();
         if (cancellation_token.has_value() && cancellation_token->cancelled()) {
             co_return RpcCallResult(std::unexpected(
                 RpcError(RpcErrorCode::CANCELLED, "RPC call cancelled before send")));
@@ -450,7 +450,7 @@ public:
             co_return RpcCallResult(std::unexpected(
                 RpcError(RpcErrorCode::INTERNAL_ERROR, "RPC channel has no scheduler")));
         }
-        auto loops_started = co_await ensureLoopsStarted(scheduler);
+        auto loops_started = co_await ensure_loops_started(scheduler);
         if (!loops_started.has_value() || !loops_started.value()) {
             co_return RpcCallResult(std::unexpected(
                 RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to start RPC channel loops")));
@@ -459,13 +459,13 @@ public:
         const uint32_t request_id = m_request_id.fetch_add(1, std::memory_order_relaxed);
         OutboundCall outbound;
         outbound.request = RpcRequest(request_id, service, method);
-        outbound.request.callMode(mode);
-        outbound.request.endOfStream(end_of_stream);
+        outbound.request.call_mode(mode);
+        outbound.request.end_of_stream(end_of_stream);
         outbound.request.metadata() = options.metadata();
         if (payload != nullptr && payload_len > 0) {
             outbound.request.payload(payload, payload_len);
         }
-        outbound.reserved_bytes = estimateRequestBytes(outbound.request);
+        outbound.reserved_bytes = estimate_request_bytes(outbound.request);
         outbound.started_at = std::chrono::steady_clock::now();
         auto reserve_result = m_outbound_backpressure.reserve(outbound.reserved_bytes);
         if (!reserve_result.has_value()) {
@@ -480,7 +480,7 @@ public:
         // 注册在调用协程中析构；pending 的最后一个引用可能在 reader/writer 线程释放。
         RpcCancellationRegistration cancellation_registration;
         if (cancellation_token.has_value()) {
-            cancellation_registration = cancellation_token->registerCallback([pending = pending.get()] {
+            cancellation_registration = cancellation_token->register_callback([pending = pending.get()] {
                 if (pending->completed.exchange(true, std::memory_order_acq_rel)) {
                     return;
                 }
@@ -502,13 +502,13 @@ public:
                 RpcError(RpcErrorCode::RESOURCE_EXHAUSTED, "RPC outbound queue rejected call")));
         }
 
-        auto deadline = options.effectiveDeadline(RpcClock::now());
+        auto deadline = options.effective_deadline(RpcClock::now());
         std::expected<RpcCallResult, IOError> wait_result;
         if (deadline.has_value()) {
             auto now = RpcClock::now();
             if (*deadline <= now) {
                 pending->completed.store(true, std::memory_order_release);
-                requestPendingCleanup(request_id,
+                request_pending_cleanup(request_id,
                                       RpcError(RpcErrorCode::DEADLINE_EXCEEDED,
                                                "RPC deadline exceeded"));
                 co_return RpcCallResult(std::unexpected(
@@ -525,7 +525,7 @@ public:
         if (!wait_result.has_value()) {
             if (IOError::contains(wait_result.error().code(), kTimeout)) {
                 pending->completed.store(true, std::memory_order_release);
-                requestPendingCleanup(request_id,
+                request_pending_cleanup(request_id,
                                       RpcError(RpcErrorCode::DEADLINE_EXCEEDED,
                                                "RPC deadline exceeded"));
                 co_return RpcCallResult(std::unexpected(
@@ -536,7 +536,7 @@ public:
         }
         if (!wait_result.value().has_value() &&
             wait_result.value().error().code() == RpcErrorCode::CANCELLED) {
-            requestPendingCleanup(request_id,
+            request_pending_cleanup(request_id,
                                   RpcError(RpcErrorCode::CANCELLED, "RPC call cancelled"));
         }
         co_return std::move(wait_result.value());
@@ -548,7 +548,7 @@ public:
      *
      * @note 使用通道单writer和单reader loop，不会与一元调用竞争socket读取。
      */
-    Task<RpcHeartbeatResult> sendHeartbeat() {
+    Task<RpcHeartbeatResult> send_heartbeat() {
         if (!m_socket || !m_ring_buffer) {
             co_return RpcHeartbeatResult(std::unexpected(
                 RpcError(RpcErrorCode::CONNECTION_CLOSED, "RPC channel is not connected")));
@@ -559,7 +559,7 @@ public:
             co_return RpcHeartbeatResult(std::unexpected(
                 RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to start RPC channel loops")));
         }
-        auto loops_started = co_await ensureLoopsStarted(scheduler);
+        auto loops_started = co_await ensure_loops_started(scheduler);
         if (!loops_started.has_value() || !loops_started.value()) {
             co_return RpcHeartbeatResult(std::unexpected(
                 RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to start RPC channel loops")));
@@ -592,7 +592,7 @@ public:
     }
 
     /// @brief 请求通道关闭并唤醒writer loop
-    void requestShutdown() {
+    void request_shutdown() {
         bool expected = false;
         if (m_shutdown_requested.compare_exchange_strong(expected, true,
                                                          std::memory_order_acq_rel,
@@ -614,13 +614,13 @@ public:
      *          不阻塞OS线程。
      */
     Task<std::expected<void, IOError>> close() {
-        requestShutdown();
+        request_shutdown();
         std::expected<void, IOError> close_result = {};
         if (m_socket) {
             close_result = co_await m_socket->close();
         }
 
-        auto drain_result = co_await waitForBackgroundTasks(std::chrono::milliseconds(1000));
+        auto drain_result = co_await wait_for_background_tasks(std::chrono::milliseconds(1000));
         if (!drain_result.has_value() || !drain_result.value().has_value()) {
             co_return std::unexpected(IOError(kTimeout, 0));
         }
@@ -628,23 +628,23 @@ public:
     }
 
     /// @brief 获取读取器
-    RpcReaderImpl<SocketType, Strategy> getReader() {
+    RpcReaderImpl<SocketType, Strategy> get_reader() {
         return RpcReaderImpl<SocketType, Strategy>(*m_ring_buffer, m_reader_setting, *m_socket);
     }
 
     /// @brief 获取写入器
-    RpcWriterImpl<SocketType> getWriter() {
+    RpcWriterImpl<SocketType> get_writer() {
         return RpcWriterImpl<SocketType>(m_writer_setting, *m_socket);
     }
 
     /// @brief 获取底层socket
     SocketType& socket() { return *m_socket; }
     /// @brief 获取RingBuffer
-    RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return *m_ring_buffer; }
+    RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return *m_ring_buffer; }
     /// @brief 获取读取配置
-    const RpcReaderSetting& readerSetting() const { return m_reader_setting; }
+    const RpcReaderSetting& reader_setting() const { return m_reader_setting; }
     /// @brief 当前pending数量
-    size_t pendingCount() const { return m_pending_count.load(std::memory_order_acquire); }
+    size_t pending_count() const { return m_pending_count.load(std::memory_order_acquire); }
     /// @brief 底层socket和RingBuffer是否已创建，可用于拒绝未连接的上层会话创建。
     bool ready() const { return m_socket != nullptr && m_ring_buffer != nullptr; }
 
@@ -663,11 +663,11 @@ private:
         bool shutdown = false;
     };
 
-    static size_t estimateRequestBytes(const RpcRequest& request) {
-        return RPC_HEADER_SIZE + request.serializedBodySize();
+    static size_t estimate_request_bytes(const RpcRequest& request) {
+        return RPC_HEADER_SIZE + request.serialized_body_size();
     }
 
-    Task<bool> ensureLoopsStarted(Scheduler* scheduler) {
+    Task<bool> ensure_loops_started(Scheduler* scheduler) {
         if (m_shutdown_requested.load(std::memory_order_acquire)) {
             co_return false;
         }
@@ -684,7 +684,7 @@ private:
                          "previous={}",
                          loops_before_start);
         }
-        if (!scheduleTask(scheduler, writerLoop())) {
+        if (!schedule_task(scheduler, writer_loop())) {
             const size_t loops_before_sub = m_active_loops.fetch_sub(2, std::memory_order_acq_rel);
             if (loops_before_sub < 2) {
                 RPC_LOG_WARN("[channel] [loops] [count-underflow]",
@@ -694,15 +694,15 @@ private:
             m_loops_started.store(false, std::memory_order_release);
             co_return false;
         }
-        if (!scheduleTask(scheduler, readerLoop())) {
+        if (!schedule_task(scheduler, reader_loop())) {
             const size_t loops_before_sub = m_active_loops.fetch_sub(1, std::memory_order_acq_rel);
             if (loops_before_sub == 0) {
                 RPC_LOG_WARN("[channel] [loops] [count-underflow]",
                              "previous={}",
                              loops_before_sub);
             }
-            requestShutdown();
-            auto drain_result = co_await waitForBackgroundTasks(std::chrono::milliseconds(1000));
+            request_shutdown();
+            auto drain_result = co_await wait_for_background_tasks(std::chrono::milliseconds(1000));
             if (!drain_result.has_value() || !drain_result.value().has_value()) {
                 RPC_LOG_WARN("[channel] [loops] [drain-failed-after-reader-schedule-failure]",
                              "state={}",
@@ -714,7 +714,7 @@ private:
         co_return true;
     }
 
-    Task<std::expected<void, IOError>> waitForBackgroundTasks(std::chrono::milliseconds timeout) {
+    Task<std::expected<void, IOError>> wait_for_background_tasks(std::chrono::milliseconds timeout) {
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         while (m_active_loops.load(std::memory_order_acquire) != 0) {
             if (std::chrono::steady_clock::now() >= deadline) {
@@ -725,9 +725,9 @@ private:
         co_return std::expected<void, IOError>{};
     }
 
-    Task<void> writerLoop() {
+    Task<void> writer_loop() {
         LoopGuard guard(*this);
-        auto writer = getWriter();
+        auto writer = get_writer();
         while (!m_shutdown_requested.load(std::memory_order_acquire)) {
             auto recv_result = co_await m_outbound.recv();
             if (!recv_result.has_value()) {
@@ -742,17 +742,17 @@ private:
                 if (outbound.cleanup_error.has_value()) {
                     auto locked = co_await m_state_mutex.lock();
                     if (!locked.has_value()) {
-                        requestShutdown();
+                        request_shutdown();
                         break;
                     }
-                    const bool failed = m_state.failPending(outbound.cleanup_request_id,
+                    const bool failed = m_state.fail_pending(outbound.cleanup_request_id,
                                                             *outbound.cleanup_error);
                     if (!failed) {
                         RPC_LOG_DEBUG("[channel] [cleanup] [pending-missing]",
                                       "request_id={}",
                                       outbound.cleanup_request_id);
                     }
-                    m_pending_count.store(m_state.pendingCount(), std::memory_order_release);
+                    m_pending_count.store(m_state.pending_count(), std::memory_order_release);
                     m_state_mutex.unlock();
                 }
                 continue;
@@ -760,7 +760,7 @@ private:
             if (outbound.heartbeat) {
                 auto locked = co_await m_state_mutex.lock();
                 if (!locked.has_value()) {
-                    requestShutdown();
+                    request_shutdown();
                     break;
                 }
                 auto [_, inserted] = m_pending_heartbeats.emplace(outbound.heartbeat_id,
@@ -780,23 +780,23 @@ private:
                     continue;
                 }
                 auto send_result = co_await SendRawDataAwaitable<SocketType>(
-                    rpcBuildHeartbeatFrame(outbound.heartbeat_id),
+                    rpc_build_heartbeat_frame(outbound.heartbeat_id),
                     *m_socket);
                 m_outbound_backpressure.release(outbound.reserved_bytes);
                 if (!send_result.has_value()) {
                     auto fail_locked = co_await m_state_mutex.lock();
                     if (!fail_locked.has_value()) {
-                        requestShutdown();
+                        request_shutdown();
                         break;
                     }
-                    const bool failed = failHeartbeat(outbound.heartbeat_id, send_result.error());
+                    const bool failed = fail_heartbeat(outbound.heartbeat_id, send_result.error());
                     if (!failed) {
                         RPC_LOG_DEBUG("[channel] [heartbeat] [fail-missing]",
                                       "request_id={}",
                                       outbound.heartbeat_id);
                     }
                     m_state_mutex.unlock();
-                    requestShutdown();
+                    request_shutdown();
                     break;
                 }
                 continue;
@@ -808,11 +808,11 @@ private:
             auto locked = co_await m_state_mutex.lock();
             if (!locked.has_value()) {
                 m_outbound_backpressure.release(outbound.reserved_bytes);
-                requestShutdown();
+                request_shutdown();
                 break;
             }
-            auto registered = m_state.registerPending(outbound.pending_hint);
-            m_pending_count.store(m_state.pendingCount(), std::memory_order_release);
+            auto registered = m_state.register_pending(outbound.pending_hint);
+            m_pending_count.store(m_state.pending_count(), std::memory_order_release);
             m_state_mutex.unlock();
             if (!registered.has_value()) {
                 m_outbound_backpressure.release(outbound.reserved_bytes);
@@ -826,30 +826,30 @@ private:
                 continue;
             }
 
-            auto send_result = co_await writer.sendRequest(outbound.request);
+            auto send_result = co_await writer.send_request(outbound.request);
             m_outbound_backpressure.release(outbound.reserved_bytes);
             if (!send_result.has_value()) {
                 auto fail_locked = co_await m_state_mutex.lock();
                 if (!fail_locked.has_value()) {
-                    requestShutdown();
+                    request_shutdown();
                     break;
                 }
-                const bool failed = m_state.failPending(outbound.request.requestId(), send_result.error());
+                const bool failed = m_state.fail_pending(outbound.request.request_id(), send_result.error());
                 if (!failed) {
                     RPC_LOG_DEBUG("[channel] [send] [fail-pending-missing]",
                                   "request_id={}",
-                                  outbound.request.requestId());
+                                  outbound.request.request_id());
                 }
-                m_pending_count.store(m_state.pendingCount(), std::memory_order_release);
+                m_pending_count.store(m_state.pending_count(), std::memory_order_release);
                 m_state_mutex.unlock();
-                requestShutdown();
+                request_shutdown();
                 break;
             }
         }
         co_return;
     }
 
-    Task<void> readerLoop() {
+    Task<void> reader_loop() {
         LoopGuard guard(*this);
         while (!m_shutdown_requested.load(std::memory_order_acquire)) {
             RpcHeader header;
@@ -865,22 +865,22 @@ private:
                 }
                 auto locked = co_await m_state_mutex.lock();
                 if (!locked.has_value()) {
-                    requestShutdown();
+                    request_shutdown();
                     break;
                 }
-                failAllWaitersLocked(header_result.error());
+                fail_all_waiters_locked(header_result.error());
                 m_state_mutex.unlock();
-                requestShutdown();
+                request_shutdown();
                 break;
             }
 
             if (header.m_type == static_cast<uint8_t>(RpcMessageType::HEARTBEAT)) {
                 auto locked = co_await m_state_mutex.lock();
                 if (!locked.has_value()) {
-                    requestShutdown();
+                    request_shutdown();
                     break;
                 }
-                const bool completed = completeHeartbeat(header.m_request_id);
+                const bool completed = complete_heartbeat(header.m_request_id);
                 if (!completed) {
                     RPC_LOG_DEBUG("[channel] [heartbeat] [late-or-unknown]",
                                   "request_id={}",
@@ -894,12 +894,12 @@ private:
                 RpcError error(RpcErrorCode::INVALID_RESPONSE, "Unexpected RPC message type");
                 auto locked = co_await m_state_mutex.lock();
                 if (!locked.has_value()) {
-                    requestShutdown();
+                    request_shutdown();
                     break;
                 }
-                failAllWaitersLocked(error);
+                fail_all_waiters_locked(error);
                 m_state_mutex.unlock();
-                requestShutdown();
+                request_shutdown();
                 break;
             }
 
@@ -907,12 +907,12 @@ private:
                 RpcError error(RpcErrorCode::INVALID_RESPONSE, "Message too large");
                 auto locked = co_await m_state_mutex.lock();
                 if (!locked.has_value()) {
-                    requestShutdown();
+                    request_shutdown();
                     break;
                 }
-                failAllWaitersLocked(error);
+                fail_all_waiters_locked(error);
                 m_state_mutex.unlock();
-                requestShutdown();
+                request_shutdown();
                 break;
             }
 
@@ -926,41 +926,41 @@ private:
                 if (!body_result.has_value()) {
                     auto locked = co_await m_state_mutex.lock();
                     if (!locked.has_value()) {
-                        requestShutdown();
+                        request_shutdown();
                         break;
                     }
-                    failAllWaitersLocked(body_result.error());
+                    fail_all_waiters_locked(body_result.error());
                     m_state_mutex.unlock();
-                    requestShutdown();
+                    request_shutdown();
                     break;
                 }
             }
 
             RpcResponse response;
-            response.requestId(header.m_request_id);
-            response.callMode(rpcDecodeCallMode(header.m_flags));
-            response.endOfStream(rpcIsEndStream(header.m_flags));
-            if (!response.deserializeBody(body.data(), body.size())) {
+            response.request_id(header.m_request_id);
+            response.call_mode(rpc_decode_call_mode(header.m_flags));
+            response.end_of_stream(rpc_is_end_stream(header.m_flags));
+            if (!response.deserialize_body(body.data(), body.size())) {
                 RpcError error(RpcErrorCode::DESERIALIZATION_ERROR, "Failed to parse response body");
                 auto locked = co_await m_state_mutex.lock();
                 if (!locked.has_value()) {
-                    requestShutdown();
+                    request_shutdown();
                     break;
                 }
-                failAllWaitersLocked(error);
+                fail_all_waiters_locked(error);
                 m_state_mutex.unlock();
-                requestShutdown();
+                request_shutdown();
                 break;
             }
 
-            const auto metric_status = response.errorCode();
+            const auto metric_status = response.error_code();
             auto locked = co_await m_state_mutex.lock();
             if (!locked.has_value()) {
-                requestShutdown();
+                request_shutdown();
                 break;
             }
-            auto dispatch_result = m_state.dispatchResponse(std::move(response));
-            const size_t pending_count = m_state.pendingCount();
+            auto dispatch_result = m_state.dispatch_response(std::move(response));
+            const size_t pending_count = m_state.pending_count();
             m_pending_count.store(pending_count, std::memory_order_release);
             m_state_mutex.unlock();
             if (!dispatch_result.has_value()) {
@@ -970,18 +970,18 @@ private:
                              dispatch_result.error().message());
                 continue;
             }
-            emitMetric(*dispatch_result.value(), metric_status, pending_count);
+            emit_metric(*dispatch_result.value(), metric_status, pending_count);
         }
         auto locked = co_await m_state_mutex.lock();
         if (!locked.has_value()) {
             co_return;
         }
-        failAllWaitersLocked(RpcError(RpcErrorCode::UNAVAILABLE, "RPC channel closed"));
+        fail_all_waiters_locked(RpcError(RpcErrorCode::UNAVAILABLE, "RPC channel closed"));
         m_state_mutex.unlock();
         co_return;
     }
 
-    bool completeHeartbeat(uint32_t request_id) {
+    bool complete_heartbeat(uint32_t request_id) {
         auto it = m_pending_heartbeats.find(request_id);
         if (it == m_pending_heartbeats.end()) {
             return false;
@@ -1003,7 +1003,7 @@ private:
         return notified;
     }
 
-    bool failHeartbeat(uint32_t request_id, const RpcError& error) {
+    bool fail_heartbeat(uint32_t request_id, const RpcError& error) {
         auto it = m_pending_heartbeats.find(request_id);
         if (it == m_pending_heartbeats.end()) {
             return false;
@@ -1025,7 +1025,7 @@ private:
         return notified;
     }
 
-    size_t failAllHeartbeats(const RpcError& error) {
+    size_t fail_all_heartbeats(const RpcError& error) {
         std::vector<std::shared_ptr<RpcChannelPendingHeartbeat>> pending;
         pending.reserve(m_pending_heartbeats.size());
         for (auto& [_, heartbeat] : m_pending_heartbeats) {
@@ -1049,10 +1049,10 @@ private:
         return notified_count;
     }
 
-    void failAllWaitersLocked(const RpcError& error) {
-        const size_t failed_pending = m_state.failAllPending(error);
+    void fail_all_waiters_locked(const RpcError& error) {
+        const size_t failed_pending = m_state.fail_all_pending(error);
         m_pending_count.store(0, std::memory_order_release);
-        const size_t failed_heartbeats = failAllHeartbeats(error);
+        const size_t failed_heartbeats = fail_all_heartbeats(error);
         if (failed_pending > 0 || failed_heartbeats > 0) {
             RPC_LOG_DEBUG("[channel] [waiters] [failed-all]",
                           "pending={} heartbeats={}",
@@ -1061,7 +1061,7 @@ private:
         }
     }
 
-    void emitMetric(const RpcChannelPendingCall& pending, RpcErrorCode status, size_t pending_count) {
+    void emit_metric(const RpcChannelPendingCall& pending, RpcErrorCode status, size_t pending_count) {
         RpcMetricEvent event;
         event.service = pending.service;
         event.method = pending.method;
@@ -1071,7 +1071,7 @@ private:
         m_metrics.emit(event);
     }
 
-    void requestPendingCleanup(uint32_t request_id, RpcError error) {
+    void request_pending_cleanup(uint32_t request_id, RpcError error) {
         OutboundCall cleanup;
         cleanup.cleanup_pending = true;
         cleanup.cleanup_request_id = request_id;

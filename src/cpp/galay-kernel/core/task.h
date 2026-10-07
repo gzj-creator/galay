@@ -105,8 +105,8 @@ private:
     TaskResultErrorCode m_code;
 };
 
-Runtime* currentRuntime() noexcept;  ///< 读取当前线程绑定的 Runtime，上下文不存在时返回 nullptr
-Runtime* swapCurrentRuntime(Runtime* runtime) noexcept;  ///< 替换当前线程 Runtime 并返回旧值
+Runtime* current_runtime() noexcept;  ///< 读取当前线程绑定的 Runtime，上下文不存在时返回 nullptr
+Runtime* swap_current_runtime(Runtime* runtime) noexcept;  ///< 替换当前线程 Runtime 并返回旧值
 /**
  * @brief 分配 C++ coroutine frame 的存储。
  * @param size 编译器请求的 frame 字节数
@@ -115,18 +115,18 @@ Runtime* swapCurrentRuntime(Runtime* runtime) noexcept;  ///< 替换当前线程
  * @note 小 frame 只归还当前释放线程的无锁 TLS 缓存；大 frame 或超对齐请求
  *       使用匹配的全局对齐分配。
  */
-void* allocateFrameStorage(std::size_t size, std::size_t alignment) noexcept;
+void* allocate_frame_storage(std::size_t size, std::size_t alignment) noexcept;
 /**
- * @brief 释放由 allocateFrameStorage 返回的 frame 存储。
+ * @brief 释放由 allocate_frame_storage 返回的 frame 存储。
  * @param ptr 待释放地址；允许为 nullptr，非空值必须来自
- *        allocateFrameStorage() 且尚未释放
+ *        allocate_frame_storage() 且尚未释放
  * @param size 编译器提供的 frame 大小；0 表示 unsized delete。该值不参与
  *       recycler 桶选择，实际分配来源由 frame 的 provenance header 决定。
  * @param alignment 与分配路径匹配的对齐
- * @pre `ptr` 非空时必须仍指向 allocateFrameStorage() 返回的原始地址；任意
+ * @pre `ptr` 非空时必须仍指向 allocate_frame_storage() 返回的原始地址；任意
  *      外部指针都不满足该 helper 的释放契约。
  */
-void releaseFrameStorage(void* ptr,
+void release_frame_storage(void* ptr,
                          std::size_t size,
                          std::size_t alignment) noexcept;
 /**
@@ -134,51 +134,51 @@ void releaseFrameStorage(void* ptr,
  * @param enabled true 使用 TLS recycler；false 直接走匹配的全局分配
  * @note 仅供边界测试和 benchmark 做 A/B 对照；默认开启。
  */
-void setFrameRecyclerEnabledForTesting(bool enabled) noexcept;
+void set_frame_recycler_enabled_for_testing(bool enabled) noexcept;
 /**
  * @brief 让当前线程的 frame 分配暂时失败。
  * @note 仅用于验证标准 allocation-failure hook；默认关闭。
  */
-void setFrameAllocationFailureForTesting(bool enabled) noexcept;
+void set_frame_allocation_failure_for_testing(bool enabled) noexcept;
 /**
  * @brief 让当前线程的 nothrow TaskState 分配暂时失败。
  * @note 仅用于验证 get_return_object() 的空状态分支；默认关闭。
  */
-void setTaskStateAllocationFailureForTesting(bool enabled) noexcept;
+void set_task_state_allocation_failure_for_testing(bool enabled) noexcept;
 /**
  * @brief 查询当前线程指定 frame 桶的缓存节点数。
  * @note 仅供边界测试和 benchmark 观测，不参与分配热路径。
  */
-std::size_t frameFreeListSizeForTesting(std::size_t size,
+std::size_t frame_free_list_size_for_testing(std::size_t size,
                                         std::size_t alignment) noexcept;
-bool scheduleTask(const TaskRef& task) noexcept;  ///< 将任务按普通语义提交给其所属调度器
-bool scheduleTaskDeferred(const TaskRef& task) noexcept;  ///< 将任务按延后语义提交给其所属调度器
-bool scheduleTaskDeferredState(TaskState* state) noexcept;  ///< 通过裸状态提交延后任务，供 promise 热路径使用
-bool scheduleTaskImmediately(const TaskRef& task) noexcept;  ///< 在所属调度器线程上立即恢复任务
+bool schedule_task(const TaskRef& task) noexcept;  ///< 将任务按普通语义提交给其所属调度器
+bool schedule_task_deferred(const TaskRef& task) noexcept;  ///< 将任务按延后语义提交给其所属调度器
+bool schedule_task_deferred_state(TaskState* state) noexcept;  ///< 通过裸状态提交延后任务，供 promise 热路径使用
+bool schedule_task_immediately(const TaskRef& task) noexcept;  ///< 在所属调度器线程上立即恢复任务
 enum class TaskResumeResult : uint8_t {
     kAccepted,
     kAlreadyQueued,
     kRejected,
 };
-TaskResumeResult requestTaskResumeStateDetailed(TaskState* state) noexcept;
-bool requestTaskResume(const TaskRef& task) noexcept;  ///< 请求恢复已暂停任务；失败时返回 false
-bool requestTaskResumeState(TaskState* state) noexcept;  ///< 通过 owner scheduler 的无分配入口请求恢复；调用方必须持有有效引用
-std::thread::id schedulerThreadId(Scheduler* scheduler) noexcept;  ///< 查询调度器线程 ID；scheduler 为空时返回默认值
-void completeTaskState(const TaskRef& task) noexcept;  ///< 标记任务完成并触发 continuation 清理
-void completeTaskState(TaskState* state) noexcept;  ///< 通过裸状态标记任务完成，供 promise 热路径使用
-void attachTaskContinuation(const TaskRef& task, TaskRef next) noexcept;  ///< 为任务追加下一段 continuation
-bool waitTaskCompletion(const TaskRef& task);  ///< 阻塞等待任务完成；无有效任务状态时返回 false
-void storeTaskError(const TaskRef& task, TaskResultError error) noexcept;  ///< 写入任务错误
-bool destroyTaskFrame(TaskState* state) noexcept;  ///< 销毁仍处于初始挂起态的 frame，已完成 frame 不重复销毁
+TaskResumeResult request_task_resume_state_detailed(TaskState* state) noexcept;
+bool request_task_resume(const TaskRef& task) noexcept;  ///< 请求恢复已暂停任务；失败时返回 false
+bool request_task_resume_state(TaskState* state) noexcept;  ///< 通过 owner scheduler 的无分配入口请求恢复；调用方必须持有有效引用
+std::thread::id scheduler_thread_id(Scheduler* scheduler) noexcept;  ///< 查询调度器线程 ID；scheduler 为空时返回默认值
+void complete_task_state(const TaskRef& task) noexcept;  ///< 标记任务完成并触发 continuation 清理
+void complete_task_state(TaskState* state) noexcept;  ///< 通过裸状态标记任务完成，供 promise 热路径使用
+void attach_task_continuation(const TaskRef& task, TaskRef next) noexcept;  ///< 为任务追加下一段 continuation
+bool wait_task_completion(const TaskRef& task);  ///< 阻塞等待任务完成；无有效任务状态时返回 false
+void store_task_error(const TaskRef& task, TaskResultError error) noexcept;  ///< 写入任务错误
+bool destroy_task_frame(TaskState* state) noexcept;  ///< 销毁仍处于初始挂起态的 frame，已完成 frame 不重复销毁
 struct TaskAccess;  ///< 供内核实现访问 Task 私有状态的辅助入口
 template <typename T>
 class TaskAwaiter;  ///< `co_await Task<T>` 使用的 awaiter
 template <typename T>
-void initializeTaskResult(const TaskRef& task) noexcept;  ///< 初始化任务结果存储
+void initialize_task_result(const TaskRef& task) noexcept;  ///< 初始化任务结果存储
 template <typename T, typename U>
-bool storeTaskResult(const TaskRef& task, U&& value);  ///< 写入任务结果
+bool store_task_result(const TaskRef& task, U&& value);  ///< 写入任务结果
 template <typename T>
-std::expected<T, TaskResultError> tryTakeTaskResult(const TaskRef& task);  ///< 以返回值消费任务结果
+std::expected<T, TaskResultError> try_take_task_result(const TaskRef& task);  ///< 以返回值消费任务结果
 
 } // namespace detail
 
@@ -198,13 +198,13 @@ public:
     TaskRef& operator=(const TaskRef& other) noexcept;  ///< 拷贝赋值并共享同一底层状态
     TaskRef& operator=(TaskRef&& other) noexcept;  ///< 移动赋值，源对象被清空
 
-    bool isValid() const noexcept { return m_state != nullptr; }  ///< 是否引用到有效任务状态
+    bool is_valid() const noexcept { return m_state != nullptr; }  ///< 是否引用到有效任务状态
     TaskState* state() const noexcept
     {
         const auto raw = reinterpret_cast<uintptr_t>(m_state);
         return reinterpret_cast<TaskState*>(raw & ~kBorrowedBit);
     }  ///< 返回非拥有状态指针；promise view 使用低位标记
-    Scheduler* belongScheduler() const noexcept;  ///< 返回任务所属调度器；未绑定时返回 nullptr
+    Scheduler* belong_scheduler() const noexcept;  ///< 返回任务所属调度器；未绑定时返回 nullptr
 
 private:
     template <typename T>
@@ -214,7 +214,7 @@ private:
     friend struct detail::TaskRefStorageAccess;
 
     static TaskRef borrowed(TaskState* state) noexcept;
-    bool isBorrowed() const noexcept
+    bool is_borrowed() const noexcept
     {
         return (reinterpret_cast<uintptr_t>(m_state) & kBorrowedBit) != 0;
     }
@@ -252,8 +252,8 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
     static void operator delete(void* ptr, std::align_val_t alignment) noexcept;
     static void operator delete(void* ptr, std::size_t size, std::align_val_t alignment) noexcept;
 
-    void* resultStorage() noexcept { return static_cast<void*>(m_result_storage); }
-    const void* resultStorage() const noexcept { return static_cast<const void*>(m_result_storage); }
+    void* result_storage() noexcept { return static_cast<void*>(m_result_storage); }
+    const void* result_storage() const noexcept { return static_cast<const void*>(m_result_storage); }
 
     alignas(std::max_align_t) std::byte m_result_storage[kInlineResultBytes]{};  ///< 小对象内联结果存储
     std::coroutine_handle<> m_handle = nullptr;  ///< 底层协程句柄
@@ -332,7 +332,7 @@ inline TaskRef& TaskRef::operator=(const TaskRef& other) noexcept
 inline TaskRef& TaskRef::operator=(TaskRef&& other) noexcept
 {
     if (this != &other) {
-        if (other.isBorrowed() && state() == other.state()) {
+        if (other.is_borrowed() && state() == other.state()) {
             // A borrowed promise view cannot replace its own owning reference.
             other.m_state = nullptr;
             return *this;
@@ -344,7 +344,7 @@ inline TaskRef& TaskRef::operator=(TaskRef&& other) noexcept
     return *this;
 }
 
-inline Scheduler* TaskRef::belongScheduler() const noexcept
+inline Scheduler* TaskRef::belong_scheduler() const noexcept
 {
     auto* state = this->state();
     return state ? state->m_scheduler : nullptr;
@@ -362,7 +362,7 @@ inline void TaskRef::release() noexcept
     if (!m_state) {
         return;
     }
-    if (isBorrowed()) {
+    if (is_borrowed()) {
         m_state = nullptr;
         return;
     }
@@ -382,13 +382,13 @@ struct TaskWaiter
 namespace detail
 {
 
-inline Runtime* taskRuntime(const TaskRef& task) noexcept
+inline Runtime* task_runtime(const TaskRef& task) noexcept
 {
     auto* state = task.state();
     return state ? state->m_runtime : nullptr;
 }
 
-inline void setTaskRuntime(const TaskRef& task, Runtime* runtime) noexcept
+inline void set_task_runtime(const TaskRef& task, Runtime* runtime) noexcept
 {
     if (auto* state = task.state()) {
         state->m_runtime = runtime;
@@ -400,24 +400,24 @@ inline void setTaskRuntime(const TaskRef& task, Runtime* runtime) noexcept
     }
 }
 
-inline void inheritTaskRuntime(TaskState* state, Runtime* runtime) noexcept
+inline void inherit_task_runtime(TaskState* state, Runtime* runtime) noexcept
 {
     if (state != nullptr && state->m_runtime == nullptr) {
         state->m_runtime = runtime;
     }
 }
 
-inline void inheritTaskRuntime(const TaskRef& task, Runtime* runtime) noexcept
+inline void inherit_task_runtime(const TaskRef& task, Runtime* runtime) noexcept
 {
-    inheritTaskRuntime(task.state(), runtime);
+    inherit_task_runtime(task.state(), runtime);
 }
 
-inline void setTaskScheduler(const TaskRef& task, Scheduler* scheduler) noexcept
+inline void set_task_scheduler(const TaskRef& task, Scheduler* scheduler) noexcept
 {
     if (auto* state = task.state()) {
         state->m_scheduler = scheduler;
-        if (state->m_then.has_value() && state->m_then->belongScheduler() == nullptr) {
-            setTaskScheduler(*state->m_then, scheduler);
+        if (state->m_then.has_value() && state->m_then->belong_scheduler() == nullptr) {
+            set_task_scheduler(*state->m_then, scheduler);
         }
     }
 }
@@ -430,11 +430,11 @@ class CurrentRuntimeScope
 {
 public:
     explicit CurrentRuntimeScope(Runtime* runtime) noexcept
-        : m_previous(swapCurrentRuntime(runtime)) {}
+        : m_previous(swap_current_runtime(runtime)) {}
 
     ~CurrentRuntimeScope()
     {
-        swapCurrentRuntime(m_previous);
+        swap_current_runtime(m_previous);
     }
 
     CurrentRuntimeScope(const CurrentRuntimeScope&) = delete;
@@ -462,11 +462,11 @@ struct TaskResultStorageTraits
     {
         if constexpr (kInline) {
             if (state.m_result_kind == TaskState::ResultStorageKind::Inline) {
-                std::destroy_at(reinterpret_cast<T*>(state.resultStorage()));
+                std::destroy_at(reinterpret_cast<T*>(state.result_storage()));
             }
         } else {
             if (state.m_result_kind == TaskState::ResultStorageKind::Heap) {
-                auto*& ptr = *reinterpret_cast<T**>(state.resultStorage());
+                auto*& ptr = *reinterpret_cast<T**>(state.result_storage());
                 delete ptr;
                 ptr = nullptr;
             }
@@ -478,21 +478,21 @@ struct TaskResultStorageTraits
     static void store(TaskState& state, U&& value)
     {
         if constexpr (kInline) {
-            std::construct_at(reinterpret_cast<T*>(state.resultStorage()), std::forward<U>(value));
+            std::construct_at(reinterpret_cast<T*>(state.result_storage()), std::forward<U>(value));
             state.m_result_kind = TaskState::ResultStorageKind::Inline;
         } else {
-            *reinterpret_cast<T**>(state.resultStorage()) = new T(std::forward<U>(value));
+            *reinterpret_cast<T**>(state.result_storage()) = new T(std::forward<U>(value));
             state.m_result_kind = TaskState::ResultStorageKind::Heap;
         }
     }
 
-    static std::expected<T, TaskResultError> tryTake(TaskState& state)
+    static std::expected<T, TaskResultError> try_take(TaskState& state)
     {
         if constexpr (kInline) {
             if (state.m_result_kind != TaskState::ResultStorageKind::Inline) {
                 return std::unexpected(TaskResultError(TaskResultErrorCode::kResultUnavailable));
             }
-            T value = std::move(*reinterpret_cast<T*>(state.resultStorage()));
+            T value = std::move(*reinterpret_cast<T*>(state.result_storage()));
             destroy(state);
             return value;
         }
@@ -500,7 +500,7 @@ struct TaskResultStorageTraits
         if (state.m_result_kind != TaskState::ResultStorageKind::Heap) {
             return std::unexpected(TaskResultError(TaskResultErrorCode::kResultUnavailable));
         }
-        auto*& ptr = *reinterpret_cast<T**>(state.resultStorage());
+        auto*& ptr = *reinterpret_cast<T**>(state.result_storage());
         auto* result = ptr;
         ptr = nullptr;
         state.m_result_kind = TaskState::ResultStorageKind::Empty;
@@ -510,7 +510,7 @@ struct TaskResultStorageTraits
 };
 
 template <typename T>
-void initializeTaskResult(const TaskRef& task) noexcept
+void initialize_task_result(const TaskRef& task) noexcept
 {
     if (auto* state = task.state()) {
         state->m_destroy_result = &TaskResultStorageTraits<T>::destroy;
@@ -518,7 +518,7 @@ void initializeTaskResult(const TaskRef& task) noexcept
 }
 
 template <typename T>
-void initializeTaskResult(TaskState* state) noexcept
+void initialize_task_result(TaskState* state) noexcept
 {
     if (state != nullptr) {
         state->m_destroy_result = &TaskResultStorageTraits<T>::destroy;
@@ -526,7 +526,7 @@ void initializeTaskResult(TaskState* state) noexcept
 }
 
 template <>
-inline void initializeTaskResult<void>(const TaskRef& task) noexcept
+inline void initialize_task_result<void>(const TaskRef& task) noexcept
 {
     if (auto* state = task.state()) {
         state->m_destroy_result = nullptr;
@@ -534,7 +534,7 @@ inline void initializeTaskResult<void>(const TaskRef& task) noexcept
 }
 
 template <>
-inline void initializeTaskResult<void>(TaskState* state) noexcept
+inline void initialize_task_result<void>(TaskState* state) noexcept
 {
     if (state != nullptr) {
         state->m_destroy_result = nullptr;
@@ -542,7 +542,7 @@ inline void initializeTaskResult<void>(TaskState* state) noexcept
 }
 
 template <typename T, typename U>
-bool storeTaskResult(const TaskRef& task, U&& value)
+bool store_task_result(const TaskRef& task, U&& value)
 {
     auto* state = task.state();
     if (state == nullptr) {
@@ -553,7 +553,7 @@ bool storeTaskResult(const TaskRef& task, U&& value)
 }
 
 template <typename T, typename U>
-bool storeTaskResult(TaskState* state, U&& value)
+bool store_task_result(TaskState* state, U&& value)
 {
     if (state == nullptr) {
         return false;
@@ -562,14 +562,14 @@ bool storeTaskResult(TaskState* state, U&& value)
     return true;
 }
 
-inline void storeTaskError(const TaskRef& task, TaskResultError error) noexcept
+inline void store_task_error(const TaskRef& task, TaskResultError error) noexcept
 {
     if (auto* state = task.state()) {
         state->m_result_error = std::move(error);
     }
 }
 
-inline void storeTaskError(TaskState* state, TaskResultError error) noexcept
+inline void store_task_error(TaskState* state, TaskResultError error) noexcept
 {
     if (state != nullptr) {
         state->m_result_error = std::move(error);
@@ -577,14 +577,14 @@ inline void storeTaskError(TaskState* state, TaskResultError error) noexcept
 }
 
 template <typename T>
-std::expected<T, TaskResultError> tryTakeTaskResult(const TaskRef& task)
+std::expected<T, TaskResultError> try_take_task_result(const TaskRef& task)
 {
     auto* state = task.state();
     if (state == nullptr) {
         return std::unexpected(TaskResultError(TaskResultErrorCode::kInvalidState));
     }
 
-    if (!waitTaskCompletion(task)) {
+    if (!wait_task_completion(task)) {
         return std::unexpected(TaskResultError(TaskResultErrorCode::kInvalidState));
     }
     if (state->m_result_error.has_value()) {
@@ -597,7 +597,7 @@ std::expected<T, TaskResultError> tryTakeTaskResult(const TaskRef& task)
     if constexpr (std::is_void_v<T>) {
         return {};
     } else {
-        return TaskResultStorageTraits<T>::tryTake(*state);
+        return TaskResultStorageTraits<T>::try_take(*state);
     }
 }
 
@@ -619,7 +619,7 @@ struct TaskCompletionState
      * @param value 要保存的任务结果
      */
     template <typename U>
-    void setValue(U&& value)
+    void set_value(U&& value)
     {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -633,7 +633,7 @@ struct TaskCompletionState
      * @brief 写入任务错误并唤醒等待者
      * @param error 要返回给 join() 的任务错误
      */
-    void setError(detail::TaskResultError error)
+    void set_error(detail::TaskResultError error)
     {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -691,7 +691,7 @@ private:
 template <>
 struct TaskCompletionState<void>
 {
-    void setValue()  ///< 标记任务成功完成并唤醒等待者
+    void set_value()  ///< 标记任务成功完成并唤醒等待者
     {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -700,7 +700,7 @@ struct TaskCompletionState<void>
         m_cv.notify_all();
     }
 
-    void setError(detail::TaskResultError error)  ///< 写入任务错误并唤醒等待者
+    void set_error(detail::TaskResultError error)  ///< 写入任务错误并唤醒等待者
     {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -757,7 +757,7 @@ public:
     Task(const Task&) = delete;
     Task& operator=(const Task&) = delete;
 
-    bool isValid() const { return m_task.isValid(); }  ///< 是否持有可用任务
+    bool is_valid() const { return m_task.is_valid(); }  ///< 是否持有可用任务
     bool done() const
     {
         auto* state = m_task.state();
@@ -780,9 +780,9 @@ private:
     {
     }
 
-    std::expected<T, detail::TaskResultError> takeResult()  ///< 取走任务结果；失败时返回 TaskResultError
+    std::expected<T, detail::TaskResultError> take_result()  ///< 取走任务结果；失败时返回 TaskResultError
     {
-        return detail::tryTakeTaskResult<T>(m_task);
+        return detail::try_take_task_result<T>(m_task);
     }
 
     TaskRef m_task;
@@ -805,7 +805,7 @@ public:
     Task(const Task&) = delete;
     Task& operator=(const Task&) = delete;
 
-    bool isValid() const { return m_task.isValid(); }  ///< 是否持有可用任务
+    bool is_valid() const { return m_task.is_valid(); }  ///< 是否持有可用任务
     bool done() const
     {
         auto* state = m_task.state();
@@ -829,9 +829,9 @@ private:
     {
     }
 
-    std::expected<void, detail::TaskResultError> takeResult()  ///< 消费完成状态；失败时返回 TaskResultError
+    std::expected<void, detail::TaskResultError> take_result()  ///< 消费完成状态；失败时返回 TaskResultError
     {
-        return detail::tryTakeTaskResult<void>(m_task);
+        return detail::try_take_task_result<void>(m_task);
     }
 
     TaskRef m_task;
@@ -861,12 +861,12 @@ public:
     JoinHandle(const JoinHandle&) = delete;
     JoinHandle& operator=(const JoinHandle&) = delete;
 
-    bool isValid() const noexcept { return m_task.isValid() || static_cast<bool>(m_blocking_completion); }  ///< 是否绑定到有效任务完成态
+    bool is_valid() const noexcept { return m_task.is_valid() || static_cast<bool>(m_blocking_completion); }  ///< 是否绑定到有效任务完成态
 
     std::expected<void, detail::TaskResultError> wait() const  ///< 阻塞等待任务结束，不消费结果
     {
-        if (m_task.isValid()) {
-            if (!detail::waitTaskCompletion(m_task)) {
+        if (m_task.is_valid()) {
+            if (!detail::wait_task_completion(m_task)) {
                 return std::unexpected(detail::TaskResultError(detail::TaskResultErrorCode::kInvalidState));
             }
             return {};
@@ -880,8 +880,8 @@ public:
 
     std::expected<T, detail::TaskResultError> join()  ///< 阻塞等待并消费结果
     {
-        if (m_task.isValid()) {
-            return detail::tryTakeTaskResult<T>(m_task);
+        if (m_task.is_valid()) {
+            return detail::try_take_task_result<T>(m_task);
         }
         if (m_blocking_completion) {
             return m_blocking_completion->take();
@@ -916,12 +916,12 @@ public:
     JoinHandle(const JoinHandle&) = delete;
     JoinHandle& operator=(const JoinHandle&) = delete;
 
-    bool isValid() const noexcept { return m_task.isValid() || static_cast<bool>(m_blocking_completion); }  ///< 是否绑定到有效任务完成态
+    bool is_valid() const noexcept { return m_task.is_valid() || static_cast<bool>(m_blocking_completion); }  ///< 是否绑定到有效任务完成态
 
     std::expected<void, detail::TaskResultError> wait() const  ///< 阻塞等待任务结束，不消费完成状态
     {
-        if (m_task.isValid()) {
-            if (!detail::waitTaskCompletion(m_task)) {
+        if (m_task.is_valid()) {
+            if (!detail::wait_task_completion(m_task)) {
                 return std::unexpected(detail::TaskResultError(detail::TaskResultErrorCode::kInvalidState));
             }
             return {};
@@ -935,8 +935,8 @@ public:
 
     std::expected<void, detail::TaskResultError> join()  ///< 阻塞等待并消费完成状态
     {
-        if (m_task.isValid()) {
-            return detail::tryTakeTaskResult<void>(m_task);
+        if (m_task.is_valid()) {
+            return detail::try_take_task_result<void>(m_task);
         }
         if (m_blocking_completion) {
             return m_blocking_completion->take();
@@ -959,25 +959,25 @@ namespace detail
 struct TaskAccess
 {
     template <typename T>
-    static const TaskRef& taskRef(const Task<T>& task) noexcept  ///< 返回任务引用视图，不转移所有权
+    static const TaskRef& task_ref(const Task<T>& task) noexcept  ///< 返回任务引用视图，不转移所有权
     {
         return task.m_task;
     }
 
     template <typename T>
-    static decltype(auto) takeResult(Task<T>& task)  ///< 消费并返回任务结果
+    static decltype(auto) take_result(Task<T>& task)  ///< 消费并返回任务结果
     {
-        return task.takeResult();
+        return task.take_result();
     }
 
     template <typename T>
-    static std::expected<T, TaskResultError> tryTakeResult(Task<T>& task)  ///< 以返回值消费任务结果
+    static std::expected<T, TaskResultError> try_take_result(Task<T>& task)  ///< 以返回值消费任务结果
     {
-        return tryTakeTaskResult<T>(task.m_task);
+        return try_take_task_result<T>(task.m_task);
     }
 
     template <typename T>
-    static TaskRef detachTask(Task<T>&& task) noexcept  ///< 从 Task 中拆出底层任务引用并转移所有权
+    static TaskRef detach_task(Task<T>&& task) noexcept  ///< 从 Task 中拆出底层任务引用并转移所有权
     {
         return std::move(task.m_task);
     }
@@ -985,9 +985,9 @@ struct TaskAccess
 
 struct TaskRefStorageAccess
 {
-    static TaskState* releaseState(TaskRef& task) noexcept
+    static TaskState* release_state(TaskRef& task) noexcept
     {
-        if (task.isBorrowed()) {
+        if (task.is_borrowed()) {
             task.m_state = nullptr;
             return nullptr;
         }
@@ -996,7 +996,7 @@ struct TaskRefStorageAccess
         return state;
     }
 
-    static TaskRef adoptState(TaskState* state) noexcept
+    static TaskRef adopt_state(TaskState* state) noexcept
     {
         return TaskRef(state, false);
     }
@@ -1007,7 +1007,7 @@ struct TaskRefStorageAccess
  * @details 每个已停泊任务通过 TaskState 内嵌链接进入栈；owner 一次摘取整条链后
  *          反转为近似 FIFO。push 成功即接管传入 TaskRef 的唯一引用。
  * @note 同一 TaskState 在被 owner 摘取前最多只能入队一次；该不变量由
- *       requestTaskResumeState() 的 m_queued 仲裁保证。
+ *       request_task_resume_state() 的 m_queued 仲裁保证。
  */
 class TaskResumeQueue
 {
@@ -1019,16 +1019,16 @@ public:
     ~TaskResumeQueue()
     {
         close();
-        releaseAll(takeAll());
+        release_all(take_all());
     }
 
     [[nodiscard]] bool push(TaskRef task) noexcept
     {
-        if (!task.isValid()) {
+        if (!task.is_valid()) {
             return false;
         }
 
-        TaskState* state = TaskRefStorageAccess::releaseState(task);
+        TaskState* state = TaskRefStorageAccess::release_state(task);
         bool expected = false;
         if (state->m_resume_queue_claimed.load(std::memory_order_acquire) ||
             !state->m_resume_queue_claimed.compare_exchange_strong(
@@ -1037,7 +1037,7 @@ public:
                 std::memory_order_acq_rel,
                 std::memory_order_acquire)) {
             [[maybe_unused]] TaskRef rejected =
-                TaskRefStorageAccess::adoptState(state);
+                TaskRefStorageAccess::adopt_state(state);
             return false;
         }
 
@@ -1048,7 +1048,7 @@ public:
                 state->m_resume_queue_claimed.store(false,
                                                     std::memory_order_release);
                 [[maybe_unused]] TaskRef rejected =
-                    TaskRefStorageAccess::adoptState(state);
+                    TaskRefStorageAccess::adopt_state(state);
                 return false;
             }
             state->m_resume_queue_next = decode(head);
@@ -1063,7 +1063,7 @@ public:
         }
     }
 
-    [[nodiscard]] TaskState* takeAll() noexcept
+    [[nodiscard]] TaskState* take_all() noexcept
     {
         uintptr_t head = m_head.load(std::memory_order_acquire);
         // Empty drain linearizes at this acquire observation; later pushes stay queued.
@@ -1112,7 +1112,7 @@ public:
             std::memory_order_acquire);
     }
 
-    [[nodiscard]] bool isClosed() const noexcept
+    [[nodiscard]] bool is_closed() const noexcept
     {
         return (m_head.load(std::memory_order_acquire) & kClosedBit) != 0;
     }
@@ -1129,7 +1129,7 @@ public:
         return reversed;
     }
 
-    [[nodiscard]] static TaskRef popFront(TaskState*& head) noexcept
+    [[nodiscard]] static TaskRef pop_front(TaskState*& head) noexcept
     {
         if (head == nullptr) {
             return {};
@@ -1137,13 +1137,13 @@ public:
         TaskState* state = head;
         head = state->m_resume_queue_next;
         state->m_resume_queue_next = nullptr;
-        return TaskRefStorageAccess::adoptState(state);
+        return TaskRefStorageAccess::adopt_state(state);
     }
 
-    static void releaseAll(TaskState* head) noexcept
+    static void release_all(TaskState* head) noexcept
     {
         while (head != nullptr) {
-            TaskRef released = popFront(head);
+            TaskRef released = pop_front(head);
             if (TaskState* state = released.state(); state != nullptr) {
                 state->m_resume_queue_claimed.store(false,
                                                     std::memory_order_release);
@@ -1239,7 +1239,7 @@ struct ReadyEntry
     }
 
     explicit ReadyEntry(TaskRef&& task) noexcept
-        : ReadyEntry(ReadyEntryKind::CppTask, TaskRefStorageAccess::releaseState(task))
+        : ReadyEntry(ReadyEntryKind::CppTask, TaskRefStorageAccess::release_state(task))
     {
     }
 
@@ -1257,26 +1257,26 @@ struct ReadyEntry
         m_encoded = (raw & ~kKindMask) | static_cast<uintptr_t>(kind);
     }
 
-    static ReadyEntry fromEncoded(uintptr_t encoded) noexcept
+    static ReadyEntry from_encoded(uintptr_t encoded) noexcept
     {
         ReadyEntry entry;
         entry.m_encoded = encoded;
         return entry;
     }
 
-    bool isValid() const noexcept { return m_encoded != 0; }
+    bool is_valid() const noexcept { return m_encoded != 0; }
     ReadyEntryKind kind() const noexcept
     {
         return static_cast<ReadyEntryKind>(m_encoded & kKindMask);
     }
-    bool isCppTask() const noexcept { return kind() == ReadyEntryKind::CppTask; }
+    bool is_cpp_task() const noexcept { return kind() == ReadyEntryKind::CppTask; }
     void* state() const noexcept
     {
         return reinterpret_cast<void*>(m_encoded & ~kKindMask);
     }
-    TaskState* taskState() const noexcept
+    TaskState* task_state() const noexcept
     {
-        return isCppTask() ? static_cast<TaskState*>(state()) : nullptr;
+        return is_cpp_task() ? static_cast<TaskState*>(state()) : nullptr;
     }
     uintptr_t encoded() const noexcept { return m_encoded; }
     void clear() noexcept { m_encoded = 0; }
@@ -1292,7 +1292,7 @@ struct ReadyEntry
 
         if (current_kind == ReadyEntryKind::CppTask) {
             [[maybe_unused]] TaskRef released =
-                TaskRefStorageAccess::adoptState(static_cast<TaskState*>(current_state));
+                TaskRefStorageAccess::adopt_state(static_cast<TaskState*>(current_state));
             return;
         }
 
@@ -1308,22 +1308,22 @@ private:
     uintptr_t m_encoded = 0;
 };
 
-inline ReadyEntry readyEntryFromTaskRef(TaskRef&& task) noexcept
+inline ReadyEntry ready_entry_from_task_ref(TaskRef&& task) noexcept
 {
     return ReadyEntry(std::move(task));
 }
 
-inline TaskRef readyEntryToTaskRef(ReadyEntry& entry) noexcept
+inline TaskRef ready_entry_to_task_ref(ReadyEntry& entry) noexcept
 {
-    if (!entry.isCppTask()) {
+    if (!entry.is_cpp_task()) {
         return {};
     }
-    auto* state = entry.taskState();
+    auto* state = entry.task_state();
     entry.clear();
-    return TaskRefStorageAccess::adoptState(state);
+    return TaskRefStorageAccess::adopt_state(state);
 }
 
-inline const ReadyEntryHooks* readyEntryHooks(const ReadyEntry& entry) noexcept
+inline const ReadyEntryHooks* ready_entry_hooks(const ReadyEntry& entry) noexcept
 {
     if (entry.kind() != ReadyEntryKind::CCoroutine || entry.state() == nullptr) {
         return nullptr;
@@ -1331,33 +1331,33 @@ inline const ReadyEntryHooks* readyEntryHooks(const ReadyEntry& entry) noexcept
     return static_cast<ReadyEntryCoroHeader*>(entry.state())->hooks;
 }
 
-inline void releaseReadyEntry(ReadyEntry& entry) noexcept
+inline void release_ready_entry(ReadyEntry& entry) noexcept
 {
     entry.reset();
 }
 
-inline Scheduler* readyEntryScheduler(const ReadyEntry& entry) noexcept
+inline Scheduler* ready_entry_scheduler(const ReadyEntry& entry) noexcept
 {
-    if (auto* state = entry.taskState()) {
+    if (auto* state = entry.task_state()) {
         return state->m_scheduler;
     }
-    const auto* hooks = readyEntryHooks(entry);
+    const auto* hooks = ready_entry_hooks(entry);
     return hooks != nullptr && hooks->owner_scheduler != nullptr
         ? hooks->owner_scheduler(entry.state())
         : nullptr;
 }
 
-inline bool readyEntryResumeOwnerOnly(const ReadyEntry& entry) noexcept
+inline bool ready_entry_resume_owner_only(const ReadyEntry& entry) noexcept
 {
-    if (auto* state = entry.taskState()) {
+    if (auto* state = entry.task_state()) {
         return state->m_resume_owner_only.load(std::memory_order_acquire);
     }
-    const auto* hooks = readyEntryHooks(entry);
+    const auto* hooks = ready_entry_hooks(entry);
     return hooks != nullptr && hooks->resume_owner_only != nullptr &&
         hooks->resume_owner_only(entry.state());
 }
 
-inline bool resumeTaskState(TaskState* state)
+inline bool resume_task_state(TaskState* state)
 {
     if (!state || !state->m_handle || state->m_done.load(std::memory_order_relaxed)) {
         return false;
@@ -1365,7 +1365,7 @@ inline bool resumeTaskState(TaskState* state)
     state->m_queued.store(false, std::memory_order_relaxed);
     state->m_resume_queue_claimed.store(false, std::memory_order_release);
     state->m_resume_owner_only.store(false, std::memory_order_relaxed);
-    if (state->m_runtime == nullptr || state->m_runtime == currentRuntime()) {
+    if (state->m_runtime == nullptr || state->m_runtime == current_runtime()) {
         state->m_handle.resume();
         return true;
     }
@@ -1374,24 +1374,24 @@ inline bool resumeTaskState(TaskState* state)
     return true;
 }
 
-inline bool resumeReadyEntry(ReadyEntry& entry)
+inline bool resume_ready_entry(ReadyEntry& entry)
 {
-    if (!entry.isValid()) {
+    if (!entry.is_valid()) {
         return false;
     }
 
-    if (entry.isCppTask()) {
-        TaskRef task = readyEntryToTaskRef(entry);
-        return resumeTaskState(task.state());
+    if (entry.is_cpp_task()) {
+        TaskRef task = ready_entry_to_task_ref(entry);
+        return resume_task_state(task.state());
     }
 
-    const auto* hooks = readyEntryHooks(entry);
+    const auto* hooks = ready_entry_hooks(entry);
     if (hooks == nullptr || hooks->resume == nullptr) {
         return false;
     }
     const bool resumed = hooks->resume(entry.state());
     if (resumed) {
-        releaseReadyEntry(entry);
+        release_ready_entry(entry);
     }
     return resumed;
 }
@@ -1417,36 +1417,36 @@ public:
 
     bool await_ready() const noexcept  ///< 子任务已完成或无效时无需挂起父任务
     {
-        return !m_task.isValid() || m_task.done();
+        return !m_task.is_valid() || m_task.done();
     }
 
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)  ///< 安排子任务执行，并在必要时挂起父任务
     {
-        TaskRef waitingTask = handle.promise().taskRefView();
-        TaskRef childTask = TaskAccess::taskRef(m_task);
-        if (!childTask.isValid()) {
+        TaskRef waitingTask = handle.promise().task_ref_view();
+        TaskRef childTask = TaskAccess::task_ref(m_task);
+        if (!childTask.is_valid()) {
             return false;
         }
         if (m_task.done()) {
             return false;
         }
 
-        detail::inheritTaskRuntime(childTask, detail::taskRuntime(waitingTask));
-        auto* scheduler = waitingTask.belongScheduler();
+        detail::inherit_task_runtime(childTask, detail::task_runtime(waitingTask));
+        auto* scheduler = waitingTask.belong_scheduler();
         if (scheduler == nullptr) {
-            detail::storeTaskError(childTask, TaskResultError(TaskResultErrorCode::kScheduleFailed));
-            detail::completeTaskState(childTask);
+            detail::store_task_error(childTask, TaskResultError(TaskResultErrorCode::kScheduleFailed));
+            detail::complete_task_state(childTask);
             return false;
         }
-        if (childTask.belongScheduler() == nullptr) {
-            detail::setTaskScheduler(childTask, scheduler);
+        if (childTask.belong_scheduler() == nullptr) {
+            detail::set_task_scheduler(childTask, scheduler);
         }
         childTask.state()->m_next = std::move(waitingTask);
-        if (!detail::scheduleTaskImmediately(childTask)) {
+        if (!detail::schedule_task_immediately(childTask)) {
             childTask.state()->m_next.reset();
-            detail::storeTaskError(childTask, TaskResultError(TaskResultErrorCode::kScheduleFailed));
-            detail::completeTaskState(childTask);
+            detail::store_task_error(childTask, TaskResultError(TaskResultErrorCode::kScheduleFailed));
+            detail::complete_task_state(childTask);
             return false;
         }
         return true;
@@ -1454,7 +1454,7 @@ public:
 
     std::expected<T, TaskResultError> await_resume()  ///< 返回或消费子任务结果
     {
-        return TaskAccess::takeResult(m_task);
+        return TaskAccess::take_result(m_task);
     }
 
 private:
@@ -1487,13 +1487,13 @@ inline auto Task<void>::operator co_await() &&  ///< 以右值 void 任务创建
 
 inline Task<void>& Task<void>::then(Task<void> next) &  ///< 为当前任务追加 continuation，返回左值引用
 {
-    detail::attachTaskContinuation(m_task, detail::TaskAccess::detachTask(std::move(next)));
+    detail::attach_task_continuation(m_task, detail::TaskAccess::detach_task(std::move(next)));
     return *this;
 }
 
 inline Task<void>&& Task<void>::then(Task<void> next) &&  ///< 为当前任务追加 continuation，返回右值引用
 {
-    detail::attachTaskContinuation(m_task, detail::TaskAccess::detachTask(std::move(next)));
+    detail::attach_task_continuation(m_task, detail::TaskAccess::detach_task(std::move(next)));
     return std::move(*this);
 }
 
@@ -1510,50 +1510,50 @@ public:
 
     static void* operator new(std::size_t size) noexcept
     {
-        return detail::allocateFrameStorage(size, alignof(std::max_align_t));
+        return detail::allocate_frame_storage(size, alignof(std::max_align_t));
     }
 
     static void* operator new(std::size_t size,
                               std::align_val_t alignment) noexcept
     {
-        return detail::allocateFrameStorage(size,
+        return detail::allocate_frame_storage(size,
                                             static_cast<std::size_t>(alignment));
     }
 
     static void operator delete(void* ptr) noexcept
     {
-        detail::releaseFrameStorage(ptr, 0, alignof(std::max_align_t));
+        detail::release_frame_storage(ptr, 0, alignof(std::max_align_t));
     }
 
     static void operator delete(void* ptr, std::size_t size) noexcept
     {
-        detail::releaseFrameStorage(ptr, size, alignof(std::max_align_t));
+        detail::release_frame_storage(ptr, size, alignof(std::max_align_t));
     }
 
     static void operator delete(void* ptr, std::align_val_t alignment) noexcept
     {
-        detail::releaseFrameStorage(ptr, 0, static_cast<std::size_t>(alignment));
+        detail::release_frame_storage(ptr, 0, static_cast<std::size_t>(alignment));
     }
 
     static void operator delete(void* ptr,
                                 std::size_t size,
                                 std::align_val_t alignment) noexcept
     {
-        detail::releaseFrameStorage(ptr,
+        detail::release_frame_storage(ptr,
                                      size,
                                      static_cast<std::size_t>(alignment));
     }
 
     static void* operator new(std::size_t size, const std::nothrow_t&) noexcept
     {
-        return detail::allocateFrameStorage(size, alignof(std::max_align_t));
+        return detail::allocate_frame_storage(size, alignof(std::max_align_t));
     }
 
     static void* operator new(std::size_t size,
                               std::align_val_t alignment,
                               const std::nothrow_t&) noexcept
     {
-        return detail::allocateFrameStorage(size,
+        return detail::allocate_frame_storage(size,
                                             static_cast<std::size_t>(alignment));
     }
 
@@ -1571,8 +1571,8 @@ public:
         }
         m_state = state;
         m_task_view = TaskRef::borrowed(state);
-        detail::initializeTaskResult<T>(state);
-        detail::inheritTaskRuntime(state, detail::currentRuntime());
+        detail::initialize_task_result<T>(state);
+        detail::inherit_task_runtime(state, detail::current_runtime());
         return Task<T>(TaskRef(state, false));
     }
 
@@ -1600,7 +1600,7 @@ public:
     std::suspend_always yield_value(ReSchedulerType flag) noexcept  ///< `co_yield true` 时把任务重新放回延后队列
     {
         if (flag) {
-            detail::scheduleTaskDeferredState(m_state);
+            detail::schedule_task_deferred_state(m_state);
         }
         return {};
     }
@@ -1609,17 +1609,17 @@ public:
 
     void unhandled_exception() noexcept  ///< 捕获协程异常并写入完成态
     {
-        detail::storeTaskError(m_state, detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));
-        detail::completeTaskState(m_state);
+        detail::store_task_error(m_state, detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));
+        detail::complete_task_state(m_state);
     }
 
     template <typename U>
     void return_value(U&& value) noexcept(std::is_nothrow_constructible_v<T, U&&>)  ///< 写入协程返回值并标记完成
     {
-        if (!detail::storeTaskResult<T>(m_state, std::forward<U>(value))) {
-            detail::storeTaskError(m_state, detail::TaskResultError(detail::TaskResultErrorCode::kInvalidState));
+        if (!detail::store_task_result<T>(m_state, std::forward<U>(value))) {
+            detail::store_task_error(m_state, detail::TaskResultError(detail::TaskResultErrorCode::kInvalidState));
         }
-        detail::completeTaskState(m_state);
+        detail::complete_task_state(m_state);
     }
 
     ~TaskPromise() noexcept
@@ -1634,7 +1634,7 @@ public:
         m_task_view.m_state = nullptr;
     }
 
-    const TaskRef& taskRefView() const noexcept { return m_task_view; }  ///< 返回非拥有 TaskRef view
+    const TaskRef& task_ref_view() const noexcept { return m_task_view; }  ///< 返回非拥有 TaskRef view
 
 private:
     TaskState* m_state = nullptr;  ///< promise 热路径使用的非拥有状态指针
@@ -1652,50 +1652,50 @@ public:
 
     static void* operator new(std::size_t size) noexcept
     {
-        return detail::allocateFrameStorage(size, alignof(std::max_align_t));
+        return detail::allocate_frame_storage(size, alignof(std::max_align_t));
     }
 
     static void* operator new(std::size_t size,
                               std::align_val_t alignment) noexcept
     {
-        return detail::allocateFrameStorage(size,
+        return detail::allocate_frame_storage(size,
                                             static_cast<std::size_t>(alignment));
     }
 
     static void operator delete(void* ptr) noexcept
     {
-        detail::releaseFrameStorage(ptr, 0, alignof(std::max_align_t));
+        detail::release_frame_storage(ptr, 0, alignof(std::max_align_t));
     }
 
     static void operator delete(void* ptr, std::size_t size) noexcept
     {
-        detail::releaseFrameStorage(ptr, size, alignof(std::max_align_t));
+        detail::release_frame_storage(ptr, size, alignof(std::max_align_t));
     }
 
     static void operator delete(void* ptr, std::align_val_t alignment) noexcept
     {
-        detail::releaseFrameStorage(ptr, 0, static_cast<std::size_t>(alignment));
+        detail::release_frame_storage(ptr, 0, static_cast<std::size_t>(alignment));
     }
 
     static void operator delete(void* ptr,
                                 std::size_t size,
                                 std::align_val_t alignment) noexcept
     {
-        detail::releaseFrameStorage(ptr,
+        detail::release_frame_storage(ptr,
                                      size,
                                      static_cast<std::size_t>(alignment));
     }
 
     static void* operator new(std::size_t size, const std::nothrow_t&) noexcept
     {
-        return detail::allocateFrameStorage(size, alignof(std::max_align_t));
+        return detail::allocate_frame_storage(size, alignof(std::max_align_t));
     }
 
     static void* operator new(std::size_t size,
                               std::align_val_t alignment,
                               const std::nothrow_t&) noexcept
     {
-        return detail::allocateFrameStorage(size,
+        return detail::allocate_frame_storage(size,
                                             static_cast<std::size_t>(alignment));
     }
 
@@ -1713,8 +1713,8 @@ public:
         }
         m_state = state;
         m_task_view = TaskRef::borrowed(state);
-        detail::initializeTaskResult<void>(state);
-        detail::inheritTaskRuntime(state, detail::currentRuntime());
+        detail::initialize_task_result<void>(state);
+        detail::inherit_task_runtime(state, detail::current_runtime());
         return Task<void>(TaskRef(state, false));
     }
 
@@ -1741,7 +1741,7 @@ public:
     std::suspend_always yield_value(ReSchedulerType flag) noexcept  ///< `co_yield true` 时把任务重新放回延后队列
     {
         if (flag) {
-            detail::scheduleTaskDeferredState(m_state);
+            detail::schedule_task_deferred_state(m_state);
         }
         return {};
     }
@@ -1750,13 +1750,13 @@ public:
 
     void unhandled_exception() noexcept  ///< 捕获协程异常并写入完成态
     {
-        detail::storeTaskError(m_state, detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));
-        detail::completeTaskState(m_state);
+        detail::store_task_error(m_state, detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));
+        detail::complete_task_state(m_state);
     }
 
     void return_void() noexcept  ///< 标记 `void` 协程成功完成
     {
-        detail::completeTaskState(m_state);
+        detail::complete_task_state(m_state);
     }
 
     ~TaskPromise() noexcept
@@ -1769,7 +1769,7 @@ public:
         m_task_view.m_state = nullptr;
     }
 
-    const TaskRef& taskRefView() const noexcept { return m_task_view; }  ///< 返回非拥有 TaskRef view
+    const TaskRef& task_ref_view() const noexcept { return m_task_view; }  ///< 返回非拥有 TaskRef view
 
 private:
     TaskState* m_state = nullptr;  ///< promise 热路径使用的非拥有状态指针

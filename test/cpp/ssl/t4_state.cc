@@ -1,7 +1,7 @@
 /**
  * @file t4_state.cc
  * @brief 用途：锁定 SSL 状态机公开表面与 builder 状态机入口。
- * 关键覆盖点：`SslMachineAction`、`SslStateMachineAwaitable`、`SslAwaitableBuilder::fromStateMachine(...)`。
+ * 关键覆盖点：`SslMachineAction`、`SslStateMachineAwaitable`、`SslAwaitableBuilder::from_state_machine(...)`。
  * 通过条件：目标成功编译，静态断言成立，测试返回 0。
  */
 
@@ -26,10 +26,10 @@ struct SurfaceMachine {
         return SslMachineAction<result_type>::complete(result_type{0});
     }
 
-    void onHandshake(std::expected<void, SslError>) {}
-    void onRecv(std::expected<Bytes, SslError>) {}
-    void onSend(std::expected<size_t, SslError>) {}
-    void onShutdown(std::expected<void, SslError>) {}
+    void on_handshake(std::expected<void, SslError>) {}
+    void on_recv(std::expected<Bytes, SslError>) {}
+    void on_send(std::expected<size_t, SslError>) {}
+    void on_shutdown(std::expected<void, SslError>) {}
 };
 
 struct MapperOnlyMachine {
@@ -40,17 +40,17 @@ struct MapperOnlyMachine {
         return SslMachineAction<result_type>::fail(SslError(SslErrorCode::kUnknown));
     }
 
-    void onHandshake(std::expected<void, SslError>) {}
-    void onRecv(std::expected<Bytes, SslError>) {}
-    void onSend(std::expected<size_t, SslError>) {}
-    void onShutdown(std::expected<void, SslError>) {}
+    void on_handshake(std::expected<void, SslError>) {}
+    void on_recv(std::expected<Bytes, SslError>) {}
+    void on_send(std::expected<size_t, SslError>) {}
+    void on_shutdown(std::expected<void, SslError>) {}
 
-    MapperOnlyError mapSslError(const SslError&) { return MapperOnlyError(0); }
+    MapperOnlyError map_ssl_error(const SslError&) { return MapperOnlyError(0); }
 };
 
 template <typename BuilderT>
 concept HasFromStateMachine = requires(IOController* controller, SslSocket* socket, SurfaceMachine machine) {
-    { BuilderT::fromStateMachine(controller, socket, std::move(machine)) };
+    { BuilderT::from_state_machine(controller, socket, std::move(machine)) };
 };
 
 static_assert(std::is_same_v<decltype(SslMachineAction<SurfaceResult>::continue_()), SslMachineAction<SurfaceResult>>);

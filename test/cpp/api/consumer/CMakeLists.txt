@@ -3,7 +3,7 @@ project(galay_api_consumer LANGUAGES CXX)
 find_package(galay CONFIG REQUIRED)
 enable_testing()
 
-add_executable(consumer main.cc)
+add_executable(consumer t2_install_consumer.cc)
 target_link_libraries(consumer PRIVATE galay::api)
 target_compile_options(consumer PRIVATE -UNDEBUG)
 add_test(NAME installed.api COMMAND consumer)

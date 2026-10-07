@@ -87,13 +87,13 @@ static_assert(std::is_move_constructible_v<galay::kernel::ReadyRecvChunk>);
 static_assert(std::is_move_assignable_v<galay::kernel::ReadyRecvChunk>);
 #endif
 
-bool bufferCloneDeepCopies()
+bool buffer_clone_deep_copies()
 {
     std::string payload = "kernel-buffer";
     Buffer original(payload);
     Buffer cloned = original.clone();
 
-    if (cloned.toString() != payload) {
+    if (cloned.to_string() != payload) {
         std::cerr << "[T140] clone should preserve buffer bytes\n";
         return false;
     }
@@ -103,23 +103,23 @@ bool bufferCloneDeepCopies()
     }
 
     original.data()[0] = 'K';
-    if (original.toString() != "Kernel-buffer") {
+    if (original.to_string() != "Kernel-buffer") {
         std::cerr << "[T140] original mutation should be visible on original\n";
         return false;
     }
-    if (cloned.toString() != payload) {
+    if (cloned.to_string() != payload) {
         std::cerr << "[T140] clone should not observe original mutation\n";
         return false;
     }
     return true;
 }
 
-bool movedFromBufferStaysDestructible()
+bool moved_from_buffer_stays_destructible()
 {
     Buffer original(std::string("move-state"));
     Buffer moved(std::move(original));
 
-    if (moved.toString() != "move-state") {
+    if (moved.to_string() != "move-state") {
         std::cerr << "[T140] moved buffer should receive original bytes\n";
         return false;
     }
@@ -135,8 +135,8 @@ bool movedFromBufferStaysDestructible()
 int main()
 {
     bool ok = true;
-    ok = bufferCloneDeepCopies() && ok;
-    ok = movedFromBufferStaysDestructible() && ok;
+    ok = buffer_clone_deep_copies() && ok;
+    ok = moved_from_buffer_stays_destructible() && ok;
     if (ok) {
         std::cout << "T140-OwnershipSurface PASS\n";
     }

@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 基于 STREAM_INIT/STREAM_DATA/STREAM_END 协议，
- *          按 service/method 路由到 RpcService::registerStreamMethod 注册的回调。
+ *          按 service/method 路由到 RpcService::register_stream_method 注册的回调。
  */
 
 #ifndef GALAY_RPC_STREAMSVC_H
@@ -66,18 +66,18 @@ public:
     /// @brief 设置监听队列长度
     RpcStreamServerBuilder& backlog(int value)                              { m_config.backlog = value; return *this; }
     /// @brief 设置已接受连接是否启用 TCP_NODELAY
-    RpcStreamServerBuilder& tcpNoDelay(bool value)                          { m_config.tcp_no_delay = value; return *this; }
+    RpcStreamServerBuilder& tcp_no_delay(bool value)                          { m_config.tcp_no_delay = value; return *this; }
     /// @brief 设置IO调度器数量
-    RpcStreamServerBuilder& ioSchedulerCount(size_t value)                  { m_config.io_scheduler_count = value; return *this; }
+    RpcStreamServerBuilder& io_scheduler_count(size_t value)                  { m_config.io_scheduler_count = value; return *this; }
     /// @brief 设置计算调度器数量
-    RpcStreamServerBuilder& parallelSchedulerCount(size_t value)             { m_config.parallel_scheduler_count = value; return *this; }
+    RpcStreamServerBuilder& parallel_scheduler_count(size_t value)             { m_config.parallel_scheduler_count = value; return *this; }
     /**
      * @brief 设置顺序绑核策略
      * @param io_count IO调度器绑核数
      * @param parallel_count 计算调度器绑核数
      * @return 构建器引用
      */
-    RpcStreamServerBuilder& sequentialAffinity(size_t io_count, size_t parallel_count) {
+    RpcStreamServerBuilder& sequential_affinity(size_t io_count, size_t parallel_count) {
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Sequential;
         m_config.affinity.seq_io_count = io_count;
         m_config.affinity.seq_parallel_count = parallel_count;
@@ -89,7 +89,7 @@ public:
      * @param parallel_cpus 计算调度器绑定的CPU列表
      * @return 是否设置成功（数量必须匹配调度器数量）
      */
-    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus) {
+    bool custom_affinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus) {
         if (io_cpus.size() != m_config.io_scheduler_count ||
             parallel_cpus.size() != m_config.parallel_scheduler_count) {
             return false;
@@ -100,13 +100,13 @@ public:
         return true;
     }
     /// @brief 设置环形缓冲区大小
-    RpcStreamServerBuilder& ringBufferSize(size_t value)                    { m_config.ring_buffer_size = value; return *this; }
+    RpcStreamServerBuilder& ring_buffer_size(size_t value)                    { m_config.ring_buffer_size = value; return *this; }
     /// @brief 设置流帧大小上限
-    RpcStreamServerBuilder& maxFrameBytes(size_t value)                     { m_config.stream_limits.max_frame_bytes = value; return *this; }
+    RpcStreamServerBuilder& max_frame_bytes(size_t value)                     { m_config.stream_limits.max_frame_bytes = value; return *this; }
     /// @brief 构建RpcStreamServer实例
     RpcStreamServer build() const;
     /// @brief 仅导出配置
-    RpcStreamServerConfig buildConfig() const                               { return m_config; }
+    RpcStreamServerConfig build_config() const                               { return m_config; }
 
 private:
     RpcStreamServerConfig m_config;  ///< 服务器配置
@@ -128,9 +128,9 @@ public:
     explicit RpcStreamServer(const RpcStreamServerConfig& config)
         : m_config(config)
         , m_runtime(RuntimeBuilder()
-                        .ioSchedulerCount(resolveIoSchedulerCount(config.io_scheduler_count))
-                        .parallelSchedulerCount(config.parallel_scheduler_count)
-                        .applyAffinity(config.affinity)
+                        .io_scheduler_count(resolve_io_scheduler_count(config.io_scheduler_count))
+                        .parallel_scheduler_count(config.parallel_scheduler_count)
+                        .apply_affinity(config.affinity)
                         .build()) {}
 
     ~RpcStreamServer() {
@@ -143,7 +143,7 @@ public:
      * @return 成功返回void；服务名为空或重复时返回INVALID_REQUEST，容量耗尽时返回RESOURCE_EXHAUSTED
      * @note 注册表使用固定内联存储，调用过程不执行堆分配；仅可在start()之前调用
      */
-    std::expected<void, RpcError> registerService(RpcService& service) {
+    std::expected<void, RpcError> register_service(RpcService& service) {
         if (m_running.load(std::memory_order_acquire)) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                             "Cannot register RPC stream service after server start"));
@@ -152,7 +152,7 @@ public:
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                             "RPC stream service name is empty"));
         }
-        const size_t initial_index = serviceBucketIndex(service.name());
+        const size_t initial_index = service_bucket_index(service.name());
         for (size_t probe = 0; probe < m_services.size(); ++probe) {
             RpcService*& slot = m_services[(initial_index + probe) % m_services.size()];
             if (slot == nullptr) {
@@ -203,7 +203,7 @@ public:
         }
         AsyncTcpSocket listener = std::move(*listener_result);
 
-        auto reuse_addr_result = listener.option().handleReuseAddr();
+        auto reuse_addr_result = listener.option().handle_reuse_addr();
         if (!reuse_addr_result.has_value()) {
             RpcError error = RpcError::from(reuse_addr_result.error());
             RPC_LOG_ERROR("[stream-server] [socket] [reuseaddr-fail]",
@@ -211,7 +211,7 @@ public:
             m_runtime.stop();
             return std::unexpected(std::move(error));
         }
-        auto non_block_result = listener.option().handleNonBlock();
+        auto non_block_result = listener.option().handle_non_block();
         if (!non_block_result.has_value()) {
             RpcError error = RpcError::from(non_block_result.error());
             RPC_LOG_ERROR("[stream-server] [socket] [nonblock-fail]",
@@ -245,8 +245,8 @@ public:
         }
 
         m_running.store(true, std::memory_order_release);
-        auto* scheduler = m_runtime.getNextIOScheduler();
-        if (!scheduleTask(scheduler, acceptLoop(std::move(listener)))) {
+        auto* scheduler = m_runtime.get_next_io_scheduler();
+        if (!schedule_task(scheduler, accept_loop(std::move(listener)))) {
             RpcError error(RpcErrorCode::INTERNAL_ERROR,
                            "Failed to schedule stream accept loop");
             RPC_LOG_ERROR("[stream-server] [schedule] [fail]", "accept-loop");
@@ -268,7 +268,7 @@ public:
     }
 
     /// @brief 检查是否运行中
-    bool isRunning() const {
+    bool is_running() const {
         return m_running.load(std::memory_order_acquire);
     }
 
@@ -276,7 +276,7 @@ public:
     Runtime& runtime() { return m_runtime; }
 
     /// @brief 获取最近一次异步运行错误；启动失败必须读取start()返回值
-    std::optional<RpcError> lastError() const {
+    std::optional<RpcError> last_error() const {
         return m_last_error;
     }
 
@@ -284,7 +284,7 @@ private:
     static constexpr uint64_t kServiceHashOffset = 1469598103934665603ull;
     static constexpr uint64_t kServiceHashPrime = 1099511628211ull;
 
-    static size_t serviceBucketIndex(std::string_view service_name) {
+    static size_t service_bucket_index(std::string_view service_name) {
         uint64_t hash = kServiceHashOffset;
         for (unsigned char ch : service_name) {
             hash ^= static_cast<uint64_t>(ch);
@@ -293,15 +293,15 @@ private:
         return static_cast<size_t>(hash % kMaxRegisteredServices);
     }
 
-    std::expected<RpcStreamHandler*, RpcErrorCode> resolveStreamHandler(const StreamInitRequest& init_req) {
-        const size_t initial_index = serviceBucketIndex(init_req.serviceName());
+    std::expected<RpcStreamHandler*, RpcErrorCode> resolve_stream_handler(const StreamInitRequest& init_req) {
+        const size_t initial_index = service_bucket_index(init_req.service_name());
         for (size_t probe = 0; probe < m_services.size(); ++probe) {
             RpcService* service = m_services[(initial_index + probe) % m_services.size()];
             if (service == nullptr) {
                 break;
             }
-            if (service->name() == init_req.serviceName()) {
-                auto* handler = service->findStreamMethod(init_req.methodName());
+            if (service->name() == init_req.service_name()) {
+                auto* handler = service->find_stream_method(init_req.method_name());
                 if (handler == nullptr) {
                     return std::unexpected(RpcErrorCode::METHOD_NOT_FOUND);
                 }
@@ -311,7 +311,7 @@ private:
         return std::unexpected(RpcErrorCode::SERVICE_NOT_FOUND);
     }
 
-    Task<void> acceptLoop(AsyncTcpSocket listener) {
+    Task<void> accept_loop(AsyncTcpSocket listener) {
         while (m_running.load(std::memory_order_acquire)) {
             Host client_host;
             auto accept_result = co_await listener.accept(&client_host);
@@ -323,8 +323,8 @@ private:
                 continue;
             }
 
-            auto* scheduler = m_runtime.getNextIOScheduler();
-            if (!scheduleTask(scheduler, handleConnection(accept_result.value()))) {
+            auto* scheduler = m_runtime.get_next_io_scheduler();
+            if (!schedule_task(scheduler, handle_connection(accept_result.value()))) {
                 m_last_error = RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule stream connection handler");
                 RPC_LOG_ERROR("[stream-server] [schedule] [fail]", "connection-handler");
                 AsyncTcpSocket socket(accept_result.value());
@@ -348,9 +348,9 @@ private:
         co_return;
     }
 
-    Task<void> handleConnection(GHandle handle) {
+    Task<void> handle_connection(GHandle handle) {
         AsyncTcpSocket socket(handle);
-        auto non_block_result = socket.option().handleNonBlock();
+        auto non_block_result = socket.option().handle_non_block();
         if (!non_block_result) {
             m_last_error = RpcError::from(non_block_result.error());
             RPC_LOG_ERROR("[stream-server] [socket] [client-nonblock-fail]",
@@ -366,7 +366,7 @@ private:
             co_return;
         }
         if (m_config.tcp_no_delay) {
-            auto nodelay_result = socket.option().handleTcpNoDelay();
+            auto nodelay_result = socket.option().handle_tcp_no_delay();
             if (!nodelay_result) {
                 m_last_error = RpcError::from(nodelay_result.error());
                 RPC_LOG_WARN("[stream-server] [socket] [nodelay-fail]",
@@ -380,7 +380,7 @@ private:
 
         while (m_running.load(std::memory_order_acquire)) {
             StreamMessage init_frame;
-            auto recv_result = co_await reader.getMessage(init_frame);
+            auto recv_result = co_await reader.get_message(init_frame);
             if (!recv_result.has_value()) {
                 m_last_error = recv_result.error();
                 RPC_LOG_WARN("[stream-server] [recv] [fail]",
@@ -397,17 +397,17 @@ private:
                 co_return;
             }
 
-            const uint32_t stream_id = init_frame.streamId();
+            const uint32_t stream_id = init_frame.stream_id();
             RpcStream stream(socket, ring_buffer, stream_id);
 
-            if (init_frame.messageType() != RpcMessageType::STREAM_INIT) {
+            if (init_frame.message_type() != RpcMessageType::STREAM_INIT) {
                 m_last_error = RpcError(RpcErrorCode::INVALID_REQUEST,
                                         "Expected STREAM_INIT as first frame");
                 RPC_LOG_WARN("[stream-server] [protocol] [invalid-first-frame]",
                              "stream_id={} type={}",
                              stream_id,
-                             static_cast<int>(init_frame.messageType()));
-                auto cancel_result = co_await stream.sendCancel();
+                             static_cast<int>(init_frame.message_type()));
+                auto cancel_result = co_await stream.send_cancel();
                 if (!cancel_result.has_value()) {
                     m_last_error = cancel_result.error();
                     RPC_LOG_WARN("[stream-server] [cancel] [fail]",
@@ -427,14 +427,14 @@ private:
             }
 
             StreamInitRequest init_req;
-            if (!init_req.deserializeBody(init_frame.payload().data(), init_frame.payload().size())) {
+            if (!init_req.deserialize_body(init_frame.payload().data(), init_frame.payload().size())) {
                 m_last_error = RpcError(RpcErrorCode::INVALID_REQUEST,
                                         "Failed to parse stream init body");
                 RPC_LOG_WARN("[stream-server] [protocol] [parse-init-fail]",
                              "stream_id={} payload_size={}",
                              stream_id,
                              init_frame.payload().size());
-                auto cancel_result = co_await stream.sendCancel();
+                auto cancel_result = co_await stream.send_cancel();
                 if (!cancel_result.has_value()) {
                     m_last_error = cancel_result.error();
                     RPC_LOG_WARN("[stream-server] [cancel] [fail]",
@@ -453,16 +453,16 @@ private:
                 continue;
             }
 
-            auto handler_result = resolveStreamHandler(init_req);
+            auto handler_result = resolve_stream_handler(init_req);
             if (!handler_result.has_value()) {
                 m_last_error = RpcError(handler_result.error());
                 RPC_LOG_WARN("[stream-server] [route] [not-found]",
                              "stream_id={} service={} method={} code={}",
                              stream_id,
-                             init_req.serviceName(),
-                             init_req.methodName(),
+                             init_req.service_name(),
+                             init_req.method_name(),
                              static_cast<int>(handler_result.error()));
-                auto cancel_result = co_await stream.sendCancel();
+                auto cancel_result = co_await stream.send_cancel();
                 if (!cancel_result.has_value()) {
                     m_last_error = cancel_result.error();
                     RPC_LOG_WARN("[stream-server] [cancel] [fail]",
@@ -481,9 +481,9 @@ private:
                 continue;
             }
 
-            stream.setRoute(init_req.serviceName(), init_req.methodName());
+            stream.set_route(init_req.service_name(), init_req.method_name());
 
-            auto send_result = co_await stream.sendInitAck();
+            auto send_result = co_await stream.send_init_ack();
             if (!send_result.has_value()) {
                 m_last_error = send_result.error();
                 RPC_LOG_WARN("[stream-server] [send-init-ack] [fail]",

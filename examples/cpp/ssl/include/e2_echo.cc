@@ -35,15 +35,15 @@ using namespace galay::kernel;
 /**
  * @brief SSL客户端协程
  */
-Task<void> sslClient(SslContext* ctx, const std::string& host, uint16_t port) {
+Task<void> ssl_client(SslContext* ctx, const std::string& host, uint16_t port) {
     SslSocket socket(ctx);
 
-    if (!socket.isValid()) {
+    if (!socket.is_valid()) {
         co_return;
     }
 
-    socket.option().handleNonBlock();
-    socket.setHostname(host);  // 设置SNI
+    socket.option().handle_non_block();
+    socket.set_hostname(host);  // 设置SNI
 
     std::cout << "Connecting to " << host << ":" << port << "..." << std::endl;
 
@@ -82,7 +82,7 @@ Task<void> sslClient(SslContext* ctx, const std::string& host, uint16_t port) {
     if (!recvResult) {
     } else {
         auto& bytes = recvResult.value();
-        std::cout << "Received: " << bytes.toStringView() << std::endl;
+        std::cout << "Received: " << bytes.to_string_view() << std::endl;
     }
 
     // 关闭连接
@@ -102,20 +102,20 @@ int main(int argc, char* argv[]) {
 
     // 创建SSL上下文
     SslContext ctx(SslMethod::TLS_Client);
-    if (!ctx.isValid()) {
+    if (!ctx.is_valid()) {
         return 1;
     }
 
     // 加载CA证书（可选）
     if (!caCert.empty()) {
-        auto caResult = ctx.loadCACertificate(caCert);
+        auto caResult = ctx.load_ca_certificate(caCert);
         if (!caResult) {
             return 1;
         }
-        ctx.setVerifyMode(SslVerifyMode::Peer);
+        ctx.set_verify_mode(SslVerifyMode::Peer);
     } else {
         // 不验证服务器证书（仅用于测试）
-        ctx.setVerifyMode(SslVerifyMode::None);
+        ctx.set_verify_mode(SslVerifyMode::None);
     }
 
     // 创建调度器
@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
     scheduler.start();
 
     // 启动客户端
-    scheduleTask(scheduler, sslClient(&ctx, host, port));
+    schedule_task(scheduler, ssl_client(&ctx, host, port));
 
     // 等待完成
     std::this_thread::sleep_for(std::chrono::seconds(2));

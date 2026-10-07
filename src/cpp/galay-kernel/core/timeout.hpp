@@ -46,7 +46,7 @@ namespace detail {
  * @details 完成方在注册尚处于 arming 阶段时只记录 pending；注册方随后通过
  *          arm() 决定真正挂起，或在已有 pending 完成时同步继续。该状态机保证
  *          协程不会在 await_suspend 仍访问 awaiter/channel 时被恢复并销毁。
- * @note setWaker() 只能在对象发布给并发完成方之前调用；arm() 只能调用一次。
+ * @note set_waker() 只能在对象发布给并发完成方之前调用；arm() 只能调用一次。
  */
 class DeferredWaker
 {
@@ -64,7 +64,7 @@ public:
     DeferredWaker& operator=(DeferredWaker&&) = delete;
 
     /** @brief 在发布给完成方之前设置目标协程唤醒器。 */
-    void setWaker(Waker waker) noexcept
+    void set_waker(Waker waker) noexcept
     {
         m_waker = std::move(waker);
     }
@@ -84,7 +84,7 @@ public:
             return true;
         }
         if (expected == State::kPending) {
-            // requestWake() 不会离开 kPending，只有注册方在这里消费该状态。
+            // request_wake() 不会离开 kPending，只有注册方在这里消费该状态。
             m_state.store(State::kIssued, std::memory_order_release);
         }
         return false;
@@ -93,9 +93,9 @@ public:
     /**
      * @brief 请求完成当前等待。
      * @return 当前调用首次发布 pending 或实际发出唤醒时返回 true；重复请求返回 false。
-     * @note 实际 wakeUp() 是成功路径的最后一步，调用后不再访问本对象。
+     * @note 实际 wake_up() 是成功路径的最后一步，调用后不再访问本对象。
      */
-    [[nodiscard]] bool requestWake() noexcept
+    [[nodiscard]] bool request_wake() noexcept
     {
         State state = m_state.load(std::memory_order_acquire);
         for (;;) {
@@ -117,14 +117,14 @@ public:
                                               State::kIssued,
                                               std::memory_order_acq_rel,
                                               std::memory_order_acquire)) {
-                waker.wakeUp();
+                waker.wake_up();
                 return true;
             }
         }
     }
 
     /** @brief awaiter 恢复后释放 gate 持有的任务引用。 */
-    void clearWaker() noexcept
+    void clear_waker() noexcept
     {
         m_waker = Waker();
     }
@@ -141,16 +141,16 @@ private:
     std::atomic<State> m_state{State::kArming};
 };
 
-int removeTimedOutIORegistration(Scheduler* scheduler, IOController* controller) noexcept;
+int remove_timed_out_io_registration(Scheduler* scheduler, IOController* controller) noexcept;
 
 template <typename Awaitable>
-bool awaitableStillOwnsIORegistration(Awaitable& awaitable) noexcept
+bool awaitable_still_owns_io_registration(Awaitable& awaitable) noexcept
 {
     if constexpr (requires(Awaitable& value) {
-        { value.ownsIoRegistration() } -> std::convertible_to<bool>;
+        { value.owns_io_registration() } -> std::convertible_to<bool>;
     }) {
         // 显式定制点优先：inner 自身最清楚是否仍持有 IO 注册
-        return awaitable.ownsIoRegistration();
+        return awaitable.owns_io_registration();
     } else if constexpr (requires(Awaitable& value) { value.m_controller; }) {
         auto* controller = awaitable.m_controller;
         if (controller == nullptr) {
@@ -225,7 +225,7 @@ private:
     std::vector<TimeoutTimer*> m_free;
 };
 
-inline TimeoutTimerPool& timeoutTimerPoolLocal() noexcept
+inline TimeoutTimerPool& timeout_timer_pool_local() noexcept
 {
     thread_local TimeoutTimerPool pool;
     return pool;
@@ -253,7 +253,7 @@ public:
      * 调用；此时 DeferredWaker 不会再收到完成通知，原地重建只负责释放上一轮
      * 可能仍持有的 TaskRef 并恢复初始状态。
      */
-    void resetForReuse(std::chrono::milliseconds duration) noexcept
+    void reset_for_reuse(std::chrono::milliseconds duration) noexcept
     {
         m_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
         m_expireTime = 0;
@@ -283,26 +283,26 @@ public:
     TimeoutTimer(Duration duration)
         : Timer(duration) {}
 
-    void setWaker(Waker waker) noexcept { m_waker.setWaker(std::move(waker)); }
+    void set_waker(Waker waker) noexcept { m_waker.set_waker(std::move(waker)); }
 
     /** @brief awaiter 恢复后释放 timer 持有的任务引用。 */
-    void clearWaker() noexcept { m_waker.clearWaker(); }
+    void clear_waker() noexcept { m_waker.clear_waker(); }
 
     /**
      * @brief 发布外层 await_suspend 已完成全部注册访问。
      * @return true 表示应保持挂起；false 表示 timeout/operation 已提前完成，
      *         调用方应同步继续。
      */
-    [[nodiscard]] bool armWaker() noexcept { return m_waker.arm(); }
+    [[nodiscard]] bool arm_waker() noexcept { return m_waker.arm(); }
 
     /** @brief 返回供 timeout-aware awaiter 共享的两阶段完成唤醒门。 */
-    detail::DeferredWaker& completionWaker() noexcept { return m_waker; }
+    detail::DeferredWaker& completion_waker() noexcept { return m_waker; }
 
     /**
      * @brief 尝试由异步操作认领完成权并取消底层 timer。
      * @return true 表示操作已拥有完成权；false 表示 timeout 已获胜。
      */
-    [[nodiscard]] bool tryCompleteOperation() noexcept
+    [[nodiscard]] bool try_complete_operation() noexcept
     {
         Completion expected = Completion::kPending;
         const bool operationWon = m_completion.compare_exchange_strong(
@@ -318,10 +318,10 @@ public:
 
     /**
      * @brief 在可能失败的 dequeue/enqueue 前取得事务式完成权。
-     * @return kStarted 后调用方必须且只能调用一次 commitOperation() 或
-     *         abortOperation()；其他结果表示不得开始破坏性数据操作。
+     * @return kStarted 后调用方必须且只能调用一次 commit_operation() 或
+     *         abort_operation()；其他结果表示不得开始破坏性数据操作。
      */
-    [[nodiscard]] OperationStart tryBeginOperation() noexcept
+    [[nodiscard]] OperationStart try_begin_operation() noexcept
     {
         Completion state = m_completion.load(std::memory_order_acquire);
         for (;;) {
@@ -351,7 +351,7 @@ public:
      * @return 成功把 InFlight/TimeoutRequested 提交为 OperationWon 时返回 true。
      * @note timeout 在操作期间到达时由先取得完成权的操作获胜，避免回滚已移动值。
      */
-    [[nodiscard]] bool commitOperation() noexcept
+    [[nodiscard]] bool commit_operation() noexcept
     {
         Completion state = m_completion.load(std::memory_order_acquire);
         while (state == Completion::kOperationInFlight ||
@@ -371,10 +371,10 @@ public:
     /**
      * @brief 回滚未修改 channel 数据的事务式操作。
      * @return 未到达 timeout 时返回 kRearmed；timeout 已请求时返回 kTimeoutWon。
-     * @note 返回 kTimeoutWon 的调用方必须先清理 waiter，再以 wakeTimeoutWinner()
+     * @note 返回 kTimeoutWon 的调用方必须先清理 waiter，再以 wake_timeout_winner()
      *       作为最后一次相关访问，避免恢复后访问已销毁协程帧。
      */
-    [[nodiscard]] OperationAbort abortOperation() noexcept
+    [[nodiscard]] OperationAbort abort_operation() noexcept
     {
         Completion state = m_completion.load(std::memory_order_acquire);
         for (;;) {
@@ -403,13 +403,13 @@ public:
     }
 
     /**
-     * @brief 唤醒由 abortOperation() 最终裁决为 timeout 的任务。
+     * @brief 唤醒由 abort_operation() 最终裁决为 timeout 的任务。
      * @pre 当前调用方刚获得 OperationAbort::kTimeoutWon，且只调用一次。
-     * @note wakeUp() 可能恢复并销毁 awaiter frame，因此必须是调用方最后一步。
+     * @note wake_up() 可能恢复并销毁 awaiter frame，因此必须是调用方最后一步。
      */
-    void wakeTimeoutWinner()
+    void wake_timeout_winner()
     {
-        if (!m_waker.requestWake()) {
+        if (!m_waker.request_wake()) {
             // operation/timeout 的另一完成路径已经发布同一唤醒。
         }
     }
@@ -417,26 +417,26 @@ public:
     /** @brief 操作完成时取消 timeout 竞争；timer 已获胜时不会反转结果。 */
     void cancel() noexcept
     {
-        if (!tryCompleteOperation()) {
+        if (!try_complete_operation()) {
             // producer 或 timeout 已认领完成权；仍确保底层 timer 停止后续调度。
             Timer::cancel();
         }
     }
 
     /** @brief timer 注册失败时同步标记超时并请求恢复已挂起任务。 */
-    void timeoutNow()
+    void timeout_now()
     {
-        if (completeTimeout()) {
-            if (!m_waker.requestWake()) {
+        if (complete_timeout()) {
+            if (!m_waker.request_wake()) {
                 // 完成已由另一条路径发布，无需重复唤醒。
             }
         }
     }
 
     /** @brief 在尚未发布 inner waiter 时只标记超时，不请求恢复。 */
-    void markTimeoutWithoutWake()
+    void mark_timeout_without_wake()
     {
-        if (!completeTimeout()) {
+        if (!complete_timeout()) {
             // 另一完成方已先获胜，无需重复写入超时结果。
         }
     }
@@ -446,10 +446,10 @@ public:
     }
 
     /** @brief 由 timer manager 或测试入口触发一次 timeout 裁决。 */
-    void handleTimeout() override {
-        if (completeTimeout()) {
-            // wakeUp() 可能恢复并销毁 awaiter frame，因此必须是最后一次成员访问。
-            if (!m_waker.requestWake()) {
+    void handle_timeout() override {
+        if (complete_timeout()) {
+            // wake_up() 可能恢复并销毁 awaiter frame，因此必须是最后一次成员访问。
+            if (!m_waker.request_wake()) {
                 // 完成已由另一条路径发布，无需重复唤醒。
             }
         }
@@ -467,7 +467,7 @@ private:
         kTimeoutWon,
     };
 
-    bool completeTimeout()
+    bool complete_timeout()
     {
         bool timeoutWon = false;
         Completion state = m_completion.load(std::memory_order_acquire);
@@ -495,7 +495,7 @@ private:
             }
             break;
         }
-        Timer::handleTimeout();
+        Timer::handle_timeout();
         return timeoutWon;
     }
 
@@ -508,7 +508,7 @@ inline TimeoutTimer* detail::TimeoutTimerPool::acquire(std::chrono::milliseconds
     if (!m_free.empty()) {
         auto* timer = m_free.back();
         m_free.pop_back();
-        timer->resetForReuse(duration);
+        timer->reset_for_reuse(duration);
         return timer;
     }
     return new TimeoutTimer(duration);
@@ -545,7 +545,7 @@ inline TimeoutTimer::ptr TimeoutTimer::create(std::chrono::milliseconds duration
 
         void operator()(TimeoutTimer* timer) const noexcept {
             if (std::this_thread::get_id() == owner) {
-                detail::timeoutTimerPoolLocal().release(timer);
+                detail::timeout_timer_pool_local().release(timer);
             } else {
                 // 共享 timer 可能在其他线程晚于 scheduler frame 释放；不要
                 // 把它发布到其他线程的本地对象池。
@@ -553,7 +553,7 @@ inline TimeoutTimer::ptr TimeoutTimer::create(std::chrono::milliseconds duration
             }
         }
     };
-    return ptr(detail::timeoutTimerPoolLocal().acquire(duration),
+    return ptr(detail::timeout_timer_pool_local().acquire(duration),
                PoolDeleter{std::this_thread::get_id()});
 }
 
@@ -575,7 +575,7 @@ struct TimeoutTimerBinding {
      * 前取消该定时器，把成功与超时的竞争裁决提前到完成派发时刻。组合
      * awaitable 可先暂存绑定，再在自己的 await_suspend() 中转交给 inner。
      */
-    void bindTimeoutTimer(TimeoutTimer* timer) noexcept {
+    void bind_timeout_timer(TimeoutTimer* timer) noexcept {
         m_bound_timeout_timer = timer;
     }
 
@@ -584,22 +584,22 @@ protected:
      * @brief 将尚未发布给完成方的绑定转交给实际 inner awaitable。
      *
      * 组合 awaitable 先在外层保存 timer，再在 inner.await_suspend() 前转交，
-     * 从而不要求 inner 必须在外层 bindTimeoutTimer() 调用前完成构造。
+     * 从而不要求 inner 必须在外层 bind_timeout_timer() 调用前完成构造。
      */
     template <typename AwaitableT>
     requires requires(AwaitableT& awaitable, TimeoutTimer* timer) {
-        { awaitable.bindTimeoutTimer(timer) } noexcept;
+        { awaitable.bind_timeout_timer(timer) } noexcept;
     }
-    void forwardBoundTimeoutTimer(AwaitableT& awaitable) noexcept {
+    void forward_bound_timeout_timer(AwaitableT& awaitable) noexcept {
         auto* timer = std::exchange(m_bound_timeout_timer, nullptr);
         if (timer != nullptr) {
-            awaitable.bindTimeoutTimer(timer);
+            awaitable.bind_timeout_timer(timer);
         }
     }
 
 public:
     /** @brief 完成派发时刻取消竞争；幂等且不反转已发生的超时结果。 */
-    void cancelBoundTimeoutTimer() noexcept {
+    void cancel_bound_timeout_timer() noexcept {
         // reactor 和 await_resume() 都可能报告完成。取消前先清除非拥有观察
         // 指针，避免后续通知解引用已由 WithTimeout wrapper 释放的 timer。
         auto* timer = std::exchange(m_bound_timeout_timer, nullptr);
@@ -694,31 +694,31 @@ struct WithTimeout {
     template<typename Promise>
     requires concepts::AwaitableWith<Awaitable, Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        ensureTimer();
+        ensure_timer();
         auto timer = m_timer;
         auto waker = Waker(handle);
-        Scheduler* scheduler = waker.getScheduler();
+        Scheduler* scheduler = waker.get_scheduler();
         m_scheduler = scheduler;
-        timer->setWaker(std::move(waker));
+        timer->set_waker(std::move(waker));
         if (scheduler == nullptr) {
-            timer->markTimeoutWithoutWake();
-            injectTimeoutResult();
+            timer->mark_timeout_without_wake();
+            inject_timeout_result();
             return false;
         }
 
         if constexpr (requires(Awaitable& awaitable, TimeoutTimer* rawTimer) {
-            awaitable.bindTimeoutTimer(rawTimer);
+            awaitable.bind_timeout_timer(rawTimer);
         }) {
             // 核心 IO awaitable 只观察共享完成 timer，不延长其生命周期；
             // WithTimeout 仍是唯一所有者。
-            m_inner.bindTimeoutTimer(timer.get());
+            m_inner.bind_timeout_timer(timer.get());
         } else if constexpr (requires(Awaitable& awaitable,
                                       const TimeoutTimer::ptr& sharedTimer) {
-            awaitable.bindTimeoutTimer(sharedTimer);
+            awaitable.bind_timeout_timer(sharedTimer);
         }) {
             // channel awaitable 保留同一个共享 timer 对象，使 waiter 与超时
             // 路径共同仲裁一个完成状态。
-            m_inner.bindTimeoutTimer(timer);
+            m_inner.bind_timeout_timer(timer);
         }
 
         const bool suspended = m_inner.await_suspend(handle);
@@ -728,12 +728,12 @@ struct WithTimeout {
             timer->cancel();
             return false;
         }
-        const bool timerAdded = scheduler->addTimer(timer);
+        const bool timerAdded = scheduler->add_timer(timer);
         if (!timerAdded) {
-            timer->timeoutNow();
+            timer->timeout_now();
         }
-        // armWaker() 之后完成方可能立即恢复并销毁当前 awaiter，因此必须直接返回。
-        return timer->armWaker();
+        // arm_waker() 之后完成方可能立即恢复并销毁当前 awaiter，因此必须直接返回。
+        return timer->arm_waker();
     }
 
     auto await_resume() -> decltype(m_inner.await_resume()) {
@@ -743,15 +743,15 @@ struct WithTimeout {
         }
         const bool timedOut = timer->timeouted();
         // 当前协程已在执行，timer 不再需要保留独立 TaskRef。
-        timer->clearWaker();
+        timer->clear_waker();
         if (timedOut) [[unlikely]] {
             const bool owns_registration = [&]() noexcept {
                 if constexpr (requires(Awaitable& awaitable) {
-                    { TimeoutPolicyT::ownsIoRegistration(awaitable) } -> std::convertible_to<bool>;
+                    { TimeoutPolicyT::owns_io_registration(awaitable) } -> std::convertible_to<bool>;
                 }) {
-                    return static_cast<bool>(TimeoutPolicyT::ownsIoRegistration(m_inner));
+                    return static_cast<bool>(TimeoutPolicyT::owns_io_registration(m_inner));
                 } else {
-                    return detail::awaitableStillOwnsIORegistration(m_inner);
+                    return detail::awaitable_still_owns_io_registration(m_inner);
                 }
             }();
             if (!owns_registration) {
@@ -762,10 +762,10 @@ struct WithTimeout {
                 awaitable.m_controller;
             }) {
                 const bool removed_registration =
-                    detail::removeTimedOutIORegistration(m_scheduler, m_inner.m_controller);
+                    detail::remove_timed_out_io_registration(m_scheduler, m_inner.m_controller);
                 (void)removed_registration;
             }
-            injectTimeoutResult();
+            inject_timeout_result();
             timer->cancel();
         } else {
             // reactor 通常会在唤醒协程前取消绑定 timer。同步或自定义 awaitable
@@ -777,26 +777,26 @@ struct WithTimeout {
     }
 
     /** @brief 显式为源码级测试或手工驱动 timer 的调用方创建定时器。 */
-    void ensureTimer() {
+    void ensure_timer() {
         if (!m_timer) {
             m_timer = TimeoutTimer::create(m_duration);
         }
     }
 
     /** @brief 将嵌套 timeout 包装器的超时结果继续传给 inner。 */
-    void markTimeout() { injectTimeoutResult(); }
+    void mark_timeout() { inject_timeout_result(); }
 
 private:
-    void injectTimeoutResult()
+    void inject_timeout_result()
     {
         if constexpr (std::same_as<TimeoutPolicyT, detail::DefaultTimeoutPolicy<Awaitable>>) {
             // This member is the friendship boundary retained by the low-level
             // channel awaiters.  New awaitables should use an explicit policy
-            // and keep their result state private behind setTimeout().
+            // and keep their result state private behind set_timeout().
             if constexpr (concepts::TimeoutMarkable<Awaitable>) {
-                m_inner.markTimeout();
+                m_inner.mark_timeout();
             } else if constexpr (concepts::TimeoutSettable<Awaitable>) {
-                m_inner.setTimeout();
+                m_inner.set_timeout();
             } else if constexpr (requires(Awaitable& value) {
                 value.m_result = std::unexpected(IOError(kTimeout, 0));
             }) {

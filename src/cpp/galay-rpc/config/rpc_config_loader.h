@@ -44,7 +44,7 @@ inline std::string trim(std::string value)
     return value;
 }
 
-inline std::expected<std::string, RpcConfigError> parseString(std::string value)
+inline std::expected<std::string, RpcConfigError> parse_string(std::string value)
 {
     value = trim(std::move(value));
     if (value.size() < 2 || value.front() != '"' || value.back() != '"') {
@@ -53,7 +53,7 @@ inline std::expected<std::string, RpcConfigError> parseString(std::string value)
     return value.substr(1, value.size() - 2);
 }
 
-inline std::expected<int64_t, RpcConfigError> parseInt(std::string value)
+inline std::expected<int64_t, RpcConfigError> parse_int(std::string value)
 {
     value = trim(std::move(value));
     if (value.empty()) {
@@ -71,7 +71,7 @@ inline std::expected<int64_t, RpcConfigError> parseInt(std::string value)
     }
 }
 
-inline std::expected<bool, RpcConfigError> parseBool(std::string value)
+inline std::expected<bool, RpcConfigError> parse_bool(std::string value)
 {
     value = trim(std::move(value));
     if (value == "true") {
@@ -83,7 +83,7 @@ inline std::expected<bool, RpcConfigError> parseBool(std::string value)
     return std::unexpected(RpcConfigError{RpcConfigErrorCode::Malformed, "invalid bool"});
 }
 
-inline std::string stripComment(std::string line)
+inline std::string strip_comment(std::string line)
 {
     bool in_string = false;
     for (size_t i = 0; i < line.size(); ++i) {
@@ -99,7 +99,7 @@ inline std::string stripComment(std::string line)
 
 } // namespace detail
 
-inline std::expected<RpcConfig, RpcConfigError> LoadRpcConfig(const std::filesystem::path& path)
+inline std::expected<RpcConfig, RpcConfigError> load_rpc_config(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -112,7 +112,7 @@ inline std::expected<RpcConfig, RpcConfigError> LoadRpcConfig(const std::filesys
     size_t line_no = 0;
     while (std::getline(input, line)) {
         ++line_no;
-        line = detail::trim(detail::stripComment(std::move(line)));
+        line = detail::trim(detail::strip_comment(std::move(line)));
         if (line.empty()) {
             continue;
         }
@@ -132,7 +132,7 @@ inline std::expected<RpcConfig, RpcConfigError> LoadRpcConfig(const std::filesys
         const auto value = line.substr(equals + 1);
 
         auto parse_positive = [&](const char* name) -> std::expected<int64_t, RpcConfigError> {
-            auto parsed = detail::parseInt(value);
+            auto parsed = detail::parse_int(value);
             if (!parsed.has_value()) {
                 return parsed;
             }
@@ -143,7 +143,7 @@ inline std::expected<RpcConfig, RpcConfigError> LoadRpcConfig(const std::filesys
         };
 
         if (section == "server" && key == "host") {
-            auto parsed = detail::parseString(value);
+            auto parsed = detail::parse_string(value);
             if (!parsed.has_value()) return std::unexpected(parsed.error());
             config.server.host = *parsed;
         } else if (section == "server" && key == "port") {
@@ -166,11 +166,11 @@ inline std::expected<RpcConfig, RpcConfigError> LoadRpcConfig(const std::filesys
             if (!parsed.has_value()) return std::unexpected(parsed.error());
             config.retry.max_attempts = static_cast<uint32_t>(*parsed);
         } else if (section == "retry" && key == "require_idempotent") {
-            auto parsed = detail::parseBool(value);
+            auto parsed = detail::parse_bool(value);
             if (!parsed.has_value()) return std::unexpected(parsed.error());
             config.retry.require_idempotent = *parsed;
         } else if (section == "governance.rate_limit" && key == "enabled") {
-            auto parsed = detail::parseBool(value);
+            auto parsed = detail::parse_bool(value);
             if (!parsed.has_value()) return std::unexpected(parsed.error());
             config.governance.rate_limit.enabled = *parsed;
         } else if (section == "governance.rate_limit" && key == "capacity") {
@@ -178,7 +178,7 @@ inline std::expected<RpcConfig, RpcConfigError> LoadRpcConfig(const std::filesys
             if (!parsed.has_value()) return std::unexpected(parsed.error());
             config.governance.rate_limit.capacity = static_cast<size_t>(*parsed);
         } else if (section == "discovery" && key == "kind") {
-            auto parsed = detail::parseString(value);
+            auto parsed = detail::parse_string(value);
             if (!parsed.has_value()) return std::unexpected(parsed.error());
             if (*parsed == "local") {
                 config.discovery.kind = RpcDiscoveryKind::Local;
@@ -188,7 +188,7 @@ inline std::expected<RpcConfig, RpcConfigError> LoadRpcConfig(const std::filesys
                 return std::unexpected(RpcConfigError{RpcConfigErrorCode::InvalidValue, "discovery.kind"});
             }
         } else if (section == "discovery" && key == "prefix") {
-            auto parsed = detail::parseString(value);
+            auto parsed = detail::parse_string(value);
             if (!parsed.has_value()) return std::unexpected(parsed.error());
             config.discovery.prefix = *parsed;
         } else if (section == "stream" && key == "max_frame_bytes") {

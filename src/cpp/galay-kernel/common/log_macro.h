@@ -6,7 +6,7 @@
  *
  * @details 提供零开销的日志埋点宏，供 galay-kernel 和下游库使用。
  * 宏在展开时先通过调用方传入的 getter 获取当前库 logger 裸指针（atomic load），
- * 再检查 minLevel()。两者均通过后才执行 std::format 并调用 log()。
+ * 再检查 min_level()。两者均通过后才执行 std::format 并调用 log()。
  * 未设置对应库 logger 时，仅执行一次 atomic load + null check，不进入格式化。
  *
  * 各下游库应基于此文件定义自己的命名空间日志宏，
@@ -42,13 +42,13 @@
 #define GALAY_LOG_ENABLED(getter, level)                                         \
     ([&]() -> bool {                                                             \
         auto* const _galay_log_ptr = getter();                                   \
-        return _galay_log_ptr && _galay_log_ptr->minLevel() <= (level);          \
+        return _galay_log_ptr && _galay_log_ptr->min_level() <= (level);          \
     }())
 
 /**
  * @brief 通用日志宏（核心实现）
  *
- * @details 检查 logger 是否设置且消息级别不低于 minLevel，
+ * @details 检查 logger 是否设置且消息级别不低于 min_level，
  * 通过后使用 std::format 格式化消息并调用 log()。
  * 使用 __builtin_FILE()/__builtin_LINE()/__builtin_FUNCTION()
  * 捕获调用点的源代码位置。
@@ -65,7 +65,7 @@
 #define GALAY_LOG_WITH_LOGGER(getter, level, tag, fmt, ...)                      \
     do {                                                                         \
         auto* const _galay_log_ptr = getter();                                   \
-        if (_galay_log_ptr && _galay_log_ptr->minLevel() <= (level)) {           \
+        if (_galay_log_ptr && _galay_log_ptr->min_level() <= (level)) {           \
             std::string _galay_log_msg =                                         \
                 std::format(fmt __VA_OPT__(,) __VA_ARGS__);                      \
             _galay_log_ptr->log(level, tag, _galay_log_msg,                      \

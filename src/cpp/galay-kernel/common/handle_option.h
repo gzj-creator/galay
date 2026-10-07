@@ -17,12 +17,12 @@
  * socket.create();
  *
  * // 链式选项调用
- * socket.option().handleReuseAddr();
- * socket.option().handleReusePort();
- * socket.option().handleNonBlock();
+ * socket.option().handle_reuse_addr();
+ * socket.option().handle_reuse_port();
+ * socket.option().handle_non_block();
  *
  * // 或检查返回值
- * auto result = socket.option().handleNonBlock();
+ * auto result = socket.option().handle_non_block();
  * if (!result) {
  *     return std::unexpected(result.error());
  * }
@@ -74,7 +74,7 @@ public:
      * - Linux/macOS：使用 fcntl 清除 O_NONBLOCK
      * - Windows：使用 ioctlsocket 设置 FIONBIO = 0
      */
-    std::expected<void, IOError> handleBlock();
+    std::expected<void, IOError> handle_block();
 
     /**
      * @brief 将句柄设置为非阻塞模式
@@ -89,10 +89,10 @@ public:
      * - Windows：使用 ioctlsocket 设置 FIONBIO = 1
      *
      * @code
-     * socket.option().handleNonBlock();  // 异步 I/O 前必须调用
+     * socket.option().handle_non_block();  // 异步 I/O 前必须调用
      * @endcode
      */
-    std::expected<void, IOError> handleNonBlock();
+    std::expected<void, IOError> handle_non_block();
 
     /**
      * @brief 启用 SO_REUSEADDR 以允许重新绑定处于 TIME_WAIT 状态的端口
@@ -104,11 +104,11 @@ public:
      * @note 在 bind() 之前调用
      *
      * @code
-     * socket.option().handleReuseAddr();
+     * socket.option().handle_reuse_addr();
      * socket.bind(host);
      * @endcode
      */
-    std::expected<void, IOError> handleReuseAddr();
+    std::expected<void, IOError> handle_reuse_addr();
 
     /**
      * @brief 启用 SO_REUSEPORT 用于多进程/多线程负载均衡
@@ -123,11 +123,11 @@ public:
      * - 绑定到同一端口的所有套接字都必须设置此选项
      *
      * @code
-     * socket.option().handleReusePort();
+     * socket.option().handle_reuse_port();
      * socket.bind(Host(IPType::IPV4, "0.0.0.0", 8080));
      * @endcode
      */
-    std::expected<void, IOError> handleReusePort();
+    std::expected<void, IOError> handle_reuse_port();
 
     /**
      * @brief 设置 IPv6 socket 的 IPV6_V6ONLY 选项
@@ -142,7 +142,7 @@ public:
      * - 必须在 bind() 之前调用
      * - 仅适用于 AF_INET6 socket；用于 IPv4 socket 会由系统调用返回错误
      */
-    std::expected<void, IOError> handleIPv6Only(bool enabled = true);
+    std::expected<void, IOError> handle_ipv6_only(bool enabled = true);
 
     /**
      * @brief 通过 TCP_NODELAY 禁用 Nagle 算法
@@ -154,7 +154,7 @@ public:
      *
      * @note 在连接建立后尽快调用
      */
-    std::expected<void, IOError> handleTcpNoDelay();
+    std::expected<void, IOError> handle_tcp_no_delay();
 
     /**
      * @brief 在支持的平台上启用 SO_NOSIGPIPE
@@ -167,7 +167,7 @@ public:
      *
      * @note 这是 socket 局部策略，框架不会修改全局 SIGPIPE 处理方式。
      */
-    std::expected<void, IOError> handleNoSigPipe();
+    std::expected<void, IOError> handle_no_sig_pipe();
 
     /**
      * @brief 启用 TCP_DEFER_ACCEPT（仅 Linux）
@@ -183,7 +183,7 @@ public:
      * - 仅在监听套接字上调用，且在 listen() 之前
      * - seconds 必须为正数；值过大会增加首包延迟
      */
-    std::expected<void, IOError> handleTcpDeferAccept(int seconds = 1);
+    std::expected<void, IOError> handle_tcp_defer_accept(int seconds = 1);
 
 private:
     GHandle m_handle;  ///< 要配置的套接字句柄

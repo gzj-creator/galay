@@ -33,7 +33,7 @@ SslSocket::SslSocket(SslContext* ctx, GHandle handle)
     , m_isServer(true)
     , m_engineInitialized(false)
 {
-    initEngine();
+    init_engine();
 }
 
 SslSocket::~SslSocket()
@@ -76,7 +76,7 @@ std::expected<void, IOError> SslSocket::bind(const Host& host)
     if (handle() == GHandle::invalid()) {
         return std::unexpected(IOError(IOErrorCode::kClosed, 0));
     }
-    if (::bind(handle().fd, host.sockAddr(), host.addrLen()) < 0) {
+    if (::bind(handle().fd, host.sock_addr(), host.addr_len()) < 0) {
         return std::unexpected(IOError(IOErrorCode::kBindFailed, errno));
     }
     return {};
@@ -95,32 +95,32 @@ std::expected<void, IOError> SslSocket::listen(int backlog)
     return {};
 }
 
-std::expected<void, SslError> SslSocket::setHostname(const std::string& hostname)
+std::expected<void, SslError> SslSocket::set_hostname(const std::string& hostname)
 {
-    return m_engine.setHostname(hostname);
+    return m_engine.set_hostname(hostname);
 }
 
-bool SslSocket::initEngine()
+bool SslSocket::init_engine()
 {
     if (m_engineInitialized) {
         return true;  // 已初始化，避免重复调用
     }
 
-    if (handle().fd < 0 || !m_engine.isValid()) {
+    if (handle().fd < 0 || !m_engine.is_valid()) {
         SSL_LOG_ERROR("[socket] [init]", "fd={} engine init failed", handle().fd);
         return false;
     }
 
-    auto result = m_engine.initMemoryBIO();
+    auto result = m_engine.init_memory_bio();
     if (!result) {
         SSL_LOG_ERROR("[socket] [init]", "fd={} engine init failed", handle().fd);
         return false;
     }
 
     if (m_isServer) {
-        m_engine.setAcceptState();
+        m_engine.set_accept_state();
     } else {
-        m_engine.setConnectState();
+        m_engine.set_connect_state();
     }
 
     m_engineInitialized = true;
@@ -136,7 +136,7 @@ ConnectAwaitable SslSocket::connect(const Host& host)
 {
     // 连接前初始化 SSL 引擎为客户端模式
     m_isServer = false;
-    initEngine();
+    init_engine();
 
     return ConnectAwaitable(m_controller.get(), host);
 }
@@ -145,7 +145,7 @@ SslHandshakeAwaitable SslSocket::handshake()
 {
     // 确保 SSL 引擎已初始化（只初始化一次）
     if (!m_engineInitialized) {
-        initEngine();
+        init_engine();
     }
 
     return SslHandshakeAwaitable(m_controller.get(), this);

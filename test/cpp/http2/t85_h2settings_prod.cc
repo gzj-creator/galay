@@ -32,127 +32,127 @@ bool check(bool condition, std::string_view message) {
     return true;
 }
 
-Http2SettingsFrame settingsFrame(Http2SettingsId id, uint32_t value) {
+Http2SettingsFrame settings_frame(Http2SettingsId id, uint32_t value) {
     Http2SettingsFrame frame;
-    frame.addSetting(id, value);
+    frame.add_setting(id, value);
     return frame;
 }
 
-bool assertSettingsValueValidation() {
+bool assert_settings_value_validation() {
     bool ok = true;
     Http2Settings settings;
 
-    ok &= check(settings.applySettings(
-        settingsFrame(Http2SettingsId::EnablePush, 2)) == Http2ErrorCode::ProtocolError,
+    ok &= check(settings.apply_settings(
+        settings_frame(Http2SettingsId::EnablePush, 2)) == Http2ErrorCode::ProtocolError,
         "ENABLE_PUSH > 1 must be ProtocolError");
-    ok &= check(settings.applySettings(
-        settingsFrame(Http2SettingsId::InitialWindowSize, 2147483648u)) ==
+    ok &= check(settings.apply_settings(
+        settings_frame(Http2SettingsId::InitialWindowSize, 2147483648u)) ==
         Http2ErrorCode::FlowControlError,
         "INITIAL_WINDOW_SIZE > 2^31 - 1 must be FlowControlError");
-    ok &= check(settings.applySettings(
-        settingsFrame(Http2SettingsId::MaxFrameSize, kMinFrameSize - 1)) ==
+    ok &= check(settings.apply_settings(
+        settings_frame(Http2SettingsId::MaxFrameSize, kMinFrameSize - 1)) ==
         Http2ErrorCode::ProtocolError,
         "MAX_FRAME_SIZE below minimum must be ProtocolError");
-    ok &= check(settings.applySettings(
-        settingsFrame(Http2SettingsId::MaxFrameSize, kMaxFrameSize + 1)) ==
+    ok &= check(settings.apply_settings(
+        settings_frame(Http2SettingsId::MaxFrameSize, kMaxFrameSize + 1)) ==
         Http2ErrorCode::ProtocolError,
         "MAX_FRAME_SIZE above maximum must be ProtocolError");
 
     Http2SettingsFrame duplicate;
-    duplicate.addSetting(Http2SettingsId::MaxFrameSize, kMinFrameSize);
-    duplicate.addSetting(Http2SettingsId::MaxFrameSize, kMinFrameSize + 4096);
-    ok &= check(settings.applySettings(duplicate) == Http2ErrorCode::NoError,
+    duplicate.add_setting(Http2SettingsId::MaxFrameSize, kMinFrameSize);
+    duplicate.add_setting(Http2SettingsId::MaxFrameSize, kMinFrameSize + 4096);
+    ok &= check(settings.apply_settings(duplicate) == Http2ErrorCode::NoError,
                 "duplicate SETTINGS must apply successfully");
     ok &= check(settings.max_frame_size == kMinFrameSize + 4096,
                 "duplicate SETTINGS must keep the last value");
     return ok;
 }
 
-bool assertSettingsFrameValidation() {
+bool assert_settings_frame_validation() {
     bool ok = true;
     galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
-    conn.markSettingsSent();
+    conn.mark_settings_sent();
 
     auto ack_with_payload = std::make_unique<Http2SettingsFrame>();
-    ack_with_payload->setAck(true);
-    ack_with_payload->addSetting(Http2SettingsId::HeaderTableSize, 1);
-    manager.handleConnectionFrame(std::move(ack_with_payload));
-    manager.processPendingActions();
+    ack_with_payload->set_ack(true);
+    ack_with_payload->add_setting(Http2SettingsId::HeaderTableSize, 1);
+    manager.handle_connection_frame(std::move(ack_with_payload));
+    manager.process_pending_actions();
 
-    auto invalid_ack_response = manager.m_send_channel.tryRecv();
+    auto invalid_ack_response = manager.m_send_channel.try_recv();
     ok &= check(invalid_ack_response.has_value(),
                 "ACK SETTINGS with payload must enqueue GOAWAY");
     ok &= check(invalid_ack_response && invalid_ack_response->frame != nullptr,
                 "invalid ACK SETTINGS response must be a frame");
     ok &= check(invalid_ack_response && invalid_ack_response->frame &&
-                invalid_ack_response->frame->isGoAway(),
+                invalid_ack_response->frame->is_go_away(),
                 "invalid ACK SETTINGS response must be GOAWAY");
     ok &= check(invalid_ack_response && invalid_ack_response->frame &&
-                invalid_ack_response->frame->asGoAway()->errorCode() ==
+                invalid_ack_response->frame->as_go_away()->error_code() ==
                     Http2ErrorCode::FrameSizeError,
                 "ACK SETTINGS with payload must be FrameSizeError");
-    ok &= check(conn.isSettingsAckPending(),
+    ok &= check(conn.is_settings_ack_pending(),
                 "invalid ACK SETTINGS must not clear pending SETTINGS ACK state");
 
     auto nonzero_stream_settings = std::make_unique<Http2SettingsFrame>();
     nonzero_stream_settings->header().stream_id = 1;
-    nonzero_stream_settings->addSetting(Http2SettingsId::HeaderTableSize, 128);
-    manager.handleConnectionFrame(std::move(nonzero_stream_settings));
-    manager.processPendingActions();
+    nonzero_stream_settings->add_setting(Http2SettingsId::HeaderTableSize, 128);
+    manager.handle_connection_frame(std::move(nonzero_stream_settings));
+    manager.process_pending_actions();
 
-    auto invalid_stream_response = manager.m_send_channel.tryRecv();
+    auto invalid_stream_response = manager.m_send_channel.try_recv();
     ok &= check(invalid_stream_response.has_value(),
                 "SETTINGS on nonzero stream id must enqueue GOAWAY");
     ok &= check(invalid_stream_response && invalid_stream_response->frame != nullptr,
                 "nonzero stream SETTINGS response must be a frame");
     ok &= check(invalid_stream_response && invalid_stream_response->frame &&
-                invalid_stream_response->frame->isGoAway(),
+                invalid_stream_response->frame->is_go_away(),
                 "nonzero stream SETTINGS response must be GOAWAY");
     ok &= check(invalid_stream_response && invalid_stream_response->frame &&
-                invalid_stream_response->frame->asGoAway()->errorCode() ==
+                invalid_stream_response->frame->as_go_away()->error_code() ==
                     Http2ErrorCode::ProtocolError,
                 "SETTINGS on nonzero stream id must be ProtocolError");
     return ok;
 }
 
-bool assertHpackLimitsFollowSettings() {
+bool assert_hpack_limits_follow_settings() {
     bool ok = true;
     galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
 
     Http2SettingsFrame local_limits;
-    local_limits.addSetting(Http2SettingsId::HeaderTableSize, 128);
-    local_limits.addSetting(Http2SettingsId::MaxHeaderListSize, 64);
+    local_limits.add_setting(Http2SettingsId::HeaderTableSize, 128);
+    local_limits.add_setting(Http2SettingsId::MaxHeaderListSize, 64);
 
-    ok &= check(conn.applyLocalSettings(local_limits) == Http2ErrorCode::NoError,
+    ok &= check(conn.apply_local_settings(local_limits) == Http2ErrorCode::NoError,
                 "local SETTINGS must apply successfully");
-    ok &= check(conn.localSettings().header_table_size == 128,
+    ok &= check(conn.local_settings().header_table_size == 128,
                 "local HEADER_TABLE_SIZE must update local settings");
-    ok &= check(conn.localSettings().max_header_list_size == 64,
+    ok &= check(conn.local_settings().max_header_list_size == 64,
                 "local MAX_HEADER_LIST_SIZE must update local settings");
-    ok &= check(conn.decoder().dynamicTable().maxSize() == 128,
+    ok &= check(conn.decoder().dynamic_table().max_size() == 128,
                 "local HEADER_TABLE_SIZE must update decoder table size");
-    ok &= check(conn.decoder().maxHeaderListSize() == 64,
+    ok &= check(conn.decoder().max_header_list_size() == 64,
                 "local MAX_HEADER_LIST_SIZE must update decoder limit");
 
     Http2SettingsFrame peer_limits;
-    peer_limits.addSetting(Http2SettingsId::HeaderTableSize, 256);
+    peer_limits.add_setting(Http2SettingsId::HeaderTableSize, 256);
 
-    ok &= check(conn.applyPeerSettings(peer_limits) == Http2ErrorCode::NoError,
+    ok &= check(conn.apply_peer_settings(peer_limits) == Http2ErrorCode::NoError,
                 "peer SETTINGS must apply successfully");
-    ok &= check(conn.peerSettings().header_table_size == 256,
+    ok &= check(conn.peer_settings().header_table_size == 256,
                 "peer HEADER_TABLE_SIZE must update peer settings");
-    ok &= check(conn.encoder().dynamicTable().maxSize() == 256,
+    ok &= check(conn.encoder().dynamic_table().max_size() == 256,
                 "peer HEADER_TABLE_SIZE must update encoder table size");
     return ok;
 }
 
-std::string encodeH2cSettingsHeader(const Http2SettingsFrame& frame) {
+std::string encode_h2c_settings_header(const Http2SettingsFrame& frame) {
     std::string serialized = frame.serialize();
-    std::string base64_settings = galay::utils::Base64Util::Base64Encode(
+    std::string base64_settings = galay::utils::Base64Util::base64_encode(
         reinterpret_cast<const unsigned char*>(serialized.data() + kHttp2FrameHeaderLength),
         serialized.size() - kHttp2FrameHeaderLength);
     for (char& c : base64_settings) {
@@ -168,13 +168,13 @@ std::string encodeH2cSettingsHeader(const Http2SettingsFrame& frame) {
     return base64_settings;
 }
 
-bool assertBuilderConfigNormalization() {
+bool assert_builder_config_normalization() {
     bool ok = true;
 
     auto h2c_client = H2cClientBuilder()
-        .initialWindowSize(2147483648u)
-        .maxFrameSize(kMinFrameSize - 1)
-        .buildConfig();
+        .initial_window_size(2147483648u)
+        .max_frame_size(kMinFrameSize - 1)
+        .build_config();
     ok &= check(h2c_client.initial_window_size == 2147483647u,
                 "H2cClientBuilder must clamp INITIAL_WINDOW_SIZE");
     ok &= check(h2c_client.max_frame_size == kMinFrameSize,
@@ -182,9 +182,9 @@ bool assertBuilderConfigNormalization() {
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
     auto h2_client = H2ClientBuilder()
-        .initialWindowSize(2147483648u)
-        .maxFrameSize(kMaxFrameSize + 1)
-        .buildConfig();
+        .initial_window_size(2147483648u)
+        .max_frame_size(kMaxFrameSize + 1)
+        .build_config();
     ok &= check(h2_client.initial_window_size == 2147483647u,
                 "H2ClientBuilder must clamp INITIAL_WINDOW_SIZE");
     ok &= check(h2_client.max_frame_size == kMaxFrameSize,
@@ -192,9 +192,9 @@ bool assertBuilderConfigNormalization() {
 #endif
 
     auto h2c_server = H2cServerBuilder()
-        .initialWindowSize(2147483648u)
-        .maxFrameSize(kMinFrameSize - 1)
-        .buildConfig();
+        .initial_window_size(2147483648u)
+        .max_frame_size(kMinFrameSize - 1)
+        .build_config();
     ok &= check(h2c_server.initial_window_size == 2147483647u,
                 "H2cServerBuilder must clamp INITIAL_WINDOW_SIZE");
     ok &= check(h2c_server.max_frame_size == kMinFrameSize,
@@ -202,9 +202,9 @@ bool assertBuilderConfigNormalization() {
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
     auto h2_server = H2ServerBuilder()
-        .initialWindowSize(2147483648u)
-        .maxFrameSize(kMaxFrameSize + 1)
-        .buildConfig();
+        .initial_window_size(2147483648u)
+        .max_frame_size(kMaxFrameSize + 1)
+        .build_config();
     ok &= check(h2_server.initial_window_size == 2147483647u,
                 "H2ServerBuilder must clamp INITIAL_WINDOW_SIZE");
     ok &= check(h2_server.max_frame_size == kMaxFrameSize,
@@ -214,15 +214,15 @@ bool assertBuilderConfigNormalization() {
     return ok;
 }
 
-bool assertH2cUpgradeSettingsDecode() {
+bool assert_h2c_upgrade_settings_decode() {
     bool ok = true;
 
     Http2SettingsFrame upgrade_settings;
-    upgrade_settings.addSetting(Http2SettingsId::HeaderTableSize, 128);
-    upgrade_settings.addSetting(Http2SettingsId::InitialWindowSize, 65536);
-    upgrade_settings.addSetting(Http2SettingsId::MaxFrameSize, kMinFrameSize + 1024);
-    auto decoded = Http2Conn::decodeH2cUpgradeSettingsHeader(
-        encodeH2cSettingsHeader(upgrade_settings));
+    upgrade_settings.add_setting(Http2SettingsId::HeaderTableSize, 128);
+    upgrade_settings.add_setting(Http2SettingsId::InitialWindowSize, 65536);
+    upgrade_settings.add_setting(Http2SettingsId::MaxFrameSize, kMinFrameSize + 1024);
+    auto decoded = Http2Conn::decode_h2c_upgrade_settings_header(
+        encode_h2c_settings_header(upgrade_settings));
     ok &= check(decoded.has_value(),
                 "HTTP2-Settings header must decode successfully");
     ok &= check(decoded && decoded->settings().size() == 3,
@@ -237,7 +237,7 @@ bool assertH2cUpgradeSettingsDecode() {
                     decoded->settings()[2].value == kMinFrameSize + 1024,
                 "decoded HTTP2-Settings must preserve MAX_FRAME_SIZE");
 
-    auto invalid = Http2Conn::decodeH2cUpgradeSettingsHeader("%%%");
+    auto invalid = Http2Conn::decode_h2c_upgrade_settings_header("%%%");
     ok &= check(!invalid.has_value(),
                 "invalid HTTP2-Settings header must fail decoding");
     ok &= check(!invalid.has_value() && invalid.error() == Http2ErrorCode::ProtocolError,
@@ -245,11 +245,11 @@ bool assertH2cUpgradeSettingsDecode() {
     return ok;
 }
 
-Task<void> noopStreamHandler(Http2Stream::ptr) {
+Task<void> noop_stream_handler(Http2Stream::ptr) {
     co_return;
 }
 
-Task<void> runH2cUpgradeClient(uint16_t port) {
+Task<void> run_h2c_upgrade_client(uint16_t port) {
     H2cClient<> client(H2cClientBuilder().build());
 
     auto connect_result = co_await client.connect("127.0.0.1", port);
@@ -264,9 +264,9 @@ Task<void> runH2cUpgradeClient(uint16_t port) {
         co_return;
     }
 
-    auto* conn = client.getConn();
+    auto* conn = client.get_conn();
     if (conn != nullptr) {
-        const auto& peer = conn->peerSettings();
+        const auto& peer = conn->peer_settings();
         g_upgrade_ok = peer.max_concurrent_streams == 17 &&
                        peer.initial_window_size == 70000 &&
                        peer.max_frame_size == kMinFrameSize + 2048 &&
@@ -283,7 +283,7 @@ Task<void> runH2cUpgradeClient(uint16_t port) {
     co_return;
 }
 
-bool assertH2cUpgradeAppliesPeerSettings() {
+bool assert_h2c_upgrade_applies_peer_settings() {
     g_upgrade_done = false;
     g_upgrade_ok = false;
 
@@ -291,29 +291,29 @@ bool assertH2cUpgradeAppliesPeerSettings() {
     H2cServer server(H2cServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
-        .maxConcurrentStreams(17)
-        .initialWindowSize(70000)
-        .maxFrameSize(kMinFrameSize + 2048)
-        .maxHeaderListSize(1234)
-        .enablePush(false)
-        .streamHandler(noopStreamHandler)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
+        .max_concurrent_streams(17)
+        .initial_window_size(70000)
+        .max_frame_size(kMinFrameSize + 2048)
+        .max_header_list_size(1234)
+        .enable_push(false)
+        .stream_handler(noop_stream_handler)
         .build());
 
     server.start();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         server.stop();
         return false;
     }
 
-    if (!scheduleTask(scheduler, runH2cUpgradeClient(port))) {
+    if (!schedule_task(scheduler, run_h2c_upgrade_client(port))) {
         runtime.stop();
         server.stop();
         return false;
@@ -341,12 +341,12 @@ bool assertH2cUpgradeAppliesPeerSettings() {
 
 int main() {
     bool ok = true;
-    ok &= assertSettingsValueValidation();
-    ok &= assertSettingsFrameValidation();
-    ok &= assertHpackLimitsFollowSettings();
-    ok &= assertBuilderConfigNormalization();
-    ok &= assertH2cUpgradeSettingsDecode();
-    ok &= assertH2cUpgradeAppliesPeerSettings();
+    ok &= assert_settings_value_validation();
+    ok &= assert_settings_frame_validation();
+    ok &= assert_hpack_limits_follow_settings();
+    ok &= assert_builder_config_normalization();
+    ok &= assert_h2c_upgrade_settings_decode();
+    ok &= assert_h2c_upgrade_applies_peer_settings();
     if (!ok) {
         return 1;
     }

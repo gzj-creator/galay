@@ -48,7 +48,7 @@ struct HuffmanNode {
         : symbol(), frequency(l->frequency + r->frequency)
         , left(std::move(l)), right(std::move(r)) {}
 
-    bool isLeaf() const { return !left && !right; } ///< 判断是否为叶子节点
+    bool is_leaf() const { return !left && !right; } ///< 判断是否为叶子节点
 };
 
 /**
@@ -86,7 +86,7 @@ public:
      * @param code 编码值
      * @param length 编码位长
      */
-    void addCode(const T& symbol, uint32_t code, uint8_t length) {
+    void add_code(const T& symbol, uint32_t code, uint8_t length) {
         if (length > 32) {
             throw std::invalid_argument("Code length exceeds 32 bits");
         }
@@ -99,7 +99,7 @@ public:
      * @param symbol 目标符号
      * @return 哈夫曼编码引用
      */
-    const HuffmanCode& getCode(const T& symbol) const {
+    const HuffmanCode& get_code(const T& symbol) const {
         auto it = m_encodeTable.find(symbol);
         if (it == m_encodeTable.end()) {
             throw std::runtime_error("Symbol not found in table");
@@ -112,7 +112,7 @@ public:
      * @param symbol 目标符号
      * @return 存在返回 true
      */
-    bool hasSymbol(const T& symbol) const {
+    bool has_symbol(const T& symbol) const {
         return m_encodeTable.find(symbol) != m_encodeTable.end();
     }
 
@@ -122,7 +122,7 @@ public:
      * @param length 编码位长
      * @return 对应的符号引用
      */
-    const T& getSymbol(uint32_t code, uint8_t length) const {
+    const T& get_symbol(uint32_t code, uint8_t length) const {
         auto it = m_decodeTable.find({code, length});
         if (it == m_decodeTable.end()) {
             throw std::runtime_error("Code not found in table");
@@ -137,7 +137,7 @@ public:
      * @param symbol 输出符号
      * @return 成功返回 true
      */
-    bool tryGetSymbol(uint32_t code, uint8_t length, T& symbol) const {
+    bool try_get_symbol(uint32_t code, uint8_t length, T& symbol) const {
         auto it = m_decodeTable.find({code, length});
         if (it != m_decodeTable.end()) {
             symbol = it->second;
@@ -150,7 +150,7 @@ public:
      * @brief 获取所有符号列表
      * @return 符号向量
      */
-    std::vector<T> getSymbols() const {
+    std::vector<T> get_symbols() const {
         std::vector<T> result;
         result.reserve(m_encodeTable.size());
         for (const auto& [sym, code] : m_encodeTable) {
@@ -217,8 +217,8 @@ public:
      * @param symbol 待编码的符号
      */
     void encode(const T& symbol) {
-        const auto& code = m_table.getCode(symbol);
-        appendBits(code.code, code.length);
+        const auto& code = m_table.get_code(symbol);
+        append_bits(code.code, code.length);
     }
 
     /**
@@ -248,7 +248,7 @@ public:
      * @brief 获取当前编码位总数
      * @return 位数量
      */
-    size_t bitCount() const {
+    size_t bit_count() const {
         return m_output.size() * 8 + m_bufferBits;
     }
 
@@ -262,7 +262,7 @@ public:
     }
 
 private:
-    void appendBits(uint32_t bits, uint8_t count) {
+    void append_bits(uint32_t bits, uint8_t count) {
         while (count > 0) {
             uint8_t available = 8 - m_bufferBits;
             uint8_t toWrite = std::min(available, count);
@@ -328,7 +328,7 @@ public:
 
             if (codeLen >= m_minCodeLen) {
                 T symbol;
-                if (m_table.tryGetSymbol(code, codeLen, symbol)) {
+                if (m_table.try_get_symbol(code, codeLen, symbol)) {
                     result.push_back(symbol);
                     code = 0;
                     codeLen = 0;
@@ -395,7 +395,7 @@ public:
 
         HuffmanTable<T> table;
         if (!pq.empty()) {
-            generateCodes(pq.top().get(), 0, 0, table);
+            generate_codes(pq.top().get(), 0, 0, table);
         }
 
         return table;
@@ -406,7 +406,7 @@ public:
      * @param data 原始符号数据
      * @return 构建好的哈夫曼编码表
      */
-    static HuffmanTable<T> buildFromData(const std::vector<T>& data) {
+    static HuffmanTable<T> build_from_data(const std::vector<T>& data) {
         std::unordered_map<T, size_t> frequencies;
         for (const auto& item : data) {
             ++frequencies[item];
@@ -415,21 +415,21 @@ public:
     }
 
 private:
-    static void generateCodes(HuffmanNode<T>* node, uint32_t code, uint8_t length,
+    static void generate_codes(HuffmanNode<T>* node, uint32_t code, uint8_t length,
                               HuffmanTable<T>& table) {
         if (!node) return;
 
-        if (node->isLeaf()) {
+        if (node->is_leaf()) {
             if (length == 0) {
-                table.addCode(node->symbol, 0, 1);
+                table.add_code(node->symbol, 0, 1);
             } else {
-                table.addCode(node->symbol, code, length);
+                table.add_code(node->symbol, code, length);
             }
             return;
         }
 
-        generateCodes(node->left.get(), (code << 1), length + 1, table);
-        generateCodes(node->right.get(), (code << 1) | 1, length + 1, table);
+        generate_codes(node->left.get(), (code << 1), length + 1, table);
+        generate_codes(node->right.get(), (code << 1) | 1, length + 1, table);
     }
 };
 

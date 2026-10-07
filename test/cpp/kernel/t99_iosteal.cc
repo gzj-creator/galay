@@ -38,7 +38,7 @@ using namespace std::chrono_literals;
 
 namespace {
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 1500ms,
                std::chrono::milliseconds step = 1ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -51,7 +51,7 @@ bool waitUntil(auto&& predicate,
     return predicate();
 }
 
-void waitForFlag(const std::atomic<bool>& flag) {
+void wait_for_flag(const std::atomic<bool>& flag) {
     while (!flag.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
@@ -63,20 +63,20 @@ struct RuntimePair {
     IOSchedulerType* sibling = nullptr;
 };
 
-void startRuntimePair(RuntimePair& pair, uint64_t tick_ns = 1'000'000ULL) {
+void start_runtime_pair(RuntimePair& pair, uint64_t tick_ns = 1'000'000ULL) {
     const auto initialized = pair.runtime.start();
     if (!initialized) { throw std::runtime_error("runtime initialization failed"); }
     pair.runtime.stop();
-    pair.source = pair.runtime.getIOScheduler(0);
-    pair.sibling = pair.runtime.getIOScheduler(1);
-    pair.source->replaceTimerManager(TimingWheelTimerManager(tick_ns));
-    pair.sibling->replaceTimerManager(TimingWheelTimerManager(tick_ns));
+    pair.source = pair.runtime.get_io_scheduler(0);
+    pair.sibling = pair.runtime.get_io_scheduler(1);
+    pair.source->replace_timer_manager(TimingWheelTimerManager(tick_ns));
+    pair.sibling->replace_timer_manager(TimingWheelTimerManager(tick_ns));
     const auto started = pair.runtime.start();
     if (!started) { throw std::runtime_error("runtime restart failed"); }
 
-    const bool threads_ready = waitUntil([&]() {
-        return pair.source->threadId() != std::thread::id{} &&
-               pair.sibling->threadId() != std::thread::id{};
+    const bool threads_ready = wait_until([&]() {
+        return pair.source->thread_id() != std::thread::id{} &&
+               pair.sibling->thread_id() != std::thread::id{};
     });
     if (!threads_ready) {
         throw std::runtime_error("scheduler threads did not start in time");
@@ -92,32 +92,32 @@ struct NoStealScenarioState {
     std::atomic<int> unknown_thread{0};
 };
 
-Task<void> sourceOwnedTask(NoStealScenarioState* state,
+Task<void> source_owned_task(NoStealScenarioState* state,
                            IOScheduler* source,
                            IOScheduler* sibling) {
     const auto tid = std::this_thread::get_id();
-    if (tid == source->threadId()) {
+    if (tid == source->thread_id()) {
         state->ran_on_source.fetch_add(1, std::memory_order_relaxed);
-    } else if (tid == sibling->threadId()) {
+    } else if (tid == sibling->thread_id()) {
         state->ran_on_sibling.fetch_add(1, std::memory_order_relaxed);
     } else {
         state->unknown_thread.fetch_add(1, std::memory_order_relaxed);
     }
 
     state->entered.fetch_add(1, std::memory_order_release);
-    waitForFlag(state->release);
+    wait_for_flag(state->release);
     state->completed.fetch_add(1, std::memory_order_release);
     co_return;
 }
 
-bool runConcreteIOSchedulerDoesNotStealScenario() {
+bool run_concrete_io_scheduler_does_not_steal_scenario() {
     constexpr int kTaskCount = 64;
     RuntimePair pair;
-    startRuntimePair(pair);
+    start_runtime_pair(pair);
     NoStealScenarioState state;
 
     for (int i = 0; i < kTaskCount; ++i) {
-        if (!scheduleTask(*pair.source, sourceOwnedTask(&state, pair.source, pair.sibling))) {
+        if (!schedule_task(*pair.source, source_owned_task(&state, pair.source, pair.sibling))) {
             std::cerr << "[T99] " << kBackendName
                       << " failed to enqueue source task " << i << "\n";
             state.release.store(true, std::memory_order_release);
@@ -126,15 +126,15 @@ bool runConcreteIOSchedulerDoesNotStealScenario() {
         }
     }
 
-    const bool first_entered = waitUntil([&]() {
+    const bool first_entered = wait_until([&]() {
         return state.entered.load(std::memory_order_acquire) > 0;
     }, 2000ms);
-    const bool sibling_ran = waitUntil([&]() {
+    const bool sibling_ran = wait_until([&]() {
         return state.ran_on_sibling.load(std::memory_order_acquire) > 0;
     }, 500ms);
 
     state.release.store(true, std::memory_order_release);
-    const bool completed = waitUntil([&]() {
+    const bool completed = wait_until([&]() {
         return state.completed.load(std::memory_order_acquire) == kTaskCount;
     }, 4000ms);
 
@@ -173,7 +173,7 @@ bool runConcreteIOSchedulerDoesNotStealScenario() {
 
 int main() {
     try {
-        if (!runConcreteIOSchedulerDoesNotStealScenario()) {
+        if (!run_concrete_io_scheduler_does_not_steal_scenario()) {
             return 1;
         }
     } catch (const std::exception& ex) {

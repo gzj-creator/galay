@@ -24,7 +24,7 @@ namespace galay::kernel {
 /**
  * @brief 固定容量的 Chase-Lev 本地就绪环
  * @details 本地线程 push_back/pop_back，窃取者 steal_front。调用
- *          setStealingEnabled(false) 后（IO 调度器均如此）退化为 owner-only
+ *          set_stealing_enabled(false) 后（IO 调度器均如此）退化为 owner-only
  *          环：pop 不再发 seq_cst 仲裁栅栏，steal_front 直接拒绝。
  */
 class ChaseLevTaskRing {
@@ -46,7 +46,7 @@ public:
     ChaseLevTaskRing& operator=(const ChaseLevTaskRing&) = delete;
 
     bool push_back(detail::ReadyEntry& entry) {
-        if (!entry.isValid()) {
+        if (!entry.is_valid()) {
             return false;
         }
         const uint64_t tail = m_tail.load(std::memory_order_relaxed);
@@ -73,14 +73,14 @@ public:
     }
 
     bool push_back(TaskRef&& task) {
-        if (!task.isValid()) {
+        if (!task.is_valid()) {
             return false;
         }
         detail::ReadyEntry entry(std::move(task));
         if (push_back(entry)) {
             return true;
         }
-        task = detail::readyEntryToTaskRef(entry);
+        task = detail::ready_entry_to_task_ref(entry);
         return false;
     }
 
@@ -102,7 +102,7 @@ public:
             if (encoded == 0) {
                 return false;
             }
-            out = detail::ReadyEntry::fromEncoded(encoded);
+            out = detail::ReadyEntry::from_encoded(encoded);
             return true;
         }
         uint64_t tail = m_tail.load(std::memory_order_relaxed);
@@ -130,14 +130,14 @@ public:
             if (encoded == 0) {
                 return false;
             }
-            out = detail::ReadyEntry::fromEncoded(encoded);
+            out = detail::ReadyEntry::from_encoded(encoded);
             return true;
         }
         const uintptr_t encoded = m_slots[index].exchange(0, std::memory_order_relaxed);
         if (encoded == 0) {
             return false;
         }
-        out = detail::ReadyEntry::fromEncoded(encoded);
+        out = detail::ReadyEntry::from_encoded(encoded);
         return true;
     }
 
@@ -146,13 +146,13 @@ public:
         if (!pop_back(entry)) {
             return false;
         }
-        if (!entry.isCppTask()) {
+        if (!entry.is_cpp_task()) {
             if (!push_back(entry)) {
-                detail::releaseReadyEntry(entry);
+                detail::release_ready_entry(entry);
             }
             return false;
         }
-        out = detail::readyEntryToTaskRef(entry);
+        out = detail::ready_entry_to_task_ref(entry);
         return true;
     }
 
@@ -179,8 +179,8 @@ public:
             return false;
         }
 
-        detail::ReadyEntry entry = detail::ReadyEntry::fromEncoded(encoded);
-        if (detail::readyEntryResumeOwnerOnly(entry)) {
+        detail::ReadyEntry entry = detail::ReadyEntry::from_encoded(encoded);
+        if (detail::ready_entry_resume_owner_only(entry)) {
             out = std::move(entry);
             return false;
         }
@@ -192,23 +192,23 @@ public:
     bool steal_front(TaskRef& out) {
         detail::ReadyEntry entry;
         if (!steal_front(entry)) {
-            if (entry.isValid() && !detail::scheduleReadyEntry(entry)) {
-                detail::releaseReadyEntry(entry);
+            if (entry.is_valid() && !detail::schedule_ready_entry(entry)) {
+                detail::release_ready_entry(entry);
             }
             return false;
         }
-        if (!entry.isCppTask()) {
-            if (!detail::scheduleReadyEntry(entry)) {
-                detail::releaseReadyEntry(entry);
+        if (!entry.is_cpp_task()) {
+            if (!detail::schedule_ready_entry(entry)) {
+                detail::release_ready_entry(entry);
             }
             return false;
         }
-        out = detail::readyEntryToTaskRef(entry);
+        out = detail::ready_entry_to_task_ref(entry);
         return true;
     }
 
     // 仅在启动前或所有 owner/stealer 都已停止后切换模式。
-    void setStealingEnabled(bool enabled) noexcept {
+    void set_stealing_enabled(bool enabled) noexcept {
         m_stealing_enabled = enabled;
     }
 
@@ -218,7 +218,7 @@ public:
         return static_cast<size_t>(tail - head);
     }
 
-    size_t remainingCapacity() const noexcept {
+    size_t remaining_capacity() const noexcept {
         const size_t current = size();
         return (current >= kCapacity) ? 0 : (kCapacity - current);
     }
@@ -234,8 +234,8 @@ public:
             const uintptr_t encoded =
                 m_slots[index & kMask].exchange(0, std::memory_order_relaxed);
             if (encoded != 0) {
-                detail::ReadyEntry entry = detail::ReadyEntry::fromEncoded(encoded);
-                detail::releaseReadyEntry(entry);
+                detail::ReadyEntry entry = detail::ReadyEntry::from_encoded(encoded);
+                detail::release_ready_entry(entry);
             }
         }
         m_head.store(tail, std::memory_order_relaxed);
@@ -282,14 +282,14 @@ struct IOReadyQueue {
 
     ~IOReadyQueue()
     {
-        clearPendingReadyEntries();
+        clear_pending_ready_entries();
     }
 
     /**
      * @brief 调整跨线程注入批量缓冲区大小
      * @param inject_batch_size 目标批量大小；最小会被修正为 1
      */
-    void resizeInjectBuffer(size_t inject_batch_size) {
+    void resize_inject_buffer(size_t inject_batch_size) {
         ready_inject_buffer.resize(std::max<size_t>(1, inject_batch_size));
     }
 
@@ -298,47 +298,47 @@ struct IOReadyQueue {
      * @param task 待入队的任务；无效任务会被忽略
      * @details 优先复用 LIFO 槽位以减少最近恢复任务的调度延迟
      */
-    void scheduleLocal(TaskRef task) {
-        if (!task.isValid()) {
+    void schedule_local(TaskRef task) {
+        if (!task.is_valid()) {
             return;
         }
-        scheduleLocal(detail::ReadyEntry(std::move(task)));
+        schedule_local(detail::ReadyEntry(std::move(task)));
     }
 
-    void scheduleLocal(detail::ReadyEntry entry) {
-        if (!entry.isValid()) {
+    void schedule_local(detail::ReadyEntry entry) {
+        if (!entry.is_valid()) {
             return;
         }
         if (lifo_enabled) {
             if (ready_lifo_slot.has_value()) {
                 detail::ReadyEntry deferred = std::move(*ready_lifo_slot);
-                enqueueDeferred(deferred);
+                enqueue_deferred(deferred);
                 ready_lifo_slot.reset();
             }
             ready_lifo_slot = std::move(entry);
             return;
         }
-        enqueueDeferred(entry);
-        detail::releaseReadyEntry(entry);
+        enqueue_deferred(entry);
+        detail::release_ready_entry(entry);
     }
 
     /**
      * @brief 将任务以 FIFO 方式追加到本地队列尾部
      * @param task 待入队的任务；无效任务会被忽略
      */
-    void scheduleLocalDeferred(TaskRef task) {
-        if (!task.isValid()) {
+    void schedule_local_deferred(TaskRef task) {
+        if (!task.is_valid()) {
             return;
         }
-        scheduleLocalDeferred(detail::ReadyEntry(std::move(task)));
+        schedule_local_deferred(detail::ReadyEntry(std::move(task)));
     }
 
-    void scheduleLocalDeferred(detail::ReadyEntry entry) {
-        if (!entry.isValid()) {
+    void schedule_local_deferred(detail::ReadyEntry entry) {
+        if (!entry.is_valid()) {
             return;
         }
-        enqueueDeferredFifo(entry);
-        detail::releaseReadyEntry(entry);
+        enqueue_deferred_fifo(entry);
+        detail::release_ready_entry(entry);
     }
 
     /**
@@ -346,22 +346,22 @@ struct IOReadyQueue {
      * @param task 待入队任务
      * @return 有值表示注入成功，值为 true 时注入前队列为空；std::nullopt 表示任务无效或入队失败
      */
-    std::optional<bool> scheduleInjected(TaskRef task) {
-        if (!task.isValid()) {
+    std::optional<bool> schedule_injected(TaskRef task) {
+        if (!task.is_valid()) {
             return std::nullopt;
         }
-        return scheduleInjected(detail::ReadyEntry(std::move(task)));
+        return schedule_injected(detail::ReadyEntry(std::move(task)));
     }
 
-    std::optional<bool> scheduleInjected(detail::ReadyEntry entry) {
-        if (!entry.isValid()) {
+    std::optional<bool> schedule_injected(detail::ReadyEntry entry) {
+        if (!entry.is_valid()) {
             return std::nullopt;
         }
         const bool was_empty =
             injected_outstanding.fetch_add(1, std::memory_order_acq_rel) == 0;
         if (!ready_inject_queue.enqueue(std::move(entry))) {
             injected_outstanding.fetch_sub(1, std::memory_order_acq_rel);
-            detail::releaseReadyEntry(entry);
+            detail::release_ready_entry(entry);
             return std::nullopt;
         }
         return was_empty;
@@ -373,8 +373,8 @@ struct IOReadyQueue {
      *         std::nullopt。
      * @details TaskState 自带侵入链接，因此该路径不依赖 ConcurrentQueue 分配。
      */
-    std::optional<bool> scheduleResume(TaskRef task) noexcept {
-        if (!task.isValid()) {
+    std::optional<bool> schedule_resume(TaskRef task) noexcept {
+        if (!task.is_valid()) {
             return std::nullopt;
         }
         const bool was_empty =
@@ -387,7 +387,7 @@ struct IOReadyQueue {
     }
 
     /** @brief 停止接纳新的 owner-only 恢复请求；已接纳节点仍由 owner 排空。 */
-    void closeResumeAdmission() noexcept {
+    void close_resume_admission() noexcept {
         ready_resume_queue.close();
     }
 
@@ -395,7 +395,7 @@ struct IOReadyQueue {
      * @brief 在 scheduler 重启前重新开放恢复请求。
      * @return 前一运行周期已完整排空时返回 true；仍有 owner 本地节点时返回 false。
      */
-    [[nodiscard]] bool reopenResumeAdmission() noexcept {
+    [[nodiscard]] bool reopen_resume_admission() noexcept {
         return ready_resume_local == nullptr && ready_resume_queue.reopen();
     }
 
@@ -403,15 +403,15 @@ struct IOReadyQueue {
      * @brief 将跨线程注入队列中的任务搬运到本地队列
      * @return 实际拉取并转移到本地队列的任务数量
      */
-    size_t drainInjected() {
+    size_t drain_injected() {
         if (ready_inject_buffer.empty()) {
             return 0;
         }
-        const size_t remaining = local_ring.remainingCapacity();
+        const size_t remaining = local_ring.remaining_capacity();
         if (remaining == 0) {
             return 0;
         }
-        const bool resume_pending = hasPendingResume();
+        const bool resume_pending = has_pending_resume();
         size_t normal_capacity = remaining;
         if (resume_pending) {
             if (remaining > 1) {
@@ -434,15 +434,15 @@ struct IOReadyQueue {
             if (local_ring.push_back(entry)) {
                 continue;
             }
-            fallbackToInject(entry);
-            detail::releaseReadyEntry(entry);
+            fallback_to_inject(entry);
+            detail::release_ready_entry(entry);
         }
 
         size_t resume_count = 0;
         if (count < remaining) {
             if (ready_resume_local == nullptr) {
                 ready_resume_local = detail::TaskResumeQueue::reverse(
-                    ready_resume_queue.takeAll());
+                    ready_resume_queue.take_all());
             }
             const size_t resume_limit = remaining - count;
             TaskState* resume_batch = ready_resume_local;
@@ -460,12 +460,12 @@ struct IOReadyQueue {
                 resume_batch = detail::TaskResumeQueue::reverse(resume_batch);
             }
             while (resume_batch != nullptr) {
-                TaskRef task = detail::TaskResumeQueue::popFront(resume_batch);
+                TaskRef task = detail::TaskResumeQueue::pop_front(resume_batch);
                 detail::ReadyEntry entry(std::move(task));
                 if (!local_ring.push_back(entry)) {
-                    TaskRef restored = detail::readyEntryToTaskRef(entry);
+                    TaskRef restored = detail::ready_entry_to_task_ref(entry);
                     TaskState* state =
-                        detail::TaskRefStorageAccess::releaseState(restored);
+                        detail::TaskRefStorageAccess::release_state(restored);
                     state->m_resume_queue_next = resume_batch;
                     TaskState* restored_fifo =
                         detail::TaskResumeQueue::reverse(state);
@@ -499,12 +499,12 @@ struct IOReadyQueue {
      * @brief 判断是否仍有跨线程注入任务待处理
      * @return true 仍有任务未从注入队列转移到本地队列
      */
-    bool hasPendingInjected() const {
+    bool has_pending_injected() const {
         return injected_outstanding.load(std::memory_order_acquire) > 0;
     }
 
     /** @brief 是否仍有专用 resume 节点尚未搬入本地 ready ring。 */
-    bool hasPendingResume() const noexcept {
+    bool has_pending_resume() const noexcept {
         return ready_resume_local != nullptr || !ready_resume_queue.empty();
     }
 
@@ -512,7 +512,7 @@ struct IOReadyQueue {
      * @brief 判断 owner 线程是否已经至少处理过一批跨线程注入任务
      * @details stealing 只能旁路后续积压，不能抢走 victim 首次注入批次的 owner-first 执行机会。
      */
-    bool hasOwnerDrainedInjected() const {
+    bool has_owner_drained_injected() const {
         return owner_drained_injected_once.load(std::memory_order_acquire);
     }
 
@@ -520,7 +520,7 @@ struct IOReadyQueue {
      * @brief 判断当前轮询周期是否应该检查注入队列
      * @return true 已达到检查阈值
      */
-    bool shouldCheckInjected() const {
+    bool should_check_injected() const {
         return polls_since_inject >= inject_check_interval;
     }
 
@@ -528,7 +528,7 @@ struct IOReadyQueue {
      * @brief 判断本地执行队列是否仍有任务
      * @return true LIFO 槽位或 FIFO 队列中仍有待执行任务
      */
-    bool hasLocalWork() const {
+    bool has_local_work() const {
         return ready_lifo_slot.has_value() || !local_ring.empty();
     }
 
@@ -536,11 +536,11 @@ struct IOReadyQueue {
      * @brief 在取任务前整理本地调度状态
      * @details 当连续命中 LIFO 槽位过多时，将其回退到 FIFO 队列避免饥饿
      */
-    void prepareForRun() {
+    void prepare_for_run() {
         if (lifo_enabled && ready_lifo_slot.has_value() && consecutive_lifo_polls >= lifo_poll_limit) {
             detail::ReadyEntry deferred = std::move(*ready_lifo_slot);
-            enqueueDeferred(deferred);
-            detail::releaseReadyEntry(deferred);
+            enqueue_deferred(deferred);
+            detail::release_ready_entry(deferred);
             ready_lifo_slot.reset();
             lifo_enabled = false;
             consecutive_lifo_polls = 0;
@@ -552,8 +552,8 @@ struct IOReadyQueue {
      * @param out 成功时写入取出的任务
      * @return true 取到了任务；false 本地无任务可执行
      */
-    bool popNext(detail::ReadyEntry& out) {
-        prepareForRun();
+    bool pop_next(detail::ReadyEntry& out) {
+        prepare_for_run();
 
         if (ready_lifo_slot.has_value()) {
             out = std::move(*ready_lifo_slot);
@@ -573,42 +573,42 @@ struct IOReadyQueue {
         return false;
     }
 
-    bool popNext(TaskRef& out) {
+    bool pop_next(TaskRef& out) {
         detail::ReadyEntry entry;
-        if (!popNext(entry)) {
+        if (!pop_next(entry)) {
             return false;
         }
-        if (!entry.isCppTask()) {
-            scheduleLocal(std::move(entry));
+        if (!entry.is_cpp_task()) {
+            schedule_local(std::move(entry));
             return false;
         }
-        out = detail::readyEntryToTaskRef(entry);
+        out = detail::ready_entry_to_task_ref(entry);
         return true;
     }
 
     /**
      * @brief 供 stealing 路径调用的入口
      */
-    bool stealFront(detail::ReadyEntry& out) {
+    bool steal_front(detail::ReadyEntry& out) {
         if (local_ring.steal_front(out)) {
             return true;
         }
-        if (out.isValid()) {
-            fallbackToInject(out);
+        if (out.is_valid()) {
+            fallback_to_inject(out);
         }
         return false;
     }
 
-    bool stealFront(TaskRef& out) {
+    bool steal_front(TaskRef& out) {
         detail::ReadyEntry entry;
-        if (!stealFront(entry)) {
+        if (!steal_front(entry)) {
             return false;
         }
-        if (!entry.isCppTask()) {
-            scheduleLocal(std::move(entry));
+        if (!entry.is_cpp_task()) {
+            schedule_local(std::move(entry));
             return false;
         }
-        out = detail::readyEntryToTaskRef(entry);
+        out = detail::ready_entry_to_task_ref(entry);
         return true;
     }
 
@@ -616,9 +616,9 @@ struct IOReadyQueue {
      * @brief 尝试从 sibling scheduler 偷任务（后续 task 需求）
      * @return true 表示 stealing 成功，应立即回到 ready pass
      */
-    bool trySteal();
+    bool try_steal();
 
-    IOSchedulerStealStats snapshotStealStats() const noexcept {
+    IOSchedulerStealStats snapshot_steal_stats() const noexcept {
         return IOSchedulerStealStats{
             .steal_attempts = steal_attempts,
             .steal_successes = steal_successes,
@@ -637,22 +637,22 @@ struct IOReadyQueue {
     /**
      * @brief 配置本地 worker 的 steal-domain 元数据
      */
-    void configureStealDomain(size_t index, std::span<IOScheduler* const> view) noexcept
+    void configure_steal_domain(size_t index, std::span<IOScheduler* const> view) noexcept
     {
         self_index = index;
         siblings = view;
     }
 
-    void setStealingEnabled(bool enabled) noexcept {
+    void set_stealing_enabled(bool enabled) noexcept {
         stealing_enabled = enabled;
-        local_ring.setStealingEnabled(enabled);
+        local_ring.set_stealing_enabled(enabled);
     }
 
     std::mt19937 random_seed{std::random_device{}()};  ///< 用于 victim 选择的随机器
 
     std::atomic<uint64_t> injected_outstanding{0};  ///< 尚未搬运到本地队列的注入任务数
-    uint64_t steal_attempts = 0;  ///< trySteal() 进入真实 sibling 探测的次数
-    uint64_t steal_successes = 0;  ///< trySteal() 成功窃取至少一个任务的次数
+    uint64_t steal_attempts = 0;  ///< try_steal() 进入真实 sibling 探测的次数
+    uint64_t steal_successes = 0;  ///< try_steal() 成功窃取至少一个任务的次数
     uint32_t consecutive_lifo_polls = 0;  ///< 连续命中 ready_lifo_slot 的次数
     uint32_t lifo_poll_limit = 8;  ///< 允许连续走 LIFO 的最大次数
     uint32_t polls_since_inject = 0;  ///< 距离上次检查 ready_inject_queue 已轮询的任务数
@@ -663,45 +663,45 @@ struct IOReadyQueue {
     bool prefer_resume_on_single_slot = true;  ///< 普通注入与 resume 同时积压时轮换最后一个 ring 槽
 
 private:
-    void clearPendingReadyEntries() noexcept {
+    void clear_pending_ready_entries() noexcept {
         ready_lifo_slot.reset();
         local_ring.clear();
 
         detail::ReadyEntry entry;
         while (ready_inject_queue.try_dequeue(entry)) {
-            detail::releaseReadyEntry(entry);
+            detail::release_ready_entry(entry);
         }
         for (auto& buffered : ready_inject_buffer) {
-            detail::releaseReadyEntry(buffered);
+            detail::release_ready_entry(buffered);
         }
-        detail::TaskResumeQueue::releaseAll(ready_resume_local);
+        detail::TaskResumeQueue::release_all(ready_resume_local);
         ready_resume_local = nullptr;
-        detail::TaskResumeQueue::releaseAll(ready_resume_queue.takeAll());
+        detail::TaskResumeQueue::release_all(ready_resume_queue.take_all());
         injected_outstanding.store(0, std::memory_order_release);
     }
 
-    void enqueueDeferred(detail::ReadyEntry& entry) {
-        if (!entry.isValid()) {
+    void enqueue_deferred(detail::ReadyEntry& entry) {
+        if (!entry.is_valid()) {
             return;
         }
-        if (local_ring.remainingCapacity() == 0) {
-            fallbackToInject(entry);
+        if (local_ring.remaining_capacity() == 0) {
+            fallback_to_inject(entry);
             return;
         }
         if (!local_ring.push_back(entry)) {
-            fallbackToInject(entry);
+            fallback_to_inject(entry);
         }
     }
 
-    void enqueueDeferredFifo(detail::ReadyEntry& entry) {
-        if (!entry.isValid()) {
+    void enqueue_deferred_fifo(detail::ReadyEntry& entry) {
+        if (!entry.is_valid()) {
             return;
         }
-        fallbackToInject(entry);
+        fallback_to_inject(entry);
     }
 
-    void fallbackToInject(detail::ReadyEntry& entry) {
-        if (!entry.isValid()) {
+    void fallback_to_inject(detail::ReadyEntry& entry) {
+        if (!entry.is_valid()) {
             return;
         }
         injected_outstanding.fetch_add(1, std::memory_order_acq_rel);
@@ -709,7 +709,7 @@ private:
             return;
         }
         injected_outstanding.fetch_sub(1, std::memory_order_acq_rel);
-        detail::releaseReadyEntry(entry);
+        detail::release_ready_entry(entry);
     }
 };
 

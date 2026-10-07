@@ -12,11 +12,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -25,23 +25,23 @@ std::string readAll(const std::filesystem::path& path) {
                        std::istreambuf_iterator<char>());
 }
 
-bool containsText(const std::string& haystack, const std::string& needle) {
+bool contains_text(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto iohandlers = root / "galay-kernel" / "core" / "io_handlers.hpp";
     const auto iocontroller = root / "galay-kernel" / "core" / "io_controller.hpp";
     const auto iouring = root / "galay-kernel" / "core" / "uring_reactor.cc";
     const auto kqueue = root / "galay-kernel" / "core" / "kqueue_reactor.cc";
 
-    const std::string iohandlers_text = readAll(iohandlers);
-    const std::string iocontroller_text = readAll(iocontroller);
-    const std::string iouring_text = readAll(iouring);
-    const std::string kqueue_text = readAll(kqueue);
+    const std::string iohandlers_text = read_all(iohandlers);
+    const std::string iocontroller_text = read_all(iocontroller);
+    const std::string iouring_text = read_all(iouring);
+    const std::string kqueue_text = read_all(kqueue);
 
     if (iohandlers_text.empty() || iocontroller_text.empty() ||
         iouring_text.empty() || kqueue_text.empty()) {
@@ -49,43 +49,43 @@ int main() {
         return 1;
     }
 
-    if (!containsText(iohandlers_text, "accept4(")) {
+    if (!contains_text(iohandlers_text, "accept4(")) {
         std::cerr << "[T105] expected IOHandlers accept path to use accept4\n";
         return 1;
     }
-    if (!containsText(iohandlers_text, "SOCK_NONBLOCK | SOCK_CLOEXEC")) {
+    if (!contains_text(iohandlers_text, "SOCK_NONBLOCK | SOCK_CLOEXEC")) {
         std::cerr << "[T105] expected IOHandlers accept path to request nonblock + cloexec\n";
         return 1;
     }
-    if ((!containsText(iouring_text, "io_uring_prep_accept(") &&
-         !containsText(iouring_text, "io_uring_prep_multishot_accept(")) ||
-        !containsText(iouring_text, "SOCK_NONBLOCK | SOCK_CLOEXEC")) {
+    if ((!contains_text(iouring_text, "io_uring_prep_accept(") &&
+         !contains_text(iouring_text, "io_uring_prep_multishot_accept(")) ||
+        !contains_text(iouring_text, "SOCK_NONBLOCK | SOCK_CLOEXEC")) {
         std::cerr << "[T105] expected io_uring accept path to request nonblock + cloexec\n";
         return 1;
     }
 
-    if (!containsText(kqueue_text, "EVFILT_USER")) {
+    if (!contains_text(kqueue_text, "EVFILT_USER")) {
         std::cerr << "[T105] expected kqueue wakeup path to use EVFILT_USER\n";
         return 1;
     }
-    if (containsText(kqueue_text, "pipe(m_notify_pipe)")) {
+    if (contains_text(kqueue_text, "pipe(m_notify_pipe)")) {
         std::cerr << "[T105] expected kqueue wakeup path to stop creating a notify pipe\n";
         return 1;
     }
-    if (!containsText(kqueue_text, "NOTE_TRIGGER")) {
+    if (!contains_text(kqueue_text, "NOTE_TRIGGER")) {
         std::cerr << "[T105] expected kqueue notify path to trigger NOTE_TRIGGER\n";
         return 1;
     }
 
-    if (containsText(iocontroller_text, "new (std::nothrow) SqeRequestHandle")) {
+    if (contains_text(iocontroller_text, "new (std::nothrow) SqeRequestHandle")) {
         std::cerr << "[T105] expected IOController to stop heap allocating SqeRequestHandle\n";
         return 1;
     }
-    if (!containsText(iocontroller_text, "std::shared_ptr<SqeHandleArena> m_sqe_handle_pool[SIZE]")) {
+    if (!contains_text(iocontroller_text, "std::shared_ptr<SqeHandleArena> m_sqe_handle_pool[SIZE]")) {
         std::cerr << "[T105] expected IOController to keep per-slot stable SqeHandleArena pools\n";
         return 1;
     }
-    if (containsText(iouring_text, "std::unique_ptr<SqeRequestHandle> handle")) {
+    if (contains_text(iouring_text, "std::unique_ptr<SqeRequestHandle> handle")) {
         std::cerr << "[T105] expected IOUringReactor completion path to stop owning handle via unique_ptr\n";
         return 1;
     }

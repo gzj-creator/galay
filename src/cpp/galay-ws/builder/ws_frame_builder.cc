@@ -72,7 +72,7 @@ WsFrameBuilder& WsFrameBuilder::pong(const std::string& data)
 
 WsFrameBuilder& WsFrameBuilder::close(WsCloseCode code, const std::string& reason)
 {
-    return opcode(WsOpcode::Close).fin(true).payload(buildWsClosePayload(code, reason));
+    return opcode(WsOpcode::Close).fin(true).payload(build_ws_close_payload(code, reason));
 }
 
 WsFrame WsFrameBuilder::build() const
@@ -80,7 +80,7 @@ WsFrame WsFrameBuilder::build() const
     return m_frame;
 }
 
-WsFrame WsFrameBuilder::buildMove()
+WsFrame WsFrameBuilder::build_move()
 {
     return std::move(m_frame);
 }

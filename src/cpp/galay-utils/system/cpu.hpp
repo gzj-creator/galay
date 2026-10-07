@@ -31,7 +31,7 @@ struct CpuMask {
     std::size_t size;
 };
 
-[[nodiscard]] inline std::expected<CpuMask, std::error_code> queryCpuMask(pid_t pid)
+[[nodiscard]] inline std::expected<CpuMask, std::error_code> query_cpu_mask(pid_t pid)
 {
     // sched_getaffinity returns EINVAL when the userspace mask is too small.
     // Grow by whole words, as documented by CPU_ALLOC(3), without relying on
@@ -57,9 +57,9 @@ struct CpuMask {
 }
 
 [[nodiscard]] inline std::expected<std::vector<unsigned>, std::error_code>
-queryCpuAffinity(pid_t pid)
+query_cpu_affinity(pid_t pid)
 {
-    const auto mask = queryCpuMask(pid);
+    const auto mask = query_cpu_mask(pid);
     if (!mask) {
         return std::unexpected(mask.error());
     }
@@ -76,12 +76,12 @@ queryCpuAffinity(pid_t pid)
 }
 
 [[nodiscard]] inline std::expected<void, std::error_code>
-setCpuAffinity(pid_t pid, std::span<const unsigned> cpus)
+set_cpu_affinity(pid_t pid, std::span<const unsigned> cpus)
 {
     if (cpus.empty()) {
         return std::unexpected(std::make_error_code(std::errc::invalid_argument));
     }
-    auto mask = queryCpuMask(pid);
+    auto mask = query_cpu_mask(pid);
     if (!mask) {
         return std::unexpected(mask.error());
     }
@@ -119,10 +119,10 @@ public:
 
     /** @brief 查询系统在线 CPU ID 快照，不按当前线程的 cpuset 过滤。 */
     [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code>
-    onlineCpus()
+    online_cpus()
     {
 #if defined(__linux__)
-        return detail::readSystemIds("/sys/devices/system/cpu/online",
+        return detail::read_system_ids("/sys/devices/system/cpu/online",
                                     std::numeric_limits<int>::max());
 #else
         return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
@@ -130,7 +130,7 @@ public:
     }
 
     /** @brief 查询瞬间正在执行调用线程的 CPU ID；不保证后续绑定或不迁移。 */
-    [[nodiscard]] static std::expected<unsigned, std::error_code> currentId()
+    [[nodiscard]] static std::expected<unsigned, std::error_code> current_id()
     {
 #if defined(__linux__)
         const int cpu = sched_getcpu();
@@ -148,10 +148,10 @@ public:
 
     /** @brief 读取调用线程的有效 CPU mask，使用动态容量，不受 CPU_SETSIZE 限制。 */
     [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code>
-    cpuAffinity()
+    cpu_affinity()
     {
 #if defined(__linux__)
-        return detail::queryCpuAffinity(0);
+        return detail::query_cpu_affinity(0);
 #else
         return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
 #endif
@@ -163,14 +163,14 @@ public:
      *          cpuset、online CPU 等内核限制。回读失败时绑定可能已经生效。
      */
     [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code>
-    bindCurrentThread(std::span<const unsigned> cpus)
+    bind_current_thread(std::span<const unsigned> cpus)
     {
 #if defined(__linux__)
-        const auto set = detail::setCpuAffinity(0, cpus);
+        const auto set = detail::set_cpu_affinity(0, cpus);
         if (!set) {
             return std::unexpected(set.error());
         }
-        return cpuAffinity();
+        return cpu_affinity();
 #else
         (void)cpus;
         return std::unexpected(std::make_error_code(std::errc::operation_not_supported));

@@ -29,7 +29,7 @@ namespace detail {
  *          通过 `errno` 与结束指针判断失败，不使用异常。
  */
 template<typename T>
-std::expected<T, std::string> parseFloating(std::string_view text) {
+std::expected<T, std::string> parse_floating(std::string_view text) {
     const std::string buffer(text);
     char* end = nullptr;
     errno = 0;
@@ -66,7 +66,7 @@ struct CliValue {
     static_assert(std::is_arithmetic_v<T>, "unsupported cli value type");
 
     /// 类型名，用于帮助输出
-    static constexpr std::string_view typeName() noexcept {
+    static constexpr std::string_view type_name() noexcept {
         if constexpr (std::is_floating_point_v<T>) {
             return "float";
         } else if constexpr (std::is_unsigned_v<T>) {
@@ -86,7 +86,7 @@ struct CliValue {
             return std::unexpected(std::string("empty value"));
         }
         if constexpr (std::is_floating_point_v<T>) {
-            return detail::parseFloating<T>(text);
+            return detail::parse_floating<T>(text);
         } else {
             T out{};
             const char* first = text.data();
@@ -95,7 +95,7 @@ struct CliValue {
             if (result.ec != std::errc{}) {
                 return std::unexpected(result.ec == std::errc::result_out_of_range
                                            ? std::string("out of range")
-                                           : std::string("expected ") + std::string(typeName()));
+                                           : std::string("expected ") + std::string(type_name()));
             }
             if (result.ptr != last) {
                 return std::unexpected(std::string("trailing characters"));
@@ -105,13 +105,13 @@ struct CliValue {
     }
 
     /// 转为可读字符串，用于帮助输出
-    static std::string toString(const T& value) { return std::to_string(value); }
+    static std::string to_string(const T& value) { return std::to_string(value); }
 };
 
 /// bool 转换器：接受 true/false、1/0、yes/no、on/off
 template<>
 struct CliValue<bool> {
-    static constexpr std::string_view typeName() noexcept { return "bool"; }
+    static constexpr std::string_view type_name() noexcept { return "bool"; }
 
     static std::expected<bool, std::string> parse(std::string_view text) {
         if (text == "true" || text == "1" || text == "yes" || text == "on") {
@@ -123,19 +123,19 @@ struct CliValue<bool> {
         return std::unexpected(std::string("expected true/false"));
     }
 
-    static std::string toString(bool value) { return value ? "true" : "false"; }
+    static std::string to_string(bool value) { return value ? "true" : "false"; }
 };
 
 /// std::string 转换器：原样透传
 template<>
 struct CliValue<std::string> {
-    static constexpr std::string_view typeName() noexcept { return "string"; }
+    static constexpr std::string_view type_name() noexcept { return "string"; }
 
     static std::expected<std::string, std::string> parse(std::string_view text) {
         return std::string(text);
     }
 
-    static std::string toString(const std::string& value) { return value; }
+    static std::string to_string(const std::string& value) { return value; }
 };
 
 } // namespace galay::utils

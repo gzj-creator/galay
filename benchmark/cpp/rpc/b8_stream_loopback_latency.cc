@@ -33,7 +33,7 @@ struct Stats {
     std::vector<uint64_t> latency_us;
 };
 
-uint16_t pickPort()
+uint16_t pick_port()
 {
     const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
     return static_cast<uint16_t>(30000 + (static_cast<uint64_t>(ticks) % 12000));
@@ -43,7 +43,7 @@ class StreamBenchService : public RpcService {
 public:
     StreamBenchService() : RpcService("StreamBenchLoopback")
     {
-        registerStreamMethod("echo", &StreamBenchService::echo);
+        register_stream_method("echo", &StreamBenchService::echo);
     }
 
     Task<void> echo(RpcStream& stream)
@@ -54,33 +54,33 @@ public:
             if (!recv_result.has_value()) {
                 co_return;
             }
-            if (msg.messageType() == RpcMessageType::STREAM_DATA) {
-                auto send_result = co_await stream.sendData(msg.payloadView());
+            if (msg.message_type() == RpcMessageType::STREAM_DATA) {
+                auto send_result = co_await stream.send_data(msg.payload_view());
                 if (!send_result.has_value()) {
                     co_return;
                 }
                 continue;
             }
-            if (msg.messageType() == RpcMessageType::STREAM_END) {
-                (void)co_await stream.sendEnd();
+            if (msg.message_type() == RpcMessageType::STREAM_END) {
+                (void)co_await stream.send_end();
                 co_return;
             }
-            (void)co_await stream.sendCancel();
+            (void)co_await stream.send_cancel();
             co_return;
         }
     }
 };
 
-Task<void> runClient(uint16_t port, const Config* config, Stats* stats)
+Task<void> run_client(uint16_t port, const Config* config, Stats* stats)
 {
-    RpcClient client = RpcClientBuilder().ringBufferSize(256 * 1024).build();
+    RpcClient client = RpcClientBuilder().ring_buffer_size(256 * 1024).build();
     auto connected = co_await client.connect("127.0.0.1", port);
     if (!connected.has_value()) {
         stats->errors = config->frames;
         co_return;
     }
 
-    auto stream_result = client.createStream(1, "StreamBenchLoopback", "echo");
+    auto stream_result = client.create_stream(1, "StreamBenchLoopback", "echo");
     if (!stream_result.has_value()) {
         stats->errors = config->frames;
         (void)co_await client.close();
@@ -88,7 +88,7 @@ Task<void> runClient(uint16_t port, const Config* config, Stats* stats)
     }
     auto stream = std::move(stream_result.value());
 
-    auto send_result = co_await stream.sendInit().timeout(500ms);
+    auto send_result = co_await stream.send_init().timeout(500ms);
     if (!send_result.has_value()) {
         stats->errors = config->frames;
         (void)co_await client.close();
@@ -97,7 +97,7 @@ Task<void> runClient(uint16_t port, const Config* config, Stats* stats)
 
     StreamMessage ack;
     auto recv_result = co_await stream.read(ack).timeout(500ms);
-    if (!recv_result.has_value() || ack.messageType() != RpcMessageType::STREAM_INIT_ACK) {
+    if (!recv_result.has_value() || ack.message_type() != RpcMessageType::STREAM_INIT_ACK) {
         stats->errors = config->frames;
         (void)co_await client.close();
         co_return;
@@ -109,7 +109,7 @@ Task<void> runClient(uint16_t port, const Config* config, Stats* stats)
     for (int i = 0; i < config->frames; ++i) {
         ++stats->sent;
         const auto begin = std::chrono::steady_clock::now();
-        auto frame_send = co_await stream.sendData(payload).timeout(1s);
+        auto frame_send = co_await stream.send_data(payload).timeout(1s);
         if (!frame_send.has_value()) {
             ++stats->errors;
             continue;
@@ -119,8 +119,8 @@ Task<void> runClient(uint16_t port, const Config* config, Stats* stats)
         recv_result = co_await stream.read(echo).timeout(1s);
         const auto end = std::chrono::steady_clock::now();
         if (!recv_result.has_value() ||
-            echo.messageType() != RpcMessageType::STREAM_DATA ||
-            !echo.payloadEquals(payload)) {
+            echo.message_type() != RpcMessageType::STREAM_DATA ||
+            !echo.payload_equals(payload)) {
             ++stats->errors;
             continue;
         }
@@ -131,18 +131,18 @@ Task<void> runClient(uint16_t port, const Config* config, Stats* stats)
             std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()));
     }
 
-    (void)co_await stream.sendEnd().timeout(1s);
+    (void)co_await stream.send_end().timeout(1s);
     StreamMessage end_frame;
     (void)co_await stream.read(end_frame).timeout(1s);
     (void)co_await client.close();
 }
 
-bool runClientWithRetry(uint16_t port, const Config& config, Stats* stats)
+bool run_client_with_retry(uint16_t port, const Config& config, Stats* stats)
 {
     for (int attempt = 0; attempt < 50; ++attempt) {
         Stats attempt_stats;
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
-        auto result = runtime.blockOnIO(runClient(port, &config, &attempt_stats));
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
+        auto result = runtime.block_on_io(run_client(port, &config, &attempt_stats));
         runtime.stop();
         if (!result.has_value()) {
             ++attempt_stats.errors;
@@ -167,10 +167,10 @@ uint64_t percentile(std::vector<uint64_t> values, double p)
     return values[index];
 }
 
-Config parseArgs(int argc, char** argv)
+Config parse_args(int argc, char** argv)
 {
     Config config;
-    config.port = pickPort();
+    config.port = pick_port();
     for (int i = 1; i + 1 < argc; i += 2) {
         std::string opt = argv[i];
         std::string value = argv[i + 1];
@@ -185,20 +185,20 @@ Config parseArgs(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    Config config = parseArgs(argc, argv);
+    Config config = parse_args(argc, argv);
     auto server = RpcStreamServerBuilder()
         .host("127.0.0.1")
         .port(config.port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
-        .ringBufferSize(256 * 1024)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
+        .ring_buffer_size(256 * 1024)
         .build();
     StreamBenchService service;
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register stream loopback benchmark service: "
                   << registered.error().message() << "\n";
@@ -213,7 +213,7 @@ int main(int argc, char** argv)
 
     Stats stats;
     const auto begin = std::chrono::steady_clock::now();
-    const bool connected = runClientWithRetry(config.port, config, &stats);
+    const bool connected = run_client_with_retry(config.port, config, &stats);
     const auto end = std::chrono::steady_clock::now();
     server.stop();
 

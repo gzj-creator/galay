@@ -71,121 +71,121 @@ static int g_tests_failed = 0;
 
 TEST(SslContext_CreateServerContext) {
     SslContext ctx(SslMethod::TLS_Server);
-    EXPECT_TRUE(ctx.isValid());
+    EXPECT_TRUE(ctx.is_valid());
 }
 
 TEST(SslContext_CreateClientContext) {
     SslContext ctx(SslMethod::TLS_Client);
-    EXPECT_TRUE(ctx.isValid());
+    EXPECT_TRUE(ctx.is_valid());
 }
 
 TEST(SslContext_CreateTLS12Server) {
     SslContext ctx(SslMethod::TLS_1_2_Server);
-    EXPECT_TRUE(ctx.isValid());
+    EXPECT_TRUE(ctx.is_valid());
 }
 
 TEST(SslContext_CreateTLS12Client) {
     SslContext ctx(SslMethod::TLS_1_2_Client);
-    EXPECT_TRUE(ctx.isValid());
+    EXPECT_TRUE(ctx.is_valid());
 }
 
 TEST(SslContext_CreateTLS13Server) {
     SslContext ctx(SslMethod::TLS_1_3_Server);
-    EXPECT_TRUE(ctx.isValid());
+    EXPECT_TRUE(ctx.is_valid());
 }
 
 TEST(SslContext_CreateTLS13Client) {
     SslContext ctx(SslMethod::TLS_1_3_Client);
-    EXPECT_TRUE(ctx.isValid());
+    EXPECT_TRUE(ctx.is_valid());
 }
 
 TEST(SslContext_LoadCertificateNotFound) {
     SslContext ctx(SslMethod::TLS_Server);
-    auto result = ctx.loadCertificate("nonexistent.crt");
+    auto result = ctx.load_certificate("nonexistent.crt");
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error().code(), SslErrorCode::kCertificateLoadFailed);
 }
 
 TEST(SslContext_LoadPrivateKeyNotFound) {
     SslContext ctx(SslMethod::TLS_Server);
-    auto result = ctx.loadPrivateKey("nonexistent.key");
+    auto result = ctx.load_private_key("nonexistent.key");
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error().code(), SslErrorCode::kPrivateKeyLoadFailed);
 }
 
 TEST(SslContext_LoadCertificateSuccess) {
     SslContext ctx(SslMethod::TLS_Server);
-    auto result = ctx.loadCertificate("certs/server.crt");
+    auto result = ctx.load_certificate("certs/server.crt");
     EXPECT_TRUE(result.has_value());
 }
 
 TEST(SslContext_LoadPrivateKeySuccess) {
     SslContext ctx(SslMethod::TLS_Server);
-    ctx.loadCertificate("certs/server.crt");  // 先加载证书
-    auto result = ctx.loadPrivateKey("certs/server.key");
+    ctx.load_certificate("certs/server.crt");  // 先加载证书
+    auto result = ctx.load_private_key("certs/server.key");
     EXPECT_TRUE(result.has_value());
 }
 
 TEST(SslContext_LoadCertificateChain) {
     SslContext ctx(SslMethod::TLS_Server);
-    auto result = ctx.loadCertificateChain("certs/server.crt");
+    auto result = ctx.load_certificate_chain("certs/server.crt");
     EXPECT_TRUE(result.has_value());
 }
 
 TEST(SslContext_LoadCACertificate) {
     SslContext ctx(SslMethod::TLS_Client);
-    auto result = ctx.loadCACertificate("certs/ca.crt");
+    auto result = ctx.load_ca_certificate("certs/ca.crt");
     EXPECT_TRUE(result.has_value());
 }
 
 TEST(SslContext_SetVerifyModeNone) {
     SslContext ctx(SslMethod::TLS_Client);
-    ctx.setVerifyMode(SslVerifyMode::None);
-    EXPECT_TRUE(ctx.isValid());
+    ctx.set_verify_mode(SslVerifyMode::None);
+    EXPECT_TRUE(ctx.is_valid());
 }
 
 TEST(SslContext_SetVerifyModePeer) {
     SslContext ctx(SslMethod::TLS_Client);
-    ctx.setVerifyMode(SslVerifyMode::Peer);
-    EXPECT_TRUE(ctx.isValid());
+    ctx.set_verify_mode(SslVerifyMode::Peer);
+    EXPECT_TRUE(ctx.is_valid());
 }
 
 TEST(SslContext_SetCiphers) {
     SslContext ctx(SslMethod::TLS_Server);
-    auto result = ctx.setCiphers("HIGH:!aNULL:!MD5");
+    auto result = ctx.set_ciphers("HIGH:!aNULL:!MD5");
     EXPECT_TRUE(result.has_value());
 }
 
 TEST(SslContext_SetCiphersuites) {
     SslContext ctx(SslMethod::TLS_1_3_Server);
-    auto result = ctx.setCiphersuites("TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256");
+    auto result = ctx.set_ciphersuites("TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256");
     EXPECT_TRUE(result.has_value());
 }
 
 TEST(SslContext_SetVerifyDepth) {
     SslContext ctx(SslMethod::TLS_Client);
-    ctx.setVerifyDepth(4);
-    EXPECT_TRUE(ctx.isValid());
+    ctx.set_verify_depth(4);
+    EXPECT_TRUE(ctx.is_valid());
 }
 
 TEST(SslContext_MoveConstruct) {
     SslContext ctx1(SslMethod::TLS_Server);
-    EXPECT_TRUE(ctx1.isValid());
+    EXPECT_TRUE(ctx1.is_valid());
 
     SslContext ctx2(std::move(ctx1));
-    EXPECT_TRUE(ctx2.isValid());
-    EXPECT_FALSE(ctx1.isValid());
+    EXPECT_TRUE(ctx2.is_valid());
+    EXPECT_FALSE(ctx1.is_valid());
 }
 
 TEST(SslContext_MoveAssign) {
     SslContext ctx1(SslMethod::TLS_Server);
     SslContext ctx2(SslMethod::TLS_Client);
-    EXPECT_TRUE(ctx1.isValid());
-    EXPECT_TRUE(ctx2.isValid());
+    EXPECT_TRUE(ctx1.is_valid());
+    EXPECT_TRUE(ctx2.is_valid());
 
     ctx2 = std::move(ctx1);
-    EXPECT_TRUE(ctx2.isValid());
-    EXPECT_FALSE(ctx1.isValid());
+    EXPECT_TRUE(ctx2.is_valid());
+    EXPECT_FALSE(ctx1.is_valid());
 }
 
 // ==================== SslEngine 测试 ====================
@@ -193,69 +193,69 @@ TEST(SslContext_MoveAssign) {
 TEST(SslEngine_CreateEngine) {
     SslContext ctx(SslMethod::TLS_Client);
     SslEngine engine(&ctx);
-    EXPECT_TRUE(engine.isValid());
+    EXPECT_TRUE(engine.is_valid());
 }
 
 TEST(SslEngine_SetHostname) {
     SslContext ctx(SslMethod::TLS_Client);
     SslEngine engine(&ctx);
-    auto result = engine.setHostname("example.com");
+    auto result = engine.set_hostname("example.com");
     EXPECT_TRUE(result.has_value());
 }
 
 TEST(SslEngine_SetConnectState) {
     SslContext ctx(SslMethod::TLS_Client);
     SslEngine engine(&ctx);
-    engine.setConnectState();
-    EXPECT_TRUE(engine.isValid());
+    engine.set_connect_state();
+    EXPECT_TRUE(engine.is_valid());
 }
 
 TEST(SslEngine_SetAcceptState) {
     SslContext ctx(SslMethod::TLS_Server);
     SslEngine engine(&ctx);
-    engine.setAcceptState();
-    EXPECT_TRUE(engine.isValid());
+    engine.set_accept_state();
+    EXPECT_TRUE(engine.is_valid());
 }
 
 TEST(SslEngine_MoveConstruct) {
     SslContext ctx(SslMethod::TLS_Client);
     SslEngine engine1(&ctx);
-    EXPECT_TRUE(engine1.isValid());
+    EXPECT_TRUE(engine1.is_valid());
 
     SslEngine engine2(std::move(engine1));
-    EXPECT_TRUE(engine2.isValid());
-    EXPECT_FALSE(engine1.isValid());
+    EXPECT_TRUE(engine2.is_valid());
+    EXPECT_FALSE(engine1.is_valid());
 }
 
 TEST(SslEngine_MoveAssign) {
     SslContext ctx(SslMethod::TLS_Client);
     SslEngine engine1(&ctx);
     SslEngine engine2(&ctx);
-    EXPECT_TRUE(engine1.isValid());
-    EXPECT_TRUE(engine2.isValid());
+    EXPECT_TRUE(engine1.is_valid());
+    EXPECT_TRUE(engine2.is_valid());
 
     engine2 = std::move(engine1);
-    EXPECT_TRUE(engine2.isValid());
-    EXPECT_FALSE(engine1.isValid());
+    EXPECT_TRUE(engine2.is_valid());
+    EXPECT_FALSE(engine1.is_valid());
 }
 
 TEST(SslEngine_HandshakeStateInitial) {
     SslContext ctx(SslMethod::TLS_Client);
     SslEngine engine(&ctx);
-    EXPECT_EQ(engine.handshakeState(), SslHandshakeState::NotStarted);
+    EXPECT_EQ(engine.handshake_state(), SslHandshakeState::NotStarted);
 }
 
 // ==================== SslError 测试 ====================
 
 TEST(SslError_SuccessError) {
     SslError err;
-    EXPECT_TRUE(err.isSuccess());
+    EXPECT_TRUE(err.is_success());
     EXPECT_EQ(err.code(), SslErrorCode::kSuccess);
 }
 
 TEST(SslError_ErrorCode) {
     SslError err(SslErrorCode::kHandshakeFailed);
-    EXPECT_FALSE(err.isSuccess());
+    EXPECT_FALSE(err.is_success());
     EXPECT_EQ(err.code(), SslErrorCode::kHandshakeFailed);
 }
 
@@ -267,29 +267,29 @@ TEST(SslError_ErrorMessage) {
 
 TEST(SslError_NeedsRetryWantRead) {
     SslError err(SslErrorCode::kHandshakeWantRead);
-    EXPECT_TRUE(err.needsRetry());
+    EXPECT_TRUE(err.needs_retry());
 }
 
 TEST(SslError_NeedsRetryWantWrite) {
     SslError err(SslErrorCode::kHandshakeWantWrite);
-    EXPECT_TRUE(err.needsRetry());
+    EXPECT_TRUE(err.needs_retry());
 }
 
 TEST(SslError_NeedsRetryFailed) {
     SslError err(SslErrorCode::kHandshakeFailed);
-    EXPECT_FALSE(err.needsRetry());
+    EXPECT_FALSE(err.needs_retry());
 }
 
 TEST(SslError_CertificateLoadFailed) {
     SslError err(SslErrorCode::kCertificateLoadFailed);
-    EXPECT_FALSE(err.isSuccess());
-    EXPECT_FALSE(err.needsRetry());
+    EXPECT_FALSE(err.is_success());
+    EXPECT_FALSE(err.needs_retry());
 }
 
 TEST(SslError_PrivateKeyLoadFailed) {
     SslError err(SslErrorCode::kPrivateKeyLoadFailed);
-    EXPECT_FALSE(err.isSuccess());
-    EXPECT_FALSE(err.needsRetry());
+    EXPECT_FALSE(err.is_success());
+    EXPECT_FALSE(err.needs_retry());
 }
 
 // ==================== 主函数 ====================

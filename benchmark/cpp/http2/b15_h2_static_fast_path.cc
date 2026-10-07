@@ -31,28 +31,28 @@ std::atomic<int64_t> g_fallback_requests{0};
 const std::string kSmallBody(1024, 's');
 std::filesystem::path g_static_root;
 
-void signalHandler(int)
+void signal_handler(int)
 {
     g_running = false;
 }
 
-Task<void> fallbackActiveHandler(Http2ConnContext& ctx)
+Task<void> fallback_active_handler(Http2ConnContext& ctx)
 {
     while (true) {
-        auto streams = co_await ctx.getActiveStreams(64);
+        auto streams = co_await ctx.get_active_streams(64);
         if (!streams) {
             break;
         }
 
         for (auto& stream : *streams) {
-            auto events = stream->takeEvents();
-            if (!hasHttp2StreamEvent(events, Http2StreamEvent::RequestComplete)) {
+            auto events = stream->take_events();
+            if (!has_http2_stream_event(events, Http2StreamEvent::RequestComplete)) {
                 continue;
             }
 
             g_fallback_requests.fetch_add(1, std::memory_order_relaxed);
-            stream->sendHeaders(
-                Http2Headers().status(404).contentType("text/plain").contentLength(0),
+            stream->send_headers(
+                Http2Headers().status(404).content_type("text/plain").content_length(0),
                 true,
                 true);
         }
@@ -60,7 +60,7 @@ Task<void> fallbackActiveHandler(Http2ConnContext& ctx)
     co_return;
 }
 
-void writeFile(const std::filesystem::path& path, size_t size, char fill)
+void write_file(const std::filesystem::path& path, size_t size, char fill)
 {
     std::ofstream out(path, std::ios::binary);
     out << std::string(size, fill);
@@ -70,7 +70,7 @@ void writeFile(const std::filesystem::path& path, size_t size, char fill)
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -98,47 +98,47 @@ int main(int argc, char* argv[])
     std::cout << "Press Ctrl+C to stop\n";
     std::cout << "========================================\n\n";
 
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 
     try {
         g_static_root = std::filesystem::temp_directory_path() /
             ("galay-h2-static-bench-" + std::to_string(::getpid()));
         std::filesystem::create_directories(g_static_root);
-        writeFile(g_static_root / "0b.bin", 0, '0');
-        writeFile(g_static_root / "1kb.bin", 1024, '1');
-        writeFile(g_static_root / "16kb.bin", 16 * 1024, '6');
-        writeFile(g_static_root / "128kb.bin", 128 * 1024, '8');
-        writeFile(g_static_root / "1mb.bin", 1024 * 1024, 'm');
+        write_file(g_static_root / "0b.bin", 0, '0');
+        write_file(g_static_root / "1kb.bin", 1024, '1');
+        write_file(g_static_root / "16kb.bin", 16 * 1024, '6');
+        write_file(g_static_root / "128kb.bin", 128 * 1024, '8');
+        write_file(g_static_root / "1mb.bin", 1024 * 1024, 'm');
 
         H2cServer server(H2cServerBuilder()
             .host("0.0.0.0")
             .port(port)
-            .ioSchedulerCount(static_cast<size_t>(io_threads))
-            .parallelSchedulerCount(0)
-            .maxConcurrentStreams(max_streams)
-            .initialWindowSize(65535)
-            .staticResponse("/echo", H2StaticResponse{
+            .io_scheduler_count(static_cast<size_t>(io_threads))
+            .parallel_scheduler_count(0)
+            .max_concurrent_streams(max_streams)
+            .initial_window_size(65535)
+            .static_response("/echo", H2StaticResponse{
                 .status = 200,
                 .content_type = "text/plain",
                 .body = "",
             })
-            .staticResponse("/small", H2StaticResponse{
+            .static_response("/small", H2StaticResponse{
                 .status = 200,
                 .content_type = "text/plain",
                 .body = kSmallBody,
             })
-            .staticFiles("/files", H2StaticFileConfig{
+            .static_files("/files", H2StaticFileConfig{
                 .root = g_static_root,
                 .small_file_threshold = 1024 * 1024,
             })
-            .activeConnHandler(fallbackActiveHandler)
+            .active_conn_handler(fallback_active_handler)
             .build());
         server.start();
 
         std::cout << "Server started successfully!\n";
-        std::cout << "Runtime Config: io=" << server.getRuntime().getIOSchedulerCount()
-                  << " parallel=" << server.getRuntime().getParallelSchedulerCount()
+        std::cout << "Runtime Config: io=" << server.get_runtime().get_io_scheduler_count()
+                  << " parallel=" << server.get_runtime().get_parallel_scheduler_count()
                   << " (configured io=" << io_threads << " parallel=0)\n";
         std::cout << "Waiting for requests...\n\n";
 

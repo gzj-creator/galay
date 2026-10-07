@@ -73,13 +73,13 @@ namespace galay::redis
         std::string_view cmd,
         std::span<const std::string_view> args)
     {
-        const auto command_slice = appendToStorage(cmd);
+        const auto command_slice = append_to_storage(cmd);
         const size_t arg_offset = m_arg_slices.size();
         for (const auto arg : args) {
-            m_arg_slices.push_back(appendToStorage(arg));
+            m_arg_slices.push_back(append_to_storage(arg));
         }
         const size_t encoded_offset = m_encoded.size();
-        m_encoder.appendCommandFast(m_encoded, cmd, args);
+        m_encoder.append_command_fast(m_encoded, cmd, args);
         const Slice encoded_slice{encoded_offset, m_encoded.size() - encoded_offset};
         m_commands.push_back(CommandMeta{command_slice, arg_offset, args.size(), encoded_slice});
         m_views_dirty = true;
@@ -95,7 +95,7 @@ namespace galay::redis
 
     std::span<const RedisCommandView> RedisCommandBuilder::commands() const
     {
-        rebuildViewsIfNeeded();
+        rebuild_views_if_needed();
         return std::span<const RedisCommandView>(m_command_views);
     }
 
@@ -133,12 +133,12 @@ namespace galay::redis
         return out;
     }
 
-    size_t RedisCommandBuilder::normalizeExpectedReplies(size_t expected_replies) noexcept
+    size_t RedisCommandBuilder::normalize_expected_replies(size_t expected_replies) noexcept
     {
         return expected_replies == 0 ? 1 : expected_replies;
     }
 
-    RedisCommandBuilder::Slice RedisCommandBuilder::appendToStorage(std::string_view value)
+    RedisCommandBuilder::Slice RedisCommandBuilder::append_to_storage(std::string_view value)
     {
         const Slice slice{m_storage.size(), value.size()};
         if (!value.empty()) {
@@ -147,7 +147,7 @@ namespace galay::redis
         return slice;
     }
 
-    std::string_view RedisCommandBuilder::toView(Slice slice) const
+    std::string_view RedisCommandBuilder::to_view(Slice slice) const
     {
         if (slice.length == 0) {
             return {};
@@ -155,7 +155,7 @@ namespace galay::redis
         return std::string_view(m_storage.data() + slice.offset, slice.length);
     }
 
-    std::string_view RedisCommandBuilder::toEncodedView(Slice slice) const
+    std::string_view RedisCommandBuilder::to_encoded_view(Slice slice) const
     {
         if (slice.length == 0) {
             return {};
@@ -163,7 +163,7 @@ namespace galay::redis
         return std::string_view(m_encoded.data() + slice.offset, slice.length);
     }
 
-    void RedisCommandBuilder::rebuildViewsIfNeeded() const
+    void RedisCommandBuilder::rebuild_views_if_needed() const
     {
         if (!m_views_dirty) {
             return;
@@ -171,7 +171,7 @@ namespace galay::redis
 
         m_arg_views.resize(m_arg_slices.size());
         for (size_t i = 0; i < m_arg_slices.size(); ++i) {
-            m_arg_views[i] = toView(m_arg_slices[i]);
+            m_arg_views[i] = to_view(m_arg_slices[i]);
         }
 
         m_command_views.resize(m_commands.size());
@@ -182,9 +182,9 @@ namespace galay::redis
                 arg_ptr = m_arg_views.data() + meta.arg_offset;
             }
             m_command_views[i] = RedisCommandView{
-                .command = toView(meta.command),
+                .command = to_view(meta.command),
                 .args = std::span<const std::string_view>(arg_ptr, meta.arg_count),
-                .encoded = toEncodedView(meta.encoded)};
+                .encoded = to_encoded_view(meta.encoded)};
         }
 
         m_views_dirty = false;
@@ -201,9 +201,9 @@ namespace galay::redis
         size_t expected_replies) const
     {
         RedisEncodedCommand result;
-        result.expected_replies = normalizeExpectedReplies(expected_replies);
-        result.encoded.reserve(m_encoder.estimateCommandBytes(cmd, args));
-        m_encoder.appendCommandFast(result.encoded, cmd, args);
+        result.expected_replies = normalize_expected_replies(expected_replies);
+        result.encoded.reserve(m_encoder.estimate_command_bytes(cmd, args));
+        m_encoder.append_command_fast(result.encoded, cmd, args);
         return result;
     }
 
@@ -213,9 +213,9 @@ namespace galay::redis
         size_t expected_replies) const
     {
         RedisEncodedCommand result;
-        result.expected_replies = normalizeExpectedReplies(expected_replies);
-        result.encoded.reserve(m_encoder.estimateCommandBytes(cmd, args));
-        m_encoder.appendCommandFast(result.encoded, cmd, args);
+        result.expected_replies = normalize_expected_replies(expected_replies);
+        result.encoded.reserve(m_encoder.estimate_command_bytes(cmd, args));
+        m_encoder.append_command_fast(result.encoded, cmd, args);
         return result;
     }
 
@@ -225,9 +225,9 @@ namespace galay::redis
         size_t expected_replies) const
     {
         RedisEncodedCommand result;
-        result.expected_replies = normalizeExpectedReplies(expected_replies);
-        result.encoded.reserve(m_encoder.estimateCommandBytes(cmd, args));
-        m_encoder.appendCommandFast(result.encoded, cmd, args);
+        result.expected_replies = normalize_expected_replies(expected_replies);
+        result.encoded.reserve(m_encoder.estimate_command_bytes(cmd, args));
+        m_encoder.append_command_fast(result.encoded, cmd, args);
         return result;
     }
 
@@ -323,17 +323,17 @@ namespace galay::redis
         return command("READWRITE");
     }
 
-    RedisEncodedCommand RedisCommandBuilder::clusterInfo() const
+    RedisEncodedCommand RedisCommandBuilder::cluster_info() const
     {
         return command("CLUSTER", {"INFO"});
     }
 
-    RedisEncodedCommand RedisCommandBuilder::clusterNodes() const
+    RedisEncodedCommand RedisCommandBuilder::cluster_nodes() const
     {
         return command("CLUSTER", {"NODES"});
     }
 
-    RedisEncodedCommand RedisCommandBuilder::clusterSlots() const
+    RedisEncodedCommand RedisCommandBuilder::cluster_slots() const
     {
         return command("CLUSTER", {"SLOTS"});
     }
@@ -392,7 +392,7 @@ namespace galay::redis
         return command("HDEL", std::array<std::string_view, 2>{key, field});
     }
 
-    RedisEncodedCommand RedisCommandBuilder::hgetAll(const std::string& key) const
+    RedisEncodedCommand RedisCommandBuilder::hget_all(const std::string& key) const
     {
         return command("HGETALL", std::array<std::string_view, 1>{key});
     }

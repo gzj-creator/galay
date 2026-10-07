@@ -9,7 +9,7 @@ using namespace galay::rpc;
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -29,7 +29,7 @@ int main(int argc, char** argv)
     size_t errors = 0;
     const auto start = std::chrono::steady_clock::now();
     for (size_t i = 0; i < requests; ++i) {
-        auto endpoint = client.selectEndpoint("BenchService");
+        auto endpoint = client.select_endpoint("BenchService");
         if (!endpoint.has_value()) {
             ++errors;
         }

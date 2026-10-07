@@ -59,7 +59,7 @@
 | Time | `galay-utils/core/time.hpp` | `Time`、`StopWatch<Clock>`、`Deadline<Clock>`、`Backoff` |
 | System | `galay-utils/system/system.hpp` | `System`、`System::AddressType` |
 | Env | `galay-utils/system/env.hpp` | `Env` |
-| TypeName | `galay-utils/core/type_name.hpp` | `getTypeName<T>()`、`getTypeName(obj)`、`demangleSymbol()` |
+| TypeName | `galay-utils/core/type_name.hpp` | `get_type_name<T>()`、`get_type_name(obj)`、`demangle_symbol()` |
 | BackTrace | `galay-utils/system/backtrace.hpp` | `BackTrace` |
 | Signal | `galay-utils/system/signal.hpp` | `SignalHandler` |
 | CPU | `galay-utils/system/cpu.hpp` | 硬件并发度、在线 CPU ID、当前 CPU 快照与线程亲和性 |
@@ -75,25 +75,25 @@
 | 静态方法 / 类型 | 成功类型 | 契约 |
 |---|---|---|
 | `CPU::count() noexcept` | `unsigned` | 原样返回 `std::thread::hardware_concurrency()` 的硬件并发度提示，可能为 0 |
-| `CPU::onlineCpus()` | `std::vector<unsigned>` | 系统在线逻辑 CPU ID 快照，排序去重，不按调用线程的 cpuset 过滤 |
-| `CPU::currentId()` | `unsigned` | 查询瞬间正在执行调用线程的 CPU ID，不保证后续不迁移 |
-| `CPU::cpuAffinity()` | `std::vector<unsigned>` | 当前调用线程的有效 CPU ID 集合，按 ID 排序 |
-| `CPU::bindCurrentThread(std::span<const unsigned> cpus)` | `std::vector<unsigned>` | 设置当前线程，回读实际 CPU 集合；输入不能为空，重复 ID 合并 |
-| `Numa::onlineNodes()` | `std::vector<unsigned>` | 系统在线 NUMA 节点快照，不按 cpuset 过滤 |
-| `Numa::nodeOfCpu(unsigned cpu)` | `unsigned` | 在线 CPU 所属的在线 NUMA 节点；未找到该 CPU 为 `no_such_device` |
-| `Numa::cpusOfNode(unsigned node)` | `std::vector<unsigned>` | 在线节点的在线 CPU ID 集合，不按线程 affinity 过滤；无 CPU 的节点成功返回空集 |
+| `CPU::online_cpus()` | `std::vector<unsigned>` | 系统在线逻辑 CPU ID 快照，排序去重，不按调用线程的 cpuset 过滤 |
+| `CPU::current_id()` | `unsigned` | 查询瞬间正在执行调用线程的 CPU ID，不保证后续不迁移 |
+| `CPU::cpu_affinity()` | `std::vector<unsigned>` | 当前调用线程的有效 CPU ID 集合，按 ID 排序 |
+| `CPU::bind_current_thread(std::span<const unsigned> cpus)` | `std::vector<unsigned>` | 设置当前线程，回读实际 CPU 集合；输入不能为空，重复 ID 合并 |
+| `Numa::online_nodes()` | `std::vector<unsigned>` | 系统在线 NUMA 节点快照，不按 cpuset 过滤 |
+| `Numa::node_of_cpu(unsigned cpu)` | `unsigned` | 在线 CPU 所属的在线 NUMA 节点；未找到该 CPU 为 `no_such_device` |
+| `Numa::cpus_of_node(unsigned node)` | `std::vector<unsigned>` | 在线节点的在线 CPU ID 集合，不按线程 affinity 过滤；无 CPU 的节点成功返回空集 |
 | `Numa::distance(unsigned from, unsigned to)` | `unsigned` | sysfs 报告的正整数相对距离，无时间/字节单位，不承诺对称或固定值 |
-| `Numa::allowedNumaNodes()` | `std::vector<unsigned>` | 当前线程所属 cpuset 允许使用的内存节点 |
-| `Memory::pageSize()` | `std::size_t` | 系统基础页大小，单位为字节，必须为正；不表示 huge page 大小 |
-| `Memory::numaPolicy()` | `Memory::PolicyState` | 当前线程的原生 mode（包括 flags）和原生 nodemask 中的节点集合 |
-| `Memory::setNumaPolicy(Policy policy, std::span<const unsigned> nodes)` | `void` | 枚举接口仅覆盖 `Default` / `Bind` / `Interleave` |
-| `Memory::restoreNumaPolicy(const PolicyState& state)` | `void` | 将保存的原生 mode、flags 和 nodemask 原样传给内核，失败必须向上传播 |
+| `Numa::allowed_numa_nodes()` | `std::vector<unsigned>` | 当前线程所属 cpuset 允许使用的内存节点 |
+| `Memory::page_size()` | `std::size_t` | 系统基础页大小，单位为字节，必须为正；不表示 huge page 大小 |
+| `Memory::numa_policy()` | `Memory::PolicyState` | 当前线程的原生 mode（包括 flags）和原生 nodemask 中的节点集合 |
+| `Memory::set_numa_policy(Policy policy, std::span<const unsigned> nodes)` | `void` | 枚举接口仅覆盖 `Default` / `Bind` / `Interleave` |
+| `Memory::restore_numa_policy(const PolicyState& state)` | `void` | 将保存的原生 mode、flags 和 nodemask 原样传给内核，失败必须向上传播 |
 
-`CPU::count()` 保留标准库提示语义，避免改变线程池/调度器的并发度推导。在线 CPU 集合、当前线程 affinity 集合与该提示是三个不同概念；需要可运行 CPU 数量时，检查 `cpuAffinity()` 后使用集合的 `.size()`。CPU ID 不保证连续，例如 `{0, 2}` 的数量是 2，但 CPU 2 仍是合法 ID，不能用 `cpu < count()` 校验，也不能把线程索引直接作为 CPU ID。
+`CPU::count()` 保留标准库提示语义，避免改变线程池/调度器的并发度推导。在线 CPU 集合、当前线程 affinity 集合与该提示是三个不同概念；需要可运行 CPU 数量时，检查 `cpu_affinity()` 后使用集合的 `.size()`。CPU ID 不保证连续，例如 `{0, 2}` 的数量是 2，但 CPU 2 仍是合法 ID，不能用 `cpu < count()` 校验，也不能把线程索引直接作为 CPU ID。
 
 Linux 的 CPU 读取与设置共用 `CPU_ALLOC` 动态 mask，`sched_getaffinity` 返回容量不足的 `EINVAL` 时扩大探测；不再有固定 `CPU_SETSIZE` / 1024 上限，也不再公开 `CPU::kMaxCpus`。实现支持 `0 <= CPU ID < INT_MAX`，并受内核实际 mask 和可分配内存约束；sysfs 超出该编号范围时返回 `value_too_large`，不会截断结果。绑定时由内核决定 online/cpuset 交集，调用方须比较实际集合与请求；绑定后的回读失败不代表绑定未生效，不承诺事务式回滚。
 
-NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/distance`；距离列按在线节点排序后的顺序对应，不能把节点 ID 当成数组下标。拓扑查询与 `allowedNumaNodes()` 清楚区分，内存策略仍由 `Memory` 负责。节点 mask 保留 `Numa::kMaxNodes == Memory::kMaxNodes == 1024`，支持节点 ID 0–1023；拓扑在线列表超容量为 `value_too_large`，参数超范围为 `invalid_argument`，内核 mask 容量不足保留 `EINVAL`，不返回截断集合。
+NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/distance`；距离列按在线节点排序后的顺序对应，不能把节点 ID 当成数组下标。拓扑查询与 `allowed_numa_nodes()` 清楚区分，内存策略仍由 `Memory` 负责。节点 mask 保留 `Numa::kMaxNodes == Memory::kMaxNodes == 1024`，支持节点 ID 0–1023；拓扑在线列表超容量为 `value_too_large`，参数超范围为 `invalid_argument`，内核 mask 容量不足保留 `EINVAL`，不返回截断集合。
 
 原生策略恢复契约：
 
@@ -108,7 +108,7 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 |---|---|
 | Linux CPU / NUMA 查询与控制 | 使用 sysfs / POSIX 系统调用；失败保留 `errno` 与 `std::generic_category()` |
 | 非 Linux CPU 在线/当前 ID/亲和性、NUMA 与内存策略接口 | `operation_not_supported`；`CPU::count()` 仍可用 |
-| `Memory::pageSize()` | Linux/macOS 使用 `sysconf(_SC_PAGESIZE)`，失败保留 errno；非正数且无 errno 为 `io_error`。Windows 使用无错误返回值的 `GetSystemInfo`，零页大小为 `io_error`；其他平台不支持 |
+| `Memory::page_size()` | Linux/macOS 使用 `sysconf(_SC_PAGESIZE)`，失败保留 errno；非正数且无 errno 为 `io_error`。Windows 使用无错误返回值的 `GetSystemInfo`，零页大小为 `io_error`；其他平台不支持 |
 | sysfs 缺失或读取失败 | 保留 `ENOENT`、`EACCES`、`EISDIR` 等错误，不通过外部命令或猜测拓扑补偿 |
 | 非法节点、畸形列表/距离、空在线列表 | `invalid_argument`；空 `cpulist` 是合法的无 CPU 节点 |
 | ID 列表超容量 / 数字解析溢出 | `value_too_large` / `result_out_of_range`，范围在展开前检查 |
@@ -123,23 +123,23 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 
 - `split(std::string_view, char)`
 - `split(std::string_view, std::string_view)`
-- `splitRespectQuotes(std::string_view, char, char)`
+- `split_respect_quotes(std::string_view, char, char)`
 - `join(const std::vector<std::string>&, std::string_view)`
-- `trim` / `trimLeft` / `trimRight`
-- `toLower` / `toUpper`
-- `startsWith` / `endsWith` / `contains`
-- `replace` / `replaceFirst`
+- `trim` / `trim_left` / `trim_right`
+- `to_lower` / `to_upper`
+- `starts_with` / `ends_with` / `contains`
+- `replace` / `replace_first`
 - `count(char)` / `count(std::string_view)`
-- `toHex` / `fromHex` / `toVisibleHex`
-- `isInteger` / `isFloat` / `isBlank`
+- `to_hex` / `from_hex` / `to_visible_hex`
+- `is_integer` / `is_float` / `is_blank`
 - `format(...)`
 - `parse<T>(...)`
-- `toString(...)`
+- `to_string(...)`
 - 语义：
   - 纯静态工具，不持有共享状态，线程安全性由输入输出对象自身决定
   - `split(..., "")` 返回原字符串；连续分隔符会保留空字段
-  - `splitRespectQuotes(...)` 只按 quote 状态忽略分隔符，不负责校验 quote 是否成对
-  - `toHex(nullptr, *)`、`toVisibleHex(nullptr, *)`、奇数长度或包含非法字符的 `fromHex(...)` 返回空结果
+  - `split_respect_quotes(...)` 只按 quote 状态忽略分隔符，不负责校验 quote 是否成对
+  - `to_hex(nullptr, *)`、`to_visible_hex(nullptr, *)`、奇数长度或包含非法字符的 `from_hex(...)` 返回空结果
   - `parse<T>(...)` 要求去除首尾空白后完整解析；溢出、空串或尾随非法字符返回默认值
 
 ### `RandomGenerator` / `Randomizer`
@@ -148,51 +148,51 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 - `explicit RandomGenerator(uint64_t seedValue)`
 - `RandomGenerator::seed()` / `RandomGenerator::reseed()`
 - `static Randomizer& instance()`
-- `randomInt` / `randomUint32` / `randomUint64`
-- `randomDouble` / `randomFloat` / `randomBool`
-- `randomString` / `randomHex` / `randomBytes`
+- `random_int` / `random_uint32` / `random_uint64`
+- `random_double` / `random_float` / `random_bool`
+- `random_string` / `random_hex` / `random_bytes`
 - `uuid()`
 - `seed()` / `reseed()`
 - 语义：
   - `RandomGenerator` 是本地无锁生成器，非线程安全；共享同一个实例时必须由调用方外部加锁
   - `Randomizer` 是线程安全单例，内部用 mutex 保护共享随机引擎；可跨线程共享，但不适合协程热路径高频调用
   - 整数随机返回闭区间 `[min, max]`；浮点随机返回半开区间 `[min, max)`；`min >= max` 时返回 `min`
-  - `randomBool(probability)` 对概率做边界处理：`<= 0` 返回 `false`，`>= 1` 返回 `true`
-  - `randomString(0, *)`、`randomString(*, "")`、`randomHex(0)` 返回空字符串；`randomBytes(nullptr, *)` 为 no-op
+  - `random_bool(probability)` 对概率做边界处理：`<= 0` 返回 `false`，`>= 1` 返回 `true`
+  - `random_string(0, *)`、`random_string(*, "")`、`random_hex(0)` 返回空字符串；`random_bytes(nullptr, *)` 为 no-op
   - `uuid()` 生成 RFC 4122 version 4 形态字符串，variant 位落在 `8`/`9`/`a`/`b`
 
 ### `Time`
 
-- `Time::currentTimeMs()` / `Time::currentTimeUs()` / `Time::currentTimeNs()`
-- `Time::formatTime(std::time_t timestamp, const char* format, bool utc = false)`
-- `Time::currentGMTTime(const char* format = "%a, %d %b %Y %H:%M:%S GMT")`
-- `Time::currentLocalTime(const char* format = "%Y-%m-%d %H:%M:%S")`
+- `Time::current_time_ms()` / `Time::current_time_us()` / `Time::current_time_ns()`
+- `Time::format_time(std::time_t timestamp, const char* format, bool utc = false)`
+- `Time::current_gmt_time(const char* format = "%a, %d %b %Y %H:%M:%S GMT")`
+- `Time::current_local_time(const char* format = "%Y-%m-%d %H:%M:%S")`
 - `StopWatch<Clock>`
   - `StopWatch()` / `explicit StopWatch(time_point start)`
   - `reset()`
-  - `elapsed()` / `elapsedMs()`
-  - `startTime()`
+  - `elapsed()` / `elapsed_ms()`
+  - `start_time()`
 - `Deadline<Clock>`
   - `explicit Deadline(time_point deadline)`
-  - `fromNow(duration)`
+  - `from_now(duration)`
   - `expired()` / `remaining()`
-  - `timePoint()`
+  - `deadline_time()`
 - `Backoff`
   - `Backoff::fixed(duration)` / `Backoff::linear(initial, step, max)` / `Backoff::exponential(initial, multiplier, max)`
   - `next()` / `reset()`
   - `attempts()` / `strategy()`
 - 语义：
-  - `System` 不再提供 `currentTime*`、`currentGMTTime`、`currentLocalTime` 或 `formatTime`；时间相关能力统一使用 `Time`
-  - `formatTime(...)` 的 `format == nullptr`、空格式、平台时间转换失败或格式化结果写入失败时返回空字符串
+  - `System` 不再提供 `current_time*`、`current_gmt_time`、`current_local_time` 或 `format_time`；时间相关能力统一使用 `Time`
+  - `format_time(...)` 的 `format == nullptr`、空格式、平台时间转换失败或格式化结果写入失败时返回空字符串
   - `StopWatch`、`Deadline`、`Backoff` 都是轻量非线程安全值对象，不创建线程，不提供 sleep 或调度语义
   - 这些类型不依赖平台、进程或 signal 头文件
 
 ### `System`
 
-- 文件：`System::readFile` / `System::writeFile` / `System::readFileMmap`
-- 文件系统：`System::fileExists` / `System::isDirectory` / `System::fileSize` / `System::createDirectory` / `System::remove` / `System::listDirectory`
-- 网络：`System::resolveHostIPv4` / `System::resolveHostIPv6` / `System::checkAddressType`
-- 主机：`CPU::count()` / `System::hostname` / `System::currentDir` / `System::changeDir` / `System::executablePath`
+- 文件：`System::read_file` / `System::write_file` / `System::read_file_mmap`
+- 文件系统：`System::file_exists` / `System::is_directory` / `System::file_size` / `System::create_directory` / `System::remove` / `System::list_directory`
+- 网络：`System::resolve_host_ipv4` / `System::resolve_host_ipv6` / `System::check_address_type`
+- 主机：`CPU::count()` / `System::hostname` / `System::current_dir` / `System::change_dir` / `System::executable_path`
 - 语义：系统时间戳和时间格式化 API 使用 `Time`；进程环境变量使用 `Env`
 
 ### `Env`
@@ -212,39 +212,39 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 
 ### `TypeName`
 
-- `template<typename T> getTypeName() -> std::string`
-- `template<typename T> getTypeName(const T& obj) -> std::string`
-- `demangleSymbol(const char* mangledName) -> std::string`
+- `template<typename T> get_type_name() -> std::string`
+- `template<typename T> get_type_name(const T& obj) -> std::string`
+- `demangle_symbol(const char* mangledName) -> std::string`
 - 语义：GCC / Clang 下会尝试 demangle；失败或平台不支持时返回原始 `typeid(...).name()` / 符号名；`nullptr` 输入返回空字符串
   - 纯函数式工具，不持有共享可变状态
 
 ### `BackTrace`
 
-- `getStackTrace(int maxFrames = 64, int skipFrames = 1) -> std::vector<std::string>`
-- `printStackTrace(int maxFrames = 64, int skipFrames = 1)`
-- `getStackTraceString(int maxFrames = 64, int skipFrames = 1) -> std::string`
-- `installCrashHandlers()`
+- `get_stack_trace(int maxFrames = 64, int skipFrames = 1) -> std::vector<std::string>`
+- `print_stack_trace(int maxFrames = 64, int skipFrames = 1)`
+- `get_stack_trace_string(int maxFrames = 64, int skipFrames = 1) -> std::string`
+- `install_crash_handlers()`
 - 语义：
   - 当前只在 `__APPLE__` / `__linux__` 上真正采集堆栈；其他平台会返回空栈或只输出 `0 frames`
-  - `printStackTrace(...)` / `getStackTraceString(...)` 会在传入的 `skipFrames` 基础上再额外跳过 1 帧，用来隐藏包装函数自身
-  - `installCrashHandlers()` 会安装 `SIGSEGV` / `SIGABRT` / `SIGFPE` / `SIGILL`，在支持的平台上额外安装 `SIGBUS`
+  - `print_stack_trace(...)` / `get_stack_trace_string(...)` 会在传入的 `skipFrames` 基础上再额外跳过 1 帧，用来隐藏包装函数自身
+  - `install_crash_handlers()` 会安装 `SIGSEGV` / `SIGABRT` / `SIGFPE` / `SIGILL`，在支持的平台上额外安装 `SIGBUS`
   - crash handler 打印堆栈后会把该 signal 的处理方式恢复为 `SIG_DFL`，再重新 `raise(signal)`，因此进程仍会按默认方式终止
 
 ### `SignalHandler`
 
 - `using Handler = std::function<void(int)>`
 - `static SignalHandler& instance()`
-- `bool setHandler(int signal, Handler handler)`
-- `template<int... Signals> bool setHandler(Handler handler)`
-- `bool removeHandler(int signal)` / `bool restoreDefault(int signal)`
-- `bool ignoreSignal(int signal)`
-- `bool blockSignal(int signal)` / `bool unblockSignal(int signal)`
-- `bool hasHandler(int signal) const`
+- `bool set_handler(int signal, Handler handler)`
+- `template<int... Signals> bool set_handler(Handler handler)`
+- `bool remove_handler(int signal)` / `bool restore_default(int signal)`
+- `bool ignore_signal(int signal)`
+- `bool block_signal(int signal)` / `bool unblock_signal(int signal)`
+- `bool has_handler(int signal) const`
 - 语义：
-  - `setHandler(...)` / `removeHandler(...)` / `restoreDefault(...)` / `ignoreSignal(...)` / `blockSignal(...)` / `unblockSignal(...)` 都返回 `bool`
-  - Windows 下 `setHandler(...)` / `removeHandler(...)` / `ignoreSignal(...)` 走 `std::signal(...)`；`blockSignal()` / `unblockSignal()` 固定返回 `false`
-  - POSIX 下 `setHandler(...)` 使用 `sigaction(..., SA_RESTART, ...)` 注册进程级 signal handler
-  - `blockSignal(...)` / `unblockSignal(...)` 在 POSIX 下通过 `pthread_sigmask(...)` 修改的是当前线程的 signal mask，而不是全局进程 mask
+  - `set_handler(...)` / `remove_handler(...)` / `restore_default(...)` / `ignore_signal(...)` / `block_signal(...)` / `unblock_signal(...)` 都返回 `bool`
+  - Windows 下 `set_handler(...)` / `remove_handler(...)` / `ignore_signal(...)` 走 `std::signal(...)`；`block_signal()` / `unblock_signal()` 固定返回 `false`
+  - POSIX 下 `set_handler(...)` 使用 `sigaction(..., SA_RESTART, ...)` 注册进程级 signal handler
+  - `block_signal(...)` / `unblock_signal(...)` 在 POSIX 下通过 `pthread_sigmask(...)` 修改的是当前线程的 signal mask，而不是全局进程 mask
 
 ## 3. 并发、缓存与缓冲
 
@@ -266,13 +266,13 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
   - `Stats`：`hits` / `misses` / `inserts` / `updates` / `capacityEvictions` / `expiredEvictions` / `removes` / `clears`
   - `EvictCallback = std::function<void(const Key&, const Value&, EvictReason)>`
 - 构造：
-  - `LruCache(size_type capacity = 0, std::optional<duration> defaultTtl = std::nullopt, EvictCallback onEvict = nullptr, ExpirationPolicy expirationPolicy = ExpirationPolicy::ExpireAfterWrite)`
-  - `LruCache(size_type capacity, chrono duration defaultTtl, EvictCallback onEvict = nullptr, ExpirationPolicy expirationPolicy = ExpirationPolicy::ExpireAfterWrite)`
-- 写入：`put` / `putFor` / `putUntil` / `emplace` / `emplaceFor`
+  - `LruCache(size_type capacity = 0, std::optional<duration> default_ttl = std::nullopt, EvictCallback on_evict = nullptr, ExpirationPolicy expirationPolicy = ExpirationPolicy::ExpireAfterWrite)`
+  - `LruCache(size_type capacity, chrono duration default_ttl, EvictCallback on_evict = nullptr, ExpirationPolicy expirationPolicy = ExpirationPolicy::ExpireAfterWrite)`
+- 写入：`put` / `put_for` / `put_until` / `emplace` / `emplace_for`
 - 查询：`get` / `peek` / `contains`
-- 管理：`remove` / `clear` / `size` / `empty` / `capacity` / `setCapacity` / `defaultTtl` / `setDefaultTtl` / `purgeExpired`
-- 哈希表调优：`reserve(size_type)` / `maxLoadFactor(float)` / `maxLoadFactor()`
-- 统计：`statsEnabled()` / `stats()` / `resetStats()`
+- 管理：`remove` / `clear` / `size` / `empty` / `capacity` / `set_capacity` / `default_ttl` / `set_default_ttl` / `purge_expired`
+- 哈希表调优：`reserve(size_type)` / `max_load_factor(float)` / `max_load_factor()`
+- 统计：`stats_enabled()` / `stats()` / `reset_stats()`
 - 语义：
   - 非线程安全；多线程或跨协程并发访问同一个实例时必须由调用方外部同步
   - 容量淘汰和 TTL 淘汰都是惰性的，不创建后台线程或定时器
@@ -287,22 +287,22 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 - `ByteMetaData()` / `ByteMetaData(std::string&)` / `ByteMetaData(std::string_view)`
 - `ByteMetaData(const char*)` / `ByteMetaData(const uint8_t*)`
 - `ByteMetaData(const char*, size_t)` / `ByteMetaData(const uint8_t*, size_t)`
-- `mallocBytes(size_t)` / `deepCopyBytes(const ByteMetaData&)`
-- `reallocBytes(ByteMetaData&, size_t)` / `clearBytes(ByteMetaData&)` / `freeBytes(ByteMetaData&)`
+- `malloc_bytes(size_t)` / `deep_copy_bytes(const ByteMetaData&)`
+- `realloc_bytes(ByteMetaData&, size_t)` / `clear_bytes(ByteMetaData&)` / `free_bytes(ByteMetaData&)`
 
 `Bytes`：
 
 - move-only：支持移动构造和移动赋值，不支持拷贝
 - 构造：`Bytes()` / `Bytes(std::string&)` / `Bytes(std::string&&)` / `Bytes(const char*)` / `Bytes(const uint8_t*)`
 - 构造：`Bytes(const char*, size_t)` / `Bytes(const uint8_t*, size_t)` / `explicit Bytes(size_t capacity)`
-- 非拥有视图：`Bytes::fromString(std::string&)` / `Bytes::fromString(std::string_view)` / `Bytes::fromCString(const char*, size_t, size_t)`
+- 非拥有视图：`Bytes::from_string(std::string&)` / `Bytes::from_string(std::string_view)` / `Bytes::from_c_string(const char*, size_t, size_t)`
 - 查询：`data()` / `c_str()` / `size()` / `capacity()` / `empty()`
-- 转换：`toString()` / `toStringView()`
+- 转换：`to_string()` / `to_string_view()`
 - 管理：`clear()`
 - 比较：`operator==` / `operator!=`
 - 语义：
   - owning 构造函数会深拷贝输入字节；`Bytes` 析构或 `clear()` 时释放拥有的内存
-  - `fromString(...)` / `fromCString(...)` 只创建 non-owning 视图，调用方必须保证底层存储生命周期长于 `Bytes`
+  - `from_string(...)` / `from_c_string(...)` 只创建 non-owning 视图，调用方必须保证底层存储生命周期长于 `Bytes`
   - `ByteMetaData` 是底层原始指针/大小/容量描述结构，本身不表达所有权
   - `c_str()` 只有在 `capacity() > size()` 时才会补写 null 终止符，不会越界扩容
   - 非线程安全；并发访问同一个实例时必须由调用方外部同步
@@ -324,8 +324,8 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 - `explicit RingBuffer(size_t capacity = RingBuffer::kDefaultCapacity)`
 - move-only：支持移动构造和移动赋值，不支持拷贝
 - 状态：`readable()` / `writable()` / `capacity()` / `empty()` / `full()`
-- 视图：`writeSpans(std::array<std::span<std::byte>, 2>&)` / `readSpans(std::array<std::span<const std::byte>, 2>&)`
-- POSIX I/O 视图：`getWriteIovecs(...)` / `getReadIovecs(...)`
+- 视图：`write_spans(std::array<std::span<std::byte>, 2>&)` / `read_spans(std::array<std::span<const std::byte>, 2>&)`
+- POSIX I/O 视图：`get_write_iovecs(...)` / `get_read_iovecs(...)`
 - 指针推进：`produce(size_t)` / `consume(size_t)`
 - 数据复制：`write(const void*, size_t)` / `write(std::string_view)` / `read(void*, size_t)`
 - `clear()`
@@ -338,20 +338,20 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 ### `ThreadPool`
 
 - `ThreadPool(size_t numThreads = 0)`
-- `addTask(F&&, Args&&...) -> std::future<std::invoke_result_t<F, Args...>>`
+- `add_task(F&&, Args&&...) -> std::future<std::invoke_result_t<F, Args...>>`
 - `execute(F&&)`
-- `threadCount()` / `pendingTasks()` / `isStopped()`
-- `waitAll()`
-- `stop()` / `stopNow()`
-- 语义：`addTask(...)` 在池已停止时抛 `std::runtime_error`；`execute(...)` 只派发任务，不返回 `future`
+- `thread_count()` / `pending_tasks()` / `is_stopped()`
+- `wait_all()`
+- `stop()` / `stop_now()`
+- 语义：`add_task(...)` 在池已停止时抛 `std::runtime_error`；`execute(...)` 只派发任务，不返回 `future`
 - 实现：任务队列基于 `moodycamel::BlockingConcurrentQueue<std::function<void()>>`；提交路径不使用 `std::mutex` / `std::condition_variable`
-- 阻塞：`waitAll()`、`stop()`、`stopNow()` 仍会阻塞调用线程，不是 coroutine awaitable
+- 阻塞：`wait_all()`、`stop()`、`stop_now()` 仍会阻塞调用线程，不是 coroutine awaitable
 
 ### `TaskWaiter`
 
-- `addTask(ThreadPool&, F&&)`
+- `add_task(ThreadPool&, F&&)`
 - `wait()`
-- `waitFor(timeout)`
+- `wait_for(timeout)`
 - 实现：使用原子计数和 `atomic::wait/notify_all` 等待，不再使用 mutex/condition_variable
 
 ### `PoolableObject` / `IsPoolable<T>`
@@ -365,10 +365,10 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 - `using Ptr = std::unique_ptr<T, std::function<void(T*)>>`
 - `using Creator = std::function<T*()>`
 - `using Destroyer = std::function<void(T*)>`
-- `ObjectPool(size_t initialSize = 0, size_t maxSize = 0, Creator creator = nullptr, Destroyer destroyer = nullptr)`
+- `ObjectPool(size_t initialSize = 0, size_t max_size = 0, Creator creator = nullptr, Destroyer destroyer = nullptr)`
 - `acquire()`：优先复用池内对象；池空时按需新建
-- `tryAcquire()`：仅在池内已有对象时成功，否则返回空 `Ptr`
-- `size()` / `totalCreated()` / `empty()`
+- `try_acquire()`：仅在池内已有对象时成功，否则返回空 `Ptr`
+- `size()` / `total_created()` / `empty()`
 - `clear()` / `shrink(size_t targetSize)`
 
 ### `BlockingObjectPool<T>`
@@ -378,9 +378,9 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 - `using Destroyer = std::function<void(T*)>`
 - `BlockingObjectPool(size_t poolSize, Creator creator = nullptr, Destroyer destroyer = nullptr)`
 - `acquire()`：阻塞直到池内有对象可取
-- `tryAcquireFor(timeout)`：超时返回空 `Ptr`
+- `try_acquire_for(timeout)`：超时返回空 `Ptr`
 - `available()`
-- 语义：这是固定大小阻塞池；没有 `tryAcquire()`、`totalCreated()`、`clear()`、`shrink()` 这组 API
+- 语义：这是固定大小阻塞池；没有 `try_acquire()`、`total_created()`、`clear()`、`shrink()` 这组 API
 
 ## 4. 流控与容错
 
@@ -391,27 +391,27 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 
 ### `RateLimiter`
 
-`rate_limiter.hpp` 的公开面分为四个无锁同步非阻塞限流器类型；异步 `acquire()` / awaitable 路径已移除，避免引入 `galay-kernel`。`tryAcquire(...)` 成功返回 `true`，未通过限流直接返回 `false`：
+`rate_limiter.hpp` 的公开面分为四个无锁同步非阻塞限流器类型；异步 `acquire()` / awaitable 路径已移除，避免引入 `galay-kernel`。`try_acquire(...)` 成功返回 `true`，未通过限流直接返回 `false`：
 
 - `CountingSemaphore`
-  - `tryAcquire(size_t n = 1)`
+  - `try_acquire(size_t n = 1)`
   - `release(size_t n = 1)`
   - `available()`
 - `TokenBucketLimiter`
   - `TokenBucketLimiter(double rate, size_t capacity)`
-  - `tryAcquire(size_t tokens = 1)`
-  - `availableTokens()`
-  - `setRate(double)` / `setCapacity(size_t)`
+  - `try_acquire(size_t tokens = 1)`
+  - `available_tokens()`
+  - `set_rate(double)` / `set_capacity(size_t)`
   - `rate()` / `capacity()`
 - `SlidingWindowLimiter`
-  - `SlidingWindowLimiter(size_t maxRequests, std::chrono::milliseconds windowSize)`
-  - `tryAcquire()`
-  - `maxRequests()`
-  - `windowSize()`
+  - `SlidingWindowLimiter(size_t max_requests, std::chrono::milliseconds window_size)`
+  - `try_acquire()`
+  - `max_requests()`
+  - `window_size()`
 - `LeakyBucketLimiter`
   - `LeakyBucketLimiter(double rate, size_t capacity)`
-  - `tryAcquire(size_t amount = 1)`
-  - `currentWater()`
+  - `try_acquire(size_t amount = 1)`
+  - `current_water()`
   - `rate()` / `capacity()`
 
 依赖边界：
@@ -424,7 +424,7 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 
 - `CircuitBreakerError`
   - `Open`：熔断器打开，`execute(F&&)` 未执行主函数
-- `CircuitBreakerExpected<T>`：约束 `execute` / `executeWithFallback` 接受的 expected-like 返回类型；函数需按值返回该类型，类型需要提供 `value_type`、`error_type` 和 `has_value()`
+- `CircuitBreakerExpected<T>`：约束 `execute` / `execute_with_fallback` 接受的 expected-like 返回类型；函数需按值返回该类型，类型需要提供 `value_type`、`error_type` 和 `has_value()`
 - `CircuitBreakerConfig`
   - `failureThreshold`
   - `successThreshold`
@@ -433,13 +433,13 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 - `BasicCircuitBreaker<ClockType = std::chrono::steady_clock>`：可注入时钟源的熔断器模板，适合确定性测试或自定义时间源
 - `CircuitBreaker`
   - `using CircuitBreaker = BasicCircuitBreaker<>`
-  - `allowRequest()`
-  - `onSuccess()` / `onFailure()`
+  - `allow_request()`
+  - `on_success()` / `on_failure()`
   - `execute(F&&)`：主函数必须返回 expected-like 结果，且 `error_type` 可从 `CircuitBreakerError` 构造；成功结果记录成功，失败结果记录失败；熔断打开时返回包含 `CircuitBreakerError::Open` 的失败结果
-  - `executeWithFallback(F&&, Fallback&&)`：主函数和 fallback 必须返回同一 expected-like 类型；主函数失败或熔断打开时返回 fallback 结果
-  - `state()` / `stateString()`
-  - `failureCount()` / `successCount()`
-  - `reset()` / `forceOpen()`
+  - `execute_with_fallback(F&&, Fallback&&)`：主函数和 fallback 必须返回同一 expected-like 类型；主函数失败或熔断打开时返回 fallback 结果
+  - `state()` / `state_string()`
+  - `failure_count()` / `success_count()`
+  - `reset()` / `force_open()`
   - `config()`
   - 语义：执行接口不捕获异常，也不通过异常判断失败；调用方应通过 `std::expected` 或兼容的结果类型表达业务失败
   - 配置归一化：`failureThreshold`、`successThreshold`、`halfOpenMaxRequests` 小于 1 时按 1 处理；负的 `resetTimeout` 按 0 处理
@@ -458,11 +458,11 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 
 ### `MurmurHash3Util`
 
-- `Hash32(const void*, size_t, uint32_t seed = 0)` / `Hash32(const std::string&, uint32_t seed = 0)`
-- `Hash128(const void*, size_t, uint32_t seed = 0)` / `Hash128(const std::string&, uint32_t seed = 0)`
-- `Hash128Raw(const void*, size_t, uint32_t seed = 0)` / `Hash128Raw(const std::string&, uint32_t seed = 0)`
-- C++17：`Hash32View(std::string_view, uint32_t seed = 0)`、`Hash128View(std::string_view, uint32_t seed = 0)`、`Hash128RawView(std::string_view, uint32_t seed = 0)`
-- 语义：`Hash32(...)` 返回 32 位整数；`Hash128(...)` / `Hash128View(...)` 返回 32 字符十六进制字符串；`Hash128Raw(...)` / `Hash128RawView(...)` 返回 `std::array<uint64_t, 2>`
+- `hash32(const void*, size_t, uint32_t seed = 0)` / `hash32(const std::string&, uint32_t seed = 0)`
+- `hash128(const void*, size_t, uint32_t seed = 0)` / `hash128(const std::string&, uint32_t seed = 0)`
+- `hash128_raw(const void*, size_t, uint32_t seed = 0)` / `hash128_raw(const std::string&, uint32_t seed = 0)`
+- C++17：`hash32_view(std::string_view, uint32_t seed = 0)`、`hash128_view(std::string_view, uint32_t seed = 0)`、`hash128_raw_view(std::string_view, uint32_t seed = 0)`
+- 语义：`hash32(...)` 返回 32 位整数；`hash128(...)` / `hash128_view(...)` 返回 32 字符十六进制字符串；`hash128_raw(...)` / `hash128_raw_view(...)` 返回 `std::array<uint64_t, 2>`
 
 ### `Balancer`
 
@@ -474,9 +474,9 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 ### `ConsistentHash`
 
 - `NodeStatus`
-  - 数据成员：`healthy` / `requestCount` / `failureCount`
-  - `recordRequest()` / `recordFailure()`
-  - `markHealthy()` / `reset()`
+  - 数据成员：`healthy` / `requestCount` / `failure_count`
+  - `record_request()` / `record_failure()`
+  - `mark_healthy()` / `reset()`
 - `NodeConfig`
   - 数据成员：`id` / `endpoint` / `weight = 1`
   - `operator==(const NodeConfig&)`
@@ -485,44 +485,44 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
   - `explicit PhysicalNode(NodeConfig cfg)`
 - `ConsistentHash`
   - `using HashFunc = std::function<uint32_t(const std::string&)>`
-  - `ConsistentHash(size_t virtualNodes = 150, HashFunc hashFunc = nullptr)`
-  - `addNode(const NodeConfig&)`
-  - `removeNode(const std::string& nodeId)`
-  - `getNode(const std::string& key) -> std::optional<NodeConfig>`
-  - `getHealthyNode(const std::string& key, size_t maxRetries = 3) -> std::optional<NodeConfig>`
-  - `getNodes(const std::string& key, size_t count) -> std::vector<NodeConfig>`
-  - `markUnhealthy(const std::string&)` / `markHealthy(const std::string&)`
-  - `getAllNodes() -> std::vector<NodeConfig>`
-  - `nodeCount()` / `virtualNodeCount()` / `empty()` / `clear()`
-- 语义：当前公开头里没有 `getNodeStatus()`；状态相关检索应落到 `NodeStatus`、`PhysicalNode` 以及 `markHealthy()` / `markUnhealthy()`
+  - `ConsistentHash(size_t virtualNodes = 150, HashFunc hash_func = nullptr)`
+  - `add_node(const NodeConfig&)`
+  - `remove_node(const std::string& nodeId)`
+  - `get_node(const std::string& key) -> std::optional<NodeConfig>`
+  - `get_healthy_node(const std::string& key, size_t maxRetries = 3) -> std::optional<NodeConfig>`
+  - `get_nodes(const std::string& key, size_t count) -> std::vector<NodeConfig>`
+  - `mark_unhealthy(const std::string&)` / `mark_healthy(const std::string&)`
+  - `get_all_nodes() -> std::vector<NodeConfig>`
+  - `node_count()` / `virtual_node_count()` / `empty()` / `clear()`
+- 语义：当前公开头里没有 `getNodeStatus()`；状态相关检索应落到 `NodeStatus`、`PhysicalNode` 以及 `mark_healthy()` / `mark_unhealthy()`
 
 ### `BloomFilter<T, Hash>`
 
-- `BloomFilter(size_t bitCount, Hash hash = Hash{})`
-- `static fromExpectedItems(size_t expectedItems, double falsePositiveRate, Hash hash = Hash{}) -> BloomFilter`
-- `static bitCountForExpectedItems(size_t expectedItems, double falsePositiveRate) -> size_t`
-- `add(const T&)` / `addHash(uint64_t hash64)`
-- `possiblyContains(const T&) const` / `possiblyContainsHash(uint64_t hash64) const`
+- `BloomFilter(size_t bit_count, Hash hash = Hash{})`
+- `static from_expected_items(size_t expectedItems, double falsePositiveRate, Hash hash = Hash{}) -> BloomFilter`
+- `static bit_count_for_expected_items(size_t expectedItems, double falsePositiveRate) -> size_t`
+- `add(const T&)` / `add_hash(uint64_t hash64)`
+- `possibly_contains(const T&) const` / `possibly_contains_hash(uint64_t hash64) const`
 - `clear()`
-- `bitCount()` / `blockCount()` / `hashCount()` / `empty()` / `insertionCount()`
+- `bit_count()` / `block_count()` / `hash_count()` / `empty()` / `insertion_count()`
 - 语义：
   - 采用 split-block Bloom Filter：每个 256-bit block 含 8 个 `uint32_t` word，每次 add/query 只访问一个 block，并在每个 word 中设置或检查 1 个 bit
-  - `possiblyContains(...) == false` 表示一定不存在
-  - `possiblyContains(...) == true` 只表示可能存在，存在假阳性；需要精确判断时必须回源确认
+  - `possibly_contains(...) == false` 表示一定不存在
+  - `possibly_contains(...) == true` 只表示可能存在，存在假阳性；需要精确判断时必须回源确认
   - 不支持删除；普通 Bloom Filter 无法安全删除单个元素
-  - false positive rate 受 bit 数、插入规模和 hash 分布影响，`fromExpectedItems(...)` 是容量估算而不是误判率承诺
+  - false positive rate 受 bit 数、插入规模和 hash 分布影响，`from_expected_items(...)` 是容量估算而不是误判率承诺
   - 非线程安全；并发 add/query/clear 同一个实例时必须外部同步
-  - 默认 `std::hash` 不保证跨进程或跨版本稳定；持久化或跨服务共享时应使用稳定 64-bit hash 并调用 `addHash()` / `possiblyContainsHash()`
+  - 默认 `std::hash` 不保证跨进程或跨版本稳定；持久化或跨服务共享时应使用稳定 64-bit hash 并调用 `add_hash()` / `possibly_contains_hash()`
 
 ### `TrieTree`
 
 - `add`
 - `contains`
-- `startsWith`
+- `starts_with`
 - `query`
 - `remove`
-- `getWordsWithPrefix`
-- `getAllWords`
+- `get_words_with_prefix`
+- `get_all_words`
 - `size()` / `empty()` / `clear()`
 
 ### `MVCC`
@@ -533,18 +533,18 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
   - `VersionedValue(Version v, std::unique_ptr<T> val, bool del = false)`
 - `Mvcc<T>`
   - `Mvcc()`
-  - `getValue(Version version) const -> const T*`
-  - `getCurrentValue() const -> const T*`
-  - `getValueWithVersion(Version version) const -> std::pair<const T*, Version>`
-  - `putValue(std::unique_ptr<T>) -> Version`
-  - `putValue(const T&) -> Version`
-  - `updateValue(std::function<std::unique_ptr<T>(const T*)>) -> Version`
-  - `compareAndSwap(Version expectedVersion, std::unique_ptr<T> newValue) -> Version`
-  - `removeValue(Version version)` / `deleteValue() -> Version`
-  - `isValid(Version version) const`
-  - `currentVersion() const` / `versionCount() const`
-  - `gc(size_t keepVersions)` / `gcOlderThan(Version olderThan)`
-  - `getAllVersions() const -> std::vector<Version>`
+  - `get_value(Version version) const -> const T*`
+  - `get_current_value() const -> const T*`
+  - `get_value_with_version(Version version) const -> std::pair<const T*, Version>`
+  - `put_value(std::unique_ptr<T>) -> Version`
+  - `put_value(const T&) -> Version`
+  - `update_value(std::function<std::unique_ptr<T>(const T*)>) -> Version`
+  - `compare_and_swap(Version expectedVersion, std::unique_ptr<T> newValue) -> Version`
+  - `remove_value(Version version)` / `delete_value() -> Version`
+  - `is_valid(Version version) const`
+  - `current_version() const` / `version_count() const`
+  - `gc(size_t keepVersions)` / `gc_older_than(Version olderThan)`
+  - `get_all_versions() const -> std::vector<Version>`
   - `clear()`
 - `Snapshot`
   - `explicit Snapshot(Version version)`
@@ -555,8 +555,8 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
   - `read() const -> const T*`
   - `write(std::unique_ptr<T> value)`
   - `commit()`
-  - `isCommitted() const`
-- 语义：`compareAndSwap(...)` 冲突时返回 `0`；`deleteValue()` 会写入 tombstone 版本，而不是立即擦除历史版本
+  - `is_committed() const`
+- 语义：`compare_and_swap(...)` 冲突时返回 `0`；`delete_value()` 会写入 tombstone 版本，而不是立即擦除历史版本
 
 ## 6. 应用与系统集成
 
@@ -571,28 +571,28 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 - 头文件拆分：`app/error.hpp`（错误类型）、`app/value.hpp`（无异常类型转换）、`app/arg.hpp`（选项）、`app/positional.hpp`（位置参数）、`app/cmd.hpp`（命令与解析）、`app/app.hpp`（入口，聚合以上全部）
 - `CliErrorCode`
   - `UnknownOption` / `MissingValue` / `InvalidValue` / `MissingRequired` / `NotInChoices` / `UnknownSubcommand` / `HelpRequested` / `VersionRequested`
-- `cliErrorString(CliErrorCode) -> const char*`
+- `cli_error_string(CliErrorCode) -> const char*`
 - `CliError`
   - `code` / `source` / `detail`
-  - `isTermination()`：`HelpRequested` 与 `VersionRequested` 为正常终止
+  - `is_termination()`：`HelpRequested` 与 `VersionRequested` 为正常终止
   - `message()`
 - `CliValue<T>`（转换器，支持 `bool`、整数、浮点、`std::string`）
-  - `typeName()` / `parse(std::string_view) -> std::expected<T, std::string>` / `toString(const T&)`
+  - `type_name()` / `parse(std::string_view) -> std::expected<T, std::string>` / `to_string(const T&)`
 - `Opt<T>`
   - `def(T)` / `required(bool = true)` / `multi(bool = true)` / `choices(std::vector<std::string>)`
-  - `bind(T*)` / `bindAll(std::vector<T>*)`
-  - `value()` / `values()` / `isSet()` / `name()` / `shortName()` / `description()`
+  - `bind(T*)` / `bind_all(std::vector<T>*)`
+  - `value()` / `values()` / `is_set()` / `name()` / `short_name()` / `description()`
 - `Positional<T>`
   - `def(T)` / `required(bool = true)` / `many(bool = true)` / `choices(...)`
-  - `bind(T*)` / `bindAll(std::vector<T>*)`
-  - `value()` / `values()` / `isSet()`
+  - `bind(T*)` / `bind_all(std::vector<T>*)`
+  - `value()` / `values()` / `is_set()`
 - `Cmd`
-  - `opt<T>(name, shortName, description)` / `opt<T>(name, description)`
-  - `flag(name, shortName, description)` / `flag(name, description)`
+  - `opt<T>(name, short_name, description)` / `opt<T>(name, description)`
+  - `flag(name, short_name, description)` / `flag(name, description)`
   - `pos<T>(name, description)`
   - `sub(name, description)` / `on(CmdCallback)`
   - `has(name)` / `rest()` / `selected()`
-  - `name()` / `description()` / `printHelp(std::ostream&)`
+  - `name()` / `description()` / `print_help(std::ostream&)`
 - `App`
   - `App(std::string name, std::string description = "")`
   - `version(std::string)`：声明后 `--version` 生效
@@ -605,16 +605,16 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 ### `Parser`
 
 - `ParserBase`
-  - `parseFile`
-  - `parseString`
-  - `getValue`
-  - `hasKey`
-  - `getKeys`
-  - `getValueAs<T>`
-  - `lastError()`
+  - `parse_file`
+  - `parse_string`
+  - `get_value`
+  - `has_key`
+  - `get_keys`
+  - `get_value_as<T>`
+  - `last_error()`
 - `ConfigParser`
-  - `getKeysInSection`
-  - `getArray`
+  - `get_keys_in_section`
+  - `get_array`
 - `IniParser`
   - 继承 `ConfigParser`
 - `EnvParser`
@@ -622,11 +622,11 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
 - `TomlParser`
   - 继承 `ParserBase`
   - 支持基础 key-value、section、dotted key、字符串、数字、布尔值和数组
-  - `getArray`
+  - `get_array`
 - `ParserManager`
   - `instance()`
-  - `registerParser(extension, creator)`
-  - `createParser(path)`
+  - `register_parser(extension, creator)`
+  - `create_parser(path)`
   - 默认注册：`.conf` → `ConfigParser`，`.ini` → `IniParser`，`.env` → `EnvParser`，`.toml` → `TomlParser`
 
 ### `Process`
@@ -638,26 +638,26 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
   - 数据成员：`code` / `signaled` / `signal`
   - `success() const`
 - `ProcessPriorityError`
-- `processPriorityErrorString(ProcessPriorityError)`
+- `process_priority_error_string(ProcessPriorityError)`
 - `ProcessAffinityError`
-- `processAffinityErrorString(ProcessAffinityError)`
+- `process_affinity_error_string(ProcessAffinityError)`
 - `Process`
-  - `Process::currentId()`
-  - `Process::parentId()`
+  - `Process::current_id()`
+  - `Process::parent_id()`
   - `Process::priority() -> std::expected<int, ProcessPriorityError>`
   - `Process::priority(ProcessId pid) -> std::expected<int, ProcessPriorityError>`
-  - `Process::setPriority(int value) -> std::expected<void, ProcessPriorityError>`
-  - `Process::setPriority(ProcessId pid, int value) -> std::expected<void, ProcessPriorityError>`
-  - `Process::cpuAffinity() -> std::expected<std::vector<unsigned int>, ProcessAffinityError>`
-  - `Process::cpuAffinity(ProcessId pid) -> std::expected<std::vector<unsigned int>, ProcessAffinityError>`
-  - `Process::setCpuAffinity(std::span<const unsigned int> cpus) -> std::expected<void, ProcessAffinityError>`
-  - `Process::setCpuAffinity(ProcessId pid, std::span<const unsigned int> cpus) -> std::expected<void, ProcessAffinityError>`
+  - `Process::set_priority(int value) -> std::expected<void, ProcessPriorityError>`
+  - `Process::set_priority(ProcessId pid, int value) -> std::expected<void, ProcessPriorityError>`
+  - `Process::cpu_affinity() -> std::expected<std::vector<unsigned int>, ProcessAffinityError>`
+  - `Process::cpu_affinity(ProcessId pid) -> std::expected<std::vector<unsigned int>, ProcessAffinityError>`
+  - `Process::set_cpu_affinity(std::span<const unsigned int> cpus) -> std::expected<void, ProcessAffinityError>`
+  - `Process::set_cpu_affinity(ProcessId pid, std::span<const unsigned int> cpus) -> std::expected<void, ProcessAffinityError>`
   - `wait(ProcessId pid, int options = 0) -> std::optional<ExitStatus>`
   - `spawn(const std::string& path, const std::vector<std::string>& args) -> ProcessId`
   - `execute(const std::string& command) -> ExitStatus`
-  - `executeWithOutput(const std::string& command) -> std::pair<ExitStatus, std::string>`
+  - `execute_with_output(const std::string& command) -> std::pair<ExitStatus, std::string>`
   - `kill(ProcessId pid, int signal)`
-  - `Process::isRunning(ProcessId pid)`
+  - `Process::is_running(ProcessId pid)`
   - `daemonize()`
 
 Linux 的进程亲和性接口操作传入 pid/tid 对应线程，默认使用进程主线程 pid；不会遍历已有线程。读取使用动态 mask，完整枚举实际 CPU ID；设置只做集合排序去重，编号与 online/cpuset 限制交给内核，不使用 `CPU::count()` 判定。Windows 保留 `GetProcessAffinityMask` / `SetProcessAffinityMask` 的现有单处理器组语义与 `DWORD_PTR` 位数限制。错误继续映射为现有 `ProcessAffinityError`；需要原始 `std::error_code` 的调用线程控制使用 `CPU` 接口。
@@ -675,16 +675,16 @@ Linux 的进程亲和性接口操作传入 pid/tid 对应线程，默认使用�
 
 ### `Base64Util`
 
-- `Base64Encode(const std::string&, bool url = false)`
-- `Base64EncodePem(const std::string&)`
-- `Base64EncodeMime(const std::string&)`
-- `Base64Decode(const std::string&, bool remove_linebreaks = false)`
-- `Base64Encode(const unsigned char*, size_t len, bool url = false)`
-- C++17：`Base64EncodeView(std::string_view, bool = false)`、`Base64EncodePemView(std::string_view)`、`Base64EncodeMimeView(std::string_view)`、`Base64DecodeView(std::string_view, bool = false)`
+- `base64_encode(const std::string&, bool url = false)`
+- `base64_encode_pem(const std::string&)`
+- `base64_encode_mime(const std::string&)`
+- `base64_decode(const std::string&, bool remove_linebreaks = false)`
+- `base64_encode(const unsigned char*, size_t len, bool url = false)`
+- C++17：`base64_encode_view(std::string_view, bool = false)`、`base64_encode_pem_view(std::string_view)`、`base64_encode_mime_view(std::string_view)`、`base64_decode_view(std::string_view, bool = false)`
 - 语义：
   - `url = false` 使用标准 Base64 字母表 `+/`；`url = true` 使用 URL-safe 字母表 `-_`
-  - `Base64EncodePem(...)` 会按每 64 个字符插入换行；`Base64EncodeMime(...)` 会按每 76 个字符插入换行
-  - `Base64Decode(...)` / `Base64DecodeView(...)` 遇到非法字符会抛 `std::runtime_error`
+  - `base64_encode_pem(...)` 会按每 64 个字符插入换行；`base64_encode_mime(...)` 会按每 76 个字符插入换行
+  - `base64_decode(...)` / `base64_decode_view(...)` 遇到非法字符会抛 `std::runtime_error`
   - `remove_linebreaks = true` 会先移除输入中的 `
 ` 再解码，适合处理 PEM / MIME 风格输出
 
@@ -694,12 +694,12 @@ Linux 的进程亲和性接口操作传入 pid/tid 对应线程，默认使用�
   - 数据成员：`code` / `length`
 - `HuffmanTable<T>`
   - `HuffmanTable()`
-  - `addCode(const T& symbol, uint32_t code, uint8_t length)`
-  - `getCode(const T& symbol) const -> const HuffmanCode&`
-  - `hasSymbol(const T& symbol) const`
-  - `getSymbol(uint32_t code, uint8_t length) const -> const T&`
-  - `tryGetSymbol(uint32_t code, uint8_t length, T& symbol) const`
-  - `getSymbols() const -> std::vector<T>`
+  - `add_code(const T& symbol, uint32_t code, uint8_t length)`
+  - `get_code(const T& symbol) const -> const HuffmanCode&`
+  - `has_symbol(const T& symbol) const`
+  - `get_symbol(uint32_t code, uint8_t length) const -> const T&`
+  - `try_get_symbol(uint32_t code, uint8_t length, T& symbol) const`
+  - `get_symbols() const -> std::vector<T>`
   - `size() const`
   - `clear()`
 - `HuffmanEncoder<T>`
@@ -707,54 +707,54 @@ Linux 的进程亲和性接口操作传入 pid/tid 对应线程，默认使用�
   - `encode(const T& symbol)`
   - `encode(const std::vector<T>& symbols)`
   - `finish() -> std::vector<uint8_t>`
-  - `bitCount() const`
+  - `bit_count() const`
   - `reset()`
 - `HuffmanDecoder<T>`
   - `HuffmanDecoder(const HuffmanTable<T>& table, uint8_t minCodeLen = 1, uint8_t maxCodeLen = 32)`
   - `decode(const std::vector<uint8_t>& data, size_t symbolCount = 0) -> std::vector<T>`
 - `HuffmanBuilder<T>`
   - `build(const std::unordered_map<T, size_t>& frequencies) -> HuffmanTable<T>`
-  - `buildFromData(const std::vector<T>& data) -> HuffmanTable<T>`
-- 语义：`HuffmanTable<T>::getCode()` / `getSymbol()` 在缺失项上抛异常；`HuffmanDecoder<T>::decode()` 在超过 `maxCodeLen` 时抛 `std::runtime_error`
+  - `build_from_data(const std::vector<T>& data) -> HuffmanTable<T>`
+- 语义：`HuffmanTable<T>::get_code()` / `get_symbol()` 在缺失项上抛异常；`HuffmanDecoder<T>::decode()` 在超过 `maxCodeLen` 时抛 `std::runtime_error`
 
 ### `MD5Util`
 
 - `MD5(const std::string&)` / `MD5(const unsigned char*, size_t)`
-- `MD5Raw(const std::string&)` / `MD5Raw(const unsigned char*, size_t)`
-- C++17：`MD5View(std::string_view)` / `MD5RawView(std::string_view)`
-- 语义：`MD5(...)` / `MD5View(...)` 返回 32 字符小写十六进制字符串；`MD5Raw(...)` / `MD5RawView(...)` 返回 `std::array<uint8_t, 16>` 原始摘要字节
+- `md5_raw(const std::string&)` / `md5_raw(const unsigned char*, size_t)`
+- C++17：`md5_view(std::string_view)` / `md5_raw_view(std::string_view)`
+- 语义：`MD5(...)` / `md5_view(...)` 返回 32 字符小写十六进制字符串；`md5_raw(...)` / `md5_raw_view(...)` 返回 `std::array<uint8_t, 16>` 原始摘要字节
 
 ### `SaltGenerator`
 
-- `generateHex(size_t length = 32)`
-- `generateBase64(size_t length = 32)`
-- `generateBytes(size_t length = 32)`
-- `generateCustom(size_t length, const std::string& charset)`
-- `generateSecureHex(size_t length = 32)`
-- `generateSecureBase64(size_t length = 32)`
-- `generateSecureBytes(size_t length = 32)`
-- `generateBcryptSalt()`
-- `generateTimestamped(size_t length = 32)`
-- `isValidHex(const std::string&)` / `isValidBase64(const std::string&)`
+- `generate_hex(size_t length = 32)`
+- `generate_base64(size_t length = 32)`
+- `generate_bytes(size_t length = 32)`
+- `generate_custom(size_t length, const std::string& charset)`
+- `generate_secure_hex(size_t length = 32)`
+- `generate_secure_base64(size_t length = 32)`
+- `generate_secure_bytes(size_t length = 32)`
+- `generate_bcrypt_salt()`
+- `generate_timestamped(size_t length = 32)`
+- `is_valid_hex(const std::string&)` / `is_valid_base64(const std::string&)`
 - 语义：
-  - `generateHex(length)` / `generateBase64(length)` / `generateBytes(length)` / `generateSecure*` 里的 `length` 表示“随机字节数”，不是最终字符串长度
+  - `generate_hex(length)` / `generate_base64(length)` / `generate_bytes(length)` / `generateSecure*` 里的 `length` 表示“随机字节数”，不是最终字符串长度
   - 因而十六进制输出通常是 `2 * length` 个字符，Base64 输出通常接近 `4 * ceil(length / 3)` 个字符
-  - `generateCustom(length, charset)` 的 `length` 才是最终输出字符数
-  - `generateBcryptSalt()` 使用 16 个安全随机字节并输出 22 字符 bcrypt 风格 Base64 盐值
+  - `generate_custom(length, charset)` 的 `length` 才是最终输出字符数
+  - `generate_bcrypt_salt()` 使用 16 个安全随机字节并输出 22 字符 bcrypt 风格 Base64 盐值
 
 ### `SHA256`
 
 - `hash(const uint8_t* data, size_t length) -> std::array<uint8_t, 32>`
-- `hashHex(const uint8_t* data, size_t length)`
-- `hashHex(const std::string& data)`
-- 语义：`hash(...)` 返回 32 字节原始摘要；`hashHex(...)` 返回 64 字符小写十六进制字符串
+- `hash_hex(const uint8_t* data, size_t length)`
+- `hash_hex(const std::string& data)`
+- 语义：`hash(...)` 返回 32 字节原始摘要；`hash_hex(...)` 返回 64 字符小写十六进制字符串
 
 ### `HMAC`
 
-- `hmacSha256(const uint8_t* key, size_t keyLen, const uint8_t* data, size_t dataLen) -> std::array<uint8_t, 32>`
-- `hmacSha256(const std::string& key, const std::string& data) -> std::array<uint8_t, 32>`
-- `hmacSha256Hex(const std::string& key, const std::string& data)`
-- 语义：`hmacSha256(...)` 返回 32 字节原始 HMAC；`hmacSha256Hex(...)` 返回 64 字符小写十六进制字符串
+- `hmac_sha256(const uint8_t* key, size_t keyLen, const uint8_t* data, size_t dataLen) -> std::array<uint8_t, 32>`
+- `hmac_sha256(const std::string& key, const std::string& data) -> std::array<uint8_t, 32>`
+- `hmac_sha256_hex(const std::string& key, const std::string& data)`
+- 语义：`hmac_sha256(...)` 返回 32 字节原始 HMAC；`hmac_sha256_hex(...)` 返回 64 字符小写十六进制字符串
 
 ### `defn.hpp`
 
@@ -779,9 +779,9 @@ Linux 的进程亲和性接口操作传入 pid/tid 对应线程，默认使用�
 - 当前仓库没有统一的 `expected` / 错误码基类；检索失败语义时必须回到对应头文件签名，而不能把整个仓库当成单一错误模型
 - 纯工具类主路径集中在 `core/`、`encoding/`、`crypto/`、`common/`，它们主要回答“输入是什么、返回值是什么”
 - 线程池位于 `thread/`，对象池位于 `common/`，系统资源接口位于 `system/`；检索时要额外关注阻塞、等待与资源释放语义
-- `ThreadPool::addTask(...)` 返回 `std::future<...>`，而 `execute(...)` 是 fire-and-forget 风格；两者不应混用为同一等待模型
+- `ThreadPool::add_task(...)` 返回 `std::future<...>`，而 `execute(...)` 是 fire-and-forget 风格；两者不应混用为同一等待模型
 - `ObjectPool<T>` 与 `BlockingObjectPool<T>` 不是同一组方法：前者是“可扩容 + 非阻塞取对象”，后者是“固定池 + 阻塞等待”
-- `RateLimiter` 不再提供 `acquire(...)` awaitable；使用无锁同步非阻塞 `tryAcquire(...)` 获取结果
+- `RateLimiter` 不再提供 `acquire(...)` awaitable；使用无锁同步非阻塞 `try_acquire(...)` 获取结果
 - `ConsistentHash` 当前没有 `getNodeStatus()` 公开 API；状态检索要从 `NodeStatus`、`PhysicalNode` 以及标记接口理解
 - `App::run(...)`、`ParserBase::*`、`Process::*`、`System::*` 直接面向进程 / 文件系统 / 环境变量等外部状态，细节问题需要结合真实调用环境理解
 - 资源生命周期主要集中在 `ThreadPool`、对象池、限流器、断路器与 `Process` 相关 API；纯字符串 / 哈希 / 编码工具通常是无状态或短生命周期值语义

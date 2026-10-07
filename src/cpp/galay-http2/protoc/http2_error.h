@@ -100,22 +100,22 @@ public:
      * @brief 判断是否存在错误
      * @return 非无错误时返回 true
      */
-    bool isError() const { return m_code != Http2ErrorCode::NoError; }
+    bool is_error() const { return m_code != Http2ErrorCode::NoError; }
 
     /**
      * @brief 转换为可读字符串
      * @return 格式为 "错误码名称: 附加信息"
      */
-    std::string toString() const {
-        return http2ErrorCodeToString(m_code) + (m_message.empty() ? "" : ": " + m_message);
+    std::string to_string() const {
+        return http2_error_code_to_string(m_code) + (m_message.empty() ? "" : ": " + m_message);
     }
 
-    static Http2Error noError() { return Http2Error(Http2ErrorCode::NoError); } ///< 创建无错误对象
-    static Http2Error protocolError(const std::string& msg = "") { return Http2Error(Http2ErrorCode::ProtocolError, msg); } ///< 创建协议错误
-    static Http2Error internalError(const std::string& msg = "") { return Http2Error(Http2ErrorCode::InternalError, msg); } ///< 创建内部错误
-    static Http2Error flowControlError(const std::string& msg = "") { return Http2Error(Http2ErrorCode::FlowControlError, msg); } ///< 创建流量控制错误
-    static Http2Error frameSizeError(const std::string& msg = "") { return Http2Error(Http2ErrorCode::FrameSizeError, msg); } ///< 创建帧大小错误
-    static Http2Error compressionError(const std::string& msg = "") { return Http2Error(Http2ErrorCode::CompressionError, msg); } ///< 创建压缩错误
+    static Http2Error no_error() { return Http2Error(Http2ErrorCode::NoError); } ///< 创建无错误对象
+    static Http2Error protocol_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::ProtocolError, msg); } ///< 创建协议错误
+    static Http2Error internal_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::InternalError, msg); } ///< 创建内部错误
+    static Http2Error flow_control_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::FlowControlError, msg); } ///< 创建流量控制错误
+    static Http2Error frame_size_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::FrameSizeError, msg); } ///< 创建帧大小错误
+    static Http2Error compression_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::CompressionError, msg); } ///< 创建压缩错误
 
 private:
     std::string m_message; ///< 附加描述信息
@@ -142,7 +142,7 @@ enum class Http2RuntimeError
  * @param error 运行时错误枚举
  * @return 错误名称字符串
  */
-inline std::string http2RuntimeErrorToString(Http2RuntimeError error) {
+inline std::string http2_runtime_error_to_string(Http2RuntimeError error) {
     switch (error) {
         case Http2RuntimeError::ProtocolViolation:    return "protocol-violation";
         case Http2RuntimeError::FlowControlViolation: return "flow-control-violation";
@@ -160,7 +160,7 @@ inline std::string http2RuntimeErrorToString(Http2RuntimeError error) {
  * @param error 运行时错误枚举
  * @return 致命错误返回 true（ProtocolViolation/FlowControlViolation）
  */
-inline bool http2IsConnectionFatal(Http2RuntimeError error) {
+inline bool http2_is_connection_fatal(Http2RuntimeError error) {
     switch (error) {
         case Http2RuntimeError::ProtocolViolation:
         case Http2RuntimeError::FlowControlViolation:
@@ -187,10 +187,10 @@ struct Http2GoAwayError
     bool retryable = false;                                ///< 是否可安全重试
     std::string debug;                                     ///< 调试信息
 
-    std::string toString() const {
+    std::string to_string() const {
         return "GOAWAY stream_id=" + std::to_string(stream_id) +
                " last_stream_id=" + std::to_string(last_stream_id) +
-               " error=" + http2ErrorCodeToString(error_code) +
+               " error=" + http2_error_code_to_string(error_code) +
                " retryable=" + std::string(retryable ? "true" : "false") +
                (debug.empty() ? "" : (" debug=" + debug));
     }

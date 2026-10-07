@@ -22,7 +22,7 @@ struct Counts
     std::uint64_t duplicate_ignored = 0;
 };
 
-Counts runPressure()
+Counts run_pressure()
 {
     Counts counts;
     for (std::uint64_t i = 0; i < kIterations; ++i) {
@@ -52,12 +52,12 @@ Counts runPressure()
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     const auto start = std::chrono::steady_clock::now();
-    const Counts counts = runPressure();
+    const Counts counts = run_pressure();
     const auto elapsed = std::chrono::steady_clock::now() - start;
     const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
 

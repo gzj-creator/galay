@@ -26,7 +26,7 @@ constexpr int kIterationsPerWorker = 250;
 constexpr size_t kSeedConnections = 32;
 
 template <typename T>
-void addCounter(std::atomic<T>& counter, T delta = T{1}) noexcept
+void add_counter(std::atomic<T>& counter, T delta = T{1}) noexcept
 requires std::is_integral_v<T>
 {
     const T previous = counter.fetch_add(delta, std::memory_order_acq_rel);
@@ -42,7 +42,7 @@ struct SharedState {
     std::atomic<int> notify_failures{0};
 };
 
-Task<void> poolWorker(RedisConnectionPool* pool,
+Task<void> pool_worker(RedisConnectionPool* pool,
                       SharedState* state,
                       std::shared_ptr<std::atomic<int>> remaining,
                       std::shared_ptr<AsyncWaiter<void>> done_waiter)
@@ -59,7 +59,7 @@ Task<void> poolWorker(RedisConnectionPool* pool,
         }
 
         auto conn = result.value();
-        if (!conn || conn->isClosed() || !conn->isHealthy()) {
+        if (!conn || conn->is_closed() || !conn->is_healthy()) {
             ++local_invalid_connections;
         } else {
             ++local_completed_ops;
@@ -67,21 +67,21 @@ Task<void> poolWorker(RedisConnectionPool* pool,
         pool->release(conn);
     }
 
-    addCounter(state->acquire_failures, local_acquire_failures);
-    addCounter(state->invalid_connections, local_invalid_connections);
-    addCounter(state->completed_ops, local_completed_ops);
+    add_counter(state->acquire_failures, local_acquire_failures);
+    add_counter(state->invalid_connections, local_invalid_connections);
+    add_counter(state->completed_ops, local_completed_ops);
 
     const int previous = remaining->fetch_sub(1, std::memory_order_acq_rel);
     if (previous == 1) {
         const bool notified = done_waiter->notify();
         if (!notified) {
-            addCounter(state->notify_failures);
+            add_counter(state->notify_failures);
         }
     }
     co_return;
 }
 
-Task<void> runPoolThreadedState(IOScheduler** schedulers, std::promise<int>* exit_code)
+Task<void> run_pool_threaded_state(IOScheduler** schedulers, std::promise<int>* exit_code)
 {
     ConnectionPoolConfig config = ConnectionPoolConfig::create("127.0.0.1", 6379, 0, kSeedConnections);
     config.initial_connections = 0;
@@ -96,14 +96,14 @@ Task<void> runPoolThreadedState(IOScheduler** schedulers, std::promise<int>* exi
     }
 
     for (size_t i = 0; i < kSeedConnections; ++i) {
-        auto conn = pool.createConnectionSlot();
+        auto conn = pool.create_connection_slot();
         if (!conn) {
             std::cerr << "failed to create seeded pool connection\n";
             exit_code->set_value(1);
             co_return;
         }
-        conn->setHealthy(true);
-        const bool returned = pool.returnToAvailable(conn);
+        conn->set_healthy(true);
+        const bool returned = pool.return_to_available(conn);
         if (!returned) {
             std::cerr << "failed to seed pool idle queue\n";
             exit_code->set_value(1);
@@ -122,9 +122,9 @@ Task<void> runPoolThreadedState(IOScheduler** schedulers, std::promise<int>* exi
             exit_code->set_value(1);
             co_return;
         }
-        const bool scheduled = scheduleTask(
+        const bool scheduled = schedule_task(
             scheduler,
-            poolWorker(&pool, &state, remaining, done_waiter));
+            pool_worker(&pool, &state, remaining, done_waiter));
         if (!scheduled) {
             std::cerr << "failed to schedule pool worker\n";
             exit_code->set_value(1);
@@ -139,7 +139,7 @@ Task<void> runPoolThreadedState(IOScheduler** schedulers, std::promise<int>* exi
         co_return;
     }
 
-    const auto stats = pool.getStats();
+    const auto stats = pool.get_stats();
     const int expected_ops = kWorkerCount * kIterationsPerWorker;
     const int failures = state.acquire_failures.load(std::memory_order_acquire);
     const int invalid = state.invalid_connections.load(std::memory_order_acquire);
@@ -180,8 +180,8 @@ Task<void> runPoolThreadedState(IOScheduler** schedulers, std::promise<int>* exi
 int main()
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(kSchedulerCount)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(kSchedulerCount)
+        .parallel_scheduler_count(0)
         .build();
     auto started = runtime.start();
     if (!started) {
@@ -191,7 +191,7 @@ int main()
 
     IOScheduler* schedulers[kSchedulerCount] = {};
     for (int i = 0; i < kSchedulerCount; ++i) {
-        schedulers[i] = runtime.getNextIOScheduler();
+        schedulers[i] = runtime.get_next_io_scheduler();
         if (schedulers[i] == nullptr) {
             runtime.stop();
             std::cerr << "failed to get IO scheduler\n";
@@ -201,9 +201,9 @@ int main()
 
     std::promise<int> exit_code_promise;
     auto exit_code_future = exit_code_promise.get_future();
-    const bool scheduled = scheduleTask(
+    const bool scheduled = schedule_task(
         schedulers[0],
-        runPoolThreadedState(schedulers, &exit_code_promise));
+        run_pool_threaded_state(schedulers, &exit_code_promise));
     if (!scheduled) {
         runtime.stop();
         std::cerr << "failed to schedule threaded state test\n";

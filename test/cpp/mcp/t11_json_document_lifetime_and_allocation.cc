@@ -26,12 +26,12 @@ bool require(bool condition, std::string_view message)
     return true;
 }
 
-std::size_t takeAllocationCount()
+std::size_t take_allocation_count()
 {
     return g_allocations.exchange(0, std::memory_order_relaxed);
 }
 
-bool readString(const galay::mcp::JsonDocument& doc, const char* key, std::string_view expected)
+bool read_string(const galay::mcp::JsonDocument& doc, const char* key, std::string_view expected)
 {
     auto value = doc.root().at(key).as_string();
     if (!value) {
@@ -41,7 +41,7 @@ bool readString(const galay::mcp::JsonDocument& doc, const char* key, std::strin
     return require(*value == expected, "unexpected string value");
 }
 
-bool externalElementSurvivesDocumentMove()
+bool external_element_survives_document_move()
 {
     auto parsed = galay::mcp::JsonDocument::parse(R"({"params":{"name":"before-move"}})");
     if (!require(parsed.has_value(), "failed to parse move-alias document")) {
@@ -119,13 +119,13 @@ int main()
         return 1;
     }
 
-    if (!readString(first.value(), "name", "first")) {
+    if (!read_string(first.value(), "name", "first")) {
         return 1;
     }
-    if (!readString(second.value(), "name", "second")) {
+    if (!read_string(second.value(), "name", "second")) {
         return 1;
     }
-    if (!externalElementSurvivesDocumentMove()) {
+    if (!external_element_survives_document_move()) {
         return 1;
     }
 
@@ -141,7 +141,7 @@ int main()
         }
     }
 
-    takeAllocationCount();
+    take_allocation_count();
     g_count_allocations.store(true, std::memory_order_relaxed);
     for (std::size_t i = 0; i < short_window; ++i) {
         auto doc = galay::mcp::JsonDocument::parse(json);
@@ -151,7 +151,7 @@ int main()
         }
     }
     g_count_allocations.store(false, std::memory_order_relaxed);
-    const auto short_allocations = takeAllocationCount();
+    const auto short_allocations = take_allocation_count();
 
     g_count_allocations.store(true, std::memory_order_relaxed);
     for (std::size_t i = 0; i < long_window; ++i) {
@@ -162,7 +162,7 @@ int main()
         }
     }
     g_count_allocations.store(false, std::memory_order_relaxed);
-    const auto long_allocations = takeAllocationCount();
+    const auto long_allocations = take_allocation_count();
 
     if (!require(long_allocations == short_allocations * (long_window / short_window),
                  "JsonDocument::parse steady-state allocation count is not constant per parse")) {

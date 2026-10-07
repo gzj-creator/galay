@@ -39,11 +39,11 @@ public:
         return copy;
     }
 
-    bool parseFile(const std::string& path) override {
-        return parseFileContent(path);
+    bool parse_file(const std::string& path) override {
+        return parse_file_content(path);
     }
 
-    bool parseString(const std::string& content) override {
+    bool parse_string(const std::string& content) override {
         m_values.clear();
         m_last_error.clear();
         std::string current_section;
@@ -82,7 +82,7 @@ public:
         return true;
     }
 
-    std::optional<std::string> getValue(const std::string& key) const override {
+    std::optional<std::string> get_value(const std::string& key) const override {
         auto iter = m_values.find(key);
         if (iter != m_values.end()) {
             return iter->second;
@@ -90,11 +90,11 @@ public:
         return std::nullopt;
     }
 
-    bool hasKey(const std::string& key) const override {
+    bool has_key(const std::string& key) const override {
         return m_values.find(key) != m_values.end();
     }
 
-    std::vector<std::string> getKeys() const override {
+    std::vector<std::string> get_keys() const override {
         std::vector<std::string> keys;
         keys.reserve(m_values.size());
         for (const auto& entry : m_values) {
@@ -108,7 +108,7 @@ public:
      * @param section 分节名称
      * @return 键名列表
      */
-    std::vector<std::string> getKeysInSection(const std::string& section) const {
+    std::vector<std::string> get_keys_in_section(const std::string& section) const {
         std::vector<std::string> keys;
         std::string prefix = section + ".";
         for (const auto& entry : m_values) {
@@ -124,12 +124,12 @@ public:
      * @param key 键名
      * @return 字符串数组
      */
-    std::vector<std::string> getArray(const std::string& key) const {
-        auto value = getValue(key);
+    std::vector<std::string> get_array(const std::string& key) const {
+        auto value = get_value(key);
         if (!value) {
             return {};
         }
-        return parser_detail::splitCommaSeparated(*value);
+        return parser_detail::split_comma_separated(*value);
     }
 
 private:

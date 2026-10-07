@@ -34,22 +34,22 @@ int main() {
     headers.emplace_back("content-length", "128");
     headers.emplace_back("user-agent", "Go-http-client/2.0");
     headers.emplace_back("x-extra", "keep-me");
-    stream->setDecodedHeaders(std::move(headers));
-    stream->consumeDecodedHeadersAsRequest();
+    stream->set_decoded_headers(std::move(headers));
+    stream->consume_decoded_headers_as_request();
 
-    if (!check(stream->request().getHeader("accept-encoding") == "gzip",
+    if (!check(stream->request().get_header("accept-encoding") == "gzip",
                "request should expose accept-encoding through lookup")) {
         return 1;
     }
-    if (!check(stream->request().getHeader("content-type") == "text/plain",
+    if (!check(stream->request().get_header("content-type") == "text/plain",
                "request should expose content-type through lookup")) {
         return 1;
     }
-    if (!check(stream->request().getHeader("content-length") == "128",
+    if (!check(stream->request().get_header("content-length") == "128",
                "request should expose content-length through lookup")) {
         return 1;
     }
-    if (!check(stream->request().getHeader("user-agent") == "Go-http-client/2.0",
+    if (!check(stream->request().get_header("user-agent") == "Go-http-client/2.0",
                "request should expose user-agent through lookup")) {
         return 1;
     }
@@ -64,7 +64,7 @@ int main() {
     }
 
     stream->request().clear();
-    if (!check(stream->request().getHeader("content-type").empty(),
+    if (!check(stream->request().get_header("content-type").empty(),
                "request clear should reset common header fast-path state")) {
         return 1;
     }

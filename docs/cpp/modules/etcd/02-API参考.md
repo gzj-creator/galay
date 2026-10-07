@@ -49,8 +49,8 @@ struct EtcdNetworkConfig {
     size_t buffer_size = 16384;
     bool keepalive = true;
 
-    bool isRequestTimeoutEnabled() const;
-    static EtcdNetworkConfig withTimeout(std::chrono::milliseconds timeout);
+    bool is_request_timeout_enabled() const;
+    static EtcdNetworkConfig with_timeout(std::chrono::milliseconds timeout);
 };
 ```
 
@@ -68,7 +68,7 @@ struct EtcdConfig : EtcdNetworkConfig {
     EtcdProductionConfig production;
     EtcdCredentialConfig credentials;
 
-    static EtcdConfig withTimeout(std::chrono::milliseconds timeout);
+    static EtcdConfig with_timeout(std::chrono::milliseconds timeout);
 };
 ```
 
@@ -113,13 +113,13 @@ struct EtcdCredentialConfig {
     std::string password;
     std::string bearer_token;
 
-    std::string redactedString() const;
+    std::string redacted_string() const;
 };
 ```
 
 语义：
 
-- `redactedString()` 可用于日志/调试输出，但不会返回明文 `password` 或 `bearer_token`
+- `redacted_string()` 可用于日志/调试输出，但不会返回明文 `password` 或 `bearer_token`
 - 当前模块没有自动登录或 token 刷新行为；这部分属于后续 auth task
 
 ### `EtcdProductionConfig`
@@ -175,15 +175,15 @@ struct PipelineOp {
     std::optional<int64_t> limit = std::nullopt;
     std::optional<int64_t> lease_id = std::nullopt;
 
-    static PipelineOp Put(std::string key,
+    static PipelineOp put(std::string key,
                           std::string value,
                           std::optional<int64_t> lease_id = std::nullopt);
 
-    static PipelineOp Get(std::string key,
+    static PipelineOp get(std::string key,
                           bool prefix = false,
                           std::optional<int64_t> limit = std::nullopt);
 
-    static PipelineOp Del(std::string key, bool prefix = false);
+    static PipelineOp del(std::string key, bool prefix = false);
 };
 ```
 
@@ -216,7 +216,7 @@ struct EtcdClientStats {
 
 语义：
 
-- `EtcdClient::getStats()` / `AsyncEtcdClient::getStats()` 当前返回只读快照
+- `EtcdClient::get_stats()` / `AsyncEtcdClient::get_stats()` 当前返回只读快照
 - 在本 task 完成后，普通单端点 client 默认仍返回零值；真实计数由后续生产 wrapper 接入
 
 ### `EtcdErrorType` 与 `EtcdError`
@@ -245,7 +245,7 @@ public:
 
     EtcdErrorType type() const;
     std::string message() const;
-    bool isOk() const;
+    bool is_ok() const;
 };
 ```
 
@@ -297,15 +297,15 @@ using EtcdVoidResult = std::expected<void, EtcdError>;
 class EtcdClientBuilder {
 public:
     EtcdClientBuilder& endpoint(std::string endpoint);
-    EtcdClientBuilder& apiPrefix(std::string prefix);
-    EtcdClientBuilder& productionConfig(EtcdProductionConfig config);
-    EtcdClientBuilder& requestTimeout(std::chrono::milliseconds timeout);
-    EtcdClientBuilder& bufferSize(size_t size);
-    EtcdClientBuilder& keepAlive(bool enabled);
+    EtcdClientBuilder& api_prefix(std::string prefix);
+    EtcdClientBuilder& production_config(EtcdProductionConfig config);
+    EtcdClientBuilder& request_timeout(std::chrono::milliseconds timeout);
+    EtcdClientBuilder& buffer_size(size_t size);
+    EtcdClientBuilder& keep_alive(bool enabled);
     EtcdClientBuilder& config(EtcdConfig config);
     EtcdClient build() const;
-    EtcdConfig& buildConfig();
-    const EtcdConfig& buildConfig() const;
+    EtcdConfig& build_config();
+    const EtcdConfig& build_config() const;
 };
 ```
 
@@ -338,11 +338,11 @@ public:
                       std::optional<int64_t> limit = std::nullopt);
 
     EtcdDeleteResult del(const std::string& key, bool prefix = false);
-    EtcdLeaseGrantResult grantLease(int64_t ttl_seconds);
-    EtcdLeaseGrantResult keepAliveOnce(int64_t lease_id);
+    EtcdLeaseGrantResult grant_lease(int64_t ttl_seconds);
+    EtcdLeaseGrantResult keep_alive_once(int64_t lease_id);
     EtcdPipelineResult pipeline(std::span<const PipelineOp> operations);
     EtcdPipelineResult pipeline(std::vector<PipelineOp> operations);
-    EtcdClientStats getStats() const;
+    EtcdClientStats get_stats() const;
 
     bool connected() const;
 };
@@ -361,7 +361,7 @@ public:
 - `connect()` 在“已经连接”时直接成功返回，不重复建连
 - `close()` 在“已经关闭”时也会直接成功返回
 - `get(..., true, limit)` 与 `del(..., true)` 使用 etcd 前缀 range 语义
-- `keepAliveOnce()` 在未开启 `request_timeout` 时，会对这次续约请求使用固定 5 秒超时
+- `keep_alive_once()` 在未开启 `request_timeout` 时，会对这次续约请求使用固定 5 秒超时
 - `pipeline()` 是固定格式的 txn 批量请求：`compare=[]`、`failure=[]`，只公开 success 分支
 
 ### `EtcdClusterClient` / `EtcdClientLease`
@@ -369,24 +369,24 @@ public:
 ```cpp
 class EtcdClusterClientBuilder {
 public:
-    EtcdClusterClientBuilder& productionConfig(EtcdProductionConfig config);
-    EtcdClusterClientBuilder& connectionsPerEndpoint(size_t count);
+    EtcdClusterClientBuilder& production_config(EtcdProductionConfig config);
+    EtcdClusterClientBuilder& connections_per_endpoint(size_t count);
     EtcdClusterClient build() const;
 };
 
 class EtcdClusterClient {
 public:
-    EtcdClientAcquireResult tryAcquire();
-    EtcdClientAcquireResult acquireConnected();
+    EtcdClientAcquireResult try_acquire();
+    EtcdClientAcquireResult acquire_connected();
 
     template <class Fn>
-    auto withClient(Fn&& fn)
+    auto with_client(Fn&& fn)
         -> std::expected<
             typename std::invoke_result_t<Fn, EtcdClient&>::value_type,
             EtcdError>;
 
     size_t size() const noexcept;
-    size_t idleCount() const noexcept;
+    size_t idle_count() const noexcept;
 };
 
 class EtcdClientLease {
@@ -397,11 +397,11 @@ public:
 };
 ```
 
-- `withClient(fn)` 是常规入口：取得租约、在需要时同步连接、执行 `fn(EtcdClient&)`，并返回 `std::expected<T, EtcdError>`
-- `acquireConnected()` 适合需要跨多个操作持有同一 client 的场景；它返回已经连接的 move-only 租约
-- `tryAcquire()` 仍作为低阶非阻塞入口保留：只访问无锁空闲队列，不连接网络、不执行请求
+- `with_client(fn)` 是常规入口：取得租约、在需要时同步连接、执行 `fn(EtcdClient&)`，并返回 `std::expected<T, EtcdError>`
+- `acquire_connected()` 适合需要跨多个操作持有同一 client 的场景；它返回已经连接的 move-only 租约
+- `try_acquire()` 仍作为低阶非阻塞入口保留：只访问无锁空闲队列，不连接网络、不执行请求
 - 池空返回 `EtcdErrorType::PoolExhausted`
-- 租约为 move-only；`withClient()` 的成功、建连失败、回调错误路径都会由 RAII 自动归还，手动租约析构或 `release()` 也会归还
+- 租约为 move-only；`with_client()` 的成功、建连失败、回调错误路径都会由 RAII 自动归还，手动租约析构或 `release()` 也会归还
 - pool 本身可移动，已经借出的租约仍会归还到同一共享 pool state
 
 ## 4. 异步客户端
@@ -430,15 +430,15 @@ class AsyncEtcdClientBuilder {
 public:
     AsyncEtcdClientBuilder& scheduler(galay::kernel::IOScheduler* scheduler);
     AsyncEtcdClientBuilder& endpoint(std::string endpoint);
-    AsyncEtcdClientBuilder& apiPrefix(std::string prefix);
-    AsyncEtcdClientBuilder& productionConfig(EtcdProductionConfig config);
-    AsyncEtcdClientBuilder& requestTimeout(std::chrono::milliseconds timeout);
-    AsyncEtcdClientBuilder& bufferSize(size_t size);
-    AsyncEtcdClientBuilder& keepAlive(bool enabled);
+    AsyncEtcdClientBuilder& api_prefix(std::string prefix);
+    AsyncEtcdClientBuilder& production_config(EtcdProductionConfig config);
+    AsyncEtcdClientBuilder& request_timeout(std::chrono::milliseconds timeout);
+    AsyncEtcdClientBuilder& buffer_size(size_t size);
+    AsyncEtcdClientBuilder& keep_alive(bool enabled);
     AsyncEtcdClientBuilder& config(EtcdConfig config);
     AsyncEtcdClient build() const;
-    EtcdConfig& buildConfig();
-    const EtcdConfig& buildConfig() const;
+    EtcdConfig& build_config();
+    const EtcdConfig& build_config() const;
 };
 ```
 
@@ -449,16 +449,16 @@ class AsyncEtcdClusterClientBuilder {
 public:
     AsyncEtcdClusterClientBuilder& scheduler(galay::kernel::IOScheduler* scheduler);
     AsyncEtcdClusterClientBuilder& endpoint(std::string endpoint);
-    AsyncEtcdClusterClientBuilder& apiPrefix(std::string prefix);
-    AsyncEtcdClusterClientBuilder& productionConfig(EtcdProductionConfig config);
-    AsyncEtcdClusterClientBuilder& connectionsPerEndpoint(size_t count);
-    AsyncEtcdClusterClientBuilder& requestTimeout(std::chrono::milliseconds timeout);
-    AsyncEtcdClusterClientBuilder& bufferSize(size_t size);
-    AsyncEtcdClusterClientBuilder& keepAlive(bool enabled);
+    AsyncEtcdClusterClientBuilder& api_prefix(std::string prefix);
+    AsyncEtcdClusterClientBuilder& production_config(EtcdProductionConfig config);
+    AsyncEtcdClusterClientBuilder& connections_per_endpoint(size_t count);
+    AsyncEtcdClusterClientBuilder& request_timeout(std::chrono::milliseconds timeout);
+    AsyncEtcdClusterClientBuilder& buffer_size(size_t size);
+    AsyncEtcdClusterClientBuilder& keep_alive(bool enabled);
     AsyncEtcdClusterClientBuilder& config(EtcdConfig config);
     AsyncEtcdClusterClient build() const;
-    EtcdConfig& buildConfig();
-    const EtcdConfig& buildConfig() const;
+    EtcdConfig& build_config();
+    const EtcdConfig& build_config() const;
 };
 ```
 
@@ -471,28 +471,28 @@ class AsyncEtcdClusterClient {
 public:
     explicit AsyncEtcdClusterClient(galay::kernel::IOScheduler* scheduler = nullptr,
                                     EtcdConfig config = {});
-    AsyncEtcdClientAcquireResult tryAcquire();
-    galay::kernel::Task<AsyncEtcdClientAcquireResult> acquireConnected();
+    AsyncEtcdClientAcquireResult try_acquire();
+    galay::kernel::Task<AsyncEtcdClientAcquireResult> acquire_connected();
 
     template <class Fn>
-    auto withClient(Fn fn) -> galay::kernel::Task<
+    auto with_client(Fn fn) -> galay::kernel::Task<
         std::expected<details::AsyncEtcdOperationValue<Fn>, EtcdError>>;
 
     size_t size() const noexcept;
-    size_t idleCount() const noexcept;
+    size_t idle_count() const noexcept;
     galay::kernel::IOScheduler* scheduler() const noexcept;
 };
 ```
 
 语义补充：
 
-- `withClient(fn)` 接受 `Task<std::expected<T, EtcdError>>(AsyncEtcdClient&)` 形式的操作；它自动取得租约、按需异步连接并等待操作完成
+- `with_client(fn)` 接受 `Task<std::expected<T, EtcdError>>(AsyncEtcdClient&)` 形式的操作；它自动取得租约、按需异步连接并等待操作完成
 - `fn` 按值保存在协程 frame 中，租约也会 move 到 frame 局部，因此两者都能安全跨越所有 `co_await`
 - 回调 Task 的调度或结果消费错误会映射为 `EtcdErrorType::Internal`，并在 `EtcdError::message()` 中保留原 `TaskResultError` 消息；操作自身的 `EtcdError` 原样传播
-- `acquireConnected()` 返回自动完成连接的租约，适合在一个协程中连续执行多个操作
-- `tryAcquire()` 仍作为低阶入口保留；它本身不挂起协程，池空时立即返回 `PoolExhausted`
+- `acquire_connected()` 返回自动完成连接的租约，适合在一个协程中连续执行多个操作
+- `try_acquire()` 仍作为低阶入口保留；它本身不挂起协程，池空时立即返回 `PoolExhausted`
 - 成功返回 move-only `AsyncEtcdClientLease`，调用方随后直接 `co_await lease->connect()/get()/put()`
-- `withClient()` 保证租约在成功、建连失败、回调错误以及任意 `co_return` 路径自动归还
+- `with_client()` 保证租约在成功、建连失败、回调错误以及任意 `co_return` 路径自动归还
 - `Task<T>` 的 `co_await` 仍遵循 kernel 契约，最外层返回 `std::expected<T, TaskResultError>`；调用方应先检查 Task 层，再检查内部 etcd 操作结果
 - 租约保证单个 `AsyncEtcdClient` 不会同时借给多个调用方
 - pool 不执行透明 retry、failover 或后台连接维护
@@ -540,13 +540,13 @@ public:
                      std::optional<int64_t> limit = std::nullopt);
 
     DeleteAwaitable del(const std::string& key, bool prefix = false);
-    GrantLeaseAwaitable grantLease(int64_t ttl_seconds);
-    KeepAliveAwaitable keepAliveOnce(int64_t lease_id);
+    GrantLeaseAwaitable grant_lease(int64_t ttl_seconds);
+    KeepAliveAwaitable keep_alive_once(int64_t lease_id);
     PipelineAwaitable pipeline(std::span<const PipelineOp> operations);
     PipelineAwaitable pipeline(std::vector<PipelineOp> operations);
     EtcdBoolResult watch(const std::string& key, WatchTaskHandler handler);
     EtcdBoolResult watch(const std::string& key, WatchFunctionHandler handler);
-    EtcdClientStats getStats() const;
+    EtcdClientStats get_stats() const;
 
     bool connected() const;
 };
@@ -629,28 +629,28 @@ public:
 
 - `PutAwaitable`
   - 路径：`/kv/put`
-  - 解析：`parsePutResponse(...)`
+  - 解析：`parse_put_response(...)`
   - 成功返回：`EtcdBoolResult{true}`
 - `GetAwaitable`
   - 路径：`/kv/range`
-  - 解析：`parseGetResponseKvs(...)`
+  - 解析：`parse_get_response_kvs(...)`
   - 成功返回：`EtcdGetResult`
 - `DeleteAwaitable`
   - 路径：`/kv/deleterange`
-  - 解析：`parseDeleteResponseDeletedCount(...)`
+  - 解析：`parse_delete_response_deleted_count(...)`
   - 成功返回：`EtcdDeleteResult`
 - `GrantLeaseAwaitable`
   - 路径：`/lease/grant`
-  - 解析：`parseLeaseGrantResponseId(...)`
+  - 解析：`parse_lease_grant_response_id(...)`
   - 成功返回：`EtcdLeaseGrantResult`
 - `KeepAliveAwaitable`
   - 路径：`/lease/keepalive`
-  - 解析：`parseLeaseKeepAliveResponseId(..., expected_lease_id)`
+  - 解析：`parse_lease_keep_alive_response_id(..., expected_lease_id)`
   - 成功返回：`EtcdLeaseGrantResult`
   - 超时补充：当 `request_timeout` 没有启用时，这个 awaitable 会对本次请求强制使用 5 秒超时
 - `PipelineAwaitable`
   - 路径：`/kv/txn`
-  - 解析：`parsePipelineTxnResponse(...)`
+  - 解析：`parse_pipeline_txn_response(...)`
   - 成功返回：`EtcdPipelineResult`
   - 额外状态：构造时会捕获一份 `PipelineOpType` 列表，用于在响应阶段按操作顺序解释每一项 txn 返回
 
@@ -668,7 +668,7 @@ public:
 ### endpoint / prefix 相关 helper
 
 ```cpp
-std::string normalizeApiPrefix(std::string prefix);
+std::string normalize_api_prefix(std::string prefix);
 
 struct ParsedEndpoint {
     std::string host;
@@ -677,96 +677,96 @@ struct ParsedEndpoint {
     bool ipv6 = false;
 };
 
-std::expected<ParsedEndpoint, std::string> parseEndpoint(const std::string& endpoint);
-std::string buildHostHeader(const std::string& host, uint16_t port, bool ipv6);
+std::expected<ParsedEndpoint, std::string> parse_endpoint(const std::string& endpoint);
+std::string build_host_header(const std::string& host, uint16_t port, bool ipv6);
 ```
 
 语义补充：
 
-- `normalizeApiPrefix()` 会补齐前导 `/`，并移除尾部多余 `/`；空字符串会规范成 `/v3`
-- `parseEndpoint()` 负责从 `http://...` / `https://...` endpoint 中解析 host、port、scheme 与 IPv6 标记，并在未显式给出端口时自动补 `80` / `443`
-- `parseEndpoint()` 可以把 `https://...` 解析成 `secure = true`；但这不等于客户端真的支持 TLS，当前同步 / 异步客户端随后都会拒绝 secure endpoint
-- `buildHostHeader()` 会按 IPv4 / IPv6 形式生成 HTTP `Host` 头值
+- `normalize_api_prefix()` 会补齐前导 `/`，并移除尾部多余 `/`；空字符串会规范成 `/v3`
+- `parse_endpoint()` 负责从 `http://...` / `https://...` endpoint 中解析 host、port、scheme 与 IPv6 标记，并在未显式给出端口时自动补 `80` / `443`
+- `parse_endpoint()` 可以把 `https://...` 解析成 `secure = true`；但这不等于客户端真的支持 TLS，当前同步 / 异步客户端随后都会拒绝 secure endpoint
+- `build_host_header()` 会按 IPv4 / IPv6 形式生成 HTTP `Host` 头值
 
 ### request body builder
 
 ```cpp
-std::expected<std::string, EtcdError> buildPutRequestBody(
+std::expected<std::string, EtcdError> build_put_request_body(
     std::string_view key,
     std::string_view value,
     std::optional<int64_t> lease_id = std::nullopt);
 
-std::expected<std::string, EtcdError> buildGetRequestBody(
+std::expected<std::string, EtcdError> build_get_request_body(
     std::string_view key,
     bool prefix = false,
     std::optional<int64_t> limit = std::nullopt);
 
-std::expected<std::string, EtcdError> buildDeleteRequestBody(
+std::expected<std::string, EtcdError> build_delete_request_body(
     std::string_view key,
     bool prefix = false);
 
-std::expected<std::string, EtcdError> buildLeaseGrantRequestBody(int64_t ttl_seconds);
-std::expected<std::string, EtcdError> buildLeaseKeepAliveRequestBody(int64_t lease_id);
-std::expected<std::string, EtcdError> buildTxnBody(std::span<const PipelineOp> operations);
-std::expected<std::string, EtcdError> buildTxnBody(const std::vector<PipelineOp>& operations);
+std::expected<std::string, EtcdError> build_lease_grant_request_body(int64_t ttl_seconds);
+std::expected<std::string, EtcdError> build_lease_keep_alive_request_body(int64_t lease_id);
+std::expected<std::string, EtcdError> build_txn_body(std::span<const PipelineOp> operations);
+std::expected<std::string, EtcdError> build_txn_body(const std::vector<PipelineOp>& operations);
 ```
 
 语义补充：
 
 - 这些 builder 都返回**最终 JSON body 字符串**，不负责拼完整 HTTP request
-- `buildPutRequestBody()` 要求 `key` 非空；`lease_id` 提供时必须为正数
-- `buildGetRequestBody()` 要求 `key` 非空；`limit` 提供时必须为正数；`prefix=true` 时会自动生成 etcd range end
-- `buildDeleteRequestBody()` 要求 `key` 非空；`prefix=true` 时同样生成 range end
-- `buildLeaseGrantRequestBody()` 要求 `ttl_seconds > 0`
-- `buildLeaseKeepAliveRequestBody()` 要求 `lease_id > 0`
-- `buildTxnBody()` 要求操作列表非空，且每个 `PipelineOp` 的 `key` 非空；如果给了 `limit` / `lease_id`，也都必须为正数
-- `buildTxnBody()` 当前固定生成 `{"compare":[],"success":[...],"failure":[]}` 结构；这正是当前 pipeline API 没有公开 compare / failure DSL 的原因
+- `build_put_request_body()` 要求 `key` 非空；`lease_id` 提供时必须为正数
+- `build_get_request_body()` 要求 `key` 非空；`limit` 提供时必须为正数；`prefix=true` 时会自动生成 etcd range end
+- `build_delete_request_body()` 要求 `key` 非空；`prefix=true` 时同样生成 range end
+- `build_lease_grant_request_body()` 要求 `ttl_seconds > 0`
+- `build_lease_keep_alive_request_body()` 要求 `lease_id > 0`
+- `build_txn_body()` 要求操作列表非空，且每个 `PipelineOp` 的 `key` 非空；如果给了 `limit` / `lease_id`，也都必须为正数
+- `build_txn_body()` 当前固定生成 `{"compare":[],"success":[...],"failure":[]}` 结构；这正是当前 pipeline API 没有公开 compare / failure DSL 的原因
 
 ### response parser
 
 ```cpp
-std::expected<simdjson::dom::object, EtcdError> parseEtcdSuccessObject(
+std::expected<simdjson::dom::object, EtcdError> parse_etcd_success_object(
     const std::string& body,
     const std::string& context);
 
-std::expected<std::vector<EtcdKeyValue>, EtcdError> parseKvsFromObject(
+std::expected<std::vector<EtcdKeyValue>, EtcdError> parse_kvs_from_object(
     const simdjson::dom::object& object,
     const std::string& context);
 
-std::expected<std::vector<PipelineItemResult>, EtcdError> parsePipelineResponses(
+std::expected<std::vector<PipelineItemResult>, EtcdError> parse_pipeline_responses(
     const simdjson::dom::object& root,
     std::span<const PipelineOpType> operation_types);
 
-std::expected<std::vector<PipelineItemResult>, EtcdError> parsePipelineResponses(
+std::expected<std::vector<PipelineItemResult>, EtcdError> parse_pipeline_responses(
     const simdjson::dom::object& root,
     std::span<const PipelineOp> operations);
 
-std::expected<void, EtcdError> parsePutResponse(const std::string& body);
-std::expected<std::vector<EtcdKeyValue>, EtcdError> parseGetResponseKvs(const std::string& body);
-std::expected<int64_t, EtcdError> parseDeleteResponseDeletedCount(const std::string& body);
-std::expected<int64_t, EtcdError> parseLeaseGrantResponseId(const std::string& body);
-std::expected<int64_t, EtcdError> parseLeaseKeepAliveResponseId(
+std::expected<void, EtcdError> parse_put_response(const std::string& body);
+std::expected<std::vector<EtcdKeyValue>, EtcdError> parse_get_response_kvs(const std::string& body);
+std::expected<int64_t, EtcdError> parse_delete_response_deleted_count(const std::string& body);
+std::expected<int64_t, EtcdError> parse_lease_grant_response_id(const std::string& body);
+std::expected<int64_t, EtcdError> parse_lease_keep_alive_response_id(
     const std::string& body,
     int64_t expected_lease_id);
 
-std::expected<std::vector<PipelineItemResult>, EtcdError> parsePipelineTxnResponse(
+std::expected<std::vector<PipelineItemResult>, EtcdError> parse_pipeline_txn_response(
     const std::string& body,
     std::span<const PipelineOpType> operation_types);
 
-std::expected<std::vector<PipelineItemResult>, EtcdError> parsePipelineTxnResponse(
+std::expected<std::vector<PipelineItemResult>, EtcdError> parse_pipeline_txn_response(
     const std::string& body,
     std::span<const PipelineOp> operations);
 ```
 
 语义补充：
 
-- `parseEtcdSuccessObject()` 是通用入口：把 body 解析为 JSON object，并把 simdjson 错误映射成 `EtcdErrorType::Parse`
-- `parseKvsFromObject()` 从 etcd 返回对象中解码 `kvs` 数组，生成 `std::vector<EtcdKeyValue>`
-- `parsePutResponse()` 当前只在 body 看起来包含 etcd error 字段时进一步做对象解析；普通成功 body 会直接视为成功
-- `parseGetResponseKvs()` / `parseDeleteResponseDeletedCount()` / `parseLeaseGrantResponseId()` / `parseLeaseKeepAliveResponseId()` 分别对应公开的 `get` / `del` / `grantLease` / `keepAliveOnce` 解析语义
-- `parseLeaseGrantResponseId()` 要求响应里存在 `ID` 字段；缺失时返回 `Parse` 错误
-- `parseLeaseKeepAliveResponseId()` 如果响应里带了 `ID` 且它与期望租约 ID 不一致，会返回 `Parse` 错误；否则返回期望租约 ID
-- `parsePipelineResponses()` / `parsePipelineTxnResponse()` 会检查：
+- `parse_etcd_success_object()` 是通用入口：把 body 解析为 JSON object，并把 simdjson 错误映射成 `EtcdErrorType::Parse`
+- `parse_kvs_from_object()` 从 etcd 返回对象中解码 `kvs` 数组，生成 `std::vector<EtcdKeyValue>`
+- `parse_put_response()` 当前只在 body 看起来包含 etcd error 字段时进一步做对象解析；普通成功 body 会直接视为成功
+- `parse_get_response_kvs()` / `parse_delete_response_deleted_count()` / `parse_lease_grant_response_id()` / `parse_lease_keep_alive_response_id()` 分别对应公开的 `get` / `del` / `grant_lease` / `keep_alive_once` 解析语义
+- `parse_lease_grant_response_id()` 要求响应里存在 `ID` 字段；缺失时返回 `Parse` 错误
+- `parse_lease_keep_alive_response_id()` 如果响应里带了 `ID` 且它与期望租约 ID 不一致，会返回 `Parse` 错误；否则返回期望租约 ID
+- `parse_pipeline_responses()` / `parse_pipeline_txn_response()` 会检查：
   - `succeeded` 字段若显式为 `false`，则按 `Server` 错误返回
   - `responses` 数组是否存在，且长度是否与操作数一致
   - 每一项是否含有与操作类型匹配的 `response_put` / `response_range` / `response_delete_range`
@@ -779,14 +779,14 @@ std::expected<std::vector<PipelineItemResult>, EtcdError> parsePipelineTxnRespon
 
 - `connect()` / `close()` / `put()` 成功后返回 `EtcdBoolResult{true}`
 - `get()` / `pipeline()` 成功后直接从 `value()` 读取结构化结果
-- `grantLease()` / `keepAliveOnce()` 成功后直接从 `value()` 读取租约 ID
+- `grant_lease()` / `keep_alive_once()` 成功后直接从 `value()` 读取租约 ID
 - `del()` 成功后直接从 `value()` 读取删除数
 
 ## 7. 调用顺序、返回与失败语义
 
 两条客户端路径都遵循同一套业务语义：
 
-- 在第一次 `put/get/del/grantLease/keepAliveOnce/pipeline` 之前先完成 `connect()`
+- 在第一次 `put/get/del/grant_lease/keep_alive_once/pipeline` 之前先完成 `connect()`
 - 同步路径直接返回结构化 `std::expected<value, EtcdError>`
 - 异步路径的公开 awaitable 在 `co_await` 后返回同语义的结构化结果
 - 调用侧应直接消费返回值，而不是再回头读 client 状态缓存

@@ -30,7 +30,7 @@ static_assert(std::is_nothrow_move_constructible_v<detail::ReadyEntry>,
 
 namespace {
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 1500ms,
                std::chrono::milliseconds step = 1ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -43,18 +43,18 @@ bool waitUntil(auto&& predicate,
     return predicate();
 }
 
-Task<void> markTask(std::atomic<int>* counter) {
+Task<void> mark_task(std::atomic<int>* counter) {
     counter->fetch_add(1, std::memory_order_release);
     co_return;
 }
 
-Task<int> valueTask(int value) {
+Task<int> value_task(int value) {
     co_return value * 2;
 }
 
-Task<int> parentTask(std::atomic<int>* steps) {
+Task<int> parent_task(std::atomic<int>* steps) {
     steps->fetch_add(1, std::memory_order_release);
-    auto child = co_await valueTask(21);
+    auto child = co_await value_task(21);
     if (!child.has_value()) {
         co_return -1;
     }
@@ -62,7 +62,7 @@ Task<int> parentTask(std::atomic<int>* steps) {
     co_return *child + 1;
 }
 
-Task<void> thenStep(std::atomic<int>* sequence, int expected, int next) {
+Task<void> then_step(std::atomic<int>* sequence, int expected, int next) {
     int observed = sequence->load(std::memory_order_acquire);
     if (observed == expected) {
         sequence->store(next, std::memory_order_release);
@@ -92,14 +92,14 @@ struct ManualSuspendAwaitable {
     void await_resume() const noexcept {}
 };
 
-Task<void> parkedTask(ManualWakeState* state) {
+Task<void> parked_task(ManualWakeState* state) {
     co_await ManualSuspendAwaitable{state};
     state->resumed_thread = std::this_thread::get_id();
     state->resumed.fetch_add(1, std::memory_order_release);
     co_return;
 }
 
-TaskRef makeDummyTaskRef() {
+TaskRef make_dummy_task_ref() {
     return TaskRef(new TaskState(std::coroutine_handle<>{}), false);
 }
 
@@ -108,10 +108,10 @@ public:
     std::expected<void, IOError> start() { return {}; }
     void stop() {}
     bool schedule(TaskRef) noexcept { return false; }
-    bool scheduleResume(TaskRef) noexcept { return false; }
-    bool scheduleDeferred(TaskRef) noexcept { return false; }
-    bool scheduleImmediately(TaskRef) noexcept { return false; }
-    bool addTimer(Timer::ptr) { return false; }
+    bool schedule_resume(TaskRef) noexcept { return false; }
+    bool schedule_deferred(TaskRef) noexcept { return false; }
+    bool schedule_immediately(TaskRef) noexcept { return false; }
+    bool add_timer(Timer::ptr) { return false; }
     SchedulerType type() { return kParallelScheduler; }
 };
 
@@ -123,16 +123,16 @@ struct FakeCoroState {
     std::atomic<int>* released = nullptr;
 };
 
-Scheduler* fakeOwnerScheduler(void* state) noexcept {
+Scheduler* fake_owner_scheduler(void* state) noexcept {
     return static_cast<FakeCoroState*>(state)->owner;
 }
 
-bool fakeResumeOwnerOnly(void* state) noexcept {
+bool fake_resume_owner_only(void* state) noexcept {
     auto* fake = static_cast<FakeCoroState*>(state);
     return fake->owner_only;
 }
 
-bool fakeResume(void* state) noexcept {
+bool fake_resume(void* state) noexcept {
     auto* fake = static_cast<FakeCoroState*>(state);
     if (fake->resumed != nullptr) {
         fake->resumed->fetch_add(1, std::memory_order_release);
@@ -140,7 +140,7 @@ bool fakeResume(void* state) noexcept {
     return true;
 }
 
-void fakeRelease(void* state) noexcept {
+void fake_release(void* state) noexcept {
     auto* fake = static_cast<FakeCoroState*>(state);
     if (fake->released != nullptr) {
         fake->released->fetch_add(1, std::memory_order_release);
@@ -148,40 +148,40 @@ void fakeRelease(void* state) noexcept {
 }
 
 constexpr detail::ReadyEntryHooks kFakeCoroHooks{
-    .owner_scheduler = fakeOwnerScheduler,
-    .resume_owner_only = fakeResumeOwnerOnly,
-    .resume = fakeResume,
-    .release = fakeRelease,
+    .owner_scheduler = fake_owner_scheduler,
+    .resume_owner_only = fake_resume_owner_only,
+    .resume = fake_resume,
+    .release = fake_release,
 };
 
-detail::ReadyEntry makeFakeCoroEntry(FakeCoroState* state) {
+detail::ReadyEntry make_fake_coro_entry(FakeCoroState* state) {
     state->header.hooks = &kFakeCoroHooks;
     return detail::ReadyEntry(detail::ReadyEntryKind::CCoroutine, state);
 }
 
-bool verifyReadyEntryTaskRefRoundTrip() {
-    TaskRef original = makeDummyTaskRef();
+bool verify_ready_entry_task_ref_round_trip() {
+    TaskRef original = make_dummy_task_ref();
     TaskState* const state = original.state();
     detail::ReadyEntry entry(std::move(original));
 
-    if (original.isValid()) {
+    if (original.is_valid()) {
         std::cerr << "[T135] TaskRef should be moved into ReadyEntry\n";
         return false;
     }
-    if (!entry.isCppTask() || entry.state() != state) {
+    if (!entry.is_cpp_task() || entry.state() != state) {
         std::cerr << "[T135] ReadyEntry should carry the original C++ TaskState\n";
         return false;
     }
 
-    TaskRef restored = detail::readyEntryToTaskRef(entry);
-    if (restored.state() != state || entry.isValid()) {
+    TaskRef restored = detail::ready_entry_to_task_ref(entry);
+    if (restored.state() != state || entry.is_valid()) {
         std::cerr << "[T135] ReadyEntry should release ownership back to TaskRef\n";
         return false;
     }
     return true;
 }
 
-bool verifyCCoroutineReadyEntryHooks() {
+bool verify_c_coroutine_ready_entry_hooks() {
     NullScheduler owner;
     std::atomic<int> resumed{0};
     std::atomic<int> released{0};
@@ -192,23 +192,23 @@ bool verifyCCoroutineReadyEntryHooks() {
         .released = &released,
     };
 
-    detail::ReadyEntry entry = makeFakeCoroEntry(&state);
-    if (!entry.isValid() || entry.kind() != detail::ReadyEntryKind::CCoroutine) {
+    detail::ReadyEntry entry = make_fake_coro_entry(&state);
+    if (!entry.is_valid() || entry.kind() != detail::ReadyEntryKind::CCoroutine) {
         std::cerr << "[T135] C coroutine ReadyEntry should be valid\n";
         return false;
     }
-    if (detail::readyEntryScheduler(entry) != &owner) {
+    if (detail::ready_entry_scheduler(entry) != &owner) {
         std::cerr << "[T135] C coroutine ReadyEntry should expose owner scheduler\n";
         return false;
     }
-    if (!detail::readyEntryResumeOwnerOnly(entry)) {
+    if (!detail::ready_entry_resume_owner_only(entry)) {
         std::cerr << "[T135] C coroutine ReadyEntry should expose owner-only resume\n";
         return false;
     }
-    if (!detail::resumeReadyEntry(entry) ||
+    if (!detail::resume_ready_entry(entry) ||
         resumed.load(std::memory_order_acquire) != 1 ||
         released.load(std::memory_order_acquire) != 1 ||
-        entry.isValid()) {
+        entry.is_valid()) {
         std::cerr << "[T135] C coroutine ReadyEntry should resume through hook and release ownership\n";
         return false;
     }
@@ -216,18 +216,18 @@ bool verifyCCoroutineReadyEntryHooks() {
     return true;
 }
 
-bool verifyCCoroutineScheduleRejectKeepsEntry() {
+bool verify_c_coroutine_schedule_reject_keeps_entry() {
     std::atomic<int> released{0};
     FakeCoroState state{.released = &released};
-    detail::ReadyEntry entry = makeFakeCoroEntry(&state);
+    detail::ReadyEntry entry = make_fake_coro_entry(&state);
 
-    if (detail::scheduleReadyEntry(entry) || !entry.isValid() ||
+    if (detail::schedule_ready_entry(entry) || !entry.is_valid() ||
         released.load(std::memory_order_acquire) != 0) {
         std::cerr << "[T135] unsupported C coroutine schedule should reject without release\n";
         return false;
     }
 
-    detail::releaseReadyEntry(entry);
+    detail::release_ready_entry(entry);
     if (released.load(std::memory_order_acquire) != 1) {
         std::cerr << "[T135] rejected C coroutine entry should remain owned by caller\n";
         return false;
@@ -235,40 +235,40 @@ bool verifyCCoroutineScheduleRejectKeepsEntry() {
     return true;
 }
 
-bool verifyCppScheduleRejectKeepsEntry() {
+bool verify_cpp_schedule_reject_keeps_entry() {
     NullScheduler rejecting_scheduler;
-    TaskRef task = makeDummyTaskRef();
+    TaskRef task = make_dummy_task_ref();
     TaskState* const state = task.state();
-    detail::setTaskScheduler(task, &rejecting_scheduler);
+    detail::set_task_scheduler(task, &rejecting_scheduler);
     detail::ReadyEntry entry(std::move(task));
 
-    if (detail::scheduleReadyEntry(entry) || !entry.isValid() ||
-        entry.taskState() != state) {
+    if (detail::schedule_ready_entry(entry) || !entry.is_valid() ||
+        entry.task_state() != state) {
         std::cerr << "[T135] rejected C++ schedule should keep ReadyEntry owned by caller\n";
         return false;
     }
 
-    TaskRef restored = detail::readyEntryToTaskRef(entry);
-    if (!restored.isValid() || restored.state() != state ||
-        restored.belongScheduler() != &rejecting_scheduler) {
+    TaskRef restored = detail::ready_entry_to_task_ref(entry);
+    if (!restored.is_valid() || restored.state() != state ||
+        restored.belong_scheduler() != &rejecting_scheduler) {
         std::cerr << "[T135] rejected C++ schedule should remain recoverable as TaskRef\n";
         return false;
     }
     return true;
 }
 
-bool verifySchedulerCoreAcceptsReadyEntryResume() {
+bool verify_scheduler_core_accepts_ready_entry_resume() {
     IOReadyQueue worker;
     SchedulerCore core(worker, 4);
-    worker.scheduleLocal(makeDummyTaskRef());
+    worker.schedule_local(make_dummy_task_ref());
 
     size_t ready_entries = 0;
-    const size_t ran = core.runReadyPass([&](detail::ReadyEntry& entry) {
-        if (!entry.isCppTask()) {
+    const size_t ran = core.run_ready_pass([&](detail::ReadyEntry& entry) {
+        if (!entry.is_cpp_task()) {
             return;
         }
-        TaskRef task = detail::readyEntryToTaskRef(entry);
-        if (task.isValid()) {
+        TaskRef task = detail::ready_entry_to_task_ref(entry);
+        if (task.is_valid()) {
             ++ready_entries;
         }
     });
@@ -280,24 +280,24 @@ bool verifySchedulerCoreAcceptsReadyEntryResume() {
     return true;
 }
 
-bool verifyOwnerOnlyCCoroutineEntryIsReturnedToCaller() {
+bool verify_owner_only_c_coroutine_entry_is_returned_to_caller() {
     std::atomic<int> released{0};
     FakeCoroState state{
         .owner_only = true,
         .released = &released,
     };
-    detail::ReadyEntry entry = makeFakeCoroEntry(&state);
+    detail::ReadyEntry entry = make_fake_coro_entry(&state);
     ChaseLevTaskRing ring;
 
-    if (!ring.push_back(entry) || entry.isValid()) {
+    if (!ring.push_back(entry) || entry.is_valid()) {
         std::cerr << "[T135] failed to queue fake C coroutine entry\n";
         return false;
     }
 
     detail::ReadyEntry stolen;
-    if (ring.steal_front(stolen) || !stolen.isValid()) {
+    if (ring.steal_front(stolen) || !stolen.is_valid()) {
         std::cerr << "[T135] owner-only C coroutine entry should be returned to caller after CAS\n";
-        detail::releaseReadyEntry(stolen);
+        detail::release_ready_entry(stolen);
         return false;
     }
     if (ring.size() != 0 || released.load(std::memory_order_acquire) != 0) {
@@ -305,7 +305,7 @@ bool verifyOwnerOnlyCCoroutineEntryIsReturnedToCaller() {
         return false;
     }
 
-    detail::releaseReadyEntry(stolen);
+    detail::release_ready_entry(stolen);
     if (released.load(std::memory_order_acquire) != 1) {
         std::cerr << "[T135] returned owner-only C coroutine entry should release exactly once\n";
         return false;
@@ -313,13 +313,13 @@ bool verifyOwnerOnlyCCoroutineEntryIsReturnedToCaller() {
     return true;
 }
 
-bool verifyWorkerRequeuesOwnerOnlyEntryThroughInjectQueue() {
+bool verify_worker_requeues_owner_only_entry_through_inject_queue() {
     std::atomic<int> released{0};
     FakeCoroState state{
         .owner_only = true,
         .released = &released,
     };
-    detail::ReadyEntry entry = makeFakeCoroEntry(&state);
+    detail::ReadyEntry entry = make_fake_coro_entry(&state);
     IOReadyQueue worker;
 
     if (!worker.local_ring.push_back(entry)) {
@@ -328,26 +328,26 @@ bool verifyWorkerRequeuesOwnerOnlyEntryThroughInjectQueue() {
     }
 
     detail::ReadyEntry stolen;
-    if (worker.stealFront(stolen) || stolen.isValid()) {
+    if (worker.steal_front(stolen) || stolen.is_valid()) {
         std::cerr << "[T135] worker owner-only probe must not be exposed to stealer\n";
-        detail::releaseReadyEntry(stolen);
+        detail::release_ready_entry(stolen);
         return false;
     }
-    if (!worker.hasPendingInjected() || worker.local_ring.size() != 0 ||
+    if (!worker.has_pending_injected() || worker.local_ring.size() != 0 ||
         released.load(std::memory_order_acquire) != 0) {
         std::cerr << "[T135] worker should requeue owner-only entry through inject queue\n";
         return false;
     }
 
-    if (worker.drainInjected() != 1 || !worker.popNext(stolen)) {
+    if (worker.drain_injected() != 1 || !worker.pop_next(stolen)) {
         std::cerr << "[T135] owner should recover worker-requeued owner-only entry\n";
         return false;
     }
-    detail::releaseReadyEntry(stolen);
+    detail::release_ready_entry(stolen);
     return released.load(std::memory_order_acquire) == 1;
 }
 
-bool verifyPendingReadyEntriesReleaseOnWorkerDestroy() {
+bool verify_pending_ready_entries_release_on_worker_destroy() {
     std::atomic<int> released{0};
     FakeCoroState ring_state{.released = &released};
     FakeCoroState lifo_state{.released = &released};
@@ -356,10 +356,10 @@ bool verifyPendingReadyEntriesReleaseOnWorkerDestroy() {
 
     {
         IOReadyQueue worker(2);
-        worker.scheduleLocal(makeFakeCoroEntry(&ring_state));
-        worker.scheduleLocal(makeFakeCoroEntry(&lifo_state));
-        worker.scheduleInjected(makeFakeCoroEntry(&injected_state));
-        worker.ready_inject_buffer[0] = makeFakeCoroEntry(&buffer_state);
+        worker.schedule_local(make_fake_coro_entry(&ring_state));
+        worker.schedule_local(make_fake_coro_entry(&lifo_state));
+        worker.schedule_injected(make_fake_coro_entry(&injected_state));
+        worker.ready_inject_buffer[0] = make_fake_coro_entry(&buffer_state);
     }
 
     if (released.load(std::memory_order_acquire) != 4) {
@@ -370,14 +370,14 @@ bool verifyPendingReadyEntriesReleaseOnWorkerDestroy() {
     return true;
 }
 
-bool verifyRuntimeCppCompatibility() {
+bool verify_runtime_cpp_compatibility() {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
 
     std::atomic<int> spawned{0};
-    auto void_handle = runtime.spawnIO(markTask(&spawned));
+    auto void_handle = runtime.spawn_io(mark_task(&spawned));
     if (!void_handle.has_value()) {
         std::cerr << "[T135] spawnIO(Task<void>) failed\n";
         return false;
@@ -389,7 +389,7 @@ bool verifyRuntimeCppCompatibility() {
         return false;
     }
 
-    auto value_handle = runtime.spawnIO(valueTask(9));
+    auto value_handle = runtime.spawn_io(value_task(9));
     if (!value_handle.has_value()) {
         std::cerr << "[T135] spawnIO(Task<int>) failed\n";
         runtime.stop();
@@ -403,7 +403,7 @@ bool verifyRuntimeCppCompatibility() {
     }
 
     std::atomic<int> parent_steps{0};
-    auto parent = runtime.blockOnIO(parentTask(&parent_steps));
+    auto parent = runtime.block_on_io(parent_task(&parent_steps));
     if (!parent.has_value() || *parent != 43 ||
         parent_steps.load(std::memory_order_acquire) != 2) {
         std::cerr << "[T135] co_await Task<T> parent resume failed\n";
@@ -415,14 +415,14 @@ bool verifyRuntimeCppCompatibility() {
     return true;
 }
 
-bool verifyThenCompatibility() {
+bool verify_then_compatibility() {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
 
     std::atomic<int> sequence{0};
-    auto result = runtime.blockOnIO(thenStep(&sequence, 0, 1).then(thenStep(&sequence, 1, 2)));
+    auto result = runtime.block_on_io(then_step(&sequence, 0, 1).then(then_step(&sequence, 1, 2)));
     runtime.stop();
 
     if (!result.has_value() || sequence.load(std::memory_order_acquire) != 2) {
@@ -432,10 +432,10 @@ bool verifyThenCompatibility() {
     return true;
 }
 
-bool verifyCrossThreadWakeAndCoalescing() {
+bool verify_cross_thread_wake_and_coalescing() {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     auto started = runtime.start();
     if (!started.has_value()) {
@@ -443,33 +443,33 @@ bool verifyCrossThreadWakeAndCoalescing() {
         return false;
     }
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         std::cerr << "[T135] missing IO scheduler\n";
         return false;
     }
 
     ManualWakeState state;
-    if (!scheduleTask(*scheduler, parkedTask(&state))) {
+    if (!schedule_task(*scheduler, parked_task(&state))) {
         std::cerr << "[T135] failed to schedule parked task\n";
         runtime.stop();
         return false;
     }
 
-    if (!waitUntil([&]() { return state.armed.load(std::memory_order_acquire); })) {
+    if (!wait_until([&]() { return state.armed.load(std::memory_order_acquire); })) {
         std::cerr << "[T135] parked task did not arm waker\n";
         runtime.stop();
         return false;
     }
 
     std::thread producer([&]() {
-        state.waker.wakeUp();
-        state.waker.wakeUp();
-        state.waker.wakeUp();
+        state.waker.wake_up();
+        state.waker.wake_up();
+        state.waker.wake_up();
     });
     producer.join();
 
-    const bool resumed_once = waitUntil([&]() {
+    const bool resumed_once = wait_until([&]() {
         return state.resumed.load(std::memory_order_acquire) == 1;
     });
     runtime.stop();
@@ -479,7 +479,7 @@ bool verifyCrossThreadWakeAndCoalescing() {
                   << state.resumed.load(std::memory_order_acquire) << "\n";
         return false;
     }
-    if (state.resumed_thread != scheduler->threadId()) {
+    if (state.resumed_thread != scheduler->thread_id()) {
         std::cerr << "[T135] cross-thread wake resumed on non-owner scheduler thread\n";
         return false;
     }
@@ -489,37 +489,37 @@ bool verifyCrossThreadWakeAndCoalescing() {
 }  // namespace
 
 int main() {
-    if (!verifyReadyEntryTaskRefRoundTrip()) {
+    if (!verify_ready_entry_task_ref_round_trip()) {
         return 1;
     }
-    if (!verifyCCoroutineReadyEntryHooks()) {
+    if (!verify_c_coroutine_ready_entry_hooks()) {
         return 1;
     }
-    if (!verifyCCoroutineScheduleRejectKeepsEntry()) {
+    if (!verify_c_coroutine_schedule_reject_keeps_entry()) {
         return 1;
     }
-    if (!verifyCppScheduleRejectKeepsEntry()) {
+    if (!verify_cpp_schedule_reject_keeps_entry()) {
         return 1;
     }
-    if (!verifySchedulerCoreAcceptsReadyEntryResume()) {
+    if (!verify_scheduler_core_accepts_ready_entry_resume()) {
         return 1;
     }
-    if (!verifyOwnerOnlyCCoroutineEntryIsReturnedToCaller()) {
+    if (!verify_owner_only_c_coroutine_entry_is_returned_to_caller()) {
         return 1;
     }
-    if (!verifyWorkerRequeuesOwnerOnlyEntryThroughInjectQueue()) {
+    if (!verify_worker_requeues_owner_only_entry_through_inject_queue()) {
         return 1;
     }
-    if (!verifyPendingReadyEntriesReleaseOnWorkerDestroy()) {
+    if (!verify_pending_ready_entries_release_on_worker_destroy()) {
         return 1;
     }
-    if (!verifyRuntimeCppCompatibility()) {
+    if (!verify_runtime_cpp_compatibility()) {
         return 1;
     }
-    if (!verifyThenCompatibility()) {
+    if (!verify_then_compatibility()) {
         return 1;
     }
-    if (!verifyCrossThreadWakeAndCoalescing()) {
+    if (!verify_cross_thread_wake_and_coalescing()) {
         return 1;
     }
 

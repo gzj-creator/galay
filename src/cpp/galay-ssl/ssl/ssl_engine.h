@@ -61,7 +61,7 @@ public:
     /**
      * @brief 检查引擎是否有效
      */
-    bool isValid() const { return m_ssl != nullptr; }
+    bool is_valid() const { return m_ssl != nullptr; }
 
     /**
      * @brief 获取底层 SSL 指针
@@ -72,15 +72,15 @@ public:
      * @brief 设置文件描述符（旧模式，已弃用）
      * @param fd socket 文件描述符
      * @return 成功返回 void，失败返回 SslError
-     * @deprecated 使用 initMemoryBIO() 替代
+     * @deprecated 使用 init_memory_bio() 替代
      */
-    std::expected<void, SslError> setFd(int fd);
+    std::expected<void, SslError> set_fd(int fd);
 
     /**
      * @brief 使用 Memory BIO 初始化（IO 与 SSL 解耦）
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> initMemoryBIO();
+    std::expected<void, SslError> init_memory_bio();
 
     /**
      * @brief 将从网络 recv 到的密文喂给 SSL（写入 rbio）
@@ -88,7 +88,7 @@ public:
      * @param length 数据长度
      * @return 成功返回实际写入 BIO 的字节数，失败返回 SslError；不会阻塞
      */
-    std::expected<size_t, SslError> feedEncryptedInput(const char* data, size_t length);
+    std::expected<size_t, SslError> feed_encrypted_input(const char* data, size_t length);
 
     /**
      * @brief 从 SSL 取出待发送的密文（读取 wbio）
@@ -96,36 +96,36 @@ public:
      * @param length 缓冲区大小
      * @return 成功返回实际读取的字节数，失败返回 SslError；不会阻塞
      */
-    std::expected<size_t, SslError> extractEncryptedOutput(char* buffer, size_t length);
+    std::expected<size_t, SslError> extract_encrypted_output(char* buffer, size_t length);
 
     /**
      * @brief 检查 wbio 中是否有待发送的密文
      * @return 待发送的密文字节数
      */
-    size_t pendingEncryptedOutput() const;
+    size_t pending_encrypted_output() const;
 
     /**
      * @brief 设置 SNI 主机名
      * @param hostname 服务器主机名
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> setHostname(const std::string& hostname);
+    std::expected<void, SslError> set_hostname(const std::string& hostname);
 
     /**
      * @brief 设置为客户端模式
      */
-    void setConnectState();
+    void set_connect_state();
 
     /**
      * @brief 设置为服务端模式
      */
-    void setAcceptState();
+    void set_accept_state();
 
     /**
      * @brief 执行握手（非阻塞）
      * @return 握手结果
      */
-    SslIOResult doHandshake();
+    SslIOResult do_handshake();
 
     /**
      * @brief 读取数据（非阻塞）
@@ -154,12 +154,12 @@ public:
     /**
      * @brief 获取握手状态
      */
-    SslHandshakeState handshakeState() const { return m_handshakeState; }
+    SslHandshakeState handshake_state() const { return m_handshakeState; }
 
     /**
      * @brief 检查握手是否完成
      */
-    bool isHandshakeCompleted() const {
+    bool is_handshake_completed() const {
         return m_handshakeState == SslHandshakeState::Completed;
     }
 
@@ -167,38 +167,38 @@ public:
      * @brief 获取对端证书
      * @return X509 证书指针，需要调用者释放
      */
-    X509* getPeerCertificate() const;
+    X509* get_peer_certificate() const;
 
     /**
      * @brief 获取证书验证结果
      * @return 验证结果码
      */
-    long getVerifyResult() const;
+    long get_verify_result() const;
 
     /**
      * @brief 获取协商的协议版本
      * @return 协议版本字符串
      */
-    std::string getProtocolVersion() const;
+    std::string get_protocol_version() const;
 
     /**
      * @brief 获取协商的密码套件
      * @return 密码套件名称
      */
-    std::string getCipher() const;
+    std::string get_cipher() const;
 
     /**
      * @brief 获取协商的 ALPN 协议
      * @return ALPN 协议名称
      */
-    std::string getALPNProtocol() const;
+    std::string get_alpn_protocol() const;
 
     /**
      * @brief 获取最后一次操作的 SSL 错误
      * @param ret SSL 操作返回值
      * @return SSL 错误码
      */
-    int getError(int ret) const;
+    int get_error(int ret) const;
 
     /**
      * @brief 获取待发送数据大小
@@ -210,19 +210,19 @@ public:
      * @param session SSL_SESSION 指针
      * @return 成功返回 true
      */
-    bool setSession(SSL_SESSION* session);
+    bool set_session(SSL_SESSION* session);
 
     /**
      * @brief 获取当前 Session（握手完成后调用）
      * @return SSL_SESSION 指针，调用者需要 SSL_SESSION_free
      */
-    SSL_SESSION* getSession() const;
+    SSL_SESSION* get_session() const;
 
     /**
      * @brief 检查是否复用了 Session
      * @return 是否复用
      */
-    bool isSessionReused() const;
+    bool is_session_reused() const;
 
 private:
     SSL* m_ssl;                         ///< OpenSSL SSL 对象

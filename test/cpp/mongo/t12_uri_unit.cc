@@ -10,20 +10,20 @@ using namespace galay::mongo;
 namespace
 {
 
-bool failCase(const std::string& message)
+bool fail_case(const std::string& message)
 {
     std::cerr << "  FAILED: " << message << std::endl;
     return false;
 }
 
-bool expectError(const std::string& uri, MongoErrorType type)
+bool expect_error(const std::string& uri, MongoErrorType type)
 {
-    auto parsed = parseMongoUri(uri);
+    auto parsed = parse_mongo_uri(uri);
     if (parsed) {
-        return failCase("expected URI parse failure for: " + uri);
+        return fail_case("expected URI parse failure for: " + uri);
     }
     if (parsed.error().type() != type) {
-        return failCase("unexpected error type for " + uri + ": " +
+        return fail_case("unexpected error type for " + uri + ": " +
                         parsed.error().message());
     }
     return true;
@@ -33,39 +33,39 @@ bool test_replica_set_uri_round_trips_to_config()
 {
     std::cout << "Testing replica set URI parsing..." << std::endl;
 
-    auto parsed = parseMongoUri(
+    auto parsed = parse_mongo_uri(
         "mongodb://host1:27017,host2:27018/test"
         "?replicaSet=rs0&authSource=admin"
         "&readPreference=primaryPreferred&serverSelectionTimeoutMS=3000");
     if (!parsed) {
-        return failCase("parse failed: " + parsed.error().message());
+        return fail_case("parse failed: " + parsed.error().message());
     }
 
     const MongoConfig& cfg = *parsed;
     if (cfg.host != "host1" || cfg.port != 27017) {
-        return failCase("compatibility host/port not set to first seed");
+        return fail_case("compatibility host/port not set to first seed");
     }
     if (cfg.seeds.size() != 2) {
-        return failCase("seed count mismatch");
+        return fail_case("seed count mismatch");
     }
     if (cfg.seeds[0].host != "host1" || cfg.seeds[0].port != 27017 ||
         cfg.seeds[1].host != "host2" || cfg.seeds[1].port != 27018) {
-        return failCase("seed endpoints mismatch");
+        return fail_case("seed endpoints mismatch");
     }
     if (cfg.database != "test") {
-        return failCase("database mismatch");
+        return fail_case("database mismatch");
     }
     if (cfg.auth_database != "admin") {
-        return failCase("authSource mismatch");
+        return fail_case("authSource mismatch");
     }
     if (cfg.topology.replica_set_name != "rs0") {
-        return failCase("replicaSet mismatch");
+        return fail_case("replicaSet mismatch");
     }
     if (cfg.topology.read_preference != MongoReadPreference::kPrimaryPreferred) {
-        return failCase("readPreference mismatch");
+        return fail_case("readPreference mismatch");
     }
     if (cfg.topology.server_selection_timeout != std::chrono::milliseconds(3000)) {
-        return failCase("serverSelectionTimeoutMS mismatch");
+        return fail_case("serverSelectionTimeoutMS mismatch");
     }
 
     std::cout << "  PASSED" << std::endl;
@@ -76,23 +76,23 @@ bool test_invalid_uri_cases_return_typed_errors()
 {
     std::cout << "Testing invalid URI handling..." << std::endl;
 
-    if (!expectError("postgresql://host1/test", MONGO_ERROR_INVALID_PARAM)) {
+    if (!expect_error("postgresql://host1/test", MONGO_ERROR_INVALID_PARAM)) {
         return false;
     }
-    if (!expectError("mongodb:///test", MONGO_ERROR_INVALID_PARAM)) {
+    if (!expect_error("mongodb:///test", MONGO_ERROR_INVALID_PARAM)) {
         return false;
     }
-    if (!expectError("mongodb://host1:notaport/test", MONGO_ERROR_INVALID_PARAM)) {
+    if (!expect_error("mongodb://host1:notaport/test", MONGO_ERROR_INVALID_PARAM)) {
         return false;
     }
-    if (!expectError("mongodb://host1:70000/test", MONGO_ERROR_INVALID_PARAM)) {
+    if (!expect_error("mongodb://host1:70000/test", MONGO_ERROR_INVALID_PARAM)) {
         return false;
     }
-    if (!expectError("mongodb://host1/test?readPreference=unknown",
+    if (!expect_error("mongodb://host1/test?readPreference=unknown",
                      MONGO_ERROR_INVALID_PARAM)) {
         return false;
     }
-    if (!expectError("mongodb://host1/test?tls=true", MONGO_ERROR_UNSUPPORTED)) {
+    if (!expect_error("mongodb://host1/test?tls=true", MONGO_ERROR_UNSUPPORTED)) {
         return false;
     }
 

@@ -50,7 +50,7 @@ int fail(const std::string& message)
     return 1;
 }
 
-bool samePipelineOp(const PipelineOp& lhs, const PipelineOp& rhs)
+bool same_pipeline_op(const PipelineOp& lhs, const PipelineOp& rhs)
 {
     return lhs.type == rhs.type &&
         lhs.key == rhs.key &&
@@ -60,7 +60,7 @@ bool samePipelineOp(const PipelineOp& lhs, const PipelineOp& rhs)
         lhs.lease_id == rhs.lease_id;
 }
 
-EtcdProductionConfig makeProduction()
+EtcdProductionConfig make_production()
 {
     EtcdProductionConfig production;
     production.endpoints = {
@@ -153,9 +153,9 @@ static_assert(HasValueClone<AsyncEtcdClusterClientBuilder>);
 
 int main()
 {
-    PipelineOp put = PipelineOp::Put("alpha", "one", 42);
+    PipelineOp put = PipelineOp::put("alpha", "one", 42);
     PipelineOp put_clone = put.clone();
-    if (!samePipelineOp(put, put_clone)) {
+    if (!same_pipeline_op(put, put_clone)) {
         return fail("PipelineOp clone should duplicate all fields");
     }
     put_clone.key = "beta";
@@ -163,40 +163,40 @@ int main()
         return fail("PipelineOp clone should own independent strings");
     }
 
-    EtcdClusterState state(makeProduction());
-    state.recordRequest();
-    state.recordRetry();
-    const auto first = state.selectEndpoint();
-    const auto second = state.selectEndpoint();
+    EtcdClusterState state(make_production());
+    state.record_request();
+    state.record_retry();
+    const auto first = state.select_endpoint();
+    const auto second = state.select_endpoint();
     if (!first.has_value() || *first != 0 || !second.has_value() || *second != 1) {
         return fail("EtcdClusterState setup should advance round robin cursor");
     }
-    state.markFailure(
+    state.mark_failure(
         0,
         EtcdError(EtcdErrorType::Connection, "dial failed"),
         true,
         std::chrono::system_clock::time_point(std::chrono::seconds(7)));
-    state.markSuccess(
+    state.mark_success(
         1,
         std::chrono::system_clock::time_point(std::chrono::seconds(9)));
 
     EtcdClusterState state_clone = state.clone();
-    const auto clone_stats = state_clone.getStats();
+    const auto clone_stats = state_clone.get_stats();
     if (clone_stats.requests != 1 ||
         clone_stats.retries != 1 ||
         clone_stats.request_failures != 1 ||
         clone_stats.endpoint_switches != 1) {
         return fail("EtcdClusterState clone should preserve stats");
     }
-    const auto& clone_snapshots = state_clone.getEndpointSnapshots();
+    const auto& clone_snapshots = state_clone.get_endpoint_snapshots();
     if (clone_snapshots.size() != 3 ||
         clone_snapshots[0].state != EtcdEndpointHealthState::Unhealthy ||
         clone_snapshots[1].state != EtcdEndpointHealthState::Healthy ||
         !clone_snapshots[0].last_error.has_value()) {
         return fail("EtcdClusterState clone should preserve endpoint snapshots");
     }
-    const auto clone_next = state_clone.selectEndpoint();
-    const auto original_next = state.selectEndpoint();
+    const auto clone_next = state_clone.select_endpoint();
+    const auto original_next = state.select_endpoint();
     if (!clone_next.has_value() || !original_next.has_value() ||
         *clone_next != *original_next) {
         return fail("EtcdClusterState clone should preserve selection cursor");
@@ -204,57 +204,57 @@ int main()
 
     EtcdClientBuilder sync_builder;
     sync_builder.endpoint("http://127.0.0.1:2379")
-        .apiPrefix("/v3")
-        .requestTimeout(std::chrono::milliseconds(250))
-        .bufferSize(4096)
-        .keepAlive(false)
-        .tcpNoDelay(false);
+        .api_prefix("/v3")
+        .request_timeout(std::chrono::milliseconds(250))
+        .buffer_size(4096)
+        .keep_alive(false)
+        .tcp_no_delay(false);
     EtcdClientBuilder sync_builder_clone = sync_builder.clone();
-    if (sync_builder_clone.buildConfig().endpoint != "http://127.0.0.1:2379" ||
-        sync_builder_clone.buildConfig().request_timeout != std::chrono::milliseconds(250) ||
-        sync_builder_clone.buildConfig().buffer_size != 4096) {
+    if (sync_builder_clone.build_config().endpoint != "http://127.0.0.1:2379" ||
+        sync_builder_clone.build_config().request_timeout != std::chrono::milliseconds(250) ||
+        sync_builder_clone.build_config().buffer_size != 4096) {
         return fail("EtcdClientBuilder clone should preserve config");
     }
 
     EtcdClusterClientBuilder cluster_builder;
-    cluster_builder.productionConfig(makeProduction())
-        .requestTimeout(std::chrono::milliseconds(300));
+    cluster_builder.production_config(make_production())
+        .request_timeout(std::chrono::milliseconds(300));
     EtcdClusterClientBuilder cluster_builder_clone = cluster_builder.clone();
-    if (cluster_builder_clone.buildConfig().production.endpoints.size() != 3 ||
-        cluster_builder_clone.buildConfig().production.connections_per_endpoint != 2 ||
-        cluster_builder_clone.buildConfig().request_timeout != std::chrono::milliseconds(300)) {
+    if (cluster_builder_clone.build_config().production.endpoints.size() != 3 ||
+        cluster_builder_clone.build_config().production.connections_per_endpoint != 2 ||
+        cluster_builder_clone.build_config().request_timeout != std::chrono::milliseconds(300)) {
         return fail("EtcdClusterClientBuilder clone should preserve production config");
     }
 
     AsyncEtcdClientBuilder async_builder;
     async_builder.endpoint("http://127.0.0.1:22379")
-        .requestTimeout(std::chrono::milliseconds(350))
-        .tcpNoDelay(false);
+        .request_timeout(std::chrono::milliseconds(350))
+        .tcp_no_delay(false);
     AsyncEtcdClientBuilder async_builder_clone = async_builder.clone();
-    if (async_builder_clone.buildConfig().endpoint != "http://127.0.0.1:22379" ||
-        async_builder_clone.buildConfig().request_timeout != std::chrono::milliseconds(350)) {
+    if (async_builder_clone.build_config().endpoint != "http://127.0.0.1:22379" ||
+        async_builder_clone.build_config().request_timeout != std::chrono::milliseconds(350)) {
         return fail("AsyncEtcdClientBuilder clone should preserve config");
     }
 
     AsyncEtcdClusterClientBuilder async_cluster_builder;
-    async_cluster_builder.productionConfig(makeProduction())
-        .requestTimeout(std::chrono::milliseconds(400));
+    async_cluster_builder.production_config(make_production())
+        .request_timeout(std::chrono::milliseconds(400));
     AsyncEtcdClusterClientBuilder async_cluster_builder_clone = async_cluster_builder.clone();
-    if (async_cluster_builder_clone.buildConfig().production.endpoints.size() != 3 ||
-        async_cluster_builder_clone.buildConfig().production.connections_per_endpoint != 2 ||
-        async_cluster_builder_clone.buildConfig().request_timeout != std::chrono::milliseconds(400)) {
+    if (async_cluster_builder_clone.build_config().production.endpoints.size() != 3 ||
+        async_cluster_builder_clone.build_config().production.connections_per_endpoint != 2 ||
+        async_cluster_builder_clone.build_config().request_timeout != std::chrono::milliseconds(400)) {
         return fail("AsyncEtcdClusterClientBuilder clone should preserve production config");
     }
 
     AsyncEtcdClusterClient async_cluster = async_cluster_builder_clone.build();
-    auto async_lease = async_cluster.tryAcquire();
+    auto async_lease = async_cluster.try_acquire();
     if (!async_lease.has_value()) {
         return fail("AsyncEtcdClusterClient should provide a client lease");
     }
     AsyncEtcdClusterClient moved_async_cluster(std::move(async_cluster));
     async_lease->release();
     if (moved_async_cluster.size() != 6 ||
-        moved_async_cluster.idleCount() != moved_async_cluster.size()) {
+        moved_async_cluster.idle_count() != moved_async_cluster.size()) {
         return fail("moved AsyncEtcdClusterClient should retain pool state");
     }
 

@@ -33,7 +33,7 @@ namespace galay::http
 namespace
 {
 
-StaticFileReadError makeError(StaticFileReadErrorCode code,
+StaticFileReadError make_error(StaticFileReadErrorCode code,
                               size_t expected_bytes = 0,
                               size_t actual_bytes = 0,
                               int error_number = 0,
@@ -48,13 +48,13 @@ StaticFileReadError makeError(StaticFileReadErrorCode code,
     };
 }
 
-std::expected<off_t, StaticFileReadError> checkedOffset(size_t offset,
+std::expected<off_t, StaticFileReadError> checked_offset(size_t offset,
                                                         size_t length) noexcept
 {
     const auto max_offset = static_cast<uintmax_t>(std::numeric_limits<off_t>::max());
     if (static_cast<uintmax_t>(offset) > max_offset ||
         static_cast<uintmax_t>(length) > max_offset - static_cast<uintmax_t>(offset)) {
-        return std::unexpected(makeError(StaticFileReadErrorCode::kInvalidRange,
+        return std::unexpected(make_error(StaticFileReadErrorCode::kInvalidRange,
                                           length,
                                           0,
                                           EOVERFLOW));
@@ -64,7 +64,7 @@ std::expected<off_t, StaticFileReadError> checkedOffset(size_t offset,
 
 #if !defined(USE_IOURING)
 
-std::expected<std::string, StaticFileReadError> readDescriptorBlocking(int fd,
+std::expected<std::string, StaticFileReadError> read_descriptor_blocking(int fd,
                                                                         size_t offset,
                                                                         size_t length)
 {
@@ -72,15 +72,15 @@ std::expected<std::string, StaticFileReadError> readDescriptorBlocking(int fd,
         return std::string{};
     }
     if (fd < 0) {
-        return std::unexpected(makeError(StaticFileReadErrorCode::kOpenFailed,
+        return std::unexpected(make_error(StaticFileReadErrorCode::kOpenFailed,
                                           length,
                                           0,
                                           EBADF));
     }
 
-    auto checked_offset = checkedOffset(offset, length);
-    if (!checked_offset.has_value()) {
-        return std::unexpected(checked_offset.error());
+    auto offset_result = checked_offset(offset, length);
+    if (!offset_result.has_value()) {
+        return std::unexpected(offset_result.error());
     }
 
     std::string content(length, '\0');
@@ -93,18 +93,18 @@ std::expected<std::string, StaticFileReadError> readDescriptorBlocking(int fd,
         const ssize_t bytes_read = ::pread(fd,
                                            content.data() + total_read,
                                            read_size,
-                                           *checked_offset + static_cast<off_t>(total_read));
+                                           *offset_result + static_cast<off_t>(total_read));
         if (bytes_read < 0) {
             if (errno == EINTR) {
                 continue;
             }
-            return std::unexpected(makeError(StaticFileReadErrorCode::kReadFailed,
+            return std::unexpected(make_error(StaticFileReadErrorCode::kReadFailed,
                                               length,
                                               total_read,
                                               errno));
         }
         if (bytes_read == 0) {
-            return std::unexpected(makeError(StaticFileReadErrorCode::kShortRead,
+            return std::unexpected(make_error(StaticFileReadErrorCode::kShortRead,
                                               length,
                                               total_read));
         }
@@ -129,7 +129,7 @@ struct NotifyBlockingOperationOnExit
     {
         if (!notified) {
             (void)this->waiter->notify(
-                std::unexpected(makeError(StaticFileReadErrorCode::kTaskFailed)));
+                std::unexpected(make_error(StaticFileReadErrorCode::kTaskFailed)));
         }
     }
 
@@ -144,38 +144,38 @@ struct NotifyBlockingOperationOnExit
 };
 
 template<typename F>
-galay::kernel::Task<std::invoke_result_t<std::decay_t<F>&>> runBlockingOperation(F&& operation)
+galay::kernel::Task<std::invoke_result_t<std::decay_t<F>&>> run_blocking_operation(F&& operation)
 {
     using Operation = std::decay_t<F>;
     using Result = std::invoke_result_t<Operation&>;
 
     auto runtime = galay::kernel::RuntimeHandle::current();
     if (!runtime.has_value()) {
-        co_return std::unexpected(makeError(StaticFileReadErrorCode::kRuntimeUnavailable));
+        co_return std::unexpected(make_error(StaticFileReadErrorCode::kRuntimeUnavailable));
     }
 
     using Waiter = galay::kernel::AsyncWaiter<Result>;
     auto waiter = std::make_shared<Waiter>();
-    auto submitted = runtime->spawnBlocking(
+    auto submitted = runtime->spawn_blocking(
         [operation = Operation(std::forward<F>(operation)), waiter]() mutable {
             NotifyBlockingOperationOnExit<Result> notification(waiter);
             auto result = std::invoke(operation);
             notification.notify(std::move(result));
         });
-    if (!submitted.has_value() || !submitted->isValid()) {
-        co_return std::unexpected(makeError(StaticFileReadErrorCode::kSubmitFailed));
+    if (!submitted.has_value() || !submitted->is_valid()) {
+        co_return std::unexpected(make_error(StaticFileReadErrorCode::kSubmitFailed));
     }
 
     auto result = co_await waiter->wait();
     if (!result.has_value()) {
-        co_return std::unexpected(makeError(StaticFileReadErrorCode::kTaskFailed));
+        co_return std::unexpected(make_error(StaticFileReadErrorCode::kTaskFailed));
     }
     co_return std::move(result.value());
 }
 
 #if defined(USE_IOURING)
 
-StaticFileReadError fromIoError(const galay::kernel::IOError& error,
+StaticFileReadError from_io_error(const galay::kernel::IOError& error,
                                 StaticFileReadErrorCode fallback) noexcept
 {
     const uint32_t io_code = static_cast<uint32_t>(error.code() & 0xffffffffu);
@@ -188,14 +188,14 @@ StaticFileReadError fromIoError(const galay::kernel::IOError& error,
     } else if (io_code == static_cast<uint32_t>(galay::kernel::kDisconnectError)) {
         code = StaticFileReadErrorCode::kCloseFailed;
     }
-    return makeError(code, 0, 0, system_code);
+    return make_error(code, 0, 0, system_code);
 }
 
 #endif
 
 } // namespace
 
-const char* staticFileReadErrorName(StaticFileReadErrorCode code) noexcept
+const char* static_file_read_error_name(StaticFileReadErrorCode code) noexcept
 {
     switch (code) {
         case StaticFileReadErrorCode::kOpenFailed:
@@ -223,13 +223,13 @@ const char* staticFileReadErrorName(StaticFileReadErrorCode code) noexcept
 namespace
 {
 
-StaticFileMetadataResult inspectBlocking(const std::string& filePath)
+StaticFileMetadataResult inspect_blocking(const std::string& filePath)
 {
     namespace fs = std::filesystem;
     std::error_code canonical_error;
     const fs::path canonical_path = fs::canonical(filePath, canonical_error);
     if (canonical_error) {
-        return std::unexpected(makeError(StaticFileReadErrorCode::kMetadataFailed,
+        return std::unexpected(make_error(StaticFileReadErrorCode::kMetadataFailed,
                                           0,
                                           0,
                                           canonical_error.value()));
@@ -237,7 +237,7 @@ StaticFileMetadataResult inspectBlocking(const std::string& filePath)
 
     std::error_code regular_error;
     if (!fs::is_regular_file(canonical_path, regular_error) || regular_error) {
-        return std::unexpected(makeError(StaticFileReadErrorCode::kMetadataFailed,
+        return std::unexpected(make_error(StaticFileReadErrorCode::kMetadataFailed,
                                           0,
                                           0,
                                           regular_error ? regular_error.value() : EINVAL));
@@ -246,7 +246,7 @@ StaticFileMetadataResult inspectBlocking(const std::string& filePath)
     std::error_code size_error;
     const uintmax_t raw_size = fs::file_size(canonical_path, size_error);
     if (size_error || raw_size > std::numeric_limits<size_t>::max()) {
-        return std::unexpected(makeError(StaticFileReadErrorCode::kMetadataFailed,
+        return std::unexpected(make_error(StaticFileReadErrorCode::kMetadataFailed,
                                           0,
                                           0,
                                           size_error ? size_error.value() : EOVERFLOW));
@@ -257,7 +257,7 @@ StaticFileMetadataResult inspectBlocking(const std::string& filePath)
     if (::stat(canonical_path.c_str(), &metadata) == 0) {
         last_modified = metadata.st_mtime;
     } else {
-        return std::unexpected(makeError(StaticFileReadErrorCode::kMetadataFailed,
+        return std::unexpected(make_error(StaticFileReadErrorCode::kMetadataFailed,
                                           0,
                                           0,
                                           errno));
@@ -270,12 +270,12 @@ StaticFileMetadataResult inspectBlocking(const std::string& filePath)
     };
 }
 
-StaticFileDescriptorResult openForSendfileBlocking(const std::string& filePath)
+StaticFileDescriptorResult open_for_sendfile_blocking(const std::string& filePath)
 {
     galay::kernel::FileDescriptor descriptor;
     auto opened = descriptor.open(filePath.c_str(), O_RDONLY | O_CLOEXEC);
     if (!opened.has_value()) {
-        return std::unexpected(makeError(StaticFileReadErrorCode::kOpenFailed,
+        return std::unexpected(make_error(StaticFileReadErrorCode::kOpenFailed,
                                           0,
                                           0,
                                           static_cast<int>(opened.error().code() >> 32)));
@@ -287,23 +287,23 @@ StaticFileDescriptorResult openForSendfileBlocking(const std::string& filePath)
 
 galay::kernel::Task<StaticFileMetadataResult> StaticFileReader::inspect(const std::string& filePath)
 {
-    auto result = co_await runBlockingOperation([filePath]() {
-        return inspectBlocking(filePath);
+    auto result = co_await run_blocking_operation([filePath]() {
+        return inspect_blocking(filePath);
     });
     if (!result.has_value()) {
-        co_return std::unexpected(makeError(StaticFileReadErrorCode::kTaskFailed));
+        co_return std::unexpected(make_error(StaticFileReadErrorCode::kTaskFailed));
     }
     co_return std::move(result.value());
 }
 
-galay::kernel::Task<StaticFileDescriptorResult> StaticFileReader::openForSendfile(
+galay::kernel::Task<StaticFileDescriptorResult> StaticFileReader::open_for_sendfile(
     const std::string& filePath)
 {
-    auto result = co_await runBlockingOperation([filePath]() {
-        return openForSendfileBlocking(filePath);
+    auto result = co_await run_blocking_operation([filePath]() {
+        return open_for_sendfile_blocking(filePath);
     });
     if (!result.has_value()) {
-        co_return std::unexpected(makeError(StaticFileReadErrorCode::kTaskFailed));
+        co_return std::unexpected(make_error(StaticFileReadErrorCode::kTaskFailed));
     }
     co_return std::move(result.value());
 }
@@ -311,11 +311,11 @@ galay::kernel::Task<StaticFileDescriptorResult> StaticFileReader::openForSendfil
 galay::kernel::Task<StaticFileSessionResult> StaticFileReader::open(
     const std::string& filePath)
 {
-    auto result = co_await runBlockingOperation([filePath]() {
-        return openForSendfileBlocking(filePath);
+    auto result = co_await run_blocking_operation([filePath]() {
+        return open_for_sendfile_blocking(filePath);
     });
     if (!result.has_value()) {
-        co_return std::unexpected(makeError(StaticFileReadErrorCode::kTaskFailed));
+        co_return std::unexpected(make_error(StaticFileReadErrorCode::kTaskFailed));
     }
     StaticFileDescriptorResult descriptor_result = std::move(result.value());
     if (!descriptor_result.has_value()) {
@@ -331,21 +331,21 @@ galay::kernel::Task<StaticFileSessionResult> StaticFileReader::open(
     co_return std::move(session);
 }
 
-galay::kernel::Task<StaticFileReadResult> StaticFileReader::readAll(
+galay::kernel::Task<StaticFileReadResult> StaticFileReader::read_all(
     const std::string& filePath,
     size_t fileSize)
 {
-    return readAt(filePath, 0, fileSize);
+    return read_at(filePath, 0, fileSize);
 }
 
-galay::kernel::Task<StaticFileReadResult> StaticFileReader::readAt(
+galay::kernel::Task<StaticFileReadResult> StaticFileReader::read_at(
     const std::string& filePath,
     size_t offset,
     size_t length)
 {
     auto opened = co_await open(filePath);
     if (!opened.has_value()) {
-        co_return std::unexpected(makeError(StaticFileReadErrorCode::kTaskFailed,
+        co_return std::unexpected(make_error(StaticFileReadErrorCode::kTaskFailed,
                                             length));
     }
     StaticFileSessionResult session_result = std::move(opened.value());
@@ -354,24 +354,24 @@ galay::kernel::Task<StaticFileReadResult> StaticFileReader::readAt(
     }
 
     StaticFileSession session = std::move(session_result.value());
-    auto result = co_await session.readAt(offset, length);
+    auto result = co_await session.read_at(offset, length);
     if (!result.has_value()) {
-        co_return std::unexpected(makeError(StaticFileReadErrorCode::kTaskFailed,
+        co_return std::unexpected(make_error(StaticFileReadErrorCode::kTaskFailed,
                                             length));
     }
     co_return std::move(result.value());
 }
 
-galay::kernel::Task<StaticFileReadResult> StaticFileSession::readAt(size_t offset,
+galay::kernel::Task<StaticFileReadResult> StaticFileSession::read_at(size_t offset,
                                                                      size_t length)
 {
     if (length == 0) {
         co_return std::string{};
     }
 
-    auto checked_offset = checkedOffset(offset, length);
-    if (!checked_offset.has_value()) {
-        co_return std::unexpected(checked_offset.error());
+    auto offset_result = checked_offset(offset, length);
+    if (!offset_result.has_value()) {
+        co_return std::unexpected(offset_result.error());
     }
 
 #if defined(USE_IOURING)
@@ -384,19 +384,19 @@ galay::kernel::Task<StaticFileReadResult> StaticFileSession::readAt(size_t offse
             static_cast<size_t>(std::numeric_limits<unsigned>::max()));
         auto read_result = co_await m_file.read(content.data() + total_read,
                                                read_length,
-                                               *checked_offset + static_cast<off_t>(total_read));
+                                               *offset_result + static_cast<off_t>(total_read));
         if (!read_result.has_value()) {
-            const auto read_error = fromIoError(read_result.error(),
+            const auto read_error = from_io_error(read_result.error(),
                                                 StaticFileReadErrorCode::kReadFailed);
             auto close_result = co_await m_file.close();
             if (!close_result.has_value()) {
-                co_return std::unexpected(makeError(StaticFileReadErrorCode::kCloseFailed,
+                co_return std::unexpected(make_error(StaticFileReadErrorCode::kCloseFailed,
                                                     length,
                                                     total_read,
                                                     read_error.error_number,
                                                     static_cast<int>(close_result.error().code() >> 32)));
             }
-            co_return std::unexpected(makeError(read_error.code,
+            co_return std::unexpected(make_error(read_error.code,
                                                 length,
                                                 total_read,
                                                 read_error.error_number));
@@ -406,7 +406,7 @@ galay::kernel::Task<StaticFileReadResult> StaticFileSession::readAt(size_t offse
             const int close_error = close_result.has_value()
                 ? 0
                 : static_cast<int>(close_result.error().code() >> 32);
-            co_return std::unexpected(makeError(StaticFileReadErrorCode::kShortRead,
+            co_return std::unexpected(make_error(StaticFileReadErrorCode::kShortRead,
                                                 length,
                                                 total_read,
                                                 0,
@@ -418,11 +418,11 @@ galay::kernel::Task<StaticFileReadResult> StaticFileSession::readAt(size_t offse
     co_return content;
 #else
     const int fd = m_file.get();
-    auto result = co_await runBlockingOperation([fd, offset, length]() {
-        return readDescriptorBlocking(fd, offset, length);
+    auto result = co_await run_blocking_operation([fd, offset, length]() {
+        return read_descriptor_blocking(fd, offset, length);
     });
     if (!result.has_value()) {
-        co_return std::unexpected(makeError(StaticFileReadErrorCode::kTaskFailed,
+        co_return std::unexpected(make_error(StaticFileReadErrorCode::kTaskFailed,
                                             length));
     }
     co_return std::move(result.value());

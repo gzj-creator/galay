@@ -42,7 +42,7 @@ struct BidirectionalMachine {
     explicit BidirectionalMachine(std::atomic<bool>* await_bound)
         : m_await_bound(await_bound) {}
 
-    void onAwaitContext(const AwaitContext&) {
+    void on_await_context(const AwaitContext&) {
         if (m_await_bound != nullptr) {
             m_await_bound->store(true, std::memory_order_release);
         }
@@ -54,16 +54,16 @@ struct BidirectionalMachine {
         }
         switch (m_phase) {
         case Phase::kWaitRead:
-            return MachineAction<result_type>::waitRead(&m_in, 1);
+            return MachineAction<result_type>::wait_read(&m_in, 1);
         case Phase::kWaitWrite:
-            return MachineAction<result_type>::waitWrite(&m_out, 1);
+            return MachineAction<result_type>::wait_write(&m_out, 1);
         case Phase::kDone:
             return MachineAction<result_type>::fail(IOError(kParamInvalid, 0));
         }
         return MachineAction<result_type>::fail(IOError(kParamInvalid, 0));
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
             m_result = std::unexpected(result.error());
             m_phase = Phase::kDone;
@@ -77,7 +77,7 @@ struct BidirectionalMachine {
         m_phase = Phase::kDone;
     }
 
-    void onWrite(std::expected<size_t, IOError> result) {
+    void on_write(std::expected<size_t, IOError> result) {
         if (!result) {
             m_result = std::unexpected(result.error());
             m_phase = Phase::kDone;
@@ -107,7 +107,7 @@ private:
 };
 
 struct ReadOnlyFlow {
-    void onRecv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& ctx) {
+    void on_recv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& ctx) {
         ops.complete(std::move(ctx.m_result));
     }
 
@@ -128,7 +128,7 @@ struct SharedState {
     std::atomic<int> second_error{0};
 };
 
-Task<void> bidirectionalTask(SharedState* state) {
+Task<void> bidirectional_task(SharedState* state) {
     auto awaitable =
         StateMachineAwaitable<BidirectionalMachine>(&state->controller, BidirectionalMachine{&state->bidirectional_await_bound});
     auto result = co_await awaitable;
@@ -137,17 +137,17 @@ Task<void> bidirectionalTask(SharedState* state) {
     state->bidirectional_done.store(true, std::memory_order_release);
 }
 
-Task<void> secondSingleDirectionTask(SharedState* state) {
+Task<void> second_single_direction_task(SharedState* state) {
     ReadOnlyFlow flow;
     auto awaitable = AwaitableBuilder<SequenceResult, 4, ReadOnlyFlow>(&state->controller, flow)
-        .recv<&ReadOnlyFlow::onRecv>(&flow.m_byte, 1)
+        .recv<&ReadOnlyFlow::on_recv>(&flow.m_byte, 1)
         .build();
     auto result = co_await awaitable;
     state->second_error.store(result ? 0 : static_cast<int>(result.error().code()), std::memory_order_release);
     state->second_done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -160,12 +160,12 @@ bool waitUntil(auto&& predicate,
     return predicate();
 }
 
-bool setNonBlocking(int fd) {
+bool set_non_blocking(int fd) {
     const int flags = fcntl(fd, F_GETFL, 0);
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool sendByteWithRetry(int fd,
+bool send_byte_with_retry(int fd,
                        char value,
                        std::chrono::milliseconds timeout = 1000ms,
                        std::chrono::milliseconds step = 2ms) {
@@ -195,7 +195,7 @@ int main() {
         std::perror("[T83] socketpair");
         return 1;
     }
-    if (!setNonBlocking(fds[0]) || !setNonBlocking(fds[1])) {
+    if (!set_non_blocking(fds[0]) || !set_non_blocking(fds[1])) {
         std::cerr << "[T83] failed to set non-blocking mode\n";
         close(fds[0]);
         close(fds[1]);
@@ -206,9 +206,9 @@ int main() {
     scheduler.start();
 
     SharedState state(fds[0]);
-    scheduleTask(scheduler, bidirectionalTask(&state));
+    schedule_task(scheduler, bidirectional_task(&state));
 
-    const bool first_in_position = waitUntil([&]() {
+    const bool first_in_position = wait_until([&]() {
         return state.bidirectional_await_bound.load(std::memory_order_acquire);
     });
     if (!first_in_position) {
@@ -219,13 +219,13 @@ int main() {
         return 1;
     }
 
-    scheduleTask(scheduler, secondSingleDirectionTask(&state));
-    const bool second_failed_fast = waitUntil([&]() {
+    schedule_task(scheduler, second_single_direction_task(&state));
+    const bool second_failed_fast = wait_until([&]() {
         return state.second_done.load(std::memory_order_acquire);
     }, 150ms);
 
     constexpr char kReadPayload = 'i';
-    if (!sendByteWithRetry(fds[1], kReadPayload)) {
+    if (!send_byte_with_retry(fds[1], kReadPayload)) {
         std::cerr << "[T83] failed to send wake payload\n";
         scheduler.stop();
         close(fds[0]);
@@ -233,7 +233,7 @@ int main() {
         return 1;
     }
 
-    const bool first_completed = waitUntil([&]() {
+    const bool first_completed = wait_until([&]() {
         return state.bidirectional_done.load(std::memory_order_acquire);
     });
 

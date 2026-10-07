@@ -44,63 +44,63 @@ namespace galay::redis
     }
 
     // 静态工厂方法：创建错误类型的RedisValue
-    RedisValue RedisValue::fromError(const std::string& error_msg)
+    RedisValue RedisValue::from_error(const std::string& error_msg)
     {
         protocol::RedisReply reply(protocol::RespType::Error, error_msg);
         return RedisValue(std::move(reply));
     }
 
-    bool RedisValue::isNull() const
+    bool RedisValue::is_null() const
     {
-        return m_reply.isNull();
+        return m_reply.is_null();
     }
 
-    bool RedisValue::isStatus() const
+    bool RedisValue::is_status() const
     {
-        return m_reply.isSimpleString();
+        return m_reply.is_simple_string();
     }
 
-    std::string RedisValue::toStatus() const
+    std::string RedisValue::to_status() const
     {
-        return m_reply.asString();
+        return m_reply.as_string();
     }
 
-    bool RedisValue::isError() const
+    bool RedisValue::is_error() const
     {
-        return m_reply.isError();
+        return m_reply.is_error();
     }
 
-    std::string RedisValue::toError() const
+    std::string RedisValue::to_error() const
     {
-        return m_reply.asString();
+        return m_reply.as_string();
     }
 
-    bool RedisValue::isInteger() const
+    bool RedisValue::is_integer() const
     {
-        return m_reply.isInteger();
+        return m_reply.is_integer();
     }
 
-    int64_t RedisValue::toInteger() const
+    int64_t RedisValue::to_integer() const
     {
-        return m_reply.asInteger();
+        return m_reply.as_integer();
     }
 
-    bool RedisValue::isString() const
+    bool RedisValue::is_string() const
     {
-        return m_reply.isBulkString();
+        return m_reply.is_bulk_string();
     }
 
-    std::string RedisValue::toString() const
+    std::string RedisValue::to_string() const
     {
-        return m_reply.asString();
+        return m_reply.as_string();
     }
 
-    bool RedisValue::isArray() const
+    bool RedisValue::is_array() const
     {
-        return m_reply.isArray();
+        return m_reply.is_array();
     }
 
-    std::vector<RedisValue> RedisValue::toArray() const
+    std::vector<RedisValue> RedisValue::to_array() const
     {
         if (!m_array_cached) {
             if (!m_cached_array) {
@@ -108,8 +108,8 @@ namespace galay::redis
             }
             auto& cache = *m_cached_array;
             cache.clear();
-            if (m_reply.isArray()) {
-                const auto& arr = m_reply.asArray();
+            if (m_reply.is_array()) {
+                const auto& arr = m_reply.as_array();
                 cache.reserve(arr.size());
                 for (const auto& elem : arr) {
                     cache.emplace_back(elem.clone());
@@ -130,32 +130,32 @@ namespace galay::redis
         return result;
     }
 
-    bool RedisValue::isDouble() const
+    bool RedisValue::is_double() const
     {
-        return m_reply.isDouble();
+        return m_reply.is_double();
     }
 
-    double RedisValue::toDouble() const
+    double RedisValue::to_double() const
     {
-        return m_reply.asDouble();
+        return m_reply.as_double();
     }
 
-    bool RedisValue::isBool() const
+    bool RedisValue::is_bool() const
     {
-        return m_reply.isBoolean();
+        return m_reply.is_boolean();
     }
 
-    bool RedisValue::toBool() const
+    bool RedisValue::to_bool() const
     {
-        return m_reply.asBoolean();
+        return m_reply.as_boolean();
     }
 
-    bool RedisValue::isMap() const
+    bool RedisValue::is_map() const
     {
-        return m_reply.isMap();
+        return m_reply.is_map();
     }
 
-    std::map<std::string, RedisValue> RedisValue::toMap() const
+    std::map<std::string, RedisValue> RedisValue::to_map() const
     {
         if (!m_map_cached) {
             if (!m_cached_map) {
@@ -163,11 +163,11 @@ namespace galay::redis
             }
             auto& cache = *m_cached_map;
             cache.clear();
-            if (m_reply.isMap()) {
-                const auto& map_data = m_reply.asMap();
+            if (m_reply.is_map()) {
+                const auto& map_data = m_reply.as_map();
                 for (const auto& [key, value] : map_data) {
                     cache.emplace(
-                        key.asString(),
+                        key.as_string(),
                         RedisValue(value.clone())
                     );
                 }
@@ -186,16 +186,16 @@ namespace galay::redis
         return result;
     }
 
-    bool RedisValue::isSet() const
+    bool RedisValue::is_set() const
     {
-        return m_reply.isSet();
+        return m_reply.is_set();
     }
 
-    std::vector<RedisValue> RedisValue::toSet() const
+    std::vector<RedisValue> RedisValue::to_set() const
     {
         std::vector<RedisValue> result;
-        if (m_reply.isSet()) {
-            const auto& set_data = m_reply.asArray();  // Set uses array internally
+        if (m_reply.is_set()) {
+            const auto& set_data = m_reply.as_array();  // Set uses array internally
             result.reserve(set_data.size());
             for (const auto& elem : set_data) {
                 result.push_back(RedisValue(elem.clone()));
@@ -204,21 +204,21 @@ namespace galay::redis
         return result;
     }
 
-    bool RedisValue::isAttr() const
+    bool RedisValue::is_attr() const
     {
         return false;  // 暂未实现
     }
 
-    bool RedisValue::isPush() const
+    bool RedisValue::is_push() const
     {
-        return m_reply.isPush();
+        return m_reply.is_push();
     }
 
-    std::vector<RedisValue> RedisValue::toPush() const
+    std::vector<RedisValue> RedisValue::to_push() const
     {
         std::vector<RedisValue> result;
-        if (m_reply.isPush()) {
-            const auto& push_data = m_reply.asArray();
+        if (m_reply.is_push()) {
+            const auto& push_data = m_reply.as_array();
             result.reserve(push_data.size());
             for (const auto& elem : push_data) {
                 result.push_back(RedisValue(elem.clone()));
@@ -227,22 +227,22 @@ namespace galay::redis
         return result;
     }
 
-    bool RedisValue::isBigNumber() const
+    bool RedisValue::is_big_number() const
     {
         return false;  // 暂未实现
     }
 
-    std::string RedisValue::toBigNumber() const
+    std::string RedisValue::to_big_number() const
     {
         return "";  // 暂未实现
     }
 
-    bool RedisValue::isVerb() const
+    bool RedisValue::is_verb() const
     {
         return false;  // 暂未实现
     }
 
-    std::string RedisValue::toVerb() const
+    std::string RedisValue::to_verb() const
     {
         return "";  // 暂未实现
     }

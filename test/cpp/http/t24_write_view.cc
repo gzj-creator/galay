@@ -23,37 +23,37 @@ int main() {
         "\r\n"
         "OK";
 
-    (void) writer.sendView(kPayload);
+    (void) writer.send_view(kPayload);
 
-    if (writer.getRemainingBytes() != kPayload.size()) {
+    if (writer.get_remaining_bytes() != kPayload.size()) {
         std::cerr << "[T68] sendView should expose full payload length\n";
         return 1;
     }
-    if (writer.sentBytes() != 0) {
+    if (writer.sent_bytes() != 0) {
         std::cerr << "[T68] sendView should start with zero sent bytes\n";
         return 1;
     }
-    if (writer.bufferData() != kPayload.data()) {
+    if (writer.buffer_data() != kPayload.data()) {
         std::cerr << "[T68] sendView should reference caller-owned storage directly\n";
         return 1;
     }
 
-    writer.updateRemaining(5);
-    if (writer.getRemainingBytes() != kPayload.size() - 5) {
+    writer.update_remaining(5);
+    if (writer.get_remaining_bytes() != kPayload.size() - 5) {
         std::cerr << "[T68] partial progress should reduce remaining bytes\n";
         return 1;
     }
-    if (writer.sentBytes() != 5) {
+    if (writer.sent_bytes() != 5) {
         std::cerr << "[T68] partial progress should advance sent bytes\n";
         return 1;
     }
-    if (writer.bufferData() != kPayload.data()) {
+    if (writer.buffer_data() != kPayload.data()) {
         std::cerr << "[T68] partial progress should keep the external buffer view\n";
         return 1;
     }
 
-    writer.updateRemaining(writer.getRemainingBytes());
-    if (writer.getRemainingBytes() != 0 || writer.sentBytes() != 0) {
+    writer.update_remaining(writer.get_remaining_bytes());
+    if (writer.get_remaining_bytes() != 0 || writer.sent_bytes() != 0) {
         std::cerr << "[T68] completed sendView should clear pending state\n";
         return 1;
     }
@@ -64,11 +64,11 @@ int main() {
 
     std::string owned = "owned-buffer";
     (void) writer.send(owned.data(), owned.size());
-    if (writer.getRemainingBytes() != owned.size()) {
+    if (writer.get_remaining_bytes() != owned.size()) {
         std::cerr << "[T68] owned send should still work after sendView\n";
         return 1;
     }
-    if (std::string(writer.bufferData(), writer.getRemainingBytes()) != owned) {
+    if (std::string(writer.buffer_data(), writer.get_remaining_bytes()) != owned) {
         std::cerr << "[T68] owned send content mismatch after sendView\n";
         return 1;
     }

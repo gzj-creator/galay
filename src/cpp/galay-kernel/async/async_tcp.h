@@ -13,8 +13,8 @@
  * // 服务端示例
  * Task<void> server() {
  *     AsyncTcpSocket listener;
- *     listener.option().handleReuseAddr();
- *     listener.option().handleNonBlock();
+ *     listener.option().handle_reuse_addr();
+ *     listener.option().handle_non_block();
  *     listener.bind(Host(IPType::IPV4, "0.0.0.0", 8080));
  *     listener.listen(1024);
  *
@@ -30,7 +30,7 @@
  * // 客户端示例
  * Task<void> client() {
  *     AsyncTcpSocket socket;
- *     socket.option().handleNonBlock();
+ *     socket.option().handle_non_block();
  *
  *     co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", 8080));
  *     co_await socket.send("Hello", 5);
@@ -176,8 +176,8 @@ public:
      * @return HandleOption 选项配置器对象
      *
      * @code
-     * socket.option().handleReuseAddr();  // 设置地址重用
-     * socket.option().handleNonBlock();   // 设置非阻塞
+     * socket.option().handle_reuse_addr();  // 设置地址重用
+     * socket.option().handle_non_block();   // 设置非阻塞
      * @endcode
      */
     galay::kernel::HandleOption option() {
@@ -269,7 +269,7 @@ public:
      * @param length 期望读取的字节数；为 0 时立即返回 0
      * @return 成功返回 length；连接在完整帧到达前关闭或发生 I/O 错误时返回 IOError
      */
-    ExactReadAwaitable readExact(char* buffer, size_t length) {
+    ExactReadAwaitable read_exact(char* buffer, size_t length) {
         return ExactReadAwaitable(
             m_controller.get(),
             galay::kernel::detail::ExactStreamMachine<false>{.read_buffer = buffer, .length = length});
@@ -308,7 +308,7 @@ public:
      * @param length 要写出的字节数；为 0 时立即返回 0
      * @return 成功返回 length；连接关闭或发生 I/O 错误时返回 IOError
      */
-    ExactWriteAwaitable writeAll(const char* buffer, size_t length) {
+    ExactWriteAwaitable write_all(const char* buffer, size_t length) {
         return ExactWriteAwaitable(
             m_controller.get(),
             galay::kernel::detail::ExactStreamMachine<true>{.write_buffer = buffer, .length = length});
@@ -463,7 +463,7 @@ public:
      * @brief 获取IO控制器
      * @return IOController* IO控制器；对象为 moved-from 状态时返回 nullptr
      */
-    galay::kernel::IOController* getController() { return m_controller.get(); }
+    galay::kernel::IOController* get_controller() { return m_controller.get(); }
 
     /**
      * @brief 克隆当前socket，共享底层句柄与IO控制器
@@ -483,10 +483,10 @@ public:
      * @brief 获取当前socket的共享持有计数
      * @return shared_ptr 引用计数；对象为 moved-from 状态时返回 0
      */
-    int getSharedCount() const { return static_cast<int>(m_controller.use_count()); }
+    int get_shared_count() const { return static_cast<int>(m_controller.use_count()); }
 
 private:
-    static std::expected<GHandle, galay::kernel::IOError> openHandle(galay::kernel::IPType type);  ///< 按协议版本创建底层 socket
+    static std::expected<GHandle, galay::kernel::IOError> open_handle(galay::kernel::IPType type);  ///< 按协议版本创建底层 socket
 
     /**
      * @brief 从共享控制器构造（仅 clone 使用）
@@ -499,7 +499,7 @@ private:
      * @brief 释放本对象对共享控制器的持有
      * @note 递减共享计数；计数减到 0 且句柄仍有效时关闭句柄
      */
-    void releaseSharedOwnership() noexcept;
+    void release_shared_ownership() noexcept;
 
 private:
     std::shared_ptr<galay::kernel::IOController> m_controller;  ///< IO事件控制器；clone 共享同一实例

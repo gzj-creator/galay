@@ -18,37 +18,37 @@ ExpectedRpcResponseReadState<Strategy>::ExpectedRpcResponseReadState(
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool ExpectedRpcResponseReadState<Strategy>::parseFromRingBuffer()
+bool ExpectedRpcResponseReadState<Strategy>::parse_from_ring_buffer()
 {
-    if (this->ringBuffer().readable() == 0) {
+    if (this->ring_buffer().readable() == 0) {
         return false;
     }
 
     std::array<struct iovec, 2> read_iovecs{};
-    const size_t read_iovecs_count = this->ringBuffer().getReadIovecs(read_iovecs);
+    const size_t read_iovecs_count = this->ring_buffer().get_read_iovecs(read_iovecs);
     if (read_iovecs_count == 0) {
         return false;
     }
 
     const std::span<const iovec> read_span(read_iovecs.data(), read_iovecs_count);
-    auto parse_result = tryParseResponseMessage(read_span,
-                                                iovecsReadableBytes(read_span),
+    auto parse_result = try_parse_response_message(read_span,
+                                                iovecs_readable_bytes(read_span),
                                                 m_setting->max_message_size,
                                                 *m_response);
     if (!parse_result.has_value()) {
-        this->setReadError(parse_result.error());
+        this->set_read_error(parse_result.error());
         return true;
     }
     if (parse_result.value() == 0) {
         return false;
     }
-    if (m_response->requestId() != m_expected_request_id) {
-        this->setReadError(RpcError(RpcErrorCode::INVALID_RESPONSE,
+    if (m_response->request_id() != m_expected_request_id) {
+        this->set_read_error(RpcError(RpcErrorCode::INVALID_RESPONSE,
                                     "Mismatched response request id"));
         return true;
     }
 
-    this->ringBuffer().consume(parse_result.value());
+    this->ring_buffer().consume(parse_result.value());
     return true;
 }
 
@@ -68,7 +68,7 @@ RecvRpcResponseChainAwaitable<SocketType, Strategy>::RecvRpcResponseChainAwaitab
           setting,
           expected_request_id,
           response))
-    , m_inner(AwaitableBuilder<Result>::fromStateMachine(
+    , m_inner(AwaitableBuilder<Result>::from_state_machine(
                   nullptr,
                   detail::RpcRingBufferReadMachine<ReadState>(m_state))
                   .build())

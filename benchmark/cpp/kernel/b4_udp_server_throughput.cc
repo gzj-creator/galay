@@ -48,18 +48,18 @@ int g_server_port = 9090;                  // 服务器端口
 IOScheduler* g_scheduler = nullptr;
 
 // 信号处理函数
-void signalHandler(int signum) {
+void signal_handler(int signum) {
     LogInfo("\nReceived signal {}, shutting down server...", signum);
     g_running.store(false, std::memory_order_relaxed);
 }
 
 // UDP Echo服务器工作协程 - 多协程并发处理
-Task<void> udpServerWorker(int worker_id) {
+Task<void> udp_server_worker(int worker_id) {
     AsyncUdpSocket socket;
 
-    socket.option().handleReuseAddr();
-    socket.option().handleReusePort();  // 关键：允许多个socket绑定同一端口
-    socket.option().handleNonBlock();
+    socket.option().handle_reuse_addr();
+    socket.option().handle_reuse_port();  // 关键：允许多个socket绑定同一端口
+    socket.option().handle_non_block();
 
     // 设置接收缓冲区大小
     int recv_buf_size = 8 * 1024 * 1024; // 8MB
@@ -107,7 +107,7 @@ Task<void> udpServerWorker(int worker_id) {
 }
 
 // 统计打印线程，避免阻塞单线程调度器的事件循环。
-void statsReporter() {
+void stats_reporter() {
     auto last_time = std::chrono::steady_clock::now();
     uint64_t last_received = 0;
     uint64_t last_sent = 0;
@@ -148,7 +148,7 @@ void statsReporter() {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -170,8 +170,8 @@ int main(int argc, char* argv[]) {
     LogInfo("Configuration: {} workers, port {}", NUM_SERVER_WORKERS, g_server_port);
 
     // 注册信号处理
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
 #ifdef USE_KQUEUE
     LogInfo("Using KqueueScheduler (macOS)");
@@ -193,12 +193,12 @@ int main(int argc, char* argv[]) {
 
     // 启动多个服务器工作协程
     for (int i = 0; i < NUM_SERVER_WORKERS; ++i) {
-        scheduleTask(scheduler, udpServerWorker(i));
+        schedule_task(scheduler, udp_server_worker(i));
     }
     LogInfo("Started {} server workers", NUM_SERVER_WORKERS);
 
     // 周期统计放到普通线程上，避免阻塞 scheduler 线程。
-    std::thread reporter(statsReporter);
+    std::thread reporter(stats_reporter);
 
     LogInfo("Server is running. Press Ctrl+C to stop.");
 

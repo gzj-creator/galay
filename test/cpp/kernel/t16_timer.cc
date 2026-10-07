@@ -26,7 +26,7 @@ void test_basic_functionality() {
     std::cout << "\n[Test 1] Testing basic functionality..." << std::endl;
     g_totalTests++;
 
-    auto* scheduler = TimerScheduler::getInstance();
+    auto* scheduler = TimerScheduler::get_instance();
     scheduler->start();
 
     std::atomic<int> count{0};
@@ -35,7 +35,7 @@ void test_basic_functionality() {
         std::cout << "  Timer callback executed!" << std::endl;
     });
 
-    bool added = scheduler->addTimer(timer);
+    bool added = scheduler->add_timer(timer);
     assert(added && "Timer should be added successfully");
 
     // 等待定时器触发
@@ -53,7 +53,7 @@ void test_concurrent_add() {
     std::cout << "\n[Test 2] Testing concurrent timer addition..." << std::endl;
     g_totalTests++;
 
-    auto* scheduler = TimerScheduler::getInstance();
+    auto* scheduler = TimerScheduler::get_instance();
     scheduler->start();
 
     const int numThreads = 8;
@@ -69,7 +69,7 @@ void test_concurrent_add() {
                 auto timer = std::make_shared<CBTimer>(delay, [&totalFired]() {
                     totalFired.fetch_add(1, std::memory_order_relaxed);
                 });
-                scheduler->addTimer(timer);
+                scheduler->add_timer(timer);
             }
         });
     }
@@ -100,7 +100,7 @@ void test_high_concurrency() {
     std::cout << "\n[Test 3] Testing high concurrency stress..." << std::endl;
     g_totalTests++;
 
-    auto* scheduler = TimerScheduler::getInstance();
+    auto* scheduler = TimerScheduler::get_instance();
     scheduler->start();
 
     const int numThreads = 16;
@@ -127,7 +127,7 @@ void test_high_concurrency() {
                 auto timer = std::make_shared<CBTimer>(delay, [&totalFired]() {
                     totalFired.fetch_add(1, std::memory_order_relaxed);
                 });
-                scheduler->addTimer(timer);
+                scheduler->add_timer(timer);
             }
         });
     }
@@ -168,7 +168,7 @@ void test_timer_cancellation() {
     std::cout << "\n[Test 4] Testing timer cancellation..." << std::endl;
     g_totalTests++;
 
-    auto* scheduler = TimerScheduler::getInstance();
+    auto* scheduler = TimerScheduler::get_instance();
     scheduler->start();
 
     std::atomic<int> firedCount{0};
@@ -182,7 +182,7 @@ void test_timer_cancellation() {
             firedCount.fetch_add(1, std::memory_order_relaxed);
         });
         timers.push_back(timer);
-        scheduler->addTimer(timer);
+        scheduler->add_timer(timer);
     }
 
     // 取消一半的定时器
@@ -211,7 +211,7 @@ void test_batch_add() {
     std::cout << "\n[Test 5] Testing batch timer addition..." << std::endl;
     g_totalTests++;
 
-    auto* scheduler = TimerScheduler::getInstance();
+    auto* scheduler = TimerScheduler::get_instance();
     scheduler->start();
 
     std::atomic<int> totalFired{0};
@@ -229,7 +229,7 @@ void test_batch_add() {
     }
 
     auto start = std::chrono::steady_clock::now();
-    size_t added = scheduler->addTimerBatch(timers);
+    size_t added = scheduler->add_timer_batch(timers);
     auto end = std::chrono::steady_clock::now();
     auto addTime = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
@@ -255,23 +255,23 @@ void test_start_stop() {
     std::cout << "\n[Test 6] Testing start/stop cycles..." << std::endl;
     g_totalTests++;
 
-    auto* scheduler = TimerScheduler::getInstance();
+    auto* scheduler = TimerScheduler::get_instance();
 
     for (int cycle = 0; cycle < 3; cycle++) {
         scheduler->start();
-        assert(scheduler->isRunning() && "Scheduler should be running");
+        assert(scheduler->is_running() && "Scheduler should be running");
 
         std::atomic<int> count{0};
         auto timer = std::make_shared<CBTimer>(50ms, [&count]() {
             count++;
         });
-        scheduler->addTimer(timer);
+        scheduler->add_timer(timer);
 
         std::this_thread::sleep_for(100ms);
         assert(count.load() == 1 && "Timer should fire");
 
         scheduler->stop();
-        assert(!scheduler->isRunning() && "Scheduler should be stopped");
+        assert(!scheduler->is_running() && "Scheduler should be stopped");
 
         std::cout << "  Cycle " << (cycle + 1) << " completed" << std::endl;
     }
@@ -285,15 +285,15 @@ void test_edge_cases() {
     std::cout << "\n[Test 7] Testing edge cases..." << std::endl;
     g_totalTests++;
 
-    auto* scheduler = TimerScheduler::getInstance();
+    auto* scheduler = TimerScheduler::get_instance();
 
     // 测试未启动时添加定时器
-    bool added = scheduler->addTimer(std::make_shared<CBTimer>(100ms, []() {}));
+    bool added = scheduler->add_timer(std::make_shared<CBTimer>(100ms, []() {}));
     assert(!added && "Should not add timer when not running");
 
     // 测试空指针
     scheduler->start();
-    added = scheduler->addTimer(nullptr);
+    added = scheduler->add_timer(nullptr);
     assert(!added && "Should not add nullptr");
 
     // 测试零延迟定时器
@@ -301,7 +301,7 @@ void test_edge_cases() {
     auto timer = std::make_shared<CBTimer>(0ms, [&count]() {
         count++;
     });
-    scheduler->addTimer(timer);
+    scheduler->add_timer(timer);
     std::this_thread::sleep_for(50ms);
     assert(count.load() == 1 && "Zero-delay timer should fire immediately");
 
@@ -315,7 +315,7 @@ void test_concurrent_add_and_cancel() {
     std::cout << "\n[Test 8] Testing concurrent add and cancel..." << std::endl;
     g_totalTests++;
 
-    auto* scheduler = TimerScheduler::getInstance();
+    auto* scheduler = TimerScheduler::get_instance();
     scheduler->start();
 
     const int numTimers = 1000;
@@ -330,7 +330,7 @@ void test_concurrent_add_and_cancel() {
             auto timer = std::make_shared<CBTimer>(100ms, [&firedCount]() {
                 firedCount.fetch_add(1, std::memory_order_relaxed);
             });
-            if (!scheduler->addTimer(timer)) {
+            if (!scheduler->add_timer(timer)) {
                 addFailed.store(true, std::memory_order_release);
             }
             timers[i] = timer;
@@ -394,13 +394,13 @@ int main() {
     std::cout << "==========================================" << std::endl;
 
     // 写入测试结果
-    resultWriter.addTest();
+    resultWriter.add_test();
     if (g_passedTests == g_totalTests) {
-        resultWriter.addPassed();
+        resultWriter.add_passed();
     } else {
-        resultWriter.addFailed();
+        resultWriter.add_failed();
     }
-    resultWriter.writeResult();
+    resultWriter.write_result();
 
     return (g_passedTests == g_totalTests) ? 0 : 1;
 }

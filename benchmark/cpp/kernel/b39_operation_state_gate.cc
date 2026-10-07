@@ -42,19 +42,19 @@ Measurement measure()
         for (std::size_t i = 0; i < Batch; ++i) {
             auto& op = operations[i].emplace(OperationKey{
                 static_cast<uint32_t>(i), static_cast<uint32_t>(round + 1)});
-            result.errors += !op.markSubmitted();
-            result.errors += !op.addPhysicalReference();
+            result.errors += !op.mark_submitted();
+            result.errors += !op.add_physical_reference();
         }
         // GCC/Clang：假设 adapter 可读写这批 operation，但不生成硬件 fence。
         asm volatile("" : : "g"(operations.data()) : "memory");
         for (std::size_t i = 0; i < Batch; ++i) {
-            result.winners += operations[i]->tryComplete(
+            result.winners += operations[i]->try_complete(
                 (round + i) % 2 ? CompletionReason::kReady : CompletionReason::kCancelled);
         }
         asm volatile("" : : "g"(operations.data()) : "memory");
         for (auto& op : operations) {
-            result.errors += op->tryComplete(CompletionReason::kRuntimeStopped);
-            const auto released = op->releasePhysicalReference();
+            result.errors += op->try_complete(CompletionReason::kRuntimeStopped);
+            const auto released = op->release_physical_reference();
             result.errors += !released;
             result.drains += op->phase() == OperationPhase::kSafeToResume;
             op.reset();
@@ -85,7 +85,7 @@ bool run()
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 

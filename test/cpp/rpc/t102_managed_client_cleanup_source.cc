@@ -8,12 +8,12 @@
 
 namespace {
 
-std::filesystem::path projectRoot()
+std::filesystem::path project_root()
 {
     return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path();
 }
 
-std::string readAll(const std::filesystem::path& path)
+std::string read_all(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -32,7 +32,7 @@ std::string trim(std::string line)
     return line.substr(begin, end - begin + 1);
 }
 
-bool hasBareCloseAwait(const std::string& source)
+bool has_bare_close_await(const std::string& source)
 {
     std::istringstream stream(source);
     std::string line;
@@ -48,8 +48,8 @@ bool hasBareCloseAwait(const std::string& source)
 
 int main()
 {
-    const auto source_path = projectRoot() / "src/cpp/galay-rpc/kernel/rpc_managed_client.h";
-    const auto source = readAll(source_path);
+    const auto source_path = project_root() / "src/cpp/galay-rpc/kernel/rpc_managed_client.h";
+    const auto source = read_all(source_path);
     if (source.empty()) {
         std::cerr << "failed to read " << source_path << "\n";
         return 1;
@@ -59,7 +59,7 @@ int main()
     if (source.find("(void)release_result") != std::string::npos) {
         failures.push_back("managed client release() result is explicitly discarded");
     }
-    if (hasBareCloseAwait(source)) {
+    if (has_bare_close_await(source)) {
         failures.push_back("managed client close() result is awaited without handling");
     }
 

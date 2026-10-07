@@ -60,7 +60,7 @@ struct Host {
             addr4->sin_family = AF_INET;
             addr4->sin_port = htons(port);
             if (inet_pton(AF_INET, ip.c_str(), &addr4->sin_addr) != 1) {
-                markInvalid();
+                mark_invalid();
                 return;
             }
             m_addr_len = sizeof(sockaddr_in);
@@ -69,12 +69,12 @@ struct Host {
             addr6->sin6_family = AF_INET6;
             addr6->sin6_port = htons(port);
             if (inet_pton(AF_INET6, ip.c_str(), &addr6->sin6_addr) != 1) {
-                markInvalid();
+                mark_invalid();
                 return;
             }
             m_addr_len = sizeof(sockaddr_in6);
         } else {
-            markInvalid();
+            mark_invalid();
         }
     }
 
@@ -103,7 +103,7 @@ struct Host {
      * @param addr 原始地址存储；通过检查 family 字段确定长度
      * @return 包装给定地址的 Host
      */
-    static Host fromSockAddr(const sockaddr_storage& addr) {
+    static Host from_sock_addr(const sockaddr_storage& addr) {
         Host host;
         std::memcpy(&host.m_addr, &addr, sizeof(addr));
         if (addr.ss_family == AF_INET) {
@@ -111,26 +111,26 @@ struct Host {
         } else if (addr.ss_family == AF_INET6) {
             host.m_addr_len = sizeof(sockaddr_in6);
         } else {
-            host.markInvalid();
+            host.mark_invalid();
         }
         return host;
     }
 
-    bool valid() const { return isIPv4() || isIPv6(); }           ///< 检查地址是否为合法 IPv4/IPv6。
-    bool isIPv4() const { return m_addr.ss_family == AF_INET && m_addr_len == sizeof(sockaddr_in); }   ///< 检查存储的地址是否为 IPv4
-    bool isIPv6() const { return m_addr.ss_family == AF_INET6 && m_addr_len == sizeof(sockaddr_in6); }  ///< 检查存储的地址是否为 IPv6
+    bool valid() const { return is_ipv4() || is_ipv6(); }           ///< 检查地址是否为合法 IPv4/IPv6。
+    bool is_ipv4() const { return m_addr.ss_family == AF_INET && m_addr_len == sizeof(sockaddr_in); }   ///< 检查存储的地址是否为 IPv4
+    bool is_ipv6() const { return m_addr.ss_family == AF_INET6 && m_addr_len == sizeof(sockaddr_in6); }  ///< 检查存储的地址是否为 IPv6
 
     /**
      * @brief 获取 IP 地址字符串
      * @return 点分十进制（IPv4）或冒号十六进制（IPv6）字符串
      */
     std::string ip() const {
-        if (isIPv4()) {
+        if (is_ipv4()) {
             const sockaddr_in* addr4 = reinterpret_cast<const sockaddr_in*>(&m_addr);
             char buf[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &addr4->sin_addr, buf, sizeof(buf));
             return buf;
-        } else if (isIPv6()) {
+        } else if (is_ipv6()) {
             const sockaddr_in6* addr6 = reinterpret_cast<const sockaddr_in6*>(&m_addr);
             char buf[INET6_ADDRSTRLEN];
             inet_ntop(AF_INET6, &addr6->sin6_addr, buf, sizeof(buf));
@@ -144,23 +144,23 @@ struct Host {
      * @return 端口号
      */
     uint16_t port() const {
-        if (isIPv4()) {
+        if (is_ipv4()) {
             const sockaddr_in* addr4 = reinterpret_cast<const sockaddr_in*>(&m_addr);
             return ntohs(addr4->sin_port);
-        } else if (isIPv6()) {
+        } else if (is_ipv6()) {
             const sockaddr_in6* addr6 = reinterpret_cast<const sockaddr_in6*>(&m_addr);
             return ntohs(addr6->sin6_port);
         }
         return 0;
     }
 
-    sockaddr* sockAddr() { return reinterpret_cast<sockaddr*>(&m_addr); }              ///< 获取用于系统调用的可变 sockaddr 指针
-    const sockaddr* sockAddr() const { return reinterpret_cast<const sockaddr*>(&m_addr); } ///< 获取常量 sockaddr 指针
-    socklen_t* addrLen() { return &m_addr_len; }           ///< 获取用于系统调用更新的可变长度指针
-    socklen_t addrLen() const { return m_addr_len; }       ///< 获取当前地址结构长度
+    sockaddr* sock_addr() { return reinterpret_cast<sockaddr*>(&m_addr); }              ///< 获取用于系统调用的可变 sockaddr 指针
+    const sockaddr* sock_addr() const { return reinterpret_cast<const sockaddr*>(&m_addr); } ///< 获取常量 sockaddr 指针
+    socklen_t* addr_len() { return &m_addr_len; }           ///< 获取用于系统调用更新的可变长度指针
+    socklen_t addr_len() const { return m_addr_len; }       ///< 获取当前地址结构长度
 
 private:
-    void markInvalid() {
+    void mark_invalid() {
         std::memset(&m_addr, 0, sizeof(m_addr));
         m_addr.ss_family = AF_UNSPEC;
         m_addr_len = 0;

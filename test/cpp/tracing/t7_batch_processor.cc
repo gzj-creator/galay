@@ -16,7 +16,7 @@ namespace {
 
 class RecordingExporter final : public galay::tracing::SpanExporter {
 public:
-    galay::tracing::ExportResult exportSpans(std::span<const galay::tracing::Span> spans) override {
+    galay::tracing::ExportResult export_spans(std::span<const galay::tracing::Span> spans) override {
         for (const auto& span : spans) {
             exported.push_back(span.clone());
         }
@@ -29,7 +29,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] std::size_t exportedSize() const {
+    [[nodiscard]] std::size_t exported_size() const {
         return exported_count.load(std::memory_order_acquire);
     }
 
@@ -40,7 +40,7 @@ public:
 
 class BlockingExporter final : public galay::tracing::SpanExporter {
 public:
-    galay::tracing::ExportResult exportSpans(std::span<const galay::tracing::Span>) override {
+    galay::tracing::ExportResult export_spans(std::span<const galay::tracing::Span>) override {
         export_started.store(true, std::memory_order_release);
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         return galay::tracing::ExportResult::kSuccess;
@@ -51,7 +51,7 @@ public:
 
 class BlockingFirstExporter final : public galay::tracing::SpanExporter {
 public:
-    galay::tracing::ExportResult exportSpans(std::span<const galay::tracing::Span>) override {
+    galay::tracing::ExportResult export_spans(std::span<const galay::tracing::Span>) override {
         const auto call = export_calls.fetch_add(1, std::memory_order_acq_rel) + 1;
         if (call == 1) {
             export_started.store(true, std::memory_order_release);
@@ -74,7 +74,7 @@ public:
     explicit SlowExporter(std::chrono::milliseconds delay)
         : delay(delay) {}
 
-    galay::tracing::ExportResult exportSpans(std::span<const galay::tracing::Span>) override {
+    galay::tracing::ExportResult export_spans(std::span<const galay::tracing::Span>) override {
         export_started.store(true, std::memory_order_release);
         std::this_thread::sleep_for(delay);
         return galay::tracing::ExportResult::kSuccess;
@@ -84,7 +84,7 @@ public:
     std::atomic<bool> export_started{false};
 };
 
-galay::tracing::Span makeSpan(std::string_view name, bool sampled = true) {
+galay::tracing::Span make_span(std::string_view name, bool sampled = true) {
     auto context = galay::tracing::TraceContext(
         galay::tracing::TraceId::random(),
         galay::tracing::SpanId::random(),
@@ -102,10 +102,10 @@ galay::tracing::BatchSpanProcessorConfig test_config() {
     };
 }
 
-bool waitForExportedSize(const RecordingExporter& exporter, std::size_t expected) {
+bool wait_for_exported_size(const RecordingExporter& exporter, std::size_t expected) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(200);
     while (std::chrono::steady_clock::now() <= deadline) {
-        if (exporter.exportedSize() >= expected) {
+        if (exporter.exported_size() >= expected) {
             return true;
         }
         std::this_thread::yield();
@@ -113,30 +113,30 @@ bool waitForExportedSize(const RecordingExporter& exporter, std::size_t expected
     return false;
 }
 
-void sampledSpansAreExported() {
+void sampled_spans_are_exported() {
     auto exporter = std::make_unique<RecordingExporter>();
     auto* raw = exporter.get();
     galay::tracing::BatchSpanProcessor processor(std::move(exporter), test_config());
 
-    processor.onEnd(makeSpan("sampled", true));
+    processor.on_end(make_span("sampled", true));
 
-    assert(processor.forceFlush(std::chrono::seconds(1)));
+    assert(processor.force_flush(std::chrono::seconds(1)));
     assert(raw->exported.size() == 1);
     assert(raw->exported[0].name() == "sampled");
 }
 
-void unsampledSpansAreNotExported() {
+void unsampled_spans_are_not_exported() {
     auto exporter = std::make_unique<RecordingExporter>();
     auto* raw = exporter.get();
     galay::tracing::BatchSpanProcessor processor(std::move(exporter), test_config());
 
-    processor.onEnd(makeSpan("unsampled", false));
+    processor.on_end(make_span("unsampled", false));
 
-    assert(processor.forceFlush(std::chrono::seconds(1)));
+    assert(processor.force_flush(std::chrono::seconds(1)));
     assert(raw->exported.empty());
 }
 
-void fullQueueDropsNewSpans() {
+void full_queue_drops_new_spans() {
     auto config = test_config();
     config.queue_capacity = 1;
     config.max_batch_size = 8;
@@ -145,28 +145,28 @@ void fullQueueDropsNewSpans() {
     auto* raw = exporter.get();
     galay::tracing::BatchSpanProcessor processor(std::move(exporter), config);
 
-    processor.onEnd(makeSpan("first"));
-    processor.onEnd(makeSpan("second"));
+    processor.on_end(make_span("first"));
+    processor.on_end(make_span("second"));
 
-    assert(processor.droppedSpanCount() == 1);
-    assert(processor.forceFlush(std::chrono::seconds(1)));
+    assert(processor.dropped_span_count() == 1);
+    assert(processor.force_flush(std::chrono::seconds(1)));
     assert(raw->exported.size() == 1);
     assert(raw->exported[0].name() == "first");
 }
 
-void forceFlushExportsQueuedSpans() {
+void force_flush_exports_queued_spans() {
     auto exporter = std::make_unique<RecordingExporter>();
     auto* raw = exporter.get();
     galay::tracing::BatchSpanProcessor processor(std::move(exporter), test_config());
 
-    processor.onEnd(makeSpan("one"));
-    processor.onEnd(makeSpan("two"));
+    processor.on_end(make_span("one"));
+    processor.on_end(make_span("two"));
 
-    assert(processor.forceFlush(std::chrono::seconds(1)));
+    assert(processor.force_flush(std::chrono::seconds(1)));
     assert(raw->exported.size() == 2);
 }
 
-void timedScheduleDoesNotWakeOnEverySpan() {
+void timed_schedule_does_not_wake_on_every_span() {
     auto config = test_config();
     config.schedule_mode = galay::tracing::BatchSpanScheduleMode::kTimed;
     config.flush_interval = std::chrono::hours(1);
@@ -174,14 +174,14 @@ void timedScheduleDoesNotWakeOnEverySpan() {
     auto* raw = exporter.get();
     galay::tracing::BatchSpanProcessor processor(std::move(exporter), config);
 
-    processor.onEnd(makeSpan("timed"));
+    processor.on_end(make_span("timed"));
 
-    assert(!waitForExportedSize(*raw, 1));
-    assert(processor.forceFlush(std::chrono::seconds(1)));
-    assert(raw->exportedSize() == 1);
+    assert(!wait_for_exported_size(*raw, 1));
+    assert(processor.force_flush(std::chrono::seconds(1)));
+    assert(raw->exported_size() == 1);
 }
 
-void onEndScheduleWakesForEachSpan() {
+void on_end_schedule_wakes_for_each_span() {
     auto config = test_config();
     config.schedule_mode = galay::tracing::BatchSpanScheduleMode::kOnEnd;
     config.flush_interval = std::chrono::hours(1);
@@ -189,12 +189,12 @@ void onEndScheduleWakesForEachSpan() {
     auto* raw = exporter.get();
     galay::tracing::BatchSpanProcessor processor(std::move(exporter), config);
 
-    processor.onEnd(makeSpan("on-end"));
+    processor.on_end(make_span("on-end"));
 
-    assert(waitForExportedSize(*raw, 1));
+    assert(wait_for_exported_size(*raw, 1));
 }
 
-void batchScheduleWakesWhenThresholdReached() {
+void batch_schedule_wakes_when_threshold_reached() {
     auto config = test_config();
     config.schedule_mode = galay::tracing::BatchSpanScheduleMode::kBatchSize;
     config.max_batch_size = 3;
@@ -203,15 +203,15 @@ void batchScheduleWakesWhenThresholdReached() {
     auto* raw = exporter.get();
     galay::tracing::BatchSpanProcessor processor(std::move(exporter), config);
 
-    processor.onEnd(makeSpan("one"));
-    processor.onEnd(makeSpan("two"));
-    assert(!waitForExportedSize(*raw, 1));
+    processor.on_end(make_span("one"));
+    processor.on_end(make_span("two"));
+    assert(!wait_for_exported_size(*raw, 1));
 
-    processor.onEnd(makeSpan("three"));
-    assert(waitForExportedSize(*raw, 3));
+    processor.on_end(make_span("three"));
+    assert(wait_for_exported_size(*raw, 3));
 }
 
-void concurrentOnEndFlushesAllSampledSpans() {
+void concurrent_on_end_flushes_all_sampled_spans() {
     constexpr auto kThreadCount = 4;
     constexpr auto kSpansPerThread = 64;
     auto config = test_config();
@@ -226,7 +226,7 @@ void concurrentOnEndFlushesAllSampledSpans() {
     for (int threadIndex = 0; threadIndex < kThreadCount; ++threadIndex) {
         producers.emplace_back([&processor, threadIndex] {
             for (int spanIndex = 0; spanIndex < kSpansPerThread; ++spanIndex) {
-                processor.onEnd(makeSpan("span"));
+                processor.on_end(make_span("span"));
             }
         });
     }
@@ -234,27 +234,27 @@ void concurrentOnEndFlushesAllSampledSpans() {
         producer.join();
     }
 
-    assert(processor.forceFlush(std::chrono::seconds(1)));
-    assert(raw->exportedSize() == kThreadCount * kSpansPerThread);
-    assert(processor.droppedSpanCount() == 0);
+    assert(processor.force_flush(std::chrono::seconds(1)));
+    assert(raw->exported_size() == kThreadCount * kSpansPerThread);
+    assert(processor.dropped_span_count() == 0);
 }
 
-void shutdownFlushesAndStops() {
+void shutdown_flushes_and_stops() {
     auto exporter = std::make_unique<RecordingExporter>();
     auto* raw = exporter.get();
     galay::tracing::BatchSpanProcessor processor(std::move(exporter), test_config());
 
-    processor.onEnd(makeSpan("before-shutdown"));
+    processor.on_end(make_span("before-shutdown"));
 
     assert(processor.shutdown(std::chrono::seconds(1)));
     assert(raw->shutdown_called);
     assert(raw->exported.size() == 1);
 
-    processor.onEnd(makeSpan("after-shutdown"));
+    processor.on_end(make_span("after-shutdown"));
     assert(raw->exported.size() == 1);
 }
 
-void shutdownHonorsTimeoutWhileWorkerIsExporting() {
+void shutdown_honors_timeout_while_worker_is_exporting() {
     auto config = test_config();
     config.queue_capacity = 1;
     config.max_batch_size = 1;
@@ -264,7 +264,7 @@ void shutdownHonorsTimeoutWhileWorkerIsExporting() {
     auto* raw = exporter.get();
     galay::tracing::BatchSpanProcessor processor(std::move(exporter), config);
 
-    processor.onEnd(makeSpan("slow"));
+    processor.on_end(make_span("slow"));
     const auto waitDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
     while (!raw->export_started.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() <= waitDeadline) {
@@ -278,7 +278,7 @@ void shutdownHonorsTimeoutWhileWorkerIsExporting() {
     assert(elapsed < std::chrono::milliseconds(100));
 }
 
-void shutdownDeadlineStopsFurtherDrainAfterTimedOutExport() {
+void shutdown_deadline_stops_further_drain_after_timed_out_export() {
     auto config = test_config();
     config.queue_capacity = 4;
     config.max_batch_size = 1;
@@ -289,7 +289,7 @@ void shutdownDeadlineStopsFurtherDrainAfterTimedOutExport() {
     auto* raw = exporter.get();
     galay::tracing::BatchSpanProcessor processor(std::move(exporter), config);
 
-    processor.onEnd(makeSpan("blocked"));
+    processor.on_end(make_span("blocked"));
     const auto waitDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
     while (!raw->export_started.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() <= waitDeadline) {
@@ -297,8 +297,8 @@ void shutdownDeadlineStopsFurtherDrainAfterTimedOutExport() {
     }
     assert(raw->export_started.load(std::memory_order_acquire));
 
-    processor.onEnd(makeSpan("queued-after-timeout"));
-    processor.onEnd(makeSpan("also-queued-after-timeout"));
+    processor.on_end(make_span("queued-after-timeout"));
+    processor.on_end(make_span("also-queued-after-timeout"));
     assert(!processor.shutdown(std::chrono::milliseconds(10)));
 
     raw->release_first.store(true, std::memory_order_release);
@@ -310,7 +310,7 @@ void shutdownDeadlineStopsFurtherDrainAfterTimedOutExport() {
     assert(raw->export_calls.load(std::memory_order_acquire) == 1);
 }
 
-int runSlowExporterDestructorCase()
+int run_slow_exporter_destructor_case()
 {
     auto exporter = std::make_unique<SlowExporter>(std::chrono::milliseconds(700));
     auto* raw = exporter.get();
@@ -321,7 +321,7 @@ int runSlowExporterDestructorCase()
         .schedule_mode = galay::tracing::BatchSpanScheduleMode::kBatchSize,
     });
 
-    processor.onEnd(makeSpan("slow-destructor"));
+    processor.on_end(make_span("slow-destructor"));
     const auto waitDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
     while (!raw->export_started.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() <= waitDeadline) {
@@ -332,12 +332,12 @@ int runSlowExporterDestructorCase()
     return 0;
 }
 
-void destructorWaitsForSlowExporterInsteadOfTerminating()
+void destructor_waits_for_slow_exporter_instead_of_terminating()
 {
     const pid_t child = fork();
     assert(child >= 0);
     if (child == 0) {
-        _exit(runSlowExporterDestructorCase());
+        _exit(run_slow_exporter_destructor_case());
     }
 
     int status = 0;
@@ -349,16 +349,16 @@ void destructorWaitsForSlowExporterInsteadOfTerminating()
 } // namespace
 
 int main() {
-    sampledSpansAreExported();
-    unsampledSpansAreNotExported();
-    fullQueueDropsNewSpans();
-    forceFlushExportsQueuedSpans();
-    timedScheduleDoesNotWakeOnEverySpan();
-    onEndScheduleWakesForEachSpan();
-    batchScheduleWakesWhenThresholdReached();
-    concurrentOnEndFlushesAllSampledSpans();
-    shutdownFlushesAndStops();
-    shutdownHonorsTimeoutWhileWorkerIsExporting();
-    shutdownDeadlineStopsFurtherDrainAfterTimedOutExport();
-    destructorWaitsForSlowExporterInsteadOfTerminating();
+    sampled_spans_are_exported();
+    unsampled_spans_are_not_exported();
+    full_queue_drops_new_spans();
+    force_flush_exports_queued_spans();
+    timed_schedule_does_not_wake_on_every_span();
+    on_end_schedule_wakes_for_each_span();
+    batch_schedule_wakes_when_threshold_reached();
+    concurrent_on_end_flushes_all_sampled_spans();
+    shutdown_flushes_and_stops();
+    shutdown_honors_timeout_while_worker_is_exporting();
+    shutdown_deadline_stops_further_drain_after_timed_out_export();
+    destructor_waits_for_slow_exporter_instead_of_terminating();
 }

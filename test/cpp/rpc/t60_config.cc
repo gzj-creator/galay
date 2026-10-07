@@ -20,13 +20,13 @@ int expect(bool condition, const char* message)
     return 0;
 }
 
-std::filesystem::path tempPath(const std::string& name)
+std::filesystem::path temp_path(const std::string& name)
 {
     auto dir = std::filesystem::temp_directory_path();
     return dir / ("galay_rpc_" + name + "_" + std::to_string(::getpid()) + ".toml");
 }
 
-void writeFile(const std::filesystem::path& path, const std::string& content)
+void write_file(const std::filesystem::path& path, const std::string& content)
 {
     std::ofstream out(path);
     out << content;
@@ -59,16 +59,16 @@ int main()
         return rc;
     }
 
-    auto missing = LoadRpcConfig(tempPath("missing"));
+    auto missing = load_rpc_config(temp_path("missing"));
     if (auto rc = expect(!missing.has_value() &&
                              missing.error().code == RpcConfigErrorCode::MissingFile,
                          "missing config did not return MissingFile")) {
         return rc;
     }
 
-    auto malformed_path = tempPath("malformed");
-    writeFile(malformed_path, "[server\nport = 12\n");
-    auto malformed = LoadRpcConfig(malformed_path);
+    auto malformed_path = temp_path("malformed");
+    write_file(malformed_path, "[server\nport = 12\n");
+    auto malformed = load_rpc_config(malformed_path);
     std::filesystem::remove(malformed_path);
     if (auto rc = expect(!malformed.has_value() &&
                              malformed.error().code == RpcConfigErrorCode::Malformed,
@@ -76,11 +76,11 @@ int main()
         return rc;
     }
 
-    auto invalid_path = tempPath("invalid");
-    writeFile(invalid_path,
+    auto invalid_path = temp_path("invalid");
+    write_file(invalid_path,
               "[server]\n"
               "port = 0\n");
-    auto invalid = LoadRpcConfig(invalid_path);
+    auto invalid = load_rpc_config(invalid_path);
     std::filesystem::remove(invalid_path);
     if (auto rc = expect(!invalid.has_value() &&
                              invalid.error().code == RpcConfigErrorCode::InvalidValue,
@@ -88,8 +88,8 @@ int main()
         return rc;
     }
 
-    auto partial_path = tempPath("partial");
-    writeFile(partial_path,
+    auto partial_path = temp_path("partial");
+    write_file(partial_path,
               "[server]\n"
               "host = \"127.0.0.1\"\n"
               "port = 7000\n"
@@ -117,7 +117,7 @@ int main()
               "\n"
               "[benchmark]\n"
               "requests = 1000\n");
-    auto partial = LoadRpcConfig(partial_path);
+    auto partial = load_rpc_config(partial_path);
     std::filesystem::remove(partial_path);
     if (auto rc = expect(partial.has_value(), "partial config did not load")) {
         return rc;

@@ -16,43 +16,43 @@ struct McpHttpServerTestAccess {
         auto& subscription = *state;
         auto registered = server.submit(McpHttpServer::Command(
             McpHttpServer::CommandKind::Register, {}, std::move(state)));
-        if (!registered || !server.processCommands() || !subscription.registered.isReady()) return false;
+        if (!registered || !server.process_commands() || !subscription.registered.is_ready()) return false;
 
         // These paths must work even when no new coroutine can be allocated.
-        kernel::detail::setFrameAllocationFailureForTesting(true);
-        auto notified = server.notifyToolsListChanged();
+        kernel::detail::set_frame_allocation_failure_for_testing(true);
+        auto notified = server.notify_tools_list_changed();
         auto uri = std::string("mem://owned");
-        auto resource = server.notifyResourceUpdated(uri);
+        auto resource = server.notify_resource_updated(uri);
         uri.assign("mem://changed");
-        const bool processed = server.processCommands();
-        kernel::detail::setFrameAllocationFailureForTesting(false);
+        const bool processed = server.process_commands();
+        kernel::detail::set_frame_allocation_failure_for_testing(false);
         if (!notified || !resource || !processed) return false;
-        auto first = subscription.events.tryRecv();
-        auto second = subscription.events.tryRecv();
+        auto first = subscription.events.try_recv();
+        auto second = subscription.events.try_recv();
         if (!first || !second || first->find("notifications/tools/list_changed") == std::string::npos ||
             second->find("mem://owned") == std::string::npos ||
             second->find("mem://changed") != std::string::npos) return false;
 
         // Subscriber overflow remains bounded; accepted commands are not receipts.
         for (int i = 0; i != 257; ++i) {
-            if (!server.notifyToolsListChanged()) return false;
+            if (!server.notify_tools_list_changed()) return false;
         }
-        while (server.processCommands()) {}
+        while (server.process_commands()) {}
         std::size_t received = 0;
-        while (subscription.events.tryRecv()) ++received;
+        while (subscription.events.try_recv()) ++received;
         if (received != 256) return false;
 
         if (!server.m_commands.close()) return false;
-        auto rejected = server.notifyToolsListChanged();
+        auto rejected = server.notify_tools_list_changed();
         if (rejected || rejected.error().code() != McpErrorCode::Overload) return false;
         // Release cannot require another command, allocation, or coroutine.
-        kernel::detail::setFrameAllocationFailureForTesting(true);
+        kernel::detail::set_frame_allocation_failure_for_testing(true);
         subscription.finished.store(true, std::memory_order_release);
-        server.reapSubscriptions();
-        kernel::detail::setFrameAllocationFailureForTesting(false);
+        server.reap_subscriptions();
+        kernel::detail::set_frame_allocation_failure_for_testing(false);
         if (server.m_subscriptions != nullptr) return false;
         server.m_admission.store(McpHttpServer::kAdmissionClosed);
-        rejected = server.notifyToolsListChanged();
+        rejected = server.notify_tools_list_changed();
         return !rejected && rejected.error().code() == McpErrorCode::ConnectionClosed;
     }
 };

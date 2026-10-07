@@ -9,7 +9,7 @@
 #include <optional>
 #include <string_view>
 
-using galay::mcp::protocol::makeJsonRpcRequestBody;
+using galay::mcp::protocol::make_json_rpc_request_body;
 
 namespace {
 
@@ -26,14 +26,14 @@ bool require(bool condition, std::string_view message)
 
 int main()
 {
-    const auto no_params = makeJsonRpcRequestBody(7, "tools/list", std::nullopt);
+    const auto no_params = make_json_rpc_request_body(7, "tools/list", std::nullopt);
     if (!require(no_params == R"({"jsonrpc":"2.0","id":7,"method":"tools/list"})",
                  "unexpected JSON-RPC body for request without params")) {
         return 1;
     }
 
     const auto with_params =
-        makeJsonRpcRequestBody(9, "tools/call", std::optional<std::string_view>(R"({"name":"echo"})"));
+        make_json_rpc_request_body(9, "tools/call", std::optional<std::string_view>(R"({"name":"echo"})"));
     if (!require(with_params == R"({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"echo"}})",
                  "unexpected JSON-RPC body for request with params")) {
         return 1;

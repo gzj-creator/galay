@@ -65,64 +65,64 @@ void MysqlCommandBuilder::reserve(size_t command_count, size_t encoded_bytes)
     m_command_views.reserve(command_count);
 }
 
-MysqlCommandBuilder& MysqlCommandBuilder::appendQuery(std::string_view sql, uint8_t sequence_id)
+MysqlCommandBuilder& MysqlCommandBuilder::append_query(std::string_view sql, uint8_t sequence_id)
 {
-    return appendSimple(CommandType::COM_QUERY, sql, sequence_id, MysqlCommandKind::Query);
+    return append_simple(CommandType::COM_QUERY, sql, sequence_id, MysqlCommandKind::Query);
 }
 
-MysqlCommandBuilder& MysqlCommandBuilder::appendStmtPrepare(std::string_view sql, uint8_t sequence_id)
+MysqlCommandBuilder& MysqlCommandBuilder::append_stmt_prepare(std::string_view sql, uint8_t sequence_id)
 {
-    return appendSimple(CommandType::COM_STMT_PREPARE, sql, sequence_id, MysqlCommandKind::StmtPrepare);
+    return append_simple(CommandType::COM_STMT_PREPARE, sql, sequence_id, MysqlCommandKind::StmtPrepare);
 }
 
-MysqlCommandBuilder& MysqlCommandBuilder::appendInitDb(std::string_view database, uint8_t sequence_id)
+MysqlCommandBuilder& MysqlCommandBuilder::append_init_db(std::string_view database, uint8_t sequence_id)
 {
-    return appendSimple(CommandType::COM_INIT_DB, database, sequence_id, MysqlCommandKind::InitDb);
+    return append_simple(CommandType::COM_INIT_DB, database, sequence_id, MysqlCommandKind::InitDb);
 }
 
-MysqlCommandBuilder& MysqlCommandBuilder::appendPing(uint8_t sequence_id)
+MysqlCommandBuilder& MysqlCommandBuilder::append_ping(uint8_t sequence_id)
 {
-    return appendSimple(CommandType::COM_PING, {}, sequence_id, MysqlCommandKind::Ping);
+    return append_simple(CommandType::COM_PING, {}, sequence_id, MysqlCommandKind::Ping);
 }
 
-MysqlCommandBuilder& MysqlCommandBuilder::appendQuit(uint8_t sequence_id)
+MysqlCommandBuilder& MysqlCommandBuilder::append_quit(uint8_t sequence_id)
 {
-    return appendSimple(CommandType::COM_QUIT, {}, sequence_id, MysqlCommandKind::Quit);
+    return append_simple(CommandType::COM_QUIT, {}, sequence_id, MysqlCommandKind::Quit);
 }
 
-MysqlCommandBuilder& MysqlCommandBuilder::appendResetConnection(uint8_t sequence_id)
+MysqlCommandBuilder& MysqlCommandBuilder::append_reset_connection(uint8_t sequence_id)
 {
-    return appendSimple(CommandType::COM_RESET_CONNECTION,
+    return append_simple(CommandType::COM_RESET_CONNECTION,
                         {},
                         sequence_id,
                         MysqlCommandKind::ResetConnection);
 }
 
-MysqlCommandBuilder& MysqlCommandBuilder::appendSimple(CommandType cmd,
+MysqlCommandBuilder& MysqlCommandBuilder::append_simple(CommandType cmd,
                                                        std::string_view payload,
                                                        uint8_t sequence_id,
                                                        MysqlCommandKind kind)
 {
     if (payload.size() > MYSQL_MAX_PACKET_SIZE - 1U) {
-        appendInvalid(kind, sequence_id);
+        append_invalid(kind, sequence_id);
         return *this;
     }
-    m_encoded.reserve(m_encoded.size() + estimateSimplePacketBytes(payload.size()));
-    return appendFast(cmd, payload, sequence_id, kind);
+    m_encoded.reserve(m_encoded.size() + estimate_simple_packet_bytes(payload.size()));
+    return append_fast(cmd, payload, sequence_id, kind);
 }
 
-MysqlCommandBuilder& MysqlCommandBuilder::appendFast(CommandType cmd,
+MysqlCommandBuilder& MysqlCommandBuilder::append_fast(CommandType cmd,
                                                      std::string_view payload,
                                                      uint8_t sequence_id,
                                                      MysqlCommandKind kind)
 {
-    appendSimpleFast(cmd, payload, sequence_id, kind);
+    append_simple_fast(cmd, payload, sequence_id, kind);
     return *this;
 }
 
 std::span<const MysqlCommandView> MysqlCommandBuilder::commands() const
 {
-    rebuildViewsIfNeeded();
+    rebuild_views_if_needed();
     return std::span<const MysqlCommandView>(m_command_views);
 }
 
@@ -143,7 +143,7 @@ const std::string& MysqlCommandBuilder::encoded() const noexcept
 
 MysqlEncodedBatch MysqlCommandBuilder::build() const
 {
-    if (hasInvalidCommand()) {
+    if (has_invalid_command()) {
         return MysqlEncodedBatch{};
     }
     return MysqlEncodedBatch(m_encoded, m_commands.size());
@@ -151,7 +151,7 @@ MysqlEncodedBatch MysqlCommandBuilder::build() const
 
 MysqlEncodedBatch MysqlCommandBuilder::release()
 {
-    if (hasInvalidCommand()) {
+    if (has_invalid_command()) {
         m_encoded.clear();
         m_commands.clear();
         m_command_views.clear();
@@ -167,7 +167,7 @@ MysqlEncodedBatch MysqlCommandBuilder::release()
     return out;
 }
 
-void MysqlCommandBuilder::appendPacketHeaderFast(std::string& out, uint32_t payload_len, uint8_t sequence_id)
+void MysqlCommandBuilder::append_packet_header_fast(std::string& out, uint32_t payload_len, uint8_t sequence_id)
 {
     out.push_back(static_cast<char>(payload_len & 0xFF));
     out.push_back(static_cast<char>((payload_len >> 8) & 0xFF));
@@ -175,12 +175,12 @@ void MysqlCommandBuilder::appendPacketHeaderFast(std::string& out, uint32_t payl
     out.push_back(static_cast<char>(sequence_id));
 }
 
-size_t MysqlCommandBuilder::estimateSimplePacketBytes(size_t payload_size) noexcept
+size_t MysqlCommandBuilder::estimate_simple_packet_bytes(size_t payload_size) noexcept
 {
     return MYSQL_PACKET_HEADER_SIZE + 1 + payload_size;
 }
 
-void MysqlCommandBuilder::appendInvalid(MysqlCommandKind kind, uint8_t sequence_id)
+void MysqlCommandBuilder::append_invalid(MysqlCommandKind kind, uint8_t sequence_id)
 {
     m_commands.push_back(CommandMeta{
         .encoded = Slice{m_encoded.size(), 0},
@@ -190,7 +190,7 @@ void MysqlCommandBuilder::appendInvalid(MysqlCommandKind kind, uint8_t sequence_
     m_views_dirty = true;
 }
 
-bool MysqlCommandBuilder::hasInvalidCommand() const noexcept
+bool MysqlCommandBuilder::has_invalid_command() const noexcept
 {
     for (const auto& command : m_commands) {
         if (command.encoded.length == 0) {
@@ -200,19 +200,19 @@ bool MysqlCommandBuilder::hasInvalidCommand() const noexcept
     return false;
 }
 
-void MysqlCommandBuilder::appendSimpleFast(CommandType cmd,
+void MysqlCommandBuilder::append_simple_fast(CommandType cmd,
                                            std::string_view payload,
                                            uint8_t sequence_id,
                                            MysqlCommandKind kind)
 {
     if (payload.size() > MYSQL_MAX_PACKET_SIZE - 1U) {
-        appendInvalid(kind, sequence_id);
+        append_invalid(kind, sequence_id);
         return;
     }
     const uint32_t payload_len = 1U + static_cast<uint32_t>(payload.size());
     const size_t begin = m_encoded.size();
 
-    appendPacketHeaderFast(m_encoded, payload_len, sequence_id);
+    append_packet_header_fast(m_encoded, payload_len, sequence_id);
     m_encoded.push_back(static_cast<char>(cmd));
     if (!payload.empty()) {
         m_encoded.append(payload.data(), payload.size());
@@ -227,7 +227,7 @@ void MysqlCommandBuilder::appendSimpleFast(CommandType cmd,
     m_views_dirty = true;
 }
 
-void MysqlCommandBuilder::rebuildViewsIfNeeded() const
+void MysqlCommandBuilder::rebuild_views_if_needed() const
 {
     if (!m_views_dirty) {
         return;

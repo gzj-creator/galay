@@ -18,7 +18,7 @@ public:
     std::size_t count{0};
 };
 
-[[nodiscard]] const char* buildType() {
+[[nodiscard]] const char* build_type() {
 #ifdef NDEBUG
     return "Release";
 #else
@@ -29,16 +29,16 @@ public:
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     constexpr int kIterations = 100000;
     auto sink = std::make_shared<NullSink>();
     galay::tracing::Logger logger;
-    logger.clearSinks();
-    logger.addSink(sink);
-    logger.setLevel(galay::tracing::LogLevel::kInfo);
+    logger.clear_sinks();
+    logger.add_sink(sink);
+    logger.set_level(galay::tracing::LogLevel::kInfo);
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
@@ -47,7 +47,7 @@ int main() {
     const auto elapsed = std::chrono::steady_clock::now() - start;
     const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
 
-    std::cout << "B2-EnabledLog workload=" << kIterations << " build=" << buildType()
+    std::cout << "B2-EnabledLog workload=" << kIterations << " build=" << build_type()
               << " backend=core ns_per_log=" << (static_cast<double>(ns) / kIterations)
               << " sink_writes=" << sink->count << '\n';
 }

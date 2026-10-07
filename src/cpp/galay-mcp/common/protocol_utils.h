@@ -23,21 +23,21 @@ namespace protocol {
 
 /**
  * @brief 构建初始化响应结果
- * @param serverName 服务器名称
+ * @param server_name 服务器名称
  * @param serverVersion 服务器版本
  * @param hasTools 是否支持工具功能
  * @param hasResources 是否支持资源功能
  * @param hasPrompts 是否支持提示功能
  * @return 初始化结果的JSON字符串
  */
-inline std::string buildInitializeResult(const std::string& serverName,
+inline std::string build_initialize_result(const std::string& server_name,
                                         const std::string& serverVersion,
                                         bool hasTools,
                                         bool hasResources,
                                         bool hasPrompts) {
     InitializeResult result;
     result.protocolVersion = MCP_VERSION;
-    result.serverInfo.name = serverName;
+    result.serverInfo.name = server_name;
     result.serverInfo.version = serverVersion;
     result.serverInfo.capabilities = "{}";
 
@@ -46,7 +46,7 @@ inline std::string buildInitializeResult(const std::string& serverName,
     result.capabilities.prompts = hasPrompts;
     result.capabilities.logging = false;
 
-    return result.toJson();
+    return result.to_json();
 }
 
 /**
@@ -55,7 +55,7 @@ inline std::string buildInitializeResult(const std::string& serverName,
  * @param result 结果JSON字符串
  * @return 包含成功结果的JsonRpcResponse
  */
-inline JsonRpcResponse makeResultResponse(int64_t id, const std::string& result) {
+inline JsonRpcResponse make_result_response(int64_t id, const std::string& result) {
     JsonRpcResponse response;
     response.id = id;
     response.result = result;
@@ -71,11 +71,11 @@ inline JsonRpcResponse makeResultResponse(int64_t id, const std::string& result)
  *        without creating another temporary buffer.
  * @return Serialized JSON request body ready to send as an HTTP payload.
  */
-inline std::string makeJsonRpcRequestBody(int64_t id,
+inline std::string make_json_rpc_request_body(int64_t id,
                                           std::string_view method,
                                           std::optional<std::string_view> params = std::nullopt) {
     std::string body;
-    auto writer = makeJsonWriter(body);
+    auto writer = make_json_writer(body);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("jsonrpc");
@@ -110,7 +110,7 @@ inline std::string makeJsonRpcRequestBody(int64_t id,
  * @param details 错误详情（可选）
  * @return 包含错误信息的JsonRpcResponse
  */
-inline JsonRpcResponse makeErrorResponse(int64_t id,
+inline JsonRpcResponse make_error_response(int64_t id,
                                          int code,
                                          const std::string& message,
                                          const std::string& details = "") {
@@ -119,7 +119,7 @@ inline JsonRpcResponse makeErrorResponse(int64_t id,
     error.message = message;
     if (!details.empty()) {
         std::string quoted;
-        auto writer = makeJsonWriter(quoted);
+        auto writer = make_json_writer(quoted);
         // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
         (void)writer.string(details);
         if (writer.finish()) {
@@ -129,7 +129,7 @@ inline JsonRpcResponse makeErrorResponse(int64_t id,
 
     JsonRpcResponse response;
     response.id = id;
-    response.error = error.toJson();
+    response.error = error.to_json();
     return response;
 }
 
@@ -143,15 +143,15 @@ inline JsonRpcResponse makeErrorResponse(int64_t id,
  * @return 列表结果的JSON字符串
  */
 template <typename MapType, typename Extractor>
-std::string buildListResultFromMap(const MapType& map, const char* key, Extractor extractor) {
+std::string build_list_result_from_map(const MapType& map, const char* key, Extractor extractor) {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key(key);
     (void)writer.start_array();
     for (const auto& [name, info] : map) {
-        (void)writer.raw(extractor(info).toJson());
+        (void)writer.raw(extractor(info).to_json());
     }
     (void)writer.end_array();
     (void)writer.end_object();

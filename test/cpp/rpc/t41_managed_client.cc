@@ -21,12 +21,12 @@ public:
     ManagedService()
         : RpcService("ManagedService")
     {
-        registerMethod("echo", &ManagedService::echo);
+        register_method("echo", &ManagedService::echo);
     }
 
     Task<void> echo(RpcContext& ctx)
     {
-        ctx.setPayload(ctx.request().payloadView());
+        ctx.set_payload(ctx.request().payload_view());
         co_return;
     }
 };
@@ -37,7 +37,7 @@ struct TestState {
     std::string error;
 };
 
-uint16_t loopbackPort()
+uint16_t loopback_port()
 {
     return static_cast<uint16_t>(42000 + (::getpid() % 5000));
 }
@@ -49,16 +49,16 @@ void fail(TestState* state, std::string message)
 }
 
 template<typename AwaitResult>
-bool payloadEquals(const AwaitResult& result, const std::string& expected)
+bool payload_equals(const AwaitResult& result, const std::string& expected)
 {
     if (!result.has_value() || !result->has_value() || !result->value().has_value()) {
         return false;
     }
     const auto& payload = result->value()->payload();
-    return result->value()->isOk() && std::string(payload.begin(), payload.end()) == expected;
+    return result->value()->is_ok() && std::string(payload.begin(), payload.end()) == expected;
 }
 
-Task<void> runManagedChecks(uint16_t port, TestState* state)
+Task<void> run_managed_checks(uint16_t port, TestState* state)
 {
     RpcStaticDiscovery discovery;
     discovery.set("ManagedService", {
@@ -78,8 +78,8 @@ Task<void> runManagedChecks(uint16_t port, TestState* state)
         co_return;
     }
 
-    auto selected_a = client.selectEndpoint("ManagedService");
-    auto selected_b = client.selectEndpoint("ManagedService");
+    auto selected_a = client.select_endpoint("ManagedService");
+    auto selected_b = client.select_endpoint("ManagedService");
     if (!selected_a.has_value() || !selected_b.has_value() ||
         selected_a->port != static_cast<uint16_t>(port + 1) || selected_b->port != port) {
         fail(state, "round-robin endpoint selection failed");
@@ -87,16 +87,16 @@ Task<void> runManagedChecks(uint16_t port, TestState* state)
         co_return;
     }
 
-    client.markEndpointUnavailable(*selected_a);
-    auto selected_after_failure = client.selectEndpoint("ManagedService");
+    client.mark_endpoint_unavailable(*selected_a);
+    auto selected_after_failure = client.select_endpoint("ManagedService");
     if (!selected_after_failure.has_value() || selected_after_failure->port != port) {
         fail(state, "endpoint failure did not select next allowed endpoint");
         state->done.store(true, std::memory_order_release);
         co_return;
     }
 
-    client.markEndpointUnavailable(*selected_after_failure);
-    auto recovered_after_all_unavailable = client.selectEndpoint("ManagedService");
+    client.mark_endpoint_unavailable(*selected_after_failure);
+    auto recovered_after_all_unavailable = client.select_endpoint("ManagedService");
     if (!recovered_after_all_unavailable.has_value()) {
         fail(state, "all-unavailable endpoints were not reopened for transient recovery");
         state->done.store(true, std::memory_order_release);
@@ -106,7 +106,7 @@ Task<void> runManagedChecks(uint16_t port, TestState* state)
     bool connected = false;
     for (int attempt = 0; attempt < 100; ++attempt) {
         auto result = co_await client.call("ManagedService", "echo", "managed");
-        if (payloadEquals(result, "managed")) {
+        if (payload_equals(result, "managed")) {
             connected = true;
             break;
         }
@@ -132,7 +132,7 @@ Task<void> runManagedChecks(uint16_t port, TestState* state)
     }
     auto direct_result = co_await direct.call("ManagedService", "echo", "direct");
     co_await direct.close();
-    if (!payloadEquals(direct_result, "direct")) {
+    if (!payload_equals(direct_result, "direct")) {
         fail(state, "existing RpcClient direct call failed");
         state->done.store(true, std::memory_order_release);
         co_return;
@@ -153,16 +153,16 @@ Task<void> runManagedChecks(uint16_t port, TestState* state)
 
 int main()
 {
-    const uint16_t port = loopbackPort();
+    const uint16_t port = loopback_port();
 
     auto server = RpcServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     ManagedService service;
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register managed service: "
                   << registered.error().message() << "\n";
@@ -175,7 +175,7 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();
@@ -185,7 +185,7 @@ int main()
     }
 
     TestState state;
-    auto scheduled = runtime.spawnIO(runManagedChecks(port, &state));
+    auto scheduled = runtime.spawn_io(run_managed_checks(port, &state));
     if (!scheduled.has_value()) {
         runtime.stop();
         server.stop();

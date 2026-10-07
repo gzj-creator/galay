@@ -30,15 +30,15 @@ using IOSchedulerType = galay::kernel::IOUringScheduler;
 using namespace galay::ssl;
 using namespace galay::kernel;
 
-Task<void> sslClient(SslContext* ctx, const std::string& host, uint16_t port) {
+Task<void> ssl_client(SslContext* ctx, const std::string& host, uint16_t port) {
     SslSocket socket(ctx);
 
-    if (!socket.isValid()) {
+    if (!socket.is_valid()) {
         co_return;
     }
 
-    socket.option().handleNonBlock();
-    socket.setHostname(host);
+    socket.option().handle_non_block();
+    socket.set_hostname(host);
 
     std::cout << "Connecting to " << host << ":" << port << "..." << std::endl;
 
@@ -73,7 +73,7 @@ Task<void> sslClient(SslContext* ctx, const std::string& host, uint16_t port) {
     auto recvResult = co_await socket.recv(buffer, sizeof(buffer));
     if (recvResult) {
         auto& bytes = recvResult.value();
-        std::cout << "Received: " << bytes.toStringView() << std::endl;
+        std::cout << "Received: " << bytes.to_string_view() << std::endl;
     }
 
     co_await socket.shutdown();
@@ -91,24 +91,24 @@ int main(int argc, char* argv[]) {
     std::string caCert = argc > 3 ? argv[3] : "";
 
     SslContext ctx(SslMethod::TLS_Client);
-    if (!ctx.isValid()) {
+    if (!ctx.is_valid()) {
         return 1;
     }
 
     if (!caCert.empty()) {
-        auto caResult = ctx.loadCACertificate(caCert);
+        auto caResult = ctx.load_ca_certificate(caCert);
         if (!caResult) {
             return 1;
         }
-        ctx.setVerifyMode(SslVerifyMode::Peer);
+        ctx.set_verify_mode(SslVerifyMode::Peer);
     } else {
-        ctx.setVerifyMode(SslVerifyMode::None);
+        ctx.set_verify_mode(SslVerifyMode::None);
     }
 
     IOSchedulerType scheduler;
     scheduler.start();
 
-    scheduleTask(scheduler, sslClient(&ctx, host, port));
+    schedule_task(scheduler, ssl_client(&ctx, host, port));
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 

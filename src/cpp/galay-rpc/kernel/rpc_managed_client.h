@@ -107,7 +107,7 @@ public:
         snapshot.endpoints = endpoints.value();
         snapshot.next_index = 0;
         for (const auto& endpoint : snapshot.endpoints) {
-            auto ensure_result = m_pool.ensureEndpoint(endpoint);
+            auto ensure_result = m_pool.ensure_endpoint(endpoint);
             if (!ensure_result.has_value()) {
                 return std::unexpected(ensure_result.error());
             }
@@ -120,8 +120,8 @@ public:
      * @param service 服务名
      * @return endpoint或UNAVAILABLE
      */
-    std::expected<RpcEndpoint, RpcError> selectEndpoint(const std::string& service) {
-        auto snapshot_result = ensureSnapshot(service);
+    std::expected<RpcEndpoint, RpcError> select_endpoint(const std::string& service) {
+        auto snapshot_result = ensure_snapshot(service);
         if (!snapshot_result.has_value()) {
             return std::unexpected(snapshot_result.error());
         }
@@ -160,7 +160,7 @@ public:
      * @brief 标记endpoint暂不可用
      * @param endpoint 失败endpoint
      */
-    void markEndpointUnavailable(const RpcEndpoint& endpoint) {
+    void mark_endpoint_unavailable(const RpcEndpoint& endpoint) {
         m_unavailable_endpoints.insert(endpoint.key());
     }
 
@@ -168,7 +168,7 @@ public:
      * @brief 清除endpoint不可用标记
      * @param endpoint endpoint
      */
-    void markEndpointAvailable(const RpcEndpoint& endpoint) {
+    void mark_endpoint_available(const RpcEndpoint& endpoint) {
         m_unavailable_endpoints.erase(endpoint.key());
     }
 
@@ -189,9 +189,9 @@ public:
                                     const char* payload,
                                     size_t payload_len,
                                     const RpcCallOptions& options = {}) {
-        return callOwned(std::string(service),
+        return call_owned(std::string(service),
                          std::string(method),
-                         copyPayload(payload, payload_len),
+                         copy_payload(payload, payload_len),
                          options);
     }
 
@@ -224,18 +224,18 @@ private:
         size_t next_index = 0;
     };
 
-    static std::vector<char> copyPayload(const char* payload, size_t payload_len) {
+    static std::vector<char> copy_payload(const char* payload, size_t payload_len) {
         if (payload == nullptr || payload_len == 0) {
             return {};
         }
         return std::vector<char>(payload, payload + payload_len);
     }
 
-    Task<RpcManagedCallResult> callOwned(std::string service,
+    Task<RpcManagedCallResult> call_owned(std::string service,
                                          std::string method,
                                          std::vector<char> payload,
                                          RpcCallOptions options) {
-        auto guarded = m_governance.tryAcquire();
+        auto guarded = m_governance.try_acquire();
         if (!guarded.has_value()) {
             co_return RpcManagedCallResult(std::unexpected(guarded.error()));
         }
@@ -247,14 +247,14 @@ private:
                           payload = std::move(payload),
                           options = std::move(options)]() mutable {
             const char* payload_data = payload.empty() ? nullptr : payload.data();
-            return callOnce(service, method, payload_data, payload.size(), options);
+            return call_once(service, method, payload_data, payload.size(), options);
         };
-        auto retry_task_result = co_await RpcRetryController::runAsync<RpcManagedCallResult>(
+        auto retry_task_result = co_await RpcRetryController::run_async<RpcManagedCallResult>(
             m_config.retry,
             retry_options,
             operation);
         if (!retry_task_result.has_value()) {
-            m_governance.onFailure();
+            m_governance.on_failure();
             m_governance.release();
             co_return RpcManagedCallResult(std::unexpected(
                 RpcError(RpcErrorCode::INTERNAL_ERROR, retry_task_result.error().message())));
@@ -262,31 +262,31 @@ private:
         auto result = std::move(retry_task_result.value());
 
         if (result.has_value()) {
-            m_governance.onSuccess();
+            m_governance.on_success();
         } else {
-            m_governance.onFailure();
+            m_governance.on_failure();
         }
         m_governance.release();
         co_return std::move(result);
     }
 
-    static bool isEndpointFailure(const RpcError& error) {
+    static bool is_endpoint_failure(const RpcError& error) {
         return error.code() == RpcErrorCode::CONNECTION_CLOSED ||
                error.code() == RpcErrorCode::UNAVAILABLE ||
                error.code() == RpcErrorCode::INTERNAL_ERROR;
     }
 
-    static RpcError combineCleanupError(const RpcError& primary, const RpcError& cleanup) {
+    static RpcError combine_cleanup_error(const RpcError& primary, const RpcError& cleanup) {
         return RpcError(RpcErrorCode::INTERNAL_ERROR,
-                        primary.toString() + "; cleanup failed: " + cleanup.toString());
+                        primary.to_string() + "; cleanup failed: " + cleanup.to_string());
     }
 
-    Task<RpcManagedCallResult> callOnce(const std::string& service,
+    Task<RpcManagedCallResult> call_once(const std::string& service,
                                         const std::string& method,
                                         const char* payload,
                                         size_t payload_len,
                                         const RpcCallOptions& options) {
-        auto snapshot_result = ensureSnapshot(service);
+        auto snapshot_result = ensure_snapshot(service);
         if (!snapshot_result.has_value()) {
             co_return RpcManagedCallResult(std::unexpected(snapshot_result.error()));
         }
@@ -294,18 +294,18 @@ private:
         RpcError last_error(RpcErrorCode::UNAVAILABLE, "RPC service has no allowed endpoints");
 
         for (size_t attempt = 0; attempt < attempts; ++attempt) {
-            auto selected = selectEndpoint(service);
+            auto selected = select_endpoint(service);
             if (!selected.has_value()) {
                 co_return RpcManagedCallResult(std::unexpected(selected.error()));
             }
 
-            auto endpoint_task_result = co_await callEndpoint(*selected, service, method, payload, payload_len, options);
+            auto endpoint_task_result = co_await call_endpoint(*selected, service, method, payload, payload_len, options);
             if (!endpoint_task_result.has_value()) {
                 co_return RpcManagedCallResult(std::unexpected(
                     RpcError(RpcErrorCode::INTERNAL_ERROR, endpoint_task_result.error().message())));
             }
             auto call_result = std::move(endpoint_task_result.value());
-            if (call_result.has_value() || !isEndpointFailure(call_result.error())) {
+            if (call_result.has_value() || !is_endpoint_failure(call_result.error())) {
                 co_return std::move(call_result);
             }
             last_error = call_result.error();
@@ -314,7 +314,7 @@ private:
         co_return RpcManagedCallResult(std::unexpected(last_error));
     }
 
-    Task<RpcManagedCallResult> callEndpoint(const RpcEndpoint& endpoint,
+    Task<RpcManagedCallResult> call_endpoint(const RpcEndpoint& endpoint,
                                             const std::string& service,
                                             const std::string& method,
                                             const char* payload,
@@ -333,24 +333,24 @@ private:
         RpcClient client(m_config.client);
         auto connect_result = co_await client.connect(endpoint.host, endpoint.port);
         if (!connect_result.has_value()) {
-            lease.markBroken();
-            markEndpointUnavailable(endpoint);
+            lease.mark_broken();
+            mark_endpoint_unavailable(endpoint);
             RpcError primary_error(RpcErrorCode::INTERNAL_ERROR, connect_result.error().message());
             auto release_result = m_pool.release(std::move(lease));
             if (!release_result.has_value()) {
                 co_return RpcManagedCallResult(std::unexpected(
-                    combineCleanupError(primary_error, release_result.error())));
+                    combine_cleanup_error(primary_error, release_result.error())));
             }
             co_return RpcManagedCallResult(std::unexpected(std::move(primary_error)));
         }
         if (!connect_result->has_value()) {
-            lease.markBroken();
-            markEndpointUnavailable(endpoint);
+            lease.mark_broken();
+            mark_endpoint_unavailable(endpoint);
             auto primary_error = RpcError::from(connect_result->error(), RpcErrorCode::UNAVAILABLE);
             auto release_result = m_pool.release(std::move(lease));
             if (!release_result.has_value()) {
                 co_return RpcManagedCallResult(std::unexpected(
-                    combineCleanupError(primary_error, release_result.error())));
+                    combine_cleanup_error(primary_error, release_result.error())));
             }
             co_return RpcManagedCallResult(std::unexpected(std::move(primary_error)));
         }
@@ -364,29 +364,29 @@ private:
             close_error.emplace(RpcError::from(close_result->error(), RpcErrorCode::CONNECTION_CLOSED));
         }
         if (!call_result.has_value()) {
-            lease.markBroken();
-            markEndpointUnavailable(endpoint);
+            lease.mark_broken();
+            mark_endpoint_unavailable(endpoint);
             RpcError primary_error(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule managed RPC call");
             if (close_error.has_value()) {
-                primary_error = combineCleanupError(primary_error, *close_error);
+                primary_error = combine_cleanup_error(primary_error, *close_error);
             }
             auto release_result = m_pool.release(std::move(lease));
             if (!release_result.has_value()) {
-                primary_error = combineCleanupError(primary_error, release_result.error());
+                primary_error = combine_cleanup_error(primary_error, release_result.error());
             }
             co_return RpcManagedCallResult(std::unexpected(std::move(primary_error)));
         }
 
         if (close_error.has_value()) {
-            lease.markBroken();
-            markEndpointUnavailable(endpoint);
+            lease.mark_broken();
+            mark_endpoint_unavailable(endpoint);
             RpcError primary_error = call_result->has_value()
                 ? *close_error
-                : combineCleanupError(call_result->error(), *close_error);
+                : combine_cleanup_error(call_result->error(), *close_error);
             auto release_result = m_pool.release(std::move(lease));
             if (!release_result.has_value()) {
                 co_return RpcManagedCallResult(std::unexpected(
-                    combineCleanupError(primary_error, release_result.error())));
+                    combine_cleanup_error(primary_error, release_result.error())));
             }
             co_return RpcManagedCallResult(std::unexpected(std::move(primary_error)));
         }
@@ -394,27 +394,27 @@ private:
         if (!call_result->has_value() &&
             (call_result->error().code() == RpcErrorCode::CONNECTION_CLOSED ||
              call_result->error().code() == RpcErrorCode::UNAVAILABLE)) {
-            lease.markBroken();
-            markEndpointUnavailable(endpoint);
+            lease.mark_broken();
+            mark_endpoint_unavailable(endpoint);
         } else {
-            markEndpointAvailable(endpoint);
+            mark_endpoint_available(endpoint);
         }
 
         auto release_result = m_pool.release(std::move(lease));
         if (!release_result.has_value()) {
             if (!call_result->has_value()) {
                 co_return RpcManagedCallResult(std::unexpected(
-                    combineCleanupError(call_result->error(), release_result.error())));
+                    combine_cleanup_error(call_result->error(), release_result.error())));
             }
             co_return RpcManagedCallResult(std::unexpected(
                 RpcError(RpcErrorCode::INTERNAL_ERROR,
                          "RPC managed client release failed after successful call: " +
-                             release_result.error().toString())));
+                             release_result.error().to_string())));
         }
         co_return std::move(call_result.value());
     }
 
-    std::expected<ServiceSnapshot*, RpcError> ensureSnapshot(const std::string& service) {
+    std::expected<ServiceSnapshot*, RpcError> ensure_snapshot(const std::string& service) {
         auto it = m_services.find(service);
         if (it == m_services.end() || it->second.endpoints.empty()) {
             auto refreshed = refresh(service);

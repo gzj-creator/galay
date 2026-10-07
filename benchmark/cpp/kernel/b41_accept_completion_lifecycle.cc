@@ -29,24 +29,24 @@ namespace {
 class Owner final : public IOScheduler {
 public:
     bool initialize() {
-        if (!m_reactor.start() || !m_worker.reopenResumeAdmission()) { return false; }
+        if (!m_reactor.start() || !m_worker.reopen_resume_admission()) { return false; }
         m_threadId = std::this_thread::get_id();
         return true;
     }
     bool dispatch() {
-        const auto ran = m_core.runReadyPass(
+        const auto ran = m_core.run_ready_pass(
             [this](TaskRef& task) { resume(task); },
-            [this](size_t n) { m_wake_coordinator.onRemoteCollected(n); });
+            [this](size_t n) { m_wake_coordinator.on_remote_collected(n); });
         (void)ran; // An empty nonblocking poll is progress-neutral, not an error.
 #ifdef USE_EPOLL
-        return m_reactor.flushPendingChanges() == 0;
+        return m_reactor.flush_pending_changes() == 0;
 #else
-        return !lastError();
+        return !last_error();
 #endif
     }
     bool poll() {
         m_reactor.poll(0, m_wake_coordinator);
-        return !lastError();
+        return !last_error();
     }
     bool registered(const IOController& controller) const {
 #ifdef USE_EPOLL
@@ -66,7 +66,7 @@ struct Batch {
     bool latency = true;
 };
 
-Task<void> acceptBatch(IOController& controller, Batch& batch) {
+Task<void> accept_batch(IOController& controller, Batch& batch) {
     for (size_t i = 0; i != batch.accepted.size(); ++i) {
         Host peer;
         auto result = co_await AcceptAwaitable(&controller, &peer);
@@ -85,7 +85,7 @@ Task<void> acceptBatch(IOController& controller, Batch& batch) {
 
 // Failure-only observations: SO_ERROR=0 alone does not prove a completed
 // nonblocking connect. SYN_SENT plus an empty listener is not a lost wakeup.
-void diagnoseTimeout(int listener, const std::vector<int>& clients, bool registered) {
+void diagnose_timeout(int listener, const std::vector<int>& clients, bool registered) {
     pollfd ready{listener, POLLIN, 0};
     const int polled = ::poll(&ready, 1, 0);
     std::cerr << "B41 diagnostic registered=" << registered
@@ -126,16 +126,16 @@ bool measure(size_t width, size_t rounds, bool components = false, bool native =
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     socklen_t length = sizeof(address);
     if (listener < 0) { return false; }
-    const auto closeFd = [](int fd) { return fd < 0 || ::close(fd) == 0; };
+    const auto close_fd = [](int fd) { return fd < 0 || ::close(fd) == 0; };
     if (::bind(listener, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
         ::listen(listener, 256) != 0 ||
         ::getsockname(listener, reinterpret_cast<sockaddr*>(&address), &length) != 0) {
-        if (!closeFd(listener)) { std::cerr << "listener cleanup failed\n"; }
+        if (!close_fd(listener)) { std::cerr << "listener cleanup failed\n"; }
         return false;
     }
     Owner owner;
     if (!owner.initialize()) {
-        if (!closeFd(listener)) { std::cerr << "listener cleanup failed\n"; }
+        if (!close_fd(listener)) { std::cerr << "listener cleanup failed\n"; }
         return false;
     }
     IOController controller(GHandle{.fd = listener});
@@ -153,7 +153,7 @@ bool measure(size_t width, size_t rounds, bool components = false, bool native =
     for (size_t round = 0; round != rounds + warmup; ++round) {
         batch.completed = 0;
         batch.errors = 0;
-        if (!components && (!scheduleTask(owner, acceptBatch(controller, batch)) || !owner.dispatch() ||
+        if (!components && (!schedule_task(owner, accept_batch(controller, batch)) || !owner.dispatch() ||
             batch.completed != 0 || !owner.registered(controller))) { ++errors; break; }
         for (auto& client : clients) {
             client = ::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
@@ -209,7 +209,7 @@ bool measure(size_t width, size_t rounds, bool components = false, bool native =
                             batch.latencies[i] = std::chrono::duration<double, std::micro>(Clock::now() - batch.starts[i]).count();
                         }
                     }
-                } else if (!scheduleTask(owner, acceptBatch(controller, batch)) || !owner.dispatch()) {
+                } else if (!schedule_task(owner, accept_batch(controller, batch)) || !owner.dispatch()) {
                     ++errors;
                 }
             }
@@ -231,7 +231,7 @@ bool measure(size_t width, size_t rounds, bool components = false, bool native =
             std::cerr << "B41 incomplete batch=" << width << " round=" << round
                       << " completed=" << batch.completed << " passes=" << passes
                       << " seconds=" << seconds << '\n';
-            diagnoseTimeout(listener, clients, owner.registered(controller));
+            diagnose_timeout(listener, clients, owner.registered(controller));
         }
         if (round >= warmup) {
             elapsed += seconds;
@@ -244,12 +244,12 @@ bool measure(size_t width, size_t rounds, bool components = false, bool native =
             samples.insert(samples.end(), batch.latencies.begin(), batch.latencies.end());
         }
         for (size_t i = 0; i != width; ++i) {
-            errors += !closeFd(std::exchange(batch.accepted[i], -1));
-            errors += !closeFd(std::exchange(clients[i], -1));
+            errors += !close_fd(std::exchange(batch.accepted[i], -1));
+            errors += !close_fd(std::exchange(clients[i], -1));
         }
         if (errors != 0) { break; }
     }
-    if (owner.addClose(&controller) != 0) { ++errors; }
+    if (owner.add_close(&controller) != 0) { ++errors; }
     // Error paths can still have a suspended waiter. Drain its close result
     // while controller/batch storage is alive, including on the before build.
     if (!owner.dispatch()) { ++errors; }
@@ -291,7 +291,7 @@ bool measure(size_t width, size_t rounds, bool components = false, bool native =
 #endif
 
 int main(int argc, char** argv) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 

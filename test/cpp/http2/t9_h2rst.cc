@@ -18,9 +18,9 @@ using namespace galay::async;
  * @brief 测试 shutdown() 批量 RST_STREAM 的契约
  *
  * 验证点：
- * 1. Http2Conn 提供 forEachStream() 遍历所有流
+ * 1. Http2Conn 提供 for_each_stream() 遍历所有流
  * 2. Http2Stream 提供 state() 查询流状态
- * 3. Http2FrameBuilder 提供 rstStreamBytes() 构建 RST_STREAM 帧
+ * 3. Http2FrameBuilder 提供 rst_stream_bytes() 构建 RST_STREAM 帧
  * 4. 流状态包含 Closed 状态用于过滤
  */
 
@@ -32,9 +32,9 @@ int main() {
         void operator()(uint32_t, Http2Stream::ptr&) const {}
     };
 
-    // 1. Http2Conn 必须提供 forEachStream() 方法
+    // 1. Http2Conn 必须提供 for_each_stream() 方法
     static_assert(requires(Http2Conn* conn, StreamVisitor visitor) {
-        conn->forEachStream(visitor);
+        conn->for_each_stream(visitor);
     }, "Http2Conn must expose forEachStream() for stream iteration");
 
     // 2. Http2Stream 必须提供 state() 方法
@@ -42,14 +42,14 @@ int main() {
         { stream->state() } -> std::same_as<Http2StreamState>;
     }, "Http2Stream must expose state() returning Http2StreamState");
 
-    // 3. Http2Stream 必须提供 onRstStreamSent() 方法
+    // 3. Http2Stream 必须提供 on_rst_stream_sent() 方法
     static_assert(requires(Http2Stream* stream) {
-        stream->onRstStreamSent();
+        stream->on_rst_stream_sent();
     }, "Http2Stream must expose onRstStreamSent() for state transition");
 
-    // 4. Http2FrameBuilder 必须提供 rstStreamBytes() 静态方法
+    // 4. Http2FrameBuilder 必须提供 rst_stream_bytes() 静态方法
     static_assert(requires(uint32_t stream_id, Http2ErrorCode error) {
-        { Http2FrameBuilder::rstStreamBytes(stream_id, error) } -> std::same_as<std::string>;
+        { Http2FrameBuilder::rst_stream_bytes(stream_id, error) } -> std::same_as<std::string>;
     }, "Http2FrameBuilder must expose rstStreamBytes() for RST_STREAM frame construction");
 
     // 5. Http2StreamState 必须包含 Closed 状态
@@ -59,7 +59,7 @@ int main() {
 
     std::cout << "[T38] Static contract checks PASS\n";
 
-    // ========== Scenario 1: forEachStream iteration ==========
+    // ========== Scenario 1: for_each_stream iteration ==========
     {
         std::cout << "[T38] Scenario 1: forEachStream iteration contract\n";
 
@@ -67,13 +67,13 @@ int main() {
         Http2Conn conn(std::move(socket));
 
         // 创建几个流
-        auto stream1 = conn.createStream(1);
-        auto stream3 = conn.createStream(3);
-        auto stream5 = conn.createStream(5);
+        auto stream1 = conn.create_stream(1);
+        auto stream3 = conn.create_stream(3);
+        auto stream5 = conn.create_stream(5);
 
-        // 验证 forEachStream 可以遍历所有流
+        // 验证 for_each_stream 可以遍历所有流
         int count = 0;
-        conn.forEachStream([&](uint32_t stream_id, Http2Stream::ptr& stream) {
+        conn.for_each_stream([&](uint32_t stream_id, Http2Stream::ptr& stream) {
             assert(stream != nullptr);
             assert(stream_id == 1 || stream_id == 3 || stream_id == 5);
             count++;
@@ -92,22 +92,22 @@ int main() {
         Http2Conn conn(std::move(socket));
 
         // 创建流并设置不同状态
-        auto stream1 = conn.createStream(1);
-        auto stream3 = conn.createStream(3);
-        auto stream5 = conn.createStream(5);
+        auto stream1 = conn.create_stream(1);
+        auto stream3 = conn.create_stream(3);
+        auto stream5 = conn.create_stream(5);
 
         // stream1: Open (活跃)
-        stream1->setState(Http2StreamState::Open);
+        stream1->set_state(Http2StreamState::Open);
 
         // stream3: Closed (已关闭)
-        stream3->setState(Http2StreamState::Closed);
+        stream3->set_state(Http2StreamState::Closed);
 
         // stream5: HalfClosedLocal (半关闭)
-        stream5->setState(Http2StreamState::HalfClosedLocal);
+        stream5->set_state(Http2StreamState::HalfClosedLocal);
 
         // 统计非 Closed 状态的流
         int active_count = 0;
-        conn.forEachStream([&](uint32_t stream_id, Http2Stream::ptr& stream) {
+        conn.for_each_stream([&](uint32_t stream_id, Http2Stream::ptr& stream) {
             if (stream && stream->state() != Http2StreamState::Closed) {
                 active_count++;
             }
@@ -123,7 +123,7 @@ int main() {
         std::cout << "[T38] Scenario 3: RST_STREAM frame construction contract\n";
 
         // 构建 RST_STREAM 帧
-        auto bytes = Http2FrameBuilder::rstStreamBytes(1, Http2ErrorCode::NoError);
+        auto bytes = Http2FrameBuilder::rst_stream_bytes(1, Http2ErrorCode::NoError);
 
         // 验证帧格式：9 字节头部 + 4 字节错误码
         assert(bytes.size() == 13 && "RST_STREAM frame should be 13 bytes");
@@ -151,15 +151,15 @@ int main() {
         // 创建多个活跃流
         std::vector<uint32_t> stream_ids = {1, 3, 5, 7, 9};
         for (uint32_t id : stream_ids) {
-            auto stream = conn.createStream(id);
-            stream->setState(Http2StreamState::Open);
+            auto stream = conn.create_stream(id);
+            stream->set_state(Http2StreamState::Open);
         }
 
         // 模拟批量构建 RST_STREAM 帧
         std::vector<std::string> rst_frames;
-        conn.forEachStream([&](uint32_t stream_id, Http2Stream::ptr& stream) {
+        conn.for_each_stream([&](uint32_t stream_id, Http2Stream::ptr& stream) {
             if (stream && stream->state() != Http2StreamState::Closed) {
-                auto bytes = Http2FrameBuilder::rstStreamBytes(stream_id, Http2ErrorCode::NoError);
+                auto bytes = Http2FrameBuilder::rst_stream_bytes(stream_id, Http2ErrorCode::NoError);
                 rst_frames.push_back(std::move(bytes));
             }
         });
@@ -169,18 +169,18 @@ int main() {
         std::cout << "[T38] Scenario 4 PASS: constructed " << rst_frames.size() << " RST_STREAM frames\n";
     }
 
-    // ========== Scenario 5: onRstStreamSent state transition ==========
+    // ========== Scenario 5: on_rst_stream_sent state transition ==========
     {
         std::cout << "[T38] Scenario 5: onRstStreamSent state transition\n";
 
         AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
-        auto stream = conn.createStream(1);
-        stream->setState(Http2StreamState::Open);
+        auto stream = conn.create_stream(1);
+        stream->set_state(Http2StreamState::Open);
 
-        // 调用 onRstStreamSent() 应该将流状态转换为 Closed
-        stream->onRstStreamSent();
+        // 调用 on_rst_stream_sent() 应该将流状态转换为 Closed
+        stream->on_rst_stream_sent();
 
         assert(stream->state() == Http2StreamState::Closed && "Stream should be Closed after onRstStreamSent()");
 

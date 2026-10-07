@@ -9,7 +9,7 @@ namespace galay::mongo
 namespace
 {
 
-bool isHexObjectId(std::string_view oid) noexcept
+bool is_hex_object_id(std::string_view oid) noexcept
 {
     if (oid.size() != 24) {
         return false;
@@ -104,20 +104,20 @@ MongoValue::MongoValue(TimestampTag, uint64_t ts)
 {
 }
 
-std::expected<MongoValue, std::string> MongoValue::fromObjectId(std::string oid)
+std::expected<MongoValue, std::string> MongoValue::from_object_id(std::string oid)
 {
-    if (!isHexObjectId(oid)) {
+    if (!is_hex_object_id(oid)) {
         return std::unexpected("ObjectId must be a 24-character hex string");
     }
     return MongoValue(ObjectIdTag{}, std::move(oid));
 }
 
-MongoValue MongoValue::fromDateTime(int64_t millis)
+MongoValue MongoValue::from_date_time(int64_t millis)
 {
     return MongoValue(DateTimeTag{}, millis);
 }
 
-MongoValue MongoValue::fromTimestamp(uint64_t ts)
+MongoValue MongoValue::from_timestamp(uint64_t ts)
 {
     return MongoValue(TimestampTag{}, ts);
 }
@@ -140,9 +140,9 @@ MongoValue MongoValue::clone() const
     case MongoValueType::Binary:
         return MongoValue(std::get<Binary>(m_storage));
     case MongoValueType::Document:
-        return MongoValue(toDocument().clone());
+        return MongoValue(to_document().clone());
     case MongoValueType::Array:
-        return MongoValue(toArray().clone());
+        return MongoValue(to_array().clone());
     case MongoValueType::ObjectId:
         return MongoValue(ObjectIdTag{}, std::get<std::string>(m_storage));
     case MongoValueType::DateTime:
@@ -169,70 +169,70 @@ MongoValueType MongoValue::type() const
     return MongoValueType::Array;
 }
 
-bool MongoValue::isNull() const { return std::holds_alternative<std::nullptr_t>(m_storage); }
-bool MongoValue::isBool() const { return std::holds_alternative<bool>(m_storage); }
-bool MongoValue::isInt32() const { return std::holds_alternative<int32_t>(m_storage); }
-bool MongoValue::isInt64() const { return std::holds_alternative<int64_t>(m_storage); }
-bool MongoValue::isDouble() const { return std::holds_alternative<double>(m_storage); }
-bool MongoValue::isString() const { return std::holds_alternative<std::string>(m_storage); }
-bool MongoValue::isBinary() const { return std::holds_alternative<Binary>(m_storage); }
-bool MongoValue::isDocument() const { return std::holds_alternative<DocumentPtr>(m_storage); }
-bool MongoValue::isArray() const { return std::holds_alternative<ArrayPtr>(m_storage); }
-bool MongoValue::isObjectId() const { return m_type_tag == MongoValueType::ObjectId; }
-bool MongoValue::isDateTime() const { return m_type_tag == MongoValueType::DateTime; }
-bool MongoValue::isTimestamp() const { return m_type_tag == MongoValueType::Timestamp; }
+bool MongoValue::is_null() const { return std::holds_alternative<std::nullptr_t>(m_storage); }
+bool MongoValue::is_bool() const { return std::holds_alternative<bool>(m_storage); }
+bool MongoValue::is_int32() const { return std::holds_alternative<int32_t>(m_storage); }
+bool MongoValue::is_int64() const { return std::holds_alternative<int64_t>(m_storage); }
+bool MongoValue::is_double() const { return std::holds_alternative<double>(m_storage); }
+bool MongoValue::is_string() const { return std::holds_alternative<std::string>(m_storage); }
+bool MongoValue::is_binary() const { return std::holds_alternative<Binary>(m_storage); }
+bool MongoValue::is_document() const { return std::holds_alternative<DocumentPtr>(m_storage); }
+bool MongoValue::is_array() const { return std::holds_alternative<ArrayPtr>(m_storage); }
+bool MongoValue::is_object_id() const { return m_type_tag == MongoValueType::ObjectId; }
+bool MongoValue::is_date_time() const { return m_type_tag == MongoValueType::DateTime; }
+bool MongoValue::is_timestamp() const { return m_type_tag == MongoValueType::Timestamp; }
 
-bool MongoValue::toBool(bool default_value) const
+bool MongoValue::to_bool(bool default_value) const
 {
-    if (isBool()) return std::get<bool>(m_storage);
-    if (isInt32()) return std::get<int32_t>(m_storage) != 0;
-    if (isInt64()) return std::get<int64_t>(m_storage) != 0;
-    if (isDouble()) return std::fabs(std::get<double>(m_storage)) > 1e-12;
+    if (is_bool()) return std::get<bool>(m_storage);
+    if (is_int32()) return std::get<int32_t>(m_storage) != 0;
+    if (is_int64()) return std::get<int64_t>(m_storage) != 0;
+    if (is_double()) return std::fabs(std::get<double>(m_storage)) > 1e-12;
     return default_value;
 }
 
-int32_t MongoValue::toInt32(int32_t default_value) const
+int32_t MongoValue::to_int32(int32_t default_value) const
 {
-    if (isInt32()) return std::get<int32_t>(m_storage);
-    if (isInt64()) return static_cast<int32_t>(std::get<int64_t>(m_storage));
-    if (isDouble()) return static_cast<int32_t>(std::get<double>(m_storage));
-    if (isBool()) return std::get<bool>(m_storage) ? 1 : 0;
+    if (is_int32()) return std::get<int32_t>(m_storage);
+    if (is_int64()) return static_cast<int32_t>(std::get<int64_t>(m_storage));
+    if (is_double()) return static_cast<int32_t>(std::get<double>(m_storage));
+    if (is_bool()) return std::get<bool>(m_storage) ? 1 : 0;
     return default_value;
 }
 
-int64_t MongoValue::toInt64(int64_t default_value) const
+int64_t MongoValue::to_int64(int64_t default_value) const
 {
-    if (isInt64()) return std::get<int64_t>(m_storage);
-    if (isInt32()) return std::get<int32_t>(m_storage);
-    if (isDouble()) return static_cast<int64_t>(std::get<double>(m_storage));
-    if (isBool()) return std::get<bool>(m_storage) ? 1 : 0;
+    if (is_int64()) return std::get<int64_t>(m_storage);
+    if (is_int32()) return std::get<int32_t>(m_storage);
+    if (is_double()) return static_cast<int64_t>(std::get<double>(m_storage));
+    if (is_bool()) return std::get<bool>(m_storage) ? 1 : 0;
     return default_value;
 }
 
-double MongoValue::toDouble(double default_value) const
+double MongoValue::to_double(double default_value) const
 {
-    if (isDouble()) return std::get<double>(m_storage);
-    if (isInt64()) return static_cast<double>(std::get<int64_t>(m_storage));
-    if (isInt32()) return static_cast<double>(std::get<int32_t>(m_storage));
-    if (isBool()) return std::get<bool>(m_storage) ? 1.0 : 0.0;
+    if (is_double()) return std::get<double>(m_storage);
+    if (is_int64()) return static_cast<double>(std::get<int64_t>(m_storage));
+    if (is_int32()) return static_cast<double>(std::get<int32_t>(m_storage));
+    if (is_bool()) return std::get<bool>(m_storage) ? 1.0 : 0.0;
     return default_value;
 }
 
-const std::string& MongoValue::toString() const
+const std::string& MongoValue::to_string() const
 {
-    if (isString()) return std::get<std::string>(m_storage);
+    if (is_string()) return std::get<std::string>(m_storage);
     return kEmptyString;
 }
 
-const MongoValue::Binary& MongoValue::toBinary() const
+const MongoValue::Binary& MongoValue::to_binary() const
 {
-    if (isBinary()) return std::get<Binary>(m_storage);
+    if (is_binary()) return std::get<Binary>(m_storage);
     return kEmptyBinary;
 }
 
-const MongoDocument& MongoValue::toDocument() const
+const MongoDocument& MongoValue::to_document() const
 {
-    if (isDocument()) {
+    if (is_document()) {
         const auto& ptr = std::get<DocumentPtr>(m_storage);
         if (ptr) return *ptr;
     }
@@ -240,9 +240,9 @@ const MongoDocument& MongoValue::toDocument() const
     return kEmptyDocument;
 }
 
-const MongoArray& MongoValue::toArray() const
+const MongoArray& MongoValue::to_array() const
 {
-    if (isArray()) {
+    if (is_array()) {
         const auto& ptr = std::get<ArrayPtr>(m_storage);
         if (ptr) return *ptr;
     }
@@ -250,17 +250,17 @@ const MongoArray& MongoValue::toArray() const
     return kEmptyArray;
 }
 
-MongoDocument& MongoValue::asDocument()
+MongoDocument& MongoValue::as_document()
 {
-    if (!isDocument() || !std::get<DocumentPtr>(m_storage)) {
+    if (!is_document() || !std::get<DocumentPtr>(m_storage)) {
         m_storage = std::make_shared<MongoDocument>();
     }
     return *std::get<DocumentPtr>(m_storage);
 }
 
-MongoArray& MongoValue::asArray()
+MongoArray& MongoValue::as_array()
 {
-    if (!isArray() || !std::get<ArrayPtr>(m_storage)) {
+    if (!is_array() || !std::get<ArrayPtr>(m_storage)) {
         m_storage = std::make_shared<MongoArray>();
     }
     return *std::get<ArrayPtr>(m_storage);
@@ -389,37 +389,37 @@ std::expected<std::reference_wrapper<const MongoValue>, std::string> MongoDocume
     return std::cref(*value);
 }
 
-std::string MongoDocument::getString(const std::string& key, std::string default_value) const
+std::string MongoDocument::get_string(const std::string& key, std::string default_value) const
 {
     const auto* value = find(key);
-    if (!value || !value->isString()) {
+    if (!value || !value->is_string()) {
         return default_value;
     }
-    return value->toString();
+    return value->to_string();
 }
 
-int32_t MongoDocument::getInt32(const std::string& key, int32_t default_value) const
+int32_t MongoDocument::get_int32(const std::string& key, int32_t default_value) const
 {
     const auto* value = find(key);
-    return value ? value->toInt32(default_value) : default_value;
+    return value ? value->to_int32(default_value) : default_value;
 }
 
-int64_t MongoDocument::getInt64(const std::string& key, int64_t default_value) const
+int64_t MongoDocument::get_int64(const std::string& key, int64_t default_value) const
 {
     const auto* value = find(key);
-    return value ? value->toInt64(default_value) : default_value;
+    return value ? value->to_int64(default_value) : default_value;
 }
 
-double MongoDocument::getDouble(const std::string& key, double default_value) const
+double MongoDocument::get_double(const std::string& key, double default_value) const
 {
     const auto* value = find(key);
-    return value ? value->toDouble(default_value) : default_value;
+    return value ? value->to_double(default_value) : default_value;
 }
 
-bool MongoDocument::getBool(const std::string& key, bool default_value) const
+bool MongoDocument::get_bool(const std::string& key, bool default_value) const
 {
     const auto* value = find(key);
-    return value ? value->toBool(default_value) : default_value;
+    return value ? value->to_bool(default_value) : default_value;
 }
 
 size_t MongoDocument::size() const
@@ -468,29 +468,29 @@ bool MongoReply::ok() const
     if (!ok_field) {
         return false;
     }
-    if (ok_field->isBool()) {
-        return ok_field->toBool(false);
+    if (ok_field->is_bool()) {
+        return ok_field->to_bool(false);
     }
-    return ok_field->toDouble(0.0) >= 1.0;
+    return ok_field->to_double(0.0) >= 1.0;
 }
 
-bool MongoReply::hasCommandError() const
+bool MongoReply::has_command_error() const
 {
     return !ok();
 }
 
-int32_t MongoReply::errorCode() const
+int32_t MongoReply::error_code() const
 {
-    return m_document.getInt32("code", 0);
+    return m_document.get_int32("code", 0);
 }
 
-std::string MongoReply::errorMessage() const
+std::string MongoReply::error_message() const
 {
-    const auto message = m_document.getString("errmsg", "");
+    const auto message = m_document.get_string("errmsg", "");
     if (!message.empty()) {
         return message;
     }
-    return m_document.getString("$err", "");
+    return m_document.get_string("$err", "");
 }
 
 } // namespace galay::mongo

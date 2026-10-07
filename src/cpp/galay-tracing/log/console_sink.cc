@@ -26,9 +26,9 @@ ConsoleSink::ConsoleSink()
 
 void ConsoleSink::write(const LogRecord& record) {
     auto& out = *m_out;
-    out << "level=" << logLevelName(record.level);
+    out << "level=" << log_level_name(record.level);
     if (record.context.has_value()) {
-        out << " trace_id=" << record.context->traceId().toHex() << " span_id=" << record.context->spanId().toHex();
+        out << " trace_id=" << record.context->trace_id().to_hex() << " span_id=" << record.context->span_id().to_hex();
     }
     out << " file=" << record.source.file << ':' << record.source.line << " msg=\"" << record.message << "\"\n";
 }

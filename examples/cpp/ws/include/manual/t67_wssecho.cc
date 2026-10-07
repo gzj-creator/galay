@@ -26,21 +26,21 @@ bool check(bool condition, const char* message) {
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-std::string encodeMaskedFrame(galay::websocket::WsOpcode opcode, std::string payload, bool fin = true) {
+std::string encode_masked_frame(galay::websocket::WsOpcode opcode, std::string payload, bool fin = true) {
     galay::websocket::WsFrame frame(opcode, std::move(payload), fin);
     std::string encoded;
-    galay::websocket::WsFrameParser::encodeInto(encoded, frame, true);
+    galay::websocket::WsFrameParser::encode_into(encoded, frame, true);
     return encoded;
 }
 
-galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> makeWrappedFrameBuffer(std::string_view encoded, size_t capacity = 64, size_t prefix = 40) {
+galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> make_wrapped_frame_buffer(std::string_view encoded, size_t capacity = 64, size_t prefix = 40) {
     galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> ring(capacity);
     std::string head(prefix, 'x');
-    if (ring.tryWriteBatch(head.data(), head.size()) != head.size()) {
+    if (ring.try_write_batch(head.data(), head.size()) != head.size()) {
         throw std::runtime_error("failed to seed ring prefix");
     }
     ring.consume(prefix - 10);
-    if (ring.tryWriteBatch(encoded.data(), encoded.size()) != encoded.size()) {
+    if (ring.try_write_batch(encoded.data(), encoded.size()) != encoded.size()) {
         throw std::runtime_error("failed to wrap encoded frame into ring");
     }
     ring.consume(10);
@@ -48,11 +48,11 @@ galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dyn
 }
 
 template<typename MachineT, typename ActionT>
-std::string drainSslSend(MachineT& machine, ActionT action) {
+std::string drain_ssl_send(MachineT& machine, ActionT action) {
     std::string sent;
     while (action.signal == galay::ssl::SslMachineSignal::kSend) {
         sent.append(action.write_buffer, action.write_length);
-        machine.onSend(std::expected<size_t, galay::ssl::SslError>(action.write_length));
+        machine.on_send(std::expected<size_t, galay::ssl::SslError>(action.write_length));
         action = machine.advance();
     }
     return sent;
@@ -71,7 +71,7 @@ int main() {
     {
         galay::ssl::SslSocket socket(nullptr);
         WssConn conn(std::move(socket), true);
-        auto loop = conn.echoLoopConsume();
+        auto loop = conn.echo_loop_consume();
         (void) loop;
         if (!check(conn.m_echo_counters.composite_awaitables_started == 1,
                    "ssl echo loop consume should start one awaitable")) {
@@ -82,11 +82,11 @@ int main() {
     {
         galay::ssl::SslSocket socket(nullptr);
         galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> ring(256);
-        const auto text1 = encodeMaskedFrame(WsOpcode::Text, "loop-one");
-        const auto text2 = encodeMaskedFrame(WsOpcode::Text, "loop-two");
-        const auto close = encodeMaskedFrame(WsOpcode::Close, "");
+        const auto text1 = encode_masked_frame(WsOpcode::Text, "loop-one");
+        const auto text2 = encode_masked_frame(WsOpcode::Text, "loop-two");
+        const auto close = encode_masked_frame(WsOpcode::Close, "");
         const std::string encoded = text1 + text2 + close;
-        if (ring.tryWriteBatch(encoded.data(), encoded.size()) != encoded.size()) {
+        if (ring.try_write_batch(encoded.data(), encoded.size()) != encoded.size()) {
             std::cerr << "[T67] failed to seed loop ring buffer\n";
             return 1;
         }
@@ -95,7 +95,7 @@ int main() {
         galay::websocket::detail::WsSslEchoLoopMachine<galay::ssl::SslSocket> machine(
             &conn,
             WsReaderSetting(),
-            WsWriterSetting::byServer());
+            WsWriterSetting::by_server());
 
         std::string sent_stream;
         auto action = machine.advance();
@@ -107,7 +107,7 @@ int main() {
 
             while (action.signal == galay::ssl::SslMachineSignal::kSend) {
                 sent_stream.append(action.write_buffer, action.write_length);
-                machine.onSend(std::expected<size_t, galay::ssl::SslError>(action.write_length));
+                machine.on_send(std::expected<size_t, galay::ssl::SslError>(action.write_length));
                 action = machine.advance();
             }
         }
@@ -117,9 +117,9 @@ int main() {
             return 1;
         }
         const std::string expected_stream =
-            WsFrameParser::toBytes(WsFrameParser::createTextFrame("loop-one"), false) +
-            WsFrameParser::toBytes(WsFrameParser::createTextFrame("loop-two"), false) +
-            WsFrameParser::toBytes(WsFrameParser::createCloseFrame(WsCloseCode::Normal), false);
+            WsFrameParser::to_bytes(WsFrameParser::create_text_frame("loop-one"), false) +
+            WsFrameParser::to_bytes(WsFrameParser::create_text_frame("loop-two"), false) +
+            WsFrameParser::to_bytes(WsFrameParser::create_close_frame(WsCloseCode::Normal), false);
         if (!check(sent_stream == expected_stream,
                    "ssl echo loop output stream mismatch")) {
             return 1;
@@ -138,7 +138,7 @@ int main() {
         galay::websocket::detail::WsSslEchoMachine<galay::ssl::SslSocket> machine(
             &conn,
             WsReaderSetting(),
-            WsWriterSetting::byServer(),
+            WsWriterSetting::by_server(),
             message,
             opcode);
 
@@ -149,14 +149,14 @@ int main() {
         }
 
         const std::string payload = "hello ssl composite";
-        const auto encoded = encodeMaskedFrame(WsOpcode::Text, payload);
+        const auto encoded = encode_masked_frame(WsOpcode::Text, payload);
         if (!check(first.read_length >= encoded.size(),
                    "ssl composite recv window should fit encoded frame")) {
             return 1;
         }
         std::memcpy(first.read_buffer, encoded.data(), encoded.size());
 
-        machine.onRecv(std::expected<galay::utils::Bytes, galay::ssl::SslError>(
+        machine.on_recv(std::expected<galay::utils::Bytes, galay::ssl::SslError>(
             galay::utils::Bytes(first.read_buffer, encoded.size())));
 
         const auto second = machine.advance();
@@ -165,7 +165,7 @@ int main() {
             return 1;
         }
 
-        const auto expected = WsFrameParser::toBytes(WsFrameParser::createTextFrame(payload), false);
+        const auto expected = WsFrameParser::to_bytes(WsFrameParser::create_text_frame(payload), false);
         if (!check(second.write_length == expected.size(),
                    "ssl composite echo send length mismatch")) {
             return 1;
@@ -187,7 +187,7 @@ int main() {
             return 1;
         }
 
-        machine.onSend(std::expected<size_t, galay::ssl::SslError>(second.write_length));
+        machine.on_send(std::expected<size_t, galay::ssl::SslError>(second.write_length));
         const auto third = machine.advance();
         if (!check(third.signal == galay::ssl::SslMachineSignal::kComplete,
                    "ssl composite echo should complete after send")) {
@@ -207,7 +207,7 @@ int main() {
         WssConn conn(std::move(socket), true);
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
-        auto echo_op = conn.echoOnceConsume(message, opcode);
+        auto echo_op = conn.echo_once_consume(message, opcode);
         (void) echo_op;
         if (!check(conn.m_echo_counters.composite_awaitables_started == 1,
                    "ssl consume composite path should start one awaitable")) {
@@ -223,7 +223,7 @@ int main() {
         galay::websocket::detail::WsSslEchoMachine<galay::ssl::SslSocket> machine(
             &conn,
             WsReaderSetting(),
-            WsWriterSetting::byServer(),
+            WsWriterSetting::by_server(),
             message,
             opcode,
             false);
@@ -235,13 +235,13 @@ int main() {
         }
 
         const std::string payload = "consume ssl composite";
-        const auto encoded = encodeMaskedFrame(WsOpcode::Text, payload);
+        const auto encoded = encode_masked_frame(WsOpcode::Text, payload);
         if (!check(first.read_length >= encoded.size(),
                    "ssl consume composite recv window should fit encoded frame")) {
             return 1;
         }
         std::memcpy(first.read_buffer, encoded.data(), encoded.size());
-        machine.onRecv(std::expected<galay::utils::Bytes, galay::ssl::SslError>(
+        machine.on_recv(std::expected<galay::utils::Bytes, galay::ssl::SslError>(
             galay::utils::Bytes(first.read_buffer, encoded.size())));
 
         const auto second = machine.advance();
@@ -250,9 +250,9 @@ int main() {
             return 1;
         }
 
-        const auto expected = WsFrameParser::toBytes(WsFrameParser::createTextFrame(payload), false);
+        const auto expected = WsFrameParser::to_bytes(WsFrameParser::create_text_frame(payload), false);
         auto send_action = second;
-        const auto sent = drainSslSend(machine, send_action);
+        const auto sent = drain_ssl_send(machine, send_action);
         if (!check(sent == expected,
                    "ssl consume composite send payload mismatch")) {
             return 1;
@@ -266,14 +266,14 @@ int main() {
     {
         galay::ssl::SslSocket socket(nullptr);
         const std::string payload = "wrapped ssl zero-copy";
-        auto ring = makeWrappedFrameBuffer(encodeMaskedFrame(WsOpcode::Text, payload));
+        auto ring = make_wrapped_frame_buffer(encode_masked_frame(WsOpcode::Text, payload));
         WssConn conn(std::move(socket), std::move(ring), true);
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
         galay::websocket::detail::WsSslEchoMachine<galay::ssl::SslSocket> machine(
             &conn,
             WsReaderSetting(),
-            WsWriterSetting::byServer(),
+            WsWriterSetting::by_server(),
             message,
             opcode,
             false);
@@ -284,9 +284,9 @@ int main() {
             return 1;
         }
 
-        const auto expected = WsFrameParser::toBytes(WsFrameParser::createTextFrame(payload), false);
+        const auto expected = WsFrameParser::to_bytes(WsFrameParser::create_text_frame(payload), false);
         auto send_action = first;
-        const auto sent = drainSslSend(machine, send_action);
+        const auto sent = drain_ssl_send(machine, send_action);
         if (!check(sent == expected,
                    "wrapped ssl consume send payload mismatch")) {
             return 1;
@@ -305,7 +305,7 @@ int main() {
         galay::websocket::detail::WsSslEchoMachine<galay::ssl::SslSocket> machine(
             &conn,
             WsReaderSetting(),
-            WsWriterSetting::byServer(),
+            WsWriterSetting::by_server(),
             message,
             opcode);
 
@@ -315,9 +315,9 @@ int main() {
             return 1;
         }
 
-        const auto encoded = encodeMaskedFrame(WsOpcode::Ping, "ping");
+        const auto encoded = encode_masked_frame(WsOpcode::Ping, "ping");
         std::memcpy(first.read_buffer, encoded.data(), encoded.size());
-        machine.onRecv(std::expected<galay::utils::Bytes, galay::ssl::SslError>(
+        machine.on_recv(std::expected<galay::utils::Bytes, galay::ssl::SslError>(
             galay::utils::Bytes(first.read_buffer, encoded.size())));
 
         const auto second = machine.advance();

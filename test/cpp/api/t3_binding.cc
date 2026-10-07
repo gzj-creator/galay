@@ -132,10 +132,10 @@ HttpRequest request(std::string body = {}, std::string content_type = "applicati
     result.header().method() = HttpMethod::POST;
     result.header().version() = HttpVersion::HttpVersion_1_1;
     if (!content_type.empty()) {
-        require(result.header().headerPairs().addHeaderPair("Content-Type", content_type) == kNoError,
+        require(result.header().header_pairs().add_header_pair("Content-Type", content_type) == kNoError,
                 "set content type");
     }
-    result.setBodyStr(std::move(body));
+    result.set_body_str(std::move(body));
     return result;
 }
 
@@ -155,7 +155,7 @@ void test_scalars() {
     require(plan->parameters[7].schema.type == "boolean", "bool enum schema");
 
     auto req = request({}, {});
-    req.setRouteParams(std::map<std::string, std::string>{{"id", "18446744073709551615"}});
+    req.set_route_params(std::map<std::string, std::string>{{"id", "18446744073709551615"}});
     req.header().args() = {{"small", "-128"}, {"ratio", "1.25"}, {"enabled", "true"},
         {"text", "\xE4\xBD\xA0\xE5\xA5\xBD"}, {"mode", "disabled"},
         {"code", "18446744073709551615"}, {"flag", "false"}};
@@ -178,17 +178,17 @@ void test_scalars() {
     }
     for (const auto value : {"18446744073709551616", "-1", "1x", "", "+1"}) {
         auto invalid = req.clone();
-        invalid.setRouteParams(std::map<std::string, std::string>{{"id", value}});
+        invalid.set_route_params(std::map<std::string, std::string>{{"id", value}});
         rejected(plan->decode(invalid), ApiErrorCode::kBadRequest, "invalid path integer");
     }
     auto missing = req.clone();
-    missing.setRouteParams(std::map<std::string, std::string>{});
+    missing.set_route_params(std::map<std::string, std::string>{});
     rejected(plan->decode(missing), ApiErrorCode::kBadRequest, "missing path parameter");
     missing = req.clone();
     require(missing.header().args().erase("small") == 1, "erase mandatory query");
     rejected(plan->decode(missing), ApiErrorCode::kBadRequest, "missing mandatory query");
     auto unexpected_body = req.clone();
-    unexpected_body.setBodyStr(std::string("{}"));
+    unexpected_body.set_body_str(std::string("{}"));
     rejected(plan->decode(unexpected_body), ApiErrorCode::kBadRequest, "body rejected when no body schema");
 }
 
@@ -203,11 +203,11 @@ void test_mixed_body() {
             plan->body_schema->properties.contains("display-title"), "only remaining fields in schema");
     auto req = request(R"({"display-title":"Ada","nested":{"name":"inner"}})",
                        "Application/JSON; charset=utf-8");
-    req.setRouteParams(std::map<std::string, std::string>{{"id", "7"}});
+    req.set_route_params(std::map<std::string, std::string>{{"id", "7"}});
     auto decoded = plan->decode(req);
     require(decoded && decoded->id == 7 && decoded->verbose == true && decoded->title == "Ada" &&
             decoded->nested.name == "inner" && decoded->retries == 3, "mixed body does not repeat query/path");
-    req.setBodyStr(std::string(R"({"display-title":"Ada","nested":{"name":"inner"},"retries":null})"));
+    req.set_body_str(std::string(R"({"display-title":"Ada","nested":{"name":"inner"},"retries":null})"));
     decoded = plan->decode(req);
     require(decoded && !decoded->retries, "explicit optional null clears default");
 
@@ -221,19 +221,19 @@ void test_mixed_body() {
             R"({"display-title":"Ada","display-title":"Bob","nested":{"name":"inner"}})",
             R"({"display-title":"Ada","nested":{"name":"inner"},"retries":6})"}) {
         auto invalid = req.clone();
-        invalid.setBodyStr(std::string(body));
+        invalid.set_body_str(std::string(body));
         rejected(plan->decode(invalid), ApiErrorCode::kBadRequest, "invalid/unknown body rejected");
     }
     for (const auto type : {"", "text/plain", "application/jsonp", "application/problem+json"}) {
         auto invalid = req.clone();
-        require(invalid.header().headerPairs().removeHeaderPair("Content-Type") == kNoError, "remove type");
+        require(invalid.header().header_pairs().remove_header_pair("Content-Type") == kNoError, "remove type");
         if (!std::string_view(type).empty()) {
-            require(invalid.header().headerPairs().addHeaderPair("Content-Type", type) == kNoError, "set type");
+            require(invalid.header().header_pairs().add_header_pair("Content-Type", type) == kNoError, "set type");
         }
         rejected(plan->decode(invalid), ApiErrorCode::kUnsupportedMediaType, "JSON content type required");
     }
     auto repeated_type = req.clone();
-    require(repeated_type.header().headerPairs().addHeaderPair("Content-Type", "text/plain") == kNoError,
+    require(repeated_type.header().header_pairs().add_header_pair("Content-Type", "text/plain") == kNoError,
             "append repeated content type");
     rejected(plan->decode(repeated_type), ApiErrorCode::kUnsupportedMediaType,
              "repeated content type is rejected rather than partially accepted");

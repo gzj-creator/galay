@@ -26,7 +26,7 @@ std::string AuthPlugin::sha256(const std::string& data)
     return std::string(reinterpret_cast<const char*>(digest.data()), digest.size());
 }
 
-std::string AuthPlugin::xorStrings(const std::string& a, const std::string& b)
+std::string AuthPlugin::xor_strings(const std::string& a, const std::string& b)
 {
     size_t min_len = std::min(a.size(), b.size());
     std::string result(min_len, '\0');
@@ -36,7 +36,7 @@ std::string AuthPlugin::xorStrings(const std::string& a, const std::string& b)
     return result;
 }
 
-std::string AuthPlugin::nativePasswordAuth(const std::string& password, const std::string& salt)
+std::string AuthPlugin::native_password_auth(const std::string& password, const std::string& salt)
 {
     if (password.empty()) {
         return "";
@@ -50,10 +50,10 @@ std::string AuthPlugin::nativePasswordAuth(const std::string& password, const st
     std::string combined = salt + hash2;
     std::string hash3 = sha1(combined);
     // SHA1(password) XOR SHA1(salt + SHA1(SHA1(password)))
-    return xorStrings(hash1, hash3);
+    return xor_strings(hash1, hash3);
 }
 
-std::string AuthPlugin::cachingSha2Auth(const std::string& password, const std::string& salt)
+std::string AuthPlugin::caching_sha2_auth(const std::string& password, const std::string& salt)
 {
     if (password.empty()) {
         return "";
@@ -67,24 +67,24 @@ std::string AuthPlugin::cachingSha2Auth(const std::string& password, const std::
     std::string combined = hash2 + salt;
     std::string hash3 = sha256(combined);
     // XOR(SHA256(password), SHA256(SHA256(SHA256(password)) + salt))
-    return xorStrings(hash1, hash3);
+    return xor_strings(hash1, hash3);
 }
 
 std::expected<std::string, std::string>
-AuthPlugin::authResponseForPlugin(std::string_view plugin_name,
+AuthPlugin::auth_response_for_plugin(std::string_view plugin_name,
                                   const std::string& password,
                                   const std::string& salt)
 {
     if (plugin_name == "mysql_native_password") {
-        return nativePasswordAuth(password, salt);
+        return native_password_auth(password, salt);
     }
     if (plugin_name == "caching_sha2_password") {
-        return cachingSha2Auth(password, salt);
+        return caching_sha2_auth(password, salt);
     }
     return std::unexpected("Unsupported auth plugin: " + std::string(plugin_name));
 }
 
-std::expected<std::string, std::string> AuthPlugin::cachingSha2FullAuth(const std::string& password,
+std::expected<std::string, std::string> AuthPlugin::caching_sha2_full_auth(const std::string& password,
                                                                         const std::string& salt,
                                                                         std::string_view pem_public_key)
 {
@@ -111,7 +111,7 @@ std::expected<std::string, std::string> AuthPlugin::cachingSha2FullAuth(const st
         }
     }
 
-    auto encrypted = galay::ssl::rsaOaepSha1EncryptWithPemPublicKey(payload, public_key);
+    auto encrypted = galay::ssl::rsa_oaep_sha1_encrypt_with_pem_public_key(payload, public_key);
     if (!encrypted) {
         return std::unexpected(encrypted.error());
     }

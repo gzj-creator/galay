@@ -65,7 +65,7 @@
         for (const auto& cmd_view : commands) {
             encoded_bytes += !cmd_view.encoded.empty()
                                  ? cmd_view.encoded.size()
-                                 : detail::estimateRespCommandBytes(cmd_view.command, cmd_view.args);
+                                 : detail::estimate_resp_command_bytes(cmd_view.command, cmd_view.args);
         }
 
         encoded_cmd.reserve(encoded_bytes);
@@ -73,7 +73,7 @@
             if (!cmd_view.encoded.empty()) {
                 encoded_cmd.append(cmd_view.encoded.data(), cmd_view.encoded.size());
             } else {
-                encoder.appendCommandFast(encoded_cmd, cmd_view.command, cmd_view.args);
+                encoder.append_command_fast(encoded_cmd, cmd_view.command, cmd_view.args);
             }
         }
         encoded_view = encoded_cmd;
@@ -87,36 +87,36 @@
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisExchangeMachine<Strategy>::setError(RedisError error) noexcept
+    void detail::RedisExchangeMachine<Strategy>::set_error(RedisError error) noexcept
     {
         m_state->result = std::unexpected(std::move(error));
         m_state->phase = RedisExchangeSharedState<Strategy>::Phase::Invalid;
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisExchangeMachine<Strategy>::setSendError(const IOError& io_error) noexcept
+    void detail::RedisExchangeMachine<Strategy>::set_send_error(const IOError& io_error) noexcept
     {
-        setError(detail::mapIoErrorToRedisError(
+        set_error(detail::map_io_error_to_redis_error(
             io_error,
             RedisErrorType::REDIS_ERROR_TYPE_SEND_ERROR));
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisExchangeMachine<Strategy>::setRecvError(const IOError& io_error) noexcept
+    void detail::RedisExchangeMachine<Strategy>::set_recv_error(const IOError& io_error) noexcept
     {
-        setError(detail::mapIoErrorToRedisError(
+        set_error(detail::map_io_error_to_redis_error(
             io_error,
             RedisErrorType::REDIS_ERROR_TYPE_RECV_ERROR));
     }
 
     template<RingBufferBackendStrategy Strategy>
-    bool detail::RedisExchangeMachine<Strategy>::prepareReadWindow()
+    bool detail::RedisExchangeMachine<Strategy>::prepare_read_window()
     {
-        m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
+        m_state->read_iov_count = m_state->client->ring_buffer().get_write_iovecs(
             m_state->read_iovecs.data(),
             m_state->read_iovecs.size());
         if (m_state->read_iov_count == 0) {
-            setError(RedisError(
+            set_error(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_BUFFER_OVERFLOW_ERROR,
                 "Ring buffer exhausted before parsing complete response"));
             return false;
@@ -125,11 +125,11 @@
     }
 
     template<RingBufferBackendStrategy Strategy>
-    std::expected<bool, RedisError> detail::RedisExchangeMachine<Strategy>::tryParseReplies()
+    std::expected<bool, RedisError> detail::RedisExchangeMachine<Strategy>::try_parse_replies()
     {
         bool parse_error = false;
-        const bool done = detail::parseRepliesFromRingBuffer(
-            m_state->client->ringBuffer(),
+        const bool done = detail::parse_replies_from_ring_buffer(
+            m_state->client->ring_buffer(),
             m_state->client->parser(),
             m_state->parse_buffer,
             m_state->expected_replies,
@@ -153,7 +153,7 @@
 
         switch (m_state->phase) {
         case RedisExchangeSharedState<Strategy>::Phase::Invalid:
-            setError(RedisError(
+            set_error(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                 "Redis exchange machine in invalid state"));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
@@ -172,13 +172,13 @@
                 m_state->phase = RedisExchangeSharedState<Strategy>::Phase::Parse;
                 return galay::kernel::MachineAction<result_type>::continue_();
             }
-            return galay::kernel::MachineAction<result_type>::waitWrite(
+            return galay::kernel::MachineAction<result_type>::wait_write(
                 m_state->encoded_view.data() + m_state->sent,
                 m_state->encoded_view.size() - m_state->sent);
         case RedisExchangeSharedState<Strategy>::Phase::Parse: {
-            auto parsed = tryParseReplies();
+            auto parsed = try_parse_replies();
             if (!parsed.has_value()) {
-                setError(std::move(parsed.error()));
+                set_error(std::move(parsed.error()));
                 return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
             }
             if (parsed.value()) {
@@ -187,10 +187,10 @@
                 m_state->phase = RedisExchangeSharedState<Strategy>::Phase::Done;
                 return galay::kernel::MachineAction<result_type>::continue_();
             }
-            if (!prepareReadWindow()) {
+            if (!prepare_read_window()) {
                 return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
             }
-            return galay::kernel::MachineAction<result_type>::waitReadv(
+            return galay::kernel::MachineAction<result_type>::wait_readv(
                 m_state->read_iovecs.data(),
                 m_state->read_iov_count);
         }
@@ -198,45 +198,45 @@
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
 
-        setError(RedisError(
+        set_error(RedisError(
             RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
             "Unknown redis exchange machine state"));
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisExchangeMachine<Strategy>::onRead(std::expected<size_t, IOError> result)
+    void detail::RedisExchangeMachine<Strategy>::on_read(std::expected<size_t, IOError> result)
     {
         if (m_state->result.has_value()) {
             return;
         }
         if (!result.has_value()) {
-            setRecvError(result.error());
+            set_recv_error(result.error());
             return;
         }
         if (result.value() == 0) {
-            setError(RedisError(
+            set_error(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_CLOSED,
                 "Connection closed"));
             return;
         }
 
-        m_state->client->ringBuffer().produce(result.value());
+        m_state->client->ring_buffer().produce(result.value());
         m_state->phase = RedisExchangeSharedState<Strategy>::Phase::Parse;
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisExchangeMachine<Strategy>::onWrite(std::expected<size_t, IOError> result)
+    void detail::RedisExchangeMachine<Strategy>::on_write(std::expected<size_t, IOError> result)
     {
         if (m_state->result.has_value()) {
             return;
         }
         if (!result.has_value()) {
-            setSendError(result.error());
+            set_send_error(result.error());
             return;
         }
         if (result.value() == 0) {
-            setError(RedisError(
+            set_error(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_SEND_ERROR,
                 "Send returned 0"));
             return;
@@ -265,7 +265,7 @@
         , db_index(db_index_in)
         , version(version_in)
     {
-        client.ringBuffer().clear();
+        client.ring_buffer().clear();
         client.parser() = protocol::RespParser();
     }
 
@@ -277,44 +277,44 @@
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisConnectMachine<Strategy>::setError(RedisError error) noexcept
+    void detail::RedisConnectMachine<Strategy>::set_error(RedisError error) noexcept
     {
         m_state->result = std::unexpected(std::move(error));
         m_state->phase = RedisConnectSharedState<Strategy>::Phase::Invalid;
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisConnectMachine<Strategy>::setConnectError(const IOError& io_error) noexcept
+    void detail::RedisConnectMachine<Strategy>::set_connect_error(const IOError& io_error) noexcept
     {
-        setError(detail::mapIoErrorToRedisError(
+        set_error(detail::map_io_error_to_redis_error(
             io_error,
             RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR));
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisConnectMachine<Strategy>::setSendError(const IOError& io_error) noexcept
+    void detail::RedisConnectMachine<Strategy>::set_send_error(const IOError& io_error) noexcept
     {
-        setError(detail::mapIoErrorToRedisError(
+        set_error(detail::map_io_error_to_redis_error(
             io_error,
             RedisErrorType::REDIS_ERROR_TYPE_SEND_ERROR));
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisConnectMachine<Strategy>::setRecvError(const IOError& io_error) noexcept
+    void detail::RedisConnectMachine<Strategy>::set_recv_error(const IOError& io_error) noexcept
     {
-        setError(detail::mapIoErrorToRedisError(
+        set_error(detail::map_io_error_to_redis_error(
             io_error,
             RedisErrorType::REDIS_ERROR_TYPE_RECV_ERROR));
     }
 
     template<RingBufferBackendStrategy Strategy>
-    bool detail::RedisConnectMachine<Strategy>::prepareReadWindow()
+    bool detail::RedisConnectMachine<Strategy>::prepare_read_window()
     {
-        m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
+        m_state->read_iov_count = m_state->client->ring_buffer().get_write_iovecs(
             m_state->read_iovecs.data(),
             m_state->read_iovecs.size());
         if (m_state->read_iov_count == 0) {
-            setError(RedisError(
+            set_error(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_BUFFER_OVERFLOW_ERROR,
                 "No writable iovec for response"));
             return false;
@@ -323,7 +323,7 @@
     }
 
     template<RingBufferBackendStrategy Strategy>
-    bool detail::RedisConnectMachine<Strategy>::prepareNextCommand()
+    bool detail::RedisConnectMachine<Strategy>::prepare_next_command()
     {
         RedisCommandBuilder builder;
         if (!m_state->auth_sent && (!m_state->username.empty() || !m_state->password.empty())) {
@@ -350,11 +350,11 @@
     }
 
     template<RingBufferBackendStrategy Strategy>
-    std::expected<bool, RedisError> detail::RedisConnectMachine<Strategy>::tryParseReply()
+    std::expected<bool, RedisError> detail::RedisConnectMachine<Strategy>::try_parse_reply()
     {
         bool parse_error = false;
-        const bool done = detail::parseRepliesFromRingBuffer(
-            m_state->client->ringBuffer(),
+        const bool done = detail::parse_replies_from_ring_buffer(
+            m_state->client->ring_buffer(),
             m_state->client->parser(),
             m_state->parse_buffer,
             1,
@@ -377,14 +377,14 @@
 
         RedisValue reply = std::move(m_state->values.front());
         m_state->values.clear();
-        if (reply.isError()) {
+        if (reply.is_error()) {
             const auto error_type = m_state->pending_command == RedisConnectSharedState<Strategy>::PendingCommand::Auth
                 ? RedisErrorType::REDIS_ERROR_TYPE_AUTH_ERROR
                 : RedisErrorType::REDIS_ERROR_TYPE_INVALID_ERROR;
-            return std::unexpected(RedisError(error_type, reply.toError()));
+            return std::unexpected(RedisError(error_type, reply.to_error()));
         }
 
-        if (prepareNextCommand()) {
+        if (prepare_next_command()) {
             m_state->phase = RedisConnectSharedState<Strategy>::Phase::Send;
         } else {
             m_state->phase = RedisConnectSharedState<Strategy>::Phase::Done;
@@ -403,33 +403,33 @@
 
         switch (m_state->phase) {
         case RedisConnectSharedState<Strategy>::Phase::Invalid:
-            setError(RedisError(
+            set_error(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                 "Redis connect machine in invalid state"));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         case RedisConnectSharedState<Strategy>::Phase::Connect:
-            return galay::kernel::MachineAction<result_type>::waitConnect(m_state->host);
+            return galay::kernel::MachineAction<result_type>::wait_connect(m_state->host);
         case RedisConnectSharedState<Strategy>::Phase::Send:
             if (m_state->sent >= m_state->encoded_cmd.size()) {
                 m_state->phase = RedisConnectSharedState<Strategy>::Phase::Parse;
                 return galay::kernel::MachineAction<result_type>::continue_();
             }
-            return galay::kernel::MachineAction<result_type>::waitWrite(
+            return galay::kernel::MachineAction<result_type>::wait_write(
                 m_state->encoded_cmd.data() + m_state->sent,
                 m_state->encoded_cmd.size() - m_state->sent);
         case RedisConnectSharedState<Strategy>::Phase::Parse: {
-            auto parsed = tryParseReply();
+            auto parsed = try_parse_reply();
             if (!parsed.has_value()) {
-                setError(std::move(parsed.error()));
+                set_error(std::move(parsed.error()));
                 return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
             }
             if (parsed.value()) {
                 return galay::kernel::MachineAction<result_type>::continue_();
             }
-            if (!prepareReadWindow()) {
+            if (!prepare_read_window()) {
                 return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
             }
-            return galay::kernel::MachineAction<result_type>::waitReadv(
+            return galay::kernel::MachineAction<result_type>::wait_readv(
                 m_state->read_iovecs.data(),
                 m_state->read_iov_count);
         }
@@ -440,25 +440,25 @@
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
 
-        setError(RedisError(
+        set_error(RedisError(
             RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
             "Unknown redis connect machine state"));
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisConnectMachine<Strategy>::onConnect(std::expected<void, IOError> result)
+    void detail::RedisConnectMachine<Strategy>::on_connect(std::expected<void, IOError> result)
     {
         if (m_state->result.has_value()) {
             return;
         }
         if (!result.has_value()) {
-            setConnectError(result.error());
+            set_connect_error(result.error());
             return;
         }
 
-        m_state->client->setClosed(false);
-        if (prepareNextCommand()) {
+        m_state->client->set_closed(false);
+        if (prepare_next_command()) {
             m_state->phase = RedisConnectSharedState<Strategy>::Phase::Send;
         } else {
             m_state->phase = RedisConnectSharedState<Strategy>::Phase::Done;
@@ -467,38 +467,38 @@
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisConnectMachine<Strategy>::onRead(std::expected<size_t, IOError> result)
+    void detail::RedisConnectMachine<Strategy>::on_read(std::expected<size_t, IOError> result)
     {
         if (m_state->result.has_value()) {
             return;
         }
         if (!result.has_value()) {
-            setRecvError(result.error());
+            set_recv_error(result.error());
             return;
         }
         if (result.value() == 0) {
-            setError(RedisError(
+            set_error(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_CLOSED,
                 "Connection closed"));
             return;
         }
 
-        m_state->client->ringBuffer().produce(result.value());
+        m_state->client->ring_buffer().produce(result.value());
         m_state->phase = RedisConnectSharedState<Strategy>::Phase::Parse;
     }
 
     template<RingBufferBackendStrategy Strategy>
-    void detail::RedisConnectMachine<Strategy>::onWrite(std::expected<size_t, IOError> result)
+    void detail::RedisConnectMachine<Strategy>::on_write(std::expected<size_t, IOError> result)
     {
         if (m_state->result.has_value()) {
             return;
         }
         if (!result.has_value()) {
-            setSendError(result.error());
+            set_send_error(result.error());
             return;
         }
         if (result.value() == 0) {
-            setError(RedisError(
+            set_error(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_SEND_ERROR,
                 "Send returned 0"));
             return;

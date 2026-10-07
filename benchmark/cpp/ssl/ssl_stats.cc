@@ -14,7 +14,7 @@ std::atomic<uint64_t> g_recv_plain_bytes{0};
 std::atomic<uint64_t> g_recv_chunks{0};
 constexpr uint32_t kFlushThreshold = 64;
 
-void resetStats()
+void reset_stats()
 {
     g_send_ops.store(0, std::memory_order_relaxed);
     g_send_plain_bytes.store(0, std::memory_order_relaxed);
@@ -33,7 +33,7 @@ struct LocalStats {
     uint64_t recv_chunks = 0;
 };
 
-void flushLocal(LocalStats& local)
+void flush_local(LocalStats& local)
 {
     if (local.pending == 0) {
         return;
@@ -63,13 +63,13 @@ struct ThreadStats {
         if (local.epoch != g_epoch.load(std::memory_order_relaxed)) {
             return;
         }
-        flushLocal(local);
+        flush_local(local);
     }
 };
 
 thread_local ThreadStats g_threadStats;
 
-bool prepareLocal(LocalStats& local)
+bool prepare_local(LocalStats& local)
 {
     if (!g_enabled.load(std::memory_order_relaxed)) {
         return false;
@@ -82,7 +82,7 @@ bool prepareLocal(LocalStats& local)
     return true;
 }
 
-void flushCurrentThread()
+void flush_current_thread()
 {
     auto& local = g_threadStats.local;
     if (local.pending == 0) {
@@ -92,32 +92,32 @@ void flushCurrentThread()
         local = LocalStats{};
         return;
     }
-    flushLocal(local);
+    flush_local(local);
 }
 } // namespace
 
-void sslStatsSetEnabled(bool enabled)
+void ssl_stats_set_enabled(bool enabled)
 {
     g_enabled.store(false, std::memory_order_relaxed);
     g_epoch.fetch_add(1, std::memory_order_relaxed);
-    resetStats();
+    reset_stats();
     if (!enabled) {
         return;
     }
     g_enabled.store(true, std::memory_order_relaxed);
 }
 
-bool sslStatsEnabled()
+bool ssl_stats_enabled()
 {
     return g_enabled.load(std::memory_order_relaxed);
 }
 
-SslIoStats sslStatsSnapshot()
+SslIoStats ssl_stats_snapshot()
 {
-    if (!sslStatsEnabled()) {
+    if (!ssl_stats_enabled()) {
         return {};
     }
-    flushCurrentThread();
+    flush_current_thread();
 
     SslIoStats stats;
     stats.send_ops = g_send_ops.load(std::memory_order_relaxed);
@@ -128,27 +128,27 @@ SslIoStats sslStatsSnapshot()
     return stats;
 }
 
-void sslStatsAddSend(size_t bytes)
+void ssl_stats_add_send(size_t bytes)
 {
     auto& local = g_threadStats.local;
-    if (!prepareLocal(local)) {
+    if (!prepare_local(local)) {
         return;
     }
     local.send_ops += 1;
     local.send_plain_bytes += static_cast<uint64_t>(bytes);
     local.pending += 2;
     if (local.pending >= kFlushThreshold) {
-        flushLocal(local);
+        flush_local(local);
     }
 }
 
-void sslStatsAddRecv(size_t bytes)
+void ssl_stats_add_recv(size_t bytes)
 {
     if (bytes == 0) {
         return;
     }
     auto& local = g_threadStats.local;
-    if (!prepareLocal(local)) {
+    if (!prepare_local(local)) {
         return;
     }
     local.recv_ops += 1;
@@ -156,7 +156,7 @@ void sslStatsAddRecv(size_t bytes)
     local.recv_chunks += 1;
     local.pending += 3;
     if (local.pending >= kFlushThreshold) {
-        flushLocal(local);
+        flush_local(local);
     }
 }
 

@@ -9,7 +9,7 @@ namespace
 
 constexpr int32_t kChecksumPresentFlag = 0x01;
 
-int32_t readInt32LE(const char* p)
+int32_t read_int32_le(const char* p)
 {
     return static_cast<int32_t>(
         (static_cast<uint32_t>(static_cast<uint8_t>(p[0]))      ) |
@@ -18,7 +18,7 @@ int32_t readInt32LE(const char* p)
         (static_cast<uint32_t>(static_cast<uint8_t>(p[3])) << 24));
 }
 
-uint32_t readUint32LE(const char* p)
+uint32_t read_uint32_le(const char* p)
 {
     return (static_cast<uint32_t>(static_cast<uint8_t>(p[0]))      ) |
            (static_cast<uint32_t>(static_cast<uint8_t>(p[1])) <<  8) |
@@ -26,7 +26,7 @@ uint32_t readUint32LE(const char* p)
            (static_cast<uint32_t>(static_cast<uint8_t>(p[3])) << 24);
 }
 
-void writeInt32LEAt(std::string& out, size_t pos, int32_t value)
+void write_int32_le_at(std::string& out, size_t pos, int32_t value)
 {
     const auto u = static_cast<uint32_t>(value);
     out[pos + 0] = static_cast<char>(u & 0xFF);
@@ -35,7 +35,7 @@ void writeInt32LEAt(std::string& out, size_t pos, int32_t value)
     out[pos + 3] = static_cast<char>((u >> 24) & 0xFF);
 }
 
-void appendInt32LE(std::string& out, int32_t value)
+void append_int32_le(std::string& out, int32_t value)
 {
     const auto u = static_cast<uint32_t>(value);
     out.push_back(static_cast<char>(u & 0xFF));
@@ -55,19 +55,19 @@ MongoMessage MongoMessage::clone() const
     return copy;
 }
 
-std::expected<std::string, std::string> MongoProtocol::encodeOpMsg(int32_t request_id,
+std::expected<std::string, std::string> MongoProtocol::encode_op_msg(int32_t request_id,
                                                                    const MongoDocument& body,
                                                                    int32_t flags)
 {
     std::string out;
-    auto appended = appendOpMsg(out, request_id, body, flags);
+    auto appended = append_op_msg(out, request_id, body, flags);
     if (!appended) {
         return std::unexpected(appended.error());
     }
     return out;
 }
 
-std::expected<void, std::string> MongoProtocol::appendOpMsg(std::string& out,
+std::expected<void, std::string> MongoProtocol::append_op_msg(std::string& out,
                                                             int32_t request_id,
                                                             const MongoDocument& body,
                                                             int32_t flags)
@@ -76,22 +76,22 @@ std::expected<void, std::string> MongoProtocol::appendOpMsg(std::string& out,
     out.reserve(base + 16 + 4 + 1 + 64);
     out.resize(base + 16, '\0');
 
-    appendInt32LE(out, flags);
+    append_int32_le(out, flags);
     out.push_back(static_cast<char>(0));
-    auto body_appended = BsonCodec::appendDocument(out, body);
+    auto body_appended = BsonCodec::append_document(out, body);
     if (!body_appended) {
         out.resize(base);
         return std::unexpected(body_appended.error());
     }
 
-    writeInt32LEAt(out, base + 0, static_cast<int32_t>(out.size() - base));
-    writeInt32LEAt(out, base + 4, request_id);
-    writeInt32LEAt(out, base + 8, 0); // responseTo for request
-    writeInt32LEAt(out, base + 12, kMongoOpMsg);
+    write_int32_le_at(out, base + 0, static_cast<int32_t>(out.size() - base));
+    write_int32_le_at(out, base + 4, request_id);
+    write_int32_le_at(out, base + 8, 0); // responseTo for request
+    write_int32_le_at(out, base + 12, kMongoOpMsg);
     return {};
 }
 
-std::expected<void, std::string> MongoProtocol::appendOpMsgWithDatabase(std::string& out,
+std::expected<void, std::string> MongoProtocol::append_op_msg_with_database(std::string& out,
                                                                         int32_t request_id,
                                                                         const MongoDocument& body,
                                                                         std::string_view database,
@@ -101,32 +101,32 @@ std::expected<void, std::string> MongoProtocol::appendOpMsgWithDatabase(std::str
     out.reserve(base + 16 + 4 + 1 + 64 + database.size());
     out.resize(base + 16, '\0');
 
-    appendInt32LE(out, flags);
+    append_int32_le(out, flags);
     out.push_back(static_cast<char>(0));
-    auto body_appended = BsonCodec::appendDocumentWithDatabase(out, body, database);
+    auto body_appended = BsonCodec::append_document_with_database(out, body, database);
     if (!body_appended) {
         out.resize(base);
         return std::unexpected(body_appended.error());
     }
 
-    writeInt32LEAt(out, base + 0, static_cast<int32_t>(out.size() - base));
-    writeInt32LEAt(out, base + 4, request_id);
-    writeInt32LEAt(out, base + 8, 0); // responseTo for request
-    writeInt32LEAt(out, base + 12, kMongoOpMsg);
+    write_int32_le_at(out, base + 0, static_cast<int32_t>(out.size() - base));
+    write_int32_le_at(out, base + 4, request_id);
+    write_int32_le_at(out, base + 8, 0); // responseTo for request
+    write_int32_le_at(out, base + 12, kMongoOpMsg);
     return {};
 }
 
-std::expected<MongoMessage, MongoError> MongoProtocol::decodeMessage(const char* data, size_t len)
+std::expected<MongoMessage, MongoError> MongoProtocol::decode_message(const char* data, size_t len)
 {
     if (data == nullptr || len < 16) {
         return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL, "Mongo message too short"));
     }
 
     MongoMessage message;
-    message.header.message_length = readInt32LE(data + 0);
-    message.header.request_id = readInt32LE(data + 4);
-    message.header.response_to = readInt32LE(data + 8);
-    message.header.op_code = readInt32LE(data + 12);
+    message.header.message_length = read_int32_le(data + 0);
+    message.header.request_id = read_int32_le(data + 4);
+    message.header.response_to = read_int32_le(data + 8);
+    message.header.op_code = read_int32_le(data + 12);
 
     if (message.header.message_length < 21) {
         return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL, "Invalid Mongo message length"));
@@ -148,7 +148,7 @@ std::expected<MongoMessage, MongoError> MongoProtocol::decodeMessage(const char*
     }
 
     size_t pos = 16;
-    message.flags = readInt32LE(data + pos);
+    message.flags = read_int32_le(data + pos);
     pos += 4;
 
     // If checksumPresent bit is set, the last 4 bytes are a CRC32 checksum
@@ -159,7 +159,7 @@ std::expected<MongoMessage, MongoError> MongoProtocol::decodeMessage(const char*
                                               "OP_MSG checksum missing"));
         }
 
-        const uint32_t expected_checksum = readUint32LE(data + message_size - 4);
+        const uint32_t expected_checksum = read_uint32_le(data + message_size - 4);
         const uint32_t actual_checksum = detail::crc32c(data, message_size - 4);
         if (actual_checksum != expected_checksum) {
             return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL,
@@ -178,7 +178,7 @@ std::expected<MongoMessage, MongoError> MongoProtocol::decodeMessage(const char*
 
         if (section_kind == 0) {
             size_t consumed = 0;
-            auto document_or_err = BsonCodec::decodeDocument(
+            auto document_or_err = BsonCodec::decode_document(
                 data + pos,
                 parseable_end - pos,
                 consumed);
@@ -199,7 +199,7 @@ std::expected<MongoMessage, MongoError> MongoProtocol::decodeMessage(const char*
                                                   "Invalid OP_MSG section(1) header"));
             }
 
-            const int32_t section_size = readInt32LE(data + pos);
+            const int32_t section_size = read_int32_le(data + pos);
             if (section_size <= 4) {
                 return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL,
                                                   "Invalid OP_MSG section(1) size"));
@@ -228,13 +228,13 @@ std::expected<MongoMessage, MongoError> MongoProtocol::decodeMessage(const char*
 }
 
 std::expected<MongoMessage, MongoError>
-MongoProtocol::extractMessage(const char* data, size_t len, size_t& consumed)
+MongoProtocol::extract_message(const char* data, size_t len, size_t& consumed)
 {
     if (data == nullptr || len < 4) {
         return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL, "Mongo message header incomplete"));
     }
 
-    const int32_t message_length = readInt32LE(data);
+    const int32_t message_length = read_int32_le(data);
     if (message_length < 16) {
         return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL, "Invalid Mongo message length"));
     }
@@ -244,10 +244,10 @@ MongoProtocol::extractMessage(const char* data, size_t len, size_t& consumed)
     }
 
     consumed = static_cast<size_t>(message_length);
-    return decodeMessage(data, consumed);
+    return decode_message(data, consumed);
 }
 
-MongoDocument MongoProtocol::makeCommand(std::string db,
+MongoDocument MongoProtocol::make_command(std::string db,
                                          std::string command_name,
                                          MongoValue command_value,
                                          MongoDocument arguments)

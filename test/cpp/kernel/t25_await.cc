@@ -43,11 +43,11 @@ using SequenceResult = std::expected<size_t, IOError>;
 using SequenceT = SequenceAwaitable<SequenceResult, 4>;
 
 struct SendThenRecvFlow {
-    void onSend(SequenceOps<SequenceResult, 4>& ops, SendIOContext&);
-    void onRecv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& recv_ctx);
+    void on_send(SequenceOps<SequenceResult, 4>& ops, SendIOContext&);
+    void on_recv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& recv_ctx);
 
-    using SendStep = SequenceStep<SequenceResult, 4, SendThenRecvFlow, SendIOContext, &SendThenRecvFlow::onSend>;
-    using RecvStep = SequenceStep<SequenceResult, 4, SendThenRecvFlow, RecvIOContext, &SendThenRecvFlow::onRecv>;
+    using SendStep = SequenceStep<SequenceResult, 4, SendThenRecvFlow, SendIOContext, &SendThenRecvFlow::on_send>;
+    using RecvStep = SequenceStep<SequenceResult, 4, SendThenRecvFlow, RecvIOContext, &SendThenRecvFlow::on_recv>;
 
     SendThenRecvFlow(const char* send_data, size_t send_len, char* recv_buf, size_t recv_buf_len)
         : send(this, send_data, send_len)
@@ -63,15 +63,15 @@ struct SendThenRecvFlow {
     RecvStep recv;
 };
 
-inline void SendThenRecvFlow::onSend(SequenceOps<SequenceResult, 4>& ops, SendIOContext&) {
+inline void SendThenRecvFlow::on_send(SequenceOps<SequenceResult, 4>& ops, SendIOContext&) {
     ops.queue(recv);
 }
 
-inline void SendThenRecvFlow::onRecv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& recv_ctx) {
+inline void SendThenRecvFlow::on_recv(SequenceOps<SequenceResult, 4>& ops, RecvIOContext& recv_ctx) {
     ops.complete(std::move(recv_ctx.m_result));
 }
 
-Task<void> serverTask([[maybe_unused]] IOScheduler* scheduler, int listen_fd)
+Task<void> server_task([[maybe_unused]] IOScheduler* scheduler, int listen_fd)
 {
     g_total++;
 
@@ -130,7 +130,7 @@ Task<void> serverTask([[maybe_unused]] IOScheduler* scheduler, int listen_fd)
     co_return;
 }
 
-Task<void> clientTask([[maybe_unused]] IOScheduler* scheduler, const char* ip, int port)
+Task<void> client_task([[maybe_unused]] IOScheduler* scheduler, const char* ip, int port)
 {
     g_total++;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -220,20 +220,20 @@ int main()
 
     TestScheduler scheduler;
     scheduler.start();
-    scheduleTask(scheduler, serverTask(&scheduler, listen_fd));
-    scheduleTask(scheduler, clientTask(&scheduler, "127.0.0.1", PORT));
+    schedule_task(scheduler, server_task(&scheduler, listen_fd));
+    schedule_task(scheduler, client_task(&scheduler, "127.0.0.1", PORT));
     std::this_thread::sleep_for(std::chrono::seconds(3));
     scheduler.stop();
     close(listen_fd);
 
     const bool ok = g_failed.load() == 0 && g_passed.load() == g_total.load();
     galay::test::TestResultWriter writer("T25");
-    writer.addTest();
+    writer.add_test();
     if (ok) {
-        writer.addPassed();
+        writer.add_passed();
     } else {
-        writer.addFailed();
+        writer.add_failed();
     }
-    writer.writeResult();
+    writer.write_result();
     return ok ? 0 : 1;
 }

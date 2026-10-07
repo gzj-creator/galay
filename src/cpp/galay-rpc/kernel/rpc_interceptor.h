@@ -21,7 +21,7 @@ namespace galay::rpc
 
 using RpcServerInterceptor = std::function<std::expected<void, RpcError>(const RpcRequest&)>;
 
-inline RpcServerInterceptor AllowAllRpcInterceptor()
+inline RpcServerInterceptor allow_all_rpc_interceptor()
 {
     return [](const RpcRequest&) -> std::expected<void, RpcError> {
         return {};

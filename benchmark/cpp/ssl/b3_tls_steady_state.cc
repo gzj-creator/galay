@@ -65,7 +65,7 @@ void fail(SteadyState* state, std::string message)
     }
 }
 
-std::string benchmarkCertPath(const char* name)
+std::string benchmark_cert_path(const char* name)
 {
     return std::string(GALAY_SSL_BENCHMARK_CERT_DIR) + "/" + name;
 }
@@ -79,7 +79,7 @@ bool expect(bool condition, const char* message)
     return true;
 }
 
-bool waitFor(std::atomic<bool>& flag, const char* message)
+bool wait_for(std::atomic<bool>& flag, const char* message)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!flag.load(std::memory_order_relaxed)) {
@@ -92,7 +92,7 @@ bool waitFor(std::atomic<bool>& flag, const char* message)
     return true;
 }
 
-bool waitForCount(std::atomic<int>& count, int expected, const char* message)
+bool wait_for_count(std::atomic<int>& count, int expected, const char* message)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     while (count.load(std::memory_order_relaxed) < expected) {
@@ -105,7 +105,7 @@ bool waitForCount(std::atomic<int>& count, int expected, const char* message)
     return true;
 }
 
-bool waitForCompletion(SteadyState& state, std::atomic<int>& count, int expected, const char* message)
+bool wait_for_completion(SteadyState& state, std::atomic<int>& count, int expected, const char* message)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     while (count.load(std::memory_order_relaxed) < expected) {
@@ -133,10 +133,10 @@ bool waitForCompletion(SteadyState& state, std::atomic<int>& count, int expected
     return true;
 }
 
-Task<void> handleAcceptedClient(SslContext* ctx, GHandle handle, SteadyState* state)
+Task<void> handle_accepted_client(SslContext* ctx, GHandle handle, SteadyState* state)
 {
     SslSocket client(ctx, handle);
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     auto handshake_result = co_await client.handshake();
     if (!handshake_result) {
@@ -173,16 +173,16 @@ Task<void> handleAcceptedClient(SslContext* ctx, GHandle handle, SteadyState* st
     state->server_done.fetch_add(1, std::memory_order_relaxed);
 }
 
-Task<void> runServer(IOScheduler* scheduler, SslContext* ctx, SteadyState* state)
+Task<void> run_server(IOScheduler* scheduler, SslContext* ctx, SteadyState* state)
 {
     SslSocket listener(ctx);
-    if (!listener.isValid()) {
+    if (!listener.is_valid()) {
         fail(state, "listener invalid");
         co_return;
     }
 
-    listener.option().handleReuseAddr();
-    listener.option().handleNonBlock();
+    listener.option().handle_reuse_addr();
+    listener.option().handle_non_block();
 
     if (!listener.bind(Host(IPType::IPV4, "127.0.0.1", kPort))) {
         fail(state, "bind failed");
@@ -203,7 +203,7 @@ Task<void> runServer(IOScheduler* scheduler, SslContext* ctx, SteadyState* state
             break;
         }
         state->accepted.fetch_add(1, std::memory_order_relaxed);
-        if (!scheduleTask(scheduler, handleAcceptedClient(ctx, accept_result.value(), state))) {
+        if (!schedule_task(scheduler, handle_accepted_client(ctx, accept_result.value(), state))) {
             fail(state, "schedule accepted client failed");
             break;
         }
@@ -212,17 +212,17 @@ Task<void> runServer(IOScheduler* scheduler, SslContext* ctx, SteadyState* state
     (void)co_await listener.close();
 }
 
-Task<void> runClient(SslContext* ctx, SteadyState* state, int client_id)
+Task<void> run_client(SslContext* ctx, SteadyState* state, int client_id)
 {
     SslSocket socket(ctx);
-    if (!socket.isValid()) {
+    if (!socket.is_valid()) {
         fail(state, "client socket invalid");
         state->client_done.fetch_add(1, std::memory_order_relaxed);
         co_return;
     }
 
-    socket.option().handleNonBlock();
-    if (!socket.setHostname("localhost")) {
+    socket.option().handle_non_block();
+    if (!socket.set_hostname("localhost")) {
         fail(state, "set hostname failed");
         state->client_done.fetch_add(1, std::memory_order_relaxed);
         co_return;
@@ -281,7 +281,7 @@ Task<void> runClient(SslContext* ctx, SteadyState* state, int client_id)
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -289,46 +289,46 @@ int main()
 
     SslContext server_ctx(SslMethod::TLS_Server);
     SslContext client_ctx(SslMethod::TLS_Client);
-    if (!expect(server_ctx.isValid(), "server context invalid") ||
-        !expect(client_ctx.isValid(), "client context invalid")) {
+    if (!expect(server_ctx.is_valid(), "server context invalid") ||
+        !expect(client_ctx.is_valid(), "client context invalid")) {
         return 2;
     }
 
-    if (!expect(server_ctx.setCiphersuites("TLS_AES_128_GCM_SHA256").has_value(),
+    if (!expect(server_ctx.set_ciphersuites("TLS_AES_128_GCM_SHA256").has_value(),
                 "set server TLS 1.3 ciphersuite failed") ||
-        !expect(client_ctx.setCiphersuites("TLS_AES_128_GCM_SHA256").has_value(),
+        !expect(client_ctx.set_ciphersuites("TLS_AES_128_GCM_SHA256").has_value(),
                 "set client TLS 1.3 ciphersuite failed")) {
         return 2;
     }
 
-    if (!expect(server_ctx.loadCertificate(benchmarkCertPath("server.crt")).has_value(), "load server cert failed") ||
-        !expect(server_ctx.loadPrivateKey(benchmarkCertPath("server.key")).has_value(), "load server key failed") ||
-        !expect(client_ctx.loadCACertificate(benchmarkCertPath("ca.crt")).has_value(), "load CA failed")) {
+    if (!expect(server_ctx.load_certificate(benchmark_cert_path("server.crt")).has_value(), "load server cert failed") ||
+        !expect(server_ctx.load_private_key(benchmark_cert_path("server.key")).has_value(), "load server key failed") ||
+        !expect(client_ctx.load_ca_certificate(benchmark_cert_path("ca.crt")).has_value(), "load CA failed")) {
         std::cerr << "[SKIP] missing TLS benchmark certificates under "
                   << GALAY_SSL_BENCHMARK_CERT_DIR << std::endl;
         return 0;
     }
-    client_ctx.setVerifyMode(SslVerifyMode::Peer);
+    client_ctx.set_verify_mode(SslVerifyMode::Peer);
 
     TestScheduler scheduler;
     scheduler.start();
 
     int exit_code = 0;
     const auto benchmark_start = std::chrono::steady_clock::now();
-    if (!expect(scheduleTask(scheduler, runServer(&scheduler, &server_ctx, &state)), "spawn server failed") ||
-        !waitFor(state.server_ready, "server did not become ready")) {
+    if (!expect(schedule_task(scheduler, run_server(&scheduler, &server_ctx, &state)), "spawn server failed") ||
+        !wait_for(state.server_ready, "server did not become ready")) {
         exit_code = 3;
     }
 
     for (int i = 0; exit_code == 0 && i < kConnections; ++i) {
-        if (!expect(scheduleTask(scheduler, runClient(&client_ctx, &state, i)), "spawn client failed")) {
+        if (!expect(schedule_task(scheduler, run_client(&client_ctx, &state, i)), "spawn client failed")) {
             exit_code = 4;
         }
     }
 
     if (exit_code == 0 &&
-        (!waitForCompletion(state, state.client_done, kConnections, "clients did not finish") ||
-         !waitForCompletion(state, state.server_done, kConnections, "server handlers did not finish"))) {
+        (!wait_for_completion(state, state.client_done, kConnections, "clients did not finish") ||
+         !wait_for_completion(state, state.server_done, kConnections, "server handlers did not finish"))) {
         exit_code = 5;
     }
 

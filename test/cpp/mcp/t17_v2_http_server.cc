@@ -46,7 +46,7 @@ uint16_t port()
     return readOk ? value : 0;
 }
 
-int connectTo(uint16_t value)
+int connect_to(uint16_t value)
 {
     sockaddr_in address{};
     address.sin_family = AF_INET;
@@ -65,7 +65,7 @@ int connectTo(uint16_t value)
     return -1;
 }
 
-void sendAll(int fd, std::string_view value)
+void send_all(int fd, std::string_view value)
 {
     std::size_t offset = 0;
     while (offset != value.size()) {
@@ -77,7 +77,7 @@ void sendAll(int fd, std::string_view value)
 
 std::string exchange(uint16_t portValue, std::string_view body, std::string_view extraHeaders)
 {
-    const int fd = connectTo(portValue);
+    const int fd = connect_to(portValue);
     if (fd < 0) return {};
     std::string request = "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nConnection: close\r\n";
     request.append(extraHeaders.data(), extraHeaders.size());
@@ -85,7 +85,7 @@ std::string exchange(uint16_t portValue, std::string_view body, std::string_view
     request += std::to_string(body.size());
     request += "\r\n\r\n";
     request.append(body.data(), body.size());
-    sendAll(fd, request);
+    send_all(fd, request);
     std::string response;
     char buffer[4096];
     while (true) {
@@ -103,7 +103,7 @@ std::string body(std::string_view response)
     return offset == std::string_view::npos ? std::string{} : std::string(response.substr(offset + 4));
 }
 
-std::string recvUntil(int fd, std::string_view marker)
+std::string recv_until(int fd, std::string_view marker)
 {
     std::string response;
     char buffer[4096];
@@ -115,9 +115,9 @@ std::string recvUntil(int fd, std::string_view marker)
     return response;
 }
 
-int openListen(uint16_t portValue, std::string_view bodyValue)
+int open_listen(uint16_t portValue, std::string_view bodyValue)
 {
-    const int fd = connectTo(portValue);
+    const int fd = connect_to(portValue);
     if (fd < 0) return -1;
     std::string request =
         "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n"
@@ -129,20 +129,20 @@ int openListen(uint16_t portValue, std::string_view bodyValue)
     request += std::to_string(bodyValue.size());
     request += "\r\n\r\n";
     request.append(bodyValue.data(), bodyValue.size());
-    sendAll(fd, request);
+    send_all(fd, request);
     return fd;
 }
 
-std::string makeBody(std::string_view method, std::string_view fields)
+std::string make_body(std::string_view method, std::string_view fields)
 {
     galay::mcp::v2::RequestMeta meta;
-    auto params = galay::mcp::v2::makeRequestParams(meta, fields);
+    auto params = galay::mcp::v2::make_request_params(meta, fields);
     if (!params) return {};
     galay::mcp::v2::JsonRpcRequest request;
     request.id = 1;
     request.method = std::string(method);
     request.params = std::move(params.value());
-    return request.toJson();
+    return request.to_json();
 }
 
 } // namespace
@@ -153,7 +153,7 @@ int main()
     if (!require(selectedPort != 0, "failed to select test port")) return 1;
 
     galay::mcp::v2::McpHttpServer server("127.0.0.1", selectedPort, 2, 1);
-    server.addTool("echo", "Echo",
+    server.add_tool("echo", "Echo",
                    R"({"type":"object","properties":{"region":{"type":"string","x-mcp-header":"Region"}}})",
                    [](const json::Json&,
                       std::expected<std::string, galay::mcp::McpError>& result)
@@ -161,7 +161,7 @@ int main()
                         result = std::string("hello");
                         co_return;
                     });
-    server.addResource("mem://hello", "hello", "Hello", "text/plain",
+    server.add_resource("mem://hello", "hello", "Hello", "text/plain",
                        [](const std::string&,
                           std::expected<std::string, galay::mcp::McpError>& result)
                            -> galay::kernel::Task<void> {
@@ -170,7 +170,7 @@ int main()
                        });
     std::thread serverThread([&server] { server.start(); });
 
-    const int probe = connectTo(selectedPort);
+    const int probe = connect_to(selectedPort);
     if (!require(probe >= 0, "v2 HTTP server did not start")) {
         server.stop();
         serverThread.join();
@@ -178,7 +178,7 @@ int main()
     }
     ::close(probe);
 
-    const auto discover = makeBody(galay::mcp::v2::Methods::SERVER_DISCOVER, "{}");
+    const auto discover = make_body(galay::mcp::v2::Methods::SERVER_DISCOVER, "{}");
     const auto valid = exchange(selectedPort,
                                 discover,
                                 "Accept: application/json, text/event-stream\r\n"
@@ -211,7 +211,7 @@ int main()
         server.stop(); serverThread.join(); return 1;
     }
 
-    const auto call = makeBody(galay::mcp::v2::Methods::TOOLS_CALL,
+    const auto call = make_body(galay::mcp::v2::Methods::TOOLS_CALL,
                                R"({"name":"echo","arguments":{}})");
     const auto nameMismatch = exchange(selectedPort,
                                        call,
@@ -225,7 +225,7 @@ int main()
         server.stop(); serverThread.join(); return 1;
     }
 
-    const auto headerCall = makeBody(galay::mcp::v2::Methods::TOOLS_CALL,
+    const auto headerCall = make_body(galay::mcp::v2::Methods::TOOLS_CALL,
                                      R"({"name":"echo","arguments":{"region":"us west"}})");
     const auto missingParameterHeader = exchange(
         selectedPort, headerCall,
@@ -263,14 +263,14 @@ int main()
         server.stop(); serverThread.join(); return 1;
     }
 
-    const auto listen = makeBody(
+    const auto listen = make_body(
         galay::mcp::v2::Methods::SUBSCRIPTIONS_LISTEN,
         R"({"notifications":{"toolsListChanged":true,"promptsListChanged":true,"resourcesListChanged":true,"resourceSubscriptions":["mem://hello"]}})");
-    const int listenFd = openListen(selectedPort, listen);
+    const int listenFd = open_listen(selectedPort, listen);
     if (!require(listenFd >= 0, "failed to open subscriptions/listen stream")) {
         server.stop(); serverThread.join(); return 1;
     }
-    const auto acknowledged = recvUntil(
+    const auto acknowledged = recv_until(
         listenFd, "notifications/subscriptions/acknowledged");
     if (!require(acknowledged.find("200 OK") != std::string::npos &&
                      acknowledged.find("content-type: text/event-stream") !=
@@ -287,17 +287,17 @@ int main()
         ::close(listenFd);
         server.stop(); serverThread.join(); return 1;
     }
-    if (!require(server.notifyToolsListChanged().has_value() &&
-                     server.notifyPromptsListChanged().has_value() &&
-                     server.notifyResourcesListChanged().has_value() &&
-                     server.notifyResourceUpdated("mem://other").has_value() &&
-                     server.notifyResourceUpdated("mem://hello/child").has_value() &&
-                     server.notifyResourceUpdated("mem://hello").has_value(),
+    if (!require(server.notify_tools_list_changed().has_value() &&
+                     server.notify_prompts_list_changed().has_value() &&
+                     server.notify_resources_list_changed().has_value() &&
+                     server.notify_resource_updated("mem://other").has_value() &&
+                     server.notify_resource_updated("mem://hello/child").has_value() &&
+                     server.notify_resource_updated("mem://hello").has_value(),
                  "notification command was not accepted")) {
         ::close(listenFd);
         server.stop(); serverThread.join(); return 1;
     }
-    const auto changed = recvUntil(listenFd, "notifications/resources/updated");
+    const auto changed = recv_until(listenFd, "notifications/resources/updated");
     if (!require(changed.find(
                      "\"io.modelcontextprotocol/subscriptionId\":1") !=
                      std::string::npos &&
@@ -312,9 +312,9 @@ int main()
     }
     ::close(listenFd);
 
-    const int shutdownListenFd = openListen(selectedPort, listen);
+    const int shutdownListenFd = open_listen(selectedPort, listen);
     if (!require(shutdownListenFd >= 0 &&
-                     recvUntil(shutdownListenFd,
+                     recv_until(shutdownListenFd,
                                "notifications/subscriptions/acknowledged")
                          .find("notifications/subscriptions/acknowledged") !=
                          std::string::npos,
@@ -324,7 +324,7 @@ int main()
     }
 
     server.stop();
-    const auto gracefulClose = recvUntil(shutdownListenFd, "0\r\n\r\n");
+    const auto gracefulClose = recv_until(shutdownListenFd, "0\r\n\r\n");
     ::close(shutdownListenFd);
     serverThread.join();
     if (!require(gracefulClose.find("\"resultType\":\"complete\"") !=

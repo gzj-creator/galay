@@ -17,7 +17,7 @@ namespace galay::tracing {
 
 namespace {
 
-void appendJsonString(std::string& out, std::string_view value) {
+void append_json_string(std::string& out, std::string_view value) {
     static constexpr char kHex[] = "0123456789abcdef";
 
     out.push_back('"');
@@ -58,89 +58,89 @@ void appendJsonString(std::string& out, std::string_view value) {
     out.push_back('"');
 }
 
-void appendAttributeValue(std::string& out, const SpanAttributeValue& value) {
+void append_attribute_value(std::string& out, const SpanAttributeValue& value) {
     switch (value.type()) {
     case SpanAttributeType::kInt64:
-        out.append(std::to_string(value.asInt64()));
+        out.append(std::to_string(value.as_int64()));
         break;
     case SpanAttributeType::kUInt64:
-        out.append(std::to_string(value.asUInt64()));
+        out.append(std::to_string(value.as_uint64()));
         break;
     case SpanAttributeType::kDouble:
-        out.append(std::to_string(value.asDouble()));
+        out.append(std::to_string(value.as_double()));
         break;
     case SpanAttributeType::kBool:
-        out.append(value.asBool() ? "true" : "false");
+        out.append(value.as_bool() ? "true" : "false");
         break;
     case SpanAttributeType::kString:
-        appendJsonString(out, value.asString());
+        append_json_string(out, value.as_string());
         break;
     }
 }
 
-void appendAttributes(std::string& out, std::span<const SpanAttribute> attributes) {
+void append_attributes(std::string& out, std::span<const SpanAttribute> attributes) {
     out.push_back('[');
     for (std::size_t i = 0; i < attributes.size(); ++i) {
         if (i != 0) {
             out.push_back(',');
         }
         out.append("{\"key\":");
-        appendJsonString(out, attributes[i].name);
+        append_json_string(out, attributes[i].name);
         out.append(",\"value\":");
-        appendAttributeValue(out, attributes[i].value);
+        append_attribute_value(out, attributes[i].value);
         out.push_back('}');
     }
     out.push_back(']');
 }
 
-void appendEvents(std::string& out, std::span<const SpanEvent> events) {
+void append_events(std::string& out, std::span<const SpanEvent> events) {
     out.append(",\"events\":[");
     for (std::size_t i = 0; i < events.size(); ++i) {
         if (i != 0) {
             out.push_back(',');
         }
         out.append("{\"name\":");
-        appendJsonString(out, events[i].name);
+        append_json_string(out, events[i].name);
         out.append(",\"attributes\":");
-        appendAttributes(out, events[i].attributes);
+        append_attributes(out, events[i].attributes);
         out.push_back('}');
     }
     out.push_back(']');
 }
 
-void appendLinks(std::string& out, std::span<const SpanLink> links) {
+void append_links(std::string& out, std::span<const SpanLink> links) {
     out.append(",\"links\":[");
     for (std::size_t i = 0; i < links.size(); ++i) {
         if (i != 0) {
             out.push_back(',');
         }
         out.append("{\"trace_id\":\"");
-        out.append(links[i].context.traceId().toHex());
+        out.append(links[i].context.trace_id().to_hex());
         out.append("\",\"span_id\":\"");
-        out.append(links[i].context.spanId().toHex());
+        out.append(links[i].context.span_id().to_hex());
         out.append("\",\"attributes\":");
-        appendAttributes(out, links[i].attributes);
+        append_attributes(out, links[i].attributes);
         out.push_back('}');
     }
     out.push_back(']');
 }
 
-[[nodiscard]] std::string renderSpanJson(const Span& span) {
-    const auto& context = span.spanContext();
+[[nodiscard]] std::string render_span_json(const Span& span) {
+    const auto& context = span.span_context();
     std::string line;
     line.append("{\"name\":");
-    appendJsonString(line, span.name());
+    append_json_string(line, span.name());
     line.append(",\"trace_id\":\"");
-    line.append(context.traceId().toHex());
+    line.append(context.trace_id().to_hex());
     line.append("\",\"span_id\":\"");
-    line.append(context.spanId().toHex());
+    line.append(context.span_id().to_hex());
     line.append("\",\"sampled\":");
     line.append(context.sampled() ? "true" : "false");
     if (!span.events().empty()) {
-        appendEvents(line, span.events());
+        append_events(line, span.events());
     }
     if (!span.links().empty()) {
-        appendLinks(line, span.links());
+        append_links(line, span.links());
     }
     line.push_back('}');
     return line;
@@ -152,19 +152,19 @@ FileSpanExporter::FileSpanExporter(const std::filesystem::path& path)
     : m_out(path, std::ios::out | std::ios::app) {
 }
 
-ExportResult FileSpanExporter::exportSpans(std::span<const Span> spans) {
+ExportResult FileSpanExporter::export_spans(std::span<const Span> spans) {
     std::lock_guard lock(m_mutex);
     if (!m_out) {
         return ExportResult::kFailure;
     }
 
     for (const auto& span : spans) {
-        m_out << renderSpanJson(span) << '\n';
+        m_out << render_span_json(span) << '\n';
     }
     return m_out ? ExportResult::kSuccess : ExportResult::kFailure;
 }
 
-bool FileSpanExporter::forceFlush(std::chrono::milliseconds) {
+bool FileSpanExporter::force_flush(std::chrono::milliseconds) {
     std::lock_guard lock(m_mutex);
     m_out.flush();
     return static_cast<bool>(m_out);

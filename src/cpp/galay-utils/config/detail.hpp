@@ -39,7 +39,7 @@ inline std::string trim(const std::string& text) {
  * @param text 输入字符串
  * @return 处理转义后的字符串
  */
-inline std::string processEscapes(const std::string& text) {
+inline std::string process_escapes(const std::string& text) {
     std::string result;
     result.reserve(text.length());
 
@@ -67,7 +67,7 @@ inline std::string processEscapes(const std::string& text) {
  * @param text 输入字符串
  * @return 被引号包裹返回 true
  */
-inline bool isQuoted(const std::string& text) {
+inline bool is_quoted(const std::string& text) {
     return text.length() >= 2 &&
         ((text.front() == '"' && text.back() == '"') ||
          (text.front() == '\'' && text.back() == '\''));
@@ -79,10 +79,10 @@ inline bool isQuoted(const std::string& text) {
  * @return 去除引号后的字符串
  */
 inline std::string unquote(const std::string& text) {
-    if (!isQuoted(text)) {
+    if (!is_quoted(text)) {
         return text;
     }
-    return processEscapes(text.substr(1, text.length() - 2));
+    return process_escapes(text.substr(1, text.length() - 2));
 }
 
 /**
@@ -90,7 +90,7 @@ inline std::string unquote(const std::string& text) {
  * @param text 输入字符串
  * @return 分割后的字符串向量
  */
-inline std::vector<std::string> splitCommaSeparated(const std::string& text) {
+inline std::vector<std::string> split_comma_separated(const std::string& text) {
     if (trim(text).empty()) {
         return {};
     }
@@ -145,7 +145,7 @@ inline std::vector<std::string> splitCommaSeparated(const std::string& text) {
  * @param comment_character 注释起始字符
  * @return 去除注释后的字符串
  */
-inline std::string stripInlineComment(const std::string& text, char comment_character) {
+inline std::string strip_inline_comment(const std::string& text, char comment_character) {
     bool in_single_quote = false;
     bool in_double_quote = false;
     bool escaped = false;

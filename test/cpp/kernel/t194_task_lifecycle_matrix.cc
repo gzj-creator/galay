@@ -31,17 +31,17 @@ template <class T, size_t Payload>
 bool verify() {
     for (int path = 0; path < 6; ++path) {
         std::atomic<int> destroyed{0}, entered{0};
-        if (path == 4) { detail::setFrameAllocationFailureForTesting(true); }
-        if (path == 5) { detail::setTaskStateAllocationFailureForTesting(true); }
+        if (path == 4) { detail::set_frame_allocation_failure_for_testing(true); }
+        if (path == 5) { detail::set_task_state_allocation_failure_for_testing(true); }
         auto task = create<T, Payload>(Probe(destroyed), entered, path == 2);
-        detail::setFrameAllocationFailureForTesting(false);
-        detail::setTaskStateAllocationFailureForTesting(false);
-        if (entered != 0 || (path >= 4 ? task.isValid() : !task.isValid())) { return false; }
+        detail::set_frame_allocation_failure_for_testing(false);
+        detail::set_task_state_allocation_failure_for_testing(false);
+        if (entered != 0 || (path >= 4 ? task.is_valid() : !task.is_valid())) { return false; }
         if (path >= 4) {
             if (destroyed != 1) { return false; }
             continue;
         }
-        TaskRef owner = detail::TaskAccess::detachTask(std::move(task));
+        TaskRef owner = detail::TaskAccess::detach_task(std::move(task));
         if (path == 1 || path == 2 || path == 3) {
             owner.state()->m_handle.resume();
             if (entered != 1) { return false; }

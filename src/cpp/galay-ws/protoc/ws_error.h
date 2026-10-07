@@ -108,7 +108,7 @@ public:
      */
     std::string message() const
     {
-        std::string msg = getErrorMessage(m_code);
+        std::string msg = get_error_message(m_code);
         if (!m_extra_msg.empty()) {
             msg += ": " + m_extra_msg;
         }
@@ -119,7 +119,7 @@ public:
      * @brief 转换为 WebSocket 关闭状态码
      * @return 对应的 WsCloseCode 枚举值
      */
-    WsCloseCode toCloseCode() const
+    WsCloseCode to_close_code() const
     {
         switch (m_code) {
             case kWsInvalidFrame:
@@ -147,7 +147,7 @@ public:
     }
 
 private:
-    static std::string getErrorMessage(WsErrorCode code)
+    static std::string get_error_message(WsErrorCode code)
     {
         switch (code) {
             case kWsNoError:

@@ -24,21 +24,21 @@ struct WorkCounters {
     std::atomic<std::size_t> released{0};
 };
 
-void runWork(void* context, std::size_t) noexcept
+void run_work(void* context, std::size_t) noexcept
 {
     static_cast<WorkCounters*>(context)->executed.fetch_add(
         1, std::memory_order_release);
 }
 
-void releaseWork(void* context) noexcept
+void release_work(void* context) noexcept
 {
     static_cast<WorkCounters*>(context)->released.fetch_add(
         1, std::memory_order_release);
 }
 
-ParallelWorkItem makeWork(WorkCounters* counters)
+ParallelWorkItem make_work(WorkCounters* counters)
 {
-    return ParallelWorkItem(counters, 0, &runWork, &releaseWork);
+    return ParallelWorkItem(counters, 0, &run_work, &release_work);
 }
 
 struct Blocker {
@@ -46,7 +46,7 @@ struct Blocker {
     std::atomic<bool> release{false};
 };
 
-void runBlocker(void* context, std::size_t) noexcept
+void run_blocker(void* context, std::size_t) noexcept
 {
     auto* blocker = static_cast<Blocker*>(context);
     blocker->started.store(true, std::memory_order_release);
@@ -55,9 +55,9 @@ void runBlocker(void* context, std::size_t) noexcept
     }
 }
 
-void releaseBlocker(void*) noexcept {}
+void release_blocker(void*) noexcept {}
 
-bool verifyWorkAdmissionRace()
+bool verify_work_admission_race()
 {
     constexpr std::size_t kRounds = 8;
     constexpr std::size_t kProducers = 16;
@@ -71,8 +71,8 @@ bool verifyWorkAdmissionRace()
         }
 
         Blocker blocker;
-        if (!scheduler.scheduleWork(
-                ParallelWorkItem(&blocker, 0, &runBlocker, &releaseBlocker))) {
+        if (!scheduler.schedule_work(
+                ParallelWorkItem(&blocker, 0, &run_blocker, &release_blocker))) {
             std::cerr << "[T182] blocker was rejected\n";
             scheduler.stop();
             return false;
@@ -100,7 +100,7 @@ bool verifyWorkAdmissionRace()
                      attempt < kAttemptsPerProducer &&
                      produce.load(std::memory_order_acquire);
                      ++attempt) {
-                    if (scheduler.scheduleWork(makeWork(&counters))) {
+                    if (scheduler.schedule_work(make_work(&counters))) {
                         accepted.fetch_add(1, std::memory_order_relaxed);
                     }
                 }
@@ -109,7 +109,7 @@ bool verifyWorkAdmissionRace()
 
         std::this_thread::sleep_for(1ms);
         std::thread stopper([&]() { scheduler.stop(); });
-        while (scheduler.isRunning()) {
+        while (scheduler.is_running()) {
             std::this_thread::yield();
         }
         produce.store(false, std::memory_order_release);
@@ -131,18 +131,18 @@ bool verifyWorkAdmissionRace()
     return true;
 }
 
-Task<void> shutdownGraph(std::atomic<bool>* started,
+Task<void> shutdown_graph(std::atomic<bool>* started,
                          std::atomic<bool>* release,
                          std::atomic<bool>* ran_after_await)
 {
     ParallelGraph graph;
-    auto first = graph.add(makeParallelWork([started, release]() noexcept {
+    auto first = graph.add(make_parallel_work([started, release]() noexcept {
         started->store(true, std::memory_order_release);
         while (!release->load(std::memory_order_acquire)) {
             std::this_thread::yield();
         }
     }));
-    auto second = graph.add(makeParallelWork([]() noexcept {}));
+    auto second = graph.add(make_parallel_work([]() noexcept {}));
     if (!first.has_value() || !second.has_value() ||
         !graph.then(*first, *second).has_value()) {
         co_return;
@@ -161,12 +161,12 @@ struct ScheduleOnDestroy {
     ~ScheduleOnDestroy()
     {
         if (scheduler != nullptr && counters != nullptr) {
-            (void)scheduler->scheduleWork(makeWork(counters));
+            (void)scheduler->schedule_work(make_work(counters));
         }
     }
 };
 
-Task<void> resumeSchedulesWork(ParallelScheduler* scheduler,
+Task<void> resume_schedules_work(ParallelScheduler* scheduler,
                                WorkCounters* counters)
 {
     // 析构函数在 owner worker 排空已入队的 owner-only resume 时执行；
@@ -175,7 +175,7 @@ Task<void> resumeSchedulesWork(ParallelScheduler* scheduler,
     co_return;
 }
 
-bool verifyOwnerDrainAdmission()
+bool verify_owner_drain_admission()
 {
     ParallelScheduler scheduler;
     if (!scheduler.start().has_value()) {
@@ -184,8 +184,8 @@ bool verifyOwnerDrainAdmission()
     }
 
     Blocker blocker;
-    if (!scheduler.scheduleWork(
-            ParallelWorkItem(&blocker, 0, &runBlocker, &releaseBlocker))) {
+    if (!scheduler.schedule_work(
+            ParallelWorkItem(&blocker, 0, &run_blocker, &release_blocker))) {
         std::cerr << "[T182] owner-drain blocker was rejected\n";
         scheduler.stop();
         return false;
@@ -203,8 +203,8 @@ bool verifyOwnerDrainAdmission()
     }
 
     WorkCounters counters;
-    auto task = resumeSchedulesWork(&scheduler, &counters);
-    auto task_ref = detail::TaskAccess::taskRef(task);
+    auto task = resume_schedules_work(&scheduler, &counters);
+    auto task_ref = detail::TaskAccess::task_ref(task);
     auto* state = task_ref.state();
     if (state == nullptr) {
         std::cerr << "[T182] owner-drain task has no state\n";
@@ -212,8 +212,8 @@ bool verifyOwnerDrainAdmission()
         scheduler.stop();
         return false;
     }
-    detail::setTaskScheduler(task_ref, &scheduler);
-    if (detail::requestTaskResumeStateDetailed(state) !=
+    detail::set_task_scheduler(task_ref, &scheduler);
+    if (detail::request_task_resume_state_detailed(state) !=
         detail::TaskResumeResult::kAccepted) {
         std::cerr << "[T182] owner-drain resume was rejected\n";
         blocker.release.store(true, std::memory_order_release);
@@ -222,7 +222,7 @@ bool verifyOwnerDrainAdmission()
     }
 
     std::thread stopper([&]() { scheduler.stop(); });
-    while (scheduler.isRunning()) {
+    while (scheduler.is_running()) {
         std::this_thread::yield();
     }
     blocker.release.store(true, std::memory_order_release);
@@ -238,16 +238,16 @@ bool verifyOwnerDrainAdmission()
     return true;
 }
 
-bool verifyParentResumeFailureIsObservable()
+bool verify_parent_resume_failure_is_observable()
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(0).parallelSchedulerCount(2).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(0).parallel_scheduler_count(2).build();
     std::atomic<bool> work_started{false};
     std::atomic<bool> release_work{false};
     std::atomic<bool> resumed_parent{false};
 
-    auto task = shutdownGraph(&work_started, &release_work, &resumed_parent);
-    TaskRef observer = detail::TaskAccess::taskRef(task);
-    auto handle = runtime.spawnCpu(std::move(task));
+    auto task = shutdown_graph(&work_started, &release_work, &resumed_parent);
+    TaskRef observer = detail::TaskAccess::task_ref(task);
+    auto handle = runtime.spawn_cpu(std::move(task));
     if (!handle.has_value()) {
         std::cerr << "[T182] failed to submit graph parent\n";
         runtime.stop();
@@ -268,7 +268,7 @@ bool verifyParentResumeFailureIsObservable()
 
     // 根任务运行在 parallel scheduler 0，首个图节点运行在 scheduler 1。
     // 在图节点完成前停止 parent 的 owner scheduler。
-    auto* parent_scheduler = runtime.getParallelScheduler(0);
+    auto* parent_scheduler = runtime.get_parallel_scheduler(0);
     if (parent_scheduler == nullptr) {
         std::cerr << "[T182] parent scheduler missing\n";
         release_work.store(true, std::memory_order_release);
@@ -286,7 +286,7 @@ bool verifyParentResumeFailureIsObservable()
     }
     if (state == nullptr || !state->m_done.load(std::memory_order_acquire)) {
         std::cerr << "[T182] parent remained incomplete after resume failure\n";
-        runtime.getParallelScheduler(1)->stop();
+        runtime.get_parallel_scheduler(1)->stop();
         runtime.stop();
         return false;
     }
@@ -296,7 +296,7 @@ bool verifyParentResumeFailureIsObservable()
         joined.error().code() == detail::TaskResultErrorCode::kResumeFailed &&
         !resumed_parent.load(std::memory_order_acquire);
 
-    runtime.getParallelScheduler(1)->stop();
+    runtime.get_parallel_scheduler(1)->stop();
     runtime.stop();
     if (!observable) {
         return false;
@@ -304,8 +304,8 @@ bool verifyParentResumeFailureIsObservable()
 
     // 同步根任务 API 应保留更具体的错误，不能将 owner resume 失败折叠为提交失败。
     Runtime blocking_runtime = RuntimeBuilder()
-        .ioSchedulerCount(0)
-        .parallelSchedulerCount(2)
+        .io_scheduler_count(0)
+        .parallel_scheduler_count(2)
         .build();
     if (!blocking_runtime.start().has_value()) {
         return false;
@@ -316,11 +316,11 @@ bool verifyParentResumeFailureIsObservable()
         while (!block_started.load(std::memory_order_acquire)) {
             std::this_thread::yield();
         }
-        blocking_runtime.getParallelScheduler(0)->stop();
+        blocking_runtime.get_parallel_scheduler(0)->stop();
         block_release.store(true, std::memory_order_release);
     });
-    const auto blocked = blocking_runtime.blockOnCpu(
-        shutdownGraph(&block_started, &block_release, &resumed_parent));
+    const auto blocked = blocking_runtime.block_on_cpu(
+        shutdown_graph(&block_started, &block_release, &resumed_parent));
     stopper.join();
     const bool mapped = !blocked.has_value() &&
         blocked.error().code() == RuntimeErrorCode::kResumeFailed;
@@ -332,8 +332,8 @@ bool verifyParentResumeFailureIsObservable()
 
 int main()
 {
-    if (!verifyWorkAdmissionRace() || !verifyOwnerDrainAdmission() ||
-        !verifyParentResumeFailureIsObservable()) {
+    if (!verify_work_admission_race() || !verify_owner_drain_admission() ||
+        !verify_parent_resume_failure_is_observable()) {
         return 1;
     }
     std::cout << "T182-ParallelShutdownRaces PASS\n";

@@ -31,7 +31,7 @@ using namespace galay::kernel;
 
 namespace {
 
-constexpr const char* benchmarkBackend() {
+constexpr const char* benchmark_backend() {
 #if defined(USE_KQUEUE)
     return "kqueue";
 #elif defined(USE_IOURING)
@@ -43,7 +43,7 @@ constexpr const char* benchmarkBackend() {
 #endif
 }
 
-constexpr const char* benchmarkBuildMode() {
+constexpr const char* benchmark_build_mode() {
 #ifdef NDEBUG
     return "release-like";
 #else
@@ -58,14 +58,14 @@ std::atomic<uint64_t> g_total_bytes{0};
 std::atomic<uint64_t> g_total_requests{0};
 std::atomic<bool> g_running{true};
 
-void signalHandler([[maybe_unused]] int signum) {
+void signal_handler([[maybe_unused]] int signum) {
     g_running.store(false, std::memory_order_release);
 }
 
 // 处理单个客户端连接
-Task<void> handleClient(GHandle clientHandle) {
+Task<void> handle_client(GHandle clientHandle) {
     AsyncTcpSocket client(clientHandle);
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     char buffer[4096];
 
@@ -96,7 +96,7 @@ Task<void> handleClient(GHandle clientHandle) {
 }
 
 // 接受连接的协程
-Task<void> acceptLoop(IOScheduler* scheduler, AsyncTcpSocket* listener) {
+Task<void> accept_loop(IOScheduler* scheduler, AsyncTcpSocket* listener) {
     while (g_running.load(std::memory_order_relaxed)) {
         Host clientHost;
         auto acceptResult = co_await listener->accept(&clientHost);
@@ -110,13 +110,13 @@ Task<void> acceptLoop(IOScheduler* scheduler, AsyncTcpSocket* listener) {
         g_total_connections.fetch_add(1, std::memory_order_relaxed);
 
         // 启动处理协程
-        scheduleTask(scheduler, handleClient(acceptResult.value()));
+        schedule_task(scheduler, handle_client(acceptResult.value()));
     }
     co_return;
 }
 
 // 统计打印线程
-void statsThread() {
+void stats_thread() {
     auto lastTime = std::chrono::steady_clock::now();
     uint64_t lastBytes = 0;
     uint64_t lastRequests = 0;
@@ -147,7 +147,7 @@ void statsThread() {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -156,15 +156,15 @@ int main(int argc, char* argv[]) {
         port = static_cast<uint16_t>(std::atoi(argv[1]));
     }
     int scheduler_count =
-        galay::benchmark::defaultBenchmarkSchedulerCount(std::thread::hardware_concurrency());
+        galay::benchmark::default_benchmark_scheduler_count(std::thread::hardware_concurrency());
     if (argc > 2) {
         scheduler_count = std::max(1, std::atoi(argv[2]));
     }
 
     LogInfo("Benchmark Server starting on port {}", port);
     LogInfo("meta: backend={}, build={}, role=server, io_mode=plain, scenario=tcp-echo",
-            benchmarkBackend(),
-            benchmarkBuildMode());
+            benchmark_backend(),
+            benchmark_build_mode());
     LogInfo("scheduler_count={}", scheduler_count);
 
 #if defined(USE_KQUEUE)
@@ -193,7 +193,7 @@ int main(int argc, char* argv[]) {
         schedulers.push_back(std::move(scheduler));
 
         AsyncTcpSocket listener;
-        auto opt = listener.option().handleReuseAddr();
+        auto opt = listener.option().handle_reuse_addr();
         if (!opt) {
             LogError("Failed to set SO_REUSEADDR: {}", opt.error().message());
             for (auto& running : schedulers) {
@@ -201,7 +201,7 @@ int main(int argc, char* argv[]) {
             }
             return 1;
         }
-        opt = listener.option().handleReusePort();
+        opt = listener.option().handle_reuse_port();
         if (!opt) {
             LogError("Failed to set SO_REUSEPORT: {}", opt.error().message());
             for (auto& running : schedulers) {
@@ -209,7 +209,7 @@ int main(int argc, char* argv[]) {
             }
             return 1;
         }
-        opt = listener.option().handleNonBlock();
+        opt = listener.option().handle_non_block();
         if (!opt) {
             LogError("Failed to set non-block: {}", opt.error().message());
             for (auto& running : schedulers) {
@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
             }
             return 1;
         }
-        opt = listener.option().handleTcpDeferAccept();
+        opt = listener.option().handle_tcp_defer_accept();
         if (!opt) {
             LogError("Failed to set TCP_DEFER_ACCEPT: {}", opt.error().message());
             for (auto& running : schedulers) {
@@ -251,14 +251,14 @@ int main(int argc, char* argv[]) {
     LogInfo("Press Ctrl+C to stop");
 
     // 注册信号处理
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     // 启动统计线程
-    std::thread stats(statsThread);
+    std::thread stats(stats_thread);
 
     for (size_t i = 0; i < listeners.size(); ++i) {
-        scheduleTask(*schedulers[i], acceptLoop(schedulers[i].get(), &listeners[i]));
+        schedule_task(*schedulers[i], accept_loop(schedulers[i].get(), &listeners[i]));
     }
 
     // 等待信号

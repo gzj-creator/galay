@@ -29,7 +29,7 @@ void require(bool condition, const char* message)
     }
 }
 
-std::string frameBytes(Http2FrameType type,
+std::string frame_bytes(Http2FrameType type,
                        uint8_t flags,
                        uint32_t stream_id,
                        std::string_view payload)
@@ -45,24 +45,24 @@ std::string frameBytes(Http2FrameType type,
     return bytes;
 }
 
-Http2DataFrame makeData(uint32_t stream_id, std::string payload, bool end_stream = false)
+Http2DataFrame make_data(uint32_t stream_id, std::string payload, bool end_stream = false)
 {
     Http2DataFrame frame;
     frame.header().stream_id = stream_id;
-    frame.setData(std::move(payload));
-    frame.setEndStream(end_stream);
+    frame.set_data(std::move(payload));
+    frame.set_end_stream(end_stream);
     return frame;
 }
 
-Http2WindowUpdateFrame makeWindowUpdate(uint32_t stream_id, uint32_t increment)
+Http2WindowUpdateFrame make_window_update(uint32_t stream_id, uint32_t increment)
 {
     Http2WindowUpdateFrame frame;
     frame.header().stream_id = stream_id;
-    frame.setWindowSizeIncrement(increment);
+    frame.set_window_size_increment(increment);
     return frame;
 }
 
-void expectPendingAction(const std::deque<PendingAction>& actions,
+void expect_pending_action(const std::deque<PendingAction>& actions,
                          PendingAction::Type type,
                          uint32_t stream_id,
                          Http2ErrorCode code)
@@ -74,229 +74,229 @@ void expectPendingAction(const std::deque<PendingAction>& actions,
     assert(action.error_code == code);
 }
 
-void testOutboundDataWaitsForStreamWindow()
+void test_outbound_data_waits_for_stream_window()
 {
     AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
-    auto stream = conn.createStream(1);
-    stream->setState(Http2StreamState::Open);
-    manager.attachStreamIO(stream);
-    stream->adjustSendWindow(-stream->sendWindow());
+    auto stream = conn.create_stream(1);
+    stream->set_state(Http2StreamState::Open);
+    manager.attach_stream_io(stream);
+    stream->adjust_send_window(-stream->send_window());
 
-    auto wait = stream->replyData(std::string("abc"), true);
-    assert(!wait.m_waiter->isReady());
+    auto wait = stream->reply_data(std::string("abc"), true);
+    assert(!wait.m_waiter->is_ready());
     assert(manager.m_send_channel.empty());
 
-    auto update = std::make_unique<Http2WindowUpdateFrame>(makeWindowUpdate(1, 3));
-    manager.handleWindowUpdateFrame(std::move(update), 1);
+    auto update = std::make_unique<Http2WindowUpdateFrame>(make_window_update(1, 3));
+    manager.handle_window_update_frame(std::move(update), 1);
 
-    auto sent = manager.m_send_channel.tryRecv();
+    auto sent = manager.m_send_channel.try_recv();
     assert(sent.has_value());
-    assert(sent->flatten() == Http2FrameBuilder::dataBytes(1, "abc", true));
+    assert(sent->flatten() == Http2FrameBuilder::data_bytes(1, "abc", true));
     assert(sent->waiter == wait.m_waiter);
-    assert(!wait.m_waiter->isReady());
-    assert(stream->sendWindow() == 0);
-    assert(stream->isEndStreamSent());
+    assert(!wait.m_waiter->is_ready());
+    assert(stream->send_window() == 0);
+    assert(stream->is_end_stream_sent());
 }
 
-void testOutboundDataWaitsForConnectionWindow()
+void test_outbound_data_waits_for_connection_window()
 {
     AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
-    auto stream = conn.createStream(17);
-    stream->setState(Http2StreamState::Open);
-    manager.attachStreamIO(stream);
-    conn.adjustConnSendWindow(-conn.connSendWindow());
+    auto stream = conn.create_stream(17);
+    stream->set_state(Http2StreamState::Open);
+    manager.attach_stream_io(stream);
+    conn.adjust_conn_send_window(-conn.conn_send_window());
 
-    auto wait = stream->replyData(std::string("abc"), false);
-    assert(!wait.m_waiter->isReady());
+    auto wait = stream->reply_data(std::string("abc"), false);
+    assert(!wait.m_waiter->is_ready());
     assert(manager.m_send_channel.empty());
 
-    manager.handleConnectionFrame(std::make_unique<Http2WindowUpdateFrame>(
-        makeWindowUpdate(0, 3)));
+    manager.handle_connection_frame(std::make_unique<Http2WindowUpdateFrame>(
+        make_window_update(0, 3)));
 
-    auto sent = manager.m_send_channel.tryRecv();
+    auto sent = manager.m_send_channel.try_recv();
     assert(sent.has_value());
-    assert(sent->flatten() == Http2FrameBuilder::dataBytes(17, "abc", false));
+    assert(sent->flatten() == Http2FrameBuilder::data_bytes(17, "abc", false));
     assert(sent->waiter == wait.m_waiter);
-    assert(!wait.m_waiter->isReady());
-    assert(conn.connSendWindow() == 0);
-    assert(stream->sendWindow() == static_cast<int32_t>(kDefaultInitialWindowSize - 3));
+    assert(!wait.m_waiter->is_ready());
+    assert(conn.conn_send_window() == 0);
+    assert(stream->send_window() == static_cast<int32_t>(kDefaultInitialWindowSize - 3));
 }
 
-void testPendingDataWaiterNotifiedOnClose()
+void test_pending_data_waiter_notified_on_close()
 {
     auto stream = Http2Stream::create(3);
     std::vector<Http2OutgoingFrame> send_queue;
-    stream->attachIO(&send_queue, nullptr, nullptr);
-    stream->setState(Http2StreamState::Open);
-    stream->adjustSendWindow(-stream->sendWindow());
+    stream->attach_io(&send_queue, nullptr, nullptr);
+    stream->set_state(Http2StreamState::Open);
+    stream->adjust_send_window(-stream->send_window());
 
-    auto wait = stream->replyData(std::string("blocked"), true);
-    assert(!wait.m_waiter->isReady());
+    auto wait = stream->reply_data(std::string("blocked"), true);
+    assert(!wait.m_waiter->is_ready());
     assert(send_queue.empty());
 
-    stream->closeFrameQueue();
-    assert(wait.m_waiter->isReady());
+    stream->close_frame_queue();
+    assert(wait.m_waiter->is_ready());
 }
 
-void testIncomingDataChecksConnectionRecvWindowFirst()
+void test_incoming_data_checks_connection_recv_window_first()
 {
     AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
-    auto stream = conn.createStream(5);
-    stream->setState(Http2StreamState::Open);
-    stream->adjustRecvWindow(100);
-    conn.adjustConnRecvWindow(-conn.connRecvWindow() + 1);
+    auto stream = conn.create_stream(5);
+    stream->set_state(Http2StreamState::Open);
+    stream->adjust_recv_window(100);
+    conn.adjust_conn_recv_window(-conn.conn_recv_window() + 1);
 
-    manager.handleDataFrame(std::make_unique<Http2DataFrame>(makeData(5, "xx")), 5);
+    manager.handle_data_frame(std::make_unique<Http2DataFrame>(make_data(5, "xx")), 5);
 
-    expectPendingAction(manager.m_pending_actions,
+    expect_pending_action(manager.m_pending_actions,
                         PendingAction::Type::SendGoaway,
                         0,
                         Http2ErrorCode::FlowControlError);
-    assert(conn.connRecvWindow() == 1);
-    assert(stream->recvWindow() > 1);
+    assert(conn.conn_recv_window() == 1);
+    assert(stream->recv_window() > 1);
     assert(stream->request().body.empty());
 }
 
-void testIncomingDataChecksStreamRecvWindow()
+void test_incoming_data_checks_stream_recv_window()
 {
     AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
-    auto stream = conn.createStream(7);
-    stream->setState(Http2StreamState::Open);
-    stream->adjustRecvWindow(-stream->recvWindow() + 1);
+    auto stream = conn.create_stream(7);
+    stream->set_state(Http2StreamState::Open);
+    stream->adjust_recv_window(-stream->recv_window() + 1);
 
-    manager.handleDataFrame(std::make_unique<Http2DataFrame>(makeData(7, "xx")), 7);
+    manager.handle_data_frame(std::make_unique<Http2DataFrame>(make_data(7, "xx")), 7);
 
-    expectPendingAction(manager.m_pending_actions,
+    expect_pending_action(manager.m_pending_actions,
                         PendingAction::Type::SendRstStream,
                         7,
                         Http2ErrorCode::FlowControlError);
-    assert(stream->recvWindow() == 1);
+    assert(stream->recv_window() == 1);
     assert(stream->request().body.empty());
 }
 
-void testWindowUpdateOverflow()
+void test_window_update_overflow()
 {
     AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
-    conn.adjustConnSendWindow(kMaxStreamId - conn.connSendWindow());
-    manager.handleConnectionFrame(std::make_unique<Http2WindowUpdateFrame>(
-        makeWindowUpdate(0, 1)));
+    conn.adjust_conn_send_window(kMaxStreamId - conn.conn_send_window());
+    manager.handle_connection_frame(std::make_unique<Http2WindowUpdateFrame>(
+        make_window_update(0, 1)));
 
-    expectPendingAction(manager.m_pending_actions,
+    expect_pending_action(manager.m_pending_actions,
                         PendingAction::Type::SendGoaway,
                         0,
                         Http2ErrorCode::FlowControlError);
-    assert(conn.connSendWindow() == static_cast<int32_t>(kMaxStreamId));
+    assert(conn.conn_send_window() == static_cast<int32_t>(kMaxStreamId));
 
-    auto stream = conn.createStream(9);
-    stream->setState(Http2StreamState::Open);
-    stream->adjustSendWindow(kMaxStreamId - stream->sendWindow());
-    manager.handleWindowUpdateFrame(std::make_unique<Http2WindowUpdateFrame>(
-        makeWindowUpdate(9, 1)), 9);
+    auto stream = conn.create_stream(9);
+    stream->set_state(Http2StreamState::Open);
+    stream->adjust_send_window(kMaxStreamId - stream->send_window());
+    manager.handle_window_update_frame(std::make_unique<Http2WindowUpdateFrame>(
+        make_window_update(9, 1)), 9);
 
-    expectPendingAction(manager.m_pending_actions,
+    expect_pending_action(manager.m_pending_actions,
                         PendingAction::Type::SendRstStream,
                         9,
                         Http2ErrorCode::FlowControlError);
-    assert(stream->sendWindow() == static_cast<int32_t>(kMaxStreamId));
+    assert(stream->send_window() == static_cast<int32_t>(kMaxStreamId));
 }
 
-void testSettingsInitialWindowDeltaAppliesToExistingStreams()
+void test_settings_initial_window_delta_applies_to_existing_streams()
 {
     AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
-    auto stream1 = conn.createStream(11);
-    auto stream2 = conn.createStream(13);
-    stream1->adjustSendWindow(-100);
-    stream2->adjustSendWindow(-200);
+    auto stream1 = conn.create_stream(11);
+    auto stream2 = conn.create_stream(13);
+    stream1->adjust_send_window(-100);
+    stream2->adjust_send_window(-200);
 
     Http2SettingsFrame settings;
-    settings.addSetting(Http2SettingsId::InitialWindowSize,
+    settings.add_setting(Http2SettingsId::InitialWindowSize,
                         kDefaultInitialWindowSize + 1000);
-    manager.handleConnectionFrame(std::make_unique<Http2SettingsFrame>(settings.clone()));
+    manager.handle_connection_frame(std::make_unique<Http2SettingsFrame>(settings.clone()));
 
-    assert(stream1->sendWindow() == static_cast<int32_t>(kDefaultInitialWindowSize + 900));
-    assert(stream2->sendWindow() == static_cast<int32_t>(kDefaultInitialWindowSize + 800));
+    assert(stream1->send_window() == static_cast<int32_t>(kDefaultInitialWindowSize + 900));
+    assert(stream2->send_window() == static_cast<int32_t>(kDefaultInitialWindowSize + 800));
 
-    stream1->adjustSendWindow(kMaxStreamId - stream1->sendWindow());
+    stream1->adjust_send_window(kMaxStreamId - stream1->send_window());
     Http2SettingsFrame overflow;
-    overflow.addSetting(Http2SettingsId::InitialWindowSize,
+    overflow.add_setting(Http2SettingsId::InitialWindowSize,
                         kDefaultInitialWindowSize + 1001);
-    manager.handleConnectionFrame(std::make_unique<Http2SettingsFrame>(overflow.clone()));
+    manager.handle_connection_frame(std::make_unique<Http2SettingsFrame>(overflow.clone()));
 
-    expectPendingAction(manager.m_pending_actions,
+    expect_pending_action(manager.m_pending_actions,
                         PendingAction::Type::SendGoaway,
                         0,
                         Http2ErrorCode::FlowControlError);
-    assert(conn.peerSettings().initial_window_size == kDefaultInitialWindowSize + 1000);
+    assert(conn.peer_settings().initial_window_size == kDefaultInitialWindowSize + 1000);
 }
 
-void testUnknownExtensionFrameIsConsumedAndIgnored()
+void test_unknown_extension_frame_is_consumed_and_ignored()
 {
     AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
 
-    const auto unknown = frameBytes(static_cast<Http2FrameType>(0x0b), 0, 1, "ext");
-    const auto settings = frameBytes(Http2FrameType::Settings, 0, 0, "");
-    conn.feedData(unknown.data(), unknown.size());
-    conn.feedData(settings.data(), settings.size());
+    const auto unknown = frame_bytes(static_cast<Http2FrameType>(0x0b), 0, 1, "ext");
+    const auto settings = frame_bytes(Http2FrameType::Settings, 0, 0, "");
+    conn.feed_data(unknown.data(), unknown.size());
+    conn.feed_data(settings.data(), settings.size());
 
-    auto parsed = conn.parseBufferedFrames(4);
+    auto parsed = conn.parse_buffered_frames(4);
     assert(parsed.has_value());
     assert(parsed->size() == 1);
-    assert(parsed->front()->isSettings());
-    assert(conn.ringBuffer().readable() == 0);
+    assert(parsed->front()->is_settings());
+    assert(conn.ring_buffer().readable() == 0);
 }
 
-void testDataBuilderSplitsPayloadAtDefaultMaxFrameSize()
+void test_data_builder_splits_payload_at_default_max_frame_size()
 {
     const std::string payload(kDefaultMaxFrameSize + 3, 'x');
-    const auto bytes = Http2FrameBuilder::dataBytes(15, payload, true);
+    const auto bytes = Http2FrameBuilder::data_bytes(15, payload, true);
 
     AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
-    conn.feedData(bytes.data(), bytes.size());
+    conn.feed_data(bytes.data(), bytes.size());
 
-    auto parsed = conn.parseBufferedFrames(4);
+    auto parsed = conn.parse_buffered_frames(4);
     assert(parsed.has_value());
     assert(parsed->size() == 2);
-    assert(parsed->at(0)->isData());
-    assert(parsed->at(0)->asData()->data().size() == kDefaultMaxFrameSize);
-    assert(!parsed->at(0)->asData()->isEndStream());
-    assert(parsed->at(1)->isData());
-    assert(parsed->at(1)->asData()->data().size() == 3);
-    assert(parsed->at(1)->asData()->isEndStream());
+    assert(parsed->at(0)->is_data());
+    assert(parsed->at(0)->as_data()->data().size() == kDefaultMaxFrameSize);
+    assert(!parsed->at(0)->as_data()->is_end_stream());
+    assert(parsed->at(1)->is_data());
+    assert(parsed->at(1)->as_data()->data().size() == 3);
+    assert(parsed->at(1)->as_data()->is_end_stream());
 }
 
-void testSendDataFrameRejectsInsufficientSendWindow()
+void test_send_data_frame_rejects_insufficient_send_window()
 {
     AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
-    auto stream = conn.createStream(19);
-    stream->setState(Http2StreamState::Open);
-    conn.adjustConnSendWindow(-conn.connSendWindow() + 1);
+    auto stream = conn.create_stream(19);
+    stream->set_state(Http2StreamState::Open);
+    conn.adjust_conn_send_window(-conn.conn_send_window() + 1);
 
-    const int32_t conn_window_before = conn.connSendWindow();
-    const int32_t stream_window_before = stream->sendWindow();
-    auto write = conn.sendDataFrame(19, std::string("xx"), false);
+    const int32_t conn_window_before = conn.conn_send_window();
+    const int32_t stream_window_before = stream->send_window();
+    auto write = conn.send_data_frame(19, std::string("xx"), false);
 
-    require(conn.connSendWindow() == conn_window_before,
+    require(conn.conn_send_window() == conn_window_before,
             "connection window must not change on rejected DATA");
-    require(stream->sendWindow() == stream_window_before,
+    require(stream->send_window() == stream_window_before,
             "stream window must not change on rejected DATA");
     require(write.await_ready(), "flow-control rejection must be an immediate awaitable");
     auto result = write.await_resume();
@@ -309,16 +309,16 @@ void testSendDataFrameRejectsInsufficientSendWindow()
 
 int main()
 {
-    testOutboundDataWaitsForStreamWindow();
-    testOutboundDataWaitsForConnectionWindow();
-    testPendingDataWaiterNotifiedOnClose();
-    testIncomingDataChecksConnectionRecvWindowFirst();
-    testIncomingDataChecksStreamRecvWindow();
-    testWindowUpdateOverflow();
-    testSettingsInitialWindowDeltaAppliesToExistingStreams();
-    testUnknownExtensionFrameIsConsumedAndIgnored();
-    testDataBuilderSplitsPayloadAtDefaultMaxFrameSize();
-    testSendDataFrameRejectsInsufficientSendWindow();
+    test_outbound_data_waits_for_stream_window();
+    test_outbound_data_waits_for_connection_window();
+    test_pending_data_waiter_notified_on_close();
+    test_incoming_data_checks_connection_recv_window_first();
+    test_incoming_data_checks_stream_recv_window();
+    test_window_update_overflow();
+    test_settings_initial_window_delta_applies_to_existing_streams();
+    test_unknown_extension_frame_is_consumed_and_ignored();
+    test_data_builder_splits_payload_at_default_max_frame_size();
+    test_send_data_frame_rejects_insufficient_send_window();
 
     std::cout << "t27_protocol_correctness PASS\n";
     return 0;

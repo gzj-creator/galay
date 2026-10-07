@@ -12,9 +12,9 @@ import galay.http;
 using namespace galay::http;
 using namespace galay::kernel;
 
-Task<bool> runHttpsClient(const std::string& url) {
+Task<bool> run_https_client(const std::string& url) {
     HttpsClient client(HttpsClientBuilder()
-        .verifyPeer(false)
+        .verify_peer(false)
         .build());
 
     auto connect_result = co_await client.connect(url);
@@ -30,22 +30,22 @@ Task<bool> runHttpsClient(const std::string& url) {
         co_return false;
     }
 
-    auto session_result = client.getSession();
+    auto session_result = client.get_session();
     if (!session_result) {
         (void)co_await client.close();
         co_return false;
     }
     auto& session = *session_result.value();
-    auto& writer = session.getWriter();
-    auto& reader = session.getReader();
+    auto& writer = session.get_writer();
+    auto& reader = session.get_reader();
 
     auto request = Http1_1RequestBuilder::get("/")
         .host("localhost")
         .connection("close")
-        .buildMove();
+        .build_move();
 
     while (true) {
-        auto send_result = co_await writer.sendRequest(request);
+        auto send_result = co_await writer.send_request(request);
         if (!send_result) {
             std::cerr << "Send failed: " << send_result.error().message() << "\n";
             (void)co_await client.close();
@@ -58,7 +58,7 @@ Task<bool> runHttpsClient(const std::string& url) {
 
     HttpResponse response;
     while (true) {
-        auto recv_result = co_await reader.getResponse(response);
+        auto recv_result = co_await reader.get_response(response);
         if (!recv_result) {
             std::cerr << "Recv failed: " << recv_result.error().message() << "\n";
             (void)co_await client.close();
@@ -70,7 +70,7 @@ Task<bool> runHttpsClient(const std::string& url) {
     }
 
     std::cout << "Status: " << static_cast<int>(response.header().code()) << "\n";
-    std::cout << "Body: " << response.getBodyStr() << "\n";
+    std::cout << "Body: " << response.get_body_str() << "\n";
     (void)co_await client.close();
     co_return true;
 }
@@ -83,9 +83,9 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
         runtime.start();
-        auto join = runtime.spawnIO(runHttpsClient(url));
+        auto join = runtime.spawn_io(run_https_client(url));
         bool ok = false;
         if (join) {
             auto result = join->join();

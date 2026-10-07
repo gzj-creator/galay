@@ -37,7 +37,7 @@ void check(bool condition, const std::string& message)
     }
 }
 
-std::string makeMaskedRaw(WsOpcode opcode,
+std::string make_masked_raw(WsOpcode opcode,
                           uint8_t length_code,
                           std::vector<uint8_t> extended_length,
                           std::string payload,
@@ -60,21 +60,21 @@ std::string makeMaskedRaw(WsOpcode opcode,
     return out;
 }
 
-std::string encodeMaskedFrame(WsOpcode opcode, std::string payload, bool fin = true)
+std::string encode_masked_frame(WsOpcode opcode, std::string payload, bool fin = true)
 {
     WsFrame frame(opcode, std::move(payload), fin);
     std::string encoded;
-    WsFrameParser::encodeInto(encoded, frame, true);
+    WsFrameParser::encode_into(encoded, frame, true);
     return encoded;
 }
 
-void writeAll(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring, std::string_view bytes)
+void write_all(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring, std::string_view bytes)
 {
-    const size_t written = ring.tryWriteBatch(bytes.data(), bytes.size());
+    const size_t written = ring.try_write_batch(bytes.data(), bytes.size());
     check(written == bytes.size(), "ring buffer write truncated");
 }
 
-void expectFrameError(const std::string& raw, WsErrorCode code, const std::string& label)
+void expect_frame_error(const std::string& raw, WsErrorCode code, const std::string& label)
 {
     std::string mutable_raw = raw;
     iovec iov{
@@ -82,14 +82,14 @@ void expectFrameError(const std::string& raw, WsErrorCode code, const std::strin
         .iov_len = mutable_raw.size(),
     };
     WsFrame frame;
-    auto parsed = WsFrameParser::fromIOVec(&iov, 1, frame, true);
+    auto parsed = WsFrameParser::from_io_vec(&iov, 1, frame, true);
     check(!parsed.has_value(), label + " should fail");
     check(parsed.error().code() == code,
           label + " expected error " + std::to_string(code) +
               " but got " + std::to_string(parsed.error().code()));
 }
 
-HttpRequest parseUpgradeRequest(const std::string& key)
+HttpRequest parse_upgrade_request(const std::string& key)
 {
     std::string raw =
         "GET /chat HTTP/1.1\r\n"
@@ -104,51 +104,51 @@ HttpRequest parseUpgradeRequest(const std::string& key)
         .iov_len = raw.size(),
     };
     HttpRequest request;
-    const auto [err, consumed] = request.fromIOVec({iov});
+    const auto [err, consumed] = request.from_io_vec({iov});
     check(err == kNoError && consumed == static_cast<ssize_t>(raw.size()),
           "upgrade request fixture should parse");
     return request;
 }
 
-void testFrameLengthEncodingBoundaries()
+void test_frame_length_encoding_boundaries()
 {
-    expectFrameError(
-        makeMaskedRaw(WsOpcode::Binary, 126, {0x00, 0x7D}, std::string(125, 'a')),
+    expect_frame_error(
+        make_masked_raw(WsOpcode::Binary, 126, {0x00, 0x7D}, std::string(125, 'a')),
         kWsInvalidPayloadLength,
         "non-minimal 16-bit length");
 
-    expectFrameError(
-        makeMaskedRaw(WsOpcode::Binary, 127, {0, 0, 0, 0, 0, 0, 0, 126}, std::string(126, 'b')),
+    expect_frame_error(
+        make_masked_raw(WsOpcode::Binary, 127, {0, 0, 0, 0, 0, 0, 0, 126}, std::string(126, 'b')),
         kWsInvalidPayloadLength,
         "non-minimal 64-bit length");
 
-    expectFrameError(
-        makeMaskedRaw(WsOpcode::Binary, 127, {0x80, 0, 0, 0, 0, 0, 0, 0}, ""),
+    expect_frame_error(
+        make_masked_raw(WsOpcode::Binary, 127, {0x80, 0, 0, 0, 0, 0, 0, 0}, ""),
         kWsInvalidPayloadLength,
         "64-bit length with MSB set");
 }
 
-void testCloseFrameValidation()
+void test_close_frame_validation()
 {
-    expectFrameError(
-        makeMaskedRaw(WsOpcode::Close, 1, {}, std::string(1, '\0')),
+    expect_frame_error(
+        make_masked_raw(WsOpcode::Close, 1, {}, std::string(1, '\0')),
         kWsInvalidPayloadLength,
         "close payload length 1");
 
     const std::string illegal_code = std::string("\x03\xE7", 2);
-    expectFrameError(
-        makeMaskedRaw(WsOpcode::Close, 2, {}, illegal_code),
+    expect_frame_error(
+        make_masked_raw(WsOpcode::Close, 2, {}, illegal_code),
         kWsInvalidCloseCode,
         "illegal close code 999");
 
     const std::string invalid_reason = std::string("\x03\xE8", 2) + std::string("\xFF", 1);
-    expectFrameError(
-        makeMaskedRaw(WsOpcode::Close, 3, {}, invalid_reason),
+    expect_frame_error(
+        make_masked_raw(WsOpcode::Close, 3, {}, invalid_reason),
         kWsInvalidUtf8,
         "invalid UTF-8 close reason");
 }
 
-void testFragmentedTextValidatesWholeUtf8()
+void test_fragmented_text_validates_whole_utf8()
 {
     WsReaderSetting setting;
     setting.max_frame_size = 1024;
@@ -157,17 +157,17 @@ void testFragmentedTextValidatesWholeUtf8()
     {
         RingBuffer ring(1024);
         std::string buffered;
-        buffered += encodeMaskedFrame(WsOpcode::Text, std::string("\xC3", 1), false);
-        buffered += encodeMaskedFrame(WsOpcode::Continuation, std::string("\xA9", 1), true);
-        writeAll(ring, buffered);
+        buffered += encode_masked_frame(WsOpcode::Text, std::string("\xC3", 1), false);
+        buffered += encode_masked_frame(WsOpcode::Continuation, std::string("\xA9", 1), true);
+        write_all(ring, buffered);
 
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
         galay::websocket::detail::WsMessageReadState state(
             ring, setting, message, opcode, true, false, nullptr);
 
-        check(state.parseFromBuffer(), "fragmented split UTF-8 should complete");
-        const auto result = state.takeResult();
+        check(state.parse_from_buffer(), "fragmented split UTF-8 should complete");
+        const auto result = state.take_result();
         check(result.has_value(), "fragmented split UTF-8 should parse successfully");
         check(message == std::string("\xC3\xA9", 2),
               "fragmented split UTF-8 should preserve payload bytes");
@@ -177,28 +177,28 @@ void testFragmentedTextValidatesWholeUtf8()
     {
         RingBuffer ring(1024);
         std::string buffered;
-        buffered += encodeMaskedFrame(WsOpcode::Text, std::string("\xC3", 1), false);
-        buffered += encodeMaskedFrame(WsOpcode::Continuation, std::string("(", 1), true);
-        writeAll(ring, buffered);
+        buffered += encode_masked_frame(WsOpcode::Text, std::string("\xC3", 1), false);
+        buffered += encode_masked_frame(WsOpcode::Continuation, std::string("(", 1), true);
+        write_all(ring, buffered);
 
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
         galay::websocket::detail::WsMessageReadState state(
             ring, setting, message, opcode, true, false, nullptr);
 
-        check(state.parseFromBuffer(), "fragmented invalid UTF-8 should complete with an error");
-        const auto result = state.takeResult();
+        check(state.parse_from_buffer(), "fragmented invalid UTF-8 should complete with an error");
+        const auto result = state.take_result();
         check(!result.has_value(), "fragmented invalid UTF-8 should not parse successfully");
         check(result.error().code() == kWsInvalidUtf8,
               "fragmented invalid UTF-8 should return kWsInvalidUtf8");
     }
 }
 
-void testEchoZeroCopyHonorsReaderLimits()
+void test_echo_zero_copy_honors_reader_limits()
 {
     AsyncTcpSocket socket;
     auto ring = RingBuffer(1024);
-    writeAll(ring, encodeMaskedFrame(WsOpcode::Text, "12345"));
+    write_all(ring, encode_masked_frame(WsOpcode::Text, "12345"));
     WsConn conn(std::move(socket), std::move(ring), true);
 
     WsReaderSetting reader_setting;
@@ -210,7 +210,7 @@ void testEchoZeroCopyHonorsReaderLimits()
     galay::websocket::detail::WsEchoMachine<AsyncTcpSocket> machine(
         &conn,
         reader_setting,
-        WsWriterSetting::byServer(),
+        WsWriterSetting::by_server(),
         message,
         opcode,
         false);
@@ -226,21 +226,21 @@ void testEchoZeroCopyHonorsReaderLimits()
           "oversized zero-copy echo should not count a zero-copy hit");
 }
 
-void testUpgradeKeyMustDecodeTo16Bytes()
+void test_upgrade_key_must_decode_to16_bytes()
 {
-    auto valid = parseUpgradeRequest("dGhlIHNhbXBsZSBub25jZQ==");
-    check(WsUpgrade::handleUpgrade(valid).success, "valid 16-byte upgrade key should pass");
+    auto valid = parse_upgrade_request("dGhlIHNhbXBsZSBub25jZQ==");
+    check(WsUpgrade::handle_upgrade(valid).success, "valid 16-byte upgrade key should pass");
 
-    auto short_key = parseUpgradeRequest("YWJj");
-    auto short_result = WsUpgrade::handleUpgrade(short_key);
+    auto short_key = parse_upgrade_request("YWJj");
+    auto short_result = WsUpgrade::handle_upgrade(short_key);
     check(!short_result.success, "upgrade key decoding to 3 bytes should fail");
 
-    auto malformed_key = parseUpgradeRequest("!!!!");
-    auto malformed_result = WsUpgrade::handleUpgrade(malformed_key);
+    auto malformed_key = parse_upgrade_request("!!!!");
+    auto malformed_result = WsUpgrade::handle_upgrade(malformed_key);
     check(!malformed_result.success, "malformed upgrade key should fail");
 }
 
-void testUnalignedMaskRoundTrip()
+void test_unaligned_mask_round_trip()
 {
     std::array<char, 33> storage{};
     char* unaligned = storage.data() + 1;
@@ -250,9 +250,9 @@ void testUnalignedMaskRoundTrip()
     }
     const std::string original(unaligned, 19);
 
-    WsFrameParser::applyMaskBytes(unaligned, 19, key);
+    WsFrameParser::apply_mask_bytes(unaligned, 19, key);
     check(std::string(unaligned, 19) != original, "mask should alter unaligned payload");
-    WsFrameParser::applyMaskBytes(unaligned, 19, key);
+    WsFrameParser::apply_mask_bytes(unaligned, 19, key);
     check(std::string(unaligned, 19) == original, "masking twice should restore unaligned payload");
 }
 
@@ -260,12 +260,12 @@ void testUnalignedMaskRoundTrip()
 
 int main()
 {
-    testFrameLengthEncodingBoundaries();
-    testCloseFrameValidation();
-    testFragmentedTextValidatesWholeUtf8();
-    testEchoZeroCopyHonorsReaderLimits();
-    testUpgradeKeyMustDecodeTo16Bytes();
-    testUnalignedMaskRoundTrip();
+    test_frame_length_encoding_boundaries();
+    test_close_frame_validation();
+    test_fragmented_text_validates_whole_utf8();
+    test_echo_zero_copy_honors_reader_limits();
+    test_upgrade_key_must_decode_to16_bytes();
+    test_unaligned_mask_round_trip();
 
     std::cout << "T7-WsProtocolBoundaries PASS\n";
     return 0;

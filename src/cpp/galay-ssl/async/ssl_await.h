@@ -193,7 +193,7 @@ concept SslAwaitableResult =
 /**
  * @brief SSL 可等待状态机概念
  * @tparam MachineT 状态机类型
- * @details 约束状态机必须提供 advance、onHandshake、onRecv、onSend、onShutdown 接口，
+ * @details 约束状态机必须提供 advance、on_handshake、on_recv、on_send、on_shutdown 接口，
  *          且 result_type 必须是错误类型可由 SslError 构造的 std::expected。
  */
 template <typename MachineT>
@@ -205,10 +205,10 @@ concept SslAwaitableStateMachine =
              std::expected<void, SslError> shutdown_result) {
         typename MachineT::result_type;
         { machine.advance() } -> std::same_as<SslMachineAction<typename MachineT::result_type>>;
-        { machine.onHandshake(std::move(handshake_result)) } -> std::same_as<void>;
-        { machine.onRecv(std::move(recv_result)) } -> std::same_as<void>;
-        { machine.onSend(std::move(send_result)) } -> std::same_as<void>;
-        { machine.onShutdown(std::move(shutdown_result)) } -> std::same_as<void>;
+        { machine.on_handshake(std::move(handshake_result)) } -> std::same_as<void>;
+        { machine.on_recv(std::move(recv_result)) } -> std::same_as<void>;
+        { machine.on_send(std::move(send_result)) } -> std::same_as<void>;
+        { machine.on_shutdown(std::move(shutdown_result)) } -> std::same_as<void>;
     } && SslAwaitableResult<typename MachineT::result_type>;
 
 /**
@@ -300,7 +300,7 @@ public:
     /**
      * @brief 标记使用了队列操作
      */
-    void markQueueUsed()
+    void mark_queue_used()
     {
         m_queue_used = true;
     }
@@ -309,7 +309,7 @@ public:
      * @brief 检查是否有结果值
      * @return 是否已设置结果
      */
-    bool hasResultValue() const
+    bool has_result_value() const
     {
         return m_result_set && m_result.has_value();
     }
@@ -318,7 +318,7 @@ public:
      * @brief 取出结果值
      * @return 结果值，取出后内部状态重置
      */
-    std::optional<ResultT> takeResultValue()
+    std::optional<ResultT> take_result_value()
     {
         m_result_set = false;
         auto result = std::move(m_result);
@@ -330,7 +330,7 @@ public:
      * @brief 检查是否使用了队列操作
      * @return 是否使用了队列
      */
-    bool queueUsed() const
+    bool queue_used() const
     {
         return m_queue_used;
     }
@@ -375,7 +375,7 @@ public:
     template <typename StepT>
     StepT& queue(StepT& step)
     {
-        m_owner.markQueueUsed();
+        m_owner.mark_queue_used();
         return step;
     }
 
@@ -385,7 +385,7 @@ public:
      * @param steps 步骤引用包
      */
     template <typename... StepTs>
-    void queueMany(StepTs&... steps)
+    void queue_many(StepTs&... steps)
     {
         (queue(steps), ...);
     }
@@ -457,26 +457,26 @@ public:
     /**
      * @brief 启动握手操作
      */
-    void startHandshake();
+    void start_handshake();
 
     /**
      * @brief 启动接收操作
      * @param buffer 接收缓冲区
      * @param length 缓冲区大小
      */
-    void startRecv(char* buffer, size_t length);
+    void start_recv(char* buffer, size_t length);
 
     /**
      * @brief 启动发送操作
      * @param buffer 发送数据
      * @param length 数据长度
      */
-    void startSend(const char* buffer, size_t length);
+    void start_send(const char* buffer, size_t length);
 
     /**
      * @brief 启动关闭操作
      */
-    void startShutdown();
+    void start_shutdown();
 
     /**
      * @brief 轮询驱动器状态
@@ -488,13 +488,13 @@ public:
      * @brief 处理读取完成事件
      * @param result 读取结果
      */
-    void onRead(std::expected<size_t, IOError> result);
+    void on_read(std::expected<size_t, IOError> result);
 
     /**
      * @brief 处理写入完成事件
      * @param result 写入结果
      */
-    void onWrite(std::expected<size_t, IOError> result);
+    void on_write(std::expected<size_t, IOError> result);
 
     /**
      * @brief 检查操作是否已完成
@@ -506,37 +506,37 @@ public:
      * @brief 取出握手结果
      * @return 握手结果
      */
-    std::expected<void, SslError> takeHandshakeResult();
+    std::expected<void, SslError> take_handshake_result();
 
     /**
      * @brief 取出接收结果
      * @return 接收结果（包含字节数据）
      */
-    std::expected<Bytes, SslError> takeRecvResult();
+    std::expected<Bytes, SslError> take_recv_result();
 
     /**
      * @brief 取出发送结果
      * @return 发送结果（已发送字节数）
      */
-    std::expected<size_t, SslError> takeSendResult();
+    std::expected<size_t, SslError> take_send_result();
 
     /**
      * @brief 取出关闭结果
      * @return 关闭结果
      */
-    std::expected<void, SslError> takeShutdownResult();
+    std::expected<void, SslError> take_shutdown_result();
 
     /**
      * @brief 获取接收 IO 上下文
      * @return 接收上下文引用
      */
-    RecvIOContext& recvContext() { return m_recv_context; }
+    RecvIOContext& recv_context() { return m_recv_context; }
 
     /**
      * @brief 获取发送 IO 上下文
      * @return 发送上下文引用
      */
-    SendIOContext& sendContext() { return m_send_context; }
+    SendIOContext& send_context() { return m_send_context; }
 
 private:
     /**
@@ -559,38 +559,38 @@ private:
         kCompleted,  ///< 已完成
     };
 
-    void resetContexts();                                    ///< 重置所有 IO 上下文
-    void resetHandshakeState();                              ///< 重置握手状态
-    void resetRecvState();                                   ///< 重置接收状态
-    void resetSendState();                                   ///< 重置发送状态
-    void resetShutdownState();                               ///< 重置关闭状态
-    void clearOperation();                                   ///< 清除当前操作
+    void reset_contexts();                                    ///< 重置所有 IO 上下文
+    void reset_handshake_state();                              ///< 重置握手状态
+    void reset_recv_state();                                   ///< 重置接收状态
+    void reset_send_state();                                   ///< 重置发送状态
+    void reset_shutdown_state();                               ///< 重置关闭状态
+    void clear_operation();                                   ///< 清除当前操作
 
-    WaitAction pollHandshake();                              ///< 轮询握手进度
-    WaitAction pollRecv();                                   ///< 轮询接收进度
-    WaitAction pollSend();                                   ///< 轮询发送进度
-    WaitAction pollShutdown();                               ///< 轮询关闭进度
+    WaitAction poll_handshake();                              ///< 轮询握手进度
+    WaitAction poll_recv();                                   ///< 轮询接收进度
+    WaitAction poll_send();                                   ///< 轮询发送进度
+    WaitAction poll_shutdown();                               ///< 轮询关闭进度
 
-    void onHandshakeRead(std::expected<size_t, IOError> result);   ///< 处理握手读取完成
-    void onHandshakeWrite(std::expected<size_t, IOError> result);  ///< 处理握手写入完成
-    void onRecvRead(std::expected<size_t, IOError> result);        ///< 处理接收读取完成
-    void onRecvWrite(std::expected<size_t, IOError> result);       ///< 处理接收写入完成
-    void onSendRead(std::expected<size_t, IOError> result);        ///< 处理发送读取完成
-    void onSendWrite(std::expected<size_t, IOError> result);       ///< 处理发送写入完成
-    void onShutdownRead(std::expected<size_t, IOError> result);    ///< 处理关闭读取完成
-    void onShutdownWrite(std::expected<size_t, IOError> result);   ///< 处理关闭写入完成
+    void on_handshake_read(std::expected<size_t, IOError> result);   ///< 处理握手读取完成
+    void on_handshake_write(std::expected<size_t, IOError> result);  ///< 处理握手写入完成
+    void on_recv_read(std::expected<size_t, IOError> result);        ///< 处理接收读取完成
+    void on_recv_write(std::expected<size_t, IOError> result);       ///< 处理接收写入完成
+    void on_send_read(std::expected<size_t, IOError> result);        ///< 处理发送读取完成
+    void on_send_write(std::expected<size_t, IOError> result);       ///< 处理发送写入完成
+    void on_shutdown_read(std::expected<size_t, IOError> result);    ///< 处理关闭读取完成
+    void on_shutdown_write(std::expected<size_t, IOError> result);   ///< 处理关闭写入完成
 
-    bool prepareReadBuffer(std::vector<char>& buffer);                    ///< 准备读取缓冲区
-    bool prepareWriteFromPending(std::vector<char>& buffer, size_t pending, SslErrorCode error_code);  ///< 从待发送数据准备写入缓冲区
-    bool prepareRecvSendChunk(size_t pending);                            ///< 准备接收发送块
-    bool fillSendChunk(size_t pending = 0);                                ///< 填充发送块
-    RecvPollAction drainRecvPlaintext();                                  ///< 排空接收明文
+    bool prepare_read_buffer(std::vector<char>& buffer);                    ///< 准备读取缓冲区
+    bool prepare_write_from_pending(std::vector<char>& buffer, size_t pending, SslErrorCode error_code);  ///< 从待发送数据准备写入缓冲区
+    bool prepare_recv_send_chunk(size_t pending);                            ///< 准备接收发送块
+    bool fill_send_chunk(size_t pending = 0);                                ///< 填充发送块
+    RecvPollAction drain_recv_plaintext();                                  ///< 排空接收明文
 
-    void setHandshakeFailure(SslError error);   ///< 设置握手失败
-    void setRecvFailure(SslError error);        ///< 设置接收失败
-    void setSendFailure(SslError error);        ///< 设置发送失败
-    void setShutdownSuccess();                  ///< 设置关闭成功
-    void clearTransientBuffers();               ///< 清除临时缓冲区
+    void set_handshake_failure(SslError error);   ///< 设置握手失败
+    void set_recv_failure(SslError error);        ///< 设置接收失败
+    void set_send_failure(SslError error);        ///< 设置发送失败
+    void set_shutdown_success();                  ///< 设置关闭成功
+    void clear_transient_buffers();               ///< 清除临时缓冲区
 
     SslSocket* m_socket = nullptr;                     ///< SSL Socket 指针
     RecvIOContext m_recv_context;                       ///< 接收 IO 上下文
@@ -703,9 +703,9 @@ public:
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
         if (!m_context_bound) {
-            galay::kernel::detail::bindAwaitContextIfSupported(
+            galay::kernel::detail::bind_await_context_if_supported(
                 m_machine,
-                galay::kernel::detail::makeAwaitContext(handle));
+                galay::kernel::detail::make_await_context(handle));
             m_context_bound = true;
         }
         return SequenceAwaitableBase::await_suspend(handle);
@@ -717,16 +717,16 @@ public:
      */
     auto await_resume() -> result_type
     {
-        onCompleted();
+        on_completed();
         if (m_result_set) {
             return std::move(*m_result);
         }
         if (SequenceAwaitableBase::m_error.has_value()) {
             // Sequence registration can fail immediately before the SSL machine
             // produces a driver-level SslError. Bridge that base error instead of aborting.
-            return makeUnexpected(bridgeSequenceError(*SequenceAwaitableBase::m_error));
+            return make_unexpected(bridge_sequence_error(*SequenceAwaitableBase::m_error));
         }
-        return makeUnexpected(SslError(SslErrorCode::kUnknown));
+        return make_unexpected(SslError(SslErrorCode::kUnknown));
     }
 
     /**
@@ -749,9 +749,9 @@ public:
     /**
      * @brief 移除队首任务
      */
-    void popFront() override
+    void pop_front() override
     {
-        clearActiveTask();
+        clear_active_task();
     }
 
     /**
@@ -767,22 +767,22 @@ public:
      * @brief 标记操作超时
      * @details 清除活跃任务，向状态机注入超时错误，继续驱动状态机
      */
-    void markTimeout()
+    void mark_timeout()
     {
-        clearActiveTask();
+        clear_active_task();
         const auto timeout = std::unexpected(SslError(SslErrorCode::kTimeout));
         switch (m_running_signal) {
         case SslMachineSignal::kHandshake:
-            m_machine.onHandshake(std::expected<void, SslError>(timeout));
+            m_machine.on_handshake(std::expected<void, SslError>(timeout));
             break;
         case SslMachineSignal::kRecv:
-            m_machine.onRecv(std::expected<Bytes, SslError>(timeout));
+            m_machine.on_recv(std::expected<Bytes, SslError>(timeout));
             break;
         case SslMachineSignal::kSend:
-            m_machine.onSend(std::expected<size_t, SslError>(timeout));
+            m_machine.on_send(std::expected<size_t, SslError>(timeout));
             break;
         case SslMachineSignal::kShutdown:
-            m_machine.onShutdown(std::expected<void, SslError>(timeout));
+            m_machine.on_shutdown(std::expected<void, SslError>(timeout));
             break;
         case SslMachineSignal::kContinue:
         case SslMachineSignal::kComplete:
@@ -792,44 +792,44 @@ public:
         m_running_signal = SslMachineSignal::kContinue;
         (void)pump();
         if (!m_result_set) {
-            setFailure(SslError(SslErrorCode::kTimeout));
+            set_failure(SslError(SslErrorCode::kTimeout));
         }
     }
 
 #ifdef USE_IOURING
-    SequenceProgress prepareForSubmit() override
+    SequenceProgress prepare_for_submit() override
     {
         return pump();
     }
 
-    SequenceProgress onActiveEvent(struct io_uring_cqe* cqe, GHandle handle) override
+    SequenceProgress on_active_event(struct io_uring_cqe* cqe, GHandle handle) override
     {
         if (!m_has_active_task) {
             return pump();
         }
         if (m_active_kind == ActiveKind::kRead) {
-            if (!m_driver.recvContext().handleComplete(cqe, handle)) {
+            if (!m_driver.recv_context().handle_complete(cqe, handle)) {
                 return SequenceProgress::kNeedWait;
             }
-            auto io_result = std::move(m_driver.recvContext().m_result);
-            clearActiveTask();
-            m_driver.onRead(std::move(io_result));
+            auto io_result = std::move(m_driver.recv_context().m_result);
+            clear_active_task();
+            m_driver.on_read(std::move(io_result));
             return pump();
         }
         if (m_active_kind == ActiveKind::kWrite) {
-            if (!m_driver.sendContext().handleComplete(cqe, handle)) {
+            if (!m_driver.send_context().handle_complete(cqe, handle)) {
                 return SequenceProgress::kNeedWait;
             }
-            auto io_result = std::move(m_driver.sendContext().m_result);
-            clearActiveTask();
-            m_driver.onWrite(std::move(io_result));
+            auto io_result = std::move(m_driver.send_context().m_result);
+            clear_active_task();
+            m_driver.on_write(std::move(io_result));
             return pump();
         }
-        setFailure(SslError(SslErrorCode::kUnknown));
+        set_failure(SslError(SslErrorCode::kUnknown));
         return SequenceProgress::kCompleted;
     }
 #else
-    SequenceProgress prepareForSubmit(GHandle handle) override
+    SequenceProgress prepare_for_submit(GHandle handle) override
     {
         for (size_t i = 0; i < kInlineTransitionCap; ++i) {
             const SequenceProgress progress = pump();
@@ -840,55 +840,55 @@ public:
                 return SequenceProgress::kCompleted;
             }
             if (m_active_kind == ActiveKind::kRead) {
-                if (!m_driver.recvContext().handleComplete(handle)) {
+                if (!m_driver.recv_context().handle_complete(handle)) {
                     return SequenceProgress::kNeedWait;
                 }
-                auto io_result = std::move(m_driver.recvContext().m_result);
-                clearActiveTask();
-                m_driver.onRead(std::move(io_result));
+                auto io_result = std::move(m_driver.recv_context().m_result);
+                clear_active_task();
+                m_driver.on_read(std::move(io_result));
                 continue;
             }
             if (m_active_kind == ActiveKind::kWrite) {
-                if (!m_driver.sendContext().handleComplete(handle)) {
+                if (!m_driver.send_context().handle_complete(handle)) {
                     return SequenceProgress::kNeedWait;
                 }
-                auto io_result = std::move(m_driver.sendContext().m_result);
-                clearActiveTask();
-                m_driver.onWrite(std::move(io_result));
+                auto io_result = std::move(m_driver.send_context().m_result);
+                clear_active_task();
+                m_driver.on_write(std::move(io_result));
                 continue;
             }
-            setFailure(SslError(SslErrorCode::kUnknown));
+            set_failure(SslError(SslErrorCode::kUnknown));
             return SequenceProgress::kCompleted;
         }
-        setFailure(SslError(SslErrorCode::kUnknown));
-        clearActiveTask();
+        set_failure(SslError(SslErrorCode::kUnknown));
+        clear_active_task();
         return SequenceProgress::kCompleted;
     }
 
-    SequenceProgress onActiveEvent(GHandle handle) override
+    SequenceProgress on_active_event(GHandle handle) override
     {
         if (!m_has_active_task) {
-            return prepareForSubmit(handle);
+            return prepare_for_submit(handle);
         }
         if (m_active_kind == ActiveKind::kRead) {
-            if (!m_driver.recvContext().handleComplete(handle)) {
+            if (!m_driver.recv_context().handle_complete(handle)) {
                 return SequenceProgress::kNeedWait;
             }
-            auto io_result = std::move(m_driver.recvContext().m_result);
-            clearActiveTask();
-            m_driver.onRead(std::move(io_result));
-            return prepareForSubmit(handle);
+            auto io_result = std::move(m_driver.recv_context().m_result);
+            clear_active_task();
+            m_driver.on_read(std::move(io_result));
+            return prepare_for_submit(handle);
         }
         if (m_active_kind == ActiveKind::kWrite) {
-            if (!m_driver.sendContext().handleComplete(handle)) {
+            if (!m_driver.send_context().handle_complete(handle)) {
                 return SequenceProgress::kNeedWait;
             }
-            auto io_result = std::move(m_driver.sendContext().m_result);
-            clearActiveTask();
-            m_driver.onWrite(std::move(io_result));
-            return prepareForSubmit(handle);
+            auto io_result = std::move(m_driver.send_context().m_result);
+            clear_active_task();
+            m_driver.on_write(std::move(io_result));
+            return prepare_for_submit(handle);
         }
-        setFailure(SslError(SslErrorCode::kUnknown));
+        set_failure(SslError(SslErrorCode::kUnknown));
         return SequenceProgress::kCompleted;
     }
 #endif
@@ -902,7 +902,7 @@ private:
 
     static constexpr size_t kInlineTransitionCap = 64;
 
-    static SslError bridgeSequenceError(const IOError& error)
+    static SslError bridge_sequence_error(const IOError& error)
     {
         if (IOError::contains(error.code(), kTimeout)) {
             return SslError(SslErrorCode::kTimeout);
@@ -919,102 +919,102 @@ private:
         return SslError(SslErrorCode::kUnknown);
     }
 
-    auto makeUnexpected(const SslError& error) -> result_type
+    auto make_unexpected(const SslError& error) -> result_type
     {
         return std::unexpected(ErrorT(error));
     }
 
-    void setFailure(SslError error)
+    void set_failure(SslError error)
     {
-        m_result = makeUnexpected(error);
+        m_result = make_unexpected(error);
         m_result_set = true;
     }
 
-    void activateRead()
+    void activate_read()
     {
-        m_active_task = IOTask{nullptr, &m_driver.recvContext(), RECV};
+        m_active_task = IOTask{nullptr, &m_driver.recv_context(), RECV};
         m_has_active_task = true;
         m_active_kind = ActiveKind::kRead;
     }
 
-    void activateWrite()
+    void activate_write()
     {
-        m_active_task = IOTask{nullptr, &m_driver.sendContext(), SEND};
+        m_active_task = IOTask{nullptr, &m_driver.send_context(), SEND};
         m_has_active_task = true;
         m_active_kind = ActiveKind::kWrite;
     }
 
-    void clearActiveTask()
+    void clear_active_task()
     {
         m_active_task = IOTask{};
         m_has_active_task = false;
         m_active_kind = ActiveKind::kNone;
     }
 
-    void deliverDriverResult()
+    void deliver_driver_result()
     {
         switch (m_running_signal) {
         case SslMachineSignal::kHandshake:
-            m_machine.onHandshake(m_driver.takeHandshakeResult());
+            m_machine.on_handshake(m_driver.take_handshake_result());
             break;
         case SslMachineSignal::kRecv:
-            m_machine.onRecv(m_driver.takeRecvResult());
+            m_machine.on_recv(m_driver.take_recv_result());
             break;
         case SslMachineSignal::kSend:
-            m_machine.onSend(m_driver.takeSendResult());
+            m_machine.on_send(m_driver.take_send_result());
             break;
         case SslMachineSignal::kShutdown:
-            m_machine.onShutdown(m_driver.takeShutdownResult());
+            m_machine.on_shutdown(m_driver.take_shutdown_result());
             break;
         default:
-            setFailure(SslError(SslErrorCode::kUnknown));
+            set_failure(SslError(SslErrorCode::kUnknown));
             break;
         }
         m_running_signal = SslMachineSignal::kContinue;
     }
 
-    SequenceProgress startAction(SslMachineAction<result_type> action)
+    SequenceProgress start_action(SslMachineAction<result_type> action)
     {
         switch (action.signal) {
         case SslMachineSignal::kContinue:
             return SequenceProgress::kNeedWait;
         case SslMachineSignal::kHandshake:
             m_running_signal = SslMachineSignal::kHandshake;
-            m_driver.startHandshake();
+            m_driver.start_handshake();
             return SequenceProgress::kNeedWait;
         case SslMachineSignal::kRecv:
             if (action.read_buffer == nullptr && action.read_length != 0) {
-                setFailure(SslError(SslErrorCode::kReadFailed));
+                set_failure(SslError(SslErrorCode::kReadFailed));
                 return SequenceProgress::kCompleted;
             }
             m_running_signal = SslMachineSignal::kRecv;
-            m_driver.startRecv(action.read_buffer, action.read_length);
+            m_driver.start_recv(action.read_buffer, action.read_length);
             return SequenceProgress::kNeedWait;
         case SslMachineSignal::kSend:
             if (action.write_buffer == nullptr && action.write_length != 0) {
-                setFailure(SslError(SslErrorCode::kWriteFailed));
+                set_failure(SslError(SslErrorCode::kWriteFailed));
                 return SequenceProgress::kCompleted;
             }
             m_running_signal = SslMachineSignal::kSend;
-            m_driver.startSend(action.write_buffer, action.write_length);
+            m_driver.start_send(action.write_buffer, action.write_length);
             return SequenceProgress::kNeedWait;
         case SslMachineSignal::kShutdown:
             m_running_signal = SslMachineSignal::kShutdown;
-            m_driver.startShutdown();
+            m_driver.start_shutdown();
             return SequenceProgress::kNeedWait;
         case SslMachineSignal::kComplete:
             if (!action.result.has_value()) {
-                setFailure(SslError(SslErrorCode::kUnknown));
+                set_failure(SslError(SslErrorCode::kUnknown));
                 return SequenceProgress::kCompleted;
             }
             m_result = std::move(*action.result);
             m_result_set = true;
             return SequenceProgress::kCompleted;
         case SslMachineSignal::kFail:
-            setFailure(action.error.value_or(SslError(SslErrorCode::kUnknown)));
+            set_failure(action.error.value_or(SslError(SslErrorCode::kUnknown)));
             return SequenceProgress::kCompleted;
         }
-        setFailure(SslError(SslErrorCode::kUnknown));
+        set_failure(SslError(SslErrorCode::kUnknown));
         return SequenceProgress::kCompleted;
     }
 
@@ -1031,31 +1031,31 @@ private:
             if (m_running_signal != SslMachineSignal::kContinue) {
                 const auto wait = m_driver.poll();
                 if (m_driver.completed()) {
-                    deliverDriverResult();
+                    deliver_driver_result();
                     continue;
                 }
                 if (wait.kind == SslOperationDriver::WaitKind::kRead) {
-                    activateRead();
+                    activate_read();
                     return SequenceProgress::kNeedWait;
                 }
                 if (wait.kind == SslOperationDriver::WaitKind::kWrite) {
-                    activateWrite();
+                    activate_write();
                     return SequenceProgress::kNeedWait;
                 }
-                setFailure(SslError(SslErrorCode::kUnknown));
+                set_failure(SslError(SslErrorCode::kUnknown));
                 return SequenceProgress::kCompleted;
             }
 
             auto action = m_machine.advance();
-            const SequenceProgress progress = startAction(std::move(action));
+            const SequenceProgress progress = start_action(std::move(action));
             if (progress == SequenceProgress::kCompleted) {
                 return progress;
             }
             continue;
         }
 
-        setFailure(SslError(SslErrorCode::kUnknown));
-        clearActiveTask();
+        set_failure(SslError(SslErrorCode::kUnknown));
+        clear_active_task();
         return SequenceProgress::kCompleted;
     }
 
@@ -1144,10 +1144,10 @@ public:
         return SslMachineAction<result_type>::handshake();
     }
 
-    void onHandshake(std::expected<void, SslError> result) { m_result = std::move(result); }  ///< 处理握手结果
-    void onRecv(std::expected<Bytes, SslError>) {}     ///< 未使用
-    void onSend(std::expected<size_t, SslError>) {}    ///< 未使用
-    void onShutdown(std::expected<void, SslError>) {}  ///< 未使用
+    void on_handshake(std::expected<void, SslError> result) { m_result = std::move(result); }  ///< 处理握手结果
+    void on_recv(std::expected<Bytes, SslError>) {}     ///< 未使用
+    void on_send(std::expected<size_t, SslError>) {}    ///< 未使用
+    void on_shutdown(std::expected<void, SslError>) {}  ///< 未使用
 
     std::optional<result_type> m_result;  ///< 握手结果
 };
@@ -1187,10 +1187,10 @@ public:
         return SslMachineAction<result_type>::recv(m_buffer, m_length);
     }
 
-    void onHandshake(std::expected<void, SslError>) {}                      ///< 未使用
-    void onRecv(std::expected<Bytes, SslError> result) { m_result = std::move(result); }  ///< 处理接收结果
-    void onSend(std::expected<size_t, SslError>) {}     ///< 未使用
-    void onShutdown(std::expected<void, SslError>) {}   ///< 未使用
+    void on_handshake(std::expected<void, SslError>) {}                      ///< 未使用
+    void on_recv(std::expected<Bytes, SslError> result) { m_result = std::move(result); }  ///< 处理接收结果
+    void on_send(std::expected<size_t, SslError>) {}     ///< 未使用
+    void on_shutdown(std::expected<void, SslError>) {}   ///< 未使用
 
     char* m_buffer = nullptr;              ///< 接收缓冲区
     size_t m_length = 0;                   ///< 缓冲区大小
@@ -1232,10 +1232,10 @@ public:
         return SslMachineAction<result_type>::send(m_buffer, m_length);
     }
 
-    void onHandshake(std::expected<void, SslError>) {}                          ///< 未使用
-    void onRecv(std::expected<Bytes, SslError>) {}       ///< 未使用
-    void onSend(std::expected<size_t, SslError> result) { m_result = std::move(result); }  ///< 处理发送结果
-    void onShutdown(std::expected<void, SslError>) {}    ///< 未使用
+    void on_handshake(std::expected<void, SslError>) {}                          ///< 未使用
+    void on_recv(std::expected<Bytes, SslError>) {}       ///< 未使用
+    void on_send(std::expected<size_t, SslError> result) { m_result = std::move(result); }  ///< 处理发送结果
+    void on_shutdown(std::expected<void, SslError>) {}    ///< 未使用
 
     const char* m_buffer = nullptr;        ///< 发送数据指针
     size_t m_length = 0;                   ///< 数据长度
@@ -1269,10 +1269,10 @@ public:
         return SslMachineAction<result_type>::shutdown();
     }
 
-    void onHandshake(std::expected<void, SslError>) {}                             ///< 未使用
-    void onRecv(std::expected<Bytes, SslError>) {}        ///< 未使用
-    void onSend(std::expected<size_t, SslError>) {}       ///< 未使用
-    void onShutdown(std::expected<void, SslError> result) { m_result = std::move(result); }  ///< 处理关闭结果
+    void on_handshake(std::expected<void, SslError>) {}                             ///< 未使用
+    void on_recv(std::expected<Bytes, SslError>) {}        ///< 未使用
+    void on_send(std::expected<size_t, SslError>) {}       ///< 未使用
+    void on_shutdown(std::expected<void, SslError> result) { m_result = std::move(result); }  ///< 处理关闭结果
 
     std::optional<result_type> m_result;   ///< 关闭结果
 };
@@ -1364,11 +1364,11 @@ public:
      * @return 握手步骤节点
      */
     template <auto Handler>
-    static Node makeHandshakeNode()
+    static Node make_handshake_node()
     {
         Node node;
         node.kind = NodeKind::kHandshake;
-        node.handshake_handler = &invokeHandshake<Handler>;
+        node.handshake_handler = &invoke_handshake<Handler>;
         return node;
     }
 
@@ -1380,11 +1380,11 @@ public:
      * @return 接收步骤节点
      */
     template <auto Handler>
-    static Node makeRecvNode(char* buffer, size_t length)
+    static Node make_recv_node(char* buffer, size_t length)
     {
         Node node;
         node.kind = NodeKind::kRecv;
-        node.recv_handler = &invokeRecv<Handler>;
+        node.recv_handler = &invoke_recv<Handler>;
         node.read_buffer = buffer;
         node.io_length = length;
         return node;
@@ -1398,11 +1398,11 @@ public:
      * @return 发送步骤节点
      */
     template <auto Handler>
-    static Node makeSendNode(const char* buffer, size_t length)
+    static Node make_send_node(const char* buffer, size_t length)
     {
         Node node;
         node.kind = NodeKind::kSend;
-        node.send_handler = &invokeSend<Handler>;
+        node.send_handler = &invoke_send<Handler>;
         node.write_buffer = buffer;
         node.io_length = length;
         return node;
@@ -1414,11 +1414,11 @@ public:
      * @return 关闭步骤节点
      */
     template <auto Handler>
-    static Node makeShutdownNode()
+    static Node make_shutdown_node()
     {
         Node node;
         node.kind = NodeKind::kShutdown;
-        node.shutdown_handler = &invokeShutdown<Handler>;
+        node.shutdown_handler = &invoke_shutdown<Handler>;
         return node;
     }
 
@@ -1428,11 +1428,11 @@ public:
      * @return 本地步骤节点
      */
     template <auto Handler>
-    static Node makeLocalNode()
+    static Node make_local_node()
     {
         Node node;
         node.kind = NodeKind::kLocal;
-        node.local_handler = &invokeLocal<Handler>;
+        node.local_handler = &invoke_local<Handler>;
         return node;
     }
 
@@ -1442,11 +1442,11 @@ public:
      * @return 完成步骤节点
      */
     template <auto Handler>
-    static Node makeFinishNode()
+    static Node make_finish_node()
     {
         Node node;
         node.kind = NodeKind::kFinish;
-        node.local_handler = &invokeLocal<Handler>;
+        node.local_handler = &invoke_local<Handler>;
         return node;
     }
 
@@ -1457,11 +1457,11 @@ public:
      * @return 解析步骤节点
      */
     template <auto Handler>
-    static Node makeParseNode(size_t rearm_recv_index)
+    static Node make_parse_node(size_t rearm_recv_index)
     {
         Node node;
         node.kind = NodeKind::kParse;
-        node.parse_handler = &invokeParse<Handler>;
+        node.parse_handler = &invoke_parse<Handler>;
         node.parse_rearm_recv_index = rearm_recv_index;
         return node;
     }
@@ -1470,13 +1470,13 @@ public:
      * @brief 绑定协程上下文到流水线
      * @param ctx 协程上下文
      */
-    void onAwaitContext(const AwaitContext& ctx)
+    void on_await_context(const AwaitContext& ctx)
     {
         if constexpr (requires(FlowT& flow, const AwaitContext& context) {
-            flow.onAwaitContext(context);
+            flow.on_await_context(context);
         }) {
             if (m_flow != nullptr) {
-                m_flow->onAwaitContext(ctx);
+                m_flow->on_await_context(ctx);
             }
         }
     }
@@ -1492,8 +1492,8 @@ public:
             return SslMachineAction<result_type>::complete(std::move(*m_result));
         }
         if (m_cursor >= m_nodes.size()) {
-            setError(SslError(SslErrorCode::kUnknown));
-            return emitActionFromOutcome();
+            set_error(SslError(SslErrorCode::kUnknown));
+            return emit_action_from_outcome();
         }
 
         const Node& node = m_nodes[m_cursor];
@@ -1519,23 +1519,23 @@ public:
             m_pending_index = m_cursor;
             return SslMachineAction<result_type>::shutdown();
         case NodeKind::kParse:
-            return runParse(node);
+            return run_parse(node);
         case NodeKind::kLocal:
         case NodeKind::kFinish:
-            return runLocal(node);
+            return run_local(node);
         }
-        setError(SslError(SslErrorCode::kUnknown));
-        return emitActionFromOutcome();
+        set_error(SslError(SslErrorCode::kUnknown));
+        return emit_action_from_outcome();
     }
 
     /**
      * @brief 处理握手结果
      * @param result 握手结果
      */
-    void onHandshake(std::expected<void, SslError> result)
+    void on_handshake(std::expected<void, SslError> result)
     {
         if (m_pending_kind != NodeKind::kHandshake || m_pending_index >= m_nodes.size()) {
-            setError(SslError(SslErrorCode::kUnknown));
+            set_error(SslError(SslErrorCode::kUnknown));
             return;
         }
 
@@ -1547,14 +1547,14 @@ public:
         m_handshake_context.m_result = std::move(result);
 
         const Node& node = m_nodes[m_pending_index];
-        invokeHandshakeNode(node);
-        clearPending();
+        invoke_handshake_node(node);
+        clear_pending();
 
-        if (absorbOpsOutcome()) {
+        if (absorb_ops_outcome()) {
             return;
         }
         if (error.has_value()) {
-            setError(std::move(*error));
+            set_error(std::move(*error));
             return;
         }
         ++m_cursor;
@@ -1564,10 +1564,10 @@ public:
      * @brief 处理接收结果
      * @param result 接收结果
      */
-    void onRecv(std::expected<Bytes, SslError> result)
+    void on_recv(std::expected<Bytes, SslError> result)
     {
         if (m_pending_kind != NodeKind::kRecv || m_pending_index >= m_nodes.size()) {
-            setError(SslError(SslErrorCode::kUnknown));
+            set_error(SslError(SslErrorCode::kUnknown));
             return;
         }
 
@@ -1579,14 +1579,14 @@ public:
         m_recv_context.m_result = std::move(result);
 
         const Node& node = m_nodes[m_pending_index];
-        invokeRecvNode(node);
-        clearPending();
+        invoke_recv_node(node);
+        clear_pending();
 
-        if (absorbOpsOutcome()) {
+        if (absorb_ops_outcome()) {
             return;
         }
         if (error.has_value()) {
-            setError(std::move(*error));
+            set_error(std::move(*error));
             return;
         }
         ++m_cursor;
@@ -1596,10 +1596,10 @@ public:
      * @brief 处理发送结果
      * @param result 发送结果
      */
-    void onSend(std::expected<size_t, SslError> result)
+    void on_send(std::expected<size_t, SslError> result)
     {
         if (m_pending_kind != NodeKind::kSend || m_pending_index >= m_nodes.size()) {
-            setError(SslError(SslErrorCode::kUnknown));
+            set_error(SslError(SslErrorCode::kUnknown));
             return;
         }
 
@@ -1611,14 +1611,14 @@ public:
         m_send_context.m_result = std::move(result);
 
         const Node& node = m_nodes[m_pending_index];
-        invokeSendNode(node);
-        clearPending();
+        invoke_send_node(node);
+        clear_pending();
 
-        if (absorbOpsOutcome()) {
+        if (absorb_ops_outcome()) {
             return;
         }
         if (error.has_value()) {
-            setError(std::move(*error));
+            set_error(std::move(*error));
             return;
         }
         ++m_cursor;
@@ -1628,10 +1628,10 @@ public:
      * @brief 处理关闭结果
      * @param result 关闭结果
      */
-    void onShutdown(std::expected<void, SslError> result)
+    void on_shutdown(std::expected<void, SslError> result)
     {
         if (m_pending_kind != NodeKind::kShutdown || m_pending_index >= m_nodes.size()) {
-            setError(SslError(SslErrorCode::kUnknown));
+            set_error(SslError(SslErrorCode::kUnknown));
             return;
         }
 
@@ -1643,14 +1643,14 @@ public:
         m_shutdown_context.m_result = std::move(result);
 
         const Node& node = m_nodes[m_pending_index];
-        invokeShutdownNode(node);
-        clearPending();
+        invoke_shutdown_node(node);
+        clear_pending();
 
-        if (absorbOpsOutcome()) {
+        if (absorb_ops_outcome()) {
             return;
         }
         if (error.has_value()) {
-            setError(std::move(*error));
+            set_error(std::move(*error));
             return;
         }
         ++m_cursor;
@@ -1658,45 +1658,45 @@ public:
 
 private:
     template <auto Handler>
-    static void invokeHandshake(FlowT* flow, OpsT& ops, SslHandshakeContext& ctx)
+    static void invoke_handshake(FlowT* flow, OpsT& ops, SslHandshakeContext& ctx)
     {
         (flow->*Handler)(ops, ctx);
     }
 
     template <auto Handler>
-    static void invokeRecv(FlowT* flow, OpsT& ops, SslRecvContext& ctx)
+    static void invoke_recv(FlowT* flow, OpsT& ops, SslRecvContext& ctx)
     {
         (flow->*Handler)(ops, ctx);
     }
 
     template <auto Handler>
-    static void invokeSend(FlowT* flow, OpsT& ops, SslSendContext& ctx)
+    static void invoke_send(FlowT* flow, OpsT& ops, SslSendContext& ctx)
     {
         (flow->*Handler)(ops, ctx);
     }
 
     template <auto Handler>
-    static void invokeShutdown(FlowT* flow, OpsT& ops, SslShutdownContext& ctx)
+    static void invoke_shutdown(FlowT* flow, OpsT& ops, SslShutdownContext& ctx)
     {
         (flow->*Handler)(ops, ctx);
     }
 
     template <auto Handler>
-    static void invokeLocal(FlowT* flow, OpsT& ops)
+    static void invoke_local(FlowT* flow, OpsT& ops)
     {
         (flow->*Handler)(ops);
     }
 
     template <auto Handler>
-    static ParseStatus invokeParse(FlowT* flow, OpsT& ops)
+    static ParseStatus invoke_parse(FlowT* flow, OpsT& ops)
     {
         return (flow->*Handler)(ops);
     }
 
-    void invokeHandshakeNode(const Node& node)
+    void invoke_handshake_node(const Node& node)
     {
         if (node.handshake_handler == nullptr) {
-            setError(SslError(SslErrorCode::kUnknown));
+            set_error(SslError(SslErrorCode::kUnknown));
             return;
         }
         m_ops_owner.reset();
@@ -1704,10 +1704,10 @@ private:
         node.handshake_handler(m_flow, ops, m_handshake_context);
     }
 
-    void invokeRecvNode(const Node& node)
+    void invoke_recv_node(const Node& node)
     {
         if (node.recv_handler == nullptr) {
-            setError(SslError(SslErrorCode::kUnknown));
+            set_error(SslError(SslErrorCode::kUnknown));
             return;
         }
         m_ops_owner.reset();
@@ -1715,10 +1715,10 @@ private:
         node.recv_handler(m_flow, ops, m_recv_context);
     }
 
-    void invokeSendNode(const Node& node)
+    void invoke_send_node(const Node& node)
     {
         if (node.send_handler == nullptr) {
-            setError(SslError(SslErrorCode::kUnknown));
+            set_error(SslError(SslErrorCode::kUnknown));
             return;
         }
         m_ops_owner.reset();
@@ -1726,10 +1726,10 @@ private:
         node.send_handler(m_flow, ops, m_send_context);
     }
 
-    void invokeShutdownNode(const Node& node)
+    void invoke_shutdown_node(const Node& node)
     {
         if (node.shutdown_handler == nullptr) {
-            setError(SslError(SslErrorCode::kUnknown));
+            set_error(SslError(SslErrorCode::kUnknown));
             return;
         }
         m_ops_owner.reset();
@@ -1737,37 +1737,37 @@ private:
         node.shutdown_handler(m_flow, ops, m_shutdown_context);
     }
 
-    SslMachineAction<result_type> runLocal(const Node& node)
+    SslMachineAction<result_type> run_local(const Node& node)
     {
         if (node.local_handler == nullptr) {
-            setError(SslError(SslErrorCode::kUnknown));
-            return emitActionFromOutcome();
+            set_error(SslError(SslErrorCode::kUnknown));
+            return emit_action_from_outcome();
         }
 
         m_ops_owner.reset();
         OpsT ops(m_ops_owner);
         node.local_handler(m_flow, ops);
 
-        if (absorbOpsOutcome()) {
-            return emitActionFromOutcome();
+        if (absorb_ops_outcome()) {
+            return emit_action_from_outcome();
         }
         ++m_cursor;
         return SslMachineAction<result_type>::continue_();
     }
 
-    SslMachineAction<result_type> runParse(const Node& node)
+    SslMachineAction<result_type> run_parse(const Node& node)
     {
         if (node.parse_handler == nullptr) {
-            setError(SslError(SslErrorCode::kUnknown));
-            return emitActionFromOutcome();
+            set_error(SslError(SslErrorCode::kUnknown));
+            return emit_action_from_outcome();
         }
 
         m_ops_owner.reset();
         OpsT ops(m_ops_owner);
         const ParseStatus status = node.parse_handler(m_flow, ops);
 
-        if (absorbOpsOutcome()) {
-            return emitActionFromOutcome();
+        if (absorb_ops_outcome()) {
+            return emit_action_from_outcome();
         }
 
         switch (status) {
@@ -1775,8 +1775,8 @@ private:
             if (node.parse_rearm_recv_index == kInvalidIndex ||
                 node.parse_rearm_recv_index >= m_nodes.size() ||
                 m_nodes[node.parse_rearm_recv_index].kind != NodeKind::kRecv) {
-                setError(SslError(SslErrorCode::kUnknown));
-                return emitActionFromOutcome();
+                set_error(SslError(SslErrorCode::kUnknown));
+                return emit_action_from_outcome();
             }
             m_cursor = node.parse_rearm_recv_index;
             return SslMachineAction<result_type>::continue_();
@@ -1786,35 +1786,35 @@ private:
             ++m_cursor;
             return SslMachineAction<result_type>::continue_();
         }
-        setError(SslError(SslErrorCode::kUnknown));
-        return emitActionFromOutcome();
+        set_error(SslError(SslErrorCode::kUnknown));
+        return emit_action_from_outcome();
     }
 
-    bool absorbOpsOutcome()
+    bool absorb_ops_outcome()
     {
-        if (m_ops_owner.hasResultValue()) {
-            auto result = m_ops_owner.takeResultValue();
+        if (m_ops_owner.has_result_value()) {
+            auto result = m_ops_owner.take_result_value();
             if (result.has_value()) {
                 m_result = std::move(*result);
             } else {
-                setError(SslError(SslErrorCode::kUnknown));
+                set_error(SslError(SslErrorCode::kUnknown));
             }
             return true;
         }
-        if (m_ops_owner.queueUsed()) {
+        if (m_ops_owner.queue_used()) {
             m_ops_owner.clear();
-            setError(SslError(SslErrorCode::kUnknown));
+            set_error(SslError(SslErrorCode::kUnknown));
             return true;
         }
         return false;
     }
 
-    void setError(SslError error)
+    void set_error(SslError error)
     {
         m_result = std::unexpected(ErrorT(error));
     }
 
-    SslMachineAction<result_type> emitActionFromOutcome()
+    SslMachineAction<result_type> emit_action_from_outcome()
     {
         if (m_result.has_value()) {
             return SslMachineAction<result_type>::complete(std::move(*m_result));
@@ -1822,7 +1822,7 @@ private:
         return SslMachineAction<result_type>::continue_();
     }
 
-    void clearPending()
+    void clear_pending()
     {
         m_pending_kind = NodeKind::kLocal;
         m_pending_index = kInvalidIndex;
@@ -1855,9 +1855,9 @@ private:
  *
  * @code
  * auto awaitable = SslAwaitableBuilder<ExpectedType>(controller, socket, flow)
- *     .handshake<&Flow::onConnect>()
+ *     .handshake<&Flow::on_connect>()
  *     .recv<&Flow::onResponse>(buffer, sizeof(buffer))
- *     .parse<&Flow::onParse>()
+ *     .parse<&Flow::on_parse>()
  *     .finish<&Flow::onDone>()
  *     .build();
  * auto result = co_await awaitable;
@@ -1894,7 +1894,7 @@ public:
      * @return 状态机构建器
      */
     template <SslAwaitableStateMachine MachineTParam>
-    static auto fromStateMachine(IOController* controller, SslSocket* socket, MachineTParam machine)
+    static auto from_state_machine(IOController* controller, SslSocket* socket, MachineTParam machine)
         -> SslStateMachineBuilder<MachineTParam>
     {
         static_assert(std::same_as<typename MachineTParam::result_type, ResultT>,
@@ -1910,7 +1910,7 @@ public:
     template <auto Handler>
     SslAwaitableBuilder& handshake()
     {
-        m_nodes.push_back(MachineT::template makeHandshakeNode<Handler>());
+        m_nodes.push_back(MachineT::template make_handshake_node<Handler>());
         return *this;
     }
 
@@ -1924,7 +1924,7 @@ public:
     template <auto Handler>
     SslAwaitableBuilder& recv(char* buffer, size_t length)
     {
-        m_nodes.push_back(MachineT::template makeRecvNode<Handler>(buffer, length));
+        m_nodes.push_back(MachineT::template make_recv_node<Handler>(buffer, length));
         m_last_recv_index = m_nodes.size() - 1;
         return *this;
     }
@@ -1939,7 +1939,7 @@ public:
     template <auto Handler>
     SslAwaitableBuilder& send(const char* buffer, size_t length)
     {
-        m_nodes.push_back(MachineT::template makeSendNode<Handler>(buffer, length));
+        m_nodes.push_back(MachineT::template make_send_node<Handler>(buffer, length));
         return *this;
     }
 
@@ -1951,7 +1951,7 @@ public:
     template <auto Handler>
     SslAwaitableBuilder& shutdown()
     {
-        m_nodes.push_back(MachineT::template makeShutdownNode<Handler>());
+        m_nodes.push_back(MachineT::template make_shutdown_node<Handler>());
         return *this;
     }
 
@@ -1963,7 +1963,7 @@ public:
     template <auto Handler>
     SslAwaitableBuilder& local()
     {
-        m_nodes.push_back(MachineT::template makeLocalNode<Handler>());
+        m_nodes.push_back(MachineT::template make_local_node<Handler>());
         return *this;
     }
 
@@ -1975,7 +1975,7 @@ public:
     template <auto Handler>
     SslAwaitableBuilder& parse()
     {
-        m_nodes.push_back(MachineT::template makeParseNode<Handler>(m_last_recv_index));
+        m_nodes.push_back(MachineT::template make_parse_node<Handler>(m_last_recv_index));
         return *this;
     }
 
@@ -1987,7 +1987,7 @@ public:
     template <auto Handler>
     SslAwaitableBuilder& finish()
     {
-        m_nodes.push_back(MachineT::template makeFinishNode<Handler>());
+        m_nodes.push_back(MachineT::template make_finish_node<Handler>());
         return *this;
     }
 
@@ -1997,7 +1997,7 @@ public:
      */
     auto build() & -> SslStateMachineAwaitable<MachineT>
     {
-        return buildImpl();
+        return build_impl();
     }
 
     /**
@@ -2006,11 +2006,11 @@ public:
      */
     auto build() && -> SslStateMachineAwaitable<MachineT>
     {
-        return buildImpl();
+        return build_impl();
     }
 
 private:
-    auto buildImpl() -> SslStateMachineAwaitable<MachineT>
+    auto build_impl() -> SslStateMachineAwaitable<MachineT>
     {
         return SslStateMachineAwaitable<MachineT>(
             m_controller,
@@ -2030,7 +2030,7 @@ private:
  * @brief SSL 异步操作流水线构建器（无用户流水线特化）
  * @tparam ResultT 结果类型
  * @tparam InlineN 内联步骤容量
- * @details 仅支持 fromStateMachine 方式创建可等待对象，不提供链式构建 API
+ * @details 仅支持 from_state_machine 方式创建可等待对象，不提供链式构建 API
  */
 template <typename ResultT, size_t InlineN>
 requires SslAwaitableResult<ResultT>
@@ -2046,7 +2046,7 @@ public:
      * @return 状态机构建器
      */
     template <SslAwaitableStateMachine MachineT>
-    static auto fromStateMachine(IOController* controller, SslSocket* socket, MachineT machine)
+    static auto from_state_machine(IOController* controller, SslSocket* socket, MachineT machine)
         -> SslStateMachineBuilder<MachineT>
     {
         static_assert(std::same_as<typename MachineT::result_type, ResultT>,

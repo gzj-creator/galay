@@ -37,7 +37,7 @@ enum class TraceparentError {
  * @param tracestate tracestate 头的值（可选）
  * @return 解析成功返回 TraceContext，失败返回 TraceparentError
  */
-[[nodiscard]] std::expected<TraceContext, TraceparentError> extractTraceparent(
+[[nodiscard]] std::expected<TraceContext, TraceparentError> extract_traceparent(
     std::string_view value,
     std::string_view tracestate = {});
 
@@ -47,13 +47,13 @@ enum class TraceparentError {
  * @param context 追踪上下文
  * @return traceparent 头字符串，上下文无效时返回空字符串
  */
-[[nodiscard]] std::string injectTraceparent(const TraceContext& context);
+[[nodiscard]] std::string inject_traceparent(const TraceContext& context);
 
 /**
  * @brief 获取追踪上下文的 tracestate 值用于出站传播
  * @param context 追踪上下文
  * @return tracestate 不透明字符串
  */
-[[nodiscard]] std::string injectTracestate(const TraceContext& context);
+[[nodiscard]] std::string inject_tracestate(const TraceContext& context);
 
 } // namespace galay::tracing

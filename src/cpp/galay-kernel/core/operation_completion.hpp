@@ -26,7 +26,7 @@ public:
     /** @brief 以移动方式消费恢复权；owner scheduler 必须仍在运行。 */
     void resume() && noexcept {
         Waker resume = std::move(m_resume);
-        resume.wakeUp(); // 此后不再访问 this；局部 Waker 独立于 operation 存活。
+        resume.wake_up(); // 此后不再访问 this；局部 Waker 独立于 operation 存活。
     }
 
 private:
@@ -43,7 +43,7 @@ private:
  * 继承 OperationState 的单 owner、固定地址、显式 physical-drain 契约。
  * 不依赖 IOController、TimeoutTimer 或 reactor；这些 adapter 不得另外
  * 存储/覆盖结果。payload 的移动/析构不得重入本对象。内部不分配内存，
- * 不隐式 wake；调用者先 detach，再 takeResume()，最后消费局部恢复权。
+ * 不隐式 wake；调用者先 detach，再 take_resume()，最后消费局部恢复权。
  * 唤醒可能内联销毁本对象，故调用者之后不得访问 operation/frame/resource。
  *
  * 未使用的 accepted fd 等 native resource 必须由 Result 的 RAII 或 adapter
@@ -63,25 +63,25 @@ public:
 
     /** @brief 只读诊断视图；调用者不能绕过 typed result 的完成入口。 */
     [[nodiscard]] const OperationState& state() const noexcept { return m_state; }
-    [[nodiscard]] bool markSubmitted() noexcept { return m_state.markSubmitted(); }
-    [[nodiscard]] bool requestCancel() noexcept { return m_state.requestCancel(); }
+    [[nodiscard]] bool mark_submitted() noexcept { return m_state.mark_submitted(); }
+    [[nodiscard]] bool request_cancel() noexcept { return m_state.request_cancel(); }
 
     /** @brief 转发 attachment 发布前的 retain；失败时不得发布该请求。 */
-    [[nodiscard]] std::expected<void, OperationError> addPhysicalReference() noexcept {
-        return m_state.addPhysicalReference();
+    [[nodiscard]] std::expected<void, OperationError> add_physical_reference() noexcept {
+        return m_state.add_physical_reference();
     }
 
-    /** @brief 转发 attachment drain；true 后调用者可以 takeResume()。 */
-    [[nodiscard]] std::expected<bool, OperationError> releasePhysicalReference() noexcept {
-        return m_state.releasePhysicalReference();
+    /** @brief 转发 attachment drain；true 后调用者可以 take_resume()。 */
+    [[nodiscard]] std::expected<bool, OperationError> release_physical_reference() noexcept {
+        return m_state.release_physical_reference();
     }
 
     /**
      * @brief 先选 winner，再移动结果；失败时完全不消费 result。
      * @note 不调用外部代码或唤醒器（Result 的 noexcept move 除外）。
      */
-    [[nodiscard]] bool tryComplete(CompletionReason reason, Result&& result) noexcept {
-        if (!m_state.tryComplete(reason)) {
+    [[nodiscard]] bool try_complete(CompletionReason reason, Result&& result) noexcept {
+        if (!m_state.try_complete(reason)) {
             return false;
         }
         // emplace 返回内部结果的可写别名；本协议刻意不向 adapter 暴露它。
@@ -93,11 +93,11 @@ public:
      * @brief 安全完成后一次性移交 move-only 恢复权，不执行唤醒。
      * @return drain 未完成或恢复权已取出时返回对应错误；可重试前一种错误。
      */
-    [[nodiscard]] std::expected<ResumeCapability, OperationError> takeResume() noexcept {
+    [[nodiscard]] std::expected<ResumeCapability, OperationError> take_resume() noexcept {
         if (m_state.phase() == OperationPhase::kResumeIssued) {
             return std::unexpected(OperationError::kResumeAlreadyTaken);
         }
-        if (!m_state.markResumeIssued()) {
+        if (!m_state.mark_resume_issued()) {
             return std::unexpected(OperationError::kNotSafeToResume);
         }
         return ResumeCapability(std::move(m_resume));
@@ -107,13 +107,13 @@ public:
      * @brief 恢复权移交后由 await_resume 一次性取走结果。
      * @return 未完成/draining/未移交恢复权或重复取结果时返回 kResultUnavailable。
      */
-    [[nodiscard]] std::expected<Result, OperationError> takeResult() noexcept {
+    [[nodiscard]] std::expected<Result, OperationError> take_result() noexcept {
         if (m_state.phase() != OperationPhase::kResumeIssued) {
             return std::unexpected(OperationError::kResultUnavailable);
         }
 
         // FIX: 必须等待所有 physical refs drain 完成
-        if (m_state.physicalReferenceCount() != 0) {
+        if (m_state.physical_reference_count() != 0) {
             // 仍有 backend attachment 未清理，不能安全地取结果
             return std::unexpected(OperationError::kDrainIncomplete);
         }

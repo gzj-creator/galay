@@ -11,7 +11,7 @@
 namespace {
 
 template <typename T>
-void doNotOptimize(const T& value) noexcept {
+void do_not_optimize(const T& value) noexcept {
 #if defined(__GNUC__) || defined(__clang__)
     asm volatile("" : : "g"(&value) : "memory");
 #else
@@ -19,7 +19,7 @@ void doNotOptimize(const T& value) noexcept {
 #endif
 }
 
-int blackBoxInt(int value) noexcept {
+int black_box_int(int value) noexcept {
 #if defined(__GNUC__) || defined(__clang__)
     asm volatile("" : "+r"(value) : : "memory");
 #endif
@@ -32,7 +32,7 @@ public:
         : minLevel(level) {
     }
 
-    [[nodiscard]] bool isEnabled(galay::tracing::LogLevel level) const noexcept {
+    [[nodiscard]] bool is_enabled(galay::tracing::LogLevel level) const noexcept {
         return minLevel != galay::tracing::LogLevel::kOff &&
             static_cast<int>(level) >= static_cast<int>(minLevel);
     }
@@ -40,7 +40,7 @@ public:
     [[gnu::noinline]] void write(galay::tracing::StructuredLogRecord record) noexcept {
         ++count;
         fieldCount += record.fields.size();
-        doNotOptimize(record.name);
+        do_not_optimize(record.name);
     }
 
     galay::tracing::LogLevel minLevel;
@@ -57,7 +57,7 @@ public:
     std::size_t count{0};
 };
 
-[[nodiscard]] const char* buildType() {
+[[nodiscard]] const char* build_type() {
 #ifdef NDEBUG
     return "Release";
 #else
@@ -65,21 +65,21 @@ public:
 #endif
 }
 
-[[gnu::noinline]] galay::tracing::LogLevel disabledThreshold() noexcept {
+[[gnu::noinline]] galay::tracing::LogLevel disabled_threshold() noexcept {
     return galay::tracing::LogLevel::kError;
 }
 
-[[gnu::noinline]] galay::tracing::LogLevel enabledThreshold() noexcept {
+[[gnu::noinline]] galay::tracing::LogLevel enabled_threshold() noexcept {
     return galay::tracing::LogLevel::kInfo;
 }
 
-double measureDisabledNs() {
+double measure_disabled_ns() {
     constexpr int kIterations = 200000;
-    StructuredNoopWriter writer(disabledThreshold());
+    StructuredNoopWriter writer(disabled_threshold());
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
-        doNotOptimize(i);
+        do_not_optimize(i);
         galay::tracing::event(std::nullopt, writer)
             .debug("value", galay::tracing::field("value", i));
     }
@@ -89,13 +89,13 @@ double measureDisabledNs() {
     return static_cast<double>(ns) / kIterations;
 }
 
-double measureEnabledNs(std::size_t& writes, std::size_t& fields) {
+double measure_enabled_ns(std::size_t& writes, std::size_t& fields) {
     constexpr int kIterations = 100000;
-    StructuredNoopWriter writer(enabledThreshold());
+    StructuredNoopWriter writer(enabled_threshold());
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
-        doNotOptimize(i);
+        do_not_optimize(i);
         galay::tracing::event(std::nullopt, writer)
             .info("value", galay::tracing::field("value", i));
     }
@@ -107,37 +107,37 @@ double measureEnabledNs(std::size_t& writes, std::size_t& fields) {
     return static_cast<double>(ns) / kIterations;
 }
 
-double measureDefaultDisabledNs() {
+double measure_default_disabled_ns() {
     constexpr int kIterations = 200000;
-    StructuredNoopWriter writer(disabledThreshold());
-    galay::tracing::setDefaultLogWriter(&writer);
+    StructuredNoopWriter writer(disabled_threshold());
+    galay::tracing::set_default_log_writer(&writer);
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
-        doNotOptimize(i);
+        do_not_optimize(i);
         galay::tracing::event(std::nullopt)
             .debug("value", galay::tracing::field("value", i));
     }
     const auto elapsed = std::chrono::steady_clock::now() - start;
-    galay::tracing::setDefaultLogWriter(nullptr);
+    galay::tracing::set_default_log_writer(nullptr);
     const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
 
     return static_cast<double>(ns) / kIterations;
 }
 
-double measureDefaultEnabledNs(std::size_t& writes, std::size_t& fields) {
+double measure_default_enabled_ns(std::size_t& writes, std::size_t& fields) {
     constexpr int kIterations = 100000;
-    StructuredNoopWriter writer(enabledThreshold());
-    galay::tracing::setDefaultLogWriter(&writer);
+    StructuredNoopWriter writer(enabled_threshold());
+    galay::tracing::set_default_log_writer(&writer);
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
-        doNotOptimize(i);
+        do_not_optimize(i);
         galay::tracing::event(std::nullopt)
             .info("value", galay::tracing::field("value", i));
     }
     const auto elapsed = std::chrono::steady_clock::now() - start;
-    galay::tracing::setDefaultLogWriter(nullptr);
+    galay::tracing::set_default_log_writer(nullptr);
     const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
 
     writes = writer.count;
@@ -145,13 +145,13 @@ double measureDefaultEnabledNs(std::size_t& writes, std::size_t& fields) {
     return static_cast<double>(ns) / kIterations;
 }
 
-double measureMacroDisabledNs() {
+double measure_macro_disabled_ns() {
     constexpr int kIterations = 200000;
-    StructuredNoopWriter writer(disabledThreshold());
+    StructuredNoopWriter writer(disabled_threshold());
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
-        const int value = blackBoxInt(i);
+        const int value = black_box_int(i);
         GALAY_EVENT_DEBUG(writer, std::nullopt, "value", galay::tracing::field("value", value));
     }
     const auto elapsed = std::chrono::steady_clock::now() - start;
@@ -160,13 +160,13 @@ double measureMacroDisabledNs() {
     return static_cast<double>(ns) / kIterations;
 }
 
-double measureMacroEnabledNs(std::size_t& writes, std::size_t& fields) {
+double measure_macro_enabled_ns(std::size_t& writes, std::size_t& fields) {
     constexpr int kIterations = 100000;
-    StructuredNoopWriter writer(enabledThreshold());
+    StructuredNoopWriter writer(enabled_threshold());
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
-        doNotOptimize(i);
+        do_not_optimize(i);
         GALAY_EVENT_INFO(writer, std::nullopt, "value", galay::tracing::field("value", i));
     }
     const auto elapsed = std::chrono::steady_clock::now() - start;
@@ -177,35 +177,35 @@ double measureMacroEnabledNs(std::size_t& writes, std::size_t& fields) {
     return static_cast<double>(ns) / kIterations;
 }
 
-double measureDefaultMacroDisabledNs() {
+double measure_default_macro_disabled_ns() {
     constexpr int kIterations = 200000;
-    StructuredNoopWriter writer(disabledThreshold());
-    galay::tracing::setDefaultLogWriter(&writer);
+    StructuredNoopWriter writer(disabled_threshold());
+    galay::tracing::set_default_log_writer(&writer);
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
-        const int value = blackBoxInt(i);
+        const int value = black_box_int(i);
         GALAY_EVENT_DEBUG_DEFAULT(std::nullopt, "value", galay::tracing::field("value", value));
     }
     const auto elapsed = std::chrono::steady_clock::now() - start;
-    galay::tracing::setDefaultLogWriter(nullptr);
+    galay::tracing::set_default_log_writer(nullptr);
     const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
 
     return static_cast<double>(ns) / kIterations;
 }
 
-double measureDefaultMacroEnabledNs(std::size_t& writes, std::size_t& fields) {
+double measure_default_macro_enabled_ns(std::size_t& writes, std::size_t& fields) {
     constexpr int kIterations = 100000;
-    StructuredNoopWriter writer(enabledThreshold());
-    galay::tracing::setDefaultLogWriter(&writer);
+    StructuredNoopWriter writer(enabled_threshold());
+    galay::tracing::set_default_log_writer(&writer);
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
-        doNotOptimize(i);
+        do_not_optimize(i);
         GALAY_EVENT_INFO_DEFAULT(std::nullopt, "value", galay::tracing::field("value", i));
     }
     const auto elapsed = std::chrono::steady_clock::now() - start;
-    galay::tracing::setDefaultLogWriter(nullptr);
+    galay::tracing::set_default_log_writer(nullptr);
     const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
 
     writes = writer.count;
@@ -213,16 +213,16 @@ double measureDefaultMacroEnabledNs(std::size_t& writes, std::size_t& fields) {
     return static_cast<double>(ns) / kIterations;
 }
 
-double measureLoggerFallbackNs(std::size_t& writes) {
+double measure_logger_fallback_ns(std::size_t& writes) {
     constexpr int kIterations = 100000;
     auto sink = std::make_shared<NullSink>();
     galay::tracing::Logger logger(galay::tracing::LogLevel::kInfo);
-    logger.clearSinks();
-    logger.addSink(sink);
+    logger.clear_sinks();
+    logger.add_sink(sink);
 
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
-        doNotOptimize(i);
+        do_not_optimize(i);
         galay::tracing::event(std::nullopt, logger)
             .info("value", galay::tracing::field("value", i));
     }
@@ -236,30 +236,30 @@ double measureLoggerFallbackNs(std::size_t& writes) {
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     std::size_t writes = 0;
     std::size_t fields = 0;
-    const double disabled = measureDisabledNs();
-    const double enabled = measureEnabledNs(writes, fields);
+    const double disabled = measure_disabled_ns();
+    const double enabled = measure_enabled_ns(writes, fields);
     std::size_t defaultWrites = 0;
     std::size_t defaultFields = 0;
-    const double defaultDisabled = measureDefaultDisabledNs();
-    const double defaultEnabled = measureDefaultEnabledNs(defaultWrites, defaultFields);
+    const double defaultDisabled = measure_default_disabled_ns();
+    const double defaultEnabled = measure_default_enabled_ns(defaultWrites, defaultFields);
     std::size_t macroWrites = 0;
     std::size_t macroFields = 0;
-    const double macroDisabled = measureMacroDisabledNs();
-    const double macroEnabled = measureMacroEnabledNs(macroWrites, macroFields);
+    const double macroDisabled = measure_macro_disabled_ns();
+    const double macroEnabled = measure_macro_enabled_ns(macroWrites, macroFields);
     std::size_t defaultMacroWrites = 0;
     std::size_t defaultMacroFields = 0;
-    const double defaultMacroDisabled = measureDefaultMacroDisabledNs();
-    const double defaultMacroEnabled = measureDefaultMacroEnabledNs(defaultMacroWrites, defaultMacroFields);
+    const double defaultMacroDisabled = measure_default_macro_disabled_ns();
+    const double defaultMacroEnabled = measure_default_macro_enabled_ns(defaultMacroWrites, defaultMacroFields);
     std::size_t fallbackWrites = 0;
-    const double loggerFallback = measureLoggerFallbackNs(fallbackWrites);
+    const double loggerFallback = measure_logger_fallback_ns(fallbackWrites);
 
-    std::cout << "B6-StructuredEvent workload_disabled=200000 workload_enabled=100000 build=" << buildType()
+    std::cout << "B6-StructuredEvent workload_disabled=200000 workload_enabled=100000 build=" << build_type()
               << " backend=structured_noop"
               << " explicit_disabled_ns_per_event=" << disabled
               << " explicit_enabled_ns_per_event=" << enabled

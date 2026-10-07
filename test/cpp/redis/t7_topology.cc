@@ -11,22 +11,22 @@ using namespace galay::redis;
 
 namespace {
 
-bool checkLazyTasks(IOScheduler& scheduler, std::array<Task<RedisCommandResult>, 3>& tasks)
+bool check_lazy_tasks(IOScheduler& scheduler, std::array<Task<RedisCommandResult>, 3>& tasks)
 {
     auto& worker = SchedulerTestAccess::worker(scheduler);
-    if (worker.hasLocalWork() || worker.hasPendingInjected()) {
+    if (worker.has_local_work() || worker.has_pending_injected()) {
         std::cerr << "Creating refresh tasks must not submit work\n";
         return false;
     }
     std::array<TaskRef, 3> refs;
     for (size_t i = 0; i < tasks.size(); ++i) {
-        refs[i] = galay::kernel::detail::TaskAccess::taskRef(tasks[i]);
-        if (!refs[i].isValid() || refs[i].belongScheduler() != nullptr ||
+        refs[i] = galay::kernel::detail::TaskAccess::task_ref(tasks[i]);
+        if (!refs[i].is_valid() || refs[i].belong_scheduler() != nullptr ||
             refs[i].state()->m_done.load(std::memory_order_acquire)) {
             std::cerr << "Refresh task must remain unbound and suspended until submission\n";
             return false;
         }
-        if (!scheduleTask(scheduler, std::move(tasks[i]))) {
+        if (!schedule_task(scheduler, std::move(tasks[i]))) {
             return false;
         }
     }
@@ -58,15 +58,15 @@ int main()
     {
         IOScheduler scheduler;
         auto client = RedisMasterSlaveClientBuilder().scheduler(&scheduler).build();
-        std::array tasks{client.refreshFromSentinel(), client.refreshFromSentinel(),
-                         client.refreshFromSentinel()};
-        if (!checkLazyTasks(scheduler, tasks)) { return 1; }
+        std::array tasks{client.refresh_from_sentinel(), client.refresh_from_sentinel(),
+                         client.refresh_from_sentinel()};
+        if (!check_lazy_tasks(scheduler, tasks)) { return 1; }
     }
     {
         IOScheduler scheduler;
         auto client = RedisClusterClientBuilder().scheduler(&scheduler).build();
-        std::array tasks{client.refreshSlots(), client.refreshSlots(), client.refreshSlots()};
-        if (!checkLazyTasks(scheduler, tasks)) { return 1; }
+        std::array tasks{client.refresh_slots(), client.refresh_slots(), client.refresh_slots()};
+        if (!check_lazy_tasks(scheduler, tasks)) { return 1; }
     }
     std::cout << "Topology task laziness PASS\n";
     return 0;

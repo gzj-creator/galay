@@ -49,17 +49,17 @@ namespace galay::redis
         size_t buffer_size = 65536;
         bool tcp_no_delay = true;
 
-        bool isSendTimeoutEnabled() const
+        bool is_send_timeout_enabled() const
         {
             return send_timeout >= std::chrono::milliseconds(0);
         }
 
-        bool isRecvTimeoutEnabled() const
+        bool is_recv_timeout_enabled() const
         {
             return recv_timeout >= std::chrono::milliseconds(0);
         }
 
-        static AsyncRedisConfig withTimeout(std::chrono::milliseconds send,
+        static AsyncRedisConfig with_timeout(std::chrono::milliseconds send,
                                             std::chrono::milliseconds recv)
         {
             AsyncRedisConfig cfg;
@@ -68,21 +68,21 @@ namespace galay::redis
             return cfg;
         }
 
-        static AsyncRedisConfig withRecvTimeout(std::chrono::milliseconds recv)
+        static AsyncRedisConfig with_recv_timeout(std::chrono::milliseconds recv)
         {
             AsyncRedisConfig cfg;
             cfg.recv_timeout = recv;
             return cfg;
         }
 
-        static AsyncRedisConfig withSendTimeout(std::chrono::milliseconds send)
+        static AsyncRedisConfig with_send_timeout(std::chrono::milliseconds send)
         {
             AsyncRedisConfig cfg;
             cfg.send_timeout = send;
             return cfg;
         }
 
-        static AsyncRedisConfig noTimeout()
+        static AsyncRedisConfig no_timeout()
         {
             return {};
         }

@@ -13,7 +13,7 @@
 
 using namespace galay::kernel;
 
-Task<void> pushStep(int)
+Task<void> push_step(int)
 {
     co_return;
 }
@@ -33,6 +33,6 @@ static_assert(HasTaskThenRvalue<Task<void>>);
 
 int main()
 {
-    [[maybe_unused]] auto root = pushStep(1).then(pushStep(2));
+    [[maybe_unused]] auto root = push_step(1).then(push_step(2));
     return 0;
 }

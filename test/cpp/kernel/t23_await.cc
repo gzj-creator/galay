@@ -40,7 +40,7 @@ public:
     AwaitableByValue lock() {
         return AwaitableByValue(&m_counter);
     }
-    int getCounter() const { return m_counter; }
+    int get_counter() const { return m_counter; }
 private:
     int m_counter = 0;
 };
@@ -75,7 +75,7 @@ public:
     AwaitableByRef& lock() {
         return m_awaitable;
     }
-    int getCounter() const { return m_counter; }
+    int get_counter() const { return m_counter; }
 private:
     int m_counter = 0;
     AwaitableByRef m_awaitable;
@@ -105,7 +105,7 @@ public:
     AwaitableByRefNoReset& lock() {
         return m_awaitable;
     }
-    int getCounter() const { return m_counter; }
+    int get_counter() const { return m_counter; }
 private:
     int m_counter = 0;
     AwaitableByRefNoReset m_awaitable;
@@ -119,7 +119,7 @@ concept BenchmarkTarget =
     std::default_initializable<T> &&
     std::is_lvalue_reference_v<LockRef<T>> &&
     requires(T t) {
-        { t.getCounter() } -> std::convertible_to<int>;
+        { t.get_counter() } -> std::convertible_to<int>;
     } &&
     requires(std::remove_reference_t<LockRef<T>> awaitable) {
         { awaitable.await_ready() } -> std::convertible_to<bool>;
@@ -149,7 +149,7 @@ void benchmark(const char* name, int iterations) {
     double ns_per_op = static_cast<double>(duration.count()) / iterations;
 
     std::cout << name << ": " << ns_per_op << " ns/op"
-              << " (counter=" << obj.getCounter() << ")" << std::endl;
+              << " (counter=" << obj.get_counter() << ")" << std::endl;
 }
 
 // 特化版本处理返回值类型
@@ -173,7 +173,7 @@ void benchmark<ObjectByValue>(const char* name, int iterations) {
     double ns_per_op = static_cast<double>(duration.count()) / iterations;
 
     std::cout << name << ": " << ns_per_op << " ns/op"
-              << " (counter=" << obj.getCounter() << ")" << std::endl;
+              << " (counter=" << obj.get_counter() << ")" << std::endl;
 }
 
 int main() {

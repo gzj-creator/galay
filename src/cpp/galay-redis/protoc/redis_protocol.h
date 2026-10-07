@@ -89,28 +89,28 @@ namespace galay::redis::protocol
         [[nodiscard]] RedisReply clone() const;
 
         // 类型判断
-        bool isSimpleString() const { return m_type == RespType::SimpleString; } ///< 判断是否为简单字符串
-        bool isError() const { return m_type == RespType::Error; }               ///< 判断是否为错误
-        bool isInteger() const { return m_type == RespType::Integer; }           ///< 判断是否为整数
-        bool isBulkString() const { return m_type == RespType::BulkString; }     ///< 判断是否为批量字符串
-        bool isArray() const { return m_type == RespType::Array; }               ///< 判断是否为数组
-        bool isNull() const { return m_type == RespType::Null; }                 ///< 判断是否为空值
-        bool isDouble() const { return m_type == RespType::Double; }             ///< 判断是否为浮点数
-        bool isBoolean() const { return m_type == RespType::Boolean; }           ///< 判断是否为布尔值
-        bool isMap() const { return m_type == RespType::Map; }                   ///< 判断是否为映射
-        bool isSet() const { return m_type == RespType::Set; }                   ///< 判断是否为集合
-        bool isPush() const { return m_type == RespType::Push; }                 ///< 判断是否为推送
+        bool is_simple_string() const { return m_type == RespType::SimpleString; } ///< 判断是否为简单字符串
+        bool is_error() const { return m_type == RespType::Error; }               ///< 判断是否为错误
+        bool is_integer() const { return m_type == RespType::Integer; }           ///< 判断是否为整数
+        bool is_bulk_string() const { return m_type == RespType::BulkString; }     ///< 判断是否为批量字符串
+        bool is_array() const { return m_type == RespType::Array; }               ///< 判断是否为数组
+        bool is_null() const { return m_type == RespType::Null; }                 ///< 判断是否为空值
+        bool is_double() const { return m_type == RespType::Double; }             ///< 判断是否为浮点数
+        bool is_boolean() const { return m_type == RespType::Boolean; }           ///< 判断是否为布尔值
+        bool is_map() const { return m_type == RespType::Map; }                   ///< 判断是否为映射
+        bool is_set() const { return m_type == RespType::Set; }                   ///< 判断是否为集合
+        bool is_push() const { return m_type == RespType::Push; }                 ///< 判断是否为推送
 
         // 获取值
-        std::string asString() const;                ///< 转换为字符串
-        int64_t asInteger() const;                   ///< 转换为整数
-        double asDouble() const;                     ///< 转换为浮点数
-        bool asBoolean() const;                      ///< 转换为布尔值
-        const std::vector<RedisReply>& asArray() const; ///< 转换为数组引用
-        const std::vector<std::pair<RedisReply, RedisReply>>& asMap() const; ///< 转换为映射引用
+        std::string as_string() const;                ///< 转换为字符串
+        int64_t as_integer() const;                   ///< 转换为整数
+        double as_double() const;                     ///< 转换为浮点数
+        bool as_boolean() const;                      ///< 转换为布尔值
+        const std::vector<RedisReply>& as_array() const; ///< 转换为数组引用
+        const std::vector<std::pair<RedisReply, RedisReply>>& as_map() const; ///< 转换为映射引用
 
-        RespType getType() const { return m_type; }  ///< 获取类型
-        const RespData& getData() const { return m_data; } ///< 获取数据
+        RespType get_type() const { return m_type; }  ///< 获取类型
+        const RespData& get_data() const { return m_data; } ///< 获取数据
 
     private:
         friend class RespParser;
@@ -120,7 +120,7 @@ namespace galay::redis::protocol
          * @note 该函数会拷贝 data 指向的字节到 RedisReply 内部的 std::string，
          *       不保存调用方输入缓冲区视图，确保解析结果可独立存活。
          */
-        void assignString(RespType type, const char* data, size_t length);
+        void assign_string(RespType type, const char* data, size_t length);
 
         RespData m_data;  ///< 回复数据
         RespType m_type;  ///< 回复类型
@@ -166,7 +166,7 @@ namespace galay::redis::protocol
          * @param[out] out 解析结果输出
          * @return 解析的字节数，或解析错误
          */
-        std::expected<size_t, ParseError> parseFast(const char* data,
+        std::expected<size_t, ParseError> parse_fast(const char* data,
                                                     size_t length,
                                                     RedisReply* out);
 
@@ -177,31 +177,31 @@ namespace galay::redis::protocol
 
     private:
         std::expected<size_t, ParseError>
-            parseSimpleStringFast(const char* data, size_t length, RedisReply* out); ///< 解析简单字符串 (+OK\r\n)
+            parse_simple_string_fast(const char* data, size_t length, RedisReply* out); ///< 解析简单字符串 (+OK\r\n)
 
         std::expected<size_t, ParseError>
-            parseErrorFast(const char* data, size_t length, RedisReply* out); ///< 解析错误 (-Error message\r\n)
+            parse_error_fast(const char* data, size_t length, RedisReply* out); ///< 解析错误 (-Error message\r\n)
 
         std::expected<size_t, ParseError>
-            parseIntegerFast(const char* data, size_t length, RedisReply* out); ///< 解析整数 (:1000\r\n)
+            parse_integer_fast(const char* data, size_t length, RedisReply* out); ///< 解析整数 (:1000\r\n)
 
         std::expected<size_t, ParseError>
-            parseBulkStringFast(const char* data, size_t length, RedisReply* out); ///< 解析批量字符串 ($6\r\nfoobar\r\n)
+            parse_bulk_string_fast(const char* data, size_t length, RedisReply* out); ///< 解析批量字符串 ($6\r\nfoobar\r\n)
 
         std::expected<size_t, ParseError>
-            parseArrayFast(const char* data, size_t length, RedisReply* out); ///< 解析数组 (*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n)
+            parse_array_fast(const char* data, size_t length, RedisReply* out); ///< 解析数组 (*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n)
 
         std::expected<size_t, ParseError>
-            parseDoubleFast(const char* data, size_t length, RedisReply* out); ///< 解析双精度浮点数 (,1.23\r\n) - RESP3
+            parse_double_fast(const char* data, size_t length, RedisReply* out); ///< 解析双精度浮点数 (,1.23\r\n) - RESP3
 
         std::expected<size_t, ParseError>
-            parseBooleanFast(const char* data, size_t length, RedisReply* out); ///< 解析布尔值 (#t\r\n or #f\r\n) - RESP3
+            parse_boolean_fast(const char* data, size_t length, RedisReply* out); ///< 解析布尔值 (#t\r\n or #f\r\n) - RESP3
 
         std::expected<size_t, ParseError>
-            parseMapFast(const char* data, size_t length, RedisReply* out); ///< 解析映射 (%2\r\n...) - RESP3
+            parse_map_fast(const char* data, size_t length, RedisReply* out); ///< 解析映射 (%2\r\n...) - RESP3
 
         std::expected<size_t, ParseError>
-            parseSetFast(const char* data, size_t length, RedisReply* out); ///< 解析集合 (~2\r\n...) - RESP3
+            parse_set_fast(const char* data, size_t length, RedisReply* out); ///< 解析集合 (~2\r\n...) - RESP3
 
         /**
          * @brief 查找 CRLF (\r\n) 位置
@@ -210,7 +210,7 @@ namespace galay::redis::protocol
          * @param offset 起始偏移
          * @return CRLF 位置，未找到返回空
          */
-        std::optional<size_t> findCRLF(const char* data, size_t length, size_t offset = 0);
+        std::optional<size_t> find_crlf(const char* data, size_t length, size_t offset = 0);
 
         /**
          * @brief 解析整数值
@@ -218,7 +218,7 @@ namespace galay::redis::protocol
          * @param length 数据长度
          * @return 解析的整数值，或解析错误
          */
-        std::expected<int64_t, ParseError> parseIntegerValue(const char* data, size_t length);
+        std::expected<int64_t, ParseError> parse_integer_value(const char* data, size_t length);
     };
 
     /**
@@ -237,41 +237,41 @@ namespace galay::redis::protocol
          * @param str 字符串内容
          * @return 编码后的 RESP 数据
          */
-        std::string encodeSimpleString(const std::string& str);
+        std::string encode_simple_string(const std::string& str);
 
         /**
          * @brief 编码错误消息
          * @param error 错误消息
          * @return 编码后的 RESP 数据
          */
-        std::string encodeError(const std::string& error);
+        std::string encode_error(const std::string& error);
 
         /**
          * @brief 编码整数
          * @param value 整数值
          * @return 编码后的 RESP 数据
          */
-        std::string encodeInteger(int64_t value);
+        std::string encode_integer(int64_t value);
 
         /**
          * @brief 编码批量字符串
          * @param str 字符串内容
          * @return 编码后的 RESP 数据
          */
-        std::string encodeBulkString(const std::string& str);
+        std::string encode_bulk_string(const std::string& str);
 
         /**
          * @brief 编码空值
          * @return 编码后的 RESP 数据
          */
-        std::string encodeNull();
+        std::string encode_null();
 
         /**
          * @brief 编码数组
          * @param elements 数组元素列表
          * @return 编码后的 RESP 数据
          */
-        std::string encodeArray(const std::vector<std::string>& elements);
+        std::string encode_array(const std::vector<std::string>& elements);
 
         /**
          * @brief 编码 Redis 命令（模板化版本）
@@ -281,7 +281,7 @@ namespace galay::redis::protocol
          * @return 编码后的 RESP 命令
          */
         template<typename... Args>
-        std::string encodeCommand(const std::string& cmd, Args&&... args);
+        std::string encode_command(const std::string& cmd, Args&&... args);
 
         /**
          * @brief 编码 Redis 命令（初始化列表参数）
@@ -289,7 +289,7 @@ namespace galay::redis::protocol
          * @param args 命令参数初始化列表
          * @return 编码后的 RESP 命令
          */
-        std::string encodeCommand(const std::string& cmd, std::initializer_list<std::string> args);
+        std::string encode_command(const std::string& cmd, std::initializer_list<std::string> args);
 
         /**
          * @brief 编码完整的 Redis 命令（容器版本）
@@ -298,14 +298,14 @@ namespace galay::redis::protocol
          * @return 编码后的 RESP 命令
          */
         template<typename Container>
-        std::string encodeCommand(const Container& cmd_parts);
+        std::string encode_command(const Container& cmd_parts);
 
         /**
          * @brief 编码完整的 Redis 命令（初始化列表版本）
          * @param cmd_parts 命令各部分初始化列表
          * @return 编码后的 RESP 命令
          */
-        std::string encodeCommand(std::initializer_list<std::string> cmd_parts);
+        std::string encode_command(std::initializer_list<std::string> cmd_parts);
 
         /**
          * @brief 追加编码后的命令到输出字符串
@@ -350,32 +350,32 @@ namespace galay::redis::protocol
          * @param args 命令参数
          * @return 预估字节数
          */
-        [[nodiscard]] size_t estimateCommandBytes(std::string_view cmd,
+        [[nodiscard]] size_t estimate_command_bytes(std::string_view cmd,
                                                   std::span<const std::string_view> args) const
         {
-            size_t total = 1 + decimalDigits(1 + args.size()) + 2;
-            total += estimateBulkStringBytes(cmd.size());
+            size_t total = 1 + decimal_digits(1 + args.size()) + 2;
+            total += estimate_bulk_string_bytes(cmd.size());
             for (const auto& arg : args) {
-                total += estimateBulkStringBytes(arg.size());
+                total += estimate_bulk_string_bytes(arg.size());
             }
             return total;
         }
 
-        [[nodiscard]] size_t estimateCommandBytes(std::string_view cmd,
+        [[nodiscard]] size_t estimate_command_bytes(std::string_view cmd,
                                                   std::initializer_list<std::string_view> args) const
         {
-            return estimateCommandBytes(
+            return estimate_command_bytes(
                 cmd,
                 std::span<const std::string_view>(args.begin(), args.size()));
         }
 
-        [[nodiscard]] size_t estimateCommandBytes(std::string_view cmd,
+        [[nodiscard]] size_t estimate_command_bytes(std::string_view cmd,
                                                   const std::vector<std::string>& args) const
         {
-            size_t total = 1 + decimalDigits(1 + args.size()) + 2;
-            total += estimateBulkStringBytes(cmd.size());
+            size_t total = 1 + decimal_digits(1 + args.size()) + 2;
+            total += estimate_bulk_string_bytes(cmd.size());
             for (const auto& arg : args) {
-                total += estimateBulkStringBytes(arg.size());
+                total += estimate_bulk_string_bytes(arg.size());
             }
             return total;
         }
@@ -385,68 +385,68 @@ namespace galay::redis::protocol
          * @param[out] out 输出字符串
          * @param cmd_parts 命令各部分
          */
-        void appendCommandFast(std::string& out, const std::vector<std::string>& cmd_parts) const
+        void append_command_fast(std::string& out, const std::vector<std::string>& cmd_parts) const
         {
             if (cmd_parts.empty()) {
                 out += "*0\r\n";
                 return;
             }
             out.push_back('*');
-            appendUnsignedDecimal(out, cmd_parts.size());
+            append_unsigned_decimal(out, cmd_parts.size());
             out += "\r\n";
             for (const auto& part : cmd_parts) {
-                appendBulkString(out, part);
+                append_bulk_string(out, part);
             }
         }
 
         /**
          * @brief 快速路径：追加命令（span 参数版本）
          */
-        void appendCommandFast(std::string& out,
+        void append_command_fast(std::string& out,
                                std::string_view cmd,
                                std::span<const std::string_view> args) const
         {
             const size_t arg_count = 1 + args.size();
             out.push_back('*');
-            appendUnsignedDecimal(out, arg_count);
+            append_unsigned_decimal(out, arg_count);
             out += "\r\n";
-            appendBulkString(out, cmd);
+            append_bulk_string(out, cmd);
             for (const auto& arg : args) {
-                appendBulkString(out, arg);
+                append_bulk_string(out, arg);
             }
         }
 
         /**
          * @brief 快速路径：追加命令（vector 参数版本）
          */
-        void appendCommandFast(std::string& out,
+        void append_command_fast(std::string& out,
                                std::string_view cmd,
                                const std::vector<std::string>& args) const
         {
             const size_t arg_count = 1 + args.size();
             out.push_back('*');
-            appendUnsignedDecimal(out, arg_count);
+            append_unsigned_decimal(out, arg_count);
             out += "\r\n";
-            appendBulkString(out, cmd);
+            append_bulk_string(out, cmd);
             for (const auto& arg : args) {
-                appendBulkString(out, arg);
+                append_bulk_string(out, arg);
             }
         }
 
         /**
          * @brief 快速路径：追加命令（初始化列表版本）
          */
-        void appendCommandFast(std::string& out,
+        void append_command_fast(std::string& out,
                                std::string_view cmd,
                                std::initializer_list<std::string_view> args) const
         {
             const size_t arg_count = 1 + args.size();
             out.push_back('*');
-            appendUnsignedDecimal(out, arg_count);
+            append_unsigned_decimal(out, arg_count);
             out += "\r\n";
-            appendBulkString(out, cmd);
+            append_bulk_string(out, cmd);
             for (const auto& arg : args) {
-                appendBulkString(out, arg);
+                append_bulk_string(out, arg);
             }
         }
 
@@ -456,7 +456,7 @@ namespace galay::redis::protocol
          * @param[out] out 输出字符串
          * @param value 无符号整数值
          */
-        static void appendUnsignedDecimal(std::string& out, size_t value)
+        static void append_unsigned_decimal(std::string& out, size_t value)
         {
             char buf[32];
             auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), value);
@@ -472,7 +472,7 @@ namespace galay::redis::protocol
          * @param value 无符号整数值
          * @return 十进制位数
          */
-        static size_t decimalDigits(size_t value)
+        static size_t decimal_digits(size_t value)
         {
             size_t digits = 1;
             while (value >= 10) {
@@ -487,9 +487,9 @@ namespace galay::redis::protocol
          * @param value_len 原始值长度
          * @return 编码后的预估字节数
          */
-        static size_t estimateBulkStringBytes(size_t value_len)
+        static size_t estimate_bulk_string_bytes(size_t value_len)
         {
-            return 1 + decimalDigits(value_len) + 2 + value_len + 2;
+            return 1 + decimal_digits(value_len) + 2 + value_len + 2;
         }
 
         /**
@@ -497,10 +497,10 @@ namespace galay::redis::protocol
          * @param[out] out 输出字符串
          * @param value 字符串值
          */
-        static void appendBulkString(std::string& out, std::string_view value)
+        static void append_bulk_string(std::string& out, std::string_view value)
         {
             out.push_back('$');
-            appendUnsignedDecimal(out, value.size());
+            append_unsigned_decimal(out, value.size());
             out += "\r\n";
             out.append(value.data(), value.size());
             out += "\r\n";
@@ -513,33 +513,33 @@ namespace galay::redis::protocol
          * @param value 命令部分值
          */
         template<typename T>
-        static void appendCommandPart(std::string& out, T&& value)
+        static void append_command_part(std::string& out, T&& value)
         {
             using Decayed = std::decay_t<T>;
             if constexpr (std::is_same_v<Decayed, std::string>) {
-                appendBulkString(out, value);
+                append_bulk_string(out, value);
             } else if constexpr (std::is_same_v<Decayed, std::string_view>) {
-                appendBulkString(out, value);
+                append_bulk_string(out, value);
             } else if constexpr (std::is_same_v<Decayed, const char*> ||
                                  std::is_same_v<Decayed, char*>) {
-                appendBulkString(out, value ? std::string_view(value) : std::string_view{});
+                append_bulk_string(out, value ? std::string_view(value) : std::string_view{});
             } else if constexpr (std::is_integral_v<Decayed>) {
                 char buf[32];
                 auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), value);
                 if (ec == std::errc()) {
-                    appendBulkString(out, std::string_view(buf, static_cast<size_t>(ptr - buf)));
+                    append_bulk_string(out, std::string_view(buf, static_cast<size_t>(ptr - buf)));
                 } else {
                     auto str = std::to_string(value);
-                    appendBulkString(out, str);
+                    append_bulk_string(out, str);
                 }
             } else if constexpr (std::is_floating_point_v<Decayed>) {
                 auto str = std::to_string(value);
-                appendBulkString(out, str);
+                append_bulk_string(out, str);
             } else if constexpr (std::is_convertible_v<T, std::string_view>) {
-                appendBulkString(out, std::string_view(value));
+                append_bulk_string(out, std::string_view(value));
             } else {
                 auto str = std::string(value);
-                appendBulkString(out, str);
+                append_bulk_string(out, str);
             }
         }
 
@@ -550,7 +550,7 @@ namespace galay::redis::protocol
          * @return 字符串表示
          */
         template<typename T>
-        std::string toString(T&& value);
+        std::string to_string(T&& value);
 
         /**
          * @brief 递归构建命令参数（辅助函数）
@@ -561,16 +561,16 @@ namespace galay::redis::protocol
          * @param rest 剩余参数
          */
         template<typename T, typename... Rest>
-        void buildCommandArgs(std::string& result, T&& first, Rest&&... rest);
+        void build_command_args(std::string& result, T&& first, Rest&&... rest);
 
         // RESP3扩展
-        std::string encodeDouble(double value);   ///< 编码双精度浮点数（RESP3）
-        std::string encodeBoolean(bool value);     ///< 编码布尔值（RESP3）
+        std::string encode_double(double value);   ///< 编码双精度浮点数（RESP3）
+        std::string encode_boolean(bool value);     ///< 编码布尔值（RESP3）
     };
 
     // 模板实现必须在头文件中
     template<typename T>
-    std::string RespEncoder::toString(T&& value)
+    std::string RespEncoder::to_string(T&& value)
     {
         if constexpr (std::is_same_v<std::decay_t<T>, std::string> ||
                       std::is_same_v<std::decay_t<T>, const char*> ||
@@ -587,32 +587,32 @@ namespace galay::redis::protocol
     }
 
     template<typename T, typename... Rest>
-    void RespEncoder::buildCommandArgs(std::string& result, T&& first, Rest&&... rest)
+    void RespEncoder::build_command_args(std::string& result, T&& first, Rest&&... rest)
     {
-        appendCommandPart(result, std::forward<T>(first));
+        append_command_part(result, std::forward<T>(first));
         if constexpr (sizeof...(rest) > 0) {
-            buildCommandArgs(result, std::forward<Rest>(rest)...);
+            build_command_args(result, std::forward<Rest>(rest)...);
         }
     }
 
     template<typename... Args>
-    std::string RespEncoder::encodeCommand(const std::string& cmd, Args&&... args)
+    std::string RespEncoder::encode_command(const std::string& cmd, Args&&... args)
     {
         const size_t arg_count = 1 + sizeof...(args);
         std::string result;
-        result.reserve(1 + decimalDigits(arg_count) + 2 + estimateBulkStringBytes(cmd.size()));
+        result.reserve(1 + decimal_digits(arg_count) + 2 + estimate_bulk_string_bytes(cmd.size()));
         result.push_back('*');
         result += std::to_string(arg_count);
         result += "\r\n";
-        appendBulkString(result, cmd);
+        append_bulk_string(result, cmd);
         if constexpr (sizeof...(args) > 0) {
-            buildCommandArgs(result, std::forward<Args>(args)...);
+            build_command_args(result, std::forward<Args>(args)...);
         }
         return result;
     }
 
     template<typename Container>
-    std::string RespEncoder::encodeCommand(const Container& cmd_parts)
+    std::string RespEncoder::encode_command(const Container& cmd_parts)
     {
         size_t size = 0;
         if constexpr (requires { cmd_parts.size(); }) {
@@ -626,12 +626,12 @@ namespace galay::redis::protocol
         }
 
         std::string result;
-        result.reserve(1 + decimalDigits(size) + 2 + size * 8);
+        result.reserve(1 + decimal_digits(size) + 2 + size * 8);
         result.push_back('*');
         result += std::to_string(size);
         result += "\r\n";
         for (const auto& part : cmd_parts) {
-            appendCommandPart(result, part);
+            append_command_part(result, part);
         }
         return result;
     }

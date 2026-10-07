@@ -28,7 +28,7 @@ struct BenchmarkOptions
 };
 
 template <typename Integer>
-bool parseInteger(std::string_view text, Integer& value)
+bool parse_integer(std::string_view text, Integer& value)
 {
     const char* begin = text.data();
     const char* end = begin + text.size();
@@ -36,14 +36,14 @@ bool parseInteger(std::string_view text, Integer& value)
     return error == std::errc{} && parsed_end == end;
 }
 
-void printUsage(const char* program)
+void print_usage(const char* program)
 {
     std::cout << "Usage: " << program
               << " [-h host] [-p port] [-c clients] [-n operations]"
                  " [-m normal|pipeline] [-b batch_size] [-q]\n";
 }
 
-bool parseArgs(int argc, char* argv[], BenchmarkOptions& options, bool& show_help)
+bool parse_args(int argc, char* argv[], BenchmarkOptions& options, bool& show_help)
 {
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
@@ -64,19 +64,19 @@ bool parseArgs(int argc, char* argv[], BenchmarkOptions& options, bool& show_hel
         if (arg == "-h") {
             options.host = value;
         } else if (arg == "-p") {
-            if (!parseInteger(value, options.port) || options.port <= 0 || options.port > 65535) {
+            if (!parse_integer(value, options.port) || options.port <= 0 || options.port > 65535) {
                 return false;
             }
         } else if (arg == "-c") {
-            if (!parseInteger(value, options.clients) || options.clients <= 0) {
+            if (!parse_integer(value, options.clients) || options.clients <= 0) {
                 return false;
             }
         } else if (arg == "-n") {
-            if (!parseInteger(value, options.operations) || options.operations <= 0) {
+            if (!parse_integer(value, options.operations) || options.operations <= 0) {
                 return false;
             }
         } else if (arg == "-b") {
-            if (!parseInteger(value, options.batch_size) || options.batch_size <= 0) {
+            if (!parse_integer(value, options.batch_size) || options.batch_size <= 0) {
                 return false;
             }
         } else if (arg == "-m") {
@@ -92,25 +92,25 @@ bool parseArgs(int argc, char* argv[], BenchmarkOptions& options, bool& show_hel
     return true;
 }
 
-bool replyIsStatus(const redisReply* reply, std::string_view expected)
+bool reply_is_status(const redisReply* reply, std::string_view expected)
 {
     return reply != nullptr && reply->type == REDIS_REPLY_STATUS && reply->str != nullptr &&
            std::string_view(reply->str, reply->len) == expected;
 }
 
-bool runCommand(redisContext* context,
+bool run_command(redisContext* context,
                 const char* format,
                 const std::string& key,
                 const std::string& value,
                 bool expect_value)
 {
     auto* reply = static_cast<redisReply*>(
-        redisCommand(context, format, key.data(), key.size(), value.data(), value.size()));
+        redis_command(context, format, key.data(), key.size(), value.data(), value.size()));
     if (reply == nullptr) {
         return false;
     }
 
-    bool ok = replyIsStatus(reply, "OK");
+    bool ok = reply_is_status(reply, "OK");
     if (expect_value) {
         ok = reply->type == REDIS_REPLY_STRING && reply->str != nullptr &&
              std::string_view(reply->str, reply->len) == value;
@@ -119,7 +119,7 @@ bool runCommand(redisContext* context,
     return ok;
 }
 
-void runWorker(const BenchmarkOptions* options,
+void run_worker(const BenchmarkOptions* options,
                int worker_id,
                std::atomic<std::int64_t>* success,
                std::atomic<std::int64_t>* error,
@@ -161,14 +161,14 @@ void runWorker(const BenchmarkOptions* options,
             const auto& value = values[static_cast<std::size_t>(operation)];
 
             auto begin = std::chrono::steady_clock::now();
-            const bool set_ok = runCommand(context, "SET %b %b", key, value, false);
+            const bool set_ok = run_command(context, "SET %b %b", key, value, false);
             auto end = std::chrono::steady_clock::now();
             samples.push_back(
                 std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count());
             (set_ok ? success : error)->fetch_add(1, std::memory_order_relaxed);
 
             begin = std::chrono::steady_clock::now();
-            const bool get_ok = runCommand(context, "GET %b", key, value, true);
+            const bool get_ok = run_command(context, "GET %b", key, value, true);
             end = std::chrono::steady_clock::now();
             samples.push_back(
                 std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count());
@@ -195,7 +195,7 @@ void runWorker(const BenchmarkOptions* options,
                 void* raw_reply = nullptr;
                 const int reply_status = redisGetReply(context, &raw_reply);
                 auto* reply = static_cast<redisReply*>(raw_reply);
-                if (reply_status == REDIS_OK && replyIsStatus(reply, "OK")) {
+                if (reply_status == REDIS_OK && reply_is_status(reply, "OK")) {
                     ++batch_success;
                 }
                 if (reply != nullptr) {
@@ -230,8 +230,8 @@ int main(int argc, char* argv[])
 {
     BenchmarkOptions options;
     bool show_help = false;
-    if (!parseArgs(argc, argv, options, show_help)) {
-        printUsage(argv[0]);
+    if (!parse_args(argc, argv, options, show_help)) {
+        print_usage(argv[0]);
         return show_help ? 0 : 2;
     }
 
@@ -245,7 +245,7 @@ int main(int argc, char* argv[])
     const auto begin = std::chrono::steady_clock::now();
     for (int worker = 0; worker < options.clients; ++worker) {
         workers.emplace_back(
-            runWorker, &options, worker, &success, &error, worker_latencies.data());
+            run_worker, &options, worker, &success, &error, worker_latencies.data());
     }
     for (auto& worker : workers) {
         worker.join();

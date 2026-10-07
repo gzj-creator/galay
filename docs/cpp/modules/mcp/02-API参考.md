@@ -78,10 +78,7 @@ v2 的成功结果带 `resultType`；`tools/list`、`resources/list`、
 来源：`galay-mcp/common/mcp_json.h`、`galay-mcp/common/mcp_base.h`
 
 ```cpp
-using JsonString = std::string;
-using JsonElement = simdjson::dom::element;
-using JsonObject = simdjson::dom::object;
-using JsonArray = simdjson::dom::array;
+// JSON 文本使用 std::string，DOM 使用 serde 的 json::Json。
 
 constexpr const char* MCP_VERSION = "2024-11-05";
 constexpr const char* JSONRPC_VERSION = "2.0";
@@ -152,54 +149,21 @@ enum class ContentType {
 ```cpp
 class JsonDocument {
 public:
-    static std::expected<JsonDocument, McpError> Parse(std::string_view json);
-    const JsonElement& Root() const;
-    JsonElement& Root();
-    std::string_view Raw() const;
+    static std::expected<JsonDocument, McpError> parse(std::string_view json);
+    const json::Json& root() const noexcept;
+    json::Json& root() noexcept;
 };
 
-class JsonWriter {
-public:
-    void StartObject();
-    void EndObject();
-    void StartArray();
-    void EndArray();
-    void Key(const std::string& key);
-    void String(const std::string& value);
-    void Number(int64_t value);
-    void Number(uint64_t value);
-    void Number(double value);
-    void Bool(bool value);
-    void Null();
-    void Raw(const std::string& json);
-    std::string TakeString();
-};
-
-class JsonHelper {
-public:
-    static bool GetObject(const JsonElement& element, JsonObject& out);
-    static bool GetArray(const JsonElement& element, JsonArray& out);
-    static bool GetStringValue(const JsonElement& element, std::string& out);
-    static bool GetRawJson(const JsonElement& element, std::string& out);
-
-    static bool GetString(const JsonObject& obj, const char* key, std::string& out);
-    static bool GetInt64(const JsonObject& obj, const char* key, int64_t& out);
-    static bool GetBool(const JsonObject& obj, const char* key, bool& out);
-    static bool GetElement(const JsonObject& obj, const char* key, JsonElement& out);
-    static bool GetObject(const JsonObject& obj, const char* key, JsonObject& out);
-    static bool GetArray(const JsonObject& obj, const char* key, JsonArray& out);
-
-    static const JsonElement& EmptyObject();
-};
+json::stream::StreamWriter make_json_writer(std::string& out);
+const json::Json& empty_json_object();
 ```
 
 说明：
 
-- `JsonDocument::Parse(...)` 失败时返回 `McpError::parseError(...)`；`Root()` / `Raw()` 暴露的视图都依赖 `JsonDocument` 生命周期。
-- `JsonWriter::Raw(...)` 会把调用方提供的 JSON 片段**原样写入**输出，不做合法性校验；只适合拼接已经验证过的 JSON。
-- `JsonWriter::TakeString()` 会移动走内部缓冲区；公开 API 没有单独的“清空并继续复用”接口。
-- `JsonHelper::EmptyObject()` 返回进程级共享的 `{}` DOM 元素，适合“参数缺省时按空对象处理”的场景。
-- `JsonWriter` 里的 `ContextType` / `Context` 是私有嵌套类型，只负责跟踪当前在对象还是数组里、是否需要写逗号、对象键之后是否期待 value；它们不是调用方可见扩展点。
+- `JsonDocument::parse(...)` 失败时返回 `McpError::parse_error(...)`；`root()` 持有 serde DOM 存储，移动文档不失效派生子值。
+- JSON 类型检查和读取直接使用 `json::Json::is_object()`、`operator[]`、`as_string()`、`as_int64()` 等 serde 接口，检查转换结果。
+- `make_json_writer(out)` 绑定调用方字符串，使用 serde `StreamWriter::start_object()`、`key()`、`number()` 等蛇形接口；错误粘滞，最终必须检查 `finish()`。
+- `empty_json_object()` 返回常驻的 `{}` 值。旧 `JsonWriter`、`JsonHelper` 和 simdjson 类型别名已经移除，不提供旧名或另一套包装。
 
 公开数据结构包括：
 
@@ -220,23 +184,23 @@ public:
 - `JsonRpcNotification`
 - `JsonRpcError`
 
-这些结构都提供 `toJson()`；除 `JsonRpcRequest` / `JsonRpcNotification` 外，多数也提供 `fromJson(const JsonElement&)`。
+这些结构都提供 `to_json()`；除 `JsonRpcRequest` / `JsonRpcNotification` 外，多数也提供 `from_json(const json::Json&)`。
 
 常用结构的字段要求可按以下速查：
 
 | 类型 | 必需字段 / 成功返回形状 | 可选字段 / 边界 |
 | --- | --- | --- |
-| `Content` | `type` 必需；`text` / `image` / `resource` 三种分支分别要求 `text`、`data`+`mimeType`、`uri` | 未知 `type` 会返回 `invalidMessage("Unknown content type")` |
-| `Tool` | `name`、`description` | `inputSchema` 在 `fromJson` 中是可选原始 JSON |
+| `Content` | `type` 必需；`text` / `image` / `resource` 三种分支分别要求 `text`、`data`+`mimeType`、`uri` | 未知 `type` 会返回 `invalid_message("Unknown content type")` |
+| `Tool` | `name`、`description` | `inputSchema` 在 `from_json` 中是可选原始 JSON |
 | `Resource` | `uri`、`name`、`description`、`mimeType` | 无 |
 | `PromptArgument` | `name`、`description` | `required` 缺省时为 `false` |
 | `Prompt` | `name`、`description` | `arguments` 缺省时为空数组 |
-| `ClientInfo` / `ServerInfo` | `name`、`version` | `ServerInfo.capabilities` 在 `fromJson` 中是可选原始 JSON |
+| `ClientInfo` / `ServerInfo` | `name`、`version` | `ServerInfo.capabilities` 在 `from_json` 中是可选原始 JSON |
 | `ServerCapabilities` | 顶层对象 | 只检查 `tools` / `resources` / `prompts` / `logging` 字段是否“存在且非 null”，不解析其内部子字段 |
 | `InitializeParams` | `protocolVersion`、`clientInfo` | `capabilities` 缺省时按空对象处理 |
 | `InitializeResult` | `protocolVersion`、`serverInfo`、`capabilities` | 无 |
 | `ToolCallParams` | `name` | `arguments` 缺省时为空对象 |
-| `ToolCallResult` | 顶层对象 | `content` 缺省时为空数组；`isError` 缺省时为 `false` |
+| `ToolCallResult` | 顶层对象 | `content` 缺省时为空数组；`is_error` 缺省时为 `false` |
 | `JsonRpcRequest` | `method` | `jsonrpc` 默认 `"2.0"`；`id`、`params` 可选 |
 | `JsonRpcNotification` | `method` | `jsonrpc` 默认 `"2.0"`；`params` 可选 |
 | `JsonRpcResponse` | `id` | `result` / `error` 都以原始 JSON 字符串保存 |
@@ -273,41 +237,41 @@ public:
     McpErrorCode code() const;
     const std::string& message() const;
     const std::string& details() const;
-    bool isSuccess() const;
-    std::string toString() const;
-    int toJsonRpcErrorCode() const;
+    bool is_success() const;
+    std::string to_string() const;
+    int to_json_rpc_error_code() const;
 
     static McpError success();
-    static McpError connectionFailed(const std::string& details = "");
-    static McpError connectionClosed(const std::string& details = "");
-    static McpError connectionError(const std::string& details = "");
-    static McpError protocolError(const std::string& details = "");
-    static McpError invalidMessage(const std::string& details = "");
-    static McpError invalidMethod(const std::string& method);
-    static McpError invalidParams(const std::string& details = "");
-    static McpError parseError(const std::string& details = "");
-    static McpError invalidRequest(const std::string& details = "");
-    static McpError methodNotFound(const std::string& method);
-    static McpError internalError(const std::string& details = "");
-    static McpError toolNotFound(const std::string& toolName);
-    static McpError toolExecutionFailed(const std::string& details = "");
-    static McpError toolError(const std::string& details = "");
-    static McpError resourceNotFound(const std::string& uri);
-    static McpError promptNotFound(const std::string& name);
-    static McpError initializationFailed(const std::string& details = "");
-    static McpError alreadyInitialized();
-    static McpError notInitialized();
-    static McpError readError(const std::string& details = "");
-    static McpError writeError(const std::string& details = "");
+    static McpError connection_failed(const std::string& details = "");
+    static McpError connection_closed(const std::string& details = "");
+    static McpError connection_error(const std::string& details = "");
+    static McpError protocol_error(const std::string& details = "");
+    static McpError invalid_message(const std::string& details = "");
+    static McpError invalid_method(const std::string& method);
+    static McpError invalid_params(const std::string& details = "");
+    static McpError parse_error(const std::string& details = "");
+    static McpError invalid_request(const std::string& details = "");
+    static McpError method_not_found(const std::string& method);
+    static McpError internal_error(const std::string& details = "");
+    static McpError tool_not_found(const std::string& toolName);
+    static McpError tool_execution_failed(const std::string& details = "");
+    static McpError tool_error(const std::string& details = "");
+    static McpError resource_not_found(const std::string& uri);
+    static McpError prompt_not_found(const std::string& name);
+    static McpError initialization_failed(const std::string& details = "");
+    static McpError already_initialized();
+    static McpError not_initialized();
+    static McpError read_error(const std::string& details = "");
+    static McpError write_error(const std::string& details = "");
     static McpError unknown(const std::string& details = "");
-    static McpError invalidResponse(const std::string& details = "");
-    static McpError fromJsonRpcError(int code, const std::string& message, const std::string& details = "");
+    static McpError invalid_response(const std::string& details = "");
+    static McpError from_json_rpc_error(int code, const std::string& message, const std::string& details = "");
 };
 ```
 
 同步 API 通常返回 `std::expected<T, McpError>`；HTTP 异步 API 则把结果写回调用方提供的 `std::expected<...>&`。
 
-`toJsonRpcErrorCode()` 的映射边界：
+`to_json_rpc_error_code()` 的映射边界：
 
 - `ParseError` / `InvalidRequest` / `MethodNotFound` / `InvalidMethod` / `InvalidParams` 会映射到对应 JSON-RPC 标准错误码。
 - `ToolExecutionFailed`、`InitializationFailed`、`ReadError`、`WriteError` 以及大多数非标准错误会收敛成 `INTERNAL_ERROR`（`-32603`）。
@@ -321,31 +285,31 @@ public:
 ```cpp
 class SchemaBuilder {
 public:
-    SchemaBuilder& addString(const std::string& name, const std::string& description, bool required = false);
-    SchemaBuilder& addNumber(const std::string& name, const std::string& description, bool required = false);
-    SchemaBuilder& addInteger(const std::string& name, const std::string& description, bool required = false);
-    SchemaBuilder& addBoolean(const std::string& name, const std::string& description, bool required = false);
-    SchemaBuilder& addArray(const std::string& name, const std::string& description, const std::string& itemType = "string", bool required = false);
-    SchemaBuilder& addObject(const std::string& name, const std::string& description, const JsonString& objectSchema, bool required = false);
-    SchemaBuilder& addObject(const std::string& name, const std::string& description, const SchemaBuilder& objectSchema, bool required = false);
-    SchemaBuilder& addEnum(const std::string& name, const std::string& description, const std::vector<std::string>& enumValues, bool required = false);
-    JsonString build() const;
+    SchemaBuilder& add_string(const std::string& name, const std::string& description, bool required = false);
+    SchemaBuilder& add_number(const std::string& name, const std::string& description, bool required = false);
+    SchemaBuilder& add_integer(const std::string& name, const std::string& description, bool required = false);
+    SchemaBuilder& add_boolean(const std::string& name, const std::string& description, bool required = false);
+    SchemaBuilder& add_array(const std::string& name, const std::string& description, const std::string& itemType = "string", bool required = false);
+    SchemaBuilder& add_object(const std::string& name, const std::string& description, const std::string& objectSchema, bool required = false);
+    SchemaBuilder& add_object(const std::string& name, const std::string& description, const SchemaBuilder& objectSchema, bool required = false);
+    SchemaBuilder& add_enum(const std::string& name, const std::string& description, const std::vector<std::string>& enumValues, bool required = false);
+    std::string build() const;
 };
 ```
 
 说明：
 
-- `addArray(...)` 的第三个参数是 `itemType`，默认 `"string"`。
-- `addObject(...)` 支持直接传入已有 schema JSON，或传入另一个 `SchemaBuilder`。
+- `add_array(...)` 的第三个参数是 `itemType`，默认 `"string"`。
+- `add_object(...)` 支持直接传入已有 schema JSON，或传入另一个 `SchemaBuilder`。
 - `build()` 生成最终 JSON Schema 字符串。
-- 头文件中的 `PropertyKind` / `Property` 是 `SchemaBuilder` 私有实现细节：前者表示属性类别，后者保存每个属性的名称、描述、`required`、数组 item 类型、枚举值和对象 schema；调用方只能通过 `addString` / `addNumber` / `addInteger` / `addBoolean` / `addArray` / `addObject` / `addEnum` 间接生成它们。
+- 头文件中的 `PropertyKind` / `Property` 是 `SchemaBuilder` 私有实现细节：前者表示属性类别，后者保存每个属性的名称、描述、`required`、数组 item 类型、枚举值和对象 schema；调用方只能通过 `add_string` / `add_number` / `add_integer` / `add_boolean` / `add_array` / `add_object` / `add_enum` 间接生成它们。
 
 ### `PromptArgumentBuilder`
 
 ```cpp
 class PromptArgumentBuilder {
 public:
-    PromptArgumentBuilder& addArgument(const std::string& name, const std::string& description, bool required = false);
+    PromptArgumentBuilder& add_argument(const std::string& name, const std::string& description, bool required = false);
     std::vector<PromptArgument> build() const;
 };
 ```
@@ -358,7 +322,7 @@ public:
 struct JsonRpcRequestView {
     std::optional<int64_t> id;
     std::string method;
-    JsonElement params;
+    json::Json params;
     bool hasParams = false;
 };
 
@@ -369,10 +333,10 @@ struct ParsedJsonRpcRequest {
 
 struct JsonRpcResponseView {
     int64_t id = 0;
-    JsonElement result;
-    JsonElement error;
-    bool hasResult = false;
-    bool hasError = false;
+    json::Json result;
+    json::Json error;
+    bool has_result = false;
+    bool has_error = false;
 };
 
 struct ParsedJsonRpcResponse {
@@ -380,16 +344,16 @@ struct ParsedJsonRpcResponse {
     JsonRpcResponseView response;
 };
 
-std::expected<ParsedJsonRpcRequest, McpError> parseJsonRpcRequest(std::string_view body);
-std::expected<ParsedJsonRpcResponse, McpError> parseJsonRpcResponse(std::string_view body);
+std::expected<ParsedJsonRpcRequest, McpError> parse_json_rpc_request(std::string_view body);
+std::expected<ParsedJsonRpcResponse, McpError> parse_json_rpc_response(std::string_view body);
 ```
 
 生命周期说明：
 
-- `JsonRpcRequestView` / `JsonRpcResponseView` 中的 `JsonElement` 都借用自对应的 `JsonDocument`。
+- `JsonRpcRequestView` / `JsonRpcResponseView` 中的 `json::Json` 都借用自对应的 `JsonDocument`。
 - 不要让 `request.params`、`response.result`、`response.error` 脱离 `ParsedJsonRpcRequest::document` 或 `ParsedJsonRpcResponse::document` 的生命周期。
-- `parseJsonRpcRequest(...)` 要求顶层是对象、`method` 必须存在且为字符串、`id` 若存在必须是 `int64`。
-- `parseJsonRpcResponse(...)` 要求顶层是对象，且 `id` 必须存在并为 `int64`。
+- `parse_json_rpc_request(...)` 要求顶层是对象、`method` 必须存在且为字符串、`id` 若存在必须是 `int64`。
+- `parse_json_rpc_response(...)` 要求顶层是对象，且 `id` 必须存在并为 `int64`。
 
 ## 6. `McpProtocolUtils`
 
@@ -398,21 +362,21 @@ std::expected<ParsedJsonRpcResponse, McpError> parseJsonRpcResponse(std::string_
 ```cpp
 namespace protocol {
 
-JsonString buildInitializeResult(const std::string& serverName,
+std::string build_initialize_result(const std::string& server_name,
                                  const std::string& serverVersion,
                                  bool hasTools,
                                  bool hasResources,
                                  bool hasPrompts);
 
-JsonRpcResponse makeResultResponse(int64_t id, const JsonString& result);
+JsonRpcResponse make_result_response(int64_t id, const std::string& result);
 
-JsonRpcResponse makeErrorResponse(int64_t id,
+JsonRpcResponse make_error_response(int64_t id,
                                   int code,
                                   const std::string& message,
                                   const std::string& details = "");
 
 template <typename MapType, typename Extractor>
-JsonString buildListResultFromMap(const MapType& map, const char* key, Extractor extractor);
+std::string build_list_result_from_map(const MapType& map, const char* key, Extractor extractor);
 
 } // namespace protocol
 ```
@@ -420,8 +384,8 @@ JsonString buildListResultFromMap(const MapType& map, const char* key, Extractor
 说明：
 
 - 这些 helper 是**头文件内联函数 / 模板**，没有单独的 `.cc` 实现文件。
-- `buildInitializeResult(...)` 直接生成 `InitializeResult` 对应 JSON。
-- `buildListResultFromMap(...)` 用于把工具、资源、提示注册表转成统一的列表响应 JSON。
+- `build_initialize_result(...)` 直接生成 `InitializeResult` 对应 JSON。
+- `build_list_result_from_map(...)` 用于把工具、资源、提示注册表转成统一的列表响应 JSON。
 
 ## 7. `McpStdioServer`
 
@@ -430,21 +394,21 @@ JsonString buildListResultFromMap(const MapType& map, const char* key, Extractor
 ```cpp
 class McpStdioServer {
 public:
-    using ToolHandler = std::function<std::expected<JsonString, McpError>(const JsonElement&)>;
+    using ToolHandler = std::function<std::expected<std::string, McpError>(const json::Json&)>;
     using ResourceReader = std::function<std::expected<std::string, McpError>(const std::string&)>;
-    using PromptGetter = std::function<std::expected<JsonString, McpError>(const std::string&, const JsonElement&)>;
+    using PromptGetter = std::function<std::expected<std::string, McpError>(const std::string&, const json::Json&)>;
 
     McpStdioServer();
     ~McpStdioServer();
 
-    void setServerInfo(const std::string& name, const std::string& version);
-    void addTool(const std::string& name, const std::string& description, const JsonString& inputSchema, ToolHandler handler);
-    void addResource(const std::string& uri, const std::string& name, const std::string& description, const std::string& mimeType, ResourceReader reader);
-    void addPrompt(const std::string& name, const std::string& description, const std::vector<PromptArgument>& arguments, PromptGetter getter);
+    void set_server_info(const std::string& name, const std::string& version);
+    void add_tool(const std::string& name, const std::string& description, const std::string& inputSchema, ToolHandler handler);
+    void add_resource(const std::string& uri, const std::string& name, const std::string& description, const std::string& mimeType, ResourceReader reader);
+    void add_prompt(const std::string& name, const std::string& description, const std::vector<PromptArgument>& arguments, PromptGetter getter);
 
     void run();
     void stop();
-    bool isRunning() const;
+    bool is_running() const;
 };
 ```
 
@@ -457,13 +421,13 @@ public:
 
 | 入口 | 参数 | 成功结果 | 失败 / 边界 |
 | --- | --- | --- | --- |
-| `setServerInfo(name, version)` | 服务器名、版本号 | `void` | 仅影响后续 `initialize` 响应中的 `serverInfo` |
-| `addTool(name, description, inputSchema, handler)` | 工具元数据 + `ToolHandler` | `void` | 同名工具会覆盖已有注册项，并重建 `tools/list` 缓存 |
-| `addResource(uri, name, description, mimeType, reader)` | 资源元数据 + `ResourceReader` | `void` | 同 URI 会覆盖已有注册项，并重建 `resources/list` 缓存 |
-| `addPrompt(name, description, arguments, getter)` | 提示元数据 + `PromptGetter` | `void` | 同名提示会覆盖已有注册项，并重建 `prompts/list` 缓存 |
-| `run()` | 无 | `void`，阻塞循环直到 `stop()` 或 `stdin` EOF | 解析失败会向对端发送 `PARSE_ERROR`；空行会在本地被视为 `invalidMessage("Empty message")` 并跳过 |
+| `set_server_info(name, version)` | 服务器名、版本号 | `void` | 仅影响后续 `initialize` 响应中的 `serverInfo` |
+| `add_tool(name, description, inputSchema, handler)` | 工具元数据 + `ToolHandler` | `void` | 同名工具会覆盖已有注册项，并重建 `tools/list` 缓存 |
+| `add_resource(uri, name, description, mimeType, reader)` | 资源元数据 + `ResourceReader` | `void` | 同 URI 会覆盖已有注册项，并重建 `resources/list` 缓存 |
+| `add_prompt(name, description, arguments, getter)` | 提示元数据 + `PromptGetter` | `void` | 同名提示会覆盖已有注册项，并重建 `prompts/list` 缓存 |
+| `run()` | 无 | `void`，阻塞循环直到 `stop()` 或 `stdin` EOF | 解析失败会向对端发送 `PARSE_ERROR`；空行会在本地被视为 `invalid_message("Empty message")` 并跳过 |
 | `stop()` | 无 | `void` | 只翻转 `m_running`；不会主动关闭 `stdin/stdout` |
-| `isRunning()` | 无 | `bool` | 仅读取原子状态 |
+| `is_running()` | 无 | `bool` | 仅读取原子状态 |
 
 ### 已实现的 RPC 行为
 
@@ -498,19 +462,19 @@ public:
     McpClientMode mode() const;
 
     std::expected<void, McpError> initialize(const std::string& clientName, const std::string& clientVersion);
-    std::expected<JsonString, McpError> callTool(const std::string& toolName, const JsonString& arguments);
-    std::expected<std::vector<Tool>, McpError> listTools();
-    std::expected<std::vector<Resource>, McpError> listResources();
-    std::expected<std::string, McpError> readResource(const std::string& uri);
-    std::expected<std::vector<Prompt>, McpError> listPrompts();
-    std::expected<JsonString, McpError> getPrompt(const std::string& name, const JsonString& arguments);
+    std::expected<std::string, McpError> call_tool(const std::string& toolName, const std::string& arguments);
+    std::expected<std::vector<Tool>, McpError> list_tools();
+    std::expected<std::vector<Resource>, McpError> list_resources();
+    std::expected<std::string, McpError> read_resource(const std::string& uri);
+    std::expected<std::vector<Prompt>, McpError> list_prompts();
+    std::expected<std::string, McpError> get_prompt(const std::string& name, const std::string& arguments);
     std::expected<void, McpError> ping();
     std::expected<void, McpError> disconnect();
 
-    bool isConnected() const;
-    bool isInitialized() const;
-    const ServerInfo& getServerInfo() const;
-    const ServerCapabilities& getServerCapabilities() const;
+    bool is_connected() const;
+    bool is_initialized() const;
+    const ServerInfo& get_server_info() const;
+    const ServerCapabilities& get_server_capabilities() const;
 };
 ```
 
@@ -526,22 +490,22 @@ public:
 | 入口 | 参数 | 成功结果 | 失败 / 边界 |
 | --- | --- | --- | --- |
 | `McpClient(McpStdioClientConfig{})` | 可选输入 / 输出流指针 | 构造 stdio 模式客户端 | 空流指针允许构造，但读写协议 API 会在解引用前返回 `InvalidParams` |
-| `initialize(clientName, clientVersion)` | 客户端名、版本号 | `void`；缓存 `serverInfo` / `serverCapabilities` | 已初始化时返回 `AlreadyInitialized`；初始化响应无法解析时返回 `InitializationFailed` |
-| `callTool(toolName, arguments)` | 工具名、原始 JSON 参数 | 返回 `ToolCallResult.content` 的**第一条文本内容**；若内容为空或第一项不是文本则返回 `{}` | 未初始化返回 `NotInitialized`；服务端 `isError=true` 时返回 `ToolExecutionFailed("Tool returned error")` |
-| `listTools()` | 无 | `std::vector<Tool>` | 未初始化返回 `NotInitialized`；缺失 `tools` 字段时返回空数组 |
-| `listResources()` | 无 | `std::vector<Resource>` | 未初始化返回 `NotInitialized`；缺失 `resources` 字段时返回空数组 |
-| `readResource(uri)` | 资源 URI | 返回 `contents` 数组中的第一条文本内容；没有文本内容时返回空字符串 | 未初始化返回 `NotInitialized` |
-| `listPrompts()` | 无 | `std::vector<Prompt>` | 未初始化返回 `NotInitialized`；缺失 `prompts` 字段时返回空数组 |
-| `getPrompt(name, arguments)` | 提示名、可选原始 JSON 参数 | 返回服务端 `result` 原始 JSON | 未初始化返回 `NotInitialized` |
+| `initialize(clientName, clientVersion)` | 客户端名、版本号 | `void`；缓存 `serverInfo` / `server_capabilities` | 已初始化时返回 `AlreadyInitialized`；初始化响应无法解析时返回 `InitializationFailed` |
+| `call_tool(toolName, arguments)` | 工具名、原始 JSON 参数 | 返回 `ToolCallResult.content` 的**第一条文本内容**；若内容为空或第一项不是文本则返回 `{}` | 未初始化返回 `NotInitialized`；服务端 `is_error=true` 时返回 `ToolExecutionFailed("Tool returned error")` |
+| `list_tools()` | 无 | `std::vector<Tool>` | 未初始化返回 `NotInitialized`；缺失 `tools` 字段时返回空数组 |
+| `list_resources()` | 无 | `std::vector<Resource>` | 未初始化返回 `NotInitialized`；缺失 `resources` 字段时返回空数组 |
+| `read_resource(uri)` | 资源 URI | 返回 `contents` 数组中的第一条文本内容；没有文本内容时返回空字符串 | 未初始化返回 `NotInitialized` |
+| `list_prompts()` | 无 | `std::vector<Prompt>` | 未初始化返回 `NotInitialized`；缺失 `prompts` 字段时返回空数组 |
+| `get_prompt(name, arguments)` | 提示名、可选原始 JSON 参数 | 返回服务端 `result` 原始 JSON | 未初始化返回 `NotInitialized` |
 | `ping()` | 无 | `void` | 未初始化返回 `NotInitialized` |
 | `disconnect()` | 无 | `void` | 只清空本地 `m_initialized` 标志，不发送协议级 `disconnect` 消息 |
-| `isConnected()` / `isInitialized()` / `getServerInfo()` / `getServerCapabilities()` | 无 | 本地缓存状态 / 信息 | stdio 模式下 `isConnected()` 等同 `isInitialized()`；这些查询不触发 I/O |
+| `is_connected()` / `is_initialized()` / `get_server_info()` / `get_server_capabilities()` | 无 | 本地缓存状态 / 信息 | stdio 模式下 `is_connected()` 等同 `is_initialized()`；这些查询不触发 I/O |
 
 ### 生命周期与并发语义
 
 - `initialize(...)` 会先发送 `initialize` 请求，成功后再发送 `notifications/initialized` 通知。
-- 传输层采用“一行一条 JSON-RPC 消息”的 `stdin/stdout` 协议；`readMessage()` 会跳过空行并持续读取到第一条非空消息。
-- 同一 `McpClient` 实例应视为**串行调用对象**：源码虽然给输入 / 输出分别加锁，但 `sendRequest()` 会在单一输入流上直接消费响应并忽略“不是当前 request id”的消息，这会让并发请求互相吞掉对方响应。
+- 传输层采用“一行一条 JSON-RPC 消息”的 `stdin/stdout` 协议；`read_message()` 会跳过空行并持续读取到第一条非空消息。
+- 同一 `McpClient` 实例应视为**串行调用对象**：源码虽然给输入 / 输出分别加锁，但 `send_request()` 会在单一输入流上直接消费响应并忽略“不是当前 request id”的消息，这会让并发请求互相吞掉对方响应。
 
 ### 示例与测试锚点
 
@@ -556,9 +520,9 @@ public:
 ```cpp
 class McpHttpServer {
 public:
-    using ToolHandler = std::function<kernel::Task<void>(const JsonElement&, std::expected<JsonString, McpError>&)>;
+    using ToolHandler = std::function<kernel::Task<void>(const json::Json&, std::expected<std::string, McpError>&)>;
     using ResourceReader = std::function<kernel::Task<void>(const std::string&, std::expected<std::string, McpError>&)>;
-    using PromptGetter = std::function<kernel::Task<void>(const std::string&, const JsonElement&, std::expected<JsonString, McpError>&)>;
+    using PromptGetter = std::function<kernel::Task<void>(const std::string&, const json::Json&, std::expected<std::string, McpError>&)>;
 
     McpHttpServer(const std::string& host = "0.0.0.0",
                   int port = 8080,
@@ -566,21 +530,21 @@ public:
                   size_t parallelSchedulers = 0);
     ~McpHttpServer();
 
-    void setServerInfo(const std::string& name, const std::string& version);
-    void addTool(const std::string& name, const std::string& description, const JsonString& inputSchema, ToolHandler handler);
-    void addResource(const std::string& uri, const std::string& name, const std::string& description, const std::string& mimeType, ResourceReader reader);
-    void addPrompt(const std::string& name, const std::string& description, const std::vector<PromptArgument>& arguments, PromptGetter getter);
+    void set_server_info(const std::string& name, const std::string& version);
+    void add_tool(const std::string& name, const std::string& description, const std::string& inputSchema, ToolHandler handler);
+    void add_resource(const std::string& uri, const std::string& name, const std::string& description, const std::string& mimeType, ResourceReader reader);
+    void add_prompt(const std::string& name, const std::string& description, const std::vector<PromptArgument>& arguments, PromptGetter getter);
 
     void start();
     void stop();
-    bool isRunning() const;
+    bool is_running() const;
 };
 ```
 
 约束：
 
 - 拷贝 / 移动被禁用。
-- `addTool` / `addResource` / `addPrompt` 必须在 `start()` 前完成。
+- `add_tool` / `add_resource` / `add_prompt` 必须在 `start()` 前完成。
 - 公开头文件直接依赖 `galay-http` 与 `galay-kernel`。
 
 ### 入口、返回与失败语义
@@ -588,11 +552,11 @@ public:
 | 入口 | 参数 | 成功结果 | 失败 / 边界 |
 | --- | --- | --- | --- |
 | `McpHttpServer(host, port, ioSchedulers, parallelSchedulers)` | 监听地址、端口；默认 `0.0.0.0:8080`，HTTP runtime 默认 `io=8`、`parallel=0` | 构造实例 | 实际绑定失败由底层 `galay-http` 运行时暴露 |
-| `setServerInfo(name, version)` | 服务器名、版本号 | `void` | 影响响应头 `Server` 与 `initialize` 返回体 |
-| `addTool(...)` / `addResource(...)` / `addPrompt(...)` | 与 `stdio` 版本同名参数 | `void` | 当前头文件明确标注为非线程安全注册阶段；运行期不要动态添加 |
+| `set_server_info(name, version)` | 服务器名、版本号 | `void` | 影响响应头 `Server` 与 `initialize` 返回体 |
+| `add_tool(...)` / `add_resource(...)` / `add_prompt(...)` | 与 `stdio` 版本同名参数 | `void` | 当前头文件明确标注为非线程安全注册阶段；运行期不要动态添加 |
 | `start()` | 无 | `void`，阻塞当前线程并监听 `POST /mcp` | 重复调用时直接返回；内部固定回复 `application/json` 且带 `Connection: keep-alive` |
 | `stop()` | 无 | `void` | 只清理 `m_running` 与 `m_initialized` 标志 |
-| `isRunning()` | 无 | `bool` | 仅读取原子状态 |
+| `is_running()` | 无 | `bool` | 仅读取原子状态 |
 
 ### 已实现的 HTTP / RPC 边界
 
@@ -604,7 +568,7 @@ public:
 
 ### 线程与并发语义
 
-- 头文件明确标注：`addTool` / `addResource` / `addPrompt` 必须在 `start()` 前调用，服务器运行期间不支持动态注册。
+- 头文件明确标注：`add_tool` / `add_resource` / `add_prompt` 必须在 `start()` 前调用，服务器运行期间不支持动态注册。
 - 响应列表（tools/resources/prompts）使用惰性缓存；每次注册只标记缓存脏，首次访问列表时再重建。
 - `ToolInfo` / `ResourceInfo` / `PromptInfo` 在 `McpHttpServer` 中同样只是私有注册表条目；它们存在于公开头里，但不属于业务侧协议面 API。
 
@@ -620,10 +584,10 @@ public:
 根命名空间类型混用。v2 McpHttpServer 的通知入口是普通函数，不返回协程：
 
 ```cpp
-std::expected<void, McpError> notifyToolsListChanged();
-std::expected<void, McpError> notifyResourcesListChanged();
-std::expected<void, McpError> notifyPromptsListChanged();
-std::expected<void, McpError> notifyResourceUpdated(std::string uri);
+std::expected<void, McpError> notify_tools_list_changed();
+std::expected<void, McpError> notify_resources_list_changed();
+std::expected<void, McpError> notify_prompts_list_changed();
+std::expected<void, McpError> notify_resource_updated(std::string uri);
 ```
 
 这些函数可从任意线程提交拥有值的命令，不阻塞，也不创建协程。成功仅代表
@@ -633,7 +597,7 @@ start() 所在线程独占订阅链表并处理命令；stop() 是供外部线�
 操作，销毁对象前必须 join start() 线程。注册表及 server 配置只允许在 start()
 前由单线程设置。
 
-v2 McpHttpClient 的 transport 和工具定义表属于 runtime.getIOScheduler(0)。
+v2 McpHttpClient 的 transport 和工具定义表属于 runtime.get_io_scheduler(0)。
 请求和 listen() 必须由该 owner scheduler 执行；跨 scheduler 调用返回
 InvalidParams，重叠请求返回 Overload。connect() / close() 返回
 std::expected<ConnectAwaitable, McpError> 和
@@ -659,19 +623,19 @@ public:
     ConnectAwaitable connect(std::string url);
 
     kernel::Task<void> initialize(std::string clientName, std::string clientVersion, std::expected<void, McpError>& result);
-    kernel::Task<void> callTool(std::string toolName, JsonString arguments, std::expected<JsonString, McpError>& result);
-    kernel::Task<void> listTools(std::expected<std::vector<Tool>, McpError>& result);
-    kernel::Task<void> listResources(std::expected<std::vector<Resource>, McpError>& result);
-    kernel::Task<void> readResource(std::string uri, std::expected<std::string, McpError>& result);
-    kernel::Task<void> listPrompts(std::expected<std::vector<Prompt>, McpError>& result);
-    kernel::Task<void> getPrompt(std::string name, JsonString arguments, std::expected<JsonString, McpError>& result);
+    kernel::Task<void> call_tool(std::string toolName, std::string arguments, std::expected<std::string, McpError>& result);
+    kernel::Task<void> list_tools(std::expected<std::vector<Tool>, McpError>& result);
+    kernel::Task<void> list_resources(std::expected<std::vector<Resource>, McpError>& result);
+    kernel::Task<void> read_resource(std::string uri, std::expected<std::string, McpError>& result);
+    kernel::Task<void> list_prompts(std::expected<std::vector<Prompt>, McpError>& result);
+    kernel::Task<void> get_prompt(std::string name, std::string arguments, std::expected<std::string, McpError>& result);
     kernel::Task<void> ping(std::expected<void, McpError>& result);
-    CloseAwaitable disconnectAsync();
+    CloseAwaitable disconnect_async();
 
-    bool isConnected() const;
-    bool isInitialized() const;
-    const ServerInfo& getServerInfo() const;
-    const ServerCapabilities& getServerCapabilities() const;
+    bool is_connected() const;
+    bool is_initialized() const;
+    const ServerInfo& get_server_info() const;
+    const ServerCapabilities& get_server_capabilities() const;
 };
 ```
 
@@ -679,7 +643,7 @@ public:
 
 - 先创建 `kernel::Runtime`。
 - 构造时通过 `McpHttpClientConfig{.url = url}` 选择 HTTP 模式并设置默认 URL。
-- `connect()` / `connect(url)` / `disconnectAsync()` 返回 awaitable。
+- `connect()` / `connect(url)` / `disconnect_async()` 返回 awaitable。
 - 其余 RPC 通过 `kernel::Task<void>` 把结果写回调用方提供的 `std::expected<...>&`。
 - stdio 模式对象调用这些 HTTP 协程 API 会在冷任务被调度后写入 `InvalidTransportMode`。
 
@@ -689,21 +653,21 @@ public:
 | --- | --- | --- | --- |
 | `McpClient(runtime, McpHttpClientConfig{.url = url})` | `kernel::Runtime&` 与服务端 URL | 构造实例 | 运行时生命周期需覆盖整个客户端对象 |
 | `connect()` / `connect(url)` | 服务端 URL，例如 `http://127.0.0.1:8080/mcp` | `ConnectAwaitable` | 返回类型与底层 `http::HttpClient::connect()` 保持一致；`connect(url)` 会更新后续 RPC 使用的 URL |
-| `initialize(clientName, clientVersion, result)` | 客户端名、版本号、结果引用 | `result = {}` 并缓存 `serverInfo` / `serverCapabilities` | 解析初始化响应失败时写入 `InitializationFailed` |
-| `callTool(toolName, arguments, result)` | 工具名、原始 JSON 参数、结果引用 | `result` 写入第一条文本内容；无文本时写入 `{}` | 未初始化写入 `NotInitialized`；`isError=true` 时写入 `ToolExecutionFailed("Tool returned error")` |
-| `listTools(result)` / `listResources(result)` / `listPrompts(result)` | 结果引用 | 写入相应对象数组 | 未初始化写入 `NotInitialized`；缺失列表字段时写入空数组 |
-| `readResource(uri, result)` | URI、结果引用 | 写入第一条文本内容；无文本时为空字符串 | 未初始化写入 `NotInitialized` |
-| `getPrompt(name, arguments, result)` | 提示名、可选原始 JSON 参数、结果引用 | 写入服务端 `result` 原始 JSON | 未初始化写入 `NotInitialized` |
+| `initialize(clientName, clientVersion, result)` | 客户端名、版本号、结果引用 | `result = {}` 并缓存 `serverInfo` / `server_capabilities` | 解析初始化响应失败时写入 `InitializationFailed` |
+| `call_tool(toolName, arguments, result)` | 工具名、原始 JSON 参数、结果引用 | `result` 写入第一条文本内容；无文本时写入 `{}` | 未初始化写入 `NotInitialized`；`is_error=true` 时写入 `ToolExecutionFailed("Tool returned error")` |
+| `list_tools(result)` / `list_resources(result)` / `list_prompts(result)` | 结果引用 | 写入相应对象数组 | 未初始化写入 `NotInitialized`；缺失列表字段时写入空数组 |
+| `read_resource(uri, result)` | URI、结果引用 | 写入第一条文本内容；无文本时为空字符串 | 未初始化写入 `NotInitialized` |
+| `get_prompt(name, arguments, result)` | 提示名、可选原始 JSON 参数、结果引用 | 写入服务端 `result` 原始 JSON | 未初始化写入 `NotInitialized` |
 | `ping(result)` | 结果引用 | 写入空成功结果 | 未初始化写入 `NotInitialized` |
-| `disconnectAsync()` | 无 | `CloseAwaitable` | 先清理本地 `m_initialized` / `m_connected` 标志，再返回与底层 `http::HttpClient::close()` 一致的关闭等待体 |
-| `isConnected()` / `isInitialized()` / `getServerInfo()` / `getServerCapabilities()` | 无 | 读取本地状态 / 缓存 | 不触发网络 I/O |
+| `disconnect_async()` | 无 | `CloseAwaitable` | 先清理本地 `m_initialized` / `m_connected` 标志，再返回与底层 `http::HttpClient::close()` 一致的关闭等待体 |
+| `is_connected()` / `is_initialized()` / `get_server_info()` / `get_server_capabilities()` | 无 | 读取本地状态 / 缓存 | 不触发网络 I/O |
 
 ### 生命周期与并发语义
 
-- 实践顺序是：创建 `Runtime` → `co_await connect()` → `co_await initialize(...)` → 其余 RPC → `co_await disconnectAsync()`。
-- `sendRequest(...)` 在 `m_connected == false` 时会自动重连；HTTP 连接若收到 `Connection: close` 或非 keep-alive 响应，也会把本地连接状态清为 `false`。
-- 当前 `isConnected()` 反映的是“最近一次成功 RPC 后的连接状态”；单独 `co_await connect()` 不会直接把该标志置为 `true`。
-- HTTP 状态码不是 `200 OK` 时会被包装成 `connectionError("HTTP error: <code>")`；JSON-RPC `id` 不匹配时返回 `invalidResponse("Mismatched response id")`。
+- 实践顺序是：创建 `Runtime` → `co_await connect()` → `co_await initialize(...)` → 其余 RPC → `co_await disconnect_async()`。
+- `send_request(...)` 在 `m_connected == false` 时会自动重连；HTTP 连接若收到 `Connection: close` 或非 keep-alive 响应，也会把本地连接状态清为 `false`。
+- 当前 `is_connected()` 反映的是“最近一次成功 RPC 后的连接状态”；单独 `co_await connect()` 不会直接把该标志置为 `true`。
+- HTTP 状态码不是 `200 OK` 时会被包装成 `connection_error("HTTP error: <code>")`；JSON-RPC `id` 不匹配时返回 `invalid_response("Mismatched response id")`。
 - 公开头文件和测试都没有给出“同一客户端实例可被多个线程 / 协程并发复用”的保证；如需稳妥，调用方应自行串行化。
 
 ### 示例与测试锚点

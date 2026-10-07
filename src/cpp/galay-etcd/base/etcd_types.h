@@ -72,7 +72,7 @@ struct PipelineOp
      * @param lease_id 可选的租约 ID
      * @return Put 类型的 PipelineOp
      */
-    static PipelineOp Put(std::string key,
+    static PipelineOp put(std::string key,
                           std::string value,
                           std::optional<int64_t> lease_id = std::nullopt)
     {
@@ -91,7 +91,7 @@ struct PipelineOp
      * @param limit 返回数量限制
      * @return Get 类型的 PipelineOp
      */
-    static PipelineOp Get(std::string key,
+    static PipelineOp get(std::string key,
                           bool prefix = false,
                           std::optional<int64_t> limit = std::nullopt)
     {
@@ -109,7 +109,7 @@ struct PipelineOp
      * @param prefix 是否为前缀删除
      * @return Delete 类型的 PipelineOp
      */
-    static PipelineOp Del(std::string key, bool prefix = false)
+    static PipelineOp del(std::string key, bool prefix = false)
     {
         PipelineOp op;
         op.type = PipelineOpType::Delete;

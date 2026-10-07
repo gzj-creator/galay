@@ -32,7 +32,7 @@ Task<void> run(IOScheduler* scheduler, AsyncState* state, const mysql_example::D
 
     MysqlConnectionPoolConfig pool_cfg;
     pool_cfg.mysql_config = cfg;
-    pool_cfg.async_config = AsyncMysqlConfig::withTimeout(
+    pool_cfg.async_config = AsyncMysqlConfig::with_timeout(
         std::chrono::milliseconds(3000), std::chrono::milliseconds(5000));
     pool_cfg.min_connections = 1;
     pool_cfg.max_connections = 8;
@@ -72,8 +72,8 @@ Task<void> run(IOScheduler* scheduler, AsyncState* state, const mysql_example::D
     }
 
     const auto& rs = query_res->value();
-    if (rs.rowCount() > 0) {
-        std::cout << "[E3] CONNECTION_ID() => " << rs.row(0).getString(0) << std::endl;
+    if (rs.row_count() > 0) {
+        std::cout << "[E3] CONNECTION_ID() => " << rs.row(0).get_string(0) << std::endl;
     }
 
     pool.release(client);
@@ -84,13 +84,13 @@ Task<void> run(IOScheduler* scheduler, AsyncState* state, const mysql_example::D
 
 int main()
 {
-    const auto cfg = mysql_example::loadDbExampleConfig();
-    mysql_example::printDbExampleConfig(cfg);
+    const auto cfg = mysql_example::load_db_example_config();
+    mysql_example::print_db_example_config(cfg);
 
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "no IO scheduler" << std::endl;
         runtime.stop();
@@ -98,7 +98,7 @@ int main()
     }
 
     AsyncState state;
-    if (!scheduleTask(scheduler, run(scheduler, &state, cfg))) {
+    if (!schedule_task(scheduler, run(scheduler, &state, cfg))) {
         std::cerr << "failed to schedule async pool example on IO scheduler" << std::endl;
         runtime.stop();
         return 1;

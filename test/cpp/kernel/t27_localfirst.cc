@@ -41,12 +41,12 @@ constexpr int kTraceWaiterArmed = 1;
 constexpr int kTraceOldWorkRan = 2;
 constexpr int kTraceWaiterResumed = 3;
 
-int64_t nowNs() {
+int64_t now_ns() {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 500ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -67,14 +67,14 @@ struct SameThreadWakeState {
     std::atomic<bool> old_work_ran{false};
 };
 
-void recordTrace(SameThreadWakeState* state, int value) {
+void record_trace(SameThreadWakeState* state, int value) {
     const int idx = state->trace_size.fetch_add(1, std::memory_order_acq_rel);
     if (idx >= 0 && idx < static_cast<int>(state->trace.size())) {
         state->trace[static_cast<size_t>(idx)] = value;
     }
 }
 
-int findTrace(const SameThreadWakeState& state, int value) {
+int find_trace(const SameThreadWakeState& state, int value) {
     const int size = state.trace_size.load(std::memory_order_acquire);
     for (int i = 0; i < size && i < static_cast<int>(state.trace.size()); ++i) {
         if (state.trace[static_cast<size_t>(i)] == value) {
@@ -84,49 +84,49 @@ int findTrace(const SameThreadWakeState& state, int value) {
     return -1;
 }
 
-Task<void> sameThreadWaiter(SameThreadWakeState* state) {
-    recordTrace(state, kTraceWaiterArmed);
+Task<void> same_thread_waiter(SameThreadWakeState* state) {
+    record_trace(state, kTraceWaiterArmed);
     auto result = co_await state->waiter.wait();
     if (result) {
-        recordTrace(state, kTraceWaiterResumed);
+        record_trace(state, kTraceWaiterResumed);
         state->waiter_resumed.store(true, std::memory_order_release);
     }
     co_return;
 }
 
-Task<void> sameThreadOldWork(SameThreadWakeState* state) {
-    recordTrace(state, kTraceOldWorkRan);
+Task<void> same_thread_old_work(SameThreadWakeState* state) {
+    record_trace(state, kTraceOldWorkRan);
     state->old_work_ran.store(true, std::memory_order_release);
     co_return;
 }
 
-Task<void> sameThreadDriver(IOSchedulerType* scheduler, SameThreadWakeState* state) {
-    if (!scheduleTask(scheduler, sameThreadWaiter(state))) {
+Task<void> same_thread_driver(IOSchedulerType* scheduler, SameThreadWakeState* state) {
+    if (!schedule_task(scheduler, same_thread_waiter(state))) {
         throw std::runtime_error("failed to schedule sameThreadWaiter");
     }
 
     // Let the waiter task run and suspend on AsyncWaiter before we enqueue old work.
     co_yield true;
 
-    if (!scheduleTask(scheduler, sameThreadOldWork(state))) {
+    if (!schedule_task(scheduler, same_thread_old_work(state))) {
         throw std::runtime_error("failed to schedule sameThreadOldWork");
     }
     state->waiter.notify();
     co_return;
 }
 
-bool runSameThreadWakeScenario() {
+bool run_same_thread_wake_scenario() {
     SameThreadWakeState state;
     IOSchedulerType scheduler;
     scheduler.start();
-    if (!scheduleTask(scheduler, sameThreadDriver(&scheduler, &state))) {
+    if (!schedule_task(scheduler, same_thread_driver(&scheduler, &state))) {
         std::cerr << "[T27] failed to schedule sameThreadDriver\n";
         scheduler.stop();
         return false;
     }
 
-    const bool waiter_done = waitUntil(state.waiter_resumed);
-    const bool old_done = waitUntil(state.old_work_ran);
+    const bool waiter_done = wait_until(state.waiter_resumed);
+    const bool old_done = wait_until(state.old_work_ran);
     scheduler.stop();
 
     if (!waiter_done || !old_done) {
@@ -134,8 +134,8 @@ bool runSameThreadWakeScenario() {
         return false;
     }
 
-    const int old_pos = findTrace(state, kTraceOldWorkRan);
-    const int resumed_pos = findTrace(state, kTraceWaiterResumed);
+    const int old_pos = find_trace(state, kTraceOldWorkRan);
+    const int resumed_pos = find_trace(state, kTraceWaiterResumed);
     if (old_pos < 0 || resumed_pos < 0) {
         std::cerr << "[T27] same-thread wake trace incomplete\n";
         return false;
@@ -156,29 +156,29 @@ struct CrossThreadWakeState {
     std::atomic<int64_t> executed_ns{0};
 };
 
-Task<void> crossThreadTask(CrossThreadWakeState* state) {
-    state->executed_ns.store(nowNs(), std::memory_order_release);
+Task<void> cross_thread_task(CrossThreadWakeState* state) {
+    state->executed_ns.store(now_ns(), std::memory_order_release);
     state->done.store(true, std::memory_order_release);
     co_return;
 }
 
-bool runCrossThreadWakeScenario() {
+bool run_cross_thread_wake_scenario() {
     CrossThreadWakeState state;
     IOSchedulerType scheduler;
-    scheduler.replaceTimerManager(TimingWheelTimerManager(200000000ULL));
+    scheduler.replace_timer_manager(TimingWheelTimerManager(200000000ULL));
     scheduler.start();
 
     // Give the worker time to enter its parked wait path.
     std::this_thread::sleep_for(60ms);
 
-    state.submitted_ns.store(nowNs(), std::memory_order_release);
-    if (!scheduleTask(scheduler, crossThreadTask(&state))) {
+    state.submitted_ns.store(now_ns(), std::memory_order_release);
+    if (!schedule_task(scheduler, cross_thread_task(&state))) {
         std::cerr << "[T27] failed to schedule crossThreadTask\n";
         scheduler.stop();
         return false;
     }
 
-    const bool done = waitUntil(state.done, 300ms);
+    const bool done = wait_until(state.done, 300ms);
     scheduler.stop();
 
     if (!done) {
@@ -208,7 +208,7 @@ struct FairnessState {
     std::atomic<bool> old_after_hot{false};
 };
 
-Task<void> fairnessOldTask(FairnessState* state) {
+Task<void> fairness_old_task(FairnessState* state) {
     if (state->hot_done.load(std::memory_order_acquire)) {
         state->old_after_hot.store(true, std::memory_order_release);
     }
@@ -216,7 +216,7 @@ Task<void> fairnessOldTask(FairnessState* state) {
     co_return;
 }
 
-Task<void> fairnessHotTask(FairnessState* state, int rounds) {
+Task<void> fairness_hot_task(FairnessState* state, int rounds) {
     for (int i = 0; i < rounds; ++i) {
         co_yield true;
     }
@@ -224,28 +224,28 @@ Task<void> fairnessHotTask(FairnessState* state, int rounds) {
     co_return;
 }
 
-Task<void> fairnessDriver(IOSchedulerType* scheduler, FairnessState* state) {
-    if (!scheduleTask(scheduler, fairnessHotTask(state, 32))) {
+Task<void> fairness_driver(IOSchedulerType* scheduler, FairnessState* state) {
+    if (!schedule_task(scheduler, fairness_hot_task(state, 32))) {
         throw std::runtime_error("failed to schedule fairnessHotTask");
     }
-    if (!scheduleTask(scheduler, fairnessOldTask(state))) {
+    if (!schedule_task(scheduler, fairness_old_task(state))) {
         throw std::runtime_error("failed to schedule fairnessOldTask");
     }
     co_return;
 }
 
-bool runFairnessScenario() {
+bool run_fairness_scenario() {
     FairnessState state;
     IOSchedulerType scheduler;
     scheduler.start();
-    if (!scheduleTask(scheduler, fairnessDriver(&scheduler, &state))) {
+    if (!schedule_task(scheduler, fairness_driver(&scheduler, &state))) {
         std::cerr << "[T27] failed to schedule fairnessDriver\n";
         scheduler.stop();
         return false;
     }
 
-    const bool old_done = waitUntil(state.old_seen);
-    const bool hot_done = waitUntil(state.hot_done);
+    const bool old_done = wait_until(state.old_seen);
+    const bool hot_done = wait_until(state.hot_done);
     scheduler.stop();
 
     if (!old_done || !hot_done) {
@@ -264,13 +264,13 @@ bool runFairnessScenario() {
 }  // namespace
 
 int main() {
-    if (!runSameThreadWakeScenario()) {
+    if (!run_same_thread_wake_scenario()) {
         return 1;
     }
-    if (!runCrossThreadWakeScenario()) {
+    if (!run_cross_thread_wake_scenario()) {
         return 1;
     }
-    if (!runFairnessScenario()) {
+    if (!run_fairness_scenario()) {
         return 1;
     }
 

@@ -39,7 +39,7 @@ using namespace std::chrono_literals;
  * @brief 处理 WebSocket 连接
  * @param ws_conn WebSocket 连接（通过引用传递）
  */
-Task<void> handleWebSocketConnection(WsConn& ws_conn) {
+Task<void> handle_web_socket_connection(WsConn& ws_conn) {
 
 
      // 升级到 WebSocket 连接
@@ -48,11 +48,11 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
      reader_setting.max_message_size = 10 * 1024 * 1024;  // 10MB
 
     // 获取 Reader 和 Writer（必须在协程开始时获取，保证 ws_conn 生命周期）
-    auto reader = ws_conn.getReader(reader_setting);
-    auto writer = ws_conn.getWriter(WsWriterSetting::byServer());
+    auto reader = ws_conn.get_reader(reader_setting);
+    auto writer = ws_conn.get_writer(WsWriterSetting::by_server());
 
     // 发送欢迎消息
-    auto send_result = co_await writer.sendText("Welcome to WebSocket server!");
+    auto send_result = co_await writer.send_text("Welcome to WebSocket server!");
     if (!send_result) {
         co_return;
     }
@@ -63,7 +63,7 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
         WsOpcode opcode;
 
         // 读取消息（包括数据帧和控制帧）
-        auto result = co_await reader.getMessage(message, opcode).timeout(1000ms);
+        auto result = co_await reader.get_message(message, opcode).timeout(1000ms);
 
         if (!result.has_value()) {
             WsError error = result.error();
@@ -81,7 +81,7 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
         // 根据 opcode 判断消息类型并处理
         if (opcode == WsOpcode::Ping) {
             // 收到 Ping，发送 Pong 响应
-            auto pong_result = co_await writer.sendPong(message);
+            auto pong_result = co_await writer.send_pong(message);
             if (!pong_result) {
                 break;
             }
@@ -91,7 +91,7 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
         }
         else if (opcode == WsOpcode::Close) {
             // 收到关闭请求
-            auto close_result = co_await writer.sendClose();
+            auto close_result = co_await writer.send_close();
             if (!close_result) {
             }
             break;
@@ -101,7 +101,7 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
 
             // 回显消息
             std::string echo_msg = "Echo: " + message;
-            auto echo_result = co_await writer.sendText(echo_msg);
+            auto echo_result = co_await writer.send_text(echo_msg);
             if (!echo_result) {
                 break;
             }
@@ -119,12 +119,12 @@ Task<void> handleWebSocketConnection(WsConn& ws_conn) {
  * @brief HTTP 请求处理器（处理 WebSocket 升级）
  * @param conn HTTP 连接
  */
-Task<void> handleHttpRequest(HttpConn conn) {
+Task<void> handle_http_request(HttpConn conn) {
     // 读取 HTTP 请求
-    auto reader = conn.getReader();
+    auto reader = conn.get_reader();
     HttpRequest request;
 
-    auto read_result = co_await reader.getRequest(request);
+    auto read_result = co_await reader.get_request(request);
     if (!read_result) {
         auto close_result = co_await conn.close();
         if (!close_result) {
@@ -136,13 +136,13 @@ Task<void> handleHttpRequest(HttpConn conn) {
     // 检查是否是 WebSocket 升级请求
     if (request.header().uri() == "/ws") {
         // 处理 WebSocket 升级
-        auto upgrade_result = WsUpgrade::handleUpgrade(request);
+        auto upgrade_result = WsUpgrade::handle_upgrade(request);
 
         if (!upgrade_result.success) {
 
             // 发送错误响应
-            auto writer = conn.getWriter();
-            auto result = co_await writer.sendResponse(upgrade_result.response);
+            auto writer = conn.get_writer();
+            auto result = co_await writer.send_response(upgrade_result.response);
             if (!result) {
             }
             auto close_result = co_await conn.close();
@@ -153,8 +153,8 @@ Task<void> handleHttpRequest(HttpConn conn) {
 
 
         // 发送 101 Switching Protocols 响应
-        auto writer = conn.getWriter();
-        auto send_result = co_await writer.sendResponse(upgrade_result.response);
+        auto writer = conn.get_writer();
+        auto send_result = co_await writer.send_response(upgrade_result.response);
 
         if (!send_result) {
             auto close_result = co_await conn.close();
@@ -167,7 +167,7 @@ Task<void> handleHttpRequest(HttpConn conn) {
         WsConn ws_conn = WsConn::from(std::move(conn), true);
 
         // 处理 WebSocket 连接（通过引用传递，避免移动导致引用失效）
-        co_await handleWebSocketConnection(ws_conn);
+        co_await handle_web_socket_connection(ws_conn);
         co_return;
     }
 
@@ -175,7 +175,7 @@ Task<void> handleHttpRequest(HttpConn conn) {
     auto response = Http1_1ResponseBuilder()
         .status(HttpStatusCode::OK_200)
         .header("Content-Type", "text/html; charset=utf-8")
-        .buildMove();
+        .build_move();
 
     std::string body = R"(<!DOCTYPE html>
 <html>
@@ -211,11 +211,11 @@ ws.onclose = () => {
 </body>
 </html>)";
 
-    response.header().headerPairs().addHeaderPair("Content-Length", std::to_string(body.size()));
-    response.setBodyStr(std::move(body));
+    response.header().header_pairs().add_header_pair("Content-Length", std::to_string(body.size()));
+    response.set_body_str(std::move(body));
 
-    auto writer = conn.getWriter();
-    auto result = co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    auto result = co_await writer.send_response(response);
     if (!result) {
     }
     auto close_result = co_await conn.close();
@@ -235,17 +235,17 @@ int main() {
         .host("0.0.0.0")
         .port(8080)
         .backlog(128)
-        .ioSchedulerCount(4)
-        .parallelSchedulerCount(2)
+        .io_scheduler_count(4)
+        .parallel_scheduler_count(2)
         .build());
 
     // 启动服务器
 
     // 启动服务器并传入处理器
-    server.start(handleHttpRequest);
+    server.start(handle_http_request);
 
     // 保持服务器运行
-    while (server.isRunning()) {
+    while (server.is_running()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 

@@ -27,18 +27,18 @@ void require(bool condition, const char* message) {
     }
 }
 
-Task<int> simpleTask(int value) {
+Task<int> simple_task(int value) {
     co_return value;
 }
 
-Task<void> verifyCurrentRuntimeHandle() {
-    auto current = RuntimeHandle::tryCurrent();
+Task<void> verify_current_runtime_handle() {
+    auto current = RuntimeHandle::try_current();
     require(current.has_value(), "RuntimeHandle::tryCurrent should succeed inside runtime context");
 
     auto current_result = RuntimeHandle::current();
     require(current_result.has_value(), "RuntimeHandle::current should succeed inside runtime context");
 
-    auto nested = current_result->spawnCpu(simpleTask(19));
+    auto nested = current_result->spawn_cpu(simple_task(19));
     require(nested.has_value(), "RuntimeHandle::spawnCpu should succeed inside runtime context");
     auto nested_value = nested->join();
     require(nested_value.has_value(), "RuntimeHandle::current nested join should succeed");
@@ -53,22 +53,22 @@ concept HasJoinHandleResult = requires(JoinHandle<T> handle) {
 
 template <typename T>
 concept HasTaskRef = requires(Task<T> task) {
-    task.taskRef();
+    task.task_ref();
 };
 
 template <typename T>
 concept HasBelongSchedulerGetter = requires(Task<T> task) {
-    task.belongScheduler();
+    task.belong_scheduler();
 };
 
 template <typename T>
 concept HasBelongSchedulerSetter = requires(Task<T> task, Scheduler* scheduler) {
-    task.belongScheduler(scheduler);
+    task.belong_scheduler(scheduler);
 };
 
 template <typename T>
 concept HasThreadId = requires(Task<T> task) {
-    task.threadId();
+    task.thread_id();
 };
 
 template <typename T>
@@ -93,7 +93,7 @@ concept HasRuntimeHandleCurrent = requires {
 
 template <typename = void>
 concept HasRuntimeHandleTryCurrent = requires {
-    { RuntimeHandle::tryCurrent() } -> std::same_as<std::optional<RuntimeHandle>>;
+    { RuntimeHandle::try_current() } -> std::same_as<std::optional<RuntimeHandle>>;
 };
 
 struct BlockingCallable {
@@ -102,17 +102,17 @@ struct BlockingCallable {
 
 template <typename R>
 concept HasRuntimeSpawnBlocking = requires(R runtime) {
-    { runtime.spawnBlocking(BlockingCallable{}) } -> std::same_as<std::expected<JoinHandle<int>, RuntimeError>>;
+    { runtime.spawn_blocking(BlockingCallable{}) } -> std::same_as<std::expected<JoinHandle<int>, RuntimeError>>;
 };
 
 template <typename R>
 concept HasRuntimeBlockOnExpected = requires(R runtime, Task<int> task) {
-    { runtime.blockOnIO(std::move(task)) } -> std::same_as<std::expected<int, RuntimeError>>;
+    { runtime.block_on_io(std::move(task)) } -> std::same_as<std::expected<int, RuntimeError>>;
 };
 
 template <typename R>
 concept HasRuntimeSpawnCpuExpected = requires(R runtime, Task<int> task) {
-    { runtime.spawnCpu(std::move(task)) } -> std::same_as<std::expected<JoinHandle<int>, RuntimeError>>;
+    { runtime.spawn_cpu(std::move(task)) } -> std::same_as<std::expected<JoinHandle<int>, RuntimeError>>;
 };
 
 template <typename ErrorT>
@@ -188,16 +188,16 @@ static_assert(noexcept(TaskPromise<void>::operator new(
 int main() {
     Runtime runtime;
 
-    require(!RuntimeHandle::tryCurrent().has_value(), "RuntimeHandle::tryCurrent should be empty outside runtime context");
+    require(!RuntimeHandle::try_current().has_value(), "RuntimeHandle::tryCurrent should be empty outside runtime context");
     require(!RuntimeHandle::current().has_value(), "RuntimeHandle::current should fail outside runtime context");
     require(RuntimeHandle::current().error().code() == RuntimeErrorCode::kNoCurrentRuntime,
             "RuntimeHandle::current should report missing runtime context");
 
-    auto blockResult = runtime.blockOnIO(simpleTask(7));
+    auto blockResult = runtime.block_on_io(simple_task(7));
     require(blockResult.has_value(), "Runtime::blockOn should succeed");
     require(*blockResult == 7, "Runtime::blockOn should return task result");
 
-    auto joinHandle = runtime.spawnCpu(simpleTask(11));
+    auto joinHandle = runtime.spawn_cpu(simple_task(11));
     require(joinHandle.has_value(), "Runtime::spawnCpu should succeed");
     require(joinHandle->wait().has_value(), "Runtime::spawnCpu wait should succeed");
     auto joinedValue = joinHandle->join();
@@ -205,32 +205,32 @@ int main() {
     require(*joinedValue == 11, "Runtime::spawnCpu should return joinable handle");
 
     auto handle = runtime.handle();
-    auto handleJoin = handle.spawnCpu(simpleTask(13));
+    auto handleJoin = handle.spawn_cpu(simple_task(13));
     require(handleJoin.has_value(), "RuntimeHandle::spawnCpu should succeed");
     require(handleJoin->wait().has_value(), "RuntimeHandle::spawnCpu wait should succeed");
     auto handleJoinValue = handleJoin->join();
     require(handleJoinValue.has_value(), "RuntimeHandle::spawnCpu join should succeed");
     require(*handleJoinValue == 13, "RuntimeHandle::spawnCpu should submit task");
 
-    auto runtimeBlockingJoin = runtime.spawnBlocking([]() { return 17; });
+    auto runtimeBlockingJoin = runtime.spawn_blocking([]() { return 17; });
     require(runtimeBlockingJoin.has_value(), "Runtime::spawnBlocking should succeed");
     require(runtimeBlockingJoin->wait().has_value(), "Runtime::spawnBlocking wait should succeed");
     auto runtimeBlockingValue = runtimeBlockingJoin->join();
     require(runtimeBlockingValue.has_value(), "Runtime::spawnBlocking join should succeed");
     require(*runtimeBlockingValue == 17, "Runtime::spawnBlocking should return task result");
 
-    auto blockingJoin = handle.spawnBlocking([]() { return 17; });
+    auto blockingJoin = handle.spawn_blocking([]() { return 17; });
     require(blockingJoin.has_value(), "RuntimeHandle::spawnBlocking should succeed");
     require(blockingJoin->wait().has_value(), "RuntimeHandle::spawnBlocking wait should succeed");
     auto blockingValue = blockingJoin->join();
     require(blockingValue.has_value(), "RuntimeHandle::spawnBlocking join should succeed");
     require(*blockingValue == 17, "RuntimeHandle::spawnBlocking should return task result");
 
-    auto handleBlock = runtime.blockOnIO(verifyCurrentRuntimeHandle());
+    auto handleBlock = runtime.block_on_io(verify_current_runtime_handle());
     require(handleBlock.has_value(), "Runtime::blockOn should return expected<void> success");
 
     RuntimeHandle emptyHandle;
-    auto emptyHandleSpawn = emptyHandle.spawnCpu(simpleTask(21));
+    auto emptyHandleSpawn = emptyHandle.spawn_cpu(simple_task(21));
     require(!emptyHandleSpawn.has_value(), "empty RuntimeHandle::spawnCpu should fail without throwing");
     require(emptyHandleSpawn.error().code() == RuntimeErrorCode::kInvalidHandle,
             "empty RuntimeHandle::spawnCpu should report invalid handle");
@@ -240,10 +240,10 @@ int main() {
             "RuntimeError::message should expose a reason instead of an enum label");
 
     Runtime noSchedulerRuntime = RuntimeBuilder()
-        .ioSchedulerCount(0)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(0)
+        .parallel_scheduler_count(0)
         .build();
-    auto noSchedulerResult = noSchedulerRuntime.blockOnIO(simpleTask(23));
+    auto noSchedulerResult = noSchedulerRuntime.block_on_io(simple_task(23));
     require(!noSchedulerResult.has_value(), "Runtime::blockOn should fail when no scheduler is available");
     require(noSchedulerResult.error().code() == RuntimeErrorCode::kNoSchedulerAvailable,
             "Runtime::blockOn should report missing scheduler");
@@ -252,14 +252,14 @@ int main() {
     require(noSchedulerResult.error().message().find("RuntimeError::") == std::string::npos,
             "RuntimeError::message should expose a reason instead of an enum label");
 
-    detail::TaskResultError taskError(detail::TaskResultErrorCode::kAlreadyConsumed);
-    require(!taskError.message().empty(), "TaskResultError::message should describe the error");
-    require(taskError.message().find("TaskResultError::") == std::string::npos,
+    detail::TaskResultError task_error(detail::TaskResultErrorCode::kAlreadyConsumed);
+    require(!task_error.message().empty(), "TaskResultError::message should describe the error");
+    require(task_error.message().find("TaskResultError::") == std::string::npos,
             "TaskResultError::message should expose a reason instead of an enum label");
 
-    BlockingExecutorError blockingError(BlockingExecutorErrorCode::kStopping);
-    require(!blockingError.message().empty(), "BlockingExecutorError::message should describe the error");
-    require(blockingError.message().find("BlockingExecutorError::") == std::string::npos,
+    BlockingExecutorError blocking_error(BlockingExecutorErrorCode::kStopping);
+    require(!blocking_error.message().empty(), "BlockingExecutorError::message should describe the error");
+    require(blocking_error.message().find("BlockingExecutorError::") == std::string::npos,
             "BlockingExecutorError::message should expose a reason instead of an enum label");
 
     return 0;

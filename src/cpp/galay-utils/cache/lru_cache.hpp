@@ -103,39 +103,39 @@ public:
      * @brief 判断当前缓存类型是否启用统计收集
      * @return EnableStats 模板参数值
      */
-    static constexpr bool statsEnabled() noexcept {
+    static constexpr bool stats_enabled() noexcept {
         return EnableStats;
     }
 
     /**
      * @brief 构造 LRU 缓存
      * @param capacity 最大容量，0 表示不保存任何元素
-     * @param defaultTtl 默认 TTL；为 std::nullopt 时元素默认不过期
-     * @param onEvict 可选淘汰回调
+     * @param default_ttl 默认 TTL；为 std::nullopt 时元素默认不过期
+     * @param on_evict 可选淘汰回调
      */
     explicit LruCache(size_type capacity = 0,
                       std::optional<duration> defaultTtl = std::nullopt,
-                      EvictCallback onEvict = nullptr,
+                      EvictCallback on_evict = nullptr,
                       ExpirationPolicy expirationPolicy = ExpirationPolicy::ExpireAfterWrite)
         : m_capacity(capacity)
         , m_defaultTtl(defaultTtl)
-        , m_onEvict(std::move(onEvict))
+        , m_on_evict(std::move(on_evict))
         , m_expirationPolicy(expirationPolicy) {}
 
     /**
      * @brief 构造带默认 TTL 的 LRU 缓存
      * @param capacity 最大容量，0 表示不保存任何元素
-     * @param defaultTtl 默认 TTL，支持任意可转换到 Clock::duration 的 chrono duration
-     * @param onEvict 可选淘汰回调
+     * @param default_ttl 默认 TTL，支持任意可转换到 Clock::duration 的 chrono duration
+     * @param on_evict 可选淘汰回调
      */
     template<typename Rep, typename Period>
     LruCache(size_type capacity,
              std::chrono::duration<Rep, Period> defaultTtl,
-             EvictCallback onEvict = nullptr,
+             EvictCallback on_evict = nullptr,
              ExpirationPolicy expirationPolicy = ExpirationPolicy::ExpireAfterWrite)
         : LruCache(capacity,
                    std::optional<duration>(std::chrono::duration_cast<duration>(defaultTtl)),
-                   std::move(onEvict),
+                   std::move(on_evict),
                    expirationPolicy) {}
 
     LruCache(const LruCache&) = delete;
@@ -151,7 +151,7 @@ public:
      */
     template<typename K, typename V>
     bool put(K&& key, V&& value) {
-        return putWithExpiration(std::forward<K>(key), std::forward<V>(value), expirationFromTtl(m_defaultTtl));
+        return put_with_expiration(std::forward<K>(key), std::forward<V>(value), expiration_from_ttl(m_defaultTtl));
     }
 
     /**
@@ -162,8 +162,8 @@ public:
      * @return 写入后元素仍保存在缓存中返回 true，否则返回 false
      */
     template<typename K, typename V>
-    bool putFor(K&& key, V&& value, duration ttl) {
-        return putWithExpiration(std::forward<K>(key), std::forward<V>(value), expirationFromTtl(ttl));
+    bool put_for(K&& key, V&& value, duration ttl) {
+        return put_with_expiration(std::forward<K>(key), std::forward<V>(value), expiration_from_ttl(ttl));
     }
 
     /**
@@ -174,8 +174,8 @@ public:
      * @return 写入后元素仍保存在缓存中返回 true，否则返回 false
      */
     template<typename K, typename V>
-    bool putUntil(K&& key, V&& value, time_point expiresAt) {
-        return putWithExpiration(std::forward<K>(key), std::forward<V>(value), Expiration{expiresAt, std::nullopt});
+    bool put_until(K&& key, V&& value, time_point expiresAt) {
+        return put_with_expiration(std::forward<K>(key), std::forward<V>(value), Expiration{expiresAt, std::nullopt});
     }
 
     /**
@@ -186,7 +186,7 @@ public:
      */
     template<typename K, typename... Args>
     bool emplace(K&& key, Args&&... args) {
-        return emplaceWithExpiration(std::forward<K>(key), expirationFromTtl(m_defaultTtl),
+        return emplace_with_expiration(std::forward<K>(key), expiration_from_ttl(m_defaultTtl),
                                      std::forward<Args>(args)...);
     }
 
@@ -198,8 +198,8 @@ public:
      * @return 写入后元素仍保存在缓存中返回 true，否则返回 false
      */
     template<typename K, typename... Args>
-    bool emplaceFor(K&& key, duration ttl, Args&&... args) {
-        return emplaceWithExpiration(std::forward<K>(key), expirationFromTtl(ttl),
+    bool emplace_for(K&& key, duration ttl, Args&&... args) {
+        return emplace_with_expiration(std::forward<K>(key), expiration_from_ttl(ttl),
                                      std::forward<Args>(args)...);
     }
 
@@ -216,7 +216,7 @@ public:
      * @brief 设置内部哈希表最大负载因子
      * @param factor 最大负载因子
      */
-    void maxLoadFactor(float factor) {
+    void max_load_factor(float factor) {
         m_index.max_load_factor(factor);
     }
 
@@ -224,7 +224,7 @@ public:
      * @brief 获取内部哈希表最大负载因子
      * @return 最大负载因子
      */
-    float maxLoadFactor() const {
+    float max_load_factor() const {
         return m_index.max_load_factor();
     }
 
@@ -243,7 +243,7 @@ public:
     /**
      * @brief 重置缓存统计；未启用统计时为空操作
      */
-    void resetStats() {
+    void reset_stats() {
         if constexpr (EnableStats) {
             m_stats = Stats{};
         }
@@ -253,8 +253,8 @@ public:
      * @brief 惰性清理已过期条目
      * @return 本次实际清理的条目数
      */
-    size_type purgeExpired() const {
-        return purgeExpiredImpl();
+    size_type purge_expired() const {
+        return purge_expired_impl();
     }
 
     /**
@@ -264,17 +264,17 @@ public:
      * @note 返回指针在该元素被移除、被替换或缓存被清空前有效。
      */
     Value* get(const Key& key) {
-        purgeExpired();
+        purge_expired();
 
         auto it = m_index.find(key);
         if (it == m_index.end()) {
-            recordMiss();
+            record_miss();
             return nullptr;
         }
 
-        recordHit();
+        record_hit();
         touch(it->second);
-        refreshExpirationAfterAccess(it->second);
+        refresh_expiration_after_access(it->second);
         return std::addressof(it->second->value);
     }
 
@@ -285,17 +285,17 @@ public:
      * @note const 版本仍会更新缓存的内部访问顺序，这是缓存的逻辑 const 行为。
      */
     const Value* get(const Key& key) const {
-        purgeExpired();
+        purge_expired();
 
         auto it = m_index.find(key);
         if (it == m_index.end()) {
-            recordMiss();
+            record_miss();
             return nullptr;
         }
 
-        recordHit();
+        record_hit();
         touch(it->second);
-        refreshExpirationAfterAccess(it->second);
+        refresh_expiration_after_access(it->second);
         return std::addressof(it->second->value);
     }
 
@@ -305,14 +305,14 @@ public:
      * @return 命中返回值指针，未命中或已过期返回 nullptr
      */
     Value* peek(const Key& key) {
-        purgeExpired();
+        purge_expired();
 
         auto it = m_index.find(key);
         if (it == m_index.end()) {
-            recordMiss();
+            record_miss();
             return nullptr;
         }
-        recordHit();
+        record_hit();
         return std::addressof(it->second->value);
     }
 
@@ -322,14 +322,14 @@ public:
      * @return 命中返回只读值指针，未命中或已过期返回 nullptr
      */
     const Value* peek(const Key& key) const {
-        purgeExpired();
+        purge_expired();
 
         auto it = m_index.find(key);
         if (it == m_index.end()) {
-            recordMiss();
+            record_miss();
             return nullptr;
         }
-        recordHit();
+        record_hit();
         return std::addressof(it->second->value);
     }
 
@@ -340,12 +340,12 @@ public:
      * @note 该操作会惰性清理过期元素，但不会刷新 LRU 顺序。
      */
     bool contains(const Key& key) const {
-        purgeExpired();
+        purge_expired();
         const bool found = m_index.find(key) != m_index.end();
         if (found) {
-            recordHit();
+            record_hit();
         } else {
-            recordMiss();
+            record_miss();
         }
         return found;
     }
@@ -356,14 +356,14 @@ public:
      * @return 成功移除返回 true，键不存在或已过期返回 false
      */
     bool remove(const Key& key) {
-        purgeExpired();
+        purge_expired();
 
         auto it = m_index.find(key);
         if (it == m_index.end()) {
             return false;
         }
 
-        eraseEntry(it, EvictReason::Removed);
+        erase_entry(it, EvictReason::Removed);
         return true;
     }
 
@@ -378,7 +378,7 @@ public:
                 m_items.pop_back();
                 continue;
             }
-            eraseEntry(it, EvictReason::Cleared);
+            erase_entry(it, EvictReason::Cleared);
         }
 
         while (!m_expirations.empty()) {
@@ -392,7 +392,7 @@ public:
      * @note 该操作会惰性清理过期元素。
      */
     size_type size() const {
-        purgeExpired();
+        purge_expired();
         return m_items.size();
     }
 
@@ -418,17 +418,17 @@ public:
      * @param capacity 新容量，0 表示不保存任何元素
      * @details 设置后会在本次 API 调用中惰性清理过期元素并执行容量淘汰。
      */
-    void setCapacity(size_type capacity) {
+    void set_capacity(size_type capacity) {
         m_capacity = capacity;
-        purgeExpired();
-        enforceCapacity();
+        purge_expired();
+        enforce_capacity();
     }
 
     /**
      * @brief 获取默认 TTL
      * @return 默认 TTL；std::nullopt 表示默认不过期
      */
-    std::optional<duration> defaultTtl() const {
+    std::optional<duration> default_ttl() const {
         return m_defaultTtl;
     }
 
@@ -437,7 +437,7 @@ public:
      * @param ttl 默认 TTL；std::nullopt 表示默认不过期
      * @note 只影响后续写入，不改变已有元素的过期时间。
      */
-    void setDefaultTtl(std::optional<duration> ttl) {
+    void set_default_ttl(std::optional<duration> ttl) {
         m_defaultTtl = ttl;
     }
 
@@ -471,52 +471,52 @@ private:
     using ListIterator = typename ItemList::iterator;
     using IndexMap = std::unordered_map<Key, ListIterator, Hash, KeyEqual>;
 
-    Expiration expirationFromTtl(std::optional<duration> ttl) const {
+    Expiration expiration_from_ttl(std::optional<duration> ttl) const {
         if (!ttl.has_value()) {
             return Expiration{std::nullopt, std::nullopt};
         }
         return Expiration{Clock::now() + *ttl, ttl};
     }
 
-    Expiration expirationFromTtl(duration ttl) const {
+    Expiration expiration_from_ttl(duration ttl) const {
         return Expiration{Clock::now() + ttl, ttl};
     }
 
-    bool isExpired(const std::optional<time_point>& expiresAt) const {
+    bool is_expired(const std::optional<time_point>& expiresAt) const {
         return expiresAt.has_value() && *expiresAt <= Clock::now();
     }
 
     template<typename K, typename V>
-    bool putWithExpiration(K&& key, V&& value, Expiration expiration) {
-        purgeExpired();
+    bool put_with_expiration(K&& key, V&& value, Expiration expiration) {
+        purge_expired();
 
-        Key normalizedKey(std::forward<K>(key));
-        if (isExpired(expiration.expiresAt)) {
-            removeExpiredKey(normalizedKey);
+        Key normalized_key(std::forward<K>(key));
+        if (is_expired(expiration.expiresAt)) {
+            remove_expired_key(normalized_key);
             return false;
         }
 
         if (m_capacity == 0) {
-            removeCapacityKey(normalizedKey);
+            remove_capacity_key(normalized_key);
             return false;
         }
 
-        auto indexIt = m_index.find(normalizedKey);
+        auto indexIt = m_index.find(normalized_key);
         if (indexIt != m_index.end()) {
             auto itemIt = indexIt->second;
             itemIt->value = std::forward<V>(value);
-            updateExpiration(itemIt, expiration);
+            update_expiration(itemIt, expiration);
             touch(itemIt);
-            recordUpdate();
+            record_update();
             return true;
         }
 
         m_items.push_front(Entry{
-            std::move(normalizedKey),
+            std::move(normalized_key),
             Value(std::forward<V>(value)),
             std::nullopt,
             std::nullopt,
-            nextVersion()
+            next_version()
         });
 
         auto itemIt = m_items.begin();
@@ -525,43 +525,43 @@ private:
             m_items.pop_front();
             return false;
         }
-        updateExpiration(itemIt, expiration);
-        recordInsert();
-        enforceCapacity();
+        update_expiration(itemIt, expiration);
+        record_insert();
+        enforce_capacity();
         return true;
     }
 
     template<typename K, typename... Args>
-    bool emplaceWithExpiration(K&& key, Expiration expiration, Args&&... args) {
-        purgeExpired();
+    bool emplace_with_expiration(K&& key, Expiration expiration, Args&&... args) {
+        purge_expired();
 
-        Key normalizedKey(std::forward<K>(key));
-        if (isExpired(expiration.expiresAt)) {
-            removeExpiredKey(normalizedKey);
+        Key normalized_key(std::forward<K>(key));
+        if (is_expired(expiration.expiresAt)) {
+            remove_expired_key(normalized_key);
             return false;
         }
 
         if (m_capacity == 0) {
-            removeCapacityKey(normalizedKey);
+            remove_capacity_key(normalized_key);
             return false;
         }
 
-        auto indexIt = m_index.find(normalizedKey);
+        auto indexIt = m_index.find(normalized_key);
         if (indexIt != m_index.end()) {
             auto itemIt = indexIt->second;
             itemIt->value = Value(std::forward<Args>(args)...);
-            updateExpiration(itemIt, expiration);
+            update_expiration(itemIt, expiration);
             touch(itemIt);
-            recordUpdate();
+            record_update();
             return true;
         }
 
         m_items.push_front(Entry{
-            std::move(normalizedKey),
+            std::move(normalized_key),
             Value(std::forward<Args>(args)...),
             std::nullopt,
             std::nullopt,
-            nextVersion()
+            next_version()
         });
 
         auto itemIt = m_items.begin();
@@ -570,27 +570,27 @@ private:
             m_items.pop_front();
             return false;
         }
-        updateExpiration(itemIt, expiration);
-        recordInsert();
-        enforceCapacity();
+        update_expiration(itemIt, expiration);
+        record_insert();
+        enforce_capacity();
         return true;
     }
 
-    std::uint64_t nextVersion() const {
+    std::uint64_t next_version() const {
         return ++m_nextVersion;
     }
 
-    void updateExpiration(ListIterator it, const Expiration& expiration) const {
+    void update_expiration(ListIterator it, const Expiration& expiration) const {
         it->expiresAt = expiration.expiresAt;
         it->ttl = expiration.ttl;
-        it->version = nextVersion();
+        it->version = next_version();
 
         if (expiration.expiresAt.has_value()) {
             m_expirations.push(ExpireNode{*expiration.expiresAt, it->key, it->version});
         }
     }
 
-    void refreshExpirationAfterAccess(ListIterator it) const {
+    void refresh_expiration_after_access(ListIterator it) const {
         if (m_expirationPolicy != ExpirationPolicy::ExpireAfterAccess || !it->ttl.has_value()) {
             return;
         }
@@ -604,7 +604,7 @@ private:
             }
         }
 
-        updateExpiration(it, Expiration{now + *it->ttl, it->ttl});
+        update_expiration(it, Expiration{now + *it->ttl, it->ttl});
     }
 
     void touch(ListIterator it) const {
@@ -613,7 +613,7 @@ private:
         }
     }
 
-    size_type purgeExpiredImpl() const {
+    size_type purge_expired_impl() const {
         if (m_expirations.empty()) {
             return 0;
         }
@@ -642,14 +642,14 @@ private:
                 continue;
             }
 
-            eraseEntry(indexIt, EvictReason::Expired);
+            erase_entry(indexIt, EvictReason::Expired);
             ++removed;
         }
 
         return removed;
     }
 
-    void enforceCapacity() const {
+    void enforce_capacity() const {
         while (m_items.size() > m_capacity) {
             auto last = std::prev(m_items.end());
             auto indexIt = m_index.find(last->key);
@@ -660,28 +660,28 @@ private:
                 }
                 continue;
             }
-            eraseEntry(indexIt, EvictReason::Capacity);
+            erase_entry(indexIt, EvictReason::Capacity);
         }
     }
 
-    void removeExpiredKey(const Key& key) {
+    void remove_expired_key(const Key& key) {
         auto indexIt = m_index.find(key);
         if (indexIt != m_index.end()) {
-            eraseEntry(indexIt, EvictReason::Expired);
+            erase_entry(indexIt, EvictReason::Expired);
         }
     }
 
-    void removeCapacityKey(const Key& key) {
+    void remove_capacity_key(const Key& key) {
         auto indexIt = m_index.find(key);
         if (indexIt != m_index.end()) {
-            eraseEntry(indexIt, EvictReason::Capacity);
+            erase_entry(indexIt, EvictReason::Capacity);
         }
     }
 
-    void eraseEntry(typename IndexMap::iterator indexIt, EvictReason reason) const {
+    void erase_entry(typename IndexMap::iterator indexIt, EvictReason reason) const {
         auto itemIt = indexIt->second;
-        notifyEvict(itemIt, reason);
-        recordEviction(reason);
+        notify_evict(itemIt, reason);
+        record_eviction(reason);
         auto nextIndex = m_index.erase(indexIt);
         if (nextIndex != m_index.end()) {
             // erase 返回值已显式处理；调用方不依赖后继位置。
@@ -692,37 +692,37 @@ private:
         }
     }
 
-    void notifyEvict(ListIterator it, EvictReason reason) const {
-        if (m_onEvict) {
-            m_onEvict(it->key, it->value, reason);
+    void notify_evict(ListIterator it, EvictReason reason) const {
+        if (m_on_evict) {
+            m_on_evict(it->key, it->value, reason);
         }
     }
 
-    void recordHit() const {
+    void record_hit() const {
         if constexpr (EnableStats) {
             ++m_stats.hits;
         }
     }
 
-    void recordMiss() const {
+    void record_miss() const {
         if constexpr (EnableStats) {
             ++m_stats.misses;
         }
     }
 
-    void recordInsert() const {
+    void record_insert() const {
         if constexpr (EnableStats) {
             ++m_stats.inserts;
         }
     }
 
-    void recordUpdate() const {
+    void record_update() const {
         if constexpr (EnableStats) {
             ++m_stats.updates;
         }
     }
 
-    void recordEviction(EvictReason reason) const {
+    void record_eviction(EvictReason reason) const {
         if constexpr (EnableStats) {
             switch (reason) {
             case EvictReason::Capacity:
@@ -753,7 +753,7 @@ private:
     [[no_unique_address]] mutable StatsStorage m_stats;
     size_type m_capacity;
     std::optional<duration> m_defaultTtl;
-    EvictCallback m_onEvict;
+    EvictCallback m_on_evict;
     ExpirationPolicy m_expirationPolicy;
 };
 

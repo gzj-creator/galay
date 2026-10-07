@@ -7,7 +7,7 @@ namespace galay::ssl
 
 namespace {
 
-void clearOpenSslErrorQueueIfNeeded()
+void clear_open_ssl_error_queue_if_needed()
 {
     if (ERR_peek_error() != 0) {
         ERR_clear_error();
@@ -21,7 +21,7 @@ SslEngine::SslEngine(SslContext* ctx)
     , m_ctx(ctx)
     , m_handshakeState(SslHandshakeState::NotStarted)
 {
-    if (ctx && ctx->isValid()) {
+    if (ctx && ctx->is_valid()) {
         m_ssl = SSL_new(ctx->native());
     }
     if (!m_ssl) {
@@ -71,20 +71,20 @@ SslEngine& SslEngine::operator=(SslEngine&& other) noexcept
     return *this;
 }
 
-std::expected<void, SslError> SslEngine::setFd(int fd)
+std::expected<void, SslError> SslEngine::set_fd(int fd)
 {
     if (!m_ssl) {
         return std::unexpected(SslError(SslErrorCode::kSslCreateFailed));
     }
 
     if (SSL_set_fd(m_ssl, fd) != 1) {
-        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kSslSetFdFailed));
+        return std::unexpected(SslError::from_open_ssl(SslErrorCode::kSslSetFdFailed));
     }
 
     return {};
 }
 
-std::expected<void, SslError> SslEngine::initMemoryBIO()
+std::expected<void, SslError> SslEngine::init_memory_bio()
 {
     if (!m_ssl) {
         return std::unexpected(SslError(SslErrorCode::kSslCreateFailed));
@@ -112,7 +112,7 @@ std::expected<void, SslError> SslEngine::initMemoryBIO()
     return {};
 }
 
-std::expected<size_t, SslError> SslEngine::feedEncryptedInput(const char* data, size_t length)
+std::expected<size_t, SslError> SslEngine::feed_encrypted_input(const char* data, size_t length)
 {
     if (!m_rbio) {
         return std::unexpected(SslError(SslErrorCode::kReadFailed));
@@ -123,12 +123,12 @@ std::expected<size_t, SslError> SslEngine::feedEncryptedInput(const char* data, 
 
     const int written = BIO_write(m_rbio, data, static_cast<int>(length));
     if (written < 0) {
-        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kReadFailed));
+        return std::unexpected(SslError::from_open_ssl(SslErrorCode::kReadFailed));
     }
     return static_cast<size_t>(written);
 }
 
-std::expected<size_t, SslError> SslEngine::extractEncryptedOutput(char* buffer, size_t length)
+std::expected<size_t, SslError> SslEngine::extract_encrypted_output(char* buffer, size_t length)
 {
     if (!m_wbio) {
         return std::unexpected(SslError(SslErrorCode::kWriteFailed));
@@ -139,18 +139,18 @@ std::expected<size_t, SslError> SslEngine::extractEncryptedOutput(char* buffer, 
 
     const int read = BIO_read(m_wbio, buffer, static_cast<int>(length));
     if (read < 0) {
-        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kWriteFailed));
+        return std::unexpected(SslError::from_open_ssl(SslErrorCode::kWriteFailed));
     }
     return static_cast<size_t>(read);
 }
 
-size_t SslEngine::pendingEncryptedOutput() const
+size_t SslEngine::pending_encrypted_output() const
 {
     if (!m_wbio) return 0;
     return BIO_ctrl_pending(m_wbio);
 }
 
-std::expected<void, SslError> SslEngine::setHostname(const std::string& hostname)
+std::expected<void, SslError> SslEngine::set_hostname(const std::string& hostname)
 {
     if (!m_ssl) {
         return std::unexpected(SslError(SslErrorCode::kSslCreateFailed));
@@ -158,32 +158,32 @@ std::expected<void, SslError> SslEngine::setHostname(const std::string& hostname
 
     // 设置 SNI
     if (SSL_set_tlsext_host_name(m_ssl, hostname.c_str()) != 1) {
-        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kSNISetFailed));
+        return std::unexpected(SslError::from_open_ssl(SslErrorCode::kSNISetFailed));
     }
 
     // 设置主机名验证
     if (SSL_set1_host(m_ssl, hostname.c_str()) != 1) {
-        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kSNISetFailed));
+        return std::unexpected(SslError::from_open_ssl(SslErrorCode::kSNISetFailed));
     }
 
     return {};
 }
 
-void SslEngine::setConnectState()
+void SslEngine::set_connect_state()
 {
     if (m_ssl) {
         SSL_set_connect_state(m_ssl);
     }
 }
 
-void SslEngine::setAcceptState()
+void SslEngine::set_accept_state()
 {
     if (m_ssl) {
         SSL_set_accept_state(m_ssl);
     }
 }
 
-SslIOResult SslEngine::doHandshake()
+SslIOResult SslEngine::do_handshake()
 {
     if (!m_ssl) {
         return SslIOResult::Error;
@@ -194,12 +194,12 @@ SslIOResult SslEngine::doHandshake()
     int ret = SSL_do_handshake(m_ssl);
     if (ret == 1) {
         m_handshakeState = SslHandshakeState::Completed;
-        SSL_LOG_INFO("[handshake] [ok]", "protocol={} cipher={}", getProtocolVersion(), getCipher());
+        SSL_LOG_INFO("[handshake] [ok]", "protocol={} cipher={}", get_protocol_version(), get_cipher());
         return SslIOResult::Success;
     }
 
     int err = SSL_get_error(m_ssl, ret);
-    SslIOResult result = sslErrorToResult(err);
+    SslIOResult result = ssl_error_to_result(err);
 
     if (result == SslIOResult::Error ||
         result == SslIOResult::Syscall ||
@@ -218,7 +218,7 @@ SslIOResult SslEngine::read(char* buffer, size_t length, size_t& bytesRead)
     }
 
     bytesRead = 0;
-    clearOpenSslErrorQueueIfNeeded();
+    clear_open_ssl_error_queue_if_needed();
     int ret = SSL_read(m_ssl, buffer, static_cast<int>(length));
 
     if (ret > 0) {
@@ -238,7 +238,7 @@ SslIOResult SslEngine::read(char* buffer, size_t length, size_t& bytesRead)
         return SslIOResult::ZeroReturn;
     }
 
-    return sslErrorToResult(err);
+    return ssl_error_to_result(err);
 }
 
 SslIOResult SslEngine::write(const char* buffer, size_t length, size_t& bytesWritten)
@@ -248,7 +248,7 @@ SslIOResult SslEngine::write(const char* buffer, size_t length, size_t& bytesWri
     }
 
     bytesWritten = 0;
-    clearOpenSslErrorQueueIfNeeded();
+    clear_open_ssl_error_queue_if_needed();
     int ret = SSL_write(m_ssl, buffer, static_cast<int>(length));
 
     if (ret > 0) {
@@ -256,7 +256,7 @@ SslIOResult SslEngine::write(const char* buffer, size_t length, size_t& bytesWri
         return SslIOResult::Success;
     }
 
-    return sslErrorToResult(SSL_get_error(m_ssl, ret));
+    return ssl_error_to_result(SSL_get_error(m_ssl, ret));
 }
 
 SslIOResult SslEngine::shutdown()
@@ -275,10 +275,10 @@ SslIOResult SslEngine::shutdown()
         return SslIOResult::WantRead;
     }
 
-    return sslErrorToResult(SSL_get_error(m_ssl, ret));
+    return ssl_error_to_result(SSL_get_error(m_ssl, ret));
 }
 
-X509* SslEngine::getPeerCertificate() const
+X509* SslEngine::get_peer_certificate() const
 {
     if (!m_ssl) {
         return nullptr;
@@ -286,7 +286,7 @@ X509* SslEngine::getPeerCertificate() const
     return SSL_get_peer_certificate(m_ssl);
 }
 
-long SslEngine::getVerifyResult() const
+long SslEngine::get_verify_result() const
 {
     if (!m_ssl) {
         return X509_V_ERR_APPLICATION_VERIFICATION;
@@ -294,7 +294,7 @@ long SslEngine::getVerifyResult() const
     return SSL_get_verify_result(m_ssl);
 }
 
-std::string SslEngine::getProtocolVersion() const
+std::string SslEngine::get_protocol_version() const
 {
     if (!m_ssl) {
         return "";
@@ -302,7 +302,7 @@ std::string SslEngine::getProtocolVersion() const
     return SSL_get_version(m_ssl);
 }
 
-std::string SslEngine::getCipher() const
+std::string SslEngine::get_cipher() const
 {
     if (!m_ssl) {
         return "";
@@ -314,7 +314,7 @@ std::string SslEngine::getCipher() const
     return SSL_CIPHER_get_name(cipher);
 }
 
-std::string SslEngine::getALPNProtocol() const
+std::string SslEngine::get_alpn_protocol() const
 {
     if (!m_ssl) {
         return "";
@@ -330,7 +330,7 @@ std::string SslEngine::getALPNProtocol() const
     return "";
 }
 
-int SslEngine::getError(int ret) const
+int SslEngine::get_error(int ret) const
 {
     if (!m_ssl) {
         return SSL_ERROR_SSL;
@@ -346,7 +346,7 @@ size_t SslEngine::pending() const
     return static_cast<size_t>(SSL_pending(m_ssl));
 }
 
-bool SslEngine::setSession(SSL_SESSION* session)
+bool SslEngine::set_session(SSL_SESSION* session)
 {
     if (!m_ssl || !session) {
         return false;
@@ -354,7 +354,7 @@ bool SslEngine::setSession(SSL_SESSION* session)
     return SSL_set_session(m_ssl, session) == 1;
 }
 
-SSL_SESSION* SslEngine::getSession() const
+SSL_SESSION* SslEngine::get_session() const
 {
     if (!m_ssl) {
         return nullptr;
@@ -362,7 +362,7 @@ SSL_SESSION* SslEngine::getSession() const
     return SSL_get1_session(m_ssl);
 }
 
-bool SslEngine::isSessionReused() const
+bool SslEngine::is_session_reused() const
 {
     if (!m_ssl) {
         return false;

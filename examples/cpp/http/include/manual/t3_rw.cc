@@ -37,17 +37,17 @@ using namespace galay::async;
 std::atomic<int> g_request_count{0};
 
 // Echo服务器
-Task<void> echoServer() {
+Task<void> echo_server() {
 
     AsyncTcpSocket listener;
 
     // 设置选项
-    auto optResult = listener.option().handleReuseAddr();
+    auto optResult = listener.option().handle_reuse_addr();
     if (!optResult) {
         co_return;
     }
 
-    optResult = listener.option().handleNonBlock();
+    optResult = listener.option().handle_non_block();
     if (!optResult) {
         co_return;
     }
@@ -77,7 +77,7 @@ Task<void> echoServer() {
 
         // 创建客户端socket
         AsyncTcpSocket client(acceptResult.value());
-        client.option().handleNonBlock();
+        client.option().handle_non_block();
 
         // 创建RingBuffer和HttpReader
         RingBuffer ringBuffer(8192);
@@ -91,8 +91,8 @@ Task<void> echoServer() {
         bool requestComplete = false;
 
         while (!requestComplete) {
-            // 异步读取数据（getRequest 内部会自动调用 readv）
-            auto result = co_await reader.getRequest(request);
+            // 异步读取数据（get_request 内部会自动调用 readv）
+            auto result = co_await reader.get_request(request);
 
             if (!result) {
                 auto& error = result.error();
@@ -112,7 +112,7 @@ Task<void> echoServer() {
             int testCase = g_request_count.load() % 3;
 
             if (testCase == 0) {
-                // 方式1: 使用 sendResponse 发送完整响应
+                // 方式1: 使用 send_response 发送完整响应
                 std::string body = "Echo: " + request.header().uri() + "\n";
                 body += "Request #" + std::to_string(g_request_count.load());
                 auto response = Http1_1ResponseBuilder()
@@ -120,26 +120,26 @@ Task<void> echoServer() {
                     .header("Content-Type", "text/plain")
                     .header("Server", "galay-http-test/1.0")
                     .body(std::move(body))
-                    .buildMove();
+                    .build_move();
 
-                auto sendResult = co_await writer.sendResponse(response);
+                auto sendResult = co_await writer.send_response(response);
                 if (!sendResult) {
                 } else {
                 }
             } else if (testCase == 1) {
-                // 方式2: 使用 sendHeader + send(string) 分离发送
+                // 方式2: 使用 send_header + send(string) 分离发送
                 HttpResponseHeader respHeader;
                 respHeader.version() = HttpVersion::HttpVersion_1_1;
                 respHeader.code() = HttpStatusCode::OK_200;
-                respHeader.headerPairs().addHeaderPair("Content-Type", "text/plain");
-                respHeader.headerPairs().addHeaderPair("Server", "galay-http-test/1.0");
+                respHeader.header_pairs().add_header_pair("Content-Type", "text/plain");
+                respHeader.header_pairs().add_header_pair("Server", "galay-http-test/1.0");
 
                 std::string body = "Echo: " + request.header().uri() + "\n";
                 body += "Request #" + std::to_string(g_request_count.load());
-                respHeader.headerPairs().addHeaderPair("Content-Length", std::to_string(body.size()));
+                respHeader.header_pairs().add_header_pair("Content-Length", std::to_string(body.size()));
 
                 // 发送头部
-                auto headerResult = co_await writer.sendHeader(std::move(respHeader));
+                auto headerResult = co_await writer.send_header(std::move(respHeader));
                 if (!headerResult) {
                 } else {
                     // 发送body
@@ -153,14 +153,14 @@ Task<void> echoServer() {
                 HttpResponseHeader respHeader;
                 respHeader.version() = HttpVersion::HttpVersion_1_1;
                 respHeader.code() = HttpStatusCode::OK_200;
-                respHeader.headerPairs().addHeaderPair("Content-Type", "text/plain");
-                respHeader.headerPairs().addHeaderPair("Server", "galay-http-test/1.0");
+                respHeader.header_pairs().add_header_pair("Content-Type", "text/plain");
+                respHeader.header_pairs().add_header_pair("Server", "galay-http-test/1.0");
 
                 std::string body = "Echo: " + request.header().uri() + "\n";
                 body += "Request #" + std::to_string(g_request_count.load());
-                respHeader.headerPairs().addHeaderPair("Content-Length", std::to_string(body.size()));
+                respHeader.header_pairs().add_header_pair("Content-Length", std::to_string(body.size()));
 
-                std::string headerStr = respHeader.toString();
+                std::string headerStr = respHeader.to_string();
 
                 // 发送头部（原始数据）
                 auto headerResult = co_await writer.send(headerStr.data(), headerStr.size());
@@ -185,17 +185,17 @@ Task<void> echoServer() {
 int main() {
 
 #if defined(USE_KQUEUE) || defined(USE_EPOLL) || defined(USE_IOURING)
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     rt.start();
 
-    auto* scheduler = rt.getNextIOScheduler();
+    auto* scheduler = rt.get_next_io_scheduler();
     if (!scheduler) {
         rt.stop();
         return 1;
     }
 
     // 启动服务器
-    scheduleTask(scheduler, echoServer());
+    schedule_task(scheduler, echo_server());
 
 
     // 保持运行

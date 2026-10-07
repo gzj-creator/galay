@@ -10,7 +10,7 @@
     // ======================== PoolInitializeAwaitable 实现 ========================
 
     PoolInitializeAwaitable::PoolInitializeAwaitable(RedisConnectionPool& pool)
-        : m_result(pool.initializeSync())
+        : m_result(pool.initialize_sync())
     {
     }
 
@@ -23,34 +23,34 @@
     }
 
     PoolAcquireAwaitable::SuspendAction
-    PoolAcquireAwaitable::prepareSuspend(galay::kernel::Waker waiter_waker)
+    PoolAcquireAwaitable::prepare_suspend(galay::kernel::Waker waiter_waker)
     {
         m_start_time = std::chrono::steady_clock::now();
         if (m_pool == nullptr) {
             m_state = State::Error;
-            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool is missing");
+            set_acquire_error(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool is missing");
             return SuspendAction::Error;
         }
         if (!m_pool->m_is_initialized) {
             m_state = State::Error;
-            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool not initialized");
+            set_acquire_error(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool not initialized");
             return SuspendAction::Error;
         }
         if (m_pool->m_is_shutting_down) {
             m_state = State::Error;
-            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool is shutting down");
+            set_acquire_error(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool is shutting down");
             return SuspendAction::Error;
         }
 
-        m_connection = m_pool->tryAcquireAvailable();
+        m_connection = m_pool->try_acquire_available();
         if (m_connection) {
-            incrementCounter(m_pool->m_total_acquired);
-            incrementCounter(m_pool->m_active_connections);
+            increment_counter(m_pool->m_total_acquired);
+            increment_counter(m_pool->m_active_connections);
             m_state = State::Ready;
         }
 
         if (m_state == State::Ready) {
-        } else if ((m_connection = m_pool->createConnectionSlot())) {
+        } else if ((m_connection = m_pool->create_connection_slot())) {
             m_state = State::Creating;
         } else {
             m_waiter = std::make_shared<detail::RedisPoolWaiter>(std::move(waiter_waker));
@@ -58,16 +58,16 @@
                 m_state = State::EnqueueFailed;
                 return SuspendAction::Error;
             }
-            if (!m_pool->enqueueWaiter(m_waiter)) {
+            if (!m_pool->enqueue_waiter(m_waiter)) {
                 m_state = State::EnqueueFailed;
                 m_waiter.reset();
                 return SuspendAction::Error;
             }
-            incrementCounter(m_pool->m_waiting_requests);
+            increment_counter(m_pool->m_waiting_requests);
             m_wait_counted = true;
             m_state = State::Waiting;
             if (m_pool->m_idle_connections.load(std::memory_order_acquire) > 0) {
-                const bool woke_waiter = m_pool->wakeOneWaiterFromAvailable();
+                const bool woke_waiter = m_pool->wake_one_waiter_from_available();
                 if (!woke_waiter && m_pool->m_idle_connections.load(std::memory_order_acquire) > 0) {
                     REDIS_LOG_DEBUG("[client]", "Redis pool waiter queued while idle wake raced");
                 }
@@ -76,12 +76,12 @@
         }
 
         if (m_state == State::Ready) {
-            m_pool->recordAcquireStats(m_start_time);
+            m_pool->record_acquire_stats(m_start_time);
             return SuspendAction::Ready;
         }
         if (m_state != State::Creating || !m_connection) {
             m_state = State::Error;
-            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Invalid connection acquire state");
+            set_acquire_error(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Invalid connection acquire state");
             return SuspendAction::Error;
         }
 
@@ -89,12 +89,12 @@
         options.username = m_pool->m_config.username;
         options.password = m_pool->m_config.password;
         options.db_index = m_pool->m_config.db_index;
-        const bool connect_stored = emplaceOptional(
+        const bool connect_stored = emplace_optional(
             m_connect_awaitable,
             m_connection->get()->connect(m_pool->m_config.host, m_pool->m_config.port, std::move(options)));
         if (!connect_stored) {
             m_state = State::Error;
-            setAcquireError(m_error,
+            set_acquire_error(m_error,
                             RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                             "Failed to store Redis connect awaitable");
             return SuspendAction::Error;
@@ -121,19 +121,19 @@
             m_connect_awaitable.reset();
             if (!connect_result) {
                 if (m_pool != nullptr) {
-                    m_pool->destroyConnectionSlot(m_connection);
+                    m_pool->destroy_connection_slot(m_connection);
                 }
                 m_state = State::Invalid;
                 m_connection.reset();
                 return std::unexpected(connect_result.error());
             }
 
-            m_connection->setHealthy(true);
-            m_connection->updateLastUsed();
+            m_connection->set_healthy(true);
+            m_connection->update_last_used();
             if (m_pool != nullptr) {
-                incrementCounter(m_pool->m_total_acquired);
-                incrementCounter(m_pool->m_active_connections);
-                m_pool->recordAcquireStats(m_start_time);
+                increment_counter(m_pool->m_total_acquired);
+                increment_counter(m_pool->m_active_connections);
+                m_pool->record_acquire_stats(m_start_time);
             }
             m_state = State::Invalid;
             return std::move(m_connection);
@@ -141,7 +141,7 @@
 
         if (m_state == State::Waiting) {
             if (m_wait_counted && m_pool != nullptr) {
-                decrementCounter(m_pool->m_waiting_requests);
+                decrement_counter(m_pool->m_waiting_requests);
                 m_wait_counted = false;
             }
 
@@ -162,9 +162,9 @@
             m_state = State::Invalid;
             if (connection) {
                 if (m_pool != nullptr) {
-                    incrementCounter(m_pool->m_total_acquired);
-                    incrementCounter(m_pool->m_active_connections);
-                    m_pool->recordAcquireStats(m_start_time);
+                    increment_counter(m_pool->m_total_acquired);
+                    increment_counter(m_pool->m_active_connections);
+                    m_pool->record_acquire_stats(m_start_time);
                 }
                 m_connection = std::move(connection);
                 return std::move(m_connection);
@@ -201,10 +201,10 @@
             "Invalid Redis pool acquire state"));
     }
 
-    void PoolAcquireAwaitable::markTimeout()
+    void PoolAcquireAwaitable::mark_timeout()
     {
         if (m_state == State::Creating && m_connect_awaitable.has_value()) {
-            m_connect_awaitable->markTimeout();
+            m_connect_awaitable->mark_timeout();
             return;
         }
         if (m_state == State::Waiting) {
@@ -215,7 +215,7 @@
                 }
             }
             if (m_wait_counted && m_pool != nullptr) {
-                decrementCounter(m_pool->m_waiting_requests);
+                decrement_counter(m_pool->m_waiting_requests);
                 m_wait_counted = false;
             }
         }
@@ -226,7 +226,7 @@
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
     RedissPoolInitializeAwaitable::RedissPoolInitializeAwaitable(RedissConnectionPool& pool)
-        : m_result(pool.initializeSync())
+        : m_result(pool.initialize_sync())
     {
     }
 
@@ -237,34 +237,34 @@
     }
 
     RedissPoolAcquireAwaitable::SuspendAction
-    RedissPoolAcquireAwaitable::prepareSuspend(galay::kernel::Waker waiter_waker)
+    RedissPoolAcquireAwaitable::prepare_suspend(galay::kernel::Waker waiter_waker)
     {
         m_start_time = std::chrono::steady_clock::now();
         if (m_pool == nullptr) {
             m_state = State::Error;
-            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool is missing");
+            set_acquire_error(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool is missing");
             return SuspendAction::Error;
         }
         if (!m_pool->m_is_initialized) {
             m_state = State::Error;
-            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool not initialized");
+            set_acquire_error(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool not initialized");
             return SuspendAction::Error;
         }
         if (m_pool->m_is_shutting_down) {
             m_state = State::Error;
-            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool is shutting down");
+            set_acquire_error(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool is shutting down");
             return SuspendAction::Error;
         }
 
-        m_connection = m_pool->tryAcquireAvailable();
+        m_connection = m_pool->try_acquire_available();
         if (m_connection) {
-            incrementCounter(m_pool->m_total_acquired);
-            incrementCounter(m_pool->m_active_connections);
+            increment_counter(m_pool->m_total_acquired);
+            increment_counter(m_pool->m_active_connections);
             m_state = State::Ready;
         }
 
         if (m_state == State::Ready) {
-        } else if ((m_connection = m_pool->createConnectionSlot())) {
+        } else if ((m_connection = m_pool->create_connection_slot())) {
             m_state = State::Creating;
         } else {
             m_waiter = std::make_shared<detail::RedissPoolWaiter>(std::move(waiter_waker));
@@ -272,16 +272,16 @@
                 m_state = State::EnqueueFailed;
                 return SuspendAction::Error;
             }
-            if (!m_pool->enqueueWaiter(m_waiter)) {
+            if (!m_pool->enqueue_waiter(m_waiter)) {
                 m_state = State::EnqueueFailed;
                 m_waiter.reset();
                 return SuspendAction::Error;
             }
-            incrementCounter(m_pool->m_waiting_requests);
+            increment_counter(m_pool->m_waiting_requests);
             m_wait_counted = true;
             m_state = State::Waiting;
             if (m_pool->m_idle_connections.load(std::memory_order_acquire) > 0) {
-                const bool woke_waiter = m_pool->wakeOneWaiterFromAvailable();
+                const bool woke_waiter = m_pool->wake_one_waiter_from_available();
                 if (!woke_waiter && m_pool->m_idle_connections.load(std::memory_order_acquire) > 0) {
                     REDIS_LOG_DEBUG("[client]", "TLS Redis pool waiter queued while idle wake raced");
                 }
@@ -290,12 +290,12 @@
         }
 
         if (m_state == State::Ready) {
-            m_pool->recordAcquireStats(m_start_time);
+            m_pool->record_acquire_stats(m_start_time);
             return SuspendAction::Ready;
         }
         if (m_state != State::Creating || !m_connection) {
             m_state = State::Error;
-            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Invalid TLS connection acquire state");
+            set_acquire_error(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Invalid TLS connection acquire state");
             return SuspendAction::Error;
         }
 
@@ -303,12 +303,12 @@
         options.username = m_pool->m_config.username;
         options.password = m_pool->m_config.password;
         options.db_index = m_pool->m_config.db_index;
-        const bool connect_stored = emplaceOptional(
+        const bool connect_stored = emplace_optional(
             m_connect_awaitable,
             m_connection->get()->connect(m_pool->m_config.host, m_pool->m_config.port, std::move(options)));
         if (!connect_stored) {
             m_state = State::Error;
-            setAcquireError(m_error,
+            set_acquire_error(m_error,
                             RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                             "Failed to store TLS Redis connect awaitable");
             return SuspendAction::Error;
@@ -335,19 +335,19 @@
             m_connect_awaitable.reset();
             if (!connect_result) {
                 if (m_pool != nullptr) {
-                    m_pool->destroyConnectionSlot(m_connection);
+                    m_pool->destroy_connection_slot(m_connection);
                 }
                 m_state = State::Invalid;
                 m_connection.reset();
                 return std::unexpected(connect_result.error());
             }
 
-            m_connection->setHealthy(true);
-            m_connection->updateLastUsed();
+            m_connection->set_healthy(true);
+            m_connection->update_last_used();
             if (m_pool != nullptr) {
-                incrementCounter(m_pool->m_total_acquired);
-                incrementCounter(m_pool->m_active_connections);
-                m_pool->recordAcquireStats(m_start_time);
+                increment_counter(m_pool->m_total_acquired);
+                increment_counter(m_pool->m_active_connections);
+                m_pool->record_acquire_stats(m_start_time);
             }
             m_state = State::Invalid;
             return std::move(m_connection);
@@ -355,7 +355,7 @@
 
         if (m_state == State::Waiting) {
             if (m_wait_counted && m_pool != nullptr) {
-                decrementCounter(m_pool->m_waiting_requests);
+                decrement_counter(m_pool->m_waiting_requests);
                 m_wait_counted = false;
             }
 
@@ -376,9 +376,9 @@
             m_state = State::Invalid;
             if (connection) {
                 if (m_pool != nullptr) {
-                    incrementCounter(m_pool->m_total_acquired);
-                    incrementCounter(m_pool->m_active_connections);
-                    m_pool->recordAcquireStats(m_start_time);
+                    increment_counter(m_pool->m_total_acquired);
+                    increment_counter(m_pool->m_active_connections);
+                    m_pool->record_acquire_stats(m_start_time);
                 }
                 m_connection = std::move(connection);
                 return std::move(m_connection);
@@ -415,10 +415,10 @@
             "Invalid TLS Redis pool acquire state"));
     }
 
-    void RedissPoolAcquireAwaitable::markTimeout()
+    void RedissPoolAcquireAwaitable::mark_timeout()
     {
         if (m_state == State::Creating && m_connect_awaitable.has_value()) {
-            m_connect_awaitable->markTimeout();
+            m_connect_awaitable->mark_timeout();
             return;
         }
         if (m_state == State::Waiting) {
@@ -429,7 +429,7 @@
                 }
             }
             if (m_wait_counted && m_pool != nullptr) {
-                decrementCounter(m_pool->m_waiting_requests);
+                decrement_counter(m_pool->m_waiting_requests);
                 m_wait_counted = false;
             }
         }

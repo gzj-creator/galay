@@ -12,7 +12,7 @@ using galay::etcd::EtcdClient;
 namespace
 {
 
-std::string nowSuffix()
+std::string now_suffix()
 {
     const auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
     return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(now).count());
@@ -28,7 +28,7 @@ int fail(const std::string& message)
 
 int main(int argc, char** argv)
 {
-    if (const int skip_code = etcd_test::requireIntegrationEnabledOrSkip("etcd.prefix");
+    if (const int skip_code = etcd_test::require_integration_enabled_or_skip("etcd.prefix");
         skip_code != 0) {
         return skip_code;
     }
@@ -44,7 +44,7 @@ int main(int argc, char** argv)
         return fail("connect failed: " + conn.error().message());
     }
 
-    const std::string prefix = "/galay-etcd/prefix/" + nowSuffix() + "/";
+    const std::string prefix = "/galay-etcd/prefix/" + now_suffix() + "/";
     const std::vector<std::pair<std::string, std::string>> kvs = {
         {prefix + "a", "1"},
         {prefix + "b", "2"},

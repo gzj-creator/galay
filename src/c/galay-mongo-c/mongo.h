@@ -551,7 +551,7 @@ galay_status_t galay_mongo_uri_database(const galay_mongo_uri_t* uri, const char
 galay_status_t galay_mongo_uri_port(const galay_mongo_uri_t* uri, uint16_t* port);
 
 /**
- * @brief 构造 Mongo findOne 命令 document。
+ * @brief 构造 Mongo find_one 命令 document。
  * @details 生成包含 `find`、`filter`、可选 `projection`、`limit: 1`、`singleBatch: true`
  *          和 `$db` 的命令 document。
  * @param database database 名称，调用期间借用。
@@ -568,7 +568,7 @@ galay_status_t galay_mongo_command_find_one(const char* database, const char* co
                                             galay_mongo_document_t** out);
 
 /**
- * @brief 构造 Mongo insertOne 命令 document。
+ * @brief 构造 Mongo insert_one 命令 document。
  * @param database database 名称，调用期间借用。
  * @param collection collection 名称，不能为空。
  * @param document 待插入 document，会按值复制。
@@ -580,7 +580,7 @@ galay_status_t galay_mongo_command_insert_one(const char* database, const char* 
                                               galay_mongo_document_t** out);
 
 /**
- * @brief 构造 Mongo updateOne 命令 document。
+ * @brief 构造 Mongo update_one 命令 document。
  * @param database database 名称，调用期间借用。
  * @param collection collection 名称，不能为空。
  * @param filter update filter document，会按值复制。
@@ -596,7 +596,7 @@ galay_status_t galay_mongo_command_update_one(const char* database, const char* 
                                               galay_mongo_document_t** out);
 
 /**
- * @brief 构造 Mongo deleteOne 命令 document。
+ * @brief 构造 Mongo delete_one 命令 document。
  * @param database database 名称，调用期间借用。
  * @param collection collection 名称，不能为空。
  * @param filter delete filter document，会按值复制。

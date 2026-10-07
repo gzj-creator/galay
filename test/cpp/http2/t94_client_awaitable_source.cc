@@ -16,7 +16,7 @@ enum class ReadError {
     Path,
 };
 
-std::expected<std::string, ReadError> repoRoot()
+std::expected<std::string, ReadError> repo_root()
 {
     std::string path(__FILE__);
     const std::string marker = "/test/cpp/http2/";
@@ -28,9 +28,9 @@ std::expected<std::string, ReadError> repoRoot()
     return path;
 }
 
-std::expected<std::string, ReadError> readFile(std::string_view relative)
+std::expected<std::string, ReadError> read_file(std::string_view relative)
 {
-    auto root = repoRoot();
+    auto root = repo_root();
     if (!root.has_value()) {
         return std::unexpected(root.error());
     }
@@ -84,12 +84,12 @@ bool contains(std::string_view text, std::string_view needle)
 
 int main()
 {
-    const auto h2 = readFile("/src/cpp/galay-http2/client/h2_client.h");
-    const auto h2c = readFile("/src/cpp/galay-http2/client/h2c_client.h");
-    const auto h2_awaitable = readFile("/src/cpp/galay-http2/details/h2_client_awaitable.h");
-    const auto h2_implementation = readFile("/src/cpp/galay-http2/details/h2_client_awaitable.inl");
-    const auto h2c_awaitable = readFile("/src/cpp/galay-http2/details/h2c_client_awaitable.h");
-    const auto h2c_implementation = readFile("/src/cpp/galay-http2/details/h2c_client_awaitable.inl");
+    const auto h2 = read_file("/src/cpp/galay-http2/client/h2_client.h");
+    const auto h2c = read_file("/src/cpp/galay-http2/client/h2c_client.h");
+    const auto h2_awaitable = read_file("/src/cpp/galay-http2/details/h2_client_awaitable.h");
+    const auto h2_implementation = read_file("/src/cpp/galay-http2/details/h2_client_awaitable.inl");
+    const auto h2c_awaitable = read_file("/src/cpp/galay-http2/details/h2c_client_awaitable.h");
+    const auto h2c_implementation = read_file("/src/cpp/galay-http2/details/h2c_client_awaitable.inl");
     if (!h2.has_value() || !h2c.has_value() || !h2_awaitable.has_value() ||
         !h2_implementation.has_value() || !h2c_awaitable.has_value() ||
         !h2c_implementation.has_value()) {

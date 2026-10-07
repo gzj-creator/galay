@@ -13,8 +13,8 @@
  * // 服务端示例
  * Task<void> server() {
  *     AsyncUdpSocket socket;
- *     socket.option().handleReuseAddr();
- *     socket.option().handleNonBlock();
+ *     socket.option().handle_reuse_addr();
+ *     socket.option().handle_non_block();
  *     socket.bind(Host(IPType::IPV4, "0.0.0.0", 8080));
  *
  *     while (true) {
@@ -31,7 +31,7 @@
  * // 客户端示例
  * Task<void> client() {
  *     AsyncUdpSocket socket;
- *     socket.option().handleNonBlock();
+ *     socket.option().handle_non_block();
  *
  *     Host server(IPType::IPV4, "127.0.0.1", 8080);
  *     co_await socket.sendto("Hello", 5, server);
@@ -164,8 +164,8 @@ public:
      * @return HandleOption 选项配置器对象
      *
      * @code
-     * socket.option().handleReuseAddr();  // 设置地址重用
-     * socket.option().handleNonBlock();   // 设置非阻塞
+     * socket.option().handle_reuse_addr();  // 设置地址重用
+     * socket.option().handle_non_block();   // 设置非阻塞
      * @endcode
      */
     galay::kernel::HandleOption option() { return galay::kernel::HandleOption(handle()); }
@@ -243,7 +243,7 @@ public:
      * @brief 获取IO控制器
      * @return IOController* IO控制器
      */
-    galay::kernel::IOController* getController() { return m_controller.get(); }
+    galay::kernel::IOController* get_controller() { return m_controller.get(); }
 
     /**
      * @brief 克隆当前socket，共享底层句柄与IO控制器
@@ -263,10 +263,10 @@ public:
      * @brief 获取当前socket的共享持有计数
      * @return shared_ptr 引用计数；对象为 moved-from 状态时返回 0
      */
-    int getSharedCount() const { return static_cast<int>(m_controller.use_count()); }
+    int get_shared_count() const { return static_cast<int>(m_controller.use_count()); }
 
 private:
-    static std::expected<GHandle, galay::kernel::IOError> openHandle(galay::kernel::IPType type);  ///< 按协议版本创建底层 UDP socket
+    static std::expected<GHandle, galay::kernel::IOError> open_handle(galay::kernel::IPType type);  ///< 按协议版本创建底层 UDP socket
 
     /**
      * @brief 从共享控制器构造（仅 clone 使用）
@@ -279,7 +279,7 @@ private:
      * @brief 释放本对象对共享控制器的持有
      * @note 递减共享计数；计数减到 0 且句柄仍有效时关闭句柄
      */
-    void releaseSharedOwnership() noexcept;
+    void release_shared_ownership() noexcept;
 
 private:
     std::shared_ptr<galay::kernel::IOController> m_controller;  ///< IO事件控制器；clone 共享同一实例

@@ -10,7 +10,7 @@
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -27,7 +27,7 @@ int main()
     const auto begin = std::chrono::steady_clock::now();
     for (int64_t i = 0; i < iterations; ++i) {
         for (const auto& endpoint : endpoints) {
-            auto parsed = galay::etcd::internal::parseEndpoint(endpoint);
+            auto parsed = galay::etcd::internal::parse_endpoint(endpoint);
             if (!parsed.has_value()) {
                 std::cerr << "parseEndpoint failed: " << parsed.error() << '\n';
                 return 1;

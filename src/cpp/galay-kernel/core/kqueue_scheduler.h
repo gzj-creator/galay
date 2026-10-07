@@ -2,7 +2,7 @@
  * @file kqueue_scheduler.h
  * @brief macOS/BSD kqueue 调度器的构造与 poll 适配。
  * @details 生命周期、入队、唤醒和 IO 注册均复用 IOSchedulerBase。
- * 支持编译期配置模板以获得更好的性能优化。
+ * 支持编译期容量选择和范围检查，事件循环使用共享后端实现。
  */
 #ifndef GALAY_KERNEL_KQUEUE_SCHEDULER_H
 #define GALAY_KERNEL_KQUEUE_SCHEDULER_H
@@ -24,8 +24,8 @@ protected:
 
 private:
     friend class IOSchedulerBase<KqueueSchedulerBackend, KqueueReactor>;
-    void pollBackend();
-    void flushBackend();
+    void poll_backend();
+    void flush_backend();
 };
 
 /** @brief 配置模板只负责构造容量；公共借用入口始终分派到同一真实后端基类。 */
@@ -43,8 +43,8 @@ public:
     KqueueSchedulerT(const KqueueSchedulerT&) = delete;
     KqueueSchedulerT& operator=(const KqueueSchedulerT&) = delete;
 
-    static constexpr size_t maxEvents() noexcept { return Config::kMaxEvents; }
-    static constexpr size_t batchSize() noexcept { return Config::kBatchSize; }
+    static constexpr size_t max_events() noexcept { return Config::kMaxEvents; }
+    static constexpr size_t batch_size() noexcept { return Config::kBatchSize; }
 };
 
 /** @brief 默认 kqueue 调度器 */

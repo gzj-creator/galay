@@ -82,14 +82,14 @@ private:
  * @param body 原始JSON请求文本
  * @return 成功返回ParsedJsonRpcRequest，失败返回McpError
  */
-std::expected<ParsedJsonRpcRequest, McpError> parseJsonRpcRequest(std::string_view body);
+std::expected<ParsedJsonRpcRequest, McpError> parse_json_rpc_request(std::string_view body);
 
 /**
  * @brief 从原始JSON文本解析JSON-RPC响应
  * @param body 原始JSON响应文本
  * @return 成功返回ParsedJsonRpcResponse，失败返回McpError
  */
-std::expected<ParsedJsonRpcResponse, McpError> parseJsonRpcResponse(std::string_view body);
+std::expected<ParsedJsonRpcResponse, McpError> parse_json_rpc_response(std::string_view body);
 
 } // namespace galay::mcp
 

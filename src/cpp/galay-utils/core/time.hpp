@@ -31,24 +31,24 @@ public:
      * @brief 获取 Unix epoch 至当前时间的毫秒数
      * @return 当前系统时间毫秒时间戳
      */
-    static std::int64_t currentTimeMs() {
-        return nowSinceEpoch<std::chrono::milliseconds>();
+    static std::int64_t current_time_ms() {
+        return now_since_epoch<std::chrono::milliseconds>();
     }
 
     /**
      * @brief 获取 Unix epoch 至当前时间的微秒数
      * @return 当前系统时间微秒时间戳
      */
-    static std::int64_t currentTimeUs() {
-        return nowSinceEpoch<std::chrono::microseconds>();
+    static std::int64_t current_time_us() {
+        return now_since_epoch<std::chrono::microseconds>();
     }
 
     /**
      * @brief 获取 Unix epoch 至当前时间的纳秒数
      * @return 当前系统时间纳秒时间戳
      */
-    static std::int64_t currentTimeNs() {
-        return nowSinceEpoch<std::chrono::nanoseconds>();
+    static std::int64_t current_time_ns() {
+        return now_since_epoch<std::chrono::nanoseconds>();
     }
 
     /**
@@ -58,7 +58,7 @@ public:
      * @param utc 为 true 时按 UTC/GMT 格式化，否则按本地时区格式化
      * @return 格式化后的时间字符串；转换或格式化失败时返回空字符串
      */
-    static std::string formatTime(std::time_t timestamp, const char* format, bool utc = false) {
+    static std::string format_time(std::time_t timestamp, const char* format, bool utc = false) {
         if (format == nullptr) {
             return {};
         }
@@ -93,8 +93,8 @@ public:
      * @param format strftime 格式字符串
      * @return 当前 GMT 时间字符串
      */
-    static std::string currentGMTTime(const char* format = "%a, %d %b %Y %H:%M:%S GMT") {
-        return formatTime(std::time(nullptr), format, true);
+    static std::string current_gmt_time(const char* format = "%a, %d %b %Y %H:%M:%S GMT") {
+        return format_time(std::time(nullptr), format, true);
     }
 
     /**
@@ -102,13 +102,13 @@ public:
      * @param format strftime 格式字符串
      * @return 当前本地时间字符串
      */
-    static std::string currentLocalTime(const char* format = "%Y-%m-%d %H:%M:%S") {
-        return formatTime(std::time(nullptr), format, false);
+    static std::string current_local_time(const char* format = "%Y-%m-%d %H:%M:%S") {
+        return format_time(std::time(nullptr), format, false);
     }
 
 private:
     template<typename Duration>
-    static std::int64_t nowSinceEpoch() {
+    static std::int64_t now_since_epoch() {
         const auto now = std::chrono::system_clock::now();
         return std::chrono::duration_cast<Duration>(now.time_since_epoch()).count();
     }
@@ -158,7 +158,7 @@ public:
      * @brief 获取经过毫秒数
      * @return 经过时间的毫秒浮点值
      */
-    double elapsedMs() const {
+    double elapsed_ms() const {
         return std::chrono::duration<double, std::milli>(elapsed()).count();
     }
 
@@ -166,7 +166,7 @@ public:
      * @brief 获取当前起点
      * @return 起点时刻
      */
-    time_point startTime() const {
+    time_point start_time() const {
         return m_start;
     }
 
@@ -200,7 +200,7 @@ public:
      * @return 截止时间对象
      */
     template<typename Duration>
-    static Deadline fromNow(Duration timeout) {
+    static Deadline from_now(Duration timeout) {
         return Deadline(Clock::now() + std::chrono::duration_cast<duration>(timeout));
     }
 
@@ -228,7 +228,7 @@ public:
      * @brief 获取绝对截止时刻
      * @return 截止时刻
      */
-    time_point timePoint() const {
+    time_point deadline_time() const {
         return m_deadline;
     }
 
@@ -261,7 +261,7 @@ public:
      */
     template<typename Duration>
     static Backoff fixed(Duration value) {
-        return Backoff(Strategy::Fixed, clampDuration(value), duration::zero(), 1.0, clampDuration(value));
+        return Backoff(Strategy::Fixed, clamp_duration(value), duration::zero(), 1.0, clamp_duration(value));
     }
 
     /**
@@ -274,7 +274,7 @@ public:
      */
     template<typename Duration>
     static Backoff linear(Duration initial, Duration step, Duration max) {
-        return Backoff(Strategy::Linear, clampDuration(initial), clampDuration(step), 1.0, clampDuration(max));
+        return Backoff(Strategy::Linear, clamp_duration(initial), clamp_duration(step), 1.0, clamp_duration(max));
     }
 
     /**
@@ -287,8 +287,8 @@ public:
      */
     template<typename Duration>
     static Backoff exponential(Duration initial, double multiplier, Duration max) {
-        return Backoff(Strategy::Exponential, clampDuration(initial), duration::zero(),
-                       std::max(1.0, multiplier), clampDuration(max));
+        return Backoff(Strategy::Exponential, clamp_duration(initial), duration::zero(),
+                       std::max(1.0, multiplier), clamp_duration(max));
     }
 
     /**
@@ -305,7 +305,7 @@ public:
             value = m_initial + m_step * m_attempts;
             break;
         case Strategy::Exponential:
-            value = exponentialValue();
+            value = exponential_value();
             break;
         }
 
@@ -345,12 +345,12 @@ private:
         , m_max(max) {}
 
     template<typename Duration>
-    static duration clampDuration(Duration value) {
+    static duration clamp_duration(Duration value) {
         const auto converted = std::chrono::duration_cast<duration>(value);
         return converted < duration::zero() ? duration::zero() : converted;
     }
 
-    duration exponentialValue() const {
+    duration exponential_value() const {
         long double ticks = static_cast<long double>(m_initial.count());
         for (std::size_t i = 0; i < m_attempts; ++i) {
             ticks *= m_multiplier;

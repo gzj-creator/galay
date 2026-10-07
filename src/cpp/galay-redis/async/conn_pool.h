@@ -84,7 +84,7 @@ namespace galay::redis
          * @brief 创建默认配置
          * @return 默认连接池配置
          */
-        static ConnectionPoolConfig defaultConfig()
+        static ConnectionPoolConfig default_config()
         {
             return ConnectionPoolConfig{};
         }
@@ -158,7 +158,7 @@ namespace galay::redis
          * @brief 创建默认配置
          * @return 默认 Rediss 连接池配置
          */
-        static RedissConnectionPoolConfig defaultConfig()
+        static RedissConnectionPoolConfig default_config()
         {
             return RedissConnectionPoolConfig{};
         }
@@ -224,7 +224,7 @@ namespace galay::redis
         /**
          * @brief 更新最后使用时间为当前时刻
          */
-        void updateLastUsed()
+        void update_last_used()
         {
             m_last_used = std::chrono::steady_clock::now();
         }
@@ -233,15 +233,15 @@ namespace galay::redis
          * @brief 获取连接空闲时间
          * @return 自上次使用以来经过的毫秒数
          */
-        std::chrono::milliseconds getIdleTime() const
+        std::chrono::milliseconds get_idle_time() const
         {
             auto now = std::chrono::steady_clock::now();
             return std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_used);
         }
 
-        bool isHealthy() const { return m_is_healthy; }            ///< 获取健康状态
-        void setHealthy(bool healthy) { m_is_healthy = healthy; }  ///< 设置健康状态
-        bool isClosed() const { return m_client->isClosed(); }     ///< 检查连接是否已关闭
+        bool is_healthy() const { return m_is_healthy; }            ///< 获取健康状态
+        void set_healthy(bool healthy) { m_is_healthy = healthy; }  ///< 设置健康状态
+        bool is_closed() const { return m_client->is_closed(); }     ///< 检查连接是否已关闭
 
     private:
         std::shared_ptr<RedisClient<>> m_client;                          ///< 底层 Redis 客户端
@@ -290,7 +290,7 @@ namespace galay::redis
         /**
          * @brief 更新最后使用时间为当前时刻
          */
-        void updateLastUsed()
+        void update_last_used()
         {
             m_last_used = std::chrono::steady_clock::now();
         }
@@ -299,15 +299,15 @@ namespace galay::redis
          * @brief 获取连接空闲时间
          * @return 自上次使用以来经过的毫秒数
          */
-        std::chrono::milliseconds getIdleTime() const
+        std::chrono::milliseconds get_idle_time() const
         {
             auto now = std::chrono::steady_clock::now();
             return std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_used);
         }
 
-        bool isHealthy() const { return m_is_healthy; }            ///< 获取健康状态
-        void setHealthy(bool healthy) { m_is_healthy = healthy; }  ///< 设置健康状态
-        bool isClosed() const { return m_client->isClosed(); }     ///< 检查连接是否已关闭
+        bool is_healthy() const { return m_is_healthy; }            ///< 获取健康状态
+        void set_healthy(bool healthy) { m_is_healthy = healthy; }  ///< 设置健康状态
+        bool is_closed() const { return m_client->is_closed(); }     ///< 检查连接是否已关闭
 
     private:
         std::shared_ptr<RedissClient> m_client;                         ///< 底层 Rediss 客户端
@@ -369,7 +369,7 @@ namespace galay::redis
          * @param scheduler IO调度器
          * @param config 连接池配置
          */
-        RedisConnectionPool(IOScheduler* scheduler, ConnectionPoolConfig config = ConnectionPoolConfig::defaultConfig());
+        RedisConnectionPool(IOScheduler* scheduler, ConnectionPoolConfig config = ConnectionPoolConfig::default_config());
 
         // 禁止拷贝
         RedisConnectionPool(const RedisConnectionPool&) = delete;
@@ -400,12 +400,12 @@ namespace galay::redis
         /**
          * @brief 手动触发健康检查
          */
-        void triggerHealthCheck();
+        void trigger_health_check();
 
         /**
          * @brief 手动触发空闲连接清理
          */
-        void triggerIdleCleanup();
+        void trigger_idle_cleanup();
 
         /**
          * @brief 预热连接池（创建到最小连接数）
@@ -415,21 +415,21 @@ namespace galay::redis
         /**
          * @brief 清理所有不健康的连接
          */
-        size_t cleanupUnhealthyConnections();
+        size_t cleanup_unhealthy_connections();
 
         /**
          * @brief 扩容连接池（创建指定数量的连接）
          * @param count 要创建的连接数
          * @return 实际创建的连接数
          */
-        size_t expandPool(size_t count);
+        size_t expand_pool(size_t count);
 
         /**
          * @brief 缩容连接池（移除空闲连接到目标数量）
          * @param target_size 目标连接数
          * @return 实际移除的连接数
          */
-        size_t shrinkPool(size_t target_size);
+        size_t shrink_pool(size_t target_size);
 
         /**
          * @brief 关闭连接池（同步方法）
@@ -461,12 +461,12 @@ namespace galay::redis
             uint64_t total_acquire_time_ms;// 总获取时间（用于计算平均值）
         };
 
-        PoolStats getStats() const;
+        PoolStats get_stats() const;
 
         /**
          * @brief 获取配置
          */
-        const ConnectionPoolConfig& getConfig() const { return m_config; }
+        const ConnectionPoolConfig& get_config() const { return m_config; }
 
         ~RedisConnectionPool();
 
@@ -474,30 +474,30 @@ namespace galay::redis
         friend class PoolInitializeAwaitable;
         friend class PoolAcquireAwaitable;
 
-        RedisVoidResult initializeSync(); ///< 同步初始化实现
+        RedisVoidResult initialize_sync(); ///< 同步初始化实现
         std::expected<std::shared_ptr<PooledConnection>, RedisError>
-        acquireSync(std::chrono::steady_clock::time_point start_time); ///< 同步获取连接实现
-        void recordAcquireStats(std::chrono::steady_clock::time_point start_time); ///< 记录获取连接统计
-        std::shared_ptr<PooledConnection> tryAcquireAvailable(); ///< 从分片空闲队列非阻塞获取健康连接
-        std::shared_ptr<PooledConnection> createConnectionSlot(); ///< 预留容量并创建待连接槽位
-        void destroyConnectionSlot(std::shared_ptr<PooledConnection>& conn); ///< 销毁已计入容量的连接槽位
-        bool returnToAvailable(std::shared_ptr<PooledConnection> conn); ///< 将健康连接放回分片空闲队列
-        bool enqueueWaiter(std::shared_ptr<detail::RedisPoolWaiter> waiter); ///< 注册等待连接的协程
-        bool completeOneWaiter(std::shared_ptr<PooledConnection> conn,
+        acquire_sync(std::chrono::steady_clock::time_point start_time); ///< 同步获取连接实现
+        void record_acquire_stats(std::chrono::steady_clock::time_point start_time); ///< 记录获取连接统计
+        std::shared_ptr<PooledConnection> try_acquire_available(); ///< 从分片空闲队列非阻塞获取健康连接
+        std::shared_ptr<PooledConnection> create_connection_slot(); ///< 预留容量并创建待连接槽位
+        void destroy_connection_slot(std::shared_ptr<PooledConnection>& conn); ///< 销毁已计入容量的连接槽位
+        bool return_to_available(std::shared_ptr<PooledConnection> conn); ///< 将健康连接放回分片空闲队列
+        bool enqueue_waiter(std::shared_ptr<detail::RedisPoolWaiter> waiter); ///< 注册等待连接的协程
+        bool complete_one_waiter(std::shared_ptr<PooledConnection> conn,
                                std::shared_ptr<detail::RedisPoolWaiter>& waiter_to_wake); ///< 尝试把连接转交给等待者
-        bool wakeOneWaiterFromAvailable(); ///< 从空闲队列唤醒一个等待者，避免 enqueue/release 竞态
-        size_t drainAvailableConnections(std::vector<std::shared_ptr<PooledConnection>>* drained = nullptr); ///< 清空空闲分片
-        size_t idleShardIndex() const noexcept; ///< 当前线程对应的空闲分片
+        bool wake_one_waiter_from_available(); ///< 从空闲队列唤醒一个等待者，避免 enqueue/release 竞态
+        size_t drain_available_connections(std::vector<std::shared_ptr<PooledConnection>>* drained = nullptr); ///< 清空空闲分片
+        size_t idle_shard_index() const noexcept; ///< 当前线程对应的空闲分片
 
         /**
          * @brief 获取或创建连接（内部方法，同步）
          */
-        std::expected<std::shared_ptr<PooledConnection>, RedisError> getConnectionSync();
+        std::expected<std::shared_ptr<PooledConnection>, RedisError> get_connection_sync();
 
         /**
          * @brief 检查连接健康状态（同步）
          */
-        bool checkConnectionHealthSync(std::shared_ptr<PooledConnection> conn);
+        bool check_connection_health_sync(std::shared_ptr<PooledConnection> conn);
 
     private:
         static constexpr size_t kIdleShardCount = 16;
@@ -556,7 +556,7 @@ namespace galay::redis
          * @param config Rediss 连接池配置
          */
         RedissConnectionPool(IOScheduler* scheduler,
-                             RedissConnectionPoolConfig config = RedissConnectionPoolConfig::defaultConfig());
+                             RedissConnectionPoolConfig config = RedissConnectionPoolConfig::default_config());
 
         RedissConnectionPool(const RedissConnectionPool&) = delete; ///< 禁止拷贝
         RedissConnectionPool& operator=(const RedissConnectionPool&) = delete; ///< 禁止拷贝赋值
@@ -566,15 +566,15 @@ namespace galay::redis
         RedissPoolInitializeAwaitable initialize(); ///< 初始化连接池
         RedissPoolAcquireAwaitable acquire(); ///< 获取连接
         void release(std::shared_ptr<PooledRedissConnection> conn); ///< 归还连接
-        void triggerHealthCheck(); ///< 手动触发健康检查
-        void triggerIdleCleanup(); ///< 手动触发空闲连接清理
+        void trigger_health_check(); ///< 手动触发健康检查
+        void trigger_idle_cleanup(); ///< 手动触发空闲连接清理
         void warmup(); ///< 预热连接池
-        size_t cleanupUnhealthyConnections(); ///< 清理不健康的连接
-        size_t expandPool(size_t count); ///< 扩容连接池
-        size_t shrinkPool(size_t target_size); ///< 缩容连接池
+        size_t cleanup_unhealthy_connections(); ///< 清理不健康的连接
+        size_t expand_pool(size_t count); ///< 扩容连接池
+        size_t shrink_pool(size_t target_size); ///< 缩容连接池
         void shutdown(); ///< 关闭连接池
-        PoolStats getStats() const; ///< 获取连接池统计信息
-        const RedissConnectionPoolConfig& getConfig() const { return m_config; } ///< 获取配置
+        PoolStats get_stats() const; ///< 获取连接池统计信息
+        const RedissConnectionPoolConfig& get_config() const { return m_config; } ///< 获取配置
 
         ~RedissConnectionPool();
 
@@ -582,22 +582,22 @@ namespace galay::redis
         friend class RedissPoolInitializeAwaitable;
         friend class RedissPoolAcquireAwaitable;
 
-        RedisVoidResult initializeSync(); ///< 同步初始化实现
+        RedisVoidResult initialize_sync(); ///< 同步初始化实现
         std::expected<std::shared_ptr<PooledRedissConnection>, RedisError>
-        acquireSync(std::chrono::steady_clock::time_point start_time); ///< 同步获取连接实现
-        void recordAcquireStats(std::chrono::steady_clock::time_point start_time); ///< 记录获取连接统计
-        std::shared_ptr<PooledRedissConnection> tryAcquireAvailable(); ///< 从分片空闲队列非阻塞获取健康连接
-        std::shared_ptr<PooledRedissConnection> createConnectionSlot(); ///< 预留容量并创建待连接槽位
-        void destroyConnectionSlot(std::shared_ptr<PooledRedissConnection>& conn); ///< 销毁已计入容量的连接槽位
-        bool returnToAvailable(std::shared_ptr<PooledRedissConnection> conn); ///< 将健康连接放回分片空闲队列
-        bool enqueueWaiter(std::shared_ptr<detail::RedissPoolWaiter> waiter); ///< 注册等待连接的协程
-        bool completeOneWaiter(std::shared_ptr<PooledRedissConnection> conn,
+        acquire_sync(std::chrono::steady_clock::time_point start_time); ///< 同步获取连接实现
+        void record_acquire_stats(std::chrono::steady_clock::time_point start_time); ///< 记录获取连接统计
+        std::shared_ptr<PooledRedissConnection> try_acquire_available(); ///< 从分片空闲队列非阻塞获取健康连接
+        std::shared_ptr<PooledRedissConnection> create_connection_slot(); ///< 预留容量并创建待连接槽位
+        void destroy_connection_slot(std::shared_ptr<PooledRedissConnection>& conn); ///< 销毁已计入容量的连接槽位
+        bool return_to_available(std::shared_ptr<PooledRedissConnection> conn); ///< 将健康连接放回分片空闲队列
+        bool enqueue_waiter(std::shared_ptr<detail::RedissPoolWaiter> waiter); ///< 注册等待连接的协程
+        bool complete_one_waiter(std::shared_ptr<PooledRedissConnection> conn,
                                std::shared_ptr<detail::RedissPoolWaiter>& waiter_to_wake); ///< 尝试把连接转交给等待者
-        bool wakeOneWaiterFromAvailable(); ///< 从空闲队列唤醒一个等待者，避免 enqueue/release 竞态
-        size_t drainAvailableConnections(std::vector<std::shared_ptr<PooledRedissConnection>>* drained = nullptr); ///< 清空空闲分片
-        size_t idleShardIndex() const noexcept; ///< 当前线程对应的空闲分片
-        std::expected<std::shared_ptr<PooledRedissConnection>, RedisError> getConnectionSync(); ///< 获取或创建连接
-        bool checkConnectionHealthSync(std::shared_ptr<PooledRedissConnection> conn); ///< 检查连接健康状态
+        bool wake_one_waiter_from_available(); ///< 从空闲队列唤醒一个等待者，避免 enqueue/release 竞态
+        size_t drain_available_connections(std::vector<std::shared_ptr<PooledRedissConnection>>* drained = nullptr); ///< 清空空闲分片
+        size_t idle_shard_index() const noexcept; ///< 当前线程对应的空闲分片
+        std::expected<std::shared_ptr<PooledRedissConnection>, RedisError> get_connection_sync(); ///< 获取或创建连接
+        bool check_connection_health_sync(std::shared_ptr<PooledRedissConnection> conn); ///< 检查连接健康状态
 
     private:
         static constexpr size_t kIdleShardCount = 16;

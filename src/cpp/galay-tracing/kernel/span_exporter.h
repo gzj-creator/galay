@@ -50,14 +50,14 @@ public:
      * @param spans 待导出的 Span 只读视图
      * @return 导出结果
      */
-    virtual ExportResult exportSpans(std::span<const Span> spans) = 0;
+    virtual ExportResult export_spans(std::span<const Span> spans) = 0;
 
     /**
      * @brief 强制刷新缓冲区中的所有 Span
      * @param timeout 超时时间
      * @return 成功刷新返回 true，超时或失败返回 false
      */
-    virtual bool forceFlush(std::chrono::milliseconds timeout);
+    virtual bool force_flush(std::chrono::milliseconds timeout);
 
     /**
      * @brief 关闭导出器并释放资源

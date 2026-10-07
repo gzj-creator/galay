@@ -20,7 +20,7 @@ inline constexpr std::string_view kDefaultBenchmarkClientUrl = "ws://127.0.0.1:8
  * @param argv main() argv，前 3 个业务参数仍为 clients/duration/message_size。
  * @return 第 4 个业务参数存在且非空时返回该 URL，否则返回默认 8080 endpoint。
  */
-inline std::string resolveBenchmarkClientUrl(int argc, char* argv[])
+inline std::string resolve_benchmark_client_url(int argc, char* argv[])
 {
     if (argc > 4 && argv[4] != nullptr && argv[4][0] != '\0') {
         return argv[4];
@@ -30,7 +30,7 @@ inline std::string resolveBenchmarkClientUrl(int argc, char* argv[])
 
 namespace detail {
 
-inline std::string toLowerAscii(std::string_view value)
+inline std::string to_lower_ascii(std::string_view value)
 {
     std::string lowered;
     lowered.reserve(value.size());
@@ -49,13 +49,13 @@ inline std::string toLowerAscii(std::string_view value)
  * @param arg_index nodelay 参数所在 argv 下标。
  * @return 未传、空值或无法识别时默认返回 true；off/false/0/no/disable/disabled 返回 false。
  */
-inline bool resolveBenchmarkServerNoDelay(int argc, char* argv[], int arg_index)
+inline bool resolve_benchmark_server_no_delay(int argc, char* argv[], int arg_index)
 {
     if (arg_index < 0 || argc <= arg_index || argv[arg_index] == nullptr || argv[arg_index][0] == '\0') {
         return true;
     }
 
-    const std::string value = detail::toLowerAscii(argv[arg_index]);
+    const std::string value = detail::to_lower_ascii(argv[arg_index]);
     if (value == "0" || value == "false" || value == "off" ||
         value == "no" || value == "disable" || value == "disabled") {
         return false;

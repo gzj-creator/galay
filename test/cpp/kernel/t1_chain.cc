@@ -37,7 +37,7 @@ Task<void> test()
     co_return;
 }
 
-Task<void> rootTask()
+Task<void> root_task()
 {
     auto result = co_await test();
     assert(result.has_value());
@@ -47,7 +47,7 @@ Task<void> rootTask()
 int main()
 {
     Runtime runtime;
-    auto result = runtime.blockOnIO(rootTask());
+    auto result = runtime.block_on_io(root_task());
     assert(result.has_value());
     return 0;
 }

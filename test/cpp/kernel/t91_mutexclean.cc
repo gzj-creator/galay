@@ -47,7 +47,7 @@ void require(bool condition, const char* message)
     }
 }
 
-bool waitUntil(const std::atomic<bool>& flag, std::chrono::milliseconds timeout)
+bool wait_until(const std::atomic<bool>& flag, std::chrono::milliseconds timeout)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (!flag.load(std::memory_order_acquire)) {
@@ -59,7 +59,7 @@ bool waitUntil(const std::atomic<bool>& flag, std::chrono::milliseconds timeout)
     return true;
 }
 
-Task<void> holderTask(AsyncMutex* mutex, AsyncWaiter<void>* release_waiter)
+Task<void> holder_task(AsyncMutex* mutex, AsyncWaiter<void>* release_waiter)
 {
     auto lock_result = co_await mutex->lock();
     require(lock_result.has_value(), "holder should acquire mutex");
@@ -74,7 +74,7 @@ Task<void> holderTask(AsyncMutex* mutex, AsyncWaiter<void>* release_waiter)
     co_return;
 }
 
-Task<void> timeoutWaiterTask(AsyncMutex* mutex)
+Task<void> timeout_waiter_task(AsyncMutex* mutex)
 {
     auto lock_result = co_await mutex->lock().timeout(20ms);
     g_timeout_was_timeout.store(
@@ -85,7 +85,7 @@ Task<void> timeoutWaiterTask(AsyncMutex* mutex)
     co_return;
 }
 
-Task<void> probeTask(AsyncMutex* mutex)
+Task<void> probe_task(AsyncMutex* mutex)
 {
     auto lock_result = co_await mutex->lock().timeout(50ms);
     if (lock_result.has_value()) {
@@ -106,19 +106,19 @@ int main()
 
     scheduler.start();
 
-    scheduler.schedule(detail::TaskAccess::detachTask(holderTask(&mutex, &release_waiter)));
-    require(waitUntil(g_holder_locked, 2s), "holder did not acquire mutex in time");
+    scheduler.schedule(detail::TaskAccess::detach_task(holder_task(&mutex, &release_waiter)));
+    require(wait_until(g_holder_locked, 2s), "holder did not acquire mutex in time");
 
-    scheduler.schedule(detail::TaskAccess::detachTask(timeoutWaiterTask(&mutex)));
-    require(waitUntil(g_timeout_done, 2s), "timeout waiter did not finish in time");
+    scheduler.schedule(detail::TaskAccess::detach_task(timeout_waiter_task(&mutex)));
+    require(wait_until(g_timeout_done, 2s), "timeout waiter did not finish in time");
     require(g_timeout_was_timeout.load(std::memory_order_acquire),
             "timeout waiter should complete with timeout");
 
     require(release_waiter.notify(), "release waiter should be notified once");
-    require(waitUntil(g_holder_unlocked, 2s), "holder did not unlock in time");
+    require(wait_until(g_holder_unlocked, 2s), "holder did not unlock in time");
 
-    scheduler.schedule(detail::TaskAccess::detachTask(probeTask(&mutex)));
-    require(waitUntil(g_probe_done, 2s), "probe task did not finish in time");
+    scheduler.schedule(detail::TaskAccess::detach_task(probe_task(&mutex)));
+    require(wait_until(g_probe_done, 2s), "probe task did not finish in time");
 
     scheduler.stop();
 

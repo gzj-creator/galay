@@ -2,7 +2,7 @@
  * @file epoll_scheduler.h
  * @brief Linux epoll 调度器的构造与 poll 适配。
  * @details 生命周期、入队、唤醒和 IO 注册均复用 IOSchedulerBase。
- * 支持编译期配置模板以获得更好的性能优化。
+ * 支持编译期容量选择和范围检查，事件循环使用共享后端实现。
  */
 #ifndef GALAY_KERNEL_EPOLL_SCHEDULER_H
 #define GALAY_KERNEL_EPOLL_SCHEDULER_H
@@ -19,10 +19,10 @@ class EpollSchedulerBackend : public IOSchedulerBase<EpollSchedulerBackend, Epol
 {
 public:
     /** @brief Accept operation 的 owner 注册及 timeout 适配入口。 */
-    bool submitAccept(AcceptAwaitable& awaitable, Waker&& waker) {
-        return m_reactor.submitAccept(awaitable, std::move(waker));
+    bool submit_accept(AcceptAwaitable& awaitable, Waker&& waker) {
+        return m_reactor.submit_accept(awaitable, std::move(waker));
     }
-    void timeoutAccept(AcceptAwaitable& awaitable) { m_reactor.timeoutAccept(awaitable); }
+    void timeout_accept(AcceptAwaitable& awaitable) { m_reactor.timeout_accept(awaitable); }
 
 protected:
     explicit EpollSchedulerBackend(int max_events, int batch_size);
@@ -31,8 +31,8 @@ protected:
 
 private:
     friend class IOSchedulerBase<EpollSchedulerBackend, EpollReactor>;
-    void pollBackend();
-    void flushBackend();
+    void poll_backend();
+    void flush_backend();
 };
 
 /** @brief 配置模板只负责构造容量；公共借用入口始终分派到同一真实后端基类。 */
@@ -50,8 +50,8 @@ public:
     EpollSchedulerT(const EpollSchedulerT&) = delete;
     EpollSchedulerT& operator=(const EpollSchedulerT&) = delete;
 
-    static constexpr size_t maxEvents() noexcept { return Config::kMaxEvents; }
-    static constexpr size_t batchSize() noexcept { return Config::kBatchSize; }
+    static constexpr size_t max_events() noexcept { return Config::kMaxEvents; }
+    static constexpr size_t batch_size() noexcept { return Config::kBatchSize; }
 };
 
 /** @brief 默认 epoll 调度器 */

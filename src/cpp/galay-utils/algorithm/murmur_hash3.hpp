@@ -37,7 +37,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 32 位哈希值
          */
-        static uint32_t Hash32(const void* key, size_t len, uint32_t seed = 0);
+        static uint32_t hash32(const void* key, size_t len, uint32_t seed = 0);
 
         /**
          * @brief 计算字符串的 32 位 MurmurHash3 哈希值
@@ -45,7 +45,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 32 位哈希值
          */
-        static uint32_t Hash32(const std::string& str, uint32_t seed = 0);
+        static uint32_t hash32(const std::string& str, uint32_t seed = 0);
 
         /**
          * @brief 计算 C 字符串的 32 位 MurmurHash3 哈希值
@@ -53,7 +53,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 32 位哈希值
          */
-        static uint32_t Hash32(const char* str, uint32_t seed = 0);
+        static uint32_t hash32(const char* str, uint32_t seed = 0);
 
         /**
          * @brief 计算 128 位 MurmurHash3 哈希值（十六进制字符串）
@@ -62,7 +62,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 32 字符的十六进制哈希字符串
          */
-        static std::string Hash128(const void* key, size_t len, uint32_t seed = 0);
+        static std::string hash128(const void* key, size_t len, uint32_t seed = 0);
 
         /**
          * @brief 计算字符串的 128 位 MurmurHash3 哈希值（十六进制字符串）
@@ -70,7 +70,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 32 字符的十六进制哈希字符串
          */
-        static std::string Hash128(const std::string& str, uint32_t seed = 0);
+        static std::string hash128(const std::string& str, uint32_t seed = 0);
 
         /**
          * @brief 计算 C 字符串的 128 位 MurmurHash3 哈希值（十六进制字符串）
@@ -78,7 +78,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 32 字符的十六进制哈希字符串
          */
-        static std::string Hash128(const char* str, uint32_t seed = 0);
+        static std::string hash128(const char* str, uint32_t seed = 0);
 
         /**
          * @brief 计算 128 位 MurmurHash3 哈希值（原始字节）
@@ -87,7 +87,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 包含两个 64 位整数的数组
          */
-        static std::array<uint64_t, 2> Hash128Raw(const void* key, size_t len, uint32_t seed = 0);
+        static std::array<uint64_t, 2> hash128_raw(const void* key, size_t len, uint32_t seed = 0);
 
         /**
          * @brief 计算字符串的 128 位 MurmurHash3 哈希值（原始字节）
@@ -95,7 +95,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 包含两个 64 位整数的数组
          */
-        static std::array<uint64_t, 2> Hash128Raw(const std::string& str, uint32_t seed = 0);
+        static std::array<uint64_t, 2> hash128_raw(const std::string& str, uint32_t seed = 0);
 
         /**
          * @brief 计算 C 字符串的 128 位 MurmurHash3 哈希值（原始字节）
@@ -103,7 +103,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 包含两个 64 位整数的数组
          */
-        static std::array<uint64_t, 2> Hash128Raw(const char* str, uint32_t seed = 0);
+        static std::array<uint64_t, 2> hash128_raw(const char* str, uint32_t seed = 0);
 
 #if __cplusplus >= 201703L
         /**
@@ -112,7 +112,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 32 位哈希值
          */
-        static uint32_t Hash32View(std::string_view str, uint32_t seed = 0);
+        static uint32_t hash32_view(std::string_view str, uint32_t seed = 0);
 
         /**
          * @brief 计算字符串视图的 128 位哈希值（十六进制，C++17）
@@ -120,7 +120,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 32 字符的十六进制哈希字符串
          */
-        static std::string Hash128View(std::string_view str, uint32_t seed = 0);
+        static std::string hash128_view(std::string_view str, uint32_t seed = 0);
 
         /**
          * @brief 计算字符串视图的 128 位哈希值（原始字节，C++17）
@@ -128,7 +128,7 @@ namespace galay::utils
          * @param seed 哈希种子值
          * @return 包含两个 64 位整数的数组
          */
-        static std::array<uint64_t, 2> Hash128RawView(std::string_view str, uint32_t seed = 0);
+        static std::array<uint64_t, 2> hash128_raw_view(std::string_view str, uint32_t seed = 0);
 #endif
 
     private:
@@ -165,12 +165,12 @@ namespace galay::utils
         }
 
         // Utility function to convert to hex string
-        static std::string toHexString(uint64_t high, uint64_t low);
+        static std::string to_hex_string(uint64_t high, uint64_t low);
     };
 
     // Implementation
 
-    inline uint32_t MurmurHash3Util::Hash32(const void* key, size_t len, uint32_t seed)
+    inline uint32_t MurmurHash3Util::hash32(const void* key, size_t len, uint32_t seed)
     {
         const uint8_t* data = static_cast<const uint8_t*>(key);
         const int nblocks = len / 4;
@@ -218,17 +218,17 @@ namespace galay::utils
         return h1;
     }
 
-    inline uint32_t MurmurHash3Util::Hash32(const std::string& str, uint32_t seed)
+    inline uint32_t MurmurHash3Util::hash32(const std::string& str, uint32_t seed)
     {
-        return Hash32(str.data(), str.length(), seed);
+        return hash32(str.data(), str.length(), seed);
     }
 
-    inline uint32_t MurmurHash3Util::Hash32(const char* str, uint32_t seed)
+    inline uint32_t MurmurHash3Util::hash32(const char* str, uint32_t seed)
     {
-        return str == nullptr ? Hash32("", 0, seed) : Hash32(str, std::strlen(str), seed);
+        return str == nullptr ? hash32("", 0, seed) : hash32(str, std::strlen(str), seed);
     }
 
-    inline std::array<uint64_t, 2> MurmurHash3Util::Hash128Raw(const void* key, size_t len, uint32_t seed)
+    inline std::array<uint64_t, 2> MurmurHash3Util::hash128_raw(const void* key, size_t len, uint32_t seed)
     {
         const uint8_t* data = static_cast<const uint8_t*>(key);
         const int nblocks = len / 16;
@@ -317,17 +317,17 @@ namespace galay::utils
         return {h1, h2};
     }
 
-    inline std::array<uint64_t, 2> MurmurHash3Util::Hash128Raw(const std::string& str, uint32_t seed)
+    inline std::array<uint64_t, 2> MurmurHash3Util::hash128_raw(const std::string& str, uint32_t seed)
     {
-        return Hash128Raw(str.data(), str.length(), seed);
+        return hash128_raw(str.data(), str.length(), seed);
     }
 
-    inline std::array<uint64_t, 2> MurmurHash3Util::Hash128Raw(const char* str, uint32_t seed)
+    inline std::array<uint64_t, 2> MurmurHash3Util::hash128_raw(const char* str, uint32_t seed)
     {
-        return str == nullptr ? Hash128Raw("", 0, seed) : Hash128Raw(str, std::strlen(str), seed);
+        return str == nullptr ? hash128_raw("", 0, seed) : hash128_raw(str, std::strlen(str), seed);
     }
 
-    inline std::string MurmurHash3Util::toHexString(uint64_t high, uint64_t low)
+    inline std::string MurmurHash3Util::to_hex_string(uint64_t high, uint64_t low)
     {
         static const char hexChars[] = "0123456789abcdef";
         std::string result;
@@ -348,36 +348,36 @@ namespace galay::utils
         return result;
     }
 
-    inline std::string MurmurHash3Util::Hash128(const void* key, size_t len, uint32_t seed)
+    inline std::string MurmurHash3Util::hash128(const void* key, size_t len, uint32_t seed)
     {
-        auto result = Hash128Raw(key, len, seed);
-        return toHexString(result[0], result[1]);
+        auto result = hash128_raw(key, len, seed);
+        return to_hex_string(result[0], result[1]);
     }
 
-    inline std::string MurmurHash3Util::Hash128(const std::string& str, uint32_t seed)
+    inline std::string MurmurHash3Util::hash128(const std::string& str, uint32_t seed)
     {
-        return Hash128(str.data(), str.length(), seed);
+        return hash128(str.data(), str.length(), seed);
     }
 
-    inline std::string MurmurHash3Util::Hash128(const char* str, uint32_t seed)
+    inline std::string MurmurHash3Util::hash128(const char* str, uint32_t seed)
     {
-        return str == nullptr ? Hash128("", 0, seed) : Hash128(str, std::strlen(str), seed);
+        return str == nullptr ? hash128("", 0, seed) : hash128(str, std::strlen(str), seed);
     }
 
 #if __cplusplus >= 201703L
-    inline uint32_t MurmurHash3Util::Hash32View(std::string_view str, uint32_t seed)
+    inline uint32_t MurmurHash3Util::hash32_view(std::string_view str, uint32_t seed)
     {
-        return Hash32(str.data(), str.length(), seed);
+        return hash32(str.data(), str.length(), seed);
     }
 
-    inline std::string MurmurHash3Util::Hash128View(std::string_view str, uint32_t seed)
+    inline std::string MurmurHash3Util::hash128_view(std::string_view str, uint32_t seed)
     {
-        return Hash128(str.data(), str.length(), seed);
+        return hash128(str.data(), str.length(), seed);
     }
 
-    inline std::array<uint64_t, 2> MurmurHash3Util::Hash128RawView(std::string_view str, uint32_t seed)
+    inline std::array<uint64_t, 2> MurmurHash3Util::hash128_raw_view(std::string_view str, uint32_t seed)
     {
-        return Hash128Raw(str.data(), str.length(), seed);
+        return hash128_raw(str.data(), str.length(), seed);
     }
 #endif
 

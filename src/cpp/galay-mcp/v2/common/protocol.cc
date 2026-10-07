@@ -12,7 +12,7 @@ constexpr const char* kClientInfoKey = "io.modelcontextprotocol/clientInfo";
 constexpr const char* kServerInfoKey = "io.modelcontextprotocol/serverInfo";
 constexpr const char* kLogLevelKey = "io.modelcontextprotocol/logLevel";
 
-void writeRequestId(json::stream::StreamWriter& writer, const RequestId& id)
+void write_request_id(json::stream::StreamWriter& writer, const RequestId& id)
 {
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     if (const auto* number = std::get_if<int64_t>(&id)) {
@@ -22,7 +22,7 @@ void writeRequestId(json::stream::StreamWriter& writer, const RequestId& id)
     }
 }
 
-std::expected<RequestId, McpError> parseRequestId(const json::Json& element)
+std::expected<RequestId, McpError> parse_request_id(const json::Json& element)
 {
     if (element.as_int64().has_value()) {
         return RequestId{element.as_int64().value()};
@@ -30,31 +30,31 @@ std::expected<RequestId, McpError> parseRequestId(const json::Json& element)
     if (element.is_string()) {
         return RequestId{std::string(element.as_string().value())};
     }
-    return std::unexpected(McpError::invalidRequest("id must be a string or integer"));
+    return std::unexpected(McpError::invalid_request("id must be a string or integer"));
 }
 
-std::expected<json::Json, McpError> requireObject(const json::Json& element,
+std::expected<json::Json, McpError> require_object(const json::Json& element,
                                                    std::string_view context)
 {
     if (!element.is_object()) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             std::string(context) + " must be an object"));
     }
     return element;
 }
 
-std::expected<std::string, McpError> requireString(const json::Json& object,
+std::expected<std::string, McpError> require_string(const json::Json& object,
                                                     const char* key)
 {
     auto value = object.at(key).as_string();
     if (!value) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             std::string("missing or invalid ") + key));
     }
     return std::string(*value);
 }
 
-void writeImplementationMeta(json::stream::StreamWriter& writer,
+void write_implementation_meta(json::stream::StreamWriter& writer,
                              const std::optional<Implementation>& implementation,
                              const char* key)
 {
@@ -65,11 +65,11 @@ void writeImplementationMeta(json::stream::StreamWriter& writer,
     (void)writer.key("_meta");
     (void)writer.start_object();
     (void)writer.key(key);
-    (void)writer.raw(implementation->toJson());
+    (void)writer.raw(implementation->to_json());
     (void)writer.end_object();
 }
 
-void writeCacheFields(json::stream::StreamWriter& writer, uint64_t ttlMs, CacheScope scope)
+void write_cache_fields(json::stream::StreamWriter& writer, uint64_t ttlMs, CacheScope scope)
 {
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.key("resultType");
@@ -80,7 +80,7 @@ void writeCacheFields(json::stream::StreamWriter& writer, uint64_t ttlMs, CacheS
     (void)writer.string(scope == CacheScope::Public ? "public" : "private");
 }
 
-void writeOptionalString(json::stream::StreamWriter& writer,
+void write_optional_string(json::stream::StreamWriter& writer,
                          const char* key,
                          const std::optional<std::string>& value)
 {
@@ -92,7 +92,7 @@ void writeOptionalString(json::stream::StreamWriter& writer,
     (void)writer.string(*value);
 }
 
-void writeOptionalRaw(json::stream::StreamWriter& writer,
+void write_optional_raw(json::stream::StreamWriter& writer,
                       const char* key,
                       const std::optional<std::string>& value)
 {
@@ -104,7 +104,7 @@ void writeOptionalRaw(json::stream::StreamWriter& writer,
     (void)writer.raw(*value);
 }
 
-std::expected<std::string, McpError> rawJson(const json::Json& element,
+std::expected<std::string, McpError> raw_json(const json::Json& element,
                                              std::string_view context)
 {
     std::string raw;
@@ -114,24 +114,24 @@ std::expected<std::string, McpError> rawJson(const json::Json& element,
             return {};
         });
     if (!serialized) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             std::string("invalid ") + std::string(context)));
     }
     return raw;
 }
 
-std::expected<std::string, McpError> requireRawObject(const json::Json& object,
+std::expected<std::string, McpError> require_raw_object(const json::Json& object,
                                                       const char* key)
 {
     const json::Json element = object.at(key);
     if (!element.valid() || !element.is_object()) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             std::string("missing or invalid ") + key));
     }
-    return rawJson(element, key);
+    return raw_json(element, key);
 }
 
-std::expected<std::optional<std::string>, McpError> optionalRawObject(
+std::expected<std::optional<std::string>, McpError> optional_raw_object(
     const json::Json& object,
     const char* key)
 {
@@ -140,17 +140,17 @@ std::expected<std::optional<std::string>, McpError> optionalRawObject(
         return std::optional<std::string>{};
     }
     if (!element.is_object()) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             std::string("invalid ") + key));
     }
-    auto raw = rawJson(element, key);
+    auto raw = raw_json(element, key);
     if (!raw) {
         return std::unexpected(raw.error());
     }
     return std::optional<std::string>{std::move(raw.value())};
 }
 
-std::expected<std::optional<std::string>, McpError> optionalRawArray(
+std::expected<std::optional<std::string>, McpError> optional_raw_array(
     const json::Json& object,
     const char* key)
 {
@@ -159,22 +159,22 @@ std::expected<std::optional<std::string>, McpError> optionalRawArray(
         return std::optional<std::string>{};
     }
     if (!element.is_array()) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             std::string("invalid ") + key));
     }
-    auto raw = rawJson(element, key);
+    auto raw = raw_json(element, key);
     if (!raw) {
         return std::unexpected(raw.error());
     }
     return std::optional<std::string>{std::move(raw.value())};
 }
 
-std::expected<uint64_t, McpError> requireUint64(const json::Json& object,
+std::expected<uint64_t, McpError> require_uint64(const json::Json& object,
                                                 const char* key)
 {
     const json::Json element = object.at(key);
     if (!element.valid()) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             std::string("missing or invalid ") + key));
     }
     auto unsignedValue = element.as_uint64();
@@ -185,11 +185,11 @@ std::expected<uint64_t, McpError> requireUint64(const json::Json& object,
     if (signedValue.has_value() && signedValue.value() >= 0) {
         return static_cast<uint64_t>(signedValue.value());
     }
-    return std::unexpected(McpError::invalidParams(
+    return std::unexpected(McpError::invalid_params(
         std::string("missing or invalid ") + key));
 }
 
-std::expected<std::optional<uint64_t>, McpError> optionalUint64(
+std::expected<std::optional<uint64_t>, McpError> optional_uint64(
     const json::Json& object,
     const char* key)
 {
@@ -205,15 +205,15 @@ std::expected<std::optional<uint64_t>, McpError> optionalUint64(
     if (signedValue.has_value() && signedValue.value() >= 0) {
         return std::optional<uint64_t>{static_cast<uint64_t>(signedValue.value())};
     }
-    return std::unexpected(McpError::invalidParams(
+    return std::unexpected(McpError::invalid_params(
         std::string("invalid ") + key));
 }
 
-std::expected<CacheScope, McpError> requireCacheScope(const json::Json& object)
+std::expected<CacheScope, McpError> require_cache_scope(const json::Json& object)
 {
     auto value = object.at("cacheScope").as_string();
     if (!value) {
-        return std::unexpected(McpError::invalidParams("missing or invalid cacheScope"));
+        return std::unexpected(McpError::invalid_params("missing or invalid cacheScope"));
     }
     if (*value == "public") {
         return CacheScope::Public;
@@ -221,15 +221,15 @@ std::expected<CacheScope, McpError> requireCacheScope(const json::Json& object)
     if (*value == "private") {
         return CacheScope::Private;
     }
-    return std::unexpected(McpError::invalidParams("invalid cacheScope"));
+    return std::unexpected(McpError::invalid_params("invalid cacheScope"));
 }
 
-std::expected<ResultType, McpError> requireResultType(const json::Json& object,
+std::expected<ResultType, McpError> require_result_type(const json::Json& object,
                                                       std::string& typeName)
 {
     auto value = object.at("resultType").as_string();
     if (!value) {
-        return std::unexpected(McpError::invalidResponse("missing resultType"));
+        return std::unexpected(McpError::invalid_response("missing resultType"));
     }
     typeName = std::string(*value);
     if (typeName == "complete") {
@@ -241,7 +241,7 @@ std::expected<ResultType, McpError> requireResultType(const json::Json& object,
     return ResultType::Extension;
 }
 
-std::expected<std::optional<Implementation>, McpError> parseServerInfo(
+std::expected<std::optional<Implementation>, McpError> parse_server_info(
     const json::Json& object)
 {
     const json::Json metaElement = object.at("_meta");
@@ -249,33 +249,33 @@ std::expected<std::optional<Implementation>, McpError> parseServerInfo(
         return std::optional<Implementation>{};
     }
     if (!metaElement.is_object()) {
-        return std::unexpected(McpError::invalidParams("invalid _meta"));
+        return std::unexpected(McpError::invalid_params("invalid _meta"));
     }
     const json::Json serverInfoElement = metaElement.at(kServerInfoKey);
     if (!serverInfoElement.valid()) {
         return std::optional<Implementation>{};
     }
-    auto serverInfo = Implementation::fromJson(serverInfoElement);
+    auto serverInfo = Implementation::from_json(serverInfoElement);
     if (!serverInfo) {
         return std::unexpected(serverInfo.error());
     }
     return std::optional<Implementation>{std::move(serverInfo.value())};
 }
 
-std::expected<void, McpError> parseCacheFields(const json::Json& object,
+std::expected<void, McpError> parse_cache_fields(const json::Json& object,
                                                uint64_t& ttlMs,
                                                CacheScope& cacheScope)
 {
     std::string unusedTypeName;
-    auto resultType = requireResultType(object, unusedTypeName);
+    auto resultType = require_result_type(object, unusedTypeName);
     if (!resultType) {
         return std::unexpected(resultType.error());
     }
-    auto ttl = requireUint64(object, "ttlMs");
+    auto ttl = require_uint64(object, "ttlMs");
     if (!ttl) {
         return std::unexpected(ttl.error());
     }
-    auto scope = requireCacheScope(object);
+    auto scope = require_cache_scope(object);
     if (!scope) {
         return std::unexpected(scope.error());
     }
@@ -284,7 +284,7 @@ std::expected<void, McpError> parseCacheFields(const json::Json& object,
     return {};
 }
 
-std::expected<void, McpError> parseFeatureCapability(const json::Json& object,
+std::expected<void, McpError> parse_feature_capability(const json::Json& object,
                                                      const char* key,
                                                      bool& present,
                                                      bool* listChanged,
@@ -295,7 +295,7 @@ std::expected<void, McpError> parseFeatureCapability(const json::Json& object,
         return {};
     }
     if (!element.is_object()) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             std::string("invalid capability ") + key));
     }
     present = true;
@@ -314,13 +314,13 @@ std::expected<void, McpError> parseFeatureCapability(const json::Json& object,
     return {};
 }
 
-std::expected<std::vector<std::string>, McpError> requireStringArray(
+std::expected<std::vector<std::string>, McpError> require_string_array(
     const json::Json& object,
     const char* key)
 {
     const json::Json element = object.at(key);
     if (!element.valid() || !element.is_array()) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             std::string("missing or invalid ") + key));
     }
     std::vector<std::string> values;
@@ -328,7 +328,7 @@ std::expected<std::vector<std::string>, McpError> requireStringArray(
         const json::Json item = element.at(i);
         auto value = item.as_string();
         if (!value) {
-            return std::unexpected(McpError::invalidParams(
+            return std::unexpected(McpError::invalid_params(
                 std::string("invalid ") + key));
         }
         values.push_back(std::string(*value));
@@ -336,7 +336,7 @@ std::expected<std::vector<std::string>, McpError> requireStringArray(
     return values;
 }
 
-std::expected<std::vector<PromptArgument>, McpError> parsePromptArguments(
+std::expected<std::vector<PromptArgument>, McpError> parse_prompt_arguments(
     const json::Json& object)
 {
     const json::Json element = object.at("arguments");
@@ -344,12 +344,12 @@ std::expected<std::vector<PromptArgument>, McpError> parsePromptArguments(
         return std::vector<PromptArgument>{};
     }
     if (!element.is_array()) {
-        return std::unexpected(McpError::invalidParams("invalid arguments"));
+        return std::unexpected(McpError::invalid_params("invalid arguments"));
     }
     std::vector<PromptArgument> arguments;
     for (size_t i = 0; i < element.size(); ++i) {
         const json::Json item = element.at(i);
-        auto argument = PromptArgument::fromJson(item);
+        auto argument = PromptArgument::from_json(item);
         if (!argument) {
             return std::unexpected(argument.error());
         }
@@ -360,10 +360,10 @@ std::expected<std::vector<PromptArgument>, McpError> parsePromptArguments(
 
 } // namespace
 
-std::string Implementation::toJson() const
+std::string Implementation::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("name");
@@ -393,15 +393,15 @@ std::string Implementation::toJson() const
     return std::move(out);
 }
 
-std::expected<Implementation, McpError> Implementation::fromJson(const json::Json& element)
+std::expected<Implementation, McpError> Implementation::from_json(const json::Json& element)
 {
-    auto objectResult = requireObject(element, "implementation");
+    auto objectResult = require_object(element, "implementation");
     if (!objectResult) {
         return std::unexpected(objectResult.error());
     }
     const json::Json object = objectResult.value();
-    auto name = requireString(object, "name");
-    auto version = requireString(object, "version");
+    auto name = require_string(object, "name");
+    auto version = require_string(object, "version");
     if (!name) {
         return std::unexpected(name.error());
     }
@@ -423,30 +423,30 @@ std::expected<Implementation, McpError> Implementation::fromJson(const json::Jso
     }
     const json::Json iconsElement = object.at("icons");
     if (iconsElement.valid()) {
-        auto raw = rawJson(iconsElement, "icons");
+        auto raw = raw_json(iconsElement, "icons");
         if (!raw) {
-            return std::unexpected(McpError::invalidParams("invalid icons"));
+            return std::unexpected(McpError::invalid_params("invalid icons"));
         }
         implementation.icons = std::move(raw.value());
     }
     return implementation;
 }
 
-std::string RequestMeta::toJson() const
+std::string RequestMeta::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     if (progressToken) {
         (void)writer.key("progressToken");
-        writeRequestId(writer, *progressToken);
+        write_request_id(writer, *progressToken);
     }
     (void)writer.key(kProtocolVersionKey);
     (void)writer.string(protocolVersion);
     if (clientInfo) {
         (void)writer.key(kClientInfoKey);
-        (void)writer.raw(clientInfo->toJson());
+        (void)writer.raw(clientInfo->to_json());
     }
     (void)writer.key(kClientCapabilitiesKey);
     (void)writer.raw(clientCapabilities.empty() ? "{}" : clientCapabilities);
@@ -461,32 +461,32 @@ std::string RequestMeta::toJson() const
     return std::move(out);
 }
 
-std::expected<RequestMeta, McpError> RequestMeta::fromJson(const json::Json& element)
+std::expected<RequestMeta, McpError> RequestMeta::from_json(const json::Json& element)
 {
-    auto objectResult = requireObject(element, "_meta");
+    auto objectResult = require_object(element, "_meta");
     if (!objectResult) {
         return std::unexpected(objectResult.error());
     }
     const json::Json object = objectResult.value();
 
     RequestMeta meta;
-    auto protocolVersion = requireString(object, kProtocolVersionKey);
+    auto protocolVersion = require_string(object, kProtocolVersionKey);
     if (!protocolVersion) {
         return std::unexpected(protocolVersion.error());
     }
     meta.protocolVersion = std::move(protocolVersion.value());
 
     const json::Json capabilitiesElement = object.at(kClientCapabilitiesKey);
-    auto capabilitiesRaw = rawJson(capabilitiesElement, kClientCapabilitiesKey);
+    auto capabilitiesRaw = raw_json(capabilitiesElement, kClientCapabilitiesKey);
     if (!capabilitiesElement.is_object() || !capabilitiesRaw) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             "missing or invalid io.modelcontextprotocol/clientCapabilities"));
     }
     meta.clientCapabilities = std::move(capabilitiesRaw.value());
 
     const json::Json clientInfoElement = object.at(kClientInfoKey);
     if (clientInfoElement.valid()) {
-        auto clientInfo = Implementation::fromJson(clientInfoElement);
+        auto clientInfo = Implementation::from_json(clientInfoElement);
         if (!clientInfo) {
             return std::unexpected(clientInfo.error());
         }
@@ -499,19 +499,19 @@ std::expected<RequestMeta, McpError> RequestMeta::fromJson(const json::Json& ele
 
     const json::Json progressToken = object.at("progressToken");
     if (progressToken.valid()) {
-        auto parsed = parseRequestId(progressToken);
+        auto parsed = parse_request_id(progressToken);
         if (!parsed) {
-            return std::unexpected(McpError::invalidParams("invalid progressToken"));
+            return std::unexpected(McpError::invalid_params("invalid progressToken"));
         }
         meta.progressToken = std::move(parsed.value());
     }
     return meta;
 }
 
-std::string ServerCapabilities::toJson() const
+std::string ServerCapabilities::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     if (!extensions.empty()) {
@@ -566,23 +566,23 @@ std::string ServerCapabilities::toJson() const
     return std::move(out);
 }
 
-std::expected<ServerCapabilities, McpError> ServerCapabilities::fromJson(
+std::expected<ServerCapabilities, McpError> ServerCapabilities::from_json(
     const json::Json& element)
 {
-    auto objectResult = requireObject(element, "capabilities");
+    auto objectResult = require_object(element, "capabilities");
     if (!objectResult) {
         return std::unexpected(objectResult.error());
     }
     const json::Json object = objectResult.value();
     ServerCapabilities capabilities;
 
-    auto extensions = optionalRawObject(object, "extensions");
+    auto extensions = optional_raw_object(object, "extensions");
     if (!extensions) {
         return std::unexpected(extensions.error());
     }
     capabilities.extensions = std::move(extensions.value().value_or(std::string{}));
 
-    auto tools = parseFeatureCapability(object,
+    auto tools = parse_feature_capability(object,
                                         "tools",
                                         capabilities.tools,
                                         &capabilities.toolsListChanged,
@@ -590,7 +590,7 @@ std::expected<ServerCapabilities, McpError> ServerCapabilities::fromJson(
     if (!tools) {
         return std::unexpected(tools.error());
     }
-    auto resources = parseFeatureCapability(object,
+    auto resources = parse_feature_capability(object,
                                             "resources",
                                             capabilities.resources,
                                             &capabilities.resourcesListChanged,
@@ -598,7 +598,7 @@ std::expected<ServerCapabilities, McpError> ServerCapabilities::fromJson(
     if (!resources) {
         return std::unexpected(resources.error());
     }
-    auto prompts = parseFeatureCapability(object,
+    auto prompts = parse_feature_capability(object,
                                           "prompts",
                                           capabilities.prompts,
                                           &capabilities.promptsListChanged,
@@ -606,7 +606,7 @@ std::expected<ServerCapabilities, McpError> ServerCapabilities::fromJson(
     if (!prompts) {
         return std::unexpected(prompts.error());
     }
-    auto completions = parseFeatureCapability(object,
+    auto completions = parse_feature_capability(object,
                                              "completions",
                                              capabilities.completions,
                                              nullptr,
@@ -614,7 +614,7 @@ std::expected<ServerCapabilities, McpError> ServerCapabilities::fromJson(
     if (!completions) {
         return std::unexpected(completions.error());
     }
-    auto logging = parseFeatureCapability(object,
+    auto logging = parse_feature_capability(object,
                                          "logging",
                                          capabilities.logging,
                                          nullptr,
@@ -625,22 +625,22 @@ std::expected<ServerCapabilities, McpError> ServerCapabilities::fromJson(
     return capabilities;
 }
 
-std::string Tool::toJson() const
+std::string Tool::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("name");
     (void)writer.string(name);
-    writeOptionalString(writer, "title", title);
-    writeOptionalString(writer, "description", description);
+    write_optional_string(writer, "title", title);
+    write_optional_string(writer, "description", description);
     (void)writer.key("inputSchema");
     (void)writer.raw(inputSchema.empty() ? "{\"type\":\"object\"}" : inputSchema);
-    writeOptionalRaw(writer, "outputSchema", outputSchema);
-    writeOptionalRaw(writer, "annotations", annotations);
-    writeOptionalRaw(writer, "icons", icons);
-    writeOptionalRaw(writer, "_meta", meta);
+    write_optional_raw(writer, "outputSchema", outputSchema);
+    write_optional_raw(writer, "annotations", annotations);
+    write_optional_raw(writer, "icons", icons);
+    write_optional_raw(writer, "_meta", meta);
     (void)writer.end_object();
     if (!writer.finish()) {
         return std::string{};
@@ -648,25 +648,25 @@ std::string Tool::toJson() const
     return std::move(out);
 }
 
-std::expected<Tool, McpError> Tool::fromJson(const json::Json& element)
+std::expected<Tool, McpError> Tool::from_json(const json::Json& element)
 {
-    auto objectResult = requireObject(element, "tool");
+    auto objectResult = require_object(element, "tool");
     if (!objectResult) {
         return std::unexpected(objectResult.error());
     }
     const json::Json object = objectResult.value();
-    auto name = requireString(object, "name");
+    auto name = require_string(object, "name");
     if (!name) {
         return std::unexpected(name.error());
     }
-    auto inputSchema = requireRawObject(object, "inputSchema");
+    auto inputSchema = require_raw_object(object, "inputSchema");
     if (!inputSchema) {
         return std::unexpected(inputSchema.error());
     }
     const json::Json inputElement = object.at("inputSchema");
     const auto type = inputElement.at("type").as_string();
     if (!inputElement.is_object() || !type || *type != "object") {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             "tool inputSchema root type must be object"));
     }
 
@@ -679,22 +679,22 @@ std::expected<Tool, McpError> Tool::fromJson(const json::Json& element)
     if (auto value = object.at("description").as_string()) {
         tool.description = std::string(*value);
     }
-    auto outputSchema = optionalRawObject(object, "outputSchema");
+    auto outputSchema = optional_raw_object(object, "outputSchema");
     if (!outputSchema) {
         return std::unexpected(outputSchema.error());
     }
     tool.outputSchema = std::move(outputSchema.value());
-    auto annotations = optionalRawObject(object, "annotations");
+    auto annotations = optional_raw_object(object, "annotations");
     if (!annotations) {
         return std::unexpected(annotations.error());
     }
     tool.annotations = std::move(annotations.value());
-    auto icons = optionalRawArray(object, "icons");
+    auto icons = optional_raw_array(object, "icons");
     if (!icons) {
         return std::unexpected(icons.error());
     }
     tool.icons = std::move(icons.value());
-    auto meta = optionalRawObject(object, "_meta");
+    auto meta = optional_raw_object(object, "_meta");
     if (!meta) {
         return std::unexpected(meta.error());
     }
@@ -702,26 +702,26 @@ std::expected<Tool, McpError> Tool::fromJson(const json::Json& element)
     return tool;
 }
 
-std::string Resource::toJson() const
+std::string Resource::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("uri");
     (void)writer.string(uri);
     (void)writer.key("name");
     (void)writer.string(name);
-    writeOptionalString(writer, "title", title);
-    writeOptionalString(writer, "description", description);
-    writeOptionalString(writer, "mimeType", mimeType);
+    write_optional_string(writer, "title", title);
+    write_optional_string(writer, "description", description);
+    write_optional_string(writer, "mimeType", mimeType);
     if (size) {
         (void)writer.key("size");
         (void)writer.number(*size);
     }
-    writeOptionalRaw(writer, "annotations", annotations);
-    writeOptionalRaw(writer, "icons", icons);
-    writeOptionalRaw(writer, "_meta", meta);
+    write_optional_raw(writer, "annotations", annotations);
+    write_optional_raw(writer, "icons", icons);
+    write_optional_raw(writer, "_meta", meta);
     (void)writer.end_object();
     if (!writer.finish()) {
         return std::string{};
@@ -729,15 +729,15 @@ std::string Resource::toJson() const
     return std::move(out);
 }
 
-std::expected<Resource, McpError> Resource::fromJson(const json::Json& element)
+std::expected<Resource, McpError> Resource::from_json(const json::Json& element)
 {
-    auto objectResult = requireObject(element, "resource");
+    auto objectResult = require_object(element, "resource");
     if (!objectResult) {
         return std::unexpected(objectResult.error());
     }
     const json::Json object = objectResult.value();
-    auto uri = requireString(object, "uri");
-    auto name = requireString(object, "name");
+    auto uri = require_string(object, "uri");
+    auto name = require_string(object, "name");
     if (!uri) {
         return std::unexpected(uri.error());
     }
@@ -756,22 +756,22 @@ std::expected<Resource, McpError> Resource::fromJson(const json::Json& element)
     if (auto value = object.at("mimeType").as_string()) {
         resource.mimeType = std::string(*value);
     }
-    auto size = optionalUint64(object, "size");
+    auto size = optional_uint64(object, "size");
     if (!size) {
         return std::unexpected(size.error());
     }
     resource.size = size.value();
-    auto annotations = optionalRawObject(object, "annotations");
+    auto annotations = optional_raw_object(object, "annotations");
     if (!annotations) {
         return std::unexpected(annotations.error());
     }
     resource.annotations = std::move(annotations.value());
-    auto icons = optionalRawArray(object, "icons");
+    auto icons = optional_raw_array(object, "icons");
     if (!icons) {
         return std::unexpected(icons.error());
     }
     resource.icons = std::move(icons.value());
-    auto meta = optionalRawObject(object, "_meta");
+    auto meta = optional_raw_object(object, "_meta");
     if (!meta) {
         return std::unexpected(meta.error());
     }
@@ -779,16 +779,16 @@ std::expected<Resource, McpError> Resource::fromJson(const json::Json& element)
     return resource;
 }
 
-std::string PromptArgument::toJson() const
+std::string PromptArgument::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("name");
     (void)writer.string(name);
-    writeOptionalString(writer, "title", title);
-    writeOptionalString(writer, "description", description);
+    write_optional_string(writer, "title", title);
+    write_optional_string(writer, "description", description);
     if (required) {
         (void)writer.key("required");
         (void)writer.boolean(true);
@@ -800,15 +800,15 @@ std::string PromptArgument::toJson() const
     return std::move(out);
 }
 
-std::expected<PromptArgument, McpError> PromptArgument::fromJson(
+std::expected<PromptArgument, McpError> PromptArgument::from_json(
     const json::Json& element)
 {
-    auto objectResult = requireObject(element, "prompt argument");
+    auto objectResult = require_object(element, "prompt argument");
     if (!objectResult) {
         return std::unexpected(objectResult.error());
     }
     const json::Json object = objectResult.value();
-    auto name = requireString(object, "name");
+    auto name = require_string(object, "name");
     if (!name) {
         return std::unexpected(name.error());
     }
@@ -826,26 +826,26 @@ std::expected<PromptArgument, McpError> PromptArgument::fromJson(
     return argument;
 }
 
-std::string Prompt::toJson() const
+std::string Prompt::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("name");
     (void)writer.string(name);
-    writeOptionalString(writer, "title", title);
-    writeOptionalString(writer, "description", description);
+    write_optional_string(writer, "title", title);
+    write_optional_string(writer, "description", description);
     if (!arguments.empty()) {
         (void)writer.key("arguments");
         (void)writer.start_array();
         for (const auto& argument : arguments) {
-            (void)writer.raw(argument.toJson());
+            (void)writer.raw(argument.to_json());
         }
         (void)writer.end_array();
     }
-    writeOptionalRaw(writer, "icons", icons);
-    writeOptionalRaw(writer, "_meta", meta);
+    write_optional_raw(writer, "icons", icons);
+    write_optional_raw(writer, "_meta", meta);
     (void)writer.end_object();
     if (!writer.finish()) {
         return std::string{};
@@ -853,14 +853,14 @@ std::string Prompt::toJson() const
     return std::move(out);
 }
 
-std::expected<Prompt, McpError> Prompt::fromJson(const json::Json& element)
+std::expected<Prompt, McpError> Prompt::from_json(const json::Json& element)
 {
-    auto objectResult = requireObject(element, "prompt");
+    auto objectResult = require_object(element, "prompt");
     if (!objectResult) {
         return std::unexpected(objectResult.error());
     }
     const json::Json object = objectResult.value();
-    auto name = requireString(object, "name");
+    auto name = require_string(object, "name");
     if (!name) {
         return std::unexpected(name.error());
     }
@@ -872,17 +872,17 @@ std::expected<Prompt, McpError> Prompt::fromJson(const json::Json& element)
     if (auto value = object.at("description").as_string()) {
         prompt.description = std::string(*value);
     }
-    auto arguments = parsePromptArguments(object);
+    auto arguments = parse_prompt_arguments(object);
     if (!arguments) {
         return std::unexpected(arguments.error());
     }
     prompt.arguments = std::move(arguments.value());
-    auto icons = optionalRawArray(object, "icons");
+    auto icons = optional_raw_array(object, "icons");
     if (!icons) {
         return std::unexpected(icons.error());
     }
     prompt.icons = std::move(icons.value());
-    auto meta = optionalRawObject(object, "_meta");
+    auto meta = optional_raw_object(object, "_meta");
     if (!meta) {
         return std::unexpected(meta.error());
     }
@@ -890,14 +890,14 @@ std::expected<Prompt, McpError> Prompt::fromJson(const json::Json& element)
     return prompt;
 }
 
-std::string DiscoverResult::toJson() const
+std::string DiscoverResult::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
-    writeCacheFields(writer, ttlMs, cacheScope);
-    writeImplementationMeta(writer, serverInfo, kServerInfoKey);
+    write_cache_fields(writer, ttlMs, cacheScope);
+    write_implementation_meta(writer, serverInfo, kServerInfoKey);
     (void)writer.key("supportedVersions");
     (void)writer.start_array();
     for (const auto& version : supportedVersions) {
@@ -905,7 +905,7 @@ std::string DiscoverResult::toJson() const
     }
     (void)writer.end_array();
     (void)writer.key("capabilities");
-    (void)writer.raw(capabilities.toJson());
+    (void)writer.raw(capabilities.to_json());
     if (instructions) {
         (void)writer.key("instructions");
         (void)writer.string(*instructions);
@@ -917,29 +917,29 @@ std::string DiscoverResult::toJson() const
     return std::move(out);
 }
 
-std::expected<DiscoverResult, McpError> DiscoverResult::fromJson(
+std::expected<DiscoverResult, McpError> DiscoverResult::from_json(
     const json::Json& element)
 {
-    auto objectResult = requireObject(element, "discover result");
+    auto objectResult = require_object(element, "discover result");
     if (!objectResult) {
         return std::unexpected(objectResult.error());
     }
     const json::Json object = objectResult.value();
     DiscoverResult result;
-    auto cache = parseCacheFields(object, result.ttlMs, result.cacheScope);
+    auto cache = parse_cache_fields(object, result.ttlMs, result.cacheScope);
     if (!cache) {
         return std::unexpected(cache.error());
     }
-    auto supportedVersions = requireStringArray(object, "supportedVersions");
+    auto supportedVersions = require_string_array(object, "supportedVersions");
     if (!supportedVersions) {
         return std::unexpected(supportedVersions.error());
     }
     result.supportedVersions = std::move(supportedVersions.value());
     const json::Json capabilitiesElement = object.at("capabilities");
     if (!capabilitiesElement.valid()) {
-        return std::unexpected(McpError::invalidParams("missing capabilities"));
+        return std::unexpected(McpError::invalid_params("missing capabilities"));
     }
-    auto capabilities = ServerCapabilities::fromJson(capabilitiesElement);
+    auto capabilities = ServerCapabilities::from_json(capabilitiesElement);
     if (!capabilities) {
         return std::unexpected(capabilities.error());
     }
@@ -947,7 +947,7 @@ std::expected<DiscoverResult, McpError> DiscoverResult::fromJson(
     if (auto instructions = object.at("instructions").as_string()) {
         result.instructions = std::string(*instructions);
     }
-    auto serverInfo = parseServerInfo(object);
+    auto serverInfo = parse_server_info(object);
     if (!serverInfo) {
         return std::unexpected(serverInfo.error());
     }
@@ -955,14 +955,14 @@ std::expected<DiscoverResult, McpError> DiscoverResult::fromJson(
     return result;
 }
 
-std::string ListResult::toJson() const
+std::string ListResult::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
-    writeCacheFields(writer, ttlMs, cacheScope);
-    writeImplementationMeta(writer, serverInfo, kServerInfoKey);
+    write_cache_fields(writer, ttlMs, cacheScope);
+    write_implementation_meta(writer, serverInfo, kServerInfoKey);
     (void)writer.key(field);
     (void)writer.start_array();
     for (const auto& item : items) {
@@ -980,16 +980,16 @@ std::string ListResult::toJson() const
     return std::move(out);
 }
 
-std::string JsonRpcRequest::toJson() const
+std::string JsonRpcRequest::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("jsonrpc");
     (void)writer.string(JSONRPC_VERSION);
     (void)writer.key("id");
-    writeRequestId(writer, id);
+    write_request_id(writer, id);
     (void)writer.key("method");
     (void)writer.string(method);
     if (params) {
@@ -1003,14 +1003,14 @@ std::string JsonRpcRequest::toJson() const
     return std::move(out);
 }
 
-std::string makeRequestParams(const RequestMeta& meta)
+std::string make_request_params(const RequestMeta& meta)
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("_meta");
-    (void)writer.raw(meta.toJson());
+    (void)writer.raw(meta.to_json());
     (void)writer.end_object();
     if (!writer.finish()) {
         return std::string{};
@@ -1018,7 +1018,7 @@ std::string makeRequestParams(const RequestMeta& meta)
     return std::move(out);
 }
 
-std::expected<std::string, McpError> makeRequestParams(const RequestMeta& meta,
+std::expected<std::string, McpError> make_request_params(const RequestMeta& meta,
                                                        std::string_view fieldsJson)
 {
     auto document = JsonDocument::parse(fieldsJson);
@@ -1026,23 +1026,23 @@ std::expected<std::string, McpError> makeRequestParams(const RequestMeta& meta,
         return std::unexpected(document.error());
     }
     if (!document->root().is_object()) {
-        return std::unexpected(McpError::invalidParams("request fields must be an object"));
+        return std::unexpected(McpError::invalid_params("request fields must be an object"));
     }
     const json::Json fields = document->root();
 
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     std::optional<McpError> failure;
     (void)writer.start_object();
     fields.for_each_member([&](std::string_view fieldKey, const json::Json& value) -> json::result<void> {
         const std::string key(fieldKey);
         if (key == "_meta") {
-            failure = McpError::invalidParams(
+            failure = McpError::invalid_params(
                 "request fields must not contain _meta");
             return std::unexpected(std::string("stop"));
         }
-        auto raw = rawJson(value, key);
+        auto raw = raw_json(value, key);
         if (!raw) {
             failure = raw.error();
             return std::unexpected(std::string("stop"));
@@ -1055,17 +1055,17 @@ std::expected<std::string, McpError> makeRequestParams(const RequestMeta& meta,
         return std::unexpected(*failure);
     }
     (void)writer.key("_meta");
-    (void)writer.raw(meta.toJson());
+    (void)writer.raw(meta.to_json());
     (void)writer.end_object();
     auto finished = writer.finish();
     if (!finished) {
-        return std::unexpected(McpError::invalidParams(
+        return std::unexpected(McpError::invalid_params(
             "failed to encode JSON: " + finished.error()));
     }
     return std::move(out);
 }
 
-std::expected<ParsedRequest, McpError> parseRequest(std::string_view body)
+std::expected<ParsedRequest, McpError> parse_request(std::string_view body)
 {
     auto document = JsonDocument::parse(body);
     if (!document) {
@@ -1076,23 +1076,23 @@ std::expected<ParsedRequest, McpError> parseRequest(std::string_view body)
     parsed.document = std::move(document.value());
     const json::Json object = parsed.document.root();
     if (!object.is_object()) {
-        return std::unexpected(McpError::invalidRequest("request must be an object"));
+        return std::unexpected(McpError::invalid_request("request must be an object"));
     }
     const auto jsonrpc = object.at("jsonrpc").as_string();
     if (!jsonrpc || *jsonrpc != JSONRPC_VERSION) {
-        return std::unexpected(McpError::invalidRequest("missing or invalid jsonrpc"));
+        return std::unexpected(McpError::invalid_request("missing or invalid jsonrpc"));
     }
-    auto method = requireString(object, "method");
+    auto method = require_string(object, "method");
     if (!method) {
-        return std::unexpected(McpError::invalidRequest(method.error().details()));
+        return std::unexpected(McpError::invalid_request(method.error().details()));
     }
     parsed.request.method = std::move(method.value());
 
     const json::Json idElement = object.at("id");
     if (!idElement.valid()) {
-        return std::unexpected(McpError::invalidRequest("missing id"));
+        return std::unexpected(McpError::invalid_request("missing id"));
     }
-    auto id = parseRequestId(idElement);
+    auto id = parse_request_id(idElement);
     if (!id) {
         return std::unexpected(id.error());
     }
@@ -1100,16 +1100,16 @@ std::expected<ParsedRequest, McpError> parseRequest(std::string_view body)
 
     parsed.request.params = object.at("params");
     if (!parsed.request.params.valid()) {
-        return std::unexpected(McpError::invalidParams("missing params"));
+        return std::unexpected(McpError::invalid_params("missing params"));
     }
     if (!parsed.request.params.is_object()) {
-        return std::unexpected(McpError::invalidParams("params must be an object"));
+        return std::unexpected(McpError::invalid_params("params must be an object"));
     }
     const json::Json metaElement = parsed.request.params.at("_meta");
     if (!metaElement.valid()) {
-        return std::unexpected(McpError::invalidParams("missing _meta"));
+        return std::unexpected(McpError::invalid_params("missing _meta"));
     }
-    auto meta = RequestMeta::fromJson(metaElement);
+    auto meta = RequestMeta::from_json(metaElement);
     if (!meta) {
         return std::unexpected(meta.error());
     }
@@ -1117,7 +1117,7 @@ std::expected<ParsedRequest, McpError> parseRequest(std::string_view body)
     return parsed;
 }
 
-std::expected<ParsedResult, McpError> parseResult(std::string_view body)
+std::expected<ParsedResult, McpError> parse_result(std::string_view body)
 {
     auto document = JsonDocument::parse(body);
     if (!document) {
@@ -1127,9 +1127,9 @@ std::expected<ParsedResult, McpError> parseResult(std::string_view body)
     parsed.document = std::move(document.value());
     const json::Json object = parsed.document.root();
     if (!object.is_object()) {
-        return std::unexpected(McpError::invalidResponse("result must be an object"));
+        return std::unexpected(McpError::invalid_response("result must be an object"));
     }
-    auto resultType = requireResultType(object, parsed.result.typeName);
+    auto resultType = require_result_type(object, parsed.result.typeName);
     if (!resultType) {
         return std::unexpected(resultType.error());
     }
@@ -1142,7 +1142,7 @@ ToolCallResult ToolCallResult::text(std::string value)
 {
     ToolCallResult result;
     std::string out;
-    auto content = makeJsonWriter(out);
+    auto content = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)content.start_object();
     (void)content.key("type");
@@ -1156,15 +1156,15 @@ ToolCallResult ToolCallResult::text(std::string value)
     return result;
 }
 
-std::string ToolCallResult::toJson() const
+std::string ToolCallResult::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("resultType");
     (void)writer.string("complete");
-    writeImplementationMeta(writer, serverInfo, kServerInfoKey);
+    write_implementation_meta(writer, serverInfo, kServerInfoKey);
     (void)writer.key("content");
     (void)writer.start_array();
     for (const auto& item : content) {
@@ -1192,7 +1192,7 @@ ReadResourceResult ReadResourceResult::text(std::string uri,
 {
     ReadResourceResult result;
     std::string out;
-    auto content = makeJsonWriter(out);
+    auto content = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)content.start_object();
     (void)content.key("uri");
@@ -1210,14 +1210,14 @@ ReadResourceResult ReadResourceResult::text(std::string uri,
     return result;
 }
 
-std::string ReadResourceResult::toJson() const
+std::string ReadResourceResult::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
-    writeCacheFields(writer, ttlMs, cacheScope);
-    writeImplementationMeta(writer, serverInfo, kServerInfoKey);
+    write_cache_fields(writer, ttlMs, cacheScope);
+    write_implementation_meta(writer, serverInfo, kServerInfoKey);
     (void)writer.key("contents");
     (void)writer.start_array();
     for (const auto& item : contents) {
@@ -1231,16 +1231,16 @@ std::string ReadResourceResult::toJson() const
     return std::move(out);
 }
 
-std::string GetPromptResult::toJson() const
+std::string GetPromptResult::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("resultType");
     (void)writer.string("complete");
-    writeImplementationMeta(writer, serverInfo, kServerInfoKey);
-    writeOptionalString(writer, "description", description);
+    write_implementation_meta(writer, serverInfo, kServerInfoKey);
+    write_optional_string(writer, "description", description);
     (void)writer.key("messages");
     (void)writer.start_array();
     for (const auto& item : messages) {
@@ -1254,7 +1254,7 @@ std::string GetPromptResult::toJson() const
     return std::move(out);
 }
 
-std::expected<ParsedResponse, McpError> parseResponse(std::string_view body)
+std::expected<ParsedResponse, McpError> parse_response(std::string_view body)
 {
     auto document = JsonDocument::parse(body);
     if (!document) {
@@ -1265,17 +1265,17 @@ std::expected<ParsedResponse, McpError> parseResponse(std::string_view body)
     parsed.document = std::move(document.value());
     const json::Json object = parsed.document.root();
     if (!object.is_object()) {
-        return std::unexpected(McpError::invalidResponse("response must be an object"));
+        return std::unexpected(McpError::invalid_response("response must be an object"));
     }
     const auto jsonrpc = object.at("jsonrpc").as_string();
     if (!jsonrpc || *jsonrpc != JSONRPC_VERSION) {
-        return std::unexpected(McpError::invalidResponse("missing or invalid jsonrpc"));
+        return std::unexpected(McpError::invalid_response("missing or invalid jsonrpc"));
     }
 
     const json::Json idElement = object.at("id");
     const bool hasId = idElement.valid();
     if (hasId) {
-        auto id = parseRequestId(idElement);
+        auto id = parse_request_id(idElement);
         if (!id) {
             return std::unexpected(id.error());
         }
@@ -1287,18 +1287,18 @@ std::expected<ParsedResponse, McpError> parseResponse(std::string_view body)
     parsed.response.hasResult = resultElement.valid();
     parsed.response.hasError = errorElement.valid();
     if (parsed.response.hasResult == parsed.response.hasError) {
-        return std::unexpected(McpError::invalidResponse(
+        return std::unexpected(McpError::invalid_response(
             "response must contain exactly one of result or error"));
     }
     if (parsed.response.hasResult) {
         if (!hasId) {
-            return std::unexpected(McpError::invalidResponse("result response missing id"));
+            return std::unexpected(McpError::invalid_response("result response missing id"));
         }
         if (!resultElement.is_object()) {
-            return std::unexpected(McpError::invalidResponse("result must be an object"));
+            return std::unexpected(McpError::invalid_response("result must be an object"));
         }
         std::string unusedTypeName;
-        auto resultType = requireResultType(resultElement, unusedTypeName);
+        auto resultType = require_result_type(resultElement, unusedTypeName);
         if (!resultType) {
             return std::unexpected(resultType.error());
         }
@@ -1307,21 +1307,21 @@ std::expected<ParsedResponse, McpError> parseResponse(std::string_view body)
     }
 
     if (!errorElement.is_object()) {
-        return std::unexpected(McpError::invalidResponse("error must be an object"));
+        return std::unexpected(McpError::invalid_response("error must be an object"));
     }
     const auto code = errorElement.at("code").as_int64();
     const auto message = errorElement.at("message").as_string();
     if (!code || !message) {
-        return std::unexpected(McpError::invalidResponse("invalid error object"));
+        return std::unexpected(McpError::invalid_response("invalid error object"));
     }
     parsed.response.error = errorElement;
     return parsed;
 }
 
-std::string SubscriptionFilter::toJson() const
+std::string SubscriptionFilter::to_json() const
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     if (toolsListChanged) {
@@ -1351,31 +1351,31 @@ std::string SubscriptionFilter::toJson() const
     return std::move(out);
 }
 
-std::expected<SubscriptionFilter, McpError> SubscriptionFilter::fromJson(
+std::expected<SubscriptionFilter, McpError> SubscriptionFilter::from_json(
     const json::Json& element)
 {
-    auto objectResult = requireObject(element, "notifications");
+    auto objectResult = require_object(element, "notifications");
     if (!objectResult) {
         return std::unexpected(objectResult.error());
     }
     const json::Json object = objectResult.value();
     SubscriptionFilter filter;
-    auto readFlag = [&object](const char* key, bool& destination)
+    auto read_flag = [&object](const char* key, bool& destination)
         -> std::expected<void, McpError> {
         const json::Json value = object.at(key);
         if (!value.valid()) {
             return {};
         }
         if (!value.is_bool()) {
-            return std::unexpected(McpError::invalidParams(
+            return std::unexpected(McpError::invalid_params(
                 std::string(key) + " must be a boolean"));
         }
         destination = *value.as_bool();
         return {};
     };
-    auto tools = readFlag("toolsListChanged", filter.toolsListChanged);
-    auto prompts = readFlag("promptsListChanged", filter.promptsListChanged);
-    auto resources = readFlag("resourcesListChanged", filter.resourcesListChanged);
+    auto tools = read_flag("toolsListChanged", filter.toolsListChanged);
+    auto prompts = read_flag("promptsListChanged", filter.promptsListChanged);
+    auto resources = read_flag("resourcesListChanged", filter.resourcesListChanged);
     if (!tools) return std::unexpected(tools.error());
     if (!prompts) return std::unexpected(prompts.error());
     if (!resources) return std::unexpected(resources.error());
@@ -1383,14 +1383,14 @@ std::expected<SubscriptionFilter, McpError> SubscriptionFilter::fromJson(
     const json::Json subscriptions = object.at("resourceSubscriptions");
     if (subscriptions.valid()) {
         if (!subscriptions.is_array()) {
-            return std::unexpected(McpError::invalidParams(
+            return std::unexpected(McpError::invalid_params(
                 "resourceSubscriptions must be an array"));
         }
         for (size_t i = 0; i < subscriptions.size(); ++i) {
             const json::Json item = subscriptions.at(i);
             auto uri = item.as_string();
             if (!uri) {
-                return std::unexpected(McpError::invalidParams(
+                return std::unexpected(McpError::invalid_params(
                     "resourceSubscriptions must contain strings"));
             }
             filter.resourceSubscriptions.push_back(std::string(*uri));
@@ -1399,16 +1399,16 @@ std::expected<SubscriptionFilter, McpError> SubscriptionFilter::fromJson(
     return filter;
 }
 
-std::string makeResultResponse(const RequestId& id, std::string_view resultJson)
+std::string make_result_response(const RequestId& id, std::string_view resultJson)
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("jsonrpc");
     (void)writer.string(JSONRPC_VERSION);
     (void)writer.key("id");
-    writeRequestId(writer, id);
+    write_request_id(writer, id);
     (void)writer.key("result");
     (void)writer.raw(std::string(resultJson));
     (void)writer.end_object();
@@ -1418,20 +1418,20 @@ std::string makeResultResponse(const RequestId& id, std::string_view resultJson)
     return std::move(out);
 }
 
-std::string makeErrorResponse(const std::optional<RequestId>& id,
+std::string make_error_response(const std::optional<RequestId>& id,
                              int code,
                              std::string_view message,
                              std::optional<std::string_view> details)
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("jsonrpc");
     (void)writer.string(JSONRPC_VERSION);
     if (id) {
         (void)writer.key("id");
-        writeRequestId(writer, *id);
+        write_request_id(writer, *id);
     }
     (void)writer.key("error");
     (void)writer.start_object();
@@ -1451,19 +1451,19 @@ std::string makeErrorResponse(const std::optional<RequestId>& id,
     return std::move(out);
 }
 
-std::string makeUnsupportedProtocolVersionResponse(
+std::string make_unsupported_protocol_version_response(
     const RequestId& id,
     std::string_view requested,
     const std::vector<std::string>& supported)
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("jsonrpc");
     (void)writer.string(JSONRPC_VERSION);
     (void)writer.key("id");
-    writeRequestId(writer, id);
+    write_request_id(writer, id);
     (void)writer.key("error");
     (void)writer.start_object();
     (void)writer.key("code");
@@ -1489,12 +1489,12 @@ std::string makeUnsupportedProtocolVersionResponse(
     return std::move(out);
 }
 
-std::string makeSubscriptionAcknowledgedNotification(
+std::string make_subscription_acknowledged_notification(
     const RequestId& id,
     const SubscriptionFilter& accepted)
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("jsonrpc");
@@ -1506,10 +1506,10 @@ std::string makeSubscriptionAcknowledgedNotification(
     (void)writer.key("_meta");
     (void)writer.start_object();
     (void)writer.key("io.modelcontextprotocol/subscriptionId");
-    writeRequestId(writer, id);
+    write_request_id(writer, id);
     (void)writer.end_object();
     (void)writer.key("notifications");
-    (void)writer.raw(accepted.toJson());
+    (void)writer.raw(accepted.to_json());
     (void)writer.end_object();
     (void)writer.end_object();
     if (!writer.finish()) {
@@ -1518,12 +1518,12 @@ std::string makeSubscriptionAcknowledgedNotification(
     return std::move(out);
 }
 
-std::string makeSubscriptionNotification(std::string_view method,
+std::string make_subscription_notification(std::string_view method,
                                         const RequestId& id,
                                         std::optional<std::string_view> uri)
 {
     std::string out;
-    auto writer = makeJsonWriter(out);
+    auto writer = make_json_writer(out);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)writer.start_object();
     (void)writer.key("jsonrpc");
@@ -1535,7 +1535,7 @@ std::string makeSubscriptionNotification(std::string_view method,
     (void)writer.key("_meta");
     (void)writer.start_object();
     (void)writer.key("io.modelcontextprotocol/subscriptionId");
-    writeRequestId(writer, id);
+    write_request_id(writer, id);
     (void)writer.end_object();
     if (uri) {
         (void)writer.key("uri");
@@ -1549,10 +1549,10 @@ std::string makeSubscriptionNotification(std::string_view method,
     return std::move(out);
 }
 
-std::string makeSubscriptionCompleteResponse(const RequestId& id)
+std::string make_subscription_complete_response(const RequestId& id)
 {
     std::string resultJson;
-    auto result = makeJsonWriter(resultJson);
+    auto result = make_json_writer(resultJson);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)result.start_object();
     (void)result.key("resultType");
@@ -1560,16 +1560,16 @@ std::string makeSubscriptionCompleteResponse(const RequestId& id)
     (void)result.key("_meta");
     (void)result.start_object();
     (void)result.key("io.modelcontextprotocol/subscriptionId");
-    writeRequestId(result, id);
+    write_request_id(result, id);
     (void)result.end_object();
     (void)result.end_object();
     if (!result.finish()) {
         return std::string{};
     }
-    return makeResultResponse(id, resultJson);
+    return make_result_response(id, resultJson);
 }
 
-std::string encodeSseEvent(std::string_view message)
+std::string encode_sse_event(std::string_view message)
 {
     std::string event;
     event.reserve(message.size() + 8);
@@ -1589,7 +1589,7 @@ std::string encodeSseEvent(std::string_view message)
     return event;
 }
 
-std::expected<std::optional<std::string>, McpError> parseSseEvent(
+std::expected<std::optional<std::string>, McpError> parse_sse_event(
     std::string_view event)
 {
     std::string data;
@@ -1614,7 +1614,7 @@ std::expected<std::optional<std::string>, McpError> parseSseEvent(
     }
     if (!hasData) return std::optional<std::string>{};
     if (!JsonDocument::parse(data)) {
-        return std::unexpected(McpError::invalidResponse(
+        return std::unexpected(McpError::invalid_response(
             "SSE data is not a JSON message"));
     }
     return std::optional<std::string>{std::move(data)};

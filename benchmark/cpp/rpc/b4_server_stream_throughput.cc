@@ -25,7 +25,7 @@ constexpr size_t kDefaultRingBufferSize = 128 * 1024;
 
 std::atomic<bool> g_running{true};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running.store(false, std::memory_order_release);
 }
 
@@ -33,7 +33,7 @@ class StreamBenchService : public RpcService {
 public:
     StreamBenchService()
         : RpcService("StreamBenchService") {
-        registerStreamMethod("echo", &StreamBenchService::echo);
+        register_stream_method("echo", &StreamBenchService::echo);
     }
 
     Task<void> echo(RpcStream& stream) {
@@ -44,18 +44,18 @@ public:
                 co_return;
             }
 
-            if (msg.messageType() == RpcMessageType::STREAM_DATA) {
-                auto send_result = co_await stream.sendData(msg.payloadView());
+            if (msg.message_type() == RpcMessageType::STREAM_DATA) {
+                auto send_result = co_await stream.send_data(msg.payload_view());
                 if (!send_result.has_value()) {
                     co_return;
                 }
                 continue;
             }
 
-            if (msg.messageType() == RpcMessageType::STREAM_END) {
+            if (msg.message_type() == RpcMessageType::STREAM_END) {
                 // Keep the public stream benchmark aligned with the Rust mapping:
                 // the server echoes inbound frames and then ends the stream directly.
-                auto send_result = co_await stream.sendEnd();
+                auto send_result = co_await stream.send_end();
                 if (!send_result.has_value()) {
                     co_return;
                 }
@@ -63,11 +63,11 @@ public:
                 co_return;
             }
 
-            if (msg.messageType() == RpcMessageType::STREAM_CANCEL) {
+            if (msg.message_type() == RpcMessageType::STREAM_CANCEL) {
                 co_return;
             }
 
-            (void)co_await stream.sendCancel();
+            (void)co_await stream.send_cancel();
             co_return;
         }
     }
@@ -75,12 +75,12 @@ public:
 } // namespace
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 #if defined(SIGPIPE)
     std::signal(SIGPIPE, SIG_IGN);
 #endif
@@ -99,16 +99,16 @@ int main(int argc, char* argv[]) {
         ring_buffer_size = static_cast<size_t>(std::strtoull(argv[3], nullptr, 10));
     }
 
-    const size_t resolved_io_count = resolveIoSchedulerCount(io_count);
+    const size_t resolved_io_count = resolve_io_scheduler_count(io_count);
     auto server = RpcStreamServerBuilder()
         .host("0.0.0.0")
         .port(port)
-        .ioSchedulerCount(resolved_io_count)
-        .ringBufferSize(ring_buffer_size)
+        .io_scheduler_count(resolved_io_count)
+        .ring_buffer_size(ring_buffer_size)
         .backlog(1024)
         .build();
     StreamBenchService service;
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register stream benchmark service: "
                   << registered.error().message() << "\n";
@@ -132,7 +132,7 @@ int main(int argc, char* argv[]) {
     std::cout << "RingBuffer size: " << ring_buffer_size << " bytes\n";
     std::cout << "Stream benchmark server started. Press Ctrl+C to stop.\n";
 
-    while (g_running.load(std::memory_order_acquire) && server.isRunning()) {
+    while (g_running.load(std::memory_order_acquire) && server.is_running()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 

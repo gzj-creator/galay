@@ -18,20 +18,20 @@ using namespace galay::kernel;
 static std::atomic<bool> g_running{true};
 static std::atomic<uint64_t> g_requests{0};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
-Task<void> handleStream(Http2Stream::ptr stream) {
+Task<void> handle_stream(Http2Stream::ptr stream) {
     g_requests++;
 
     while (true) {
-        auto frame_result = co_await stream->getFrame();
+        auto frame_result = co_await stream->get_frame();
         if (!frame_result || !frame_result.value()) {
             co_return;
         }
         auto frame = std::move(frame_result.value());
-        if ((frame->isHeaders() || frame->isData()) && frame->isEndStream()) {
+        if ((frame->is_headers() || frame->is_data()) && frame->is_end_stream()) {
             break;
         }
     }
@@ -41,16 +41,16 @@ Task<void> handleStream(Http2Stream::ptr stream) {
     }
 
 
-    std::string body = req.body.empty() ? "Echo: (empty)" : ("Echo: " + req.coalescedBody());
-    co_await stream->replyHeader(
+    std::string body = req.body.empty() ? "Echo: (empty)" : ("Echo: " + req.coalesced_body());
+    co_await stream->reply_header(
         Http2Headers()
             .status(200)
-            .contentType("text/plain")
+            .content_type("text/plain")
             .server("Galay-H2-Echo/1.0")
-            .contentLength(body.size()),
+            .content_length(body.size()),
         body.empty());
     if (!body.empty()) {
-        co_await stream->replyData(body, true);
+        co_await stream->reply_data(body, true);
     }
     co_return;
 }
@@ -64,8 +64,8 @@ int main(int argc, char* argv[]) {
     if (argc > 2) cert_path = argv[2];
     if (argc > 3) key_path = argv[3];
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     std::cout << "========================================\n";
     std::cout << "H2 (HTTP/2 over TLS) Echo Server Example\n";
@@ -78,13 +78,13 @@ int main(int argc, char* argv[]) {
         H2Server server(H2ServerBuilder()
             .host("0.0.0.0")
             .port(static_cast<uint16_t>(port))
-            .certPath(cert_path)
-            .keyPath(key_path)
-            .ioSchedulerCount(4)
-            .maxConcurrentStreams(100)
+            .cert_path(cert_path)
+            .key_path(key_path)
+            .io_scheduler_count(4)
+            .max_concurrent_streams(100)
             .build());
 
-        server.start(handleStream);
+        server.start(handle_stream);
 
         while (g_running) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));

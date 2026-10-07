@@ -37,7 +37,7 @@ constexpr auto kRetryInterval = std::chrono::seconds(1);
 constexpr size_t kClientRingBufferHeadroom = 256;
 constexpr size_t kLatencyReserve = 10000;
 
-const char* callModeToString(RpcCallMode mode) {
+const char* call_mode_to_string(RpcCallMode mode) {
     switch (mode) {
         case RpcCallMode::UNARY:
             return "unary";
@@ -52,7 +52,7 @@ const char* callModeToString(RpcCallMode mode) {
     }
 }
 
-std::optional<RpcCallMode> parseCallMode(std::string_view mode) {
+std::optional<RpcCallMode> parse_call_mode(std::string_view mode) {
     if (mode == "unary") {
         return RpcCallMode::UNARY;
     }
@@ -88,11 +88,11 @@ std::atomic<bool> g_running{true};
 std::mutex g_latency_mutex;
 std::vector<uint64_t> g_latencies;  // 微秒
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running.store(false);
 }
 
-Task<void> benchWorker(const BenchConfig& config) {
+Task<void> bench_worker(const BenchConfig& config) {
     const size_t ring_buffer_size =
         std::max<size_t>(kDefaultRpcRingBufferSize, config.payload_size + RPC_HEADER_SIZE + kClientRingBufferHeadroom);
     const size_t pipeline_depth = std::max<size_t>(1, config.pipeline_depth);
@@ -123,8 +123,8 @@ Task<void> benchWorker(const BenchConfig& config) {
             break;
         }
 
-        auto reader = conn.getReader();
-        auto writer = conn.getWriter();
+        auto reader = conn.get_reader();
+        auto writer = conn.get_writer();
         struct InflightEntry {
             uint32_t request_id;
             std::chrono::steady_clock::time_point send_time;
@@ -139,9 +139,9 @@ Task<void> benchWorker(const BenchConfig& config) {
                    inflight_entries.size() < pipeline_depth &&
                    !reconnect_needed) {
                 RpcRequest request(next_request_id++, "BenchEchoService", "echo");
-                request.callMode(config.mode);
-                request.endOfStream(true);
-                request.payloadView(RpcPayloadView{
+                request.call_mode(config.mode);
+                request.end_of_stream(true);
+                request.payload_view(RpcPayloadView{
                     payload.data(),
                     payload.size(),
                     nullptr,
@@ -149,12 +149,12 @@ Task<void> benchWorker(const BenchConfig& config) {
                 });
                 const auto send_start = std::chrono::steady_clock::now();
 
-                auto send_result = co_await writer.sendRequest(request);
+                auto send_result = co_await writer.send_request(request);
                 if (!send_result.has_value()) {
                     reconnect_needed = true;
                 } else {
                     inflight_entries.push_back(InflightEntry{
-                        request.requestId(),
+                        request.request_id(),
                         send_start
                     });
                 }
@@ -165,7 +165,7 @@ Task<void> benchWorker(const BenchConfig& config) {
             }
 
             RpcResponse response;
-            auto recv_result = co_await reader.getResponse(response);
+            auto recv_result = co_await reader.get_response(response);
             if (!recv_result.has_value()) {
                 reconnect_needed = true;
             }
@@ -177,7 +177,7 @@ Task<void> benchWorker(const BenchConfig& config) {
             auto entry_it = std::find_if(
                 inflight_entries.begin(),
                 inflight_entries.end(),
-                [&](const InflightEntry& entry) { return entry.request_id == response.requestId(); });
+                [&](const InflightEntry& entry) { return entry.request_id == response.request_id(); });
             if (entry_it == inflight_entries.end()) {
                 reconnect_needed = true;
                 break;
@@ -191,7 +191,7 @@ Task<void> benchWorker(const BenchConfig& config) {
             *entry_it = std::move(inflight_entries.back());
             inflight_entries.pop_back();
 
-            if (response.isOk()) {
+            if (response.is_ok()) {
                 g_total_requests.fetch_add(1, std::memory_order_relaxed);
                 g_total_bytes.fetch_add(payload.size() * 2, std::memory_order_relaxed);
             }
@@ -212,7 +212,7 @@ Task<void> benchWorker(const BenchConfig& config) {
     co_return;
 }
 
-void printUsage(const char* prog) {
+void print_usage(const char* prog) {
     std::cout << "Usage: " << prog << " [options]\n"
               << "Options:\n"
               << "  -h <host>        Server host (default: 127.0.0.1)\n"
@@ -226,12 +226,12 @@ void printUsage(const char* prog) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 #if defined(SIGPIPE)
     std::signal(SIGPIPE, SIG_IGN);
 #endif
@@ -242,13 +242,13 @@ int main(int argc, char* argv[]) {
         std::string opt = argv[i];
 
         if (opt == "--help") {
-            printUsage(argv[0]);
+            print_usage(argv[0]);
             return 0;
         }
 
         if (i + 1 >= argc) {
             std::cerr << "Missing value for option: " << opt << "\n";
-            printUsage(argv[0]);
+            print_usage(argv[0]);
             return 1;
         }
 
@@ -262,16 +262,16 @@ int main(int argc, char* argv[]) {
         else if (opt == "-i") config.io_schedulers = std::stoul(val);
         else if (opt == "-l") config.pipeline_depth = std::stoul(val);
         else if (opt == "-m") {
-            auto mode = parseCallMode(val);
+            auto mode = parse_call_mode(val);
             if (!mode.has_value()) {
                 std::cerr << "Invalid mode: " << val << "\n";
-                printUsage(argv[0]);
+                print_usage(argv[0]);
                 return 1;
             }
             config.mode = mode.value();
         } else {
             std::cerr << "Unknown option: " << opt << "\n";
-            printUsage(argv[0]);
+            print_usage(argv[0]);
             return 1;
         }
     }
@@ -281,25 +281,25 @@ int main(int argc, char* argv[]) {
     std::cout << "Connections: " << config.connections << "\n";
     std::cout << "Payload size: " << config.payload_size << " bytes\n";
     std::cout << "Duration: " << config.duration_sec << " seconds\n";
-    const size_t resolved_io_schedulers = resolveIoSchedulerCount(config.io_schedulers);
+    const size_t resolved_io_schedulers = resolve_io_scheduler_count(config.io_schedulers);
     std::cout << "IO Schedulers: "
               << (config.io_schedulers == 0
                       ? "auto (" + std::to_string(resolved_io_schedulers) + ")"
                       : std::to_string(resolved_io_schedulers))
               << "\n";
     std::cout << "Pipeline depth: " << std::max<size_t>(1, config.pipeline_depth) << "\n";
-    std::cout << "RPC mode: " << callModeToString(config.mode) << "\n";
+    std::cout << "RPC mode: " << call_mode_to_string(config.mode) << "\n";
     std::cout << "\n";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(resolved_io_schedulers).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(resolved_io_schedulers).parallel_scheduler_count(1).build();
     runtime.start();
 
     // 启动所有连接
     std::cout << "Starting " << config.connections << " connections...\n";
     bool schedule_failed = false;
     for (size_t i = 0; i < config.connections; ++i) {
-        auto* scheduler = runtime.getNextIOScheduler();
-        if (scheduler == nullptr || !scheduleTask(scheduler, benchWorker(config))) {
+        auto* scheduler = runtime.get_next_io_scheduler();
+        if (scheduler == nullptr || !schedule_task(scheduler, bench_worker(config))) {
             schedule_failed = true;
             break;
         }

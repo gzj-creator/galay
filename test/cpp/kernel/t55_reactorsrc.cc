@@ -13,11 +13,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-bool containsText(const std::filesystem::path& path, const std::string& needle) {
+bool contains_text(const std::filesystem::path& path, const std::string& needle) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return false;
@@ -27,11 +27,11 @@ bool containsText(const std::filesystem::path& path, const std::string& needle) 
     return content.find(needle) != std::string::npos;
 }
 
-bool containsAnyText(const std::filesystem::path& path,
+bool contains_any_text(const std::filesystem::path& path,
                      const std::vector<std::string>& needles,
                      std::string* matched = nullptr) {
     for (const auto& needle : needles) {
-        if (containsText(path, needle)) {
+        if (contains_text(path, needle)) {
             if (matched != nullptr) {
                 *matched = needle;
             }
@@ -44,7 +44,7 @@ bool containsAnyText(const std::filesystem::path& path,
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto kernel_dir = root / "galay-kernel" / "core";
 
     const std::vector<std::filesystem::path> required_files = {
@@ -73,7 +73,7 @@ int main() {
     };
 
     for (const auto& expectation : expectations) {
-        if (!containsText(expectation.file, expectation.symbol)) {
+        if (!contains_text(expectation.file, expectation.symbol)) {
             std::cerr << "[T55] expected " << expectation.file
                       << " to reference " << expectation.symbol << '\n';
             return 1;
@@ -81,15 +81,15 @@ int main() {
     }
 
     const auto backend_reactor = kernel_dir / "backend_reactor.h";
-    if (!containsText(backend_reactor, "concept ReactorType")) {
+    if (!contains_text(backend_reactor, "concept ReactorType")) {
         std::cerr << "[T55] expected ReactorType to be a concept contract\n";
         return 1;
     }
-    if (containsText(backend_reactor, "BackendReactor") ||
-        containsText(backend_reactor, "class BackendReactor") ||
-        containsText(backend_reactor, "virtual ~BackendReactor") ||
-        containsText(backend_reactor, "virtual void notify()") ||
-        containsText(backend_reactor, "virtual GHandle getHandle()")) {
+    if (contains_text(backend_reactor, "BackendReactor") ||
+        contains_text(backend_reactor, "class BackendReactor") ||
+        contains_text(backend_reactor, "virtual ~BackendReactor") ||
+        contains_text(backend_reactor, "virtual void notify()") ||
+        contains_text(backend_reactor, "virtual GHandle get_handle()")) {
         std::cerr << "[T55] expected ReactorType to replace the old BackendReactor name\n";
         return 1;
     }
@@ -100,10 +100,10 @@ int main() {
         kernel_dir / "uring_reactor.h",
     };
     for (const auto& path : reactor_headers) {
-        if (containsText(path, "BackendReactor") ||
-            containsText(path, "public BackendReactor") ||
-            containsText(path, "void notify() override") ||
-            containsText(path, "GHandle getHandle() const override")) {
+        if (contains_text(path, "BackendReactor") ||
+            contains_text(path, "public BackendReactor") ||
+            contains_text(path, "void notify() override") ||
+            contains_text(path, "GHandle get_handle() const override")) {
             std::cerr << "[T55] expected " << path
                       << " to satisfy ReactorType concept without virtual inheritance\n";
             return 1;
@@ -125,7 +125,7 @@ int main() {
                 "m_epoll_fd",
                 "m_event_fd",
                 "m_events",
-                "processEvent(",
+                "process_event(",
                 "buildEpollEvents(",
                 "applyEpollEvents(",
             },
@@ -133,7 +133,7 @@ int main() {
                 "epoll_wait(",
                 "epoll_ctl(",
                 "eventfd(",
-                "processEvent(",
+                "process_event(",
                 "buildEpollEvents(",
                 "applyEpollEvents(",
             },
@@ -145,23 +145,23 @@ int main() {
                 "m_ring",
                 "m_event_fd",
                 "m_eventfd_buf",
-                "processCompletion(",
-                "submitSequenceSqe(",
+                "process_completion(",
+                "submit_sequence_sqe(",
             },
             {
                 "io_uring_queue_init_params(",
                 "io_uring_get_sqe(",
                 "io_uring_wait_cqe_timeout(",
                 "io_uring_submit_and_wait_timeout(",
-                "processCompletion(",
-                "submitSequenceSqe(",
+                "process_completion(",
+                "submit_sequence_sqe(",
             },
         },
     };
 
     for (const auto& expectation : boundary_expectations) {
         std::string matched;
-        if (containsAnyText(expectation.scheduler_header,
+        if (contains_any_text(expectation.scheduler_header,
                             expectation.forbidden_header_tokens,
                             &matched)) {
             std::cerr << "[T55] expected " << expectation.scheduler_header
@@ -171,7 +171,7 @@ int main() {
         }
 
         matched.clear();
-        if (containsAnyText(expectation.scheduler_source,
+        if (contains_any_text(expectation.scheduler_source,
                             expectation.forbidden_source_tokens,
                             &matched)) {
             std::cerr << "[T55] expected " << expectation.scheduler_source
@@ -182,23 +182,23 @@ int main() {
     }
 
     const auto iouring_reactor = kernel_dir / "uring_reactor.cc";
-    if (containsText(iouring_reactor, "auto* sequence = controller->getAwaitable<SequenceAwaitableBase>();")) {
+    if (contains_text(iouring_reactor, "auto* sequence = controller->get_awaitable<SequenceAwaitableBase>();")) {
         std::cerr << "[T55] expected IOUringReactor sequence path to avoid single-owner lookup\n";
         return 1;
     }
-    if (containsText(iouring_reactor, "int IOUringReactor::submitSequenceSqe(IOEventType type,")) {
-        std::cerr << "[T55] expected IOUringReactor submitSequenceSqe to be slot-aware\n";
+    if (contains_text(iouring_reactor, "int IOUringReactor::submit_sequence_sqe(IOEventType type,")) {
+        std::cerr << "[T55] expected IOUringReactor submit_sequence_sqe to be slot-aware\n";
         return 1;
     }
-    if (!containsText(iouring_reactor, "int IOUringReactor::submitSequenceSqe(IOController::Index slot,")) {
-        std::cerr << "[T55] expected IOUringReactor submitSequenceSqe to accept slot parameter\n";
+    if (!contains_text(iouring_reactor, "int IOUringReactor::submit_sequence_sqe(IOController::Index slot,")) {
+        std::cerr << "[T55] expected IOUringReactor submit_sequence_sqe to accept slot parameter\n";
         return 1;
     }
-    if (!containsText(iouring_reactor, "controller->m_awaitable[slot] == owner")) {
+    if (!contains_text(iouring_reactor, "controller->m_awaitable[slot] == owner")) {
         std::cerr << "[T55] expected IOUringReactor sequence path to skip already-armed slots\n";
         return 1;
     }
-    if (!containsText(iouring_reactor, "controller->m_awaitable[slot] = owner;")) {
+    if (!contains_text(iouring_reactor, "controller->m_awaitable[slot] = owner;")) {
         std::cerr << "[T55] expected IOUringReactor sequence SQE submission to bind slot owner\n";
         return 1;
     }

@@ -61,11 +61,11 @@ int main()
                  "default initialize timeout should be disabled for backward compatibility")) {
         return 1;
     }
-    if (!require(!policy.timeouts.requestTimeoutEnabled(),
+    if (!require(!policy.timeouts.request_timeout_enabled(),
                  "request timeout helper disagrees with default disabled timeout")) {
         return 1;
     }
-    if (!require(!policy.timeouts.initializeTimeoutEnabled(),
+    if (!require(!policy.timeouts.initialize_timeout_enabled(),
                  "initialize timeout helper disagrees with default disabled timeout")) {
         return 1;
     }
@@ -98,7 +98,7 @@ int main()
                  "unauthorized error factory returned wrong code")) {
         return 1;
     }
-    if (!require(McpError::payloadTooLarge().code() == McpErrorCode::PayloadTooLarge,
+    if (!require(McpError::payload_too_large().code() == McpErrorCode::PayloadTooLarge,
                  "payload-too-large error factory returned wrong code")) {
         return 1;
     }

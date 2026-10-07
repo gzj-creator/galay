@@ -38,7 +38,7 @@ namespace
     bool g_done = false;
     std::atomic<int> g_failures{0};
 
-    bool parseInt(const char* s, int32_t* out)
+    bool parse_int(const char* s, int32_t* out)
     {
         if (!s || !out) {
             return false;
@@ -51,7 +51,7 @@ namespace
         }
     }
 
-    bool parseBool(const char* s, bool default_value)
+    bool parse_bool(const char* s, bool default_value)
     {
         if (!s) {
             return default_value;
@@ -63,16 +63,16 @@ namespace
         return v == "1" || v == "true" || v == "yes" || v == "on";
     }
 
-    IntegrationConfig loadConfig()
+    IntegrationConfig load_config()
     {
         IntegrationConfig cfg;
-        cfg.enabled = parseBool(std::getenv("GALAY_IT_ENABLE"), false);
+        cfg.enabled = parse_bool(std::getenv("GALAY_IT_ENABLE"), false);
         if (const char* v = std::getenv("GALAY_IT_CLUSTER_HOST")) {
             cfg.cluster_host = v;
         }
         if (const char* v = std::getenv("GALAY_IT_CLUSTER_PORT")) {
             int32_t p = 0;
-            if (parseInt(v, &p)) {
+            if (parse_int(v, &p)) {
                 cfg.cluster_port = p;
             }
         }
@@ -87,7 +87,7 @@ namespace
         }
         if (const char* v = std::getenv("GALAY_IT_SENTINEL_PORT")) {
             int32_t p = 0;
-            if (parseInt(v, &p)) {
+            if (parse_int(v, &p)) {
                 cfg.sentinel_port = p;
             }
         }
@@ -97,7 +97,7 @@ namespace
         if (const char* v = std::getenv("GALAY_IT_SENTINEL_KEY")) {
             cfg.sentinel_test_key = v;
         }
-        cfg.trigger_sentinel_failover = parseBool(std::getenv("GALAY_IT_TRIGGER_SENTINEL_FAILOVER"), true);
+        cfg.trigger_sentinel_failover = parse_bool(std::getenv("GALAY_IT_TRIGGER_SENTINEL_FAILOVER"), true);
         return cfg;
     }
 
@@ -107,7 +107,7 @@ namespace
         std::cerr << "[FAILED] " << msg << std::endl;
     }
 
-    bool expectSingleStringReply(const RedisCommandResult& result, std::string* out)
+    bool expect_single_string_reply(const RedisCommandResult& result, std::string* out)
     {
         if (!result) {
             fail("Command failed: " + std::string(result.error().message()));
@@ -118,19 +118,19 @@ namespace
             return false;
         }
         const auto& first = result.value().front();
-        if (first.isString()) {
-            *out = first.toString();
+        if (first.is_string()) {
+            *out = first.to_string();
             return true;
         }
-        if (first.isStatus()) {
-            *out = first.toStatus();
+        if (first.is_status()) {
+            *out = first.to_status();
             return true;
         }
         fail("Reply is not string/status");
         return false;
     }
 
-    bool expectAwaitedSingleStringReply(auto&& result, std::string* out)
+    bool expect_awaited_single_string_reply(auto&& result, std::string* out)
     {
         if (!result) {
             fail("Command failed: " + std::string(result.error().message()));
@@ -140,53 +140,53 @@ namespace
             fail("Command failed: " + std::string(result.value().error().message()));
             return false;
         }
-        return expectSingleStringReply(result.value(), out);
+        return expect_single_string_reply(result.value(), out);
     }
 
-    bool tryAwaitedSingleStringReply(auto&& result, std::string* out)
+    bool try_awaited_single_string_reply(auto&& result, std::string* out)
     {
         if (!result || !result.value() || !result.value().has_value() ||
             result.value()->empty()) {
             return false;
         }
         const auto& first = result.value()->front();
-        if (first.isString()) {
-            *out = first.toString();
+        if (first.is_string()) {
+            *out = first.to_string();
             return true;
         }
-        if (first.isStatus()) {
-            *out = first.toStatus();
+        if (first.is_status()) {
+            *out = first.to_status();
             return true;
         }
         return false;
     }
 
-    bool tryAwaitedStatus(auto&& result, const std::string& expected)
+    bool try_awaited_status(auto&& result, const std::string& expected)
     {
         std::string value;
-        return tryAwaitedSingleStringReply(result, &value) && value == expected;
+        return try_awaited_single_string_reply(result, &value) && value == expected;
     }
 
-    bool isAskErrorReply(const std::expected<std::optional<std::vector<RedisValue>>, RedisError>& result)
+    bool is_ask_error_reply(const std::expected<std::optional<std::vector<RedisValue>>, RedisError>& result)
     {
         if (!result || !result.value().has_value() || result.value()->empty()) {
             return false;
         }
         const auto& first = result.value()->front();
-        if (!first.isError()) {
+        if (!first.is_error()) {
             return false;
         }
-        const auto msg = first.toError();
+        const auto msg = first.to_error();
         return msg.find("ASK ") != std::string::npos || msg.find("ASK\t") != std::string::npos;
     }
 }
 
-Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
+Task<void> run_integration(IOScheduler* scheduler, IntegrationConfig cfg)
 {
     RedisCommandBuilder command_builder;
     do {
         auto cluster = RedisClusterClientBuilder().scheduler(scheduler).build();
-        cluster.setAutoRefreshInterval(std::chrono::milliseconds(1000));
+        cluster.set_auto_refresh_interval(std::chrono::milliseconds(1000));
 
         RedisClusterNodeAddress seed;
         seed.host = cfg.cluster_host;
@@ -194,20 +194,20 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
         seed.slot_start = 0;
         seed.slot_end = 16383;
 
-        auto seed_connect = co_await cluster.addNode(seed);
+        auto seed_connect = co_await cluster.add_node(seed);
         if (!seed_connect) {
             fail("Cluster seed connect failed: " + std::string(seed_connect.error().message()));
             break;
         }
 
-        auto slots_refresh = co_await cluster.refreshSlots();
+        auto slots_refresh = co_await cluster.refresh_slots();
         if (!slots_refresh) {
             fail("Cluster refreshSlots failed: " + std::string(slots_refresh.error().message()));
             break;
         }
 
         std::string moved_key = cfg.moved_key.empty() ? "galay:it:moved:key" : cfg.moved_key;
-        cluster.setSlotRange(0, 0, 16383);  // 故意污染本地映射，触发 MOVED 自动重定向路径
+        cluster.set_slot_range(0, 0, 16383);  // 故意污染本地映射，触发 MOVED 自动重定向路径
 
         auto moved_set = co_await cluster.execute("SET", {moved_key, "moved-ok"}, moved_key, true);
         if (!moved_set) {
@@ -216,7 +216,7 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
         }
         auto moved_get = co_await cluster.execute("GET", {moved_key}, moved_key, true);
         std::string moved_value;
-        if (!expectAwaitedSingleStringReply(moved_get, &moved_value)) {
+        if (!expect_awaited_single_string_reply(moved_get, &moved_value)) {
             break;
         }
         if (moved_value != "moved-ok") {
@@ -234,7 +234,7 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
 
             auto ask_raw = co_await direct_seed.command(command_builder.get(cfg.ask_key))
                                .timeout(std::chrono::seconds(5));
-            if (!isAskErrorReply(ask_raw)) {
+            if (!is_ask_error_reply(ask_raw)) {
                 fail("ASK not observed on direct seed GET, check container ask-slot setup");
                 break;
             }
@@ -249,12 +249,12 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
         }
 
         auto ms = RedisMasterSlaveClientBuilder().scheduler(scheduler).build();
-        ms.setSentinelMasterName(cfg.sentinel_master_name);
+        ms.set_sentinel_master_name(cfg.sentinel_master_name);
 
         RedisNodeAddress sentinel;
         sentinel.host = cfg.sentinel_host;
         sentinel.port = cfg.sentinel_port;
-        auto sentinel_connect = co_await ms.addSentinel(sentinel);
+        auto sentinel_connect = co_await ms.add_sentinel(sentinel);
         if (!sentinel_connect) {
             fail("Sentinel connect failed: " + std::string(sentinel_connect.error().message()));
             break;
@@ -262,7 +262,7 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
 
         bool sentinel_refresh_ok = false;
         for (int i = 0; i < 20; ++i) {
-            auto refresh = co_await ms.refreshFromSentinel();
+            auto refresh = co_await ms.refresh_from_sentinel();
             if (refresh) {
                 sentinel_refresh_ok = true;
                 break;
@@ -275,7 +275,7 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
         }
 
         auto write_before = co_await ms.execute("SET", {cfg.sentinel_test_key, "before-failover"});
-        if (!tryAwaitedStatus(write_before, "OK")) {
+        if (!try_awaited_status(write_before, "OK")) {
             if (!write_before) {
                 fail("Sentinel write(before) failed: " + std::string(write_before.error().message()));
             } else {
@@ -303,11 +303,11 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
 
             bool write_after_ok = false;
             for (int i = 0; i < 120; ++i) {
-                auto refresh = co_await ms.refreshFromSentinel();
+                auto refresh = co_await ms.refresh_from_sentinel();
                 (void)refresh;
                 auto write_after = co_await ms.execute("SET",
                                                        {cfg.sentinel_test_key, "after-failover"});
-                if (tryAwaitedStatus(write_after, "OK")) {
+                if (try_awaited_status(write_after, "OK")) {
                     write_after_ok = true;
                     break;
                 }
@@ -323,7 +323,7 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
         for (int i = 0; i < 60; ++i) {
             auto read_after = co_await ms.execute("GET", {cfg.sentinel_test_key}, false);
             std::string read_value;
-            if (tryAwaitedSingleStringReply(read_after, &read_value)) {
+            if (try_awaited_single_string_reply(read_after, &read_value)) {
                 if (read_value == "after-failover" || read_value == "before-failover") {
                     read_ok = true;
                     break;
@@ -334,7 +334,7 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
         if (!read_ok) {
             auto read_master = co_await ms.execute("GET", {cfg.sentinel_test_key}, true);
             std::string read_value;
-            if (tryAwaitedSingleStringReply(read_master, &read_value) &&
+            if (try_awaited_single_string_reply(read_master, &read_value) &&
                 (read_value == "after-failover" || read_value == "before-failover")) {
                 read_ok = true;
             }
@@ -355,7 +355,7 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
 
 int main()
 {
-    const auto cfg = loadConfig();
+    const auto cfg = load_config();
     if (!cfg.enabled) {
         std::cout << "[SKIP] set GALAY_IT_ENABLE=1 to run cluster+sentinel integration test" << std::endl;
         return redis_test::kRedisTestSkippedExitCode;
@@ -365,7 +365,7 @@ int main()
 
     Runtime runtime;
     runtime.start();
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "[FAILED] get scheduler failed" << std::endl;
         runtime.stop();
@@ -378,7 +378,7 @@ int main()
     }
     g_failures.store(0);
 
-    scheduleTask(scheduler, runIntegration(scheduler, cfg));
+    schedule_task(scheduler, run_integration(scheduler, cfg));
 
     bool finished = false;
     {

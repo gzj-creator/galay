@@ -17,11 +17,11 @@ using namespace galay::kernel;
 std::atomic<int> g_success{0};
 std::atomic<int> g_fail{0};
 
-Task<void> singleRequest(int id) {
+Task<void> single_request(int id) {
     std::cout << "[Request " << id << "] Starting..." << std::endl;
 
     HttpsClient client(HttpsClientBuilder()
-        .verifyPeer(false)
+        .verify_peer(false)
         .build());
 
     try {
@@ -46,7 +46,7 @@ Task<void> singleRequest(int id) {
         }
         std::cout << "[Request " << id << "] Handshake completed" << std::endl;
 
-        auto session_result = client.getSession();
+        auto session_result = client.get_session();
         if (!session_result) {
             co_await client.close();
             co_return;
@@ -57,11 +57,11 @@ Task<void> singleRequest(int id) {
         auto request = Http1_1RequestBuilder::get("/")
             .host("localhost")
             .connection("close")
-            .buildMove();
+            .build_move();
 
-        auto& writer = session.getWriter();
+        auto& writer = session.get_writer();
         while (true) {
-            auto send_result = co_await writer.sendRequest(request);
+            auto send_result = co_await writer.send_request(request);
             if (!send_result) {
                 std::cerr << "[Request " << id << "] Send failed: " << send_result.error().message() << std::endl;
                 g_fail++;
@@ -75,9 +75,9 @@ Task<void> singleRequest(int id) {
         // 接收响应
         std::cout << "[Request " << id << "] Receiving response..." << std::endl;
         HttpResponse response;
-        auto& reader = session.getReader();
+        auto& reader = session.get_reader();
         while (true) {
-            auto recv_result = co_await reader.getResponse(response);
+            auto recv_result = co_await reader.get_response(response);
             if (!recv_result) {
                 std::cerr << "[Request " << id << "] Recv failed: " << recv_result.error().message() << std::endl;
                 g_fail++;
@@ -114,14 +114,14 @@ int main() {
     std::cout << "==========================================" << std::endl;
 
     // 创建运行时
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(2).parallelSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().io_scheduler_count(2).parallel_scheduler_count(0).build();
     rt.start();
 
     // 发送 20 个顺序请求
     for (int i = 0; i < 20; i++) {
-        auto* scheduler = rt.getNextIOScheduler();
+        auto* scheduler = rt.get_next_io_scheduler();
         if (scheduler) {
-            scheduleTask(scheduler, singleRequest(i));
+            schedule_task(scheduler, single_request(i));
         }
         // 等待每个请求完成
         std::this_thread::sleep_for(std::chrono::milliseconds(200));

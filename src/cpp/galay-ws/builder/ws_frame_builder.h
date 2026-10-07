@@ -39,7 +39,7 @@ public:
     WsFrameBuilder& close(WsCloseCode code = WsCloseCode::Normal, const std::string& reason = "");
 
     WsFrame build() const;
-    WsFrame buildMove();
+    WsFrame build_move();
     WsFrameBuilder clone() const;
 
 private:

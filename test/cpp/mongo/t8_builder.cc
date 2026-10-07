@@ -11,7 +11,7 @@ using namespace galay::mongo::protocol;
 namespace
 {
 
-bool failCase(const std::string& message)
+bool fail_case(const std::string& message)
 {
     std::cerr << "  FAILED: " << message << std::endl;
     return false;
@@ -31,54 +31,54 @@ bool test_builder_pipeline_encode()
     builder.append("buildInfo", int32_t(1), std::move(build_info_args));
 
     if (builder.size() != 2) {
-        return failCase("builder size mismatch");
+        return fail_case("builder size mismatch");
     }
 
     const int32_t first_request_id = 100;
-    const auto encoded_or_err = builder.encodePipeline("admin", first_request_id);
+    const auto encoded_or_err = builder.encode_pipeline("admin", first_request_id);
     if (!encoded_or_err) {
-        return failCase("encodePipeline failed: " + encoded_or_err.error());
+        return fail_case("encodePipeline failed: " + encoded_or_err.error());
     }
     const std::string& encoded = encoded_or_err.value();
 
     if (encoded.empty()) {
-        return failCase("encoded pipeline is empty");
+        return fail_case("encoded pipeline is empty");
     }
 
     size_t consumed = 0;
-    auto first_msg = MongoProtocol::extractMessage(encoded.data(), encoded.size(), consumed);
+    auto first_msg = MongoProtocol::extract_message(encoded.data(), encoded.size(), consumed);
     if (!first_msg) {
-        return failCase("decode first message failed: " + first_msg.error().message());
+        return fail_case("decode first message failed: " + first_msg.error().message());
     }
     if (first_msg->header.request_id != first_request_id) {
-        return failCase("first request_id mismatch");
+        return fail_case("first request_id mismatch");
     }
-    if (first_msg->body.getInt32("ping") != 1) {
-        return failCase("first command mismatch");
+    if (first_msg->body.get_int32("ping") != 1) {
+        return fail_case("first command mismatch");
     }
-    if (first_msg->body.getString("$db") != "admin") {
-        return failCase("first command missing $db");
+    if (first_msg->body.get_string("$db") != "admin") {
+        return fail_case("first command missing $db");
     }
 
     size_t consumed2 = 0;
     const char* second_data = encoded.data() + consumed;
     const size_t second_len = encoded.size() - consumed;
-    auto second_msg = MongoProtocol::extractMessage(second_data, second_len, consumed2);
+    auto second_msg = MongoProtocol::extract_message(second_data, second_len, consumed2);
     if (!second_msg) {
-        return failCase("decode second message failed: " + second_msg.error().message());
+        return fail_case("decode second message failed: " + second_msg.error().message());
     }
     if (second_msg->header.request_id != first_request_id + 1) {
-        return failCase("second request_id mismatch");
+        return fail_case("second request_id mismatch");
     }
-    if (second_msg->body.getInt32("buildInfo") != 1) {
-        return failCase("second command mismatch");
+    if (second_msg->body.get_int32("buildInfo") != 1) {
+        return fail_case("second command mismatch");
     }
-    if (second_msg->body.getString("$db") != "admin") {
-        return failCase("second command missing $db");
+    if (second_msg->body.get_string("$db") != "admin") {
+        return fail_case("second command missing $db");
     }
 
     if (consumed + consumed2 != encoded.size()) {
-        return failCase("encoded payload has trailing bytes");
+        return fail_case("encoded payload has trailing bytes");
     }
 
     std::cout << "  PASSED" << std::endl;
@@ -93,44 +93,44 @@ bool test_append_op_msg_with_database()
     ping_without_db.append("ping", int32_t(1));
 
     std::string encoded;
-    auto appended = MongoProtocol::appendOpMsgWithDatabase(encoded, 101, ping_without_db, "admin");
+    auto appended = MongoProtocol::append_op_msg_with_database(encoded, 101, ping_without_db, "admin");
     if (!appended) {
-        return failCase("appendOpMsgWithDatabase failed: " + appended.error());
+        return fail_case("appendOpMsgWithDatabase failed: " + appended.error());
     }
 
     size_t consumed = 0;
-    auto parsed = MongoProtocol::extractMessage(encoded.data(), encoded.size(), consumed);
+    auto parsed = MongoProtocol::extract_message(encoded.data(), encoded.size(), consumed);
     if (!parsed) {
-        return failCase("decode appendOpMsgWithDatabase payload failed: " +
+        return fail_case("decode appendOpMsgWithDatabase payload failed: " +
                         parsed.error().message());
     }
     if (parsed->header.request_id != 101) {
-        return failCase("appendOpMsgWithDatabase request_id mismatch");
+        return fail_case("appendOpMsgWithDatabase request_id mismatch");
     }
-    if (parsed->body.getInt32("ping") != 1) {
-        return failCase("appendOpMsgWithDatabase ping mismatch");
+    if (parsed->body.get_int32("ping") != 1) {
+        return fail_case("appendOpMsgWithDatabase ping mismatch");
     }
-    if (parsed->body.getString("$db") != "admin") {
-        return failCase("appendOpMsgWithDatabase missing injected $db");
+    if (parsed->body.get_string("$db") != "admin") {
+        return fail_case("appendOpMsgWithDatabase missing injected $db");
     }
 
     MongoDocument ping_with_db;
     ping_with_db.append("ping", int32_t(1));
     ping_with_db.append("$db", "custom_db");
     encoded.clear();
-    appended = MongoProtocol::appendOpMsgWithDatabase(encoded, 102, ping_with_db, "admin");
+    appended = MongoProtocol::append_op_msg_with_database(encoded, 102, ping_with_db, "admin");
     if (!appended) {
-        return failCase("appendOpMsgWithDatabase(with $db) failed: " + appended.error());
+        return fail_case("appendOpMsgWithDatabase(with $db) failed: " + appended.error());
     }
 
     consumed = 0;
-    parsed = MongoProtocol::extractMessage(encoded.data(), encoded.size(), consumed);
+    parsed = MongoProtocol::extract_message(encoded.data(), encoded.size(), consumed);
     if (!parsed) {
-        return failCase("decode appendOpMsgWithDatabase(with $db) payload failed: " +
+        return fail_case("decode appendOpMsgWithDatabase(with $db) payload failed: " +
                         parsed.error().message());
     }
-    if (parsed->body.getString("$db") != "custom_db") {
-        return failCase("appendOpMsgWithDatabase should keep existing $db");
+    if (parsed->body.get_string("$db") != "custom_db") {
+        return fail_case("appendOpMsgWithDatabase should keep existing $db");
     }
 
     std::cout << "  PASSED" << std::endl;

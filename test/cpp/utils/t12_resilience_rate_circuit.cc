@@ -18,7 +18,7 @@ struct ConcurrentAcquireResult {
 };
 
 template<typename Acquire>
-ConcurrentAcquireResult runConcurrentAcquire(size_t threadCount, size_t attemptsPerThread, Acquire& acquire) {
+ConcurrentAcquireResult run_concurrent_acquire(size_t threadCount, size_t attemptsPerThread, Acquire& acquire) {
     std::barrier startLine(static_cast<std::ptrdiff_t>(threadCount + 1));
     std::atomic<size_t> acquired{0};
     std::vector<std::thread> threads;
@@ -72,18 +72,18 @@ void test_rate_limiter_uses_lock_free_non_blocking_state() {
 void test_rate_limiter() {
     std::cout << "=== Testing RateLimiter ===" << std::endl;
 
-    // Counting semaphore - 使用 tryAcquire 测试基本功能
+    // Counting semaphore - 使用 try_acquire 测试基本功能
     CountingSemaphore sem(3);
     assert(sem.available() == 3);
 
-    assert(sem.tryAcquire(2));
+    assert(sem.try_acquire(2));
     assert(sem.available() == 1);
-    assert(!sem.tryAcquire(2));
+    assert(!sem.try_acquire(2));
     assert(sem.available() == 1);
 
     sem.release(2);
     assert(sem.available() == 3);
-    assert(sem.tryAcquire(3));
+    assert(sem.try_acquire(3));
     assert(sem.available() == 0);
     sem.release(3);
 
@@ -91,46 +91,46 @@ void test_rate_limiter() {
     TokenBucketLimiter tokenBucket(100, 10); // 100 tokens/sec, capacity 10
 
     // Should be able to acquire immediately (bucket starts full)
-    assert(tokenBucket.tryAcquire(5));
-    assert(tokenBucket.availableTokens() >= 4); // At least 5 consumed
-    assert(tokenBucket.tryAcquire(5));
-    assert(!tokenBucket.tryAcquire(1));
+    assert(tokenBucket.try_acquire(5));
+    assert(tokenBucket.available_tokens() >= 4); // At least 5 consumed
+    assert(tokenBucket.try_acquire(5));
+    assert(!tokenBucket.try_acquire(1));
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
-    assert(tokenBucket.tryAcquire(1));
-    tokenBucket.setCapacity(3);
+    assert(tokenBucket.try_acquire(1));
+    tokenBucket.set_capacity(3);
     assert(tokenBucket.capacity() == 3);
-    assert(tokenBucket.availableTokens() <= 3.0);
-    tokenBucket.setRate(200);
+    assert(tokenBucket.available_tokens() <= 3.0);
+    tokenBucket.set_rate(200);
     assert(tokenBucket.rate() == 200);
 
     // Sliding window
     SlidingWindowLimiter slidingWindow(5, std::chrono::milliseconds(100));
-    assert(slidingWindow.maxRequests() == 5);
-    assert(slidingWindow.windowSize() == std::chrono::milliseconds(100));
+    assert(slidingWindow.max_requests() == 5);
+    assert(slidingWindow.window_size() == std::chrono::milliseconds(100));
 
     for (int i = 0; i < 5; ++i) {
-        assert(slidingWindow.tryAcquire());
+        assert(slidingWindow.try_acquire());
     }
-    assert(!slidingWindow.tryAcquire()); // Should be rate limited
+    assert(!slidingWindow.try_acquire()); // Should be rate limited
 
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
-    assert(slidingWindow.tryAcquire()); // Should work after window expires
+    assert(slidingWindow.try_acquire()); // Should work after window expires
 
     // Leaky bucket
     LeakyBucketLimiter leakyBucket(100, 3);
     assert(leakyBucket.rate() == 100);
     assert(leakyBucket.capacity() == 3);
-    assert(leakyBucket.tryAcquire(2));
-    assert(!leakyBucket.tryAcquire(2));
+    assert(leakyBucket.try_acquire(2));
+    assert(!leakyBucket.try_acquire(2));
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    assert(leakyBucket.tryAcquire(1));
-    assert(leakyBucket.currentWater() <= 3.0);
+    assert(leakyBucket.try_acquire(1));
+    assert(leakyBucket.current_water() <= 3.0);
 
     LeakyBucketLimiter slowLeakyBucket(10, 2);
-    assert(slowLeakyBucket.tryAcquire(2));
-    assert(!slowLeakyBucket.tryAcquire(1));
+    assert(slowLeakyBucket.try_acquire(2));
+    assert(!slowLeakyBucket.try_acquire(1));
     std::this_thread::sleep_for(std::chrono::milliseconds(120));
-    assert(slowLeakyBucket.tryAcquire(1));
+    assert(slowLeakyBucket.try_acquire(1));
 
     std::cout << "RateLimiter tests passed!" << std::endl;
 }
@@ -148,25 +148,25 @@ void test_circuit_breaker() {
     CircuitBreaker cb(config);
 
     assert(cb.state() == CircuitState::Closed);
-    assert(cb.allowRequest());
+    assert(cb.allow_request());
 
     // Simulate failures
-    cb.onFailure();
-    cb.onFailure();
+    cb.on_failure();
+    cb.on_failure();
     assert(cb.state() == CircuitState::Closed);
 
-    cb.onFailure(); // Third failure
+    cb.on_failure(); // Third failure
     assert(cb.state() == CircuitState::Open);
-    assert(!cb.allowRequest());
+    assert(!cb.allow_request());
 
     // Wait for reset timeout
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    assert(cb.allowRequest()); // Should transition to half-open
+    assert(cb.allow_request()); // Should transition to half-open
     assert(cb.state() == CircuitState::HalfOpen);
 
     // Success in half-open
-    cb.onSuccess();
-    cb.onSuccess();
+    cb.on_success();
+    cb.on_success();
     assert(cb.state() == CircuitState::Closed);
 
     std::cout << "CircuitBreaker tests passed!" << std::endl;
@@ -196,7 +196,7 @@ void test_circuit_breaker_expected_execution() {
     assert(success.has_value());
     assert(*success == 7);
     assert(calls == 1);
-    assert(cb.failureCount() == 0);
+    assert(cb.failure_count() == 0);
     assert(cb.state() == CircuitState::Closed);
 
     auto firstFailure = cb.execute([&]() -> Result {
@@ -206,7 +206,7 @@ void test_circuit_breaker_expected_execution() {
     assert(!firstFailure.has_value());
     assert(std::holds_alternative<CircuitBreakerTestError>(firstFailure.error()));
     assert(calls == 2);
-    assert(cb.failureCount() == 1);
+    assert(cb.failure_count() == 1);
     assert(cb.state() == CircuitState::Closed);
 
     auto secondFailure = cb.execute([&]() -> Result {
@@ -244,7 +244,7 @@ void test_circuit_breaker_expected_fallback() {
     int primaryCalls = 0;
     int fallbackCalls = 0;
 
-    auto fallbackAfterFailure = cb.executeWithFallback(
+    auto fallbackAfterFailure = cb.execute_with_fallback(
         [&]() -> Result {
             ++primaryCalls;
             return std::unexpected(CircuitBreakerTestError::OperationFailed);
@@ -259,7 +259,7 @@ void test_circuit_breaker_expected_fallback() {
     assert(fallbackCalls == 1);
     assert(cb.state() == CircuitState::Open);
 
-    auto fallbackWhenOpen = cb.executeWithFallback(
+    auto fallbackWhenOpen = cb.execute_with_fallback(
         [&]() -> Result {
             ++primaryCalls;
             return 7;
@@ -288,15 +288,15 @@ void test_circuit_breaker_manual_clock_timeout() {
 
     BasicCircuitBreaker<ManualClock> cb(config);
 
-    cb.onFailure();
+    cb.on_failure();
     assert(cb.state() == CircuitState::Open);
 
     ManualClock::advance(std::chrono::milliseconds(999));
-    assert(!cb.allowRequest());
+    assert(!cb.allow_request());
     assert(cb.state() == CircuitState::Open);
 
     ManualClock::advance(std::chrono::milliseconds(1));
-    assert(cb.allowRequest());
+    assert(cb.allow_request());
     assert(cb.state() == CircuitState::HalfOpen);
 
     std::cout << "CircuitBreaker manual clock timeout tests passed!" << std::endl;
@@ -315,19 +315,19 @@ void test_circuit_breaker_half_open_probe_limit() {
 
     BasicCircuitBreaker<ManualClock> cb(config);
 
-    cb.onFailure();
+    cb.on_failure();
     assert(cb.state() == CircuitState::Open);
 
     ManualClock::advance(std::chrono::seconds(1));
-    assert(cb.allowRequest());
+    assert(cb.allow_request());
     assert(cb.state() == CircuitState::HalfOpen);
-    assert(!cb.allowRequest());
+    assert(!cb.allow_request());
 
-    cb.onSuccess();
+    cb.on_success();
     assert(cb.state() == CircuitState::HalfOpen);
-    assert(cb.allowRequest());
+    assert(cb.allow_request());
 
-    cb.onSuccess();
+    cb.on_success();
     assert(cb.state() == CircuitState::Closed);
 
     std::cout << "CircuitBreaker half-open probe limit tests passed!" << std::endl;
@@ -346,15 +346,15 @@ void test_circuit_breaker_force_open_uses_current_time() {
     BasicCircuitBreaker<ManualClock> cb(config);
 
     ManualClock::advance(std::chrono::seconds(10));
-    cb.forceOpen();
+    cb.force_open();
     assert(cb.state() == CircuitState::Open);
 
     ManualClock::advance(std::chrono::milliseconds(999));
-    assert(!cb.allowRequest());
+    assert(!cb.allow_request());
     assert(cb.state() == CircuitState::Open);
 
     ManualClock::advance(std::chrono::milliseconds(1));
-    assert(cb.allowRequest());
+    assert(cb.allow_request());
     assert(cb.state() == CircuitState::HalfOpen);
 
     std::cout << "CircuitBreaker force open timestamp tests passed!" << std::endl;
@@ -384,13 +384,13 @@ void test_stress_circuit_breaker() {
     for (int t = 0; t < numThreads; ++t) {
         threads.emplace_back([&, t]() {
             for (int i = 0; i < opsPerThread; ++i) {
-                if (cb.allowRequest()) {
+                if (cb.allow_request()) {
                     ++allowedRequests;
                     if (i % 10 == 0) {
-                        cb.onFailure();
+                        cb.on_failure();
                         ++failureOps;
                     } else {
-                        cb.onSuccess();
+                        cb.on_success();
                         ++successOps;
                     }
                 }
@@ -415,7 +415,7 @@ void test_stress_circuit_breaker() {
     std::cout << "  Allowed requests: " << allowedRequests << std::endl;
     std::cout << "  Success ops: " << successOps << std::endl;
     std::cout << "  Failure ops: " << failureOps << std::endl;
-    std::cout << "  Final state: " << cb.stateString() << std::endl;
+    std::cout << "  Final state: " << cb.state_string() << std::endl;
 
     std::cout << "CircuitBreaker stress test passed!" << std::endl;
 }
@@ -430,10 +430,10 @@ void test_stress_rate_limiter_correctness() {
     {
         CountingSemaphore limiter(limit);
         auto acquire = [&]() {
-            return limiter.tryAcquire();
+            return limiter.try_acquire();
         };
 
-        const auto result = runConcurrentAcquire(threadCount, attemptsPerThread, acquire);
+        const auto result = run_concurrent_acquire(threadCount, attemptsPerThread, acquire);
 
         std::cout << "  [CountingSemaphore - Exact Limit]" << std::endl;
         std::cout << "    Attempts: " << result.attempts << ", Acquired: " << result.acquired << std::endl;
@@ -441,57 +441,57 @@ void test_stress_rate_limiter_correctness() {
 
         assert(result.acquired == limit);
         assert(limiter.available() == 0);
-        assert(!limiter.tryAcquire());
+        assert(!limiter.try_acquire());
     }
 
     {
         TokenBucketLimiter limiter(0, limit);
         auto acquire = [&]() {
-            return limiter.tryAcquire();
+            return limiter.try_acquire();
         };
 
-        const auto result = runConcurrentAcquire(threadCount, attemptsPerThread, acquire);
+        const auto result = run_concurrent_acquire(threadCount, attemptsPerThread, acquire);
 
         std::cout << "  [TokenBucketLimiter - Exact Capacity]" << std::endl;
         std::cout << "    Attempts: " << result.attempts << ", Acquired: " << result.acquired << std::endl;
         std::cout << "    Duration: " << result.duration.count() << "ms" << std::endl;
 
         assert(result.acquired == limit);
-        assert(limiter.availableTokens() == 0.0);
-        assert(!limiter.tryAcquire());
+        assert(limiter.available_tokens() == 0.0);
+        assert(!limiter.try_acquire());
     }
 
     {
         SlidingWindowLimiter limiter(limit, std::chrono::hours(1));
         auto acquire = [&]() {
-            return limiter.tryAcquire();
+            return limiter.try_acquire();
         };
 
-        const auto result = runConcurrentAcquire(threadCount, attemptsPerThread, acquire);
+        const auto result = run_concurrent_acquire(threadCount, attemptsPerThread, acquire);
 
         std::cout << "  [SlidingWindowLimiter - Exact Window]" << std::endl;
         std::cout << "    Attempts: " << result.attempts << ", Acquired: " << result.acquired << std::endl;
         std::cout << "    Duration: " << result.duration.count() << "ms" << std::endl;
 
         assert(result.acquired == limit);
-        assert(!limiter.tryAcquire());
+        assert(!limiter.try_acquire());
     }
 
     {
         LeakyBucketLimiter limiter(0, limit);
         auto acquire = [&]() {
-            return limiter.tryAcquire();
+            return limiter.try_acquire();
         };
 
-        const auto result = runConcurrentAcquire(threadCount, attemptsPerThread, acquire);
+        const auto result = run_concurrent_acquire(threadCount, attemptsPerThread, acquire);
 
         std::cout << "  [LeakyBucketLimiter - Exact Capacity]" << std::endl;
         std::cout << "    Attempts: " << result.attempts << ", Acquired: " << result.acquired << std::endl;
         std::cout << "    Duration: " << result.duration.count() << "ms" << std::endl;
 
         assert(result.acquired == limit);
-        assert(limiter.currentWater() == static_cast<double>(limit));
-        assert(!limiter.tryAcquire());
+        assert(limiter.current_water() == static_cast<double>(limit));
+        assert(!limiter.try_acquire());
     }
 
     std::cout << "RateLimiter correctness stress test passed!" << std::endl;
@@ -514,7 +514,7 @@ void test_stress_rate_limiter() {
         for (int thread_index = 0; thread_index < threadCount; ++thread_index) {
             threads.emplace_back([&]() {
                 for (int i = 0; i < iterations; ++i) {
-                    if (sem.tryAcquire(1)) {
+                    if (sem.try_acquire(1)) {
                         ++acquired;
                         sem.release(1);
                     }
@@ -550,7 +550,7 @@ void test_stress_rate_limiter() {
         for (int thread_index = 0; thread_index < threadCount; ++thread_index) {
             threads.emplace_back([&]() {
                 for (int i = 0; i < iterations; ++i) {
-                    if (limiter.tryAcquire(1)) {
+                    if (limiter.try_acquire(1)) {
                         ++acquired;
                     }
                 }
@@ -584,7 +584,7 @@ void test_stress_rate_limiter() {
         for (int thread_index = 0; thread_index < threadCount; ++thread_index) {
             threads.emplace_back([&]() {
                 for (int i = 0; i < iterations / 2; ++i) {
-                    if (limiter.tryAcquire()) {
+                    if (limiter.try_acquire()) {
                         ++acquired;
                     }
                 }

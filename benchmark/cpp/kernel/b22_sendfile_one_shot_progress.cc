@@ -19,7 +19,7 @@ constexpr const char* kPath = "/tmp/galay_b22_sendfile_progress.dat";
 constexpr size_t kFileSize = 8 * 1024 * 1024;
 constexpr int kIterations = 8;
 
-bool closeFd(int fd)
+bool close_fd(int fd)
 {
     if (fd < 0) {
         return true;
@@ -31,7 +31,7 @@ bool closeFd(int fd)
     return false;
 }
 
-bool setNonBlock(int fd)
+bool set_non_block(int fd)
 {
     const int flags = ::fcntl(fd, F_GETFL, 0);
     if (flags < 0) {
@@ -45,7 +45,7 @@ bool setNonBlock(int fd)
     return false;
 }
 
-bool setSmallSendBuffer(int fd)
+bool set_small_send_buffer(int fd)
 {
     int size = 4096;
     if (::setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size)) == 0) {
@@ -55,12 +55,12 @@ bool setSmallSendBuffer(int fd)
     return false;
 }
 
-unsigned char patternAt(size_t index)
+unsigned char pattern_at(size_t index)
 {
     return static_cast<unsigned char>((index * 131u + 17u) & 0xffu);
 }
 
-bool createPatternFile()
+bool create_pattern_file()
 {
     int fd = ::open(kPath, O_CREAT | O_TRUNC | O_WRONLY, 0644);
     if (fd < 0) {
@@ -73,14 +73,14 @@ bool createPatternFile()
     while (written_total < kFileSize) {
         const size_t n = std::min(buffer.size(), kFileSize - written_total);
         for (size_t i = 0; i < n; ++i) {
-            buffer[i] = patternAt(written_total + i);
+            buffer[i] = pattern_at(written_total + i);
         }
         size_t written = 0;
         while (written < n) {
             const ssize_t rc = ::write(fd, buffer.data() + written, n - written);
             if (rc <= 0) {
                 std::cerr << "write file failed rc=" << rc << " errno=" << errno << "\n";
-                const bool closed = closeFd(fd);
+                const bool closed = close_fd(fd);
                 return closed && false;
             }
             written += static_cast<size_t>(rc);
@@ -88,10 +88,10 @@ bool createPatternFile()
         }
     }
 
-    return closeFd(fd);
+    return close_fd(fd);
 }
 
-bool drainReceiver(int fd, size_t& received)
+bool drain_receiver(int fd, size_t& received)
 {
     std::array<unsigned char, 16384> buffer{};
     while (true) {
@@ -99,7 +99,7 @@ bool drainReceiver(int fd, size_t& received)
         if (rc > 0) {
             const size_t n = static_cast<size_t>(rc);
             for (size_t i = 0; i < n; ++i) {
-                if (buffer[i] != patternAt(received + i)) {
+                if (buffer[i] != pattern_at(received + i)) {
                     std::cerr << "data mismatch at offset=" << (received + i) << "\n";
                     return false;
                 }
@@ -118,7 +118,7 @@ bool drainReceiver(int fd, size_t& received)
     }
 }
 
-bool runOneIteration()
+bool run_one_iteration()
 {
     int sockets[2] = {-1, -1};
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) != 0) {
@@ -126,9 +126,9 @@ bool runOneIteration()
         return false;
     }
 
-    bool ok = setNonBlock(sockets[0]);
-    ok = setNonBlock(sockets[1]) && ok;
-    ok = setSmallSendBuffer(sockets[0]) && ok;
+    bool ok = set_non_block(sockets[0]);
+    ok = set_non_block(sockets[1]) && ok;
+    ok = set_small_send_buffer(sockets[0]) && ok;
 
     int file_fd = ::open(kPath, O_RDONLY);
     if (file_fd < 0) {
@@ -144,11 +144,11 @@ bool runOneIteration()
 #ifdef USE_IOURING
             struct io_uring_cqe cqe{};
             cqe.res = 1;
-            completed = context.handleComplete(&cqe, GHandle{.fd = sockets[0]});
+            completed = context.handle_complete(&cqe, GHandle{.fd = sockets[0]});
 #else
-            completed = context.handleComplete(GHandle{.fd = sockets[0]});
+            completed = context.handle_complete(GHandle{.fd = sockets[0]});
 #endif
-            if (!drainReceiver(sockets[1], received)) {
+            if (!drain_receiver(sockets[1], received)) {
                 ok = false;
                 break;
             }
@@ -159,12 +159,12 @@ bool runOneIteration()
         ok = completed && context.m_result && context.m_result.value() == kFileSize && ok;
     }
 
-    ok = closeFd(file_fd) && ok;
-    ok = closeFd(sockets[0]) && ok;
-    if (!drainReceiver(sockets[1], received)) {
+    ok = close_fd(file_fd) && ok;
+    ok = close_fd(sockets[0]) && ok;
+    if (!drain_receiver(sockets[1], received)) {
         ok = false;
     }
-    ok = closeFd(sockets[1]) && ok;
+    ok = close_fd(sockets[1]) && ok;
 
     if (received != kFileSize) {
         std::cerr << "received size mismatch actual=" << received
@@ -178,17 +178,17 @@ bool runOneIteration()
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    if (!createPatternFile()) {
+    if (!create_pattern_file()) {
         return 1;
     }
 
     const auto started = std::chrono::steady_clock::now();
     for (int i = 0; i < kIterations; ++i) {
-        if (!runOneIteration()) {
+        if (!run_one_iteration()) {
             return 1;
         }
     }

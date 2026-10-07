@@ -14,33 +14,33 @@ using namespace galay::mysql;
 namespace
 {
 
-bool runScalarOne(MysqlClient& client, const char* label)
+bool run_scalar_one(MysqlClient& client, const char* label)
 {
     auto result = client.query("SELECT 1");
     if (!result) {
         std::cerr << label << " SELECT 1 failed: " << result.error().message() << std::endl;
         return false;
     }
-    if (result->rowCount() != 1 || result->row(0).getInt64(0, -1) != 1) {
+    if (result->row_count() != 1 || result->row(0).get_int64(0, -1) != 1) {
         std::cerr << label << " SELECT 1 returned unexpected result" << std::endl;
         return false;
     }
     return true;
 }
 
-std::expected<int64_t, MysqlError> fetchConnectionId(MysqlClient& client)
+std::expected<int64_t, MysqlError> fetch_connection_id(MysqlClient& client)
 {
     auto result = client.query("SELECT CONNECTION_ID()");
     if (!result) {
         return std::unexpected(result.error());
     }
-    if (result->rowCount() != 1) {
+    if (result->row_count() != 1) {
         return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "CONNECTION_ID returned no row"));
     }
-    return result->row(0).getInt64(0, -1);
+    return result->row(0).get_int64(0, -1);
 }
 
-bool killConnection(const mysql_test::DbTestConfig& cfg, int64_t connection_id)
+bool kill_connection(const mysql_test::DbTestConfig& cfg, int64_t connection_id)
 {
     MysqlClient killer;
     auto connect_result = killer.connect(cfg.host, cfg.port, cfg.user, cfg.password, cfg.database);
@@ -121,7 +121,7 @@ bool test_connection_refused_then_recover(const mysql_test::DbTestConfig& cfg)
         return false;
     }
 
-    const bool ok = runScalarOne(good_client, "recovered connection");
+    const bool ok = run_scalar_one(good_client, "recovered connection");
     good_client.close();
     return ok;
 }
@@ -137,7 +137,7 @@ bool test_killed_connection_then_reconnect(const mysql_test::DbTestConfig& cfg)
         return false;
     }
 
-    auto connection_id = fetchConnectionId(victim);
+    auto connection_id = fetch_connection_id(victim);
     if (!connection_id || *connection_id < 0) {
         std::cerr << "failed to fetch victim connection id";
         if (!connection_id) {
@@ -148,7 +148,7 @@ bool test_killed_connection_then_reconnect(const mysql_test::DbTestConfig& cfg)
         return false;
     }
 
-    if (!killConnection(cfg, *connection_id)) {
+    if (!kill_connection(cfg, *connection_id)) {
         victim.close();
         return false;
     }
@@ -176,7 +176,7 @@ bool test_killed_connection_then_reconnect(const mysql_test::DbTestConfig& cfg)
         return false;
     }
 
-    const bool ok = runScalarOne(fresh, "fresh connection");
+    const bool ok = run_scalar_one(fresh, "fresh connection");
     fresh.close();
     return ok;
 }
@@ -187,17 +187,17 @@ int main()
 {
     std::cout << "=== T12: MySQL Resilience Integration ===" << std::endl;
 
-    if (const int skip_code = mysql_test::requireIntegrationEnabledOrSkip("T12-MySQLResilience");
+    if (const int skip_code = mysql_test::require_integration_enabled_or_skip("T12-MySQLResilience");
         skip_code != 0) {
         return skip_code;
     }
 
-    const auto cfg = mysql_test::loadDbTestConfig();
-    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(cfg, "T12-MySQLResilience");
+    const auto cfg = mysql_test::load_db_test_config();
+    if (const int skip_code = mysql_test::require_db_test_config_or_skip(cfg, "T12-MySQLResilience");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printDbTestConfig(cfg);
+    mysql_test::print_db_test_config(cfg);
 
     if (!test_connection_refused_then_recover(cfg)) {
         return 1;

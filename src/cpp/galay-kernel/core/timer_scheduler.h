@@ -10,16 +10,16 @@
  * 使用方式：
  * @code
  * // 启动全局定时轮（程序初始化时）
- * TimerScheduler::getInstance()->start();
+ * TimerScheduler::get_instance()->start();
  *
  * // 添加定时器
  * auto timer = std::make_shared<CBTimer>(100ms, []() {
  *     // 超时回调
  * });
- * TimerScheduler::getInstance()->addTimer(timer);
+ * TimerScheduler::get_instance()->add_timer(timer);
  *
  * // 停止（程序退出时）
- * TimerScheduler::getInstance()->stop();
+ * TimerScheduler::get_instance()->stop();
  * @endcode
  */
 
@@ -49,7 +49,7 @@ public:
      * @brief 获取单例实例
      * @return 全局定时轮调度器指针
      */
-    static TimerScheduler* getInstance();
+    static TimerScheduler* get_instance();
 
     // 禁止拷贝和移动
     TimerScheduler(const TimerScheduler&) = delete;
@@ -74,26 +74,26 @@ public:
      * @param timer 定时器共享指针
      * @return true 添加成功，false 添加失败
      */
-    bool addTimer(Timer::ptr timer);
+    bool add_timer(Timer::ptr timer);
 
     /**
      * @brief 批量添加定时器（线程安全，无锁）
      * @param timers 定时器列表
      * @return 成功添加的数量
      */
-    size_t addTimerBatch(const std::vector<Timer::ptr>& timers);
+    size_t add_timer_batch(const std::vector<Timer::ptr>& timers);
 
     /**
      * @brief 检查是否正在运行
      * @return true 正在运行
      */
-    bool isRunning() const { return m_running.load(std::memory_order_acquire); }
+    bool is_running() const { return m_running.load(std::memory_order_acquire); }
 
     /**
      * @brief 获取定时轮 tick 间隔（纳秒）
      * @return tick 间隔
      */
-    uint64_t tickDuration() const { return m_timerManager.during(); }
+    uint64_t tick_duration() const { return m_timerManager.during(); }
 
     /**
      * @brief 获取定时器总数（近似值）
@@ -104,7 +104,7 @@ public:
 private:
     /**
      * @brief 构造单例对象
-     * @note 只能通过 getInstance() 获取实例
+     * @note 只能通过 get_instance() 获取实例
      */
     TimerScheduler();
 
@@ -117,7 +117,7 @@ private:
     /**
      * @brief 定时轮线程主循环
      */
-    void timerLoop();
+    void timer_loop();
 
 private:
     std::thread m_thread;                           ///< 定时轮线程

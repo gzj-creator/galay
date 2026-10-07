@@ -62,13 +62,13 @@ using namespace galay::kernel;
 using ::galay::utils::RingBuffer;
 
 template<typename SocketType>
-inline Task<void> runDefaultHttp1FallbackLoop(const char* log_tag,
+inline Task<void> run_default_http1_fallback_loop(const char* log_tag,
                                               galay::http::HttpConnImpl<SocketType>&& conn) {
     bool keep_alive = true;
     while (keep_alive) {
         galay::http::HttpRequest request;
-        auto reader = conn.getReader();
-        auto read_result = co_await reader.getRequest(request);
+        auto reader = conn.get_reader();
+        auto read_result = co_await reader.get_request(request);
         if (!read_result) {
             HTTP_LOG_DEBUG("[h1-fallback]",
                            "{} recv failed: {}",
@@ -77,15 +77,15 @@ inline Task<void> runDefaultHttp1FallbackLoop(const char* log_tag,
             break;
         }
 
-        keep_alive = request.header().isKeepAlive() && !request.header().isConnectionClose();
+        keep_alive = request.header().is_keep_alive() && !request.header().is_connection_close();
 
         auto response = galay::http::Http1_1ResponseBuilder()
             .status(galay::http::HttpStatusCode::NotFound_404)
             .header("Content-Type", "text/plain")
             .body("404 Not Found")
-            .buildMove();
-        auto writer = conn.getWriter();
-        auto write_result = co_await writer.sendResponse(response);
+            .build_move();
+        auto writer = conn.get_writer();
+        auto write_result = co_await writer.send_response(response);
         if (!write_result) {
             HTTP_LOG_DEBUG("[h1-fallback]",
                            "{} send failed: {}",
@@ -151,30 +151,30 @@ public:
     H2cServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; }
     H2cServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; }
     H2cServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; }
-    H2cServerBuilder& tcpNoDelay(bool v)               { m_config.tcp_no_delay = v; return *this; }
-    H2cServerBuilder& ioSchedulerCount(size_t v)       { m_config.io_scheduler_count = v; return *this; }
-    H2cServerBuilder& parallelSchedulerCount(size_t v)  { m_config.parallel_scheduler_count = v; return *this; }
-    H2cServerBuilder& maxConcurrentStreams(uint32_t v)  { m_config.max_concurrent_streams = v; return *this; }
-    H2cServerBuilder& initialWindowSize(uint32_t v)    { m_config.initial_window_size = v; return *this; }
-    H2cServerBuilder& maxFrameSize(uint32_t v)         { m_config.max_frame_size = v; return *this; }
-    H2cServerBuilder& maxHeaderListSize(uint32_t v)    { m_config.max_header_list_size = v; return *this; }
-    H2cServerBuilder& enablePush(bool v)               { m_config.enable_push = v; return *this; }
-    H2cServerBuilder& pingEnabled(bool v)              { m_config.ping_enabled = v; return *this; }
-    H2cServerBuilder& pingInterval(std::chrono::milliseconds v) { m_config.ping_interval = v; return *this; }
-    H2cServerBuilder& pingTimeout(std::chrono::milliseconds v) { m_config.ping_timeout = v; return *this; }
-    H2cServerBuilder& settingsAckTimeout(std::chrono::milliseconds v) { m_config.settings_ack_timeout = v; return *this; }
-    H2cServerBuilder& gracefulShutdownRtt(std::chrono::milliseconds v) { m_config.graceful_shutdown_rtt = v; return *this; }
-    H2cServerBuilder& gracefulShutdownTimeout(std::chrono::milliseconds v) { m_config.graceful_shutdown_timeout = v; return *this; }
-    H2cServerBuilder& flowControlTargetWindow(uint32_t v) { m_config.flow_control_target_window = v; return *this; }
-    H2cServerBuilder& flowControlStrategy(Http2FlowControlStrategy v) {
+    H2cServerBuilder& tcp_no_delay(bool v)               { m_config.tcp_no_delay = v; return *this; }
+    H2cServerBuilder& io_scheduler_count(size_t v)       { m_config.io_scheduler_count = v; return *this; }
+    H2cServerBuilder& parallel_scheduler_count(size_t v)  { m_config.parallel_scheduler_count = v; return *this; }
+    H2cServerBuilder& max_concurrent_streams(uint32_t v)  { m_config.max_concurrent_streams = v; return *this; }
+    H2cServerBuilder& initial_window_size(uint32_t v)    { m_config.initial_window_size = v; return *this; }
+    H2cServerBuilder& max_frame_size(uint32_t v)         { m_config.max_frame_size = v; return *this; }
+    H2cServerBuilder& max_header_list_size(uint32_t v)    { m_config.max_header_list_size = v; return *this; }
+    H2cServerBuilder& enable_push(bool v)               { m_config.enable_push = v; return *this; }
+    H2cServerBuilder& ping_enabled(bool v)              { m_config.ping_enabled = v; return *this; }
+    H2cServerBuilder& ping_interval(std::chrono::milliseconds v) { m_config.ping_interval = v; return *this; }
+    H2cServerBuilder& ping_timeout(std::chrono::milliseconds v) { m_config.ping_timeout = v; return *this; }
+    H2cServerBuilder& settings_ack_timeout(std::chrono::milliseconds v) { m_config.settings_ack_timeout = v; return *this; }
+    H2cServerBuilder& graceful_shutdown_rtt(std::chrono::milliseconds v) { m_config.graceful_shutdown_rtt = v; return *this; }
+    H2cServerBuilder& graceful_shutdown_timeout(std::chrono::milliseconds v) { m_config.graceful_shutdown_timeout = v; return *this; }
+    H2cServerBuilder& flow_control_target_window(uint32_t v) { m_config.flow_control_target_window = v; return *this; }
+    H2cServerBuilder& flow_control_strategy(Http2FlowControlStrategy v) {
         m_config.flow_control_strategy = std::move(v);
         return *this;
     }
-    H2cServerBuilder& streamHandler(Http2ConnectionHandler handler) {
+    H2cServerBuilder& stream_handler(Http2ConnectionHandler handler) {
         m_config.stream_handler = std::move(handler);
         return *this;
     }
-    H2cServerBuilder& activeConnHandler(Http2ActiveConnHandler handler) {
+    H2cServerBuilder& active_conn_handler(Http2ActiveConnHandler handler) {
         m_config.active_conn_handler = std::move(handler);
         return *this;
     }
@@ -183,10 +183,10 @@ public:
      * @param path 需要与 request `:path` 精确匹配的路径。
      * @param response 由 builder 移动保存的静态响应配置。
      * @return 当前 builder，支持链式调用。
-     * @note 该接口只配置路由，不启动阻塞 I/O，也不改变 streamHandler/activeConnHandler API。
+     * @note 该接口只配置路由，不启动阻塞 I/O，也不改变 stream_handler/active_conn_handler API。
      */
-    H2cServerBuilder& staticResponse(std::string path, H2StaticResponse response) {
-        m_config.static_routes.push_back(makeH2StaticRoute(std::move(path), std::move(response)));
+    H2cServerBuilder& static_response(std::string path, H2StaticResponse response) {
+        m_config.static_routes.push_back(make_h2_static_route(std::move(path), std::move(response)));
         return *this;
     }
     /**
@@ -196,18 +196,18 @@ public:
      * @return 当前 builder，支持链式调用。
      * @note 该入口只启用 HTTP/2 DATA frame 用户态发送；h2 TLS 不使用 kernel sendfile。
      */
-    H2cServerBuilder& staticFiles(std::string prefix, H2StaticFileConfig config) {
+    H2cServerBuilder& static_files(std::string prefix, H2StaticFileConfig config) {
         m_config.static_file_mounts.push_back(
-            makeH2StaticFileMount(std::move(prefix), std::move(config)));
+            make_h2_static_file_mount(std::move(prefix), std::move(config)));
         return *this;
     }
-    H2cServerBuilder& sequentialAffinity(size_t io_count, size_t parallel_count) {
+    H2cServerBuilder& sequential_affinity(size_t io_count, size_t parallel_count) {
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Sequential;
         m_config.affinity.seq_io_count = io_count;
         m_config.affinity.seq_parallel_count = parallel_count;
         return *this;
     }
-    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus) {
+    bool custom_affinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus) {
         if (io_cpus.size() != m_config.io_scheduler_count ||
             parallel_cpus.size() != m_config.parallel_scheduler_count) {
             return false;
@@ -218,8 +218,8 @@ public:
         return true;
     }
     H2cServer build() const;
-    H2cServerConfig buildConfig() const {
-        return Http2Conn::normalizeSettingsConfig(m_config);
+    H2cServerConfig build_config() const {
+        return Http2Conn::normalize_settings_config(m_config);
     }
 private:
     H2cServerConfig m_config;
@@ -238,15 +238,15 @@ enum class DetectedProtocol {
 /**
  * @brief 判断首字节是否像 HTTP method（大写 ASCII 字母）
  */
-inline bool looksLikeHttpMethod(const char* buf) {
+inline bool looks_like_http_method(const char* buf) {
     return buf[0] >= 'A' && buf[0] <= 'Z';
 }
 
 /**
  * @brief 从 RingBuffer 的 iovec 拷贝 n 字节到 buf（不 consume）
  */
-inline void peekRingBuffer(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& rb, char* buf, size_t n) {
-    auto iovecs = borrowReadIovecs(rb);
+inline void peek_ring_buffer(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& rb, char* buf, size_t n) {
+    auto iovecs = borrow_read_iovecs(rb);
     size_t copied = 0;
     for (const auto& iov : iovecs) {
         size_t to_copy = std::min(iov.iov_len, n - copied);
@@ -259,10 +259,10 @@ inline void peekRingBuffer(RingBuffer<galay::utils::RingBufferBackendStrategy::M
 /**
  * @brief 把 RingBuffer 全部数据取出到 string 并 consume
  */
-inline std::string drainRingBuffer(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& rb) {
+inline std::string drain_ring_buffer(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& rb) {
     std::string data;
     data.reserve(rb.readable());
-    auto iovecs = borrowReadIovecs(rb);
+    auto iovecs = borrow_read_iovecs(rb);
     for (const auto& iov : iovecs) {
         data.append(static_cast<const char*>(iov.iov_base), iov.iov_len);
     }
@@ -270,7 +270,7 @@ inline std::string drainRingBuffer(RingBuffer<galay::utils::RingBufferBackendStr
     return data;
 }
 
-inline void wakeTcpAcceptLoops(const std::string& host, uint16_t port, size_t attempts) {
+inline void wake_tcp_accept_loops(const std::string& host, uint16_t port, size_t attempts) {
     if (attempts == 0 || port == 0) {
         return;
     }
@@ -298,7 +298,7 @@ inline void wakeTcpAcceptLoops(const std::string& host, uint16_t port, size_t at
     }
 }
 
-inline void waitForLoopDrain(const std::atomic<size_t>& loop_count,
+inline void wait_for_loop_drain(const std::atomic<size_t>& loop_count,
                              std::chrono::milliseconds timeout) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (loop_count.load(std::memory_order_acquire) > 0 &&
@@ -320,9 +320,9 @@ class H2cServer
 {
 public:
     explicit H2cServer(const H2cServerConfig& config = H2cServerConfig())
-        : m_runtime(RuntimeBuilder().ioSchedulerCount(config.io_scheduler_count)
-                                   .parallelSchedulerCount(config.parallel_scheduler_count)
-                                   .applyAffinity(config.affinity)
+        : m_runtime(RuntimeBuilder().io_scheduler_count(config.io_scheduler_count)
+                                   .parallel_scheduler_count(config.parallel_scheduler_count)
+                                   .apply_affinity(config.affinity)
                                    .build())
         , m_config(config)
         , m_stream_handler(config.stream_handler)
@@ -339,43 +339,43 @@ public:
     H2cServer& operator=(const H2cServer&) = delete;
     
     void start() {
-        startInternal();
+        start_internal();
     }
 
     void start(Http2ConnectionHandler handler) {
         m_stream_handler = std::move(handler);
         m_active_conn_handler = nullptr;
-        startInternal();
+        start_internal();
     }
 
     void start(Http2ActiveConnHandler handler) {
         m_active_conn_handler = std::move(handler);
-        startInternal();
+        start_internal();
     }
 
-    void setHttp1Fallback(Http1FallbackHandler handler) {
+    void set_http1_fallback(Http1FallbackHandler handler) {
         m_http1_fallback = std::move(handler);
     }
     
     void stop() {
         if (!m_running.load()) {
-            stopStartedPlugins();
+            stop_started_plugins();
             return;
         }
 
         m_running.store(false);
         HTTP_LOG_INFO("[h2c] [server] [stopping]", "port={}", m_config.port);
 
-        wakeTcpAcceptLoops(m_config.host,
+        wake_tcp_accept_loops(m_config.host,
                            m_config.port,
                            m_server_loop_count.load(std::memory_order_acquire));
-        waitForLoopDrain(m_server_loop_count, std::chrono::milliseconds(100));
-        stopStartedPlugins();
+        wait_for_loop_drain(m_server_loop_count, std::chrono::milliseconds(100));
+        stop_started_plugins();
         m_runtime.stop();
         HTTP_LOG_INFO("[h2c] [server] [stopped]", "port={}", m_config.port);
     }
     
-    bool isRunning() const {
+    bool is_running() const {
         return m_running.load();
     }
 
@@ -384,12 +384,12 @@ public:
      * @return 服务器正在运行且已有 listener 可接受连接时返回 true。
      * @note 该查询无锁、不阻塞，供启动编排和测试等待可观测就绪状态。
      */
-    bool isReady() const {
+    bool is_ready() const {
         return m_running.load(std::memory_order_acquire) &&
                m_listening_loop_count.load(std::memory_order_acquire) > 0;
     }
     
-    Runtime& getRuntime() {
+    Runtime& get_runtime() {
         return m_runtime;
     }
 
@@ -403,7 +403,7 @@ public:
      * - `stop()` 在 runtime 停止前按注册反序调用。
      * - `handle()` 返回 false 时停止后续插件，并跳过当前连接的 HTTP/2 处理。
      */
-    bool addAcceptPlugin(std::unique_ptr<galay::http::plugin::AcceptPlugin<AsyncTcpSocket>> plugin) {
+    bool add_accept_plugin(std::unique_ptr<galay::http::plugin::AcceptPlugin<AsyncTcpSocket>> plugin) {
         if (m_running.load() || !plugin) {
             return false;
         }
@@ -419,17 +419,17 @@ private:
      *          blocking task；server 直接使用裸 scheduler 投递 root task 时必须显式绑定。
      */
     template <typename T>
-    bool scheduleRuntimeTask(Scheduler* scheduler, Task<T> task) {
-        if (scheduler == nullptr || !task.isValid()) {
+    bool schedule_runtime_task(Scheduler* scheduler, Task<T> task) {
+        if (scheduler == nullptr || !task.is_valid()) {
             return false;
         }
-        TaskRef task_ref = galay::kernel::detail::TaskAccess::detachTask(std::move(task));
-        galay::kernel::detail::setTaskRuntime(task_ref, &m_runtime);
-        galay::kernel::detail::setTaskScheduler(task_ref, scheduler);
+        TaskRef task_ref = galay::kernel::detail::TaskAccess::detach_task(std::move(task));
+        galay::kernel::detail::set_task_runtime(task_ref, &m_runtime);
+        galay::kernel::detail::set_task_scheduler(task_ref, scheduler);
         return scheduler->schedule(std::move(task_ref));
     }
 
-    bool startInternal() {
+    bool start_internal() {
         if (m_running.load()) {
             HTTP_LOG_WARN("[h2c] [server]", "already running");
             return false;
@@ -448,7 +448,7 @@ private:
             return false;
         }
 
-        if (!startPlugins()) {
+        if (!start_plugins()) {
             m_runtime.stop();
             return false;
         }
@@ -459,12 +459,12 @@ private:
                       m_config.host,
                       m_config.port);
 
-        // Spawn one serverLoop per IO scheduler with SO_REUSEPORT
-        size_t io_scheduler_count = m_runtime.getIOSchedulerCount();
+        // Spawn one server_loop per IO scheduler with SO_REUSEPORT
+        size_t io_scheduler_count = m_runtime.get_io_scheduler_count();
         for (size_t i = 0; i < io_scheduler_count; i++) {
-            auto* scheduler = m_runtime.getIOScheduler(i);
+            auto* scheduler = m_runtime.get_io_scheduler(i);
             if (scheduler) {
-                auto loop = serverLoop(scheduler);
+                auto loop = server_loop(scheduler);
                 const size_t previous_loop_count =
                     m_server_loop_count.fetch_add(1, std::memory_order_acq_rel);
                 if (previous_loop_count == std::numeric_limits<size_t>::max()) {
@@ -472,7 +472,7 @@ private:
                                   "previous={}",
                                   previous_loop_count);
                 }
-                if (!scheduleRuntimeTask(scheduler, std::move(loop))) {
+                if (!schedule_runtime_task(scheduler, std::move(loop))) {
                     const size_t before_sub =
                         m_server_loop_count.fetch_sub(1, std::memory_order_acq_rel);
                     if (before_sub == 0) {
@@ -482,11 +482,11 @@ private:
                     }
                     HTTP_LOG_ERROR("[h2c] [schedule-fail]", "server-loop");
                     m_running.store(false);
-                    wakeTcpAcceptLoops(m_config.host,
+                    wake_tcp_accept_loops(m_config.host,
                                        m_config.port,
                                        m_server_loop_count.load(std::memory_order_acquire));
-                    waitForLoopDrain(m_server_loop_count, std::chrono::milliseconds(100));
-                    stopStartedPlugins();
+                    wait_for_loop_drain(m_server_loop_count, std::chrono::milliseconds(100));
+                    stop_started_plugins();
                     m_runtime.stop();
                     return false;
                 }
@@ -496,8 +496,8 @@ private:
         return true;
     }
 
-    Task<void> serverLoop(IOScheduler* scheduler) {
-        // 阶段 1：注册 serverLoop 退出守卫，确保循环结束时扣减运行计数
+    Task<void> server_loop(IOScheduler* scheduler) {
+        // 阶段 1：注册 server_loop 退出守卫，确保循环结束时扣减运行计数
         struct LoopExitGuard {
             H2cServer* server;
             bool listening = false;
@@ -510,11 +510,11 @@ private:
         } guard{this};
 
         // 阶段 2：创建当前 IO 调度器专属的 listener socket
-        // Each serverLoop creates its own listener socket
+        // Each server_loop creates its own listener socket
         AsyncTcpSocket listener(IPType::IPV4);
 
         // 阶段 3：配置 listener 复用地址，允许快速重启绑定同一地址
-        auto reuse_result = listener.option().handleReuseAddr();
+        auto reuse_result = listener.option().handle_reuse_addr();
         if (!reuse_result) {
             HTTP_LOG_ERROR("[socket] [reuseaddr-fail]",
                            "error={}",
@@ -523,7 +523,7 @@ private:
         }
 
         // 阶段 4：配置 listener 复用端口，支持多 IO 调度器并行 accept
-        auto reuse_port_result = listener.option().handleReusePort();
+        auto reuse_port_result = listener.option().handle_reuse_port();
         if (!reuse_port_result) {
             HTTP_LOG_ERROR("[socket] [reuseport-fail]",
                            "error={}",
@@ -532,7 +532,7 @@ private:
         }
 
         // 阶段 5：设置 listener 为非阻塞模式，交给协程调度器驱动 IO
-        auto nonblock_result = listener.option().handleNonBlock();
+        auto nonblock_result = listener.option().handle_non_block();
         if (!nonblock_result) {
             HTTP_LOG_ERROR("[socket] [nonblock-fail]",
                            "error={}",
@@ -587,7 +587,7 @@ private:
             // 阶段 10：根据 accept 得到的句柄构造 TCP 客户端 socket
             AsyncTcpSocket client_socket(*accept_result);
             // 阶段 11：配置客户端 socket 为非阻塞模式
-            auto nonblock_result = client_socket.option().handleNonBlock();
+            auto nonblock_result = client_socket.option().handle_non_block();
             if (!nonblock_result) {
                 HTTP_LOG_ERROR("[socket] [nonblock-fail] [client]",
                                "error={}",
@@ -595,14 +595,14 @@ private:
                 continue;
             }
             if (m_config.tcp_no_delay) {
-                auto nodelay_result = client_socket.option().handleTcpNoDelay();
+                auto nodelay_result = client_socket.option().handle_tcp_no_delay();
                 if (!nodelay_result) {
                     HTTP_LOG_DEBUG("[socket] [nodelay]", "failed to set TCP_NODELAY");
                 }
             }
 
             // 阶段 12：执行 accept plugin，允许插件在协议检测前拦截连接
-            auto continuing_result = co_await runAcceptPlugins(client_socket, client_host);
+            auto continuing_result = co_await run_accept_plugins(client_socket, client_host);
             bool continuing = continuing_result.value_or(false);
             if (!continuing) {
                 auto close_result = co_await client_socket.close();
@@ -616,8 +616,8 @@ private:
 
             // 阶段 13：把 h2c 连接处理任务轮询分发到 IO 调度器，避免 loopback
             // SO_REUSEPORT 哈希倾斜时所有连接集中在单个 accept scheduler。
-            auto* target_scheduler = m_runtime.getNextIOScheduler();
-            if (!scheduleTask(target_scheduler, handleConnection(std::move(client_socket)))) {
+            auto* target_scheduler = m_runtime.get_next_io_scheduler();
+            if (!schedule_task(target_scheduler, handle_connection(std::move(client_socket)))) {
                 HTTP_LOG_ERROR("[h2c] [schedule-fail]", "handle-connection");
                 auto close_result = co_await client_socket.close();
                 if (!close_result) {
@@ -628,7 +628,7 @@ private:
             }
         }
 
-        // 阶段 13：serverLoop 退出前关闭 listener socket
+        // 阶段 13：server_loop 退出前关闭 listener socket
         auto close_result = co_await listener.close();
         if (!close_result) {
             HTTP_LOG_WARN("[socket] [close-fail] [listener]",
@@ -641,12 +641,12 @@ private:
     /**
      * @brief 处理新连接
      */
-    Task<void> handleConnection(AsyncTcpSocket socket) {
+    Task<void> handle_connection(AsyncTcpSocket socket) {
         Http2ConnImpl<AsyncTcpSocket> conn(std::move(socket));
 
         // 配置本地设置
-        auto local_settings = Http2Conn::makeSettingsFrameFromConfig(m_config);
-        if (conn.applyLocalSettings(local_settings) != Http2ErrorCode::NoError) {
+        auto local_settings = Http2Conn::make_settings_frame_from_config(m_config);
+        if (conn.apply_local_settings(local_settings) != Http2ErrorCode::NoError) {
             auto close_result = co_await conn.close();
             if (!close_result) {
                 HTTP_LOG_WARN("[h2c] [close-fail]",
@@ -655,20 +655,20 @@ private:
             }
             co_return;
         }
-        conn.runtimeConfig().from(m_config);
+        conn.runtime_config().from(m_config);
 
         DetectedProtocol protocol = DetectedProtocol::Unknown;
         galay::http::HttpRequestHeader upgrade_request;
-        co_await detectProtocol(conn, protocol, upgrade_request);
+        co_await detect_protocol(conn, protocol, upgrade_request);
 
         switch (protocol) {
         case DetectedProtocol::H2cPriorKnowledge:
         case DetectedProtocol::H2cUpgrade: {
             if (protocol == DetectedProtocol::H2cUpgrade) {
-                auto decoded = Http2Conn::decodeH2cUpgradeSettingsHeader(
-                    upgrade_request.headerPairs().getValue("HTTP2-Settings"));
+                auto decoded = Http2Conn::decode_h2c_upgrade_settings_header(
+                    upgrade_request.header_pairs().get_value("HTTP2-Settings"));
                 if (!decoded.has_value() ||
-                    conn.applyPeerSettings(*decoded) != Http2ErrorCode::NoError) {
+                    conn.apply_peer_settings(*decoded) != Http2ErrorCode::NoError) {
                     auto close_result = co_await conn.close();
                     if (!close_result) {
                         HTTP_LOG_WARN("[h2c] [close-fail]",
@@ -679,8 +679,8 @@ private:
                 }
             }
             // 初始化 StreamManager 并启动帧分发循环
-            conn.initStreamManager();
-            auto* mgr = conn.streamManager();
+            conn.init_stream_manager();
+            auto* mgr = conn.stream_manager();
             HTTP_LOG_DEBUG("[h2] [stream-mgr]", "starting");
             if (m_active_conn_handler) {
                 co_await mgr->start(m_active_conn_handler);
@@ -697,7 +697,7 @@ private:
             break;
         }
         case DetectedProtocol::Http1:
-            co_await handleHttp1Fallback(std::move(conn), std::move(upgrade_request));
+            co_await handle_http1_fallback(std::move(conn), std::move(upgrade_request));
             break;
         default:
             HTTP_LOG_ERROR("[protocol] [detect-fail]", "h2c unknown");
@@ -713,10 +713,10 @@ private:
         co_return;
     }
 
-    Task<void> readAtLeast(Http2ConnImpl<AsyncTcpSocket>& conn, size_t n) {
-        auto& rb = conn.ringBuffer();
+    Task<void> read_at_least(Http2ConnImpl<AsyncTcpSocket>& conn, size_t n) {
+        auto& rb = conn.ring_buffer();
         while (rb.readable() < n) {
-            auto write_iovecs = borrowWriteIovecs(rb);
+            auto write_iovecs = borrow_write_iovecs(rb);
             auto result = co_await conn.socket().readv(write_iovecs.storage(), write_iovecs.size());
             if (!result || result.value() == 0) {
                 co_return;
@@ -732,26 +732,26 @@ private:
      * @param protocol 输出协议类型
      * @param upgrade_request 输出首个 HTTP/1.1 请求头（Upgrade/Http1 路径）
      */
-    Task<void> detectProtocol(Http2ConnImpl<AsyncTcpSocket>& conn,
+    Task<void> detect_protocol(Http2ConnImpl<AsyncTcpSocket>& conn,
                               DetectedProtocol& protocol,
                               galay::http::HttpRequestHeader& upgrade_request) {
         protocol = DetectedProtocol::Unknown;
-        auto& rb = conn.ringBuffer();
+        auto& rb = conn.ring_buffer();
 
-        co_await readAtLeast(conn, kHttp2ConnectionPrefaceLength);
+        co_await read_at_least(conn, kHttp2ConnectionPrefaceLength);
         if (rb.readable() < kHttp2ConnectionPrefaceLength) {
             co_return;
         }
 
         char peek_buf[kHttp2ConnectionPrefaceLength];
-        peekRingBuffer(rb, peek_buf, kHttp2ConnectionPrefaceLength);
+        peek_ring_buffer(rb, peek_buf, kHttp2ConnectionPrefaceLength);
 
         // ===== Prior Knowledge =====
         if (std::memcmp(peek_buf, kHttp2ConnectionPreface.data(), kHttp2ConnectionPrefaceLength) == 0) {
             HTTP_LOG_DEBUG("[h2] [prior-knowledge]", "detected");
             rb.consume(kHttp2ConnectionPrefaceLength);
 
-            auto settings_result = co_await conn.sendSettings();
+            auto settings_result = co_await conn.send_settings();
             if (!settings_result) {
                 co_return;
             }
@@ -761,18 +761,18 @@ private:
         }
 
         // ===== HTTP/1.1 (Upgrade or fallback) =====
-        if (looksLikeHttpMethod(peek_buf)) {
+        if (looks_like_http_method(peek_buf)) {
             HTTP_LOG_DEBUG("[h1] [detect]", "h2c fallback or upgrade");
 
-            std::string header_data = drainRingBuffer(rb);
+            std::string header_data = drain_ring_buffer(rb);
             while (header_data.find("\r\n\r\n") == std::string::npos && header_data.size() < 8192) {
-                auto write_iovecs = borrowWriteIovecs(rb);
+                auto write_iovecs = borrow_write_iovecs(rb);
                 auto result = co_await conn.socket().readv(write_iovecs.storage(), write_iovecs.size());
                 if (!result || result.value() == 0) {
                     co_return;
                 }
                 rb.produce(result.value());
-                header_data.append(drainRingBuffer(rb));
+                header_data.append(drain_ring_buffer(rb));
             }
 
             size_t header_end = header_data.find("\r\n\r\n");
@@ -781,7 +781,7 @@ private:
                 co_return;
             }
 
-            auto parse_result = upgrade_request.fromString(
+            auto parse_result = upgrade_request.from_string(
                 std::string_view(header_data.data(), header_end + 4));
             if (parse_result.first != galay::http::kNoError || parse_result.second <= 0) {
                 HTTP_LOG_ERROR("[header] [parse-fail]",
@@ -790,14 +790,14 @@ private:
                 co_return;
             }
 
-            auto& headers = upgrade_request.headerPairs();
-            std::string upgrade_value = headers.getValue("Upgrade");
+            auto& headers = upgrade_request.header_pairs();
+            std::string upgrade_value = headers.get_value("Upgrade");
             std::transform(upgrade_value.begin(), upgrade_value.end(), upgrade_value.begin(), [](unsigned char ch) {
                 return static_cast<char>(std::tolower(ch));
             });
 
             bool has_upgrade = (upgrade_value == "h2c");
-            bool has_http2_settings = headers.hasKey("HTTP2-Settings");
+            bool has_http2_settings = headers.has_key("HTTP2-Settings");
 
             if (has_upgrade && has_http2_settings) {
                 HTTP_LOG_DEBUG("[h1] [upgrade] [h2c]", "detected");
@@ -826,7 +826,7 @@ private:
                 // HTTP 头后面可能已带部分 Connection Preface，写入 RingBuffer
                 if (header_data.size() > header_end + 4) {
                     const size_t remaining = header_data.size() - header_end - 4;
-                    const size_t written = rb.tryWriteBatch(
+                    const size_t written = rb.try_write_batch(
                         header_data.data() + header_end + 4, remaining);
                     if (written != remaining) {
                         HTTP_LOG_ERROR("[upgrade] [buffer-full]", "h2c preface");
@@ -834,13 +834,13 @@ private:
                     }
                 }
 
-                co_await readAtLeast(conn, kHttp2ConnectionPrefaceLength);
+                co_await read_at_least(conn, kHttp2ConnectionPrefaceLength);
                 if (rb.readable() < kHttp2ConnectionPrefaceLength) {
                     HTTP_LOG_ERROR("[preface] [recv-fail]", "h2c");
                     co_return;
                 }
 
-                peekRingBuffer(rb, peek_buf, kHttp2ConnectionPrefaceLength);
+                peek_ring_buffer(rb, peek_buf, kHttp2ConnectionPrefaceLength);
                 if (std::memcmp(peek_buf, kHttp2ConnectionPreface.data(), kHttp2ConnectionPrefaceLength) != 0) {
                     HTTP_LOG_ERROR("[preface] [invalid]", "after upgrade");
                     co_return;
@@ -849,7 +849,7 @@ private:
 
                 rb.consume(kHttp2ConnectionPrefaceLength);
 
-                auto settings_result = co_await conn.sendSettings();
+                auto settings_result = co_await conn.send_settings();
                 if (!settings_result) {
                     co_return;
                 }
@@ -862,7 +862,7 @@ private:
             // 回灌到 RingBuffer，交给标准 HttpReader 继续解析。
             if (!header_data.empty() && !m_http1_fallback) {
                 const size_t written =
-                    rb.tryWriteBatch(header_data.data(), header_data.size());
+                    rb.try_write_batch(header_data.data(), header_data.size());
                 if (written != header_data.size()) {
                     HTTP_LOG_ERROR("[protocol] [buffer-full]", "http1 fallback");
                     co_return;
@@ -876,10 +876,10 @@ private:
         co_return;
     }
 
-    Task<void> handleHttp1Fallback(Http2ConnImpl<AsyncTcpSocket>&& h2_conn,
+    Task<void> handle_http1_fallback(Http2ConnImpl<AsyncTcpSocket>&& h2_conn,
                                    galay::http::HttpRequestHeader first_request_header) {
         galay::http::HttpConnImpl<AsyncTcpSocket> conn(
-            std::move(h2_conn.socket()), std::move(h2_conn.ringBuffer()));
+            std::move(h2_conn.socket()), std::move(h2_conn.ring_buffer()));
 
         if (m_http1_fallback) {
             co_await m_http1_fallback(std::move(conn), std::move(first_request_header));
@@ -887,16 +887,16 @@ private:
         }
 
         // 默认行为：进入 HTTP/1.1 处理链路，而不是直接返回 505。
-        co_await runDefaultHttp1FallbackLoop("[h2c] [h1-fallback]", std::move(conn));
+        co_await run_default_http1_fallback_loop("[h2c] [h1-fallback]", std::move(conn));
         co_return;
     }
 
-    bool startPlugins() {
+    bool start_plugins() {
         m_started_plugin_count = 0;
         for (auto& plugin : m_accept_plugins) {
             if (!plugin->start(m_runtime)) {
                 HTTP_LOG_ERROR("[accept-plugin] [start-fail]", "error=start returned false");
-                stopStartedPlugins();
+                stop_started_plugins();
                 return false;
             }
             ++m_started_plugin_count;
@@ -904,16 +904,16 @@ private:
         return true;
     }
 
-    void stopStartedPlugins() noexcept {
+    void stop_started_plugins() noexcept {
         while (m_started_plugin_count > 0) {
             --m_started_plugin_count;
             m_accept_plugins[m_started_plugin_count]->stop();
         }
     }
 
-    Task<bool> runAcceptPlugins(AsyncTcpSocket& client_socket, const Host& client_host) {
+    Task<bool> run_accept_plugins(AsyncTcpSocket& client_socket, const Host& client_host) {
         for (auto& plugin : m_accept_plugins) {
-            auto plugin_result = co_await plugin->handle(getRuntime(), client_socket, client_host);
+            auto plugin_result = co_await plugin->handle(get_runtime(), client_socket, client_host);
             if (!plugin_result) {
                 HTTP_LOG_ERROR("[accept-plugin] [task-fail]",
                                "error={}",
@@ -942,7 +942,7 @@ private:
 };
 
 inline H2cServer H2cServerBuilder::build() const {
-    return H2cServer(Http2Conn::normalizeSettingsConfig(m_config));
+    return H2cServer(Http2Conn::normalize_settings_config(m_config));
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
@@ -995,16 +995,16 @@ public:
     H2ServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; }
     H2ServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; }
     H2ServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; }
-    H2ServerBuilder& tcpNoDelay(bool v)               { m_config.tcp_no_delay = v; return *this; }
-    H2ServerBuilder& ioSchedulerCount(size_t v)       { m_config.io_scheduler_count = v; return *this; }
-    H2ServerBuilder& parallelSchedulerCount(size_t v)  { m_config.parallel_scheduler_count = v; return *this; }
-    H2ServerBuilder& sequentialAffinity(size_t io_count, size_t parallel_count) {
+    H2ServerBuilder& tcp_no_delay(bool v)               { m_config.tcp_no_delay = v; return *this; }
+    H2ServerBuilder& io_scheduler_count(size_t v)       { m_config.io_scheduler_count = v; return *this; }
+    H2ServerBuilder& parallel_scheduler_count(size_t v)  { m_config.parallel_scheduler_count = v; return *this; }
+    H2ServerBuilder& sequential_affinity(size_t io_count, size_t parallel_count) {
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Sequential;
         m_config.affinity.seq_io_count = io_count;
         m_config.affinity.seq_parallel_count = parallel_count;
         return *this;
     }
-    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus) {
+    bool custom_affinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus) {
         if (io_cpus.size() != m_config.io_scheduler_count ||
             parallel_cpus.size() != m_config.parallel_scheduler_count) {
             return false;
@@ -1014,32 +1014,32 @@ public:
         m_config.affinity.custom_parallel_cpus = std::move(parallel_cpus);
         return true;
     }
-    H2ServerBuilder& certPath(std::string v)          { m_config.cert_path = std::move(v); return *this; }
-    H2ServerBuilder& keyPath(std::string v)           { m_config.key_path = std::move(v); return *this; }
-    H2ServerBuilder& caPath(std::string v)            { m_config.ca_path = std::move(v); return *this; }
-    H2ServerBuilder& verifyPeer(bool v)               { m_config.verify_peer = v; return *this; }
-    H2ServerBuilder& verifyDepth(int v)               { m_config.verify_depth = v; return *this; }
-    H2ServerBuilder& maxConcurrentStreams(uint32_t v) { m_config.max_concurrent_streams = v; return *this; }
-    H2ServerBuilder& initialWindowSize(uint32_t v)    { m_config.initial_window_size = v; return *this; }
-    H2ServerBuilder& maxFrameSize(uint32_t v)         { m_config.max_frame_size = v; return *this; }
-    H2ServerBuilder& maxHeaderListSize(uint32_t v)    { m_config.max_header_list_size = v; return *this; }
-    H2ServerBuilder& enablePush(bool v)               { m_config.enable_push = v; return *this; }
-    H2ServerBuilder& pingEnabled(bool v)              { m_config.ping_enabled = v; return *this; }
-    H2ServerBuilder& pingInterval(std::chrono::milliseconds v) { m_config.ping_interval = v; return *this; }
-    H2ServerBuilder& pingTimeout(std::chrono::milliseconds v) { m_config.ping_timeout = v; return *this; }
-    H2ServerBuilder& settingsAckTimeout(std::chrono::milliseconds v) { m_config.settings_ack_timeout = v; return *this; }
-    H2ServerBuilder& gracefulShutdownRtt(std::chrono::milliseconds v) { m_config.graceful_shutdown_rtt = v; return *this; }
-    H2ServerBuilder& gracefulShutdownTimeout(std::chrono::milliseconds v) { m_config.graceful_shutdown_timeout = v; return *this; }
-    H2ServerBuilder& flowControlTargetWindow(uint32_t v) { m_config.flow_control_target_window = v; return *this; }
-    H2ServerBuilder& flowControlStrategy(Http2FlowControlStrategy v) {
+    H2ServerBuilder& cert_path(std::string v)          { m_config.cert_path = std::move(v); return *this; }
+    H2ServerBuilder& key_path(std::string v)           { m_config.key_path = std::move(v); return *this; }
+    H2ServerBuilder& ca_path(std::string v)            { m_config.ca_path = std::move(v); return *this; }
+    H2ServerBuilder& verify_peer(bool v)               { m_config.verify_peer = v; return *this; }
+    H2ServerBuilder& verify_depth(int v)               { m_config.verify_depth = v; return *this; }
+    H2ServerBuilder& max_concurrent_streams(uint32_t v) { m_config.max_concurrent_streams = v; return *this; }
+    H2ServerBuilder& initial_window_size(uint32_t v)    { m_config.initial_window_size = v; return *this; }
+    H2ServerBuilder& max_frame_size(uint32_t v)         { m_config.max_frame_size = v; return *this; }
+    H2ServerBuilder& max_header_list_size(uint32_t v)    { m_config.max_header_list_size = v; return *this; }
+    H2ServerBuilder& enable_push(bool v)               { m_config.enable_push = v; return *this; }
+    H2ServerBuilder& ping_enabled(bool v)              { m_config.ping_enabled = v; return *this; }
+    H2ServerBuilder& ping_interval(std::chrono::milliseconds v) { m_config.ping_interval = v; return *this; }
+    H2ServerBuilder& ping_timeout(std::chrono::milliseconds v) { m_config.ping_timeout = v; return *this; }
+    H2ServerBuilder& settings_ack_timeout(std::chrono::milliseconds v) { m_config.settings_ack_timeout = v; return *this; }
+    H2ServerBuilder& graceful_shutdown_rtt(std::chrono::milliseconds v) { m_config.graceful_shutdown_rtt = v; return *this; }
+    H2ServerBuilder& graceful_shutdown_timeout(std::chrono::milliseconds v) { m_config.graceful_shutdown_timeout = v; return *this; }
+    H2ServerBuilder& flow_control_target_window(uint32_t v) { m_config.flow_control_target_window = v; return *this; }
+    H2ServerBuilder& flow_control_strategy(Http2FlowControlStrategy v) {
         m_config.flow_control_strategy = std::move(v);
         return *this;
     }
-    H2ServerBuilder& streamHandler(Http2ConnectionHandler handler) {
+    H2ServerBuilder& stream_handler(Http2ConnectionHandler handler) {
         m_config.stream_handler = std::move(handler);
         return *this;
     }
-    H2ServerBuilder& activeConnHandler(Http2ActiveConnHandler handler) {
+    H2ServerBuilder& active_conn_handler(Http2ActiveConnHandler handler) {
         m_config.active_conn_handler = std::move(handler);
         return *this;
     }
@@ -1050,8 +1050,8 @@ public:
      * @return 当前 builder，支持链式调用。
      * @note TLS 路径始终经用户态加密；该配置入口不启用 kernel sendfile。
      */
-    H2ServerBuilder& staticResponse(std::string path, H2StaticResponse response) {
-        m_config.static_routes.push_back(makeH2StaticRoute(std::move(path), std::move(response)));
+    H2ServerBuilder& static_response(std::string path, H2StaticResponse response) {
+        m_config.static_routes.push_back(make_h2_static_route(std::move(path), std::move(response)));
         return *this;
     }
     /**
@@ -1061,14 +1061,14 @@ public:
      * @return 当前 builder，支持链式调用。
      * @note TLS 路径始终经用户态加密发送 DATA frame，不启用 kernel sendfile。
      */
-    H2ServerBuilder& staticFiles(std::string prefix, H2StaticFileConfig config) {
+    H2ServerBuilder& static_files(std::string prefix, H2StaticFileConfig config) {
         m_config.static_file_mounts.push_back(
-            makeH2StaticFileMount(std::move(prefix), std::move(config)));
+            make_h2_static_file_mount(std::move(prefix), std::move(config)));
         return *this;
     }
     H2Server build() const;
-    H2ServerConfig buildConfig() const {
-        return Http2Conn::normalizeSettingsConfig(m_config);
+    H2ServerConfig build_config() const {
+        return Http2Conn::normalize_settings_config(m_config);
     }
 private:
     H2ServerConfig m_config;
@@ -1081,9 +1081,9 @@ class H2Server
 {
 public:
     explicit H2Server(const H2ServerConfig& config = H2ServerConfig())
-        : m_runtime(RuntimeBuilder().ioSchedulerCount(config.io_scheduler_count)
-                                   .parallelSchedulerCount(config.parallel_scheduler_count)
-                                   .applyAffinity(config.affinity)
+        : m_runtime(RuntimeBuilder().io_scheduler_count(config.io_scheduler_count)
+                                   .parallel_scheduler_count(config.parallel_scheduler_count)
+                                   .apply_affinity(config.affinity)
                                    .build())
         , m_config(config)
         , m_stream_handler(config.stream_handler)
@@ -1101,45 +1101,45 @@ public:
     H2Server& operator=(const H2Server&) = delete;
 
     void start() {
-        startInternal();
+        start_internal();
     }
 
     void start(Http2ConnectionHandler handler) {
         m_stream_handler = std::move(handler);
         m_active_conn_handler = nullptr;
-        startInternal();
+        start_internal();
     }
 
     void start(Http2ActiveConnHandler handler) {
         m_active_conn_handler = std::move(handler);
-        startInternal();
+        start_internal();
     }
 
-    void setHttp1Fallback(
+    void set_http1_fallback(
         std::function<Task<void>(galay::http::HttpConnImpl<galay::ssl::SslSocket>)> handler) {
         m_http1_fallback = std::move(handler);
     }
 
     void stop() {
         if (!m_running.load()) {
-            stopStartedPlugins();
+            stop_started_plugins();
             return;
         }
 
         m_running.store(false);
-        wakeTcpAcceptLoops(m_config.host,
+        wake_tcp_accept_loops(m_config.host,
                            m_config.port,
                            m_server_loop_count.load(std::memory_order_acquire));
-        waitForLoopDrain(m_server_loop_count, std::chrono::milliseconds(100));
-        stopStartedPlugins();
+        wait_for_loop_drain(m_server_loop_count, std::chrono::milliseconds(100));
+        stop_started_plugins();
         m_runtime.stop();
     }
 
-    bool isRunning() const {
+    bool is_running() const {
         return m_running.load();
     }
 
-    Runtime& getRuntime() {
+    Runtime& get_runtime() {
         return m_runtime;
     }
 
@@ -1153,7 +1153,7 @@ public:
      * - `stop()` 在 runtime 停止前按注册反序调用。
      * - `handle()` 返回 false 时停止后续插件，并跳过当前连接的 TLS/HTTP/2 处理。
      */
-    bool addAcceptPlugin(std::unique_ptr<galay::http::plugin::AcceptPlugin<galay::ssl::SslSocket>> plugin) {
+    bool add_accept_plugin(std::unique_ptr<galay::http::plugin::AcceptPlugin<galay::ssl::SslSocket>> plugin) {
         if (m_running.load() || !plugin) {
             return false;
         }
@@ -1169,34 +1169,34 @@ private:
      * @brief 将 TLS server 拥有的 root task 绑定到当前 Runtime 后提交。
      */
     template <typename T>
-    bool scheduleRuntimeTask(Scheduler* scheduler, Task<T> task) {
-        if (scheduler == nullptr || !task.isValid()) {
+    bool schedule_runtime_task(Scheduler* scheduler, Task<T> task) {
+        if (scheduler == nullptr || !task.is_valid()) {
             return false;
         }
-        TaskRef task_ref = galay::kernel::detail::TaskAccess::detachTask(std::move(task));
-        galay::kernel::detail::setTaskRuntime(task_ref, &m_runtime);
-        galay::kernel::detail::setTaskScheduler(task_ref, scheduler);
+        TaskRef task_ref = galay::kernel::detail::TaskAccess::detach_task(std::move(task));
+        galay::kernel::detail::set_task_runtime(task_ref, &m_runtime);
+        galay::kernel::detail::set_task_scheduler(task_ref, scheduler);
         return scheduler->schedule(std::move(task_ref));
     }
 
-    void configureLowLatencyIoTimers() {
-        for (size_t i = 0; i < m_runtime.getIOSchedulerCount(); ++i) {
-            auto* scheduler = m_runtime.getIOScheduler(i);
+    void configure_low_latency_io_timers() {
+        for (size_t i = 0; i < m_runtime.get_io_scheduler_count(); ++i) {
+            auto* scheduler = m_runtime.get_io_scheduler(i);
             if (scheduler) {
-                scheduler->replaceTimerManager(
+                scheduler->replace_timer_manager(
                     galay::kernel::TimingWheelTimerManager(kLowLatencyIoTimerTickNs));
             }
         }
     }
 
-    bool startInternal() {
+    bool start_internal() {
         if (m_running.load()) {
             return false;
         }
         if (!m_stream_handler && !m_active_conn_handler) {
             return false;
         }
-        if (!initSslContext()) {
+        if (!init_ssl_context()) {
             return false;
         }
 
@@ -1207,18 +1207,18 @@ private:
                            runtime_start.error().message());
             return false;
         }
-        configureLowLatencyIoTimers();
-        if (!startPlugins()) {
+        configure_low_latency_io_timers();
+        if (!start_plugins()) {
             m_runtime.stop();
             return false;
         }
         m_running.store(true);
 
-        size_t io_scheduler_count = m_runtime.getIOSchedulerCount();
+        size_t io_scheduler_count = m_runtime.get_io_scheduler_count();
         for (size_t i = 0; i < io_scheduler_count; i++) {
-            auto* scheduler = m_runtime.getIOScheduler(i);
+            auto* scheduler = m_runtime.get_io_scheduler(i);
             if (scheduler) {
-                auto loop = serverLoop(scheduler);
+                auto loop = server_loop(scheduler);
                 const size_t previous_loop_count =
                     m_server_loop_count.fetch_add(1, std::memory_order_acq_rel);
                 if (previous_loop_count == std::numeric_limits<size_t>::max()) {
@@ -1226,7 +1226,7 @@ private:
                                   "previous={}",
                                   previous_loop_count);
                 }
-                if (!scheduleRuntimeTask(scheduler, std::move(loop))) {
+                if (!schedule_runtime_task(scheduler, std::move(loop))) {
                     const size_t before_sub =
                         m_server_loop_count.fetch_sub(1, std::memory_order_acq_rel);
                     if (before_sub == 0) {
@@ -1235,11 +1235,11 @@ private:
                                       before_sub);
                     }
                     m_running.store(false);
-                    wakeTcpAcceptLoops(m_config.host,
+                    wake_tcp_accept_loops(m_config.host,
                                        m_config.port,
                                        m_server_loop_count.load(std::memory_order_acquire));
-                    waitForLoopDrain(m_server_loop_count, std::chrono::milliseconds(100));
-                    stopStartedPlugins();
+                    wait_for_loop_drain(m_server_loop_count, std::chrono::milliseconds(100));
+                    stop_started_plugins();
                     m_runtime.stop();
                     return false;
                 }
@@ -1248,8 +1248,8 @@ private:
         return true;
     }
 
-    bool initSslContext() {
-        if (!m_ssl_ctx.isValid()) {
+    bool init_ssl_context() {
+        if (!m_ssl_ctx.is_valid()) {
             return false;
         }
 
@@ -1257,35 +1257,35 @@ private:
             return false;
         }
 
-        auto cert_result = m_ssl_ctx.loadCertificate(m_config.cert_path);
+        auto cert_result = m_ssl_ctx.load_certificate(m_config.cert_path);
         if (!cert_result) {
             return false;
         }
 
-        auto key_result = m_ssl_ctx.loadPrivateKey(m_config.key_path);
+        auto key_result = m_ssl_ctx.load_private_key(m_config.key_path);
         if (!key_result) {
             return false;
         }
 
         if (!m_config.ca_path.empty()) {
-            auto ca_result = m_ssl_ctx.loadCACertificate(m_config.ca_path);
+            auto ca_result = m_ssl_ctx.load_ca_certificate(m_config.ca_path);
             if (!ca_result) {
                 return false;
             }
         }
 
         if (m_config.verify_peer) {
-            m_ssl_ctx.setVerifyMode(galay::ssl::SslVerifyMode::Peer);
-            m_ssl_ctx.setVerifyDepth(m_config.verify_depth);
+            m_ssl_ctx.set_verify_mode(galay::ssl::SslVerifyMode::Peer);
+            m_ssl_ctx.set_verify_depth(m_config.verify_depth);
         } else {
-            m_ssl_ctx.setVerifyMode(galay::ssl::SslVerifyMode::None);
+            m_ssl_ctx.set_verify_mode(galay::ssl::SslVerifyMode::None);
         }
 
-        auto alpn_result = m_ssl_ctx.setALPNProtocols({"h2", "http/1.1"});
+        auto alpn_result = m_ssl_ctx.set_alpn_protocols({"h2", "http/1.1"});
         if (!alpn_result) {
             return false;
         }
-        auto alpn_select_result = m_ssl_ctx.setALPNSelectProtocols({"h2", "http/1.1"});
+        auto alpn_select_result = m_ssl_ctx.set_alpn_select_protocols({"h2", "http/1.1"});
         if (!alpn_select_result) {
             return false;
         }
@@ -1293,8 +1293,8 @@ private:
         return true;
     }
 
-    Task<void> serverLoop(IOScheduler* scheduler) {
-        // 阶段 1：注册 serverLoop 退出守卫，确保循环结束时扣减运行计数
+    Task<void> server_loop(IOScheduler* scheduler) {
+        // 阶段 1：注册 server_loop 退出守卫，确保循环结束时扣减运行计数
         struct LoopExitGuard {
             H2Server* server;
             ~LoopExitGuard() {
@@ -1306,19 +1306,19 @@ private:
         AsyncTcpSocket listener(IPType::IPV4);
 
         // 阶段 3：配置 listener 复用地址，允许快速重启绑定同一地址
-        auto reuse_result = listener.option().handleReuseAddr();
+        auto reuse_result = listener.option().handle_reuse_addr();
         if (!reuse_result) {
             co_return;
         }
 
         // 阶段 4：配置 listener 复用端口，支持多 IO 调度器并行 accept
-        auto reuse_port_result = listener.option().handleReusePort();
+        auto reuse_port_result = listener.option().handle_reuse_port();
         if (!reuse_port_result) {
             co_return;
         }
 
         // 阶段 5：设置 listener 为非阻塞模式，交给协程调度器驱动 IO
-        auto nonblock_result = listener.option().handleNonBlock();
+        auto nonblock_result = listener.option().handle_non_block();
         if (!nonblock_result) {
             co_return;
         }
@@ -1350,19 +1350,19 @@ private:
             // 阶段 10：根据 accept 得到的句柄构造 SSL 客户端 socket
             galay::ssl::SslSocket client_socket(&m_ssl_ctx, *accept_result);
             // 阶段 11：配置客户端 socket 的非阻塞与 TCP_NODELAY 选项
-            auto nonblock_result = client_socket.option().handleNonBlock();
+            auto nonblock_result = client_socket.option().handle_non_block();
             if (!nonblock_result) {
                 continue;
             }
             if (m_config.tcp_no_delay) {
-                auto nodelay_result = client_socket.option().handleTcpNoDelay();
+                auto nodelay_result = client_socket.option().handle_tcp_no_delay();
                 if (!nodelay_result) {
                     HTTP_LOG_DEBUG("[socket] [nodelay]", "failed to set TCP_NODELAY");
                 }
             }
 
             // 阶段 12：执行 accept plugin，允许插件在 TLS 握手前拦截连接
-            auto continuing_result = co_await runAcceptPlugins(client_socket, client_host);
+            auto continuing_result = co_await run_accept_plugins(client_socket, client_host);
             bool continuing = continuing_result.value_or(false);
             if (!continuing) {
                 auto close_result = co_await client_socket.close();
@@ -1375,12 +1375,12 @@ private:
             }
 
             // 阶段 13：选择连接处理调度器，默认回退到当前 IO 调度器
-            auto* target_scheduler = m_runtime.getNextIOScheduler();
+            auto* target_scheduler = m_runtime.get_next_io_scheduler();
             if (target_scheduler == nullptr) {
                 target_scheduler = scheduler;
             }
             // 阶段 14：投递 TLS HTTP/2 连接处理任务，投递失败时关闭客户端 socket
-            if (!scheduleTask(target_scheduler, handleConnection(std::move(client_socket)))) {
+            if (!schedule_task(target_scheduler, handle_connection(std::move(client_socket)))) {
                 auto close_result = co_await client_socket.close();
                 if (!close_result) {
                     HTTP_LOG_WARN("[socket] [close-fail] [client]",
@@ -1390,7 +1390,7 @@ private:
             }
         }
 
-        // 阶段 14：serverLoop 退出前关闭 listener socket
+        // 阶段 14：server_loop 退出前关闭 listener socket
         auto close_result = co_await listener.close();
         if (!close_result) {
             HTTP_LOG_WARN("[socket] [close-fail] [listener]",
@@ -1400,7 +1400,7 @@ private:
         co_return;
     }
 
-    Task<void> readConnectionPreface(galay::ssl::SslSocket& socket,
+    Task<void> read_connection_preface(galay::ssl::SslSocket& socket,
                                      std::array<char, kHttp2ConnectionPrefaceLength>& preface,
                                      bool& ok) {
         ok = false;
@@ -1416,7 +1416,7 @@ private:
         co_return;
     }
 
-    Task<void> handleConnection(galay::ssl::SslSocket socket) {
+    Task<void> handle_connection(galay::ssl::SslSocket socket) {
         auto handshake_result = co_await socket.handshake();
         if (!handshake_result) {
             auto close_result = co_await socket.close();
@@ -1428,15 +1428,15 @@ private:
             co_return;
         }
 
-        std::string alpn = socket.getALPNProtocol();
+        std::string alpn = socket.get_alpn_protocol();
         if (alpn != "h2") {
-            co_await handleHttp1Fallback(std::move(socket));
+            co_await handle_http1_fallback(std::move(socket));
             co_return;
         }
 
         std::array<char, kHttp2ConnectionPrefaceLength> preface{};
         bool preface_ok = false;
-        co_await readConnectionPreface(socket, preface, preface_ok);
+        co_await read_connection_preface(socket, preface, preface_ok);
         if (!preface_ok ||
             std::memcmp(preface.data(), kHttp2ConnectionPreface.data(), kHttp2ConnectionPrefaceLength) != 0) {
             auto close_result = co_await socket.close();
@@ -1450,8 +1450,8 @@ private:
 
         Http2ConnImpl<galay::ssl::SslSocket> conn(std::move(socket));
         auto local_settings =
-            Http2ConnImpl<galay::ssl::SslSocket>::makeSettingsFrameFromConfig(m_config);
-        if (conn.applyLocalSettings(local_settings) != Http2ErrorCode::NoError) {
+            Http2ConnImpl<galay::ssl::SslSocket>::make_settings_frame_from_config(m_config);
+        if (conn.apply_local_settings(local_settings) != Http2ErrorCode::NoError) {
             auto close_result = co_await conn.close();
             if (!close_result) {
                 HTTP_LOG_WARN("[h2] [close-fail]",
@@ -1460,9 +1460,9 @@ private:
             }
             co_return;
         }
-        conn.runtimeConfig().from(m_config);
+        conn.runtime_config().from(m_config);
 
-        auto settings_result = co_await conn.sendSettings();
+        auto settings_result = co_await conn.send_settings();
         if (!settings_result) {
             auto close_result = co_await conn.close();
             if (!close_result) {
@@ -1473,8 +1473,8 @@ private:
             co_return;
         }
 
-        conn.initStreamManager();
-        auto* mgr = conn.streamManager();
+        conn.init_stream_manager();
+        auto* mgr = conn.stream_manager();
         if (m_active_conn_handler) {
             co_await mgr->start(m_active_conn_handler);
         } else {
@@ -1489,22 +1489,22 @@ private:
         co_return;
     }
 
-    Task<void> handleHttp1Fallback(galay::ssl::SslSocket socket) {
+    Task<void> handle_http1_fallback(galay::ssl::SslSocket socket) {
         galay::http::HttpConnImpl<galay::ssl::SslSocket> conn(std::move(socket));
         if (m_http1_fallback) {
             co_await m_http1_fallback(std::move(conn));
             co_return;
         }
-        co_await runDefaultHttp1FallbackLoop("[h2] [h1-fallback]", std::move(conn));
+        co_await run_default_http1_fallback_loop("[h2] [h1-fallback]", std::move(conn));
         co_return;
     }
 
-    bool startPlugins() {
+    bool start_plugins() {
         m_started_plugin_count = 0;
         for (auto& plugin : m_accept_plugins) {
             if (!plugin->start(m_runtime)) {
                 HTTP_LOG_ERROR("[accept-plugin] [start-fail]", "error=start returned false");
-                stopStartedPlugins();
+                stop_started_plugins();
                 return false;
             }
             ++m_started_plugin_count;
@@ -1512,16 +1512,16 @@ private:
         return true;
     }
 
-    void stopStartedPlugins() noexcept {
+    void stop_started_plugins() noexcept {
         while (m_started_plugin_count > 0) {
             --m_started_plugin_count;
             m_accept_plugins[m_started_plugin_count]->stop();
         }
     }
 
-    Task<bool> runAcceptPlugins(galay::ssl::SslSocket& client_socket, const Host& client_host) {
+    Task<bool> run_accept_plugins(galay::ssl::SslSocket& client_socket, const Host& client_host) {
         for (auto& plugin : m_accept_plugins) {
-            auto plugin_result = co_await plugin->handle(getRuntime(), client_socket, client_host);
+            auto plugin_result = co_await plugin->handle(get_runtime(), client_socket, client_host);
             if (!plugin_result) {
                 HTTP_LOG_ERROR("[accept-plugin] [task-fail]",
                                "error={}",
@@ -1549,7 +1549,7 @@ private:
 };
 
 inline H2Server H2ServerBuilder::build() const {
-    return H2Server(Http2Conn::normalizeSettingsConfig(m_config));
+    return H2Server(Http2Conn::normalize_settings_config(m_config));
 }
 #endif
 

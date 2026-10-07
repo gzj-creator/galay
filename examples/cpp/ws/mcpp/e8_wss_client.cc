@@ -13,11 +13,11 @@ import galay.websocket;
 using namespace galay::websocket;
 using namespace galay::kernel;
 
-Task<bool> runWssClient(const std::string& url, int message_count) {
+Task<bool> run_wss_client(const std::string& url, int message_count) {
     constexpr auto kOpTimeout = std::chrono::milliseconds(3000);
 
     WssClient client(WssClientBuilder()
-        .verifyPeer(false)
+        .verify_peer(false)
         .build());
 
     auto connect_result = co_await client.connect(url);
@@ -33,7 +33,7 @@ Task<bool> runWssClient(const std::string& url, int message_count) {
         co_return false;
     }
 
-    auto session_result = client.getSession(WsWriterSetting::byClient());
+    auto session_result = client.get_session(WsWriterSetting::by_client());
     if (!session_result) {
         std::cerr << "Session failed: " << session_result.error().message() << "\n";
         (void)co_await client.close();
@@ -50,7 +50,7 @@ Task<bool> runWssClient(const std::string& url, int message_count) {
     std::string message;
     WsOpcode opcode{};
     while (true) {
-        auto recv_result = co_await session.getMessage(message, opcode).timeout(kOpTimeout);
+        auto recv_result = co_await session.get_message(message, opcode).timeout(kOpTimeout);
         if (!recv_result) {
             std::cerr << "Failed to receive welcome message: " << recv_result.error().message() << "\n";
             (void)co_await client.close();
@@ -66,7 +66,7 @@ Task<bool> runWssClient(const std::string& url, int message_count) {
     for (int i = 0; i < message_count; ++i) {
         std::string payload = "Hello from import WSS client #" + std::to_string(i + 1);
         while (true) {
-            auto send_result = co_await session.sendText(payload);
+            auto send_result = co_await session.send_text(payload);
             if (!send_result) {
                 std::cerr << "Send failed: " << send_result.error().message() << "\n";
                 (void)co_await client.close();
@@ -78,7 +78,7 @@ Task<bool> runWssClient(const std::string& url, int message_count) {
         }
 
         while (true) {
-            auto recv_result = co_await session.getMessage(message, opcode).timeout(kOpTimeout);
+            auto recv_result = co_await session.get_message(message, opcode).timeout(kOpTimeout);
             if (!recv_result) {
                 std::cerr << "Receive failed: " << recv_result.error().message() << "\n";
                 (void)co_await client.close();
@@ -93,7 +93,7 @@ Task<bool> runWssClient(const std::string& url, int message_count) {
     }
 
     while (true) {
-        auto close_result = co_await session.sendClose(WsCloseCode::Normal);
+        auto close_result = co_await session.send_close(WsCloseCode::Normal);
         if (!close_result) {
             break;
         }
@@ -119,9 +119,9 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
         runtime.start();
-        auto join = runtime.spawnIO(runWssClient(url, message_count));
+        auto join = runtime.spawn_io(run_wss_client(url, message_count));
         bool ok = false;
         if (join) {
             auto result = join->join();

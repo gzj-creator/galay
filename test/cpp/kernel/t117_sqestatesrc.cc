@@ -13,11 +13,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -26,38 +26,38 @@ std::string readAll(const std::filesystem::path& path) {
                        std::istreambuf_iterator<char>());
 }
 
-bool containsText(const std::string& haystack, const std::string& needle) {
+bool contains_text(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto controller_h = root / "galay-kernel" / "core" / "io_controller.hpp";
-    const std::string text = readAll(controller_h);
+    const std::string text = read_all(controller_h);
     if (text.empty()) {
         std::cerr << "[T116] failed to read io_controller.hpp\n";
         return 1;
     }
 
-    if (containsText(text, "std::shared_ptr<SqeState> m_sqe_state[SIZE]")) {
+    if (contains_text(text, "std::shared_ptr<SqeState> m_sqe_state[SIZE]")) {
         std::cerr << "[T116] expected IOController m_sqe_state to stop using shared_ptr\n";
         return 1;
     }
-    if (!containsText(text, "SqeState* state = nullptr;")) {
+    if (!contains_text(text, "SqeState* state = nullptr;")) {
         std::cerr << "[T116] expected SqeRequestHandle to borrow SqeState via raw pointer\n";
         return 1;
     }
-    if (!containsText(text, "SqeState m_state;")) {
+    if (!contains_text(text, "SqeState m_state;")) {
         std::cerr << "[T116] expected SqeHandleArena to embed a stable SqeState\n";
         return 1;
     }
-    if (!containsText(text, "SqeState* m_sqe_state[SIZE] = {nullptr, nullptr};")) {
+    if (!contains_text(text, "SqeState* m_sqe_state[SIZE] = {nullptr, nullptr};")) {
         std::cerr << "[T116] expected IOController to borrow SqeState via raw pointers\n";
         return 1;
     }
-    if (!containsText(text, "std::shared_ptr<SqeHandleArena> m_sqe_handle_pool[SIZE]")) {
+    if (!contains_text(text, "std::shared_ptr<SqeHandleArena> m_sqe_handle_pool[SIZE]")) {
         std::cerr << "[T116] expected handle arena shared ownership to remain for late CQE safety\n";
         return 1;
     }

@@ -23,7 +23,7 @@ bool fail(std::string_view message)
     return false;
 }
 
-bool parseIterations(int argc, char** argv, std::size_t& iterations)
+bool parse_iterations(int argc, char** argv, std::size_t& iterations)
 {
     if (argc <= 1) {
         return true;
@@ -44,12 +44,12 @@ bool parseIterations(int argc, char** argv, std::size_t& iterations)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     std::size_t iterations = 200'000;
-    if (!parseIterations(argc, argv, iterations)) {
+    if (!parse_iterations(argc, argv, iterations)) {
         return 2;
     }
 
@@ -61,7 +61,7 @@ int main(int argc, char** argv)
     for (std::size_t i = 0; i < warmup_iterations; ++i) {
         auto doc = galay::mcp::JsonDocument::parse(json);
         if (!doc) {
-            std::cerr << "warmup parse failed: " << doc.error().toString() << '\n';
+            std::cerr << "warmup parse failed: " << doc.error().to_string() << '\n';
             return 1;
         }
         auto id = doc->root().at("id").as_uint64();
@@ -76,7 +76,7 @@ int main(int argc, char** argv)
     for (std::size_t i = 0; i < iterations; ++i) {
         auto doc = galay::mcp::JsonDocument::parse(json);
         if (!doc) {
-            std::cerr << "parse failed: " << doc.error().toString() << '\n';
+            std::cerr << "parse failed: " << doc.error().to_string() << '\n';
             return 1;
         }
         auto id = doc->root().at("id").as_uint64();

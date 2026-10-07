@@ -31,31 +31,31 @@ using namespace galay::kernel;
 
 namespace {
 
-uint16_t tcpTestPort() {
-    return galay::test::resolvePortFromEnv("GALAY_TEST_TCP_PORT", 8080);
+uint16_t tcp_test_port() {
+    return galay::test::resolve_port_from_env("GALAY_TEST_TCP_PORT", 8080);
 }
 
 }
 
 // Echo服务器协程
-Task<void> echoServer([[maybe_unused]] IOScheduler* scheduler) {
+Task<void> echo_server([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("Server starting...");
     AsyncTcpSocket listener;
     // 设置选项
-    auto optResult = listener.option().handleReuseAddr();
+    auto optResult = listener.option().handle_reuse_addr();
     if (!optResult) {
         LogError("Failed to set reuse addr: {}", optResult.error().message());
         co_return;
     }
 
-    optResult = listener.option().handleNonBlock();
+    optResult = listener.option().handle_non_block();
     if (!optResult) {
         LogError("Failed to set non-block: {}", optResult.error().message());
         co_return;
     }
 
     // 绑定地址
-    Host bindHost(IPType::IPV4, "127.0.0.1", tcpTestPort());
+    Host bindHost(IPType::IPV4, "127.0.0.1", tcp_test_port());
     auto bindResult = listener.bind(bindHost);
     if (!bindResult) {
         LogError("Failed to bind: {}", bindResult.error().message());
@@ -70,7 +70,7 @@ Task<void> echoServer([[maybe_unused]] IOScheduler* scheduler) {
         co_return;
     }
 
-    LogInfo("Server listening on 127.0.0.1:{}", tcpTestPort());
+    LogInfo("Server listening on 127.0.0.1:{}", tcp_test_port());
 
     // 接受连接
     Host clientHost;
@@ -85,7 +85,7 @@ Task<void> echoServer([[maybe_unused]] IOScheduler* scheduler) {
 
     // 创建客户端socket
     AsyncTcpSocket client(acceptResult.value());
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     // Echo循环
     char buffer[1024];
@@ -120,15 +120,15 @@ Task<void> echoServer([[maybe_unused]] IOScheduler* scheduler) {
 }
 
 // 客户端协程
-Task<void> echoClient([[maybe_unused]] IOScheduler* scheduler) {
+Task<void> echo_client([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("Client starting...");
     AsyncTcpSocket client;
     LogDebug("Client socket created, fd={}", client.handle().fd);
 
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     // 连接服务器
-    Host serverHost(IPType::IPV4, "127.0.0.1", tcpTestPort());
+    Host serverHost(IPType::IPV4, "127.0.0.1", tcp_test_port());
     LogDebug("Client connecting to server...");
     auto connectResult = co_await client.connect(serverHost);
     if (!connectResult) {
@@ -174,14 +174,14 @@ int main() {
     LogDebug("Scheduler started");
 
     // 启动服务器
-    scheduleTask(scheduler, echoServer(&scheduler));
+    schedule_task(scheduler, echo_server(&scheduler));
     LogDebug("Server coroutine spawned");
 
     // 等待一下让服务器启动
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // 启动客户端
-    scheduleTask(scheduler, echoClient(&scheduler));
+    schedule_task(scheduler, echo_client(&scheduler));
     LogDebug("Client coroutine spawned");
 
     // 运行一段时间
@@ -196,14 +196,14 @@ int main() {
     LogDebug("Scheduler started");
 
     // 启动服务器
-    scheduleTask(scheduler, echoServer(&scheduler));
+    schedule_task(scheduler, echo_server(&scheduler));
     LogDebug("Server coroutine spawned");
 
     // 等待一下让服务器启动
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // 启动客户端
-    scheduleTask(scheduler, echoClient(&scheduler));
+    schedule_task(scheduler, echo_client(&scheduler));
     LogDebug("Client coroutine spawned");
 
     // 运行一段时间
@@ -218,14 +218,14 @@ int main() {
     LogDebug("Scheduler started");
 
     // 启动服务器
-    scheduleTask(scheduler, echoServer(&scheduler));
+    schedule_task(scheduler, echo_server(&scheduler));
     LogDebug("Server coroutine spawned");
 
     // 等待一下让服务器启动
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // 启动客户端
-    scheduleTask(scheduler, echoClient(&scheduler));
+    schedule_task(scheduler, echo_client(&scheduler));
     LogDebug("Client coroutine spawned");
 
     // 运行一段时间

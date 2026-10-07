@@ -114,7 +114,7 @@ struct MongoConfig
      * @brief 返回全部使用默认值的配置
      * @return 默认配置实例
      */
-    static MongoConfig defaultConfig()
+    static MongoConfig default_config()
     {
         return {};
     }
@@ -148,17 +148,17 @@ struct AsyncMongoConfig
     size_t buffer_size = 16384;
     size_t pipeline_reserve_per_command = 96;
 
-    bool isSendTimeoutEnabled() const
+    bool is_send_timeout_enabled() const
     {
         return send_timeout >= std::chrono::milliseconds(0);
     }
 
-    bool isRecvTimeoutEnabled() const
+    bool is_recv_timeout_enabled() const
     {
         return recv_timeout >= std::chrono::milliseconds(0);
     }
 
-    static AsyncMongoConfig withTimeout(std::chrono::milliseconds send,
+    static AsyncMongoConfig with_timeout(std::chrono::milliseconds send,
                                         std::chrono::milliseconds recv)
     {
         AsyncMongoConfig config;
@@ -167,7 +167,7 @@ struct AsyncMongoConfig
         return config;
     }
 
-    static AsyncMongoConfig noTimeout()
+    static AsyncMongoConfig no_timeout()
     {
         return {};
     }

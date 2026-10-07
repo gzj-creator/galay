@@ -13,7 +13,7 @@
 namespace
 {
 
-std::expected<size_t, std::string> parsePositiveSize(std::string_view text,
+std::expected<size_t, std::string> parse_positive_size(std::string_view text,
                                                      size_t fallback)
 {
     if (text.empty()) {
@@ -30,7 +30,7 @@ std::expected<size_t, std::string> parsePositiveSize(std::string_view text,
     return value;
 }
 
-std::string makePayload(size_t bytes)
+std::string make_payload(size_t bytes)
 {
     std::string payload;
     payload.resize(bytes);
@@ -44,13 +44,13 @@ std::string makePayload(size_t bytes)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     size_t iterations = 200000;
     if (argc > 1) {
-        auto parsed = parsePositiveSize(argv[1], iterations);
+        auto parsed = parse_positive_size(argv[1], iterations);
         if (!parsed) {
             std::cerr << "invalid iterations: " << parsed.error() << '\n';
             return 1;
@@ -60,7 +60,7 @@ int main(int argc, char** argv)
 
     size_t payload_bytes = 1024;
     if (argc > 2) {
-        auto parsed = parsePositiveSize(argv[2], payload_bytes);
+        auto parsed = parse_positive_size(argv[2], payload_bytes);
         if (!parsed) {
             std::cerr << "invalid payload bytes: " << parsed.error() << '\n';
             return 1;
@@ -68,7 +68,7 @@ int main(int argc, char** argv)
         payload_bytes = *parsed;
     }
 
-    const std::string payload = makePayload(payload_bytes);
+    const std::string payload = make_payload(payload_bytes);
     uint32_t checksum_accumulator = 2166136261u;
 
     constexpr size_t kWarmupIterations = 4096;

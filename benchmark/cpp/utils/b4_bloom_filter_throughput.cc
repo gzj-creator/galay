@@ -20,7 +20,7 @@ struct Result {
     std::uint64_t checksum;
 };
 
-uint64_t stableHash(uint64_t value) {
+uint64_t stable_hash(uint64_t value) {
     value += 0x9e3779b97f4a7c15ULL;
     value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
     value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
@@ -45,7 +45,7 @@ Result measure(std::string name, std::size_t iterations, Fn&& fn) {
     return Result{std::move(name), nsPerOp, mopsPerSec, checksum};
 }
 
-void printResult(const Result& result) {
+void print_result(const Result& result) {
     std::cout << std::left << std::setw(24) << result.name
               << std::right << std::setw(12) << std::fixed << std::setprecision(2)
               << result.nsPerOp
@@ -57,7 +57,7 @@ void printResult(const Result& result) {
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -70,36 +70,36 @@ int main() {
     missing.reserve(items);
 
     for (uint64_t i = 0; i < items; ++i) {
-        inserted.push_back(stableHash(i));
-        missing.push_back(stableHash(i + 10000000ULL));
+        inserted.push_back(stable_hash(i));
+        missing.push_back(stable_hash(i + 10000000ULL));
     }
 
     galay::utils::BloomFilter<uint64_t> filter =
-        galay::utils::BloomFilter<uint64_t>::fromExpectedItems(
+        galay::utils::BloomFilter<uint64_t>::from_expected_items(
             items, targetFalsePositiveRate);
 
     std::cout << "BloomFilter benchmark\n";
     std::cout << "Build with -O3 -DNDEBUG. Items=" << items
               << ", target_fpp=" << targetFalsePositiveRate
-              << ", bits=" << filter.bitCount()
-              << ", blocks=" << filter.blockCount() << '\n';
+              << ", bits=" << filter.bit_count()
+              << ", blocks=" << filter.block_count() << '\n';
     std::cout << std::left << std::setw(24) << "Scenario"
               << std::right << std::setw(12) << "ns/op"
               << std::setw(14) << "Mops/s" << '\n';
 
-    printResult(measure("addHash", items, [&](std::size_t i) {
-        filter.addHash(inserted[i]);
+    print_result(measure("addHash", items, [&](std::size_t i) {
+        filter.add_hash(inserted[i]);
         return inserted[i] & 0xffu;
     }));
 
-    printResult(measure("hit query", items, [&](std::size_t i) {
-        return filter.possiblyContainsHash(inserted[i]) ? 1u : 0u;
+    print_result(measure("hit query", items, [&](std::size_t i) {
+        return filter.possibly_contains_hash(inserted[i]) ? 1u : 0u;
     }));
 
     const auto missResult = measure("miss query", items, [&](std::size_t i) {
-        return filter.possiblyContainsHash(missing[i]) ? 1u : 0u;
+        return filter.possibly_contains_hash(missing[i]) ? 1u : 0u;
     });
-    printResult(missResult);
+    print_result(missResult);
 
     std::cout << "Observed false positives=" << missResult.checksum
               << " out of " << items << '\n';

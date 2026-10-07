@@ -41,14 +41,14 @@ namespace galay::utils
          * @param length 数据长度
          * @return 64 字符的十六进制哈希字符串
          */
-        static std::string hashHex(const uint8_t* data, size_t length);
+        static std::string hash_hex(const uint8_t* data, size_t length);
 
         /**
          * @brief 计算并返回十六进制格式的 SHA-256 哈希值
          * @param data 输入字符串
          * @return 64 字符的十六进制哈希字符串
          */
-        static std::string hashHex(const std::string& data);
+        static std::string hash_hex(const std::string& data);
 
     private:
         friend class HMAC;
@@ -73,7 +73,7 @@ namespace galay::utils
         static inline uint32_t gamma1(uint32_t x) { return rotr(x, 17) ^ rotr(x, 19) ^ (x >> 10); }
 
         static void transform(uint32_t state[8], const uint8_t block[64]);
-        static std::array<uint8_t, 32> hashSegments(const uint8_t* first,
+        static std::array<uint8_t, 32> hash_segments(const uint8_t* first,
                                                     size_t first_length,
                                                     const uint8_t* second,
                                                     size_t second_length);
@@ -94,7 +94,7 @@ namespace galay::utils
          * @param dataLen 数据长度
          * @return 32 字节的 HMAC 值数组
          */
-        static std::array<uint8_t, 32> hmacSha256(const uint8_t* key, size_t keyLen,
+        static std::array<uint8_t, 32> hmac_sha256(const uint8_t* key, size_t keyLen,
                                                    const uint8_t* data, size_t dataLen);
 
         /**
@@ -103,7 +103,7 @@ namespace galay::utils
          * @param data 数据字符串
          * @return 64 字符的十六进制 HMAC 字符串
          */
-        static std::string hmacSha256Hex(const std::string& key, const std::string& data);
+        static std::string hmac_sha256_hex(const std::string& key, const std::string& data);
 
         /**
          * @brief 计算 HMAC-SHA256
@@ -111,7 +111,7 @@ namespace galay::utils
          * @param data 数据字符串
          * @return 32 字节的 HMAC 值数组
          */
-        static std::array<uint8_t, 32> hmacSha256(const std::string& key, const std::string& data);
+        static std::array<uint8_t, 32> hmac_sha256(const std::string& key, const std::string& data);
     };
 
     // Implementation
@@ -173,10 +173,10 @@ namespace galay::utils
 
     inline std::array<uint8_t, 32> SHA256::hash(const uint8_t* data, size_t length)
     {
-        return hashSegments(data, length, nullptr, 0);
+        return hash_segments(data, length, nullptr, 0);
     }
 
-    inline std::array<uint8_t, 32> SHA256::hashSegments(const uint8_t* first,
+    inline std::array<uint8_t, 32> SHA256::hash_segments(const uint8_t* first,
                                                          size_t first_length,
                                                          const uint8_t* second,
                                                          size_t second_length)
@@ -251,7 +251,7 @@ namespace galay::utils
         return result;
     }
 
-    inline std::string SHA256::hashHex(const uint8_t* data, size_t length)
+    inline std::string SHA256::hash_hex(const uint8_t* data, size_t length)
     {
         auto hashBytes = hash(data, length);
 
@@ -268,12 +268,12 @@ namespace galay::utils
         return result;
     }
 
-    inline std::string SHA256::hashHex(const std::string& data)
+    inline std::string SHA256::hash_hex(const std::string& data)
     {
-        return hashHex(reinterpret_cast<const uint8_t*>(data.data()), data.length());
+        return hash_hex(reinterpret_cast<const uint8_t*>(data.data()), data.length());
     }
 
-    inline std::array<uint8_t, 32> HMAC::hmacSha256(const uint8_t* key, size_t keyLen,
+    inline std::array<uint8_t, 32> HMAC::hmac_sha256(const uint8_t* key, size_t keyLen,
                                                      const uint8_t* data, size_t dataLen)
     {
         constexpr size_t blockSize = 64;
@@ -300,19 +300,19 @@ namespace galay::utils
             opad[i] = keyBlock[i] ^ 0x5c;
         }
 
-        const auto inner_hash = SHA256::hashSegments(ipad, blockSize, data, dataLen);
-        return SHA256::hashSegments(opad, blockSize, inner_hash.data(), inner_hash.size());
+        const auto inner_hash = SHA256::hash_segments(ipad, blockSize, data, dataLen);
+        return SHA256::hash_segments(opad, blockSize, inner_hash.data(), inner_hash.size());
     }
 
-    inline std::array<uint8_t, 32> HMAC::hmacSha256(const std::string& key, const std::string& data)
+    inline std::array<uint8_t, 32> HMAC::hmac_sha256(const std::string& key, const std::string& data)
     {
-        return hmacSha256(reinterpret_cast<const uint8_t*>(key.data()), key.length(),
+        return hmac_sha256(reinterpret_cast<const uint8_t*>(key.data()), key.length(),
                          reinterpret_cast<const uint8_t*>(data.data()), data.length());
     }
 
-    inline std::string HMAC::hmacSha256Hex(const std::string& key, const std::string& data)
+    inline std::string HMAC::hmac_sha256_hex(const std::string& key, const std::string& data)
     {
-        auto hmac = hmacSha256(key, data);
+        auto hmac = hmac_sha256(key, data);
 
         static const char hexChars[] = "0123456789abcdef";
         std::string result;

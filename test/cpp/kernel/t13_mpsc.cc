@@ -66,7 +66,7 @@ std::atomic<int> g_test3_total{0};
 std::atomic<bool> g_test3_done{false};
 
 Task<void> test_batch_send_recv(galay::mpsc::UnboundedChannel<int>* channel) {
-    auto batch = co_await channel->recvBatch(100);
+    auto batch = co_await channel->recv_batch(100);
     if (batch) {
         for (int v : *batch) {
             g_test3_total.fetch_add(v, std::memory_order_relaxed);
@@ -84,7 +84,7 @@ std::atomic<int> g_test4_value{0};
 
 Task<void> test_try_recv(galay::mpsc::UnboundedChannel<int>* channel) {
     // 先尝试接收（应该有数据，因为主线程已经发送了）
-    auto value = channel->tryRecv();
+    auto value = channel->try_recv();
     if (value) {
         g_test4_value = *value;
         g_test4_done = true;
@@ -116,7 +116,7 @@ Task<void> test_multi_producer_consumer(galay::mpsc::UnboundedChannel<int>* chan
         auto value = co_await channel->recv();
         if (!value) {
             if (g_test5_send_failed.load(std::memory_order_acquire) ||
-                channel->isClosed()) {
+                channel->is_closed()) {
                 g_test5_done = true;
                 co_return;
             }
@@ -129,11 +129,11 @@ Task<void> test_multi_producer_consumer(galay::mpsc::UnboundedChannel<int>* chan
     co_return;
 }
 
-void producerThread(galay::mpsc::UnboundedChannel<int>* channel, int id) {
+void producer_thread(galay::mpsc::UnboundedChannel<int>* channel, int id) {
     for (int i = 0; i < TEST5_MSG_PER_PRODUCER; ++i) {
         if (!channel->send(id * 100 + i)) {
             g_test5_send_failed.store(true, std::memory_order_release);
-            if (!channel->close() && !channel->isClosed()) {
+            if (!channel->close() && !channel->is_closed()) {
                 g_test5_send_failed.store(true, std::memory_order_release);
             }
             return;
@@ -188,10 +188,10 @@ Task<void> test_batch_send(galay::mpsc::UnboundedChannel<int>* channel) {
     // 接收所有数据（总共 10 个元素，分 3 批发送）
     int total_received = 0;
     while (total_received < 10) {
-        auto batch = co_await channel->recvBatch(100);
+        auto batch = co_await channel->recv_batch(100);
         if (!batch) {
             if (g_test8_send_failed.load(std::memory_order_acquire) ||
-                channel->isClosed()) {
+                channel->is_closed()) {
                 g_test8_done = true;
                 co_return;
             }
@@ -236,7 +236,7 @@ Task<void> test_high_concurrency(galay::mpsc::UnboundedChannel<int>* channel) {
         auto value = co_await channel->recv();
         if (!value) {
             if (g_test10_send_failed.load(std::memory_order_acquire) ||
-                channel->isClosed()) {
+                channel->is_closed()) {
                 g_test10_done = true;
                 co_return;
             }
@@ -248,11 +248,11 @@ Task<void> test_high_concurrency(galay::mpsc::UnboundedChannel<int>* channel) {
     co_return;
 }
 
-void highConcurrencyProducer(galay::mpsc::UnboundedChannel<int>* channel, int count) {
+void high_concurrency_producer(galay::mpsc::UnboundedChannel<int>* channel, int count) {
     for (int i = 0; i < count; ++i) {
         if (!channel->send(i)) {
             g_test10_send_failed.store(true, std::memory_order_release);
-            if (!channel->close() && !channel->isClosed()) {
+            if (!channel->close() && !channel->is_closed()) {
                 g_test10_send_failed.store(true, std::memory_order_release);
             }
             return;
@@ -276,7 +276,7 @@ Task<void> test_cross_scheduler_producer(galay::mpsc::UnboundedChannel<int>* cha
     for (int i = 1; i <= TEST11_MSG_COUNT; ++i) {
         if (!channel->send(i)) {
             g_test11_send_failed.store(true, std::memory_order_release);
-            if (!channel->close() && !channel->isClosed()) {
+            if (!channel->close() && !channel->is_closed()) {
                 g_test11_send_failed.store(true, std::memory_order_release);
             }
             g_test11_producer_done = true;
@@ -293,7 +293,7 @@ Task<void> test_cross_scheduler_consumer(galay::mpsc::UnboundedChannel<int>* cha
         auto value = co_await channel->recv();
         if (!value) {
             if (g_test11_send_failed.load(std::memory_order_acquire) ||
-                channel->isClosed()) {
+                channel->is_closed()) {
                 g_test11_consumer_done = true;
                 co_return;
             }
@@ -322,7 +322,7 @@ Task<void> test_multi_scheduler_producer(galay::mpsc::UnboundedChannel<int>* cha
     for (int i = 0; i < TEST12_MSG_PER_PRODUCER; ++i) {
         if (!channel->send(id * 100 + i)) {
             g_test12_send_failed.store(true, std::memory_order_release);
-            if (!channel->close() && !channel->isClosed()) {
+            if (!channel->close() && !channel->is_closed()) {
                 g_test12_send_failed.store(true, std::memory_order_release);
             }
             g_test12_producers_done.fetch_add(1, std::memory_order_relaxed);
@@ -340,7 +340,7 @@ Task<void> test_multi_scheduler_consumer(galay::mpsc::UnboundedChannel<int>* cha
         auto value = co_await channel->recv();
         if (!value) {
             if (g_test12_send_failed.load(std::memory_order_acquire) ||
-                channel->isClosed()) {
+                channel->is_closed()) {
                 g_test12_consumer_done = true;
                 co_return;
             }
@@ -368,7 +368,7 @@ Task<void> test_same_thread_producer(galay::mpsc::UnboundedChannel<int>* channel
     for (int i = 0; i < count; ++i) {
         if (!channel->send(startValue + i)) {
             g_test13_send_failed.store(true, std::memory_order_release);
-            if (!channel->close() && !channel->isClosed()) {
+            if (!channel->close() && !channel->is_closed()) {
                 g_test13_send_failed.store(true, std::memory_order_release);
             }
             co_return;
@@ -384,7 +384,7 @@ Task<void> test_same_thread_consumer(galay::mpsc::UnboundedChannel<int>* channel
         auto value = co_await channel->recv();
         if (!value) {
             if (g_test13_send_failed.load(std::memory_order_acquire) ||
-                channel->isClosed()) {
+                channel->is_closed()) {
                 g_test13_done = true;
                 co_return;
             }
@@ -418,7 +418,7 @@ bool test_waiter_registration_retains_task_reference() {
     galay::mpsc::UnboundedChannel<int> channel;
     RegistrationRefState state;
     auto task = test_waiter_registration_ref_task(&channel, &state);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
     auto* taskState = keeper.state();
     if (taskState == nullptr || !taskState->m_handle) {
         return false;
@@ -430,7 +430,7 @@ bool test_waiter_registration_retains_task_reference() {
     const uint64_t refsWhileRegistered =
         taskState->m_refs.load(std::memory_order_acquire);
     const bool cleared =
-        galay::mpsc::UnboundedChannelTestAccess::clearWaiter(channel, taskState);
+        galay::mpsc::UnboundedChannelTestAccess::clear_waiter(channel, taskState);
     const uint64_t refsAfterClear =
         taskState->m_refs.load(std::memory_order_acquire);
     taskState->m_handle.resume();
@@ -446,7 +446,7 @@ Task<void> test_publish_epoch_task() {
 bool test_publish_epoch_lost_wake_boundary() {
     galay::mpsc::UnboundedChannel<int> channel;
     auto task = test_publish_epoch_task();
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
     auto* taskState = keeper.state();
     if (taskState == nullptr || !taskState->m_handle) {
         return false;
@@ -454,22 +454,22 @@ bool test_publish_epoch_lost_wake_boundary() {
 
     const bool sentBeforeArming = channel.send(41);
     const bool beganBeforeRetry =
-        galay::mpsc::UnboundedChannelTestAccess::beginWaiterRegistration(channel);
-    auto first = channel.tryRecv();
-    galay::mpsc::UnboundedChannelTestAccess::cancelWaiterRegistration(channel);
+        galay::mpsc::UnboundedChannelTestAccess::begin_waiter_registration(channel);
+    auto first = channel.try_recv();
+    galay::mpsc::UnboundedChannelTestAccess::cancel_waiter_registration(channel);
 
     const bool beganDuringArming =
-        galay::mpsc::UnboundedChannelTestAccess::beginWaiterRegistration(channel);
+        galay::mpsc::UnboundedChannelTestAccess::begin_waiter_registration(channel);
     const bool sentDuringArming = channel.send(42);
     const uint64_t refsBeforePublish =
         taskState->m_refs.load(std::memory_order_acquire);
-    const bool shouldSuspend = galay::mpsc::UnboundedChannelTestAccess::publishWaiter(
+    const bool shouldSuspend = galay::mpsc::UnboundedChannelTestAccess::publish_waiter(
         channel, taskState);
     const uint64_t refsAfterPublish =
         taskState->m_refs.load(std::memory_order_acquire);
-    auto second = channel.tryRecv();
+    auto second = channel.try_recv();
     const bool cleared =
-        galay::mpsc::UnboundedChannelTestAccess::clearWaiter(channel, taskState);
+        galay::mpsc::UnboundedChannelTestAccess::clear_waiter(channel, taskState);
     const uint64_t refsAfterClear =
         taskState->m_refs.load(std::memory_order_acquire);
     taskState->m_handle.resume();
@@ -483,7 +483,7 @@ bool test_publish_epoch_lost_wake_boundary() {
 
 bool test_explicit_producer_token_api() {
     galay::mpsc::UnboundedChannel<int> channel(1024, 4);
-    auto token = channel.makeProducerToken();
+    auto token = channel.make_producer_token();
     using Token = decltype(token);
 
     static_assert(std::is_move_constructible_v<Token>);
@@ -497,17 +497,17 @@ bool test_explicit_producer_token_api() {
     const bool sentSingle = channel.send(movedToken, 1);
 
     const std::vector<int> copiedBatch{2, 3};
-    const bool sentCopiedBatch = channel.sendBatch(movedToken, copiedBatch);
+    const bool sentCopiedBatch = channel.send_batch(movedToken, copiedBatch);
 
     std::vector<int> movedBatch{4, 5};
-    const bool sentMovedBatch = channel.sendBatch(movedToken, std::move(movedBatch));
+    const bool sentMovedBatch = channel.send_batch(movedToken, std::move(movedBatch));
     const bool sentDefault = channel.send(6);
 
-    auto first = channel.tryRecv();
+    auto first = channel.try_recv();
     const bool pendingAfterPrefetch =
         first.has_value() && channel.size() > 0 && !channel.empty();
 
-    auto second = channel.tryRecv();
+    auto second = channel.try_recv();
     const bool pendingWhileCached =
         second.has_value() && channel.size() > 0 && !channel.empty();
 
@@ -522,7 +522,7 @@ bool test_explicit_producer_token_api() {
         receivedSum += *second;
     }
     while (true) {
-        auto value = channel.tryRecv();
+        auto value = channel.try_recv();
         if (!value.has_value()) {
             break;
         }
@@ -539,7 +539,7 @@ bool test_explicit_producer_token_api() {
 // ============================================================================
 // 主函数
 // ============================================================================
-void runTests() {
+void run_tests() {
     LogInfo("========================================");
     LogInfo("galay::mpsc::UnboundedChannel Unit Tests");
     LogInfo("========================================");
@@ -554,11 +554,11 @@ void runTests() {
 
         const auto schedulerStarted = scheduler.start();
         const bool scheduled = schedulerStarted.has_value() &&
-            scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduler.schedule(detail::TaskAccess::detach_task(
                 test_basic_send_recv(&channel)));
 
         const bool sent = channel.send(42);
-        if (!sent && !channel.close() && !channel.isClosed()) {
+        if (!sent && !channel.close() && !channel.is_closed()) {
             LogError("[FAIL] Basic send/recv: failed to close after send failure");
         }
 
@@ -590,7 +590,7 @@ void runTests() {
 
         const auto schedulerStarted = scheduler.start();
         const bool scheduled = schedulerStarted.has_value() &&
-            scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduler.schedule(detail::TaskAccess::detach_task(
                 test_multiple_send_recv(&channel)));
 
         // 发送数据
@@ -599,7 +599,7 @@ void runTests() {
         for (int i = 0; i < TEST2_COUNT; ++i) {
             if (!channel.send(i + 1)) {
                 allSent = false;
-                if (!channel.close() && !channel.isClosed()) {
+                if (!channel.close() && !channel.is_closed()) {
                     LogError("[FAIL] Multiple send/recv: failed to close after send failure");
                 }
                 break;
@@ -638,14 +638,14 @@ void runTests() {
         // 先发送数据
         std::vector<int> data = {1, 2, 3, 4, 5};
         int expected = 15;
-        const bool sent = channel.sendBatch(data);
-        if (!sent && !channel.close() && !channel.isClosed()) {
+        const bool sent = channel.send_batch(data);
+        if (!sent && !channel.close() && !channel.is_closed()) {
             LogError("[FAIL] Batch send/recv: failed to close after send failure");
         }
 
         const auto schedulerStarted = scheduler.start();
         const bool scheduled = schedulerStarted.has_value() &&
-            scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduler.schedule(detail::TaskAccess::detach_task(
                 test_batch_send_recv(&channel)));
 
         auto start = std::chrono::steady_clock::now();
@@ -679,12 +679,12 @@ void runTests() {
 
         // 先发送数据，确保数据在协程启动前就在 channel 中
         const bool sent = channel.send(99);
-        if (!sent && !channel.close() && !channel.isClosed()) {
+        if (!sent && !channel.close() && !channel.is_closed()) {
             LogError("[FAIL] try_recv: failed to close after send failure");
         }
 
         const bool scheduled = schedulerStarted.has_value() &&
-            scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduler.schedule(detail::TaskAccess::detach_task(
                 test_try_recv(&channel)));
 
         auto start = std::chrono::steady_clock::now();
@@ -716,13 +716,13 @@ void runTests() {
 
         const auto schedulerStarted = scheduler.start();
         const bool scheduled = schedulerStarted.has_value() &&
-            scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduler.schedule(detail::TaskAccess::detach_task(
                 test_multi_producer_consumer(&channel)));
 
         // 启动多个生产者线程
         std::vector<std::thread> producers;
         for (int i = 0; i < TEST5_PRODUCER_COUNT; ++i) {
-            producers.emplace_back(producerThread, &channel, i);
+            producers.emplace_back(producer_thread, &channel, i);
         }
 
         // 等待生产者完成
@@ -763,7 +763,7 @@ void runTests() {
 
         const auto schedulerStarted = scheduler.start();
         const bool scheduled = schedulerStarted.has_value() &&
-            scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduler.schedule(detail::TaskAccess::detach_task(
                 test_empty_channel_wait(&channel)));
 
         // 等待消费者开始等待
@@ -775,7 +775,7 @@ void runTests() {
 
         // 延迟发送
         const bool sent = channel.send(123);
-        if (!sent && !channel.close() && !channel.isClosed()) {
+        if (!sent && !channel.close() && !channel.is_closed()) {
             LogError("[FAIL] Empty channel wait: failed to close after send failure");
         }
 
@@ -810,7 +810,7 @@ void runTests() {
         for (int i = 0; i < 5; ++i) {
             if (!channel.send(i)) {
                 allSent = false;
-                if (!channel.close() && !channel.isClosed()) {
+                if (!channel.close() && !channel.is_closed()) {
                     LogError("[FAIL] size/empty: failed to close after send failure");
                 }
                 break;
@@ -822,7 +822,7 @@ void runTests() {
 
         const auto schedulerStarted = scheduler.start();
         const bool scheduled = schedulerStarted.has_value() &&
-            scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduler.schedule(detail::TaskAccess::detach_task(
                 test_size_and_empty(&channel)));
 
         auto start = std::chrono::steady_clock::now();
@@ -857,7 +857,7 @@ void runTests() {
 
         const auto schedulerStarted = scheduler.start();
         const bool scheduled = schedulerStarted.has_value() &&
-            scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduler.schedule(detail::TaskAccess::detach_task(
                 test_batch_send(&channel)));
 
         // 批量发送
@@ -865,16 +865,16 @@ void runTests() {
         std::vector<int> batch2 = {4, 5, 6, 7};
         std::vector<int> batch3 = {8, 9, 10};
 
-        bool allSent = channel.sendBatch(batch1);
+        bool allSent = channel.send_batch(batch1);
         if (allSent) {
-            allSent = channel.sendBatch(batch2);
+            allSent = channel.send_batch(batch2);
         }
         if (allSent) {
-            allSent = channel.sendBatch(batch3);
+            allSent = channel.send_batch(batch3);
         }
         if (!allSent) {
             g_test8_send_failed.store(true, std::memory_order_release);
-            if (!channel.close() && !channel.isClosed()) {
+            if (!channel.close() && !channel.is_closed()) {
                 LogError("[FAIL] Batch send: failed to close after send failure");
             }
         }
@@ -914,11 +914,11 @@ void runTests() {
 
         const auto schedulerStarted = scheduler.start();
         const bool scheduled = schedulerStarted.has_value() &&
-            scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduler.schedule(detail::TaskAccess::detach_task(
                 test_string_channel(&channel)));
 
         const bool sent = channel.send(std::string("Hello, Channel!"));
-        if (!sent && !channel.close() && !channel.isClosed()) {
+        if (!sent && !channel.close() && !channel.is_closed()) {
             LogError("[FAIL] String channel: failed to close after send failure");
         }
 
@@ -951,14 +951,14 @@ void runTests() {
 
         const auto schedulerStarted = scheduler.start();
         const bool scheduled = schedulerStarted.has_value() &&
-            scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduler.schedule(detail::TaskAccess::detach_task(
                 test_high_concurrency(&channel)));
 
         // 多线程发送
         std::vector<std::thread> senders;
         int per_thread = TEST10_TOTAL / 4;
         for (int i = 0; i < 4; ++i) {
-            senders.emplace_back(highConcurrencyProducer, &channel, per_thread);
+            senders.emplace_back(high_concurrency_producer, &channel, per_thread);
         }
 
         for (auto& t : senders) {
@@ -1004,7 +1004,7 @@ void runTests() {
         std::thread consumerThread([&]() {
             const auto schedulerStarted = consumerScheduler.start();
             const bool scheduled = schedulerStarted.has_value() &&
-                consumerScheduler.schedule(detail::TaskAccess::detachTask(
+                consumerScheduler.schedule(detail::TaskAccess::detach_task(
                     test_cross_scheduler_consumer(&channel)));
             if (!scheduled) {
                 schedulingFailed.store(true, std::memory_order_release);
@@ -1022,7 +1022,7 @@ void runTests() {
         std::thread producerThread([&]() {
             const auto schedulerStarted = producerScheduler.start();
             const bool scheduled = schedulerStarted.has_value() &&
-                producerScheduler.schedule(detail::TaskAccess::detachTask(
+                producerScheduler.schedule(detail::TaskAccess::detach_task(
                     test_cross_scheduler_producer(&channel)));
             if (!scheduled) {
                 schedulingFailed.store(true, std::memory_order_release);
@@ -1079,7 +1079,7 @@ void runTests() {
         std::thread consumerThread([&]() {
             const auto schedulerStarted = consumerScheduler.start();
             const bool scheduled = schedulerStarted.has_value() &&
-                consumerScheduler.schedule(detail::TaskAccess::detachTask(
+                consumerScheduler.schedule(detail::TaskAccess::detach_task(
                     test_multi_scheduler_consumer(&channel)));
             if (!scheduled) {
                 schedulingFailed.store(true, std::memory_order_release);
@@ -1105,7 +1105,7 @@ void runTests() {
                 const auto schedulerStarted = producerSchedulers[i]->start();
                 const bool scheduled = schedulerStarted.has_value() &&
                     producerSchedulers[i]->schedule(
-                        detail::TaskAccess::detachTask(
+                        detail::TaskAccess::detach_task(
                             test_multi_scheduler_producer(&channel, i)));
                 if (!scheduled) {
                     schedulingFailed.store(true, std::memory_order_release);
@@ -1161,30 +1161,30 @@ void runTests() {
         bool scheduled = schedulerStarted.has_value();
 
         // 在同一个调度器中启动消费者和多个生产者
-        // 这样 send 时 waiterScheduler->threadId() == std::this_thread::get_id()
+        // 这样 send 时 waiterScheduler->thread_id() == std::this_thread::get_id()
         // 会走直接 resume 的高性能路径
         if (scheduled) {
-            scheduled = scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduled = scheduler.schedule(detail::TaskAccess::detach_task(
                 test_same_thread_consumer(&channel, TEST13_MSG_COUNT)));
         }
 
         // 启动多个生产者协程，每个发送一部分数据
         int perProducer = TEST13_MSG_COUNT / 4;
         if (scheduled) {
-            scheduled = scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduled = scheduler.schedule(detail::TaskAccess::detach_task(
                 test_same_thread_producer(&channel, 0, perProducer)));
         }
         if (scheduled) {
-            scheduled = scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduled = scheduler.schedule(detail::TaskAccess::detach_task(
                 test_same_thread_producer(&channel, perProducer, perProducer)));
         }
         if (scheduled) {
-            scheduled = scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduled = scheduler.schedule(detail::TaskAccess::detach_task(
                 test_same_thread_producer(&channel, perProducer * 2,
                                           perProducer)));
         }
         if (scheduled) {
-            scheduled = scheduler.schedule(detail::TaskAccess::detachTask(
+            scheduled = scheduler.schedule(detail::TaskAccess::detach_task(
                 test_same_thread_producer(&channel, perProducer * 3,
                                           perProducer)));
         }
@@ -1225,11 +1225,11 @@ void runTests() {
 
         galay::mpsc::UnboundedChannel<int> channel;
         const bool sent = channel.send(7);
-        const auto immediate = channel.tryRecvBatch(0);
-        auto awaitable = channel.recvBatch(0);
+        const auto immediate = channel.try_recv_batch(0);
+        auto awaitable = channel.recv_batch(0);
         const bool ready = awaitable.await_ready();
         auto awaited = awaitable.await_resume();
-        const auto remaining = channel.tryRecv();
+        const auto remaining = channel.try_recv();
 
         const bool passed = sent && immediate.has_value() && immediate->empty() &&
                             ready && awaited.has_value() && awaited->empty() &&
@@ -1295,16 +1295,16 @@ void runTests() {
 
 int main() {
     galay::test::TestResultWriter resultWriter("test_mpsc_channel");
-    runTests();
+    run_tests();
 
     // 写入测试结果
-    resultWriter.addTest();
+    resultWriter.add_test();
     if (g_passed == g_total) {
-        resultWriter.addPassed();
+        resultWriter.add_passed();
     } else {
-        resultWriter.addFailed();
+        resultWriter.add_failed();
     }
-    resultWriter.writeResult();
+    resultWriter.write_result();
 
     return (g_passed == g_total) ? 0 : 1;
 }

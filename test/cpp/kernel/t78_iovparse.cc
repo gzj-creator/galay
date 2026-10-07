@@ -1,7 +1,7 @@
 /**
  * @file t78_iovparse.cc
  * @brief 用途：验证 builder `readv -> parse -> writev` 流程能在半包场景下重臂 readv。
- * 关键覆盖点：`AwaitableBuilder::readv(...)`、`parse<&Flow::onParse>()`、
+ * 关键覆盖点：`AwaitableBuilder::readv(...)`、`parse<&Flow::on_parse>()`、
  * `AwaitableBuilder::writev(...)` 的混合桥接，以及 `ParseStatus::kNeedMore`
  * 在 iovec 接收路径上的重入行为。
  * 通过条件：读到分段 frame 后解析出 payload，并回写 `ACK:` + payload。
@@ -68,7 +68,7 @@ struct ParseBridgeFlow {
         send_iovecs[1].iov_len = 0;
     }
 
-    void onReadv(SequenceOps<BridgeResult, 4>& ops, ReadvIOContext& ctx) {
+    void on_readv(SequenceOps<BridgeResult, 4>& ops, ReadvIOContext& ctx) {
         if (!ctx.m_result) {
             ops.complete(std::unexpected(ctx.m_result.error()));
             return;
@@ -82,7 +82,7 @@ struct ParseBridgeFlow {
         inbox.append(body_scratch.data(), body_bytes);
     }
 
-    ParseStatus onParse(SequenceOps<BridgeResult, 4>&) {
+    ParseStatus on_parse(SequenceOps<BridgeResult, 4>&) {
         if (inbox.size() < sizeof(uint32_t)) {
             state->need_more_count.fetch_add(1, std::memory_order_release);
             return ParseStatus::kNeedMore;
@@ -105,7 +105,7 @@ struct ParseBridgeFlow {
         return ParseStatus::kCompleted;
     }
 
-    void onWritev(SequenceOps<BridgeResult, 4>& ops, WritevIOContext& ctx) {
+    void on_writev(SequenceOps<BridgeResult, 4>& ops, WritevIOContext& ctx) {
         if (!ctx.m_result) {
             ops.complete(std::unexpected(ctx.m_result.error()));
             return;
@@ -127,7 +127,7 @@ struct ParseBridgeFlow {
     TestState* state;
 };
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -140,7 +140,7 @@ bool waitUntil(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-bool waitUntilAtLeast(const std::atomic<uint32_t>& value,
+bool wait_until_at_least(const std::atomic<uint32_t>& value,
                       uint32_t target,
                       std::chrono::milliseconds timeout = 1000ms,
                       std::chrono::milliseconds step = 2ms) {
@@ -154,7 +154,7 @@ bool waitUntilAtLeast(const std::atomic<uint32_t>& value,
     return value.load(std::memory_order_acquire) >= target;
 }
 
-bool sendAll(int fd, const char* buffer, size_t length) {
+bool send_all(int fd, const char* buffer, size_t length) {
     size_t sent = 0;
     while (sent < length) {
         const ssize_t n = ::send(fd, buffer + sent, length - sent, 0);
@@ -166,7 +166,7 @@ bool sendAll(int fd, const char* buffer, size_t length) {
     return true;
 }
 
-bool recvExact(int fd, char* buffer, size_t length) {
+bool recv_exact(int fd, char* buffer, size_t length) {
     size_t received = 0;
     while (received < length) {
         const ssize_t n = ::recv(fd, buffer + received, length - received, 0);
@@ -178,31 +178,31 @@ bool recvExact(int fd, char* buffer, size_t length) {
     return true;
 }
 
-bool setNonBlocking(int fd) {
+bool set_non_blocking(int fd) {
     const int flags = fcntl(fd, F_GETFL, 0);
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
 template <typename BuilderT>
-auto makeParseBridgeAwaitable(BuilderT& builder, ParseBridgeFlow& flow) {
-    auto with_readv = builder.template readv<&ParseBridgeFlow::onReadv>(
+auto make_parse_bridge_awaitable(BuilderT& builder, ParseBridgeFlow& flow) {
+    auto with_readv = builder.template readv<&ParseBridgeFlow::on_readv>(
         flow.recv_iovecs,
         flow.recv_iovecs.size()
     );
-    auto with_parse = with_readv.template parse<&ParseBridgeFlow::onParse>();
-    auto with_writev = with_parse.template writev<&ParseBridgeFlow::onWritev>(
+    auto with_parse = with_readv.template parse<&ParseBridgeFlow::on_parse>();
+    auto with_writev = with_parse.template writev<&ParseBridgeFlow::on_writev>(
         flow.send_iovecs,
         flow.send_iovecs.size()
     );
     return with_writev.build();
 }
 
-Task<void> parseBridgeTask(TestState* state, int fd) {
+Task<void> parse_bridge_task(TestState* state, int fd) {
     IOController controller(GHandle{.fd = fd});
     ParseBridgeFlow flow(state);
 
     auto builder = AwaitableBuilder<BridgeResult, 4, ParseBridgeFlow>(&controller, flow);
-    auto awaitable = makeParseBridgeAwaitable(builder, flow);
+    auto awaitable = make_parse_bridge_awaitable(builder, flow);
 
     auto result = co_await awaitable;
     state->success.store(
@@ -224,7 +224,7 @@ int main() {
         std::cerr << "[T78] socketpair failed: " << std::strerror(errno) << "\n";
         return 1;
     }
-    if (!setNonBlocking(fds[0])) {
+    if (!set_non_blocking(fds[0])) {
         std::cerr << "[T78] failed to set scheduler fd non-blocking\n";
         close(fds[0]);
         close(fds[1]);
@@ -242,7 +242,7 @@ int main() {
         };
         char ack[8]{};
 
-        sendAll(fds[1], reinterpret_cast<const char*>(frame), 2);
+        send_all(fds[1], reinterpret_cast<const char*>(frame), 2);
         state.first_fragment_sent.store(true, std::memory_order_release);
         while (!state.allow_second_fragment.load(std::memory_order_acquire) &&
                !state.abort_peer.load(std::memory_order_acquire)) {
@@ -251,15 +251,15 @@ int main() {
         if (state.abort_peer.load(std::memory_order_acquire)) {
             return;
         }
-        if (sendAll(fds[1], reinterpret_cast<const char*>(frame + 2), sizeof(frame) - 2) &&
-            recvExact(fds[1], ack, sizeof(ack))) {
+        if (send_all(fds[1], reinterpret_cast<const char*>(frame + 2), sizeof(frame) - 2) &&
+            recv_exact(fds[1], ack, sizeof(ack))) {
             state.ack_ok.store(std::string(ack, sizeof(ack)) == "ACK:ping", std::memory_order_release);
         }
     });
 
-    scheduleTask(scheduler, parseBridgeTask(&state, fds[0]));
+    schedule_task(scheduler, parse_bridge_task(&state, fds[0]));
 
-    const bool first_fragment_observed = waitUntil(state.first_fragment_sent, 500ms);
+    const bool first_fragment_observed = wait_until(state.first_fragment_sent, 500ms);
     if (!first_fragment_observed) {
         state.abort_peer.store(true, std::memory_order_release);
         state.allow_second_fragment.store(true, std::memory_order_release);
@@ -271,8 +271,8 @@ int main() {
         return 1;
     }
 
-    const bool first_read_seen = waitUntilAtLeast(state.readv_count, 1, 500ms);
-    const bool need_more_seen = waitUntilAtLeast(state.need_more_count, 1, 500ms);
+    const bool first_read_seen = wait_until_at_least(state.readv_count, 1, 500ms);
+    const bool need_more_seen = wait_until_at_least(state.need_more_count, 1, 500ms);
     if (!first_read_seen || !need_more_seen || state.done.load(std::memory_order_acquire)) {
         state.abort_peer.store(true, std::memory_order_release);
         state.allow_second_fragment.store(true, std::memory_order_release);
@@ -285,7 +285,7 @@ int main() {
     }
     state.allow_second_fragment.store(true, std::memory_order_release);
 
-    const bool completed = waitUntil(state.done);
+    const bool completed = wait_until(state.done);
     scheduler.stop();
     close(fds[0]);
     peer.join();

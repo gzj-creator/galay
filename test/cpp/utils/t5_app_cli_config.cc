@@ -19,21 +19,21 @@ port = 8080
 debug = true
 )";
 
-    assert(config.parseString(configContent));
+    assert(config.parse_string(configContent));
 
-    assert(config.getValue("database.host").value() == "localhost");
-    assert(config.getValueAs<int>("database.port", 0) == 5432);
-    assert(config.getValue("database.name").value() == "test_db");
-    assert(config.getValueAs<int>("server.port", 0) == 8080);
+    assert(config.get_value("database.host").value() == "localhost");
+    assert(config.get_value_as<int>("database.port", 0) == 5432);
+    assert(config.get_value("database.name").value() == "test_db");
+    assert(config.get_value_as<int>("server.port", 0) == 8080);
 
-    auto dbKeys = config.getKeysInSection("database");
+    auto dbKeys = config.get_keys_in_section("database");
     assert(dbKeys.size() == 3);
 
     // INI parser
     IniParser ini;
-    assert(ini.parseString(configContent));
-    assert(ini.getValue("database.host").value() == "localhost");
-    assert(ini.getValueAs<int>("server.port", 0) == 8080);
+    assert(ini.parse_string(configContent));
+    assert(ini.get_value("database.host").value() == "localhost");
+    assert(ini.get_value_as<int>("server.port", 0) == 8080);
 
     // Env parser
     EnvParser env;
@@ -44,10 +44,10 @@ export API_KEY=secret123
 DEBUG=true
 )";
 
-    assert(env.parseString(envContent));
-    assert(env.getValue("DATABASE_URL").value() == "postgres://localhost/db");
-    assert(env.getValue("API_KEY").value() == "secret123");
-    assert(env.getValue("DEBUG").value() == "true");
+    assert(env.parse_string(envContent));
+    assert(env.get_value("DATABASE_URL").value() == "postgres://localhost/db");
+    assert(env.get_value("API_KEY").value() == "secret123");
+    assert(env.get_value("DEBUG").value() == "true");
 
     // TOML parser
     TomlParser toml;
@@ -63,16 +63,16 @@ ratio = 0.75
 tags = ["primary", "readonly"]
 )";
 
-    assert(toml.parseString(tomlContent));
-    assert(toml.getValue("title").value() == "galay-utils");
-    assert(toml.getValue("enabled").value() == "true");
-    assert(toml.getValueAs<int>("database.port", 0) == 5432);
-    assert(toml.getValue("database.ratio").value() == "0.75");
+    assert(toml.parse_string(tomlContent));
+    assert(toml.get_value("title").value() == "galay-utils");
+    assert(toml.get_value("enabled").value() == "true");
+    assert(toml.get_value_as<int>("database.port", 0) == 5432);
+    assert(toml.get_value("database.ratio").value() == "0.75");
 
-    auto ports = toml.getArray("ports");
+    auto ports = toml.get_array("ports");
     assert(ports.size() == 3 && ports[0] == "8000" && ports[2] == "8002");
 
-    auto tags = toml.getArray("database.tags");
+    auto tags = toml.get_array("database.tags");
     assert(tags.size() == 2 && tags[0] == "primary" && tags[1] == "readonly");
 
     TomlParser tomlMultilineArray;
@@ -90,16 +90,16 @@ tags = [
 ]
 )";
 
-    assert(tomlMultilineArray.parseString(tomlMultilineArrayContent));
-    auto multilinePorts = tomlMultilineArray.getArray("ports");
+    assert(tomlMultilineArray.parse_string(tomlMultilineArrayContent));
+    auto multilinePorts = tomlMultilineArray.get_array("ports");
     assert(multilinePorts.size() == 3 && multilinePorts[0] == "8000" && multilinePorts[2] == "8002");
 
-    auto multilineTags = tomlMultilineArray.getArray("database.tags");
+    auto multilineTags = tomlMultilineArray.get_array("database.tags");
     assert(multilineTags.size() == 2 && multilineTags[0] == "primary" && multilineTags[1] == "readonly");
 
     TomlParser tomlTrailingCommaArray;
-    assert(tomlTrailingCommaArray.parseString("ports = [7000, 7001,]"));
-    auto trailingCommaPorts = tomlTrailingCommaArray.getArray("ports");
+    assert(tomlTrailingCommaArray.parse_string("ports = [7000, 7001,]"));
+    auto trailingCommaPorts = tomlTrailingCommaArray.get_array("ports");
     assert(trailingCommaPorts.size() == 2 && trailingCommaPorts[0] == "7000" && trailingCommaPorts[1] == "7001");
 
     TomlParser tomlCommentedMultilineArray;
@@ -111,8 +111,8 @@ ports = [ # opening comment
 ] # closing comment
 )";
 
-    assert(tomlCommentedMultilineArray.parseString(tomlCommentedMultilineArrayContent));
-    auto commentedPorts = tomlCommentedMultilineArray.getArray("ports");
+    assert(tomlCommentedMultilineArray.parse_string(tomlCommentedMultilineArrayContent));
+    auto commentedPorts = tomlCommentedMultilineArray.get_array("ports");
     assert(commentedPorts.size() == 2 && commentedPorts[0] == "8000" && commentedPorts[1] == "8001");
 
     TomlParser tomlQuotedMultilineArray;
@@ -124,21 +124,21 @@ tags = [
 ]
 )";
 
-    assert(tomlQuotedMultilineArray.parseString(tomlQuotedMultilineArrayContent));
-    auto quotedTags = tomlQuotedMultilineArray.getArray("tags");
+    assert(tomlQuotedMultilineArray.parse_string(tomlQuotedMultilineArrayContent));
+    auto quotedTags = tomlQuotedMultilineArray.get_array("tags");
     assert(quotedTags.size() == 3);
     assert(quotedTags[0] == "literal ] # not comment");
     assert(quotedTags[1] == "a,b");
     assert(quotedTags[2] == R"(C:\tmp\)");
 
     TomlParser tomlLiteralString;
-    assert(tomlLiteralString.parseString(R"(path = 'C:\tmp\' # keep literal backslash)"));
-    assert(tomlLiteralString.getValue("path").value() == R"(C:\tmp\)");
+    assert(tomlLiteralString.parse_string(R"(path = 'C:\tmp\' # keep literal backslash)"));
+    assert(tomlLiteralString.get_value("path").value() == R"(C:\tmp\)");
 
-    auto tomlParser = ParserManager::instance().createParser("config.toml");
+    auto tomlParser = ParserManager::instance().create_parser("config.toml");
     assert(tomlParser != nullptr);
-    assert(tomlParser->parseString(tomlContent));
-    assert(tomlParser->getValue("database.host").value() == "localhost");
+    assert(tomlParser->parse_string(tomlContent));
+    assert(tomlParser->get_value("database.host").value() == "localhost");
 
     TomlParser tomlEdge;
     std::string tomlEdgeContent = R"(
@@ -153,72 +153,72 @@ enabled = false
 ports = [8080, 8081]
 )";
 
-    assert(tomlEdge.parseString(tomlEdgeContent));
-    assert(tomlEdge.getValue("title").value() == "value # not comment");
-    assert(tomlEdge.getValue("path").value() == "literal/path");
-    assert(tomlEdge.getValue("owner.name").value() == "galay");
-    assert(tomlEdge.getValue("server.enabled").value() == "false");
+    assert(tomlEdge.parse_string(tomlEdgeContent));
+    assert(tomlEdge.get_value("title").value() == "value # not comment");
+    assert(tomlEdge.get_value("path").value() == "literal/path");
+    assert(tomlEdge.get_value("owner.name").value() == "galay");
+    assert(tomlEdge.get_value("server.enabled").value() == "false");
 
-    auto emptyArray = tomlEdge.getArray("empty");
+    auto emptyArray = tomlEdge.get_array("empty");
     assert(emptyArray.empty());
 
-    auto serverPorts = tomlEdge.getArray("server.ports");
+    auto serverPorts = tomlEdge.get_array("server.ports");
     assert(serverPorts.size() == 2 && serverPorts[0] == "8080" && serverPorts[1] == "8081");
 
     TomlParser invalidToml;
-    assert(!invalidToml.parseString("invalid line"));
-    assert(!invalidToml.lastError().empty());
-    assert(!invalidToml.parseString("bad = [1, 2"));
-    assert(!invalidToml.parseString("[[products]]\nname = \"x\""));
-    assert(!invalidToml.parseString("[]\nname = \"x\""));
-    assert(!invalidToml.parseString("name = \"unterminated"));
-    assert(!invalidToml.parseString("path = 'unterminated"));
-    assert(!invalidToml.parseString("name = \"a\"\nname = \"b\""));
-    assert(!invalidToml.parseString("[database]\nhost = \"a\"\n[database]\nhost = \"b\""));
-    assert(!invalidToml.parseString("= \"value\""));
-    assert(!invalidToml.parseString(".name = \"value\""));
-    assert(!invalidToml.parseString("name. = \"value\""));
-    assert(!invalidToml.parseString("[database.]\nhost = \"localhost\""));
-    assert(!invalidToml.parseString("ports = [1,,2]"));
-    assert(!invalidToml.parseString("names = [\"a]"));
-    assert(!invalidToml.parseString("nested = [[1], [2]]"));
-    assert(!invalidToml.parseString("inline = { name = \"galay\" }"));
-    assert(!invalidToml.parseString("date = 2026-04-29T10:00:00Z"));
-    assert(!invalidToml.parseString("enabled = True"));
-    assert(!invalidToml.parseString("text = \"bad \\q escape\""));
-    assert(!invalidToml.parseString("text = \"bad \\u12 escape\""));
-    assert(!invalidToml.parseString("number = 01"));
-    assert(!invalidToml.parseString("number = 1."));
-    assert(!invalidToml.parseString("number = .1"));
-    assert(!invalidToml.parseString("number = 1_000"));
-    assert(!invalidToml.parseString("number = 1e10"));
-    assert(!invalidToml.parseString("number = nan"));
-    assert(!invalidToml.parseString("number = inf"));
-    assert(!invalidToml.parseString("mixed = [1, \"a\"]"));
-    assert(!invalidToml.parseString("trailing = [1, ,]"));
-    assert(!invalidToml.parseString("database = \"x\"\n[database]\nhost = \"localhost\""));
-    assert(!invalidToml.parseString("[database]\nhost = \"localhost\"\n[database.host]\nport = 1"));
-    assert(!invalidToml.parseString("a = 1\na.b = 2"));
-    assert(!invalidToml.parseString("a.b = 2\na = 1"));
-    assert(!invalidToml.parseString("[db]\nhost = \"a\"\n[db]\nport = 1"));
-    assert(!invalidToml.parseString("key = # missing"));
-    assert(!invalidToml.parseString("\"quoted key\" = 1"));
-    assert(!invalidToml.parseString("中文 = 1"));
-    assert(!invalidToml.parseString("name = \"a\" \"b\""));
-    assert(!invalidToml.parseString("name = 'a' 'b'"));
-    assert(!invalidToml.parseString(R"(name = "unterminated by escaped quote\")"));
-    assert(!invalidToml.parseString("ports = [\n    8000,\n"));
-    assert(!invalidToml.parseString("ports = [\n    8000\n] trailing"));
-    assert(!invalidToml.parseString("ports = [\n    8000\n[database]\nhost = \"localhost\"\n"));
-    assert(!invalidToml.parseString("ports = [\n    8000\nname = \"x\"\n]"));
-    assert(!invalidToml.parseString("names = [\n    \"a]\n]"));
-    assert(!invalidToml.parseString("nested = [\n    [1]\n]"));
-    assert(!invalidToml.parseString("tags = [\n    \"a\"\n    \"b\"\n]"));
-    assert(!invalidToml.parseString("tags = [\n    'a'\n    'b'\n]"));
+    assert(!invalidToml.parse_string("invalid line"));
+    assert(!invalidToml.last_error().empty());
+    assert(!invalidToml.parse_string("bad = [1, 2"));
+    assert(!invalidToml.parse_string("[[products]]\nname = \"x\""));
+    assert(!invalidToml.parse_string("[]\nname = \"x\""));
+    assert(!invalidToml.parse_string("name = \"unterminated"));
+    assert(!invalidToml.parse_string("path = 'unterminated"));
+    assert(!invalidToml.parse_string("name = \"a\"\nname = \"b\""));
+    assert(!invalidToml.parse_string("[database]\nhost = \"a\"\n[database]\nhost = \"b\""));
+    assert(!invalidToml.parse_string("= \"value\""));
+    assert(!invalidToml.parse_string(".name = \"value\""));
+    assert(!invalidToml.parse_string("name. = \"value\""));
+    assert(!invalidToml.parse_string("[database.]\nhost = \"localhost\""));
+    assert(!invalidToml.parse_string("ports = [1,,2]"));
+    assert(!invalidToml.parse_string("names = [\"a]"));
+    assert(!invalidToml.parse_string("nested = [[1], [2]]"));
+    assert(!invalidToml.parse_string("inline = { name = \"galay\" }"));
+    assert(!invalidToml.parse_string("date = 2026-04-29T10:00:00Z"));
+    assert(!invalidToml.parse_string("enabled = True"));
+    assert(!invalidToml.parse_string("text = \"bad \\q escape\""));
+    assert(!invalidToml.parse_string("text = \"bad \\u12 escape\""));
+    assert(!invalidToml.parse_string("number = 01"));
+    assert(!invalidToml.parse_string("number = 1."));
+    assert(!invalidToml.parse_string("number = .1"));
+    assert(!invalidToml.parse_string("number = 1_000"));
+    assert(!invalidToml.parse_string("number = 1e10"));
+    assert(!invalidToml.parse_string("number = nan"));
+    assert(!invalidToml.parse_string("number = inf"));
+    assert(!invalidToml.parse_string("mixed = [1, \"a\"]"));
+    assert(!invalidToml.parse_string("trailing = [1, ,]"));
+    assert(!invalidToml.parse_string("database = \"x\"\n[database]\nhost = \"localhost\""));
+    assert(!invalidToml.parse_string("[database]\nhost = \"localhost\"\n[database.host]\nport = 1"));
+    assert(!invalidToml.parse_string("a = 1\na.b = 2"));
+    assert(!invalidToml.parse_string("a.b = 2\na = 1"));
+    assert(!invalidToml.parse_string("[db]\nhost = \"a\"\n[db]\nport = 1"));
+    assert(!invalidToml.parse_string("key = # missing"));
+    assert(!invalidToml.parse_string("\"quoted key\" = 1"));
+    assert(!invalidToml.parse_string("中文 = 1"));
+    assert(!invalidToml.parse_string("name = \"a\" \"b\""));
+    assert(!invalidToml.parse_string("name = 'a' 'b'"));
+    assert(!invalidToml.parse_string(R"(name = "unterminated by escaped quote\")"));
+    assert(!invalidToml.parse_string("ports = [\n    8000,\n"));
+    assert(!invalidToml.parse_string("ports = [\n    8000\n] trailing"));
+    assert(!invalidToml.parse_string("ports = [\n    8000\n[database]\nhost = \"localhost\"\n"));
+    assert(!invalidToml.parse_string("ports = [\n    8000\nname = \"x\"\n]"));
+    assert(!invalidToml.parse_string("names = [\n    \"a]\n]"));
+    assert(!invalidToml.parse_string("nested = [\n    [1]\n]"));
+    assert(!invalidToml.parse_string("tags = [\n    \"a\"\n    \"b\"\n]"));
+    assert(!invalidToml.parse_string("tags = [\n    'a'\n    'b'\n]"));
 
     TomlParser tomlCrlf;
-    assert(tomlCrlf.parseString("name = \"galay\"\r\n[server]\r\nport = 8080\r\n"));
-    assert(tomlCrlf.getValue("server.port").value() == "8080");
+    assert(tomlCrlf.parse_string("name = \"galay\"\r\n[server]\r\nport = 8080\r\n"));
+    assert(tomlCrlf.get_value("server.port").value() == "8080");
 
     std::cout << "Parser tests passed!" << std::endl;
 }
@@ -261,7 +261,7 @@ void test_app_defaults_and_errors() {
     const char* missing[] = {"test-app", "--count", "7"};
     assert(app.run(3, missing, out, err) == 1);
     assert(err.str().find("missing required argument: --who") != std::string::npos);
-    assert(!required.isSet());
+    assert(!required.is_set());
     assert(count.value() == 7);
 
     err.str({});
@@ -292,7 +292,7 @@ void test_app_flags_and_multi() {
     auto& tags = app.opt<std::string>("tag", 't', "Tags").multi();
 
     std::vector<std::string> boundTags;
-    tags.bindAll(&boundTags);
+    tags.bind_all(&boundTags);
 
     const char* argv[] = {"test-app", "--no-color", "-q", "-t", "a", "--tag=b", "-tc"};
     assert(app.run(7, argv) == 0);

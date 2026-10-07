@@ -24,23 +24,23 @@ static_assert(std::is_same_v<
     decltype(std::declval<galay::tracing::OtlpHttpRequest>().headers),
     std::span<const galay::tracing::OtlpHttpHeader>>);
 
-galay::tracing::TraceContext makeContext() {
+galay::tracing::TraceContext make_context() {
     auto context = galay::tracing::TraceContext(
-        galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
-        galay::tracing::SpanId::fromHex("00f067aa0ba902b7"),
+        galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"),
+        galay::tracing::SpanId::from_hex("00f067aa0ba902b7"),
         0x01,
         "vendor=value");
-    context.setParentSpanId(galay::tracing::SpanId::fromHex("1111111111111111"));
+    context.set_parent_span_id(galay::tracing::SpanId::from_hex("1111111111111111"));
     return context;
 }
 
-galay::tracing::Span makeSpan(std::string_view name) {
-    galay::tracing::Span span(std::string(name), makeContext());
+galay::tracing::Span make_span(std::string_view name) {
+    galay::tracing::Span span(std::string(name), make_context());
     span.end();
     return span;
 }
 
-bool hasHeader(const galay::tracing::OtlpHttpRequest& request, std::string_view name, std::string_view value) {
+bool has_header(const galay::tracing::OtlpHttpRequest& request, std::string_view name, std::string_view value) {
     for (const auto& header : request.headers) {
         if (header.name == name && header.value == value) {
             return true;
@@ -49,7 +49,7 @@ bool hasHeader(const galay::tracing::OtlpHttpRequest& request, std::string_view 
     return false;
 }
 
-void configurableEndpointHeadersAndBodyAreSent() {
+void configurable_endpoint_headers_and_body_are_sent() {
     auto config = galay::tracing::OtlpHttpExporterConfig{
         .endpoint = "http://collector.example:4318/v1/traces",
         .timeout = std::chrono::milliseconds(250),
@@ -62,8 +62,8 @@ void configurableEndpointHeadersAndBodyAreSent() {
         assert(request.method == "POST");
         assert(request.endpoint == config.endpoint);
         assert(request.timeout == config.timeout);
-        assert(hasHeader(request, "content-type", "application/json"));
-        assert(hasHeader(request, "authorization", "Bearer token"));
+        assert(has_header(request, "content-type", "application/json"));
+        assert(has_header(request, "authorization", "Bearer token"));
         assert(request.body.find("\"resourceSpans\"") != std::string::npos);
         assert(request.body.find("\"scopeSpans\"") != std::string::npos);
         assert(request.body.find("\"traceId\":\"4bf92f3577b34da6a3ce929d0e0e4736\"") != std::string::npos);
@@ -76,14 +76,14 @@ void configurableEndpointHeadersAndBodyAreSent() {
 
     galay::tracing::OtlpHttpExporter exporter(config, transport);
     std::vector<galay::tracing::Span> spans;
-    spans.push_back(makeSpan("span \"quoted\""));
+    spans.push_back(make_span("span \"quoted\""));
 
-    assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
+    assert(exporter.export_spans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
 
     assert(captured);
 }
 
-void emptyBatchDoesNotSendRequest() {
+void empty_batch_does_not_send_request() {
     bool called = false;
     auto transport = [&](galay::tracing::OtlpHttpRequest) {
         called = true;
@@ -92,23 +92,23 @@ void emptyBatchDoesNotSendRequest() {
 
     galay::tracing::OtlpHttpExporter exporter({}, transport);
 
-    assert(exporter.exportSpans({}) == galay::tracing::ExportResult::kSuccess);
+    assert(exporter.export_spans({}) == galay::tracing::ExportResult::kSuccess);
     assert(!called);
 }
 
-void nonSuccessStatusFailsExport() {
+void non_success_status_fails_export() {
     auto transport = [](galay::tracing::OtlpHttpRequest) {
         return galay::tracing::OtlpHttpResponse{.status_code = 503, .body = "unavailable"};
     };
 
     galay::tracing::OtlpHttpExporter exporter({}, transport);
     std::vector<galay::tracing::Span> spans;
-    spans.push_back(makeSpan("failing"));
+    spans.push_back(make_span("failing"));
 
-    assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kFailure);
+    assert(exporter.export_spans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kFailure);
 }
 
-void multipleSpansAreEncodedIntoOneRequest() {
+void multiple_spans_are_encoded_into_one_request() {
     std::size_t calls = 0;
     auto transport = [&](galay::tracing::OtlpHttpRequest request) {
         ++calls;
@@ -119,20 +119,20 @@ void multipleSpansAreEncodedIntoOneRequest() {
 
     galay::tracing::OtlpHttpExporter exporter({}, transport);
     std::vector<galay::tracing::Span> spans;
-    spans.push_back(makeSpan("first"));
-    spans.push_back(makeSpan("second"));
+    spans.push_back(make_span("first"));
+    spans.push_back(make_span("second"));
 
     spans[1] = galay::tracing::Span("second", galay::tracing::TraceContext(
-        galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
-        galay::tracing::SpanId::fromHex("00f067aa0ba902b8"),
+        galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"),
+        galay::tracing::SpanId::from_hex("00f067aa0ba902b8"),
         0x01));
     spans[1].end();
 
-    assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
+    assert(exporter.export_spans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
     assert(calls == 1);
 }
 
-void semanticSpanFieldsAreEncoded() {
+void semantic_span_fields_are_encoded() {
     bool captured = false;
     auto transport = [&](galay::tracing::OtlpHttpRequest request) {
         captured = true;
@@ -146,28 +146,28 @@ void semanticSpanFieldsAreEncoded() {
         return galay::tracing::OtlpHttpResponse{.status_code = 200};
     };
 
-    galay::tracing::Span span("client", makeContext());
-    span.setKind(galay::tracing::SpanKind::kClient);
-    span.setStatus(galay::tracing::SpanStatusCode::kError, "timeout");
-    assert(span.setAttribute("http.method", "GET"));
-    assert(span.setAttribute("http.status_code", 503));
-    assert(span.setAttribute("retry", true));
-    assert(span.setAttribute("latency_ms", 12.5));
+    galay::tracing::Span span("client", make_context());
+    span.set_kind(galay::tracing::SpanKind::kClient);
+    span.set_status(galay::tracing::SpanStatusCode::kError, "timeout");
+    assert(span.set_attribute("http.method", "GET"));
+    assert(span.set_attribute("http.status_code", 503));
+    assert(span.set_attribute("retry", true));
+    assert(span.set_attribute("latency_ms", 12.5));
     span.end();
 
     galay::tracing::OtlpHttpExporter exporter({}, transport);
     std::vector<galay::tracing::Span> spans;
     spans.push_back(std::move(span));
 
-    assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
+    assert(exporter.export_spans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
     assert(captured);
 }
 
-void resourceAndScopeMetadataAreEncoded() {
+void resource_and_scope_metadata_are_encoded() {
     auto config = galay::tracing::OtlpHttpExporterConfig{
         .resource_attributes = {
-            galay::tracing::spanAttribute("service.name", "order-service"),
-            galay::tracing::spanAttribute("deployment.environment", "test"),
+            galay::tracing::span_attribute("service.name", "order-service"),
+            galay::tracing::span_attribute("deployment.environment", "test"),
         },
         .scope = {
             .name = "order-handler",
@@ -187,19 +187,19 @@ void resourceAndScopeMetadataAreEncoded() {
 
     galay::tracing::OtlpHttpExporter exporter(config, transport);
     std::vector<galay::tracing::Span> spans;
-    spans.push_back(makeSpan("resource"));
+    spans.push_back(make_span("resource"));
 
-    assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
+    assert(exporter.export_spans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
     assert(captured);
 }
 
 } // namespace
 
 int main() {
-    configurableEndpointHeadersAndBodyAreSent();
-    emptyBatchDoesNotSendRequest();
-    nonSuccessStatusFailsExport();
-    multipleSpansAreEncodedIntoOneRequest();
-    semanticSpanFieldsAreEncoded();
-    resourceAndScopeMetadataAreEncoded();
+    configurable_endpoint_headers_and_body_are_sent();
+    empty_batch_does_not_send_request();
+    non_success_status_fails_export();
+    multiple_spans_are_encoded_into_one_request();
+    semantic_span_fields_are_encoded();
+    resource_and_scope_metadata_are_encoded();
 }

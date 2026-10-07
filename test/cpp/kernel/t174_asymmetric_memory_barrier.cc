@@ -10,11 +10,11 @@
 int main()
 {
     const auto& support =
-        galay::kernel::detail::asymmetricMemoryBarrierSupport();
+        galay::kernel::detail::asymmetric_memory_barrier_support();
 #if defined(__linux__)
     if (support) {
-        galay::kernel::detail::asymmetricLightBarrier();
-        auto barrier = galay::kernel::detail::asymmetricHeavyBarrier();
+        galay::kernel::detail::asymmetric_light_barrier();
+        auto barrier = galay::kernel::detail::asymmetric_heavy_barrier();
         if (!barrier) {
             std::cerr << "T174 heavy barrier failed system_error="
                       << barrier.error().systemError << '\n';

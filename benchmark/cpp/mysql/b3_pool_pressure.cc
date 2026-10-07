@@ -29,7 +29,7 @@ struct PoolBenchmarkState {
     std::atomic<bool> timed_out{false};
 };
 
-Task<void> runPoolWorker(MysqlConnectionPool* pool,
+Task<void> run_pool_worker(MysqlConnectionPool* pool,
                          PoolBenchmarkState* state,
                          std::shared_ptr<std::atomic<size_t>> remaining,
                          std::shared_ptr<AsyncWaiter<void>> done_waiter,
@@ -68,7 +68,7 @@ Task<void> runPoolWorker(MysqlConnectionPool* pool,
     }
 }
 
-Task<void> runPoolBenchmark(IOScheduler* scheduler,
+Task<void> run_pool_benchmark(IOScheduler* scheduler,
                             PoolBenchmarkState* state,
                             mysql_benchmark::DbBenchmarkConfig cfg)
 {
@@ -78,7 +78,7 @@ Task<void> runPoolBenchmark(IOScheduler* scheduler,
                                                 cfg.user,
                                                 cfg.password,
                                                 cfg.database);
-    pool_cfg.async_config = AsyncMysqlConfig::withTimeout(3s, 5s);
+    pool_cfg.async_config = AsyncMysqlConfig::with_timeout(3s, 5s);
     pool_cfg.min_connections = 0;
     pool_cfg.max_connections = cfg.batch_size == 0 ? cfg.clients : cfg.batch_size;
 
@@ -87,8 +87,8 @@ Task<void> runPoolBenchmark(IOScheduler* scheduler,
     auto done_waiter = std::make_shared<AsyncWaiter<void>>();
 
     for (size_t worker = 0; worker < cfg.clients; ++worker) {
-        if (!scheduleTask(scheduler,
-                          runPoolWorker(&pool, state, remaining, done_waiter, cfg))) {
+        if (!schedule_task(scheduler,
+                          run_pool_worker(&pool, state, remaining, done_waiter, cfg))) {
             state->failed.fetch_add(cfg.queries_per_client, std::memory_order_relaxed);
             state->schedule_failures.fetch_add(1, std::memory_order_relaxed);
             state->finished_workers.fetch_add(1, std::memory_order_release);
@@ -108,26 +108,26 @@ Task<void> runPoolBenchmark(IOScheduler* scheduler,
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    auto cfg = mysql_benchmark::loadDbBenchmarkConfig();
-    if (!mysql_benchmark::parseArgs(cfg, argc, argv, std::cerr)) {
-        mysql_benchmark::printUsage(argv[0]);
+    auto cfg = mysql_benchmark::load_db_benchmark_config();
+    if (!mysql_benchmark::parse_args(cfg, argc, argv, std::cerr)) {
+        mysql_benchmark::print_usage(argv[0]);
         return 2;
     }
 
-    mysql_benchmark::printConfig(cfg);
+    mysql_benchmark::print_config(cfg);
     std::cout << "Running async pool pressure benchmark..." << std::endl;
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         std::cerr << "failed to get IO scheduler" << std::endl;
@@ -136,7 +136,7 @@ int main(int argc, char* argv[])
 
     PoolBenchmarkState state;
     const auto started = std::chrono::steady_clock::now();
-    auto result = runtime.blockOnIO(runPoolBenchmark(scheduler, &state, cfg));
+    auto result = runtime.block_on_io(run_pool_benchmark(scheduler, &state, cfg));
     const auto finished = std::chrono::steady_clock::now();
     runtime.stop();
 

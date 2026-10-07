@@ -23,13 +23,13 @@ class RouteBenchService : public RpcService {
 public:
     RouteBenchService() : RpcService("RouteBench")
     {
-        registerUnaryMethod("shared", noop);
-        registerClientStreamingMethod("shared", noop);
-        registerServerStreamingMethod("shared", noop);
-        registerBidiStreamingMethod("shared", noop);
+        register_unary_method("shared", noop);
+        register_client_streaming_method("shared", noop);
+        register_server_streaming_method("shared", noop);
+        register_bidi_streaming_method("shared", noop);
         for (int i = 0; i < 64; ++i) {
             const std::string name = "method" + std::to_string(i);
-            registerUnaryMethod(name, noop);
+            register_unary_method(name, noop);
         }
     }
 };
@@ -49,7 +49,7 @@ uint64_t percentile(std::vector<uint64_t> values, double p)
     return values[index];
 }
 
-Config parseArgs(int argc, char** argv)
+Config parse_args(int argc, char** argv)
 {
     Config config;
     for (int i = 1; i + 1 < argc; i += 2) {
@@ -64,11 +64,11 @@ Config parseArgs(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    Config config = parseArgs(argc, argv);
+    Config config = parse_args(argc, argv);
     RouteBenchService service;
     std::vector<RpcCallMode> modes{
         RpcCallMode::UNARY,
@@ -86,7 +86,7 @@ int main(int argc, char** argv)
     for (int i = 0; i < config.iterations; ++i) {
         const RpcCallMode mode = modes[static_cast<size_t>(i) % modes.size()];
         const auto sample_begin = std::chrono::steady_clock::now();
-        RpcMethodHandler* handler = service.findMethod("shared", mode);
+        RpcMethodHandler* handler = service.find_method("shared", mode);
         const auto sample_end = std::chrono::steady_clock::now();
         if (handler != nullptr) {
             ++ok;
@@ -100,7 +100,7 @@ int main(int argc, char** argv)
     }
 
     for (int i = 0; i < 128; ++i) {
-        if (service.findMethod("method" + std::to_string(i % 64), RpcCallMode::CLIENT_STREAMING) != nullptr) {
+        if (service.find_method("method" + std::to_string(i % 64), RpcCallMode::CLIENT_STREAMING) != nullptr) {
             ++errors;
         }
     }

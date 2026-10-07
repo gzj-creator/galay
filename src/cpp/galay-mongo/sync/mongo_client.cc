@@ -19,7 +19,7 @@ namespace galay::mongo
 namespace
 {
 
-MongoDocument buildClientMetadata(const std::string& app_name)
+MongoDocument build_client_metadata(const std::string& app_name)
 {
     MongoDocument driver;
     driver.append("name", "galay-mongo");
@@ -67,7 +67,7 @@ struct MongoServerCandidate
     bool secondary = false;
 };
 
-std::optional<MongoEndpoint> parseAdvertisedEndpoint(const std::string& text)
+std::optional<MongoEndpoint> parse_advertised_endpoint(const std::string& text)
 {
     const size_t colon = text.rfind(':');
     if (colon == std::string::npos || colon == 0 || colon + 1 >= text.size()) {
@@ -88,7 +88,7 @@ std::optional<MongoEndpoint> parseAdvertisedEndpoint(const std::string& text)
     return endpoint;
 }
 
-void appendEndpointIfMissing(std::vector<MongoEndpoint>& endpoints, MongoEndpoint endpoint)
+void append_endpoint_if_missing(std::vector<MongoEndpoint>& endpoints, MongoEndpoint endpoint)
 {
     const auto duplicate = std::find_if(
         endpoints.begin(),
@@ -101,39 +101,39 @@ void appendEndpointIfMissing(std::vector<MongoEndpoint>& endpoints, MongoEndpoin
     }
 }
 
-void appendAdvertisedEndpoints(const MongoDocument& hello,
+void append_advertised_endpoints(const MongoDocument& hello,
                                std::vector<MongoEndpoint>& endpoints)
 {
     const auto append_text = [&endpoints](const std::string& text) {
-        auto endpoint = parseAdvertisedEndpoint(text);
+        auto endpoint = parse_advertised_endpoint(text);
         if (endpoint) {
-            appendEndpointIfMissing(endpoints, std::move(*endpoint));
+            append_endpoint_if_missing(endpoints, std::move(*endpoint));
         }
     };
 
-    if (const MongoValue* hosts = hello.find("hosts"); hosts != nullptr && hosts->isArray()) {
-        for (const auto& host : hosts->toArray().values()) {
-            if (host.isString()) {
-                append_text(host.toString());
+    if (const MongoValue* hosts = hello.find("hosts"); hosts != nullptr && hosts->is_array()) {
+        for (const auto& host : hosts->to_array().values()) {
+            if (host.is_string()) {
+                append_text(host.to_string());
             }
         }
     }
     if (const MongoValue* passives = hello.find("passives");
-        passives != nullptr && passives->isArray()) {
-        for (const auto& host : passives->toArray().values()) {
-            if (host.isString()) {
-                append_text(host.toString());
+        passives != nullptr && passives->is_array()) {
+        for (const auto& host : passives->to_array().values()) {
+            if (host.is_string()) {
+                append_text(host.to_string());
             }
         }
     }
 
-    const std::string primary = hello.getString("primary");
+    const std::string primary = hello.get_string("primary");
     if (!primary.empty()) {
         append_text(primary);
     }
 }
 
-bool serverMatchesPreference(const MongoServerCandidate& candidate,
+bool server_matches_preference(const MongoServerCandidate& candidate,
                              MongoReadPreference preference)
 {
     switch (preference) {
@@ -149,7 +149,7 @@ bool serverMatchesPreference(const MongoServerCandidate& candidate,
     return false;
 }
 
-const MongoServerCandidate* selectServer(
+const MongoServerCandidate* select_server(
     const std::vector<MongoServerCandidate>& candidates,
     MongoReadPreference preference)
 {
@@ -220,7 +220,7 @@ MongoVoidResult MongoClient::connect(const MongoConfig& config)
 {
     const auto connect_and_hello = [this](const MongoConfig& candidate) -> MongoResult {
         m_config = candidate;
-        const auto conn_options = protocol::Connection::ConnectOptions::fromMongoConfig(candidate);
+        const auto conn_options = protocol::Connection::ConnectOptions::from_mongo_config(candidate);
         auto connected = m_connection.connect(conn_options);
         if (!connected) {
             return std::unexpected(connected.error());
@@ -230,11 +230,11 @@ MongoVoidResult MongoClient::connect(const MongoConfig& config)
         MongoDocument hello;
         hello.append("hello", int32_t(1));
         hello.append("helloOk", true);
-        hello.append("client", buildClientMetadata(candidate.app_name));
+        hello.append("client", build_client_metadata(candidate.app_name));
         const std::string hello_db = candidate.hello_database.empty()
             ? "admin"
             : candidate.hello_database;
-        return runCommandRequest(hello_db, hello, true);
+        return run_command_request(hello_db, hello, true);
     };
 
     const bool topology_requested =
@@ -248,7 +248,7 @@ MongoVoidResult MongoClient::connect(const MongoConfig& config)
             return std::unexpected(hello_result.error());
         }
 
-        auto auth_result = authenticateIfNeeded(config);
+        auto auth_result = authenticate_if_needed(config);
         if (!auth_result) {
             close();
             return auth_result;
@@ -297,9 +297,9 @@ MongoVoidResult MongoClient::connect(const MongoConfig& config)
             }
 
             const MongoDocument& hello = hello_result->document();
-            appendAdvertisedEndpoints(hello, endpoints);
+            append_advertised_endpoints(hello, endpoints);
 
-            const std::string set_name = hello.getString("setName");
+            const std::string set_name = hello.get_string("setName");
             if (!config.topology.replica_set_name.empty() &&
                 set_name != config.topology.replica_set_name) {
                 last_error = MongoError(
@@ -313,9 +313,9 @@ MongoVoidResult MongoClient::connect(const MongoConfig& config)
             MongoServerCandidate candidate;
             candidate.endpoint = endpoints[index];
             candidate.round_trip_time = round_trip_time;
-            candidate.primary = hello.getBool("isWritablePrimary", false) ||
-                                hello.getBool("ismaster", false);
-            candidate.secondary = hello.getBool("secondary", false);
+            candidate.primary = hello.get_bool("isWritablePrimary", false) ||
+                                hello.get_bool("ismaster", false);
+            candidate.secondary = hello.get_bool("secondary", false);
             if (candidate.primary || candidate.secondary) {
                 candidates.push_back(std::move(candidate));
             }
@@ -323,7 +323,7 @@ MongoVoidResult MongoClient::connect(const MongoConfig& config)
         }
 
         const MongoServerCandidate* selected =
-            selectServer(candidates, config.topology.read_preference);
+            select_server(candidates, config.topology.read_preference);
         if (selected != nullptr) {
             MongoConfig selected_config = config;
             selected_config.host = selected->endpoint.host;
@@ -332,18 +332,18 @@ MongoVoidResult MongoClient::connect(const MongoConfig& config)
             auto hello_result = connect_and_hello(selected_config);
             if (hello_result) {
                 const MongoDocument& hello = hello_result->document();
-                const std::string set_name = hello.getString("setName");
+                const std::string set_name = hello.get_string("setName");
                 MongoServerCandidate confirmed;
                 confirmed.endpoint = selected->endpoint;
-                confirmed.primary = hello.getBool("isWritablePrimary", false) ||
-                                    hello.getBool("ismaster", false);
-                confirmed.secondary = hello.getBool("secondary", false);
+                confirmed.primary = hello.get_bool("isWritablePrimary", false) ||
+                                    hello.get_bool("ismaster", false);
+                confirmed.secondary = hello.get_bool("secondary", false);
 
                 const bool set_matches = config.topology.replica_set_name.empty() ||
                     set_name == config.topology.replica_set_name;
                 if (set_matches &&
-                    serverMatchesPreference(confirmed, config.topology.read_preference)) {
-                    auto auth_result = authenticateIfNeeded(selected_config);
+                    server_matches_preference(confirmed, config.topology.read_preference)) {
+                    auto auth_result = authenticate_if_needed(selected_config);
                     if (!auth_result) {
                         close();
                         return auth_result;
@@ -382,17 +382,17 @@ MongoVoidResult MongoClient::connect(const std::string& host,
 
 MongoResult MongoClient::command(const std::string& database, const MongoDocument& command)
 {
-    return runCommandRequest(database, command, true);
+    return run_command_request(database, command, true);
 }
 
 MongoResult MongoClient::ping(const std::string& database)
 {
     MongoDocument command;
     command.append("ping", int32_t(1));
-    return runCommandRequest(database, command, true);
+    return run_command_request(database, command, true);
 }
 
-MongoResult MongoClient::findOne(const std::string& database,
+MongoResult MongoClient::find_one(const std::string& database,
                                   const std::string& collection,
                                   const MongoDocument& filter,
                                   const MongoDocument& projection)
@@ -404,10 +404,10 @@ MongoResult MongoClient::findOne(const std::string& database,
     if (!projection.empty()) {
         command.append("projection", projection.clone());
     }
-    return runCommandRequest(database, command, true);
+    return run_command_request(database, command, true);
 }
 
-MongoResult MongoClient::insertOne(const std::string& database,
+MongoResult MongoClient::insert_one(const std::string& database,
                                     const std::string& collection,
                                     const MongoDocument& document)
 {
@@ -418,10 +418,10 @@ MongoResult MongoClient::insertOne(const std::string& database,
     command.append("insert", collection);
     command.append("documents", std::move(documents));
     command.append("ordered", true);
-    return runCommandRequest(database, command, true);
+    return run_command_request(database, command, true);
 }
 
-MongoResult MongoClient::updateOne(const std::string& database,
+MongoResult MongoClient::update_one(const std::string& database,
                                     const std::string& collection,
                                     const MongoDocument& filter,
                                     const MongoDocument& update,
@@ -440,10 +440,10 @@ MongoResult MongoClient::updateOne(const std::string& database,
     command.append("update", collection);
     command.append("updates", std::move(updates));
     command.append("ordered", true);
-    return runCommandRequest(database, command, true);
+    return run_command_request(database, command, true);
 }
 
-MongoResult MongoClient::deleteOne(const std::string& database,
+MongoResult MongoClient::delete_one(const std::string& database,
                                     const std::string& collection,
                                     const MongoDocument& filter)
 {
@@ -458,7 +458,7 @@ MongoResult MongoClient::deleteOne(const std::string& database,
     command.append("delete", collection);
     command.append("deletes", std::move(deletes));
     command.append("ordered", true);
-    return runCommandRequest(database, command, true);
+    return run_command_request(database, command, true);
 }
 
 void MongoClient::close()
@@ -466,11 +466,11 @@ void MongoClient::close()
     m_connection.disconnect();
 }
 
-MongoResult MongoClient::runCommandRequest(const std::string& database,
+MongoResult MongoClient::run_command_request(const std::string& database,
                                            const MongoDocument& command,
                                            bool check_ok)
 {
-    if (!m_connection.isConnected()) {
+    if (!m_connection.is_connected()) {
         return std::unexpected(MongoError(MONGO_ERROR_CONNECTION_CLOSED, "Not connected"));
     }
 
@@ -489,7 +489,7 @@ MongoResult MongoClient::runCommandRequest(const std::string& database,
         ++m_next_request_id;
     }
     m_encoded_request_buffer.clear();
-    auto encoded = protocol::MongoProtocol::appendOpMsg(m_encoded_request_buffer, request_id, request);
+    auto encoded = protocol::MongoProtocol::append_op_msg(m_encoded_request_buffer, request_id, request);
     if (!encoded) {
         return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
     }
@@ -499,7 +499,7 @@ MongoResult MongoClient::runCommandRequest(const std::string& database,
         return std::unexpected(sent.error());
     }
 
-    auto message = m_connection.recvMessage();
+    auto message = m_connection.recv_message();
     if (!message) {
         return std::unexpected(message.error());
     }
@@ -514,16 +514,16 @@ MongoResult MongoClient::runCommandRequest(const std::string& database,
     MongoReply reply(std::move(message->body));
     if (check_ok && !reply.ok()) {
         return std::unexpected(MongoError(MONGO_ERROR_SERVER,
-                                          reply.errorCode(),
-                                          reply.errorMessage().empty()
+                                          reply.error_code(),
+                                          reply.error_message().empty()
                                               ? "Mongo command failed"
-                                              : reply.errorMessage()));
+                                              : reply.error_message()));
     }
 
     return std::move(reply);
 }
 
-MongoVoidResult MongoClient::authenticateIfNeeded(const MongoConfig& config)
+MongoVoidResult MongoClient::authenticate_if_needed(const MongoConfig& config)
 {
     if (config.username.empty() && config.password.empty()) {
         return {};
@@ -534,23 +534,23 @@ MongoVoidResult MongoClient::authenticateIfNeeded(const MongoConfig& config)
                                           "Both username and password are required for authentication"));
     }
 
-    return authenticateScramSha256(config);
+    return authenticate_scram_sha256(config);
 }
 
-MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
+MongoVoidResult MongoClient::authenticate_scram_sha256(const MongoConfig& config)
 {
     const std::string auth_db =
         !config.auth_database.empty() ? config.auth_database :
         (!config.database.empty() ? config.database : "admin");
 
-    auto nonce_or_err = generateClientNonce();
+    auto nonce_or_err = generate_client_nonce();
     if (!nonce_or_err) {
         return std::unexpected(nonce_or_err.error());
     }
 
     const std::string client_nonce = nonce_or_err.value();
     const std::string client_first_bare =
-        "n=" + escapeScramUsername(config.username) + ",r=" + client_nonce;
+        "n=" + escape_scram_username(config.username) + ",r=" + client_nonce;
     const std::string client_first_message = "n,," + client_first_bare;
 
     MongoValue::Binary first_payload(client_first_message.begin(), client_first_message.end());
@@ -561,15 +561,15 @@ MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
     sasl_start.append("payload", std::move(first_payload));
     sasl_start.append("autoAuthorize", int32_t(1));
 
-    auto start_reply = runCommandRequest(auth_db, sasl_start, true);
+    auto start_reply = run_command_request(auth_db, sasl_start, true);
     if (!start_reply) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH, start_reply.error().message()));
     }
 
     const auto& start_doc = start_reply->document();
-    int32_t conversation_id = start_doc.getInt32("conversationId", 0);
+    int32_t conversation_id = start_doc.get_int32("conversationId", 0);
     if (conversation_id == 0) {
-        conversation_id = static_cast<int32_t>(start_doc.getInt64("conversationId", 0));
+        conversation_id = static_cast<int32_t>(start_doc.get_int64("conversationId", 0));
     }
     if (conversation_id == 0) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
@@ -577,16 +577,16 @@ MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
     }
 
     const auto* start_payload_field = start_doc.find("payload");
-    if (!start_payload_field || !start_payload_field->isBinary()) {
+    if (!start_payload_field || !start_payload_field->is_binary()) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                           "Missing payload in saslStart response"));
     }
 
-    const auto& start_payload_binary = start_payload_field->toBinary();
+    const auto& start_payload_binary = start_payload_field->to_binary();
     const std::string server_first_message(start_payload_binary.begin(),
                                            start_payload_binary.end());
 
-    const auto start_kv = parseScramPayload(server_first_message);
+    const auto start_kv = parse_scram_payload(server_first_message);
     const auto nonce_it = start_kv.find("r");
     const auto salt_it = start_kv.find("s");
     const auto iter_it = start_kv.find("i");
@@ -611,7 +611,7 @@ MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
                                           "Invalid SCRAM iteration count"));
     }
 
-    auto salt_or_err = base64Decode(salt_it->second);
+    auto salt_or_err = base64_decode(salt_it->second);
     if (!salt_or_err) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                           "Invalid SCRAM salt: " + salt_or_err.error().message()));
@@ -622,13 +622,13 @@ MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
                                      server_first_message + "," +
                                      client_final_without_proof;
 
-    auto salted_password = pbkdf2HmacSha256(config.password, salt_or_err.value(), iterations);
+    auto salted_password = pbkdf2_hmac_sha256(config.password, salt_or_err.value(), iterations);
     if (!salted_password) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                           "PBKDF2 failed: " + salted_password.error().message()));
     }
 
-    auto client_key = hmacSha256(salted_password.value(), "Client Key");
+    auto client_key = hmac_sha256(salted_password.value(), "Client Key");
     if (!client_key) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                           "HMAC(client key) failed: " + client_key.error().message()));
@@ -640,31 +640,31 @@ MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
                                           "SHA256(stored key) failed: " + stored_key.error().message()));
     }
 
-    auto client_signature = hmacSha256(stored_key.value(), auth_message);
+    auto client_signature = hmac_sha256(stored_key.value(), auth_message);
     if (!client_signature) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                           "HMAC(client signature) failed: " +
                                           client_signature.error().message()));
     }
 
-    auto server_key = hmacSha256(salted_password.value(), "Server Key");
+    auto server_key = hmac_sha256(salted_password.value(), "Server Key");
     if (!server_key) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                           "HMAC(server key) failed: " + server_key.error().message()));
     }
 
-    auto server_signature = hmacSha256(server_key.value(), auth_message);
+    auto server_signature = hmac_sha256(server_key.value(), auth_message);
     if (!server_signature) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                           "HMAC(server signature) failed: " +
                                           server_signature.error().message()));
     }
 
-    const auto client_proof = xorBytes(client_key.value(), client_signature.value());
-    const auto expected_server_signature = base64Encode(server_signature.value());
+    const auto client_proof = xor_bytes(client_key.value(), client_signature.value());
+    const auto expected_server_signature = base64_encode(server_signature.value());
 
     const std::string client_final_message =
-        client_final_without_proof + ",p=" + base64Encode(client_proof);
+        client_final_without_proof + ",p=" + base64_encode(client_proof);
 
     MongoValue::Binary continue_payload(client_final_message.begin(), client_final_message.end());
 
@@ -673,23 +673,23 @@ MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
     sasl_continue.append("conversationId", conversation_id);
     sasl_continue.append("payload", std::move(continue_payload));
 
-    auto continue_reply = runCommandRequest(auth_db, sasl_continue, true);
+    auto continue_reply = run_command_request(auth_db, sasl_continue, true);
     if (!continue_reply) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH, continue_reply.error().message()));
     }
 
     const auto& continue_doc = continue_reply->document();
     const auto* continue_payload_field = continue_doc.find("payload");
-    if (!continue_payload_field || !continue_payload_field->isBinary()) {
+    if (!continue_payload_field || !continue_payload_field->is_binary()) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                           "Missing payload in saslContinue response"));
     }
 
-    const auto& continue_payload_binary = continue_payload_field->toBinary();
+    const auto& continue_payload_binary = continue_payload_field->to_binary();
     const std::string server_final_message(continue_payload_binary.begin(),
                                            continue_payload_binary.end());
 
-    const auto final_kv = parseScramPayload(server_final_message);
+    const auto final_kv = parse_scram_payload(server_final_message);
     const auto error_it = final_kv.find("e");
     if (error_it != final_kv.end()) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
@@ -707,19 +707,19 @@ MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
                                           "SCRAM server signature mismatch"));
     }
 
-    const bool done = continue_doc.getBool("done", false);
+    const bool done = continue_doc.get_bool("done", false);
     if (!done) {
         MongoDocument final_continue;
         final_continue.append("saslContinue", int32_t(1));
         final_continue.append("conversationId", conversation_id);
         final_continue.append("payload", MongoValue::Binary{});
 
-        auto final_reply = runCommandRequest(auth_db, final_continue, true);
+        auto final_reply = run_command_request(auth_db, final_continue, true);
         if (!final_reply) {
             return std::unexpected(MongoError(MONGO_ERROR_AUTH, final_reply.error().message()));
         }
 
-        if (!final_reply->document().getBool("done", false)) {
+        if (!final_reply->document().get_bool("done", false)) {
             return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                               "SCRAM authentication not finished"));
         }
@@ -728,7 +728,7 @@ MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
     return {};
 }
 
-std::string MongoClient::escapeScramUsername(const std::string& username)
+std::string MongoClient::escape_scram_username(const std::string& username)
 {
     std::string escaped;
     escaped.reserve(username.size());
@@ -747,7 +747,7 @@ std::string MongoClient::escapeScramUsername(const std::string& username)
 }
 
 std::unordered_map<std::string, std::string>
-MongoClient::parseScramPayload(const std::string& payload)
+MongoClient::parse_scram_payload(const std::string& payload)
 {
     std::unordered_map<std::string, std::string> kv;
 
@@ -770,44 +770,44 @@ MongoClient::parseScramPayload(const std::string& payload)
     return kv;
 }
 
-std::string MongoClient::base64Encode(const std::vector<uint8_t>& bytes)
+std::string MongoClient::base64_encode(const std::vector<uint8_t>& bytes)
 {
     if (bytes.empty()) {
         return "";
     }
-    return galay::utils::Base64Util::Base64Encode(bytes.data(), bytes.size());
+    return galay::utils::Base64Util::base64_encode(bytes.data(), bytes.size());
 }
 
 std::expected<std::vector<uint8_t>, MongoError>
-MongoClient::base64Decode(const std::string& text)
+MongoClient::base64_decode(const std::string& text)
 {
     if (text.empty()) {
         return std::vector<uint8_t>{};
     }
 
-    if (!galay::utils::Base64Util::Base64CanDecode(text)) {
+    if (!galay::utils::Base64Util::base64_can_decode(text)) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH, "base64 decode failed"));
     }
 
-    std::string decoded = galay::utils::Base64Util::Base64Decode(text);
+    std::string decoded = galay::utils::Base64Util::base64_decode(text);
     return std::vector<uint8_t>(decoded.begin(), decoded.end());
 }
 
 std::expected<std::vector<uint8_t>, MongoError>
-MongoClient::pbkdf2HmacSha256(const std::string& password,
+MongoClient::pbkdf2_hmac_sha256(const std::string& password,
                                const std::vector<uint8_t>& salt,
                                int iterations)
 {
     if (iterations <= 0) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH, "PKCS5_PBKDF2_HMAC failed"));
     }
-    return galay::utils::PBKDF2::hmacSha256(password, salt, static_cast<uint32_t>(iterations), 32);
+    return galay::utils::PBKDF2::hmac_sha256(password, salt, static_cast<uint32_t>(iterations), 32);
 }
 
 std::expected<std::vector<uint8_t>, MongoError>
-MongoClient::hmacSha256(const std::vector<uint8_t>& key, const std::string& data)
+MongoClient::hmac_sha256(const std::vector<uint8_t>& key, const std::string& data)
 {
-    const auto digest = galay::utils::HMAC::hmacSha256(
+    const auto digest = galay::utils::HMAC::hmac_sha256(
         key.data(),
         key.size(),
         reinterpret_cast<const uint8_t*>(data.data()),
@@ -823,7 +823,7 @@ MongoClient::sha256(const std::vector<uint8_t>& data)
 }
 
 std::vector<uint8_t>
-MongoClient::xorBytes(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b)
+MongoClient::xor_bytes(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b)
 {
     const size_t size = std::min(a.size(), b.size());
     std::vector<uint8_t> out(size, 0);
@@ -833,10 +833,10 @@ MongoClient::xorBytes(const std::vector<uint8_t>& a, const std::vector<uint8_t>&
     return out;
 }
 
-std::expected<std::string, MongoError> MongoClient::generateClientNonce()
+std::expected<std::string, MongoError> MongoClient::generate_client_nonce()
 {
-    std::vector<uint8_t> random_bytes = galay::utils::SaltGenerator::generateSecureBytes(18);
-    return base64Encode(random_bytes);
+    std::vector<uint8_t> random_bytes = galay::utils::SaltGenerator::generate_secure_bytes(18);
+    return base64_encode(random_bytes);
 }
 
 } // namespace galay::mongo

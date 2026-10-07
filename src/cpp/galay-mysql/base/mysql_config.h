@@ -37,7 +37,7 @@ struct MysqlConfig
      * @brief 创建默认配置
      * @return 默认配置对象
      */
-    static MysqlConfig defaultConfig()
+    static MysqlConfig default_config()
     {
         return {};
     }
@@ -73,17 +73,17 @@ struct AsyncMysqlConfig
     size_t result_row_reserve_hint = 0;
     bool tcp_no_delay = true; ///< 快捷 connect(host, ...) 使用的默认 TCP_NODELAY 策略
 
-    bool isSendTimeoutEnabled() const
+    bool is_send_timeout_enabled() const
     {
         return send_timeout >= std::chrono::milliseconds(0);
     }
 
-    bool isRecvTimeoutEnabled() const
+    bool is_recv_timeout_enabled() const
     {
         return recv_timeout >= std::chrono::milliseconds(0);
     }
 
-    static AsyncMysqlConfig withTimeout(std::chrono::milliseconds send,
+    static AsyncMysqlConfig with_timeout(std::chrono::milliseconds send,
                                         std::chrono::milliseconds recv)
     {
         AsyncMysqlConfig cfg;
@@ -92,21 +92,21 @@ struct AsyncMysqlConfig
         return cfg;
     }
 
-    static AsyncMysqlConfig withRecvTimeout(std::chrono::milliseconds recv)
+    static AsyncMysqlConfig with_recv_timeout(std::chrono::milliseconds recv)
     {
         AsyncMysqlConfig cfg;
         cfg.recv_timeout = recv;
         return cfg;
     }
 
-    static AsyncMysqlConfig withSendTimeout(std::chrono::milliseconds send)
+    static AsyncMysqlConfig with_send_timeout(std::chrono::milliseconds send)
     {
         AsyncMysqlConfig cfg;
         cfg.send_timeout = send;
         return cfg;
     }
 
-    static AsyncMysqlConfig noTimeout()
+    static AsyncMysqlConfig no_timeout()
     {
         return {};
     }

@@ -29,19 +29,19 @@ static constexpr std::string_view kPlainTextOkResponse =
     "\r\n"
     "OK";
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
-Task<void> handleHttpsRequest(HttpConnImpl<galay::ssl::SslSocket> conn) {
-    auto reader = conn.getReader();
-    auto writer = conn.getWriter();
+Task<void> handle_https_request(HttpConnImpl<galay::ssl::SslSocket> conn) {
+    auto reader = conn.get_reader();
+    auto writer = conn.get_writer();
 
     while (true) {
         HttpRequest request;
 
         while (true) {
-            auto read_result = co_await reader.getRequest(request);
+            auto read_result = co_await reader.get_request(request);
             if (!read_result) {
                 co_return;
             }
@@ -50,7 +50,7 @@ Task<void> handleHttpsRequest(HttpConnImpl<galay::ssl::SslSocket> conn) {
             }
         }
 
-        auto send_result = co_await writer.sendView(kPlainTextOkResponse);
+        auto send_result = co_await writer.send_view(kPlainTextOkResponse);
         if (!send_result) {
             co_return;
         }
@@ -58,7 +58,7 @@ Task<void> handleHttpsRequest(HttpConnImpl<galay::ssl::SslSocket> conn) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -81,8 +81,8 @@ int main(int argc, char* argv[]) {
         key_path = argv[4];
     }
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     std::cout << "========================================\n";
     std::cout << "HTTPS Server Benchmark\n";
@@ -98,12 +98,12 @@ int main(int argc, char* argv[]) {
         HttpsServer server(HttpsServerBuilder()
             .host("0.0.0.0")
             .port(port)
-            .certPath(cert_path)
-            .keyPath(key_path)
-            .ioSchedulerCount(static_cast<size_t>(io_threads))
+            .cert_path(cert_path)
+            .key_path(key_path)
+            .io_scheduler_count(static_cast<size_t>(io_threads))
             .build());
 
-        server.start(handleHttpsRequest);
+        server.start(handle_https_request);
         while (g_running) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
@@ -119,7 +119,7 @@ int main(int argc, char* argv[]) {
 #else
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 

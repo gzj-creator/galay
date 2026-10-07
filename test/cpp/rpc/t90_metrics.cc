@@ -18,8 +18,8 @@ namespace {
 
 class MetricsService final : public RpcService {
 public:
-    MetricsService() : RpcService("MetricsService") { registerMethod("echo", &MetricsService::echo); }
-    Task<void> echo(RpcContext& ctx) { ctx.setPayload(ctx.request().payloadView()); co_return; }
+    MetricsService() : RpcService("MetricsService") { register_method("echo", &MetricsService::echo); }
+    Task<void> echo(RpcContext& ctx) { ctx.set_payload(ctx.request().payload_view()); co_return; }
 };
 
 struct State {
@@ -72,9 +72,9 @@ Task<void> run(uint16_t p, State* state)
 int main()
 {
     const auto p = port();
-    auto server = RpcServerBuilder().host("127.0.0.1").port(p).ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    auto server = RpcServerBuilder().host("127.0.0.1").port(p).io_scheduler_count(1).parallel_scheduler_count(0).build();
     MetricsService service;
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register metrics service: "
                   << registered.error().message() << "\n";
@@ -87,7 +87,7 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();
@@ -96,7 +96,7 @@ int main()
         return 1;
     }
     State state;
-    auto scheduled = runtime.spawnIO(run(p, &state));
+    auto scheduled = runtime.spawn_io(run(p, &state));
     if (!scheduled.has_value()) {
         runtime.stop();
         server.stop();

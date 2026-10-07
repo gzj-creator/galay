@@ -23,7 +23,7 @@ int main() {
     HttpRequest request1;
     HttpRequest request2;
 
-    (void) reader.getRequest(request1);
+    (void) reader.get_request(request1);
     if (!reader.m_request_read_state) {
         std::cerr << "[T69] first getRequest should create cached request state\n";
         return 1;
@@ -39,7 +39,7 @@ int main() {
     first_state->m_parse_iovecs.push_back({nullptr, 7});
     first_state->m_http_error = HttpError(kRecvError, "stale");
 
-    (void) reader.getRequest(request2);
+    (void) reader.get_request(request2);
     if (!reader.m_request_read_state) {
         std::cerr << "[T69] second getRequest should keep cached request state\n";
         return 1;

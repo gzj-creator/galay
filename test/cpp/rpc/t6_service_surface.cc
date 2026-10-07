@@ -15,11 +15,11 @@ using namespace galay::kernel;
 
 namespace {
 
-Task<void> noopMethod(RpcContext&) {
+Task<void> noop_method(RpcContext&) {
     co_return;
 }
 
-Task<void> noopStream(RpcStream&) {
+Task<void> noop_stream(RpcStream&) {
     co_return;
 }
 
@@ -27,15 +27,15 @@ class SurfaceService : public RpcService {
 public:
     SurfaceService()
         : RpcService("SurfaceService") {
-        registerUnaryMethod("shared", noopMethod);
-        registerClientStreamingMethod("shared", noopMethod);
-        registerServerStreamingMethod("shared", noopMethod);
-        registerBidiStreamingMethod("shared", noopMethod);
-        registerStreamMethod("shared", noopStream);
+        register_unary_method("shared", noop_method);
+        register_client_streaming_method("shared", noop_method);
+        register_server_streaming_method("shared", noop_method);
+        register_bidi_streaming_method("shared", noop_method);
+        register_stream_method("shared", noop_stream);
     }
 };
 
-bool containsOnce(const std::vector<std::string>& names, const std::string& name) {
+bool contains_once(const std::vector<std::string>& names, const std::string& name) {
     return std::count(names.begin(), names.end(), name) == 1;
 }
 
@@ -44,35 +44,35 @@ bool containsOnce(const std::vector<std::string>& names, const std::string& name
 void test_find_method_by_call_mode(test::TestResultWriter& writer) {
     SurfaceService service;
 
-    writer.writeTestCase("RpcService findMethod returns mode-specific handlers",
-        service.findMethod("shared", RpcCallMode::UNARY) != nullptr &&
-        service.findMethod("shared", RpcCallMode::CLIENT_STREAMING) != nullptr &&
-        service.findMethod("shared", RpcCallMode::SERVER_STREAMING) != nullptr &&
-        service.findMethod("shared", RpcCallMode::BIDI_STREAMING) != nullptr);
+    writer.write_test_case("RpcService findMethod returns mode-specific handlers",
+        service.find_method("shared", RpcCallMode::UNARY) != nullptr &&
+        service.find_method("shared", RpcCallMode::CLIENT_STREAMING) != nullptr &&
+        service.find_method("shared", RpcCallMode::SERVER_STREAMING) != nullptr &&
+        service.find_method("shared", RpcCallMode::BIDI_STREAMING) != nullptr);
 }
 
 void test_missing_method_returns_null(test::TestResultWriter& writer) {
     SurfaceService service;
 
-    writer.writeTestCase("RpcService missing method returns null",
-        service.findMethod("missing", RpcCallMode::UNARY) == nullptr &&
-        service.findMethod("missing", RpcCallMode::CLIENT_STREAMING) == nullptr);
+    writer.write_test_case("RpcService missing method returns null",
+        service.find_method("missing", RpcCallMode::UNARY) == nullptr &&
+        service.find_method("missing", RpcCallMode::CLIENT_STREAMING) == nullptr);
 }
 
 void test_find_stream_method(test::TestResultWriter& writer) {
     SurfaceService service;
 
-    writer.writeTestCase("RpcService findStreamMethod returns stream handler",
-        service.findStreamMethod("shared") != nullptr &&
-        service.findStreamMethod("missing") == nullptr);
+    writer.write_test_case("RpcService findStreamMethod returns stream handler",
+        service.find_stream_method("shared") != nullptr &&
+        service.find_stream_method("missing") == nullptr);
 }
 
 void test_method_names_deduplicates_surface(test::TestResultWriter& writer) {
     SurfaceService service;
-    const auto names = service.methodNames();
+    const auto names = service.method_names();
 
-    writer.writeTestCase("RpcService methodNames deduplicates method names",
-        containsOnce(names, "shared"));
+    writer.write_test_case("RpcService methodNames deduplicates method names",
+        contains_once(names, "shared"));
 }
 
 int main() {
@@ -85,7 +85,7 @@ int main() {
     test_find_stream_method(writer);
     test_method_names_deduplicates_surface(writer);
 
-    writer.writeSummary();
+    writer.write_summary();
 
     std::cout << "Tests completed. Passed: " << writer.passed()
               << ", Failed: " << writer.failed() << "\n";

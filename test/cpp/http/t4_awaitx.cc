@@ -18,7 +18,7 @@ Task<void> test_connection_failure(IOScheduler* scheduler)
 {
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     // 连接到不存在的服务器
     Host host(IPType::IPV4, "127.0.0.1", 9999);
@@ -38,7 +38,7 @@ Task<void> test_server_close_connection(IOScheduler* scheduler)
 {
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
     auto connect_result = co_await socket.connect(host);
@@ -46,8 +46,8 @@ Task<void> test_server_close_connection(IOScheduler* scheduler)
         co_return;
     }
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -83,7 +83,7 @@ Task<void> test_multiple_requests(IOScheduler* scheduler)
 {
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
     auto connect_result = co_await socket.connect(host);
@@ -91,8 +91,8 @@ Task<void> test_multiple_requests(IOScheduler* scheduler)
         co_return;
     }
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -134,7 +134,7 @@ Task<void> test_large_request_body(IOScheduler* scheduler)
 {
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
     auto connect_result = co_await socket.connect(host);
@@ -142,8 +142,8 @@ Task<void> test_large_request_body(IOScheduler* scheduler)
         co_return;
     }
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -179,11 +179,11 @@ Task<void> test_large_request_body(IOScheduler* scheduler)
 /**
  * @brief 测试5: 404 错误
  */
-Task<void> test404NotFound(IOScheduler* scheduler)
+Task<void> test404_not_found(IOScheduler* scheduler)
 {
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
     auto connect_result = co_await socket.connect(host);
@@ -191,8 +191,8 @@ Task<void> test404NotFound(IOScheduler* scheduler)
         co_return;
     }
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -232,7 +232,7 @@ Task<void> test_empty_response(IOScheduler* scheduler)
 {
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
     auto connect_result = co_await socket.connect(host);
@@ -240,8 +240,8 @@ Task<void> test_empty_response(IOScheduler* scheduler)
         co_return;
     }
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -277,28 +277,28 @@ int main()
         Runtime runtime;
         runtime.start();
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             return 1;
         }
 
         // 运行边界测试
-        scheduleTask(scheduler, test_connection_failure(scheduler));
+        schedule_task(scheduler, test_connection_failure(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, test_server_close_connection(scheduler));
+        schedule_task(scheduler, test_server_close_connection(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, test_multiple_requests(scheduler));
+        schedule_task(scheduler, test_multiple_requests(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        scheduleTask(scheduler, test_large_request_body(scheduler));
+        schedule_task(scheduler, test_large_request_body(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, test404NotFound(scheduler));
+        schedule_task(scheduler, test404_not_found(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, test_empty_response(scheduler));
+        schedule_task(scheduler, test_empty_response(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
         runtime.stop();

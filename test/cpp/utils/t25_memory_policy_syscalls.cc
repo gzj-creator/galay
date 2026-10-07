@@ -100,14 +100,14 @@ int main()
     };
     for (const auto& initial : policies) {
         nativeState = initial;
-        const auto saved = Memory::numaPolicy();
-        const auto changed = Memory::setNumaPolicy(Memory::Policy::Default, {});
+        const auto saved = Memory::numa_policy();
+        const auto changed = Memory::set_numa_policy(Memory::Policy::Default, {});
         if (!saved || !changed || nativeState.native_mode != MPOL_DEFAULT ||
             !nativeState.nodes.empty()) {
             return 1;
         }
-        const auto restored = Memory::restoreNumaPolicy(*saved);
-        const auto actual = Memory::numaPolicy();
+        const auto restored = Memory::restore_numa_policy(*saved);
+        const auto actual = Memory::numa_policy();
         if (!restored || !actual || actual->native_mode != initial.native_mode ||
             actual->nodes != initial.nodes) {
             std::cerr << "native mode/flags/nodemask were not restored through the Linux ABI\n";
@@ -125,7 +125,7 @@ int main()
     };
     for (const auto& state : invalid) {
         const auto before = setCalls;
-        const auto result = Memory::restoreNumaPolicy(state);
+        const auto result = Memory::restore_numa_policy(state);
         if (result || result.error() != std::errc::invalid_argument || setCalls != before) {
             std::cerr << "invalid saved state reached set_mempolicy\n";
             return 1;
@@ -133,7 +133,7 @@ int main()
     }
     for (const int error : {EPERM, EINVAL, ENOMEM, ENOSYS}) {
         setError = error;
-        const auto result = Memory::restoreNumaPolicy(policies[4]);
+        const auto result = Memory::restore_numa_policy(policies[4]);
         if (result || result.error().value() != error ||
             result.error().category() != std::generic_category()) {
             std::cerr << "restore failure lost the kernel errno\n";
@@ -141,18 +141,18 @@ int main()
         }
     }
     getError = EIO;
-    const auto query = Memory::numaPolicy();
+    const auto query = Memory::numa_policy();
     if (query || query.error().value() != EIO ||
         query.error().category() != std::generic_category()) {
         return 1;
     }
-    const auto page = Memory::pageSize();
+    const auto page = Memory::page_size();
     if (!page || *page != 4096) {
         return 1;
     }
     pageResult = -1;
     pageError = EACCES;
-    const auto failed = Memory::pageSize();
+    const auto failed = Memory::page_size();
     if (failed || failed.error().value() != EACCES ||
         failed.error().category() != std::generic_category()) {
         return 1;
@@ -160,7 +160,7 @@ int main()
     for (const long invalidSize : {-1L, 0L}) {
         pageResult = invalidSize;
         pageError = 0;
-        const auto unknown = Memory::pageSize();
+        const auto unknown = Memory::page_size();
         if (unknown || unknown.error() != std::errc::io_error) {
             return 1;
         }

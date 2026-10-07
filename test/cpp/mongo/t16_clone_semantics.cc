@@ -8,7 +8,7 @@ using namespace galay::mongo;
 namespace
 {
 
-bool failCase(const std::string& message)
+bool fail_case(const std::string& message)
 {
     std::cerr << "  FAILED: " << message << std::endl;
     return false;
@@ -33,34 +33,34 @@ bool test_document_clone_deep_copies_nested_document_and_array()
     MongoDocument cloned = original.clone();
 
     MongoValue* profile_value = original.find("profile");
-    if (profile_value == nullptr || !profile_value->isDocument()) {
-        return failCase("original profile missing");
+    if (profile_value == nullptr || !profile_value->is_document()) {
+        return fail_case("original profile missing");
     }
-    MongoDocument& original_profile = profile_value->asDocument();
+    MongoDocument& original_profile = profile_value->as_document();
     original_profile.set("city", "beijing");
 
     MongoValue* aliases_value = original_profile.find("aliases");
-    if (aliases_value == nullptr || !aliases_value->isArray()) {
-        return failCase("original aliases missing");
+    if (aliases_value == nullptr || !aliases_value->is_array()) {
+        return fail_case("original aliases missing");
     }
-    aliases_value->asArray().values()[0] = MongoValue("mutated");
+    aliases_value->as_array().values()[0] = MongoValue("mutated");
 
     const auto* cloned_profile_value = cloned.find("profile");
-    if (cloned_profile_value == nullptr || !cloned_profile_value->isDocument()) {
-        return failCase("cloned profile missing");
+    if (cloned_profile_value == nullptr || !cloned_profile_value->is_document()) {
+        return fail_case("cloned profile missing");
     }
-    const MongoDocument& cloned_profile = cloned_profile_value->toDocument();
-    if (cloned_profile.getString("city") != "shanghai") {
-        return failCase("cloned nested document shared mutable state");
+    const MongoDocument& cloned_profile = cloned_profile_value->to_document();
+    if (cloned_profile.get_string("city") != "shanghai") {
+        return fail_case("cloned nested document shared mutable state");
     }
 
     const auto* cloned_aliases_value = cloned_profile.find("aliases");
-    if (cloned_aliases_value == nullptr || !cloned_aliases_value->isArray()) {
-        return failCase("cloned aliases missing");
+    if (cloned_aliases_value == nullptr || !cloned_aliases_value->is_array()) {
+        return fail_case("cloned aliases missing");
     }
-    const MongoArray& cloned_aliases = cloned_aliases_value->toArray();
-    if (cloned_aliases.size() != 2 || cloned_aliases[0].toString() != "primary") {
-        return failCase("cloned nested array shared mutable state");
+    const MongoArray& cloned_aliases = cloned_aliases_value->to_array();
+    if (cloned_aliases.size() != 2 || cloned_aliases[0].to_string() != "primary") {
+        return fail_case("cloned nested array shared mutable state");
     }
 
     std::cout << "  PASSED" << std::endl;
@@ -80,15 +80,15 @@ bool test_value_clone_deep_copies_nested_array()
     MongoValue original(std::move(original_array));
     MongoValue cloned = original.clone();
 
-    MongoDocument& original_item = original.asArray().values()[0].asDocument();
+    MongoDocument& original_item = original.as_array().values()[0].as_document();
     original_item.set("state", "mutated");
 
-    const MongoArray& cloned_array = cloned.toArray();
-    if (cloned_array.size() != 1 || !cloned_array[0].isDocument()) {
-        return failCase("cloned value array shape mismatch");
+    const MongoArray& cloned_array = cloned.to_array();
+    if (cloned_array.size() != 1 || !cloned_array[0].is_document()) {
+        return fail_case("cloned value array shape mismatch");
     }
-    if (cloned_array[0].toDocument().getString("state") != "original") {
-        return failCase("MongoValue clone shared nested array document state");
+    if (cloned_array[0].to_document().get_string("state") != "original") {
+        return fail_case("MongoValue clone shared nested array document state");
     }
 
     std::cout << "  PASSED" << std::endl;
@@ -110,10 +110,10 @@ bool test_reply_clone_deep_copies_document()
     original.document().set("errmsg", "mutated");
 
     if (!cloned.ok()) {
-        return failCase("cloned reply ok state changed after original mutation");
+        return fail_case("cloned reply ok state changed after original mutation");
     }
-    if (cloned.errorMessage() != "original") {
-        return failCase("cloned reply document shared mutable state");
+    if (cloned.error_message() != "original") {
+        return fail_case("cloned reply document shared mutable state");
     }
 
     std::cout << "  PASSED" << std::endl;

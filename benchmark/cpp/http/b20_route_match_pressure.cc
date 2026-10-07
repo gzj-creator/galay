@@ -21,7 +21,7 @@ using namespace galay::http;
 
 namespace {
 
-galay::kernel::Task<void> routeHandler(HttpConn& conn, HttpRequest request)
+galay::kernel::Task<void> route_handler(HttpConn& conn, HttpRequest request)
 {
     co_return;
 }
@@ -35,19 +35,19 @@ bool require(bool condition, const char* message)
     return true;
 }
 
-HttpRouter makeRouter()
+HttpRouter make_router()
 {
     HttpRouter router;
-    router.addHandler<HttpMethod::GET>("/api/users/:id/posts/:postId/comments/:commentId",
-                                       routeHandler);
-    router.addHandler<HttpMethod::GET>("/api/users/:id/profile", routeHandler);
-    router.addHandler<HttpMethod::GET>("/assets/*/bundle", routeHandler);
-    router.addHandler<HttpMethod::GET>("/files/**", routeHandler);
+    router.add_handler<HttpMethod::GET>("/api/users/:id/posts/:postId/comments/:commentId",
+                                       route_handler);
+    router.add_handler<HttpMethod::GET>("/api/users/:id/profile", route_handler);
+    router.add_handler<HttpMethod::GET>("/assets/*/bundle", route_handler);
+    router.add_handler<HttpMethod::GET>("/files/**", route_handler);
     return router;
 }
 
 template <typename Func>
-bool runBench(const char* name, size_t iterations, Func&& func)
+bool run_bench(const char* name, size_t iterations, Func&& func)
 {
     size_t checksum = 0;
     const auto start = std::chrono::steady_clock::now();
@@ -69,7 +69,7 @@ bool runBench(const char* name, size_t iterations, Func&& func)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -81,7 +81,7 @@ int main(int argc, char** argv)
         }
     }
 
-    HttpRouter router = makeRouter();
+    HttpRouter router = make_router();
     const std::array<std::string, 4> paths = {
         "/api/users/123/posts/456/comments/789",
         "/api/users/alice/profile",
@@ -89,9 +89,9 @@ int main(int argc, char** argv)
         "/files/a/b/c/d.txt",
     };
 
-    if (!runBench("BM_RouteMatchSmallParams", iterations, [&](size_t i) {
+    if (!run_bench("BM_RouteMatchSmallParams", iterations, [&](size_t i) {
             const std::string& path = paths[i % paths.size()];
-            auto match = router.findHandler(HttpMethod::GET, path);
+            auto match = router.find_handler(HttpMethod::GET, path);
             if (match.handler == nullptr) {
                 return size_t{0};
             }
@@ -100,18 +100,18 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    if (!runBench("BM_RouteMatchRequestParamInstall", iterations, [&](size_t i) {
+    if (!run_bench("BM_RouteMatchRequestParamInstall", iterations, [&](size_t i) {
             const std::string& path = paths[i % paths.size()];
-            auto match = router.findHandler(HttpMethod::GET, path);
+            auto match = router.find_handler(HttpMethod::GET, path);
             if (match.handler == nullptr) {
                 return size_t{0};
             }
             HttpRequest request;
-            request.setRouteParams(std::move(match.params));
-            return request.getRouteParam("id").size() +
-                   request.getRouteParam("postId").size() +
-                   request.getRouteParam("commentId").size() +
-                   request.getRouteParam("missing", "fallback").size();
+            request.set_route_params(std::move(match.params));
+            return request.get_route_param("id").size() +
+                   request.get_route_param("postId").size() +
+                   request.get_route_param("commentId").size() +
+                   request.get_route_param("missing", "fallback").size();
         })) {
         return 1;
     }

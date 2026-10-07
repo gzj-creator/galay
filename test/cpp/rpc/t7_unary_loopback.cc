@@ -28,17 +28,17 @@ public:
     LoopbackService()
         : RpcService("LoopbackService")
     {
-        registerMethod("echo", &LoopbackService::echo);
-        registerClientStreamingMethod("echo", &LoopbackService::echo);
-        registerServerStreamingMethod("echo", &LoopbackService::echo);
-        registerBidiStreamingMethod("echo", &LoopbackService::echo);
-        registerMethod("reverse", &LoopbackService::reverse);
-        registerMethod("length", &LoopbackService::length);
+        register_method("echo", &LoopbackService::echo);
+        register_client_streaming_method("echo", &LoopbackService::echo);
+        register_server_streaming_method("echo", &LoopbackService::echo);
+        register_bidi_streaming_method("echo", &LoopbackService::echo);
+        register_method("reverse", &LoopbackService::reverse);
+        register_method("length", &LoopbackService::length);
     }
 
     Task<void> echo(RpcContext& ctx)
     {
-        ctx.setPayload(ctx.request().payloadView());
+        ctx.set_payload(ctx.request().payload_view());
         co_return;
     }
 
@@ -46,14 +46,14 @@ public:
     {
         auto payload = ctx.request().payload();
         std::reverse(payload.begin(), payload.end());
-        ctx.setPayload(payload.data(), payload.size());
+        ctx.set_payload(payload.data(), payload.size());
         co_return;
     }
 
     Task<void> length(RpcContext& ctx)
     {
-        const uint32_t len = static_cast<uint32_t>(ctx.request().payloadSize());
-        ctx.setPayload(reinterpret_cast<const char*>(&len), sizeof(len));
+        const uint32_t len = static_cast<uint32_t>(ctx.request().payload_size());
+        ctx.set_payload(reinterpret_cast<const char*>(&len), sizeof(len));
         co_return;
     }
 };
@@ -64,7 +64,7 @@ struct CallResult {
     std::string error;
 };
 
-uint16_t loopbackPort()
+uint16_t loopback_port()
 {
     return static_cast<uint16_t>(22000 + (::getpid() % 20000));
 }
@@ -75,14 +75,14 @@ void fail(CallResult& state, std::string message)
     state.error = std::move(message);
 }
 
-bool payloadEquals(const RpcResponse& response, const std::string& expected)
+bool payload_equals(const RpcResponse& response, const std::string& expected)
 {
     const auto& payload = response.payload();
     return std::string(payload.begin(), payload.end()) == expected;
 }
 
 template<typename AwaitResult>
-const RpcResponse* responsePtr(const AwaitResult& result)
+const RpcResponse* response_ptr(const AwaitResult& result)
 {
     if (!result.has_value()) {
         return nullptr;
@@ -94,7 +94,7 @@ const RpcResponse* responsePtr(const AwaitResult& result)
     return &call_result->value();
 }
 
-Task<void> runUnaryClient(uint16_t port, CallResult* state)
+Task<void> run_unary_client(uint16_t port, CallResult* state)
 {
     RpcClient client;
     bool connected = false;
@@ -115,9 +115,9 @@ Task<void> runUnaryClient(uint16_t port, CallResult* state)
     }
 
     auto echo_result = co_await client.call("LoopbackService", "echo", "hello");
-    const RpcResponse* echo_response = responsePtr(echo_result);
-    if (echo_response == nullptr || !echo_response->isOk() ||
-        !payloadEquals(*echo_response, "hello")) {
+    const RpcResponse* echo_response = response_ptr(echo_result);
+    if (echo_response == nullptr || !echo_response->is_ok() ||
+        !payload_equals(*echo_response, "hello")) {
         fail(*state, "echo call failed");
         co_await client.close();
         state->done = true;
@@ -125,9 +125,9 @@ Task<void> runUnaryClient(uint16_t port, CallResult* state)
     }
 
     auto reverse_result = co_await client.call("LoopbackService", "reverse", "abcdef");
-    const RpcResponse* reverse_response = responsePtr(reverse_result);
-    if (reverse_response == nullptr || !reverse_response->isOk() ||
-        !payloadEquals(*reverse_response, "fedcba")) {
+    const RpcResponse* reverse_response = response_ptr(reverse_result);
+    if (reverse_response == nullptr || !reverse_response->is_ok() ||
+        !payload_equals(*reverse_response, "fedcba")) {
         fail(*state, "reverse call failed");
         co_await client.close();
         state->done = true;
@@ -136,8 +136,8 @@ Task<void> runUnaryClient(uint16_t port, CallResult* state)
 
     auto length_result = co_await client.call("LoopbackService", "length", "abcd");
     uint32_t length_value = 0;
-    const RpcResponse* length_response = responsePtr(length_result);
-    if (length_response == nullptr || !length_response->isOk() ||
+    const RpcResponse* length_response = response_ptr(length_result);
+    if (length_response == nullptr || !length_response->is_ok() ||
         length_response->payload().size() != sizeof(length_value)) {
         fail(*state, "length call failed");
         co_await client.close();
@@ -153,9 +153,9 @@ Task<void> runUnaryClient(uint16_t port, CallResult* state)
     }
 
     auto missing_service = co_await client.call("MissingService", "echo", "x");
-    const RpcResponse* missing_service_response = responsePtr(missing_service);
+    const RpcResponse* missing_service_response = response_ptr(missing_service);
     if (missing_service_response == nullptr ||
-        missing_service_response->errorCode() != RpcErrorCode::SERVICE_NOT_FOUND) {
+        missing_service_response->error_code() != RpcErrorCode::SERVICE_NOT_FOUND) {
         fail(*state, "missing service did not return SERVICE_NOT_FOUND");
         co_await client.close();
         state->done = true;
@@ -163,9 +163,9 @@ Task<void> runUnaryClient(uint16_t port, CallResult* state)
     }
 
     auto missing_method = co_await client.call("LoopbackService", "missing", "x");
-    const RpcResponse* missing_method_response = responsePtr(missing_method);
+    const RpcResponse* missing_method_response = response_ptr(missing_method);
     if (missing_method_response == nullptr ||
-        missing_method_response->errorCode() != RpcErrorCode::METHOD_NOT_FOUND) {
+        missing_method_response->error_code() != RpcErrorCode::METHOD_NOT_FOUND) {
         fail(*state, "missing method did not return METHOD_NOT_FOUND");
         co_await client.close();
         state->done = true;
@@ -173,25 +173,25 @@ Task<void> runUnaryClient(uint16_t port, CallResult* state)
     }
 
     const std::string mode_payload = "mode-payload";
-    auto client_stream = co_await client.callClientStreamFrame(
+    auto client_stream = co_await client.call_client_stream_frame(
         "LoopbackService", "echo", mode_payload.data(), mode_payload.size(), true);
-    auto server_stream = co_await client.callServerStreamRequest(
+    auto server_stream = co_await client.call_server_stream_request(
         "LoopbackService", "echo", mode_payload.data(), mode_payload.size());
-    auto bidi_stream = co_await client.callBidiStreamFrame(
+    auto bidi_stream = co_await client.call_bidi_stream_frame(
         "LoopbackService", "echo", mode_payload.data(), mode_payload.size(), true);
 
-    const RpcResponse* client_stream_response = responsePtr(client_stream);
-    const RpcResponse* server_stream_response = responsePtr(server_stream);
-    const RpcResponse* bidi_stream_response = responsePtr(bidi_stream);
+    const RpcResponse* client_stream_response = response_ptr(client_stream);
+    const RpcResponse* server_stream_response = response_ptr(server_stream);
+    const RpcResponse* bidi_stream_response = response_ptr(bidi_stream);
     if (client_stream_response == nullptr ||
-        client_stream_response->callMode() != RpcCallMode::CLIENT_STREAMING ||
-        !payloadEquals(*client_stream_response, mode_payload) ||
+        client_stream_response->call_mode() != RpcCallMode::CLIENT_STREAMING ||
+        !payload_equals(*client_stream_response, mode_payload) ||
         server_stream_response == nullptr ||
-        server_stream_response->callMode() != RpcCallMode::SERVER_STREAMING ||
-        !payloadEquals(*server_stream_response, mode_payload) ||
+        server_stream_response->call_mode() != RpcCallMode::SERVER_STREAMING ||
+        !payload_equals(*server_stream_response, mode_payload) ||
         bidi_stream_response == nullptr ||
-        bidi_stream_response->callMode() != RpcCallMode::BIDI_STREAMING ||
-        !payloadEquals(*bidi_stream_response, mode_payload)) {
+        bidi_stream_response->call_mode() != RpcCallMode::BIDI_STREAMING ||
+        !payload_equals(*bidi_stream_response, mode_payload)) {
         fail(*state, "stream-mode compatibility call failed");
         co_await client.close();
         state->done = true;
@@ -207,16 +207,16 @@ Task<void> runUnaryClient(uint16_t port, CallResult* state)
 
 int main()
 {
-    const uint16_t port = loopbackPort();
+    const uint16_t port = loopback_port();
 
     auto server = RpcServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     LoopbackService service;
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register loopback service: "
                   << registered.error().message() << "\n";
@@ -229,7 +229,7 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();
@@ -239,7 +239,7 @@ int main()
     }
 
     CallResult state;
-    if (!scheduleTask(runtime.getNextIOScheduler(), runUnaryClient(port, &state))) {
+    if (!schedule_task(runtime.get_next_io_scheduler(), run_unary_client(port, &state))) {
         runtime.stop();
         server.stop();
         std::cerr << "failed to schedule unary client\n";

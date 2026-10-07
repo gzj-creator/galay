@@ -9,22 +9,22 @@ namespace galay::test::stdoutlog
 {
 namespace detail
 {
-inline std::mutex& outputMutex()
+inline std::mutex& output_mutex()
 {
     static std::mutex mutex;
     return mutex;
 }
 
-inline void writeLine(std::ostream &os)
+inline void write_line(std::ostream &os)
 {
-    std::lock_guard lock(outputMutex());
+    std::lock_guard lock(output_mutex());
     os << '\n';
 }
 
 template<typename First, typename... Rest>
-inline void writeLine(std::ostream &os, First&& first, Rest&&... rest)
+inline void write_line(std::ostream &os, First&& first, Rest&&... rest)
 {
-    std::lock_guard lock(outputMutex());
+    std::lock_guard lock(output_mutex());
     os << std::forward<First>(first);
     ((os << ' ' << std::forward<Rest>(rest)), ...);
     os << '\n';
@@ -34,37 +34,37 @@ inline void writeLine(std::ostream &os, First&& first, Rest&&... rest)
 template<typename... Args>
 inline void trace(Args&&... args)
 {
-    detail::writeLine(std::cout, std::forward<Args>(args)...);
+    detail::write_line(std::cout, std::forward<Args>(args)...);
 }
 
 template<typename... Args>
 inline void debug(Args&&... args)
 {
-    detail::writeLine(std::cout, std::forward<Args>(args)...);
+    detail::write_line(std::cout, std::forward<Args>(args)...);
 }
 
 template<typename... Args>
 inline void info(Args&&... args)
 {
-    detail::writeLine(std::cout, std::forward<Args>(args)...);
+    detail::write_line(std::cout, std::forward<Args>(args)...);
 }
 
 template<typename... Args>
 inline void warn(Args&&... args)
 {
-    detail::writeLine(std::cout, std::forward<Args>(args)...);
+    detail::write_line(std::cout, std::forward<Args>(args)...);
 }
 
 template<typename... Args>
 inline void error(Args&&... args)
 {
-    detail::writeLine(std::cerr, std::forward<Args>(args)...);
+    detail::write_line(std::cerr, std::forward<Args>(args)...);
 }
 
 template<typename... Args>
 inline void critical(Args&&... args)
 {
-    detail::writeLine(std::cerr, std::forward<Args>(args)...);
+    detail::write_line(std::cerr, std::forward<Args>(args)...);
 }
 } // namespace galay::test::stdoutlog
 

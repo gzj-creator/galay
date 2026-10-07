@@ -16,7 +16,7 @@ enum class ReadError {
     kPath,
 };
 
-std::expected<std::string, ReadError> repoRoot()
+std::expected<std::string, ReadError> repo_root()
 {
     std::string path(__FILE__);
     const std::string marker = "/test/cpp/http/";
@@ -28,7 +28,7 @@ std::expected<std::string, ReadError> repoRoot()
     return path;
 }
 
-std::expected<std::string, ReadError> readFile(const std::string& path)
+std::expected<std::string, ReadError> read_file(const std::string& path)
 {
     const int fd = ::open(path.c_str(), O_RDONLY);
     if (fd < 0) {
@@ -66,9 +66,9 @@ std::expected<std::string, ReadError> readFile(const std::string& path)
     return content;
 }
 
-std::expected<std::string, ReadError> repoFile(std::string_view relative_path)
+std::expected<std::string, ReadError> repo_file(std::string_view relative_path)
 {
-    auto root = repoRoot();
+    auto root = repo_root();
     if (!root.has_value()) {
         return std::unexpected(root.error());
     }
@@ -81,10 +81,10 @@ std::expected<std::string, ReadError> repoFile(std::string_view relative_path)
     if (&file_appended != &path) {
         return std::unexpected(ReadError::kPath);
     }
-    return readFile(path);
+    return read_file(path);
 }
 
-int requireContains(std::string_view haystack, std::string_view needle, const char* message)
+int require_contains(std::string_view haystack, std::string_view needle, const char* message)
 {
     const size_t found = haystack.find(needle);
     if (found == std::string_view::npos) {
@@ -94,7 +94,7 @@ int requireContains(std::string_view haystack, std::string_view needle, const ch
     return 0;
 }
 
-int requireNotContains(std::string_view haystack, std::string_view needle, const char* message)
+int require_not_contains(std::string_view haystack, std::string_view needle, const char* message)
 {
     const size_t found = haystack.find(needle);
     if (found != std::string_view::npos) {
@@ -108,28 +108,28 @@ int requireNotContains(std::string_view haystack, std::string_view needle, const
 
 int main()
 {
-    auto writer = repoFile("src/cpp/galay-http/kernel/http_writer.h");
+    auto writer = repo_file("src/cpp/galay-http/kernel/http_writer.h");
     if (!writer.has_value()) {
         std::cerr << "failed to read http_writer.h\n";
         return 1;
     }
 
-    if (const int rc = requireContains(*writer,
+    if (const int rc = require_contains(*writer,
                                        "std::array<iovec, 2>",
                                        "HttpWriter TCP layout must use fixed iovec storage")) {
         return rc;
     }
-    if (const int rc = requireContains(*writer,
+    if (const int rc = require_contains(*writer,
                                        "m_writev_cursor.reserve(2)",
                                        "HttpWriter must reserve cursor storage once")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*writer,
+    if (const int rc = require_not_contains(*writer,
                                           "std::vector<iovec> iovecs;",
                                           "HttpWriter hot path must not construct local vector<iovec>")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*writer,
+    if (const int rc = require_not_contains(*writer,
                                           "m_writev_cursor.reset(std::vector<iovec>{})",
                                           "HttpWriter cleanup must clear the writev cursor without a temporary vector")) {
         return rc;

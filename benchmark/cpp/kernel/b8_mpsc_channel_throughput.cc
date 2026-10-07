@@ -41,7 +41,7 @@ galay::benchmark::CompletionLatch* g_consumer_done_latch = nullptr;
 std::mutex g_received_mutex;
 std::set<int64_t> g_received_set;
 
-void resetCounters() {
+void reset_counters() {
     g_sent = 0;
     g_received = 0;
     g_consumer_done = false;
@@ -59,7 +59,7 @@ struct ThroughputSample {
 // ============== 消费者协程 ==============
 
 // 简单消费者（吞吐量测试）
-Task<void> simpleConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
+Task<void> simple_consumer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
     g_consumer_ready.store(true, std::memory_order_release);
     int64_t received = 0;
     while (received < expected_count) {
@@ -82,7 +82,7 @@ Task<void> simpleConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64
 }
 
 // 正确性验证消费者
-Task<void> correctnessConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
+Task<void> correctness_consumer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
     while (g_received < expected_count) {
         auto value = co_await channel->recv();
         if (!value) {
@@ -105,13 +105,13 @@ Task<void> correctnessConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel, 
 // ============== 生产者函数 ==============
 
 // 多线程生产者
-void multiProducer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t start, int64_t count) {
+void multi_producer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t start, int64_t count) {
     int64_t sent = 0;
     for (int64_t i = 0; i < count; ++i) {
         if (!channel->send(start + i)) {
             g_benchmark_failed.store(true, std::memory_order_release);
             LogError("  producer starting at {} send failed after {} messages", start, sent);
-            if (!channel->close() && !channel->isClosed()) {
+            if (!channel->close() && !channel->is_closed()) {
                 LogError("  channel close failed after multi-producer send failure");
             }
             break;
@@ -124,7 +124,7 @@ void multiProducer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t star
 // ============== 压测函数 ==============
 
 // 1. 多生产者吞吐量测试
-void benchMultiProducerThroughput(int producer_count, int64_t total_messages) {
+void bench_multi_producer_throughput(int producer_count, int64_t total_messages) {
     LogInfo("--- Multi Producer Throughput Test ({} producers, {} messages) ---",
             producer_count, total_messages);
     std::vector<ThroughputSample> samples;
@@ -133,7 +133,7 @@ void benchMultiProducerThroughput(int producer_count, int64_t total_messages) {
     for (std::size_t sample_index = 0;
          sample_index < PRODUCER_THROUGHPUT_SAMPLE_COUNT;
          ++sample_index) {
-        resetCounters();
+        reset_counters();
 
         galay::mpsc::UnboundedChannel<int64_t> channel;
         ParallelScheduler scheduler;
@@ -146,14 +146,14 @@ void benchMultiProducerThroughput(int producer_count, int64_t total_messages) {
         }
         galay::benchmark::CompletionLatch consumer_done_latch(1);
         g_consumer_done_latch = &consumer_done_latch;
-        if (!scheduleTask(scheduler, simpleConsumer(&channel, total_messages))) {
+        if (!schedule_task(scheduler, simple_consumer(&channel, total_messages))) {
             g_benchmark_failed.store(true, std::memory_order_release);
             LogError("  failed to schedule multi-producer consumer");
             g_consumer_done_latch = nullptr;
             scheduler.stop();
             return;
         }
-        if (!galay::benchmark::waitForFlag(g_consumer_ready, 2s)) {
+        if (!galay::benchmark::wait_for_flag(g_consumer_ready, 2s)) {
             LogError("  consumer did not become ready before multi-producer run");
             g_consumer_done_latch = nullptr;
             scheduler.stop();
@@ -166,7 +166,7 @@ void benchMultiProducerThroughput(int producer_count, int64_t total_messages) {
         std::vector<std::thread> producers;
         for (int i = 0; i < producer_count; ++i) {
             const int64_t start_id = i * per_producer;
-            producers.emplace_back(multiProducer, &channel, start_id, per_producer);
+            producers.emplace_back(multi_producer, &channel, start_id, per_producer);
         }
 
         for (auto& t : producers) {
@@ -196,7 +196,7 @@ void benchMultiProducerThroughput(int producer_count, int64_t total_messages) {
         });
     }
 
-    const auto median_sample = galay::benchmark::medianElement(
+    const auto median_sample = galay::benchmark::median_element(
         std::move(samples),
         [](const ThroughputSample& lhs, const ThroughputSample& rhs) {
             return lhs.throughput < rhs.throughput;
@@ -210,10 +210,10 @@ void benchMultiProducerThroughput(int producer_count, int64_t total_messages) {
 }
 
 // 2. 正确性验证测试
-void benchCorrectness(int producer_count, int64_t total_messages) {
+void bench_correctness(int producer_count, int64_t total_messages) {
     LogInfo("--- Correctness Test ({} producers, {} messages) ---",
             producer_count, total_messages);
-    resetCounters();
+    reset_counters();
 
     galay::mpsc::UnboundedChannel<int64_t> channel;
     ParallelScheduler scheduler;
@@ -224,7 +224,7 @@ void benchCorrectness(int producer_count, int64_t total_messages) {
         LogError("  failed to start correctness scheduler");
         return;
     }
-    if (!scheduleTask(scheduler, correctnessConsumer(&channel, total_messages))) {
+    if (!schedule_task(scheduler, correctness_consumer(&channel, total_messages))) {
         g_benchmark_failed.store(true, std::memory_order_release);
         LogError("  failed to schedule correctness consumer");
         scheduler.stop();
@@ -237,14 +237,14 @@ void benchCorrectness(int producer_count, int64_t total_messages) {
     std::vector<std::thread> producers;
     for (int i = 0; i < producer_count; ++i) {
         int64_t start_id = i * per_producer;
-        producers.emplace_back(multiProducer, &channel, start_id, per_producer);
+        producers.emplace_back(multi_producer, &channel, start_id, per_producer);
     }
 
     for (auto& t : producers) {
         t.join();
     }
 
-    if (!galay::benchmark::waitForFlag(g_consumer_done, CORRECTNESS_WAIT_TIMEOUT, 1ms)) {
+    if (!galay::benchmark::wait_for_flag(g_consumer_done, CORRECTNESS_WAIT_TIMEOUT, 1ms)) {
         LogError("  correctness consumer timed out after {}s", CORRECTNESS_WAIT_TIMEOUT.count());
     }
 
@@ -278,9 +278,9 @@ void benchCorrectness(int producer_count, int64_t total_messages) {
 }
 
 // 3. 持续压力测试
-void benchSustained(int duration_sec) {
+void bench_sustained(int duration_sec) {
     LogInfo("--- Sustained Load Test ({}s) ---", duration_sec);
-    resetCounters();
+    reset_counters();
 
     galay::mpsc::UnboundedChannel<int64_t> channel;
     ParallelScheduler scheduler;
@@ -288,7 +288,7 @@ void benchSustained(int duration_sec) {
     std::atomic<bool> running{true};
 
     // 消费者协程
-    auto sustainedConsumer = [](galay::mpsc::UnboundedChannel<int64_t>* ch) -> Task<void> {
+    auto sustained_consumer = [](galay::mpsc::UnboundedChannel<int64_t>* ch) -> Task<void> {
         for (;;) {
             auto value = co_await ch->recv();
             if (!value) {
@@ -313,7 +313,7 @@ void benchSustained(int duration_sec) {
         LogError("  failed to start sustained scheduler");
         return;
     }
-    if (!scheduleTask(scheduler, sustainedConsumer(&channel))) {
+    if (!schedule_task(scheduler, sustained_consumer(&channel))) {
         g_benchmark_failed.store(true, std::memory_order_release);
         LogError("  failed to schedule sustained consumer");
         scheduler.stop();
@@ -333,7 +333,7 @@ void benchSustained(int duration_sec) {
                     g_benchmark_failed.store(true, std::memory_order_release);
                     running.store(false, std::memory_order_release);
                     LogError("  sustained producer send failed after {} messages", id);
-                    if (!channel.close() && !channel.isClosed()) {
+                    if (!channel.close() && !channel.is_closed()) {
                         LogError("  channel close failed after sustained send failure");
                     }
                     break;
@@ -361,7 +361,7 @@ void benchSustained(int duration_sec) {
         producer.join();
     }
 
-    if (!channel.close() && !channel.isClosed()) {
+    if (!channel.close() && !channel.is_closed()) {
         g_benchmark_failed.store(true, std::memory_order_release);
         LogError("  failed to close sustained channel after producers stopped");
     }
@@ -376,7 +376,7 @@ void benchSustained(int duration_sec) {
     const int64_t drain_timeout_seconds = std::max<int64_t>(
         10, std::min<int64_t>(estimated_seconds, 55) * 2 + 10);
     const auto drain_timeout = std::chrono::seconds(drain_timeout_seconds);
-    if (!galay::benchmark::waitForFlag(g_consumer_done, drain_timeout, 10ms)) {
+    if (!galay::benchmark::wait_for_flag(g_consumer_done, drain_timeout, 10ms)) {
         g_benchmark_failed.store(true, std::memory_order_release);
         LogError("  consumer drain timed out after {}s with {} queued messages remaining",
                  drain_timeout.count(),
@@ -402,7 +402,7 @@ void benchSustained(int duration_sec) {
 }
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -412,17 +412,17 @@ int main() {
     LogInfo("");
 
     // 1. 多生产者吞吐量
-    benchMultiProducerThroughput(4, THROUGHPUT_MESSAGES);
+    bench_multi_producer_throughput(4, THROUGHPUT_MESSAGES);
     if (g_benchmark_failed.load(std::memory_order_acquire)) return 1;
     LogInfo("");
 
     // 2. 正确性验证
-    benchCorrectness(4, CORRECTNESS_MESSAGES);
+    bench_correctness(4, CORRECTNESS_MESSAGES);
     if (g_benchmark_failed.load(std::memory_order_acquire)) return 1;
     LogInfo("");
 
     // 3. 持续压力测试
-    benchSustained(5);
+    bench_sustained(5);
     if (g_benchmark_failed.load(std::memory_order_acquire)) return 1;
     LogInfo("");
 

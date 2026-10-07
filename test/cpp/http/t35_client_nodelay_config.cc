@@ -83,7 +83,7 @@ private:
     uint16_t m_port = 0;
 };
 
-int readTcpNoDelay(int fd)
+int read_tcp_no_delay(int fd)
 {
     int value = 0;
     socklen_t value_len = sizeof(value);
@@ -94,22 +94,22 @@ int readTcpNoDelay(int fd)
     return value;
 }
 
-int observeHttpClientTcpNoDelay(bool tcp_no_delay)
+int observe_http_client_tcp_no_delay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     LoopbackListener listener;
-    HttpClient client = HttpClientBuilder().tcpNoDelay(tcp_no_delay).build();
+    HttpClient client = HttpClientBuilder().tcp_no_delay(tcp_no_delay).build();
 
-    auto connect_result = runtime.blockOnIO(
+    auto connect_result = runtime.block_on_io(
         client.connect("http://127.0.0.1:" + std::to_string(listener.port()) + "/"));
     require(connect_result.has_value(), "runtime should run HttpClient connect task");
     require(connect_result.value().has_value(), "HttpClient connect should succeed against loopback listener");
 
     auto socket_result = client.socket();
     require(socket_result.has_value(), "HttpClient should expose connected socket");
-    const int observed = readTcpNoDelay(socket_result->get().handle().fd);
+    const int observed = read_tcp_no_delay(socket_result->get().handle().fd);
 
-    auto close_result = runtime.blockOnIO(client.close());
+    auto close_result = runtime.block_on_io(client.close());
     require(close_result.has_value(), "runtime should run HttpClient close task");
     require(close_result.value().has_value(), "HttpClient close should succeed");
     runtime.stop();
@@ -117,22 +117,22 @@ int observeHttpClientTcpNoDelay(bool tcp_no_delay)
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-int observeHttpsClientTcpNoDelay(bool tcp_no_delay)
+int observe_https_client_tcp_no_delay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     LoopbackListener listener;
-    HttpsClient client = HttpsClientBuilder().tcpNoDelay(tcp_no_delay).build();
+    HttpsClient client = HttpsClientBuilder().tcp_no_delay(tcp_no_delay).build();
 
-    auto connect_result = runtime.blockOnIO(
+    auto connect_result = runtime.block_on_io(
         client.connect("https://127.0.0.1:" + std::to_string(listener.port()) + "/"));
     require(connect_result.has_value(), "runtime should run HttpsClient connect task");
     require(connect_result.value().has_value(), "HttpsClient connect should succeed against loopback listener");
 
     auto socket_result = client.socket();
     require(socket_result.has_value(), "HttpsClient should expose connected socket");
-    const int observed = readTcpNoDelay(socket_result->get().handle().fd);
+    const int observed = read_tcp_no_delay(socket_result->get().handle().fd);
 
-    auto close_result = runtime.blockOnIO(client.close());
+    auto close_result = runtime.block_on_io(client.close());
     require(close_result.has_value(), "runtime should run HttpsClient close task");
     require(close_result.value().has_value(), "HttpsClient close should succeed");
     runtime.stop();
@@ -142,37 +142,37 @@ int observeHttpsClientTcpNoDelay(bool tcp_no_delay)
 
 void test_builder_config_surface()
 {
-    auto default_http_config = HttpClientBuilder().buildConfig();
+    auto default_http_config = HttpClientBuilder().build_config();
     require(default_http_config.tcp_no_delay, "HttpClientConfig should enable TCP_NODELAY by default");
 
-    auto disabled_http_config = HttpClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_http_config = HttpClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_http_config.tcp_no_delay, "HttpClientBuilder should support disabling TCP_NODELAY");
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    auto default_https_config = HttpsClientBuilder().buildConfig();
+    auto default_https_config = HttpsClientBuilder().build_config();
     require(default_https_config.tcp_no_delay, "HttpsClientConfig should enable TCP_NODELAY by default");
 
-    auto disabled_https_config = HttpsClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_https_config = HttpsClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_https_config.tcp_no_delay, "HttpsClientBuilder should support disabling TCP_NODELAY");
 #endif
 }
 
 void test_plain_client_applies_config_to_connected_socket()
 {
-    const int default_nodelay = observeHttpClientTcpNoDelay(true);
+    const int default_nodelay = observe_http_client_tcp_no_delay(true);
     require(default_nodelay != 0, "default HttpClient socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeHttpClientTcpNoDelay(false);
+    const int disabled_nodelay = observe_http_client_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled HttpClient socket should leave TCP_NODELAY off");
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 void test_https_client_applies_config_to_connected_socket()
 {
-    const int default_nodelay = observeHttpsClientTcpNoDelay(true);
+    const int default_nodelay = observe_https_client_tcp_no_delay(true);
     require(default_nodelay != 0, "default HttpsClient socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeHttpsClientTcpNoDelay(false);
+    const int disabled_nodelay = observe_https_client_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled HttpsClient socket should leave TCP_NODELAY off");
 }
 #endif

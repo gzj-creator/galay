@@ -28,36 +28,36 @@ struct FakeResumeTokenState {
     std::atomic<uint64_t> request_count{0};
 };
 
-Scheduler* fakeOwner(void* state) noexcept {
+Scheduler* fake_owner(void* state) noexcept {
     return static_cast<FakeResumeTokenState*>(state)->owner;
 }
 
-bool fakeRequestResume(void* state) noexcept {
+bool fake_request_resume(void* state) noexcept {
     static_cast<FakeResumeTokenState*>(state)->request_count.fetch_add(1, std::memory_order_relaxed);
     return true;
 }
 
-void fakeRetain(void* state) noexcept {
+void fake_retain(void* state) noexcept {
     static_cast<FakeResumeTokenState*>(state)->retain_count.fetch_add(1, std::memory_order_relaxed);
 }
 
-void fakeRelease(void* state) noexcept {
+void fake_release(void* state) noexcept {
     static_cast<FakeResumeTokenState*>(state)->release_count.fetch_add(1, std::memory_order_relaxed);
 }
 
 constexpr detail::ResumeTokenHooks kFakeHooks{
-    .owner_scheduler = fakeOwner,
-    .request_resume = fakeRequestResume,
-    .retain = fakeRetain,
-    .release = fakeRelease,
+    .owner_scheduler = fake_owner,
+    .request_resume = fake_request_resume,
+    .retain = fake_retain,
+    .release = fake_release,
 };
 
-detail::ResumeToken makeToken(FakeResumeTokenState* state) {
+detail::ResumeToken make_token(FakeResumeTokenState* state) {
     state->header.hooks = &kFakeHooks;
-    return detail::ResumeToken::fromCCoroutine(state);
+    return detail::ResumeToken::from_c_coroutine(state);
 }
 
-double elapsedOpsPerSecond(std::chrono::steady_clock::time_point start,
+double elapsed_ops_per_second(std::chrono::steady_clock::time_point start,
                            std::chrono::steady_clock::time_point end,
                            int iterations) {
     const auto elapsed_ns =
@@ -70,36 +70,36 @@ double elapsedOpsPerSecond(std::chrono::steady_clock::time_point start,
 }  // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     ParallelScheduler scheduler;
     FakeResumeTokenState wake_only{.owner = &scheduler};
     {
-        Waker waker(makeToken(&wake_only));
+        Waker waker(make_token(&wake_only));
         const auto start = std::chrono::steady_clock::now();
         for (int i = 0; i < kIterations; ++i) {
-            waker.wakeUp();
+            waker.wake_up();
         }
         const auto end = std::chrono::steady_clock::now();
         std::cout << "ResumeTokenWakerOps wake_only_iterations=" << kIterations
                   << ", wake_only_qps=" << std::fixed << std::setprecision(0)
-                  << elapsedOpsPerSecond(start, end, kIterations) << "\n";
+                  << elapsed_ops_per_second(start, end, kIterations) << "\n";
     }
 
     FakeResumeTokenState copy_wake{.owner = &scheduler};
     {
-        Waker base(makeToken(&copy_wake));
+        Waker base(make_token(&copy_wake));
         const auto start = std::chrono::steady_clock::now();
         for (int i = 0; i < kIterations; ++i) {
             Waker copy = base;
-            copy.wakeUp();
+            copy.wake_up();
         }
         const auto end = std::chrono::steady_clock::now();
         std::cout << "ResumeTokenWakerOps copy_wake_iterations=" << kIterations
                   << ", copy_wake_qps=" << std::fixed << std::setprecision(0)
-                  << elapsedOpsPerSecond(start, end, kIterations) << "\n";
+                  << elapsed_ops_per_second(start, end, kIterations) << "\n";
     }
 
     const bool counts_ok =

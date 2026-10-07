@@ -44,11 +44,11 @@ public:
         return copy;
     }
 
-    bool parseFile(const std::string& path) override {
-        return parseFileContent(path);
+    bool parse_file(const std::string& path) override {
+        return parse_file_content(path);
     }
 
-    bool parseString(const std::string& content) override {
+    bool parse_string(const std::string& content) override {
         m_values.clear();
         m_arrays.clear();
         m_sections.clear();
@@ -66,14 +66,14 @@ public:
 
         while (std::getline(input, line)) {
             ++line_num;
-            line = stripTomlInlineComment(line);
+            line = strip_toml_inline_comment(line);
 
             if (has_pending_array) {
                 if (!line.empty()) {
                     pending_array_value += " ";
                     pending_array_value += line;
-                    if (hasClosedArrayValue(pending_array_value)) {
-                        if (!storeValue(pending_array_section, pending_array_key, pending_array_value, pending_array_line)) {
+                    if (has_closed_array_value(pending_array_value)) {
+                        if (!store_value(pending_array_section, pending_array_key, pending_array_value, pending_array_line)) {
                             return false;
                         }
                         has_pending_array = false;
@@ -96,7 +96,7 @@ public:
                     return false;
                 }
                 current_section = parser_detail::trim(line.substr(1, line.length() - 2));
-                if (!isValidKey(current_section)) {
+                if (!is_valid_key(current_section)) {
                     m_last_error = "Invalid TOML section at line " + std::to_string(line_num);
                     return false;
                 }
@@ -104,7 +104,7 @@ public:
                     m_last_error = "Duplicate TOML section at line " + std::to_string(line_num) + ": " + current_section;
                     return false;
                 }
-                if (hasKeyConflict(current_section)) {
+                if (has_key_conflict(current_section)) {
                     m_last_error = "TOML section conflicts with key at line " + std::to_string(line_num) + ": " + current_section;
                     return false;
                 }
@@ -124,12 +124,12 @@ public:
                 m_last_error = "Empty TOML key at line " + std::to_string(line_num);
                 return false;
             }
-            if (!isValidKey(key)) {
+            if (!is_valid_key(key)) {
                 m_last_error = "Invalid TOML key at line " + std::to_string(line_num) + ": " + key;
                 return false;
             }
 
-            if (!raw_value.empty() && raw_value.front() == '[' && !hasClosedArrayValue(raw_value)) {
+            if (!raw_value.empty() && raw_value.front() == '[' && !has_closed_array_value(raw_value)) {
                 pending_array_key = key;
                 pending_array_section = current_section;
                 pending_array_value = raw_value;
@@ -138,7 +138,7 @@ public:
                 continue;
             }
 
-            if (!storeValue(current_section, key, raw_value, line_num)) {
+            if (!store_value(current_section, key, raw_value, line_num)) {
                 return false;
             }
         }
@@ -151,7 +151,7 @@ public:
         return true;
     }
 
-    std::optional<std::string> getValue(const std::string& key) const override {
+    std::optional<std::string> get_value(const std::string& key) const override {
         auto iter = m_values.find(key);
         if (iter != m_values.end()) {
             return iter->second;
@@ -159,11 +159,11 @@ public:
         return std::nullopt;
     }
 
-    bool hasKey(const std::string& key) const override {
+    bool has_key(const std::string& key) const override {
         return m_values.find(key) != m_values.end();
     }
 
-    std::vector<std::string> getKeys() const override {
+    std::vector<std::string> get_keys() const override {
         std::vector<std::string> keys;
         keys.reserve(m_values.size());
         for (const auto& entry : m_values) {
@@ -172,27 +172,27 @@ public:
         return keys;
     }
 
-    std::vector<std::string> getArray(const std::string& key) const {
+    std::vector<std::string> get_array(const std::string& key) const {
         auto array_iter = m_arrays.find(key);
         if (array_iter != m_arrays.end()) {
             return array_iter->second;
         }
 
-        auto value = getValue(key);
+        auto value = get_value(key);
         if (!value) {
             return {};
         }
-        return parser_detail::splitCommaSeparated(*value);
+        return parser_detail::split_comma_separated(*value);
     }
 
 private:
     TomlParser(const TomlParser&) = delete;
     TomlParser& operator=(const TomlParser&) = delete;
 
-    bool storeValue(const std::string& current_section, const std::string& key, const std::string& raw_value, int line_num) {
+    bool store_value(const std::string& current_section, const std::string& key, const std::string& raw_value, int line_num) {
         std::vector<std::string> array_items;
         bool is_array = !raw_value.empty() && raw_value.front() == '[';
-        std::string value = normalizeValue(raw_value, line_num, is_array ? &array_items : nullptr);
+        std::string value = normalize_value(raw_value, line_num, is_array ? &array_items : nullptr);
         if (!m_last_error.empty()) {
             return false;
         }
@@ -202,7 +202,7 @@ private:
             m_last_error = "Duplicate TOML key at line " + std::to_string(line_num) + ": " + full_key;
             return false;
         }
-        if (hasKeyConflict(full_key)) {
+        if (has_key_conflict(full_key)) {
             m_last_error = "TOML key conflicts with existing key at line " + std::to_string(line_num) + ": " + full_key;
             return false;
         }
@@ -213,7 +213,7 @@ private:
         return true;
     }
 
-    std::string normalizeValue(const std::string& raw_value, int line_num, std::vector<std::string>* array_items) {
+    std::string normalize_value(const std::string& raw_value, int line_num, std::vector<std::string>* array_items) {
         if (raw_value.empty()) {
             m_last_error = "Empty TOML value at line " + std::to_string(line_num);
             return {};
@@ -231,18 +231,18 @@ private:
                 }
                 return {};
             }
-            if (hasNestedArray(array_body)) {
+            if (has_nested_array(array_body)) {
                 m_last_error = "Unsupported nested TOML array at line " + std::to_string(line_num);
                 return {};
             }
-            auto items = splitTomlArrayItems(array_body);
+            auto items = split_toml_array_items(array_body);
             if (!items.empty() && items.back().empty() && parser_detail::trim(array_body).back() == ',') {
                 items.pop_back();
             }
             ScalarKind array_kind = ScalarKind::Unknown;
             std::string result;
             for (size_t index = 0; index < items.size(); ++index) {
-                ScalarKind item_kind = scalarKind(items[index]);
+                ScalarKind item_kind = scalar_kind(items[index]);
                 if (item_kind == ScalarKind::Invalid) {
                     m_last_error = "Invalid TOML array item at line " + std::to_string(line_num);
                     return {};
@@ -256,7 +256,7 @@ private:
                 if (index > 0) {
                     result += ",";
                 }
-                std::string normalized_item = normalizeScalar(items[index], line_num);
+                std::string normalized_item = normalize_scalar(items[index], line_num);
                 if (!m_last_error.empty()) {
                     return {};
                 }
@@ -268,29 +268,29 @@ private:
             return result;
         }
 
-        return normalizeScalar(raw_value, line_num);
+        return normalize_scalar(raw_value, line_num);
     }
 
-    std::string normalizeScalar(const std::string& raw_value, int line_num) {
+    std::string normalize_scalar(const std::string& raw_value, int line_num) {
         std::string value = parser_detail::trim(raw_value);
         if (value.empty()) {
             m_last_error = "Empty TOML scalar at line " + std::to_string(line_num);
             return {};
         }
         if (value.front() == '"' || value.front() == '\'') {
-            if (!isTerminalQuotedTomlString(value)) {
+            if (!is_terminal_quoted_toml_string(value)) {
                 m_last_error = "Unterminated TOML string at line " + std::to_string(line_num);
                 return {};
             }
-            if (value.front() == '"' && !hasValidEscapes(value)) {
+            if (value.front() == '"' && !has_valid_escapes(value)) {
                 m_last_error = "Invalid TOML escape at line " + std::to_string(line_num);
                 return {};
             }
-            if (!hasValidTomlStringQuotes(value)) {
+            if (!has_valid_toml_string_quotes(value)) {
                 m_last_error = "Invalid TOML string at line " + std::to_string(line_num);
                 return {};
             }
-            return unquoteTomlString(value);
+            return unquote_toml_string(value);
         }
         if (value.front() == '{' || value.back() == '}') {
             m_last_error = "Unsupported TOML inline table at line " + std::to_string(line_num);
@@ -300,7 +300,7 @@ private:
             m_last_error = "Invalid TOML string at line " + std::to_string(line_num);
             return {};
         }
-        if (value == "true" || value == "false" || isNumber(value)) {
+        if (value == "true" || value == "false" || is_number(value)) {
             return value;
         }
         m_last_error = "Unsupported TOML scalar at line " + std::to_string(line_num) + ": " + value;
@@ -315,19 +315,19 @@ private:
         Invalid
     };
 
-    ScalarKind scalarKind(const std::string& raw_value) const {
+    ScalarKind scalar_kind(const std::string& raw_value) const {
         std::string value = parser_detail::trim(raw_value);
         if (value.empty() || value.front() == '[' || value.front() == '{' || value.back() == '}') {
             return ScalarKind::Invalid;
         }
         if (value.front() == '"' || value.front() == '\'') {
-            if (!isTerminalQuotedTomlString(value)) {
+            if (!is_terminal_quoted_toml_string(value)) {
                 return ScalarKind::Invalid;
             }
-            if (value.front() == '"' && !hasValidEscapes(value)) {
+            if (value.front() == '"' && !has_valid_escapes(value)) {
                 return ScalarKind::Invalid;
             }
-            if (!hasValidTomlStringQuotes(value)) {
+            if (!has_valid_toml_string_quotes(value)) {
                 return ScalarKind::Invalid;
             }
             return ScalarKind::String;
@@ -338,13 +338,13 @@ private:
         if (value == "true" || value == "false") {
             return ScalarKind::Bool;
         }
-        if (isNumber(value)) {
+        if (is_number(value)) {
             return ScalarKind::Number;
         }
         return ScalarKind::Invalid;
     }
 
-    static bool isValidKey(const std::string& key) {
+    static bool is_valid_key(const std::string& key) {
         if (key.empty() || key.front() == '.' || key.back() == '.') {
             return false;
         }
@@ -368,7 +368,7 @@ private:
         return true;
     }
 
-    static bool isNumber(const std::string& value) {
+    static bool is_number(const std::string& value) {
         size_t index = 0;
         if (value[index] == '+' || value[index] == '-') {
             ++index;
@@ -401,7 +401,7 @@ private:
         return has_digit && index == value.length();
     }
 
-    static std::string stripTomlInlineComment(const std::string& text) {
+    static std::string strip_toml_inline_comment(const std::string& text) {
         bool in_single_quote = false;
         bool in_double_quote = false;
         bool escaped = false;
@@ -433,7 +433,7 @@ private:
         return parser_detail::trim(text);
     }
 
-    static std::vector<std::string> splitTomlArrayItems(const std::string& text) {
+    static std::vector<std::string> split_toml_array_items(const std::string& text) {
         if (parser_detail::trim(text).empty()) {
             return {};
         }
@@ -478,7 +478,7 @@ private:
         return result;
     }
 
-    static bool isTerminalQuotedTomlString(const std::string& value) {
+    static bool is_terminal_quoted_toml_string(const std::string& value) {
         if (value.length() < 2 || (value.front() != '"' && value.front() != '\'') || value.back() != value.front()) {
             return false;
         }
@@ -493,7 +493,7 @@ private:
         return slash_count % 2 == 0;
     }
 
-    static bool hasValidTomlStringQuotes(const std::string& value) {
+    static bool has_valid_toml_string_quotes(const std::string& value) {
         char quote = value.front();
         if (quote == '\'') {
             for (size_t index = 1; index + 1 < value.length(); ++index) {
@@ -521,14 +521,14 @@ private:
         return !escaped;
     }
 
-    static std::string unquoteTomlString(const std::string& value) {
+    static std::string unquote_toml_string(const std::string& value) {
         if (value.front() == '\'') {
             return value.substr(1, value.length() - 2);
         }
-        return parser_detail::processEscapes(value.substr(1, value.length() - 2));
+        return parser_detail::process_escapes(value.substr(1, value.length() - 2));
     }
 
-    static bool hasValidEscapes(const std::string& value) {
+    static bool has_valid_escapes(const std::string& value) {
         for (size_t index = 1; index + 1 < value.length(); ++index) {
             if (value[index] != '\\') {
                 continue;
@@ -545,13 +545,13 @@ private:
                 case '\\':
                     break;
                 case 'u':
-                    if (!hasHexDigits(value, index + 1, 4)) {
+                    if (!has_hex_digits(value, index + 1, 4)) {
                         return false;
                     }
                     index += 4;
                     break;
                 case 'U':
-                    if (!hasHexDigits(value, index + 1, 8)) {
+                    if (!has_hex_digits(value, index + 1, 8)) {
                         return false;
                     }
                     index += 8;
@@ -563,7 +563,7 @@ private:
         return true;
     }
 
-    static bool hasHexDigits(const std::string& value, size_t start, size_t count) {
+    static bool has_hex_digits(const std::string& value, size_t start, size_t count) {
         if (start + count > value.length() - 1) {
             return false;
         }
@@ -575,7 +575,7 @@ private:
         return true;
     }
 
-    static bool hasClosedArrayValue(const std::string& raw_value) {
+    static bool has_closed_array_value(const std::string& raw_value) {
         std::string value = parser_detail::trim(raw_value);
         if (value.empty() || value.front() != '[') {
             return true;
@@ -621,7 +621,7 @@ private:
         return false;
     }
 
-    bool hasKeyConflict(const std::string& key) const {
+    bool has_key_conflict(const std::string& key) const {
         for (const auto& entry : m_values) {
             const std::string& existing_key = entry.first;
             if (existing_key == key) {
@@ -641,7 +641,7 @@ private:
         return false;
     }
 
-    static bool hasNestedArray(const std::string& value) {
+    static bool has_nested_array(const std::string& value) {
         bool in_single_quote = false;
         bool in_double_quote = false;
         bool escaped = false;

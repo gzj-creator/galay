@@ -33,19 +33,19 @@ constexpr size_t kProxyMaxIdleConnectionsPerUpstream = 32;
 constexpr size_t kProxyRawRelayBufferSize = 16 * 1024;
 thread_local std::unordered_map<std::string, std::vector<std::unique_ptr<HttpClient>>> g_proxyClientPools;
 
-std::string toLowerAscii(std::string value) {
+std::string to_lower_ascii(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return value;
 }
 
-std::string toUpperAscii(std::string value) {
+std::string to_upper_ascii(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
                    [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
     return value;
 }
 
-std::string toCanonicalHeaderKey(std::string value) {
+std::string to_canonical_header_key(std::string value) {
     bool word_start = true;
     for (char& ch : value) {
         unsigned char c = static_cast<unsigned char>(ch);
@@ -59,33 +59,33 @@ std::string toCanonicalHeaderKey(std::string value) {
     return value;
 }
 
-void removeHeaderPairLoose(HeaderPair& headers, const std::string& key) {
+void remove_header_pair_loose(HeaderPair& headers, const std::string& key) {
     if (key.empty()) {
         return;
     }
 
-    headers.removeHeaderPair(key);
+    headers.remove_header_pair(key);
 
-    const std::string lower = toLowerAscii(key);
-    const std::string upper = toUpperAscii(key);
-    const std::string canonical = toCanonicalHeaderKey(key);
+    const std::string lower = to_lower_ascii(key);
+    const std::string upper = to_upper_ascii(key);
+    const std::string canonical = to_canonical_header_key(key);
 
     if (lower != key) {
-        headers.removeHeaderPair(lower);
+        headers.remove_header_pair(lower);
     }
     if (upper != key && upper != lower) {
-        headers.removeHeaderPair(upper);
+        headers.remove_header_pair(upper);
     }
     if (canonical != key && canonical != lower && canonical != upper) {
-        headers.removeHeaderPair(canonical);
+        headers.remove_header_pair(canonical);
     }
 }
 
-std::string getHeaderValueLoose(const HeaderPair& headers, const std::string& key) {
-    return headers.getValue(key);
+std::string get_header_value_loose(const HeaderPair& headers, const std::string& key) {
+    return headers.get_value(key);
 }
 
-std::vector<std::string> splitConnectionTokens(const std::string& value) {
+std::vector<std::string> split_connection_tokens(const std::string& value) {
     std::vector<std::string> tokens;
     std::set<std::string> seen;
     std::string current;
@@ -102,7 +102,7 @@ std::vector<std::string> splitConnectionTokens(const std::string& value) {
         }
 
         if (end > begin) {
-            std::string token = toLowerAscii(current.substr(begin, end - begin));
+            std::string token = to_lower_ascii(current.substr(begin, end - begin));
             if (seen.insert(token).second) {
                 tokens.push_back(std::move(token));
             }
@@ -122,7 +122,7 @@ std::vector<std::string> splitConnectionTokens(const std::string& value) {
     return tokens;
 }
 
-std::string normalizeRoutePrefix(std::string routePrefix) {
+std::string normalize_route_prefix(std::string routePrefix) {
     if (routePrefix.empty()) {
         return "/";
     }
@@ -138,15 +138,15 @@ std::string normalizeRoutePrefix(std::string routePrefix) {
     return routePrefix;
 }
 
-std::string buildUpstreamKey(const std::string& host, uint16_t port) {
+std::string build_upstream_key(const std::string& host, uint16_t port) {
     return host + ":" + std::to_string(port);
 }
 
-std::string getClientIpFromConn(HttpConn& conn) {
+std::string get_client_ip_from_conn(HttpConn& conn) {
     sockaddr_storage addr{};
     socklen_t len = sizeof(addr);
 
-    if (::getpeername(conn.getSocket().handle().fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
+    if (::getpeername(conn.get_socket().handle().fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
         return "";
     }
 
@@ -166,9 +166,9 @@ std::string getClientIpFromConn(HttpConn& conn) {
     return "";
 }
 
-void applyForwardHeaders(HttpConn& conn, HeaderPair& headers, const std::string& original_host) {
-    const std::string client_ip = getClientIpFromConn(conn);
-    std::string xff = getHeaderValueLoose(headers, "X-Forwarded-For");
+void apply_forward_headers(HttpConn& conn, HeaderPair& headers, const std::string& original_host) {
+    const std::string client_ip = get_client_ip_from_conn(conn);
+    std::string xff = get_header_value_loose(headers, "X-Forwarded-For");
 
     if (!client_ip.empty()) {
         if (xff.empty()) {
@@ -176,17 +176,17 @@ void applyForwardHeaders(HttpConn& conn, HeaderPair& headers, const std::string&
         } else {
             xff += ", " + client_ip;
         }
-        headers.addHeaderPair("X-Forwarded-For", xff);
-        headers.addHeaderPair("X-Real-IP", client_ip);
+        headers.add_header_pair("X-Forwarded-For", xff);
+        headers.add_header_pair("X-Real-IP", client_ip);
     }
 
-    headers.addHeaderPair("X-Forwarded-Proto", "http");
+    headers.add_header_pair("X-Forwarded-Proto", "http");
     if (!original_host.empty()) {
-        headers.addHeaderPair("X-Forwarded-Host", original_host);
+        headers.add_header_pair("X-Forwarded-Host", original_host);
     }
 }
 
-std::string rewriteProxyUri(const std::string& routePrefix, const std::string& requestUri) {
+std::string rewrite_proxy_uri(const std::string& routePrefix, const std::string& requestUri) {
     if (requestUri.empty()) {
         return "/";
     }
@@ -216,24 +216,24 @@ std::string rewriteProxyUri(const std::string& routePrefix, const std::string& r
     return requestUri;
 }
 
-bool isLikelyStreamingRequest(const std::string& uri, const HeaderPair& headers)
+bool is_likely_streaming_request(const std::string& uri, const HeaderPair& headers)
 {
-    const std::string accept = toLowerAscii(getHeaderValueLoose(headers, "Accept"));
+    const std::string accept = to_lower_ascii(get_header_value_loose(headers, "Accept"));
     if (accept.find("text/event-stream") != std::string::npos) {
         return true;
     }
 
-    const std::string content_type = toLowerAscii(getHeaderValueLoose(headers, "Content-Type"));
+    const std::string content_type = to_lower_ascii(get_header_value_loose(headers, "Content-Type"));
     if (content_type.find("text/event-stream") != std::string::npos) {
         return true;
     }
 
-    const std::string proxy_stream = toLowerAscii(getHeaderValueLoose(headers, "X-Proxy-Stream"));
+    const std::string proxy_stream = to_lower_ascii(get_header_value_loose(headers, "X-Proxy-Stream"));
     if (proxy_stream == "1" || proxy_stream == "true" || proxy_stream == "yes") {
         return true;
     }
 
-    const std::string lower_uri = toLowerAscii(uri);
+    const std::string lower_uri = to_lower_ascii(uri);
     if (lower_uri.find("/stream") != std::string::npos ||
         lower_uri.find("stream=true") != std::string::npos ||
         lower_uri.find("stream=1") != std::string::npos) {
@@ -243,16 +243,16 @@ bool isLikelyStreamingRequest(const std::string& uri, const HeaderPair& headers)
     return false;
 }
 
-Task<void> sendProxyError(HttpConn& conn, HttpStatusCode code, const std::string& message) {
+Task<void> send_proxy_error(HttpConn& conn, HttpStatusCode code, const std::string& message) {
     auto response = Http1_1ResponseBuilder()
         .status(code)
         .header("Server", "Galay-Proxy/1.0")
         .text(message)
-        .buildMove();
+        .build_move();
 
-    auto writer = conn.getWriter();
+    auto writer = conn.get_writer();
     while (true) {
-        auto result = co_await writer.sendResponse(response);
+        auto result = co_await writer.send_response(response);
         if (!result || result.value()) {
             break;
         }
@@ -260,7 +260,7 @@ Task<void> sendProxyError(HttpConn& conn, HttpStatusCode code, const std::string
     co_return;
 }
 
-Task<void> connectProxyUpstream(HttpClient& client,
+Task<void> connect_proxy_upstream(HttpClient& client,
                                 const std::string& url,
                                 bool& ok,
                                 std::string& err_msg)
@@ -278,7 +278,7 @@ Task<void> connectProxyUpstream(HttpClient& client,
     co_return;
 }
 
-Task<void> relayRawUpstreamToDownstream(AsyncTcpSocket& upstream,
+Task<void> relay_raw_upstream_to_downstream(AsyncTcpSocket& upstream,
                                         AsyncTcpSocket& downstream,
                                         std::chrono::milliseconds downstream_write_timeout,
                                         bool& ok,
@@ -322,9 +322,9 @@ Task<void> relayRawUpstreamToDownstream(AsyncTcpSocket& upstream,
     }
 }
 
-std::chrono::milliseconds responseWriteTimeoutFromConn(const HttpConn& conn)
+std::chrono::milliseconds response_write_timeout_from_conn(const HttpConn& conn)
 {
-    return std::chrono::milliseconds(conn.defaultWriterSetting().getSendTimeout());
+    return std::chrono::milliseconds(conn.default_writer_setting().get_send_timeout());
 }
 
 } // namespace
@@ -335,25 +335,25 @@ HttpRouter::HttpRouter()
 {
 }
 
-void HttpRouter::addHandlerInternal(HttpMethod method, const std::string& path, HttpRouteHandler handler)
+void HttpRouter::add_handler_internal(HttpMethod method, const std::string& path, HttpRouteHandler handler)
 {
     // 验证路径格式
     std::string error;
-    if (!validatePath(path, error)) {
+    if (!validate_path(path, error)) {
         // 路径格式错误，记录日志并返回
         HTTP_LOG_ERROR("[route] [invalid]", "path={} error={}", path, error);
         return;
     }
 
-    if (isFuzzyPattern(path)) {
+    if (is_fuzzy_pattern(path)) {
         // 模糊匹配路由 - 使用Trie树
         auto& root = m_fuzzyRoutes[method];
         if (!root) {
             root = std::make_unique<RouteTrieNode>();
         }
 
-        auto segments = splitPath(path);
-        insertRoute(root.get(), segments, handler);
+        auto segments = split_path(path);
+        insert_route(root.get(), segments, handler);
         m_routeCount++;
     } else {
         // 精确匹配路由 - 使用unordered_map
@@ -377,7 +377,7 @@ void HttpRouter::addHandlerInternal(HttpMethod method, const std::string& path, 
     }
 }
 
-RouteMatch HttpRouter::findHandler(HttpMethod method, const std::string& path)
+RouteMatch HttpRouter::find_handler(HttpMethod method, const std::string& path)
 {
     RouteMatch result;
 
@@ -394,13 +394,13 @@ RouteMatch HttpRouter::findHandler(HttpMethod method, const std::string& path)
     // 2. 尝试模糊匹配 - 使用Trie树（O(k)，k为路径段数）
     auto fuzzyIt = m_fuzzyRoutes.find(method);
     if (fuzzyIt != m_fuzzyRoutes.end() && fuzzyIt->second) {
-        result.handler = searchRoutePath(fuzzyIt->second.get(), path, result.params);
+        result.handler = search_route_path(fuzzyIt->second.get(), path, result.params);
     }
 
     return result;  // 未找到，handler为nullptr
 }
 
-bool HttpRouter::delHandler(HttpMethod method, const std::string& path)
+bool HttpRouter::del_handler(HttpMethod method, const std::string& path)
 {
     // 尝试从精确匹配中移除
     auto methodIt = m_exactRoutes.find(method);
@@ -433,14 +433,14 @@ size_t HttpRouter::size() const
     return m_routeCount;
 }
 
-bool HttpRouter::isFuzzyPattern(const std::string& path) const
+bool HttpRouter::is_fuzzy_pattern(const std::string& path) const
 {
     // 检查是否包含路径参数（:param）或通配符（*）
     return path.find(':') != std::string::npos ||
            path.find('*') != std::string::npos;
 }
 
-std::vector<std::string> HttpRouter::splitPath(const std::string& path) const
+std::vector<std::string> HttpRouter::split_path(const std::string& path) const
 {
     std::vector<std::string> segments;
     size_t offset = 0;
@@ -465,7 +465,7 @@ std::vector<std::string> HttpRouter::splitPath(const std::string& path) const
     return segments;
 }
 
-void HttpRouter::insertRoute(RouteTrieNode* root, const std::vector<std::string>& segments,
+void HttpRouter::insert_route(RouteTrieNode* root, const std::vector<std::string>& segments,
                              HttpRouteHandler handler)
 {
     RouteTrieNode* node = root;
@@ -509,7 +509,7 @@ void HttpRouter::insertRoute(RouteTrieNode* root, const std::vector<std::string>
     node->paramNames = std::move(paramNames);
 }
 
-HttpRouteHandler* HttpRouter::searchRoute(RouteTrieNode* root, const std::vector<std::string>& segments,
+HttpRouteHandler* HttpRouter::search_route(RouteTrieNode* root, const std::vector<std::string>& segments,
                                           RouteParams& params)
 {
     params.clear();
@@ -575,7 +575,7 @@ HttpRouteHandler* HttpRouter::searchRoute(RouteTrieNode* root, const std::vector
 
 namespace {
 
-bool nextRouteSegment(std::string_view path,
+bool next_route_segment(std::string_view path,
                       size_t offset,
                       std::string_view& segment,
                       size_t& next_offset)
@@ -598,7 +598,7 @@ bool nextRouteSegment(std::string_view path,
     return true;
 }
 
-RouteTrieNode* findChildBySegment(RouteTrieNode* node, std::string_view segment)
+RouteTrieNode* find_child_by_segment(RouteTrieNode* node, std::string_view segment)
 {
     if (node == nullptr) {
         return nullptr;
@@ -614,17 +614,17 @@ RouteTrieNode* findChildBySegment(RouteTrieNode* node, std::string_view segment)
 
 } // namespace
 
-HttpRouteHandler* HttpRouter::searchRoutePath(RouteTrieNode* root,
+HttpRouteHandler* HttpRouter::search_route_path(RouteTrieNode* root,
                                               std::string_view path,
                                               RouteParams& params)
 {
     params.clear();
     std::vector<std::string_view> paramValues;
     paramValues.reserve(8);
-    return searchRoutePathRecursive(root, path, 0, paramValues, params);
+    return search_route_path_recursive(root, path, 0, paramValues, params);
 }
 
-HttpRouteHandler* HttpRouter::searchRoutePathRecursive(
+HttpRouteHandler* HttpRouter::search_route_path_recursive(
     RouteTrieNode* node,
     std::string_view path,
     size_t offset,
@@ -637,7 +637,7 @@ HttpRouteHandler* HttpRouter::searchRoutePathRecursive(
 
     std::string_view segment;
     size_t next_offset = offset;
-    const bool has_segment = nextRouteSegment(path, offset, segment, next_offset);
+    const bool has_segment = next_route_segment(path, offset, segment, next_offset);
     if (!has_segment) {
         if (!node->isEnd) {
             return nullptr;
@@ -651,8 +651,8 @@ HttpRouteHandler* HttpRouter::searchRoutePathRecursive(
         return &node->handler;
     }
 
-    if (auto* exact = findChildBySegment(node, segment)) {
-        auto* result = searchRoutePathRecursive(exact, path, next_offset, paramValues, params);
+    if (auto* exact = find_child_by_segment(node, segment)) {
+        auto* result = search_route_path_recursive(exact, path, next_offset, paramValues, params);
         if (result != nullptr) {
             return result;
         }
@@ -660,7 +660,7 @@ HttpRouteHandler* HttpRouter::searchRoutePathRecursive(
 
     if (auto paramIt = node->children.find(":param"); paramIt != node->children.end()) {
         paramValues.push_back(segment);
-        auto* result = searchRoutePathRecursive(paramIt->second.get(),
+        auto* result = search_route_path_recursive(paramIt->second.get(),
                                                 path,
                                                 next_offset,
                                                 paramValues,
@@ -672,7 +672,7 @@ HttpRouteHandler* HttpRouter::searchRoutePathRecursive(
     }
 
     if (auto wildcardIt = node->children.find("*"); wildcardIt != node->children.end()) {
-        auto* result = searchRoutePathRecursive(wildcardIt->second.get(),
+        auto* result = search_route_path_recursive(wildcardIt->second.get(),
                                                 path,
                                                 next_offset,
                                                 paramValues,
@@ -692,7 +692,7 @@ HttpRouteHandler* HttpRouter::searchRoutePathRecursive(
     return nullptr;
 }
 
-bool HttpRouter::validatePath(const std::string& path, std::string& error) const
+bool HttpRouter::validate_path(const std::string& path, std::string& error) const
 {
     // 1. 检查路径是否为空
     if (path.empty()) {
@@ -713,7 +713,7 @@ bool HttpRouter::validatePath(const std::string& path, std::string& error) const
     }
 
     // 4. 分割路径并检查每个段
-    auto segments = splitPath(path);
+    auto segments = split_path(path);
 
     if (segments.empty() && path != "/") {
         error = "Invalid path format";
@@ -820,16 +820,16 @@ void HttpRouter::mount(const std::string& routePrefix, const std::string& dirPat
         auto response = Http1_1ResponseBuilder()
             .status(HttpStatusCode::NotFound_404)
             .body("404 Not Found")
-            .buildMove();
-        auto writer = conn.getWriter();
+            .build_move();
+        auto writer = conn.get_writer();
         while (true) {
-            auto send_result = co_await writer.sendResponse(response);
+            auto send_result = co_await writer.send_response(response);
             if (!send_result || send_result.value()) break;
         }
         co_return;
     };
 
-    auto handler = createStaticFileHandler(routePrefix, dirPath, config, std::move(fallback));
+    auto handler = create_static_file_handler(routePrefix, dirPath, config, std::move(fallback));
 
     // 注册通配符路由：routePrefix/**
     std::string wildcardPath = routePrefix;
@@ -839,12 +839,12 @@ void HttpRouter::mount(const std::string& routePrefix, const std::string& dirPat
     wildcardPath += "**";
 
     // 为 GET 和 HEAD 方法注册路由
-    addHandler<HttpMethod::GET, HttpMethod::HEAD>(wildcardPath, handler);
+    add_handler<HttpMethod::GET, HttpMethod::HEAD>(wildcardPath, handler);
 
     HTTP_LOG_INFO("[mount]", "dir={} route={}", dirPath, routePrefix);
 }
 
-void HttpRouter::mountHardly(const std::string& routePrefix, const std::string& dirPath,
+void HttpRouter::mount_hardly(const std::string& routePrefix, const std::string& dirPath,
                              const StaticFileSetting& config)
 {
     namespace fs = std::filesystem;
@@ -856,12 +856,12 @@ void HttpRouter::mountHardly(const std::string& routePrefix, const std::string& 
     }
 
     // 递归遍历目录并注册所有文件
-    registerFilesRecursively(routePrefix, dirPath, config, "");
+    register_files_recursively(routePrefix, dirPath, config, "");
 
     HTTP_LOG_INFO("[mount-hard]", "dir={} route={}", dirPath, routePrefix);
 }
 
-void HttpRouter::tryFiles(const std::string& routePrefix,
+void HttpRouter::try_files(const std::string& routePrefix,
                           const std::string& dirPath,
                           const std::string& upstreamHost,
                           uint16_t upstreamPort,
@@ -883,9 +883,9 @@ void HttpRouter::tryFiles(const std::string& routePrefix,
         return;
     }
 
-    std::string normalizedPrefix = normalizeRoutePrefix(routePrefix);
-    auto fallbackProxy = createProxyHandler("/", upstreamHost, upstreamPort, mode);
-    auto handler = createStaticFileHandler(normalizedPrefix, dirPath, config, std::move(fallbackProxy));
+    std::string normalizedPrefix = normalize_route_prefix(routePrefix);
+    auto fallbackProxy = create_proxy_handler("/", upstreamHost, upstreamPort, mode);
+    auto handler = create_static_file_handler(normalizedPrefix, dirPath, config, std::move(fallbackProxy));
 
     std::string wildcardPath = normalizedPrefix;
     if (wildcardPath.back() != '/') {
@@ -893,9 +893,9 @@ void HttpRouter::tryFiles(const std::string& routePrefix,
     }
     wildcardPath += "**";
 
-    addHandler<HttpMethod::GET, HttpMethod::HEAD>(wildcardPath, handler);
+    add_handler<HttpMethod::GET, HttpMethod::HEAD>(wildcardPath, handler);
     if (normalizedPrefix != "/") {
-        addHandler<HttpMethod::GET, HttpMethod::HEAD>(normalizedPrefix, handler);
+        add_handler<HttpMethod::GET, HttpMethod::HEAD>(normalizedPrefix, handler);
     }
 
     HTTP_LOG_INFO("[try-files]",
@@ -919,17 +919,17 @@ void HttpRouter::proxy(const std::string& routePrefix,
         return;
     }
 
-    std::string normalizedPrefix = normalizeRoutePrefix(routePrefix);
-    auto handler = createProxyHandler(normalizedPrefix, upstreamHost, upstreamPort, mode);
+    std::string normalizedPrefix = normalize_route_prefix(routePrefix);
+    auto handler = create_proxy_handler(normalizedPrefix, upstreamHost, upstreamPort, mode);
 
     std::string wildcardPath = normalizedPrefix == "/" ? "/**" : normalizedPrefix + "/**";
-    addHandler<HttpMethod::GET, HttpMethod::POST, HttpMethod::PUT,
+    add_handler<HttpMethod::GET, HttpMethod::POST, HttpMethod::PUT,
                HttpMethod::PATCH, HttpMethod::DELETE, HttpMethod::HEAD,
                HttpMethod::OPTIONS>(wildcardPath, handler);
 
     // 让 /api 本身也命中代理，等价转发为上游 /
     if (normalizedPrefix != "/") {
-        addHandler<HttpMethod::GET, HttpMethod::POST, HttpMethod::PUT,
+        add_handler<HttpMethod::GET, HttpMethod::POST, HttpMethod::PUT,
                    HttpMethod::PATCH, HttpMethod::DELETE, HttpMethod::HEAD,
                    HttpMethod::OPTIONS>(normalizedPrefix, handler);
     } else {
@@ -937,7 +937,7 @@ void HttpRouter::proxy(const std::string& routePrefix,
         if (!m_fallbackProxyHandlerState) {
             m_fallbackProxyHandlerState = std::make_shared<std::optional<HttpRouteHandler>>();
         }
-        *m_fallbackProxyHandlerState = createProxyHandler("/", upstreamHost, upstreamPort, mode);
+        *m_fallbackProxyHandlerState = create_proxy_handler("/", upstreamHost, upstreamPort, mode);
         HTTP_LOG_INFO("[proxy-fallback] [enable]",
                       "upstream={}:{} mode={}",
                       upstreamHost,
@@ -952,12 +952,12 @@ void HttpRouter::proxy(const std::string& routePrefix,
                   normalizedPrefix);
 }
 
-bool HttpRouter::hasFallbackProxy() const
+bool HttpRouter::has_fallback_proxy() const
 {
     return m_fallbackProxyHandlerState && m_fallbackProxyHandlerState->has_value();
 }
 
-HttpRouteHandler* HttpRouter::fallbackProxyHandler()
+HttpRouteHandler* HttpRouter::fallback_proxy_handler()
 {
     if (!m_fallbackProxyHandlerState || !m_fallbackProxyHandlerState->has_value()) {
         return nullptr;
@@ -965,10 +965,10 @@ HttpRouteHandler* HttpRouter::fallbackProxyHandler()
     return &m_fallbackProxyHandlerState->value();
 }
 
-HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePrefix,
+HttpRouteHandler HttpRouter::create_static_file_handler(const std::string& routePrefix,
                                                      const std::string& dirPath,
                                                      const StaticFileSetting& config,
-                                                     HttpRouteHandler fallbackHandler)
+                                                     HttpRouteHandler fallback_handler)
 {
     namespace fs = std::filesystem;
 
@@ -979,7 +979,7 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
     }
 
     // 捕获 routePrefix、dirPath 和 config，返回一个协程处理器
-    return [routePrefix, dirPath, canonicalDir, config, fallbackHandler](HttpConn& conn, HttpRequest req) -> Task<void> {
+    return [routePrefix, dirPath, canonicalDir, config, fallback_handler](HttpConn& conn, HttpRequest req) -> Task<void> {
         namespace fs = std::filesystem;
 
         // 获取请求的路径参数（通配符匹配的部分）
@@ -1002,18 +1002,18 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
 
         auto inspected = co_await StaticFileReader::inspect(fullPath.string());
         if (!inspected.has_value() || !inspected.value().has_value()) {
-            if (fallbackHandler) {
-                co_await fallbackHandler(conn, std::move(req));
+            if (fallback_handler) {
+                co_await fallback_handler(conn, std::move(req));
                 co_return;
             }
             // 文件不存在
             auto response = Http1_1ResponseBuilder()
                 .status(HttpStatusCode::NotFound_404)
                 .body("404 Not Found")
-                .buildMove();
-            auto writer = conn.getWriter();
+                .build_move();
+            auto writer = conn.get_writer();
             while (true) {
-                auto send_result = co_await writer.sendResponse(response);
+                auto send_result = co_await writer.send_response(response);
                 if (!send_result || send_result.value()) break;
             }
             co_return;
@@ -1031,10 +1031,10 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
             auto response = Http1_1ResponseBuilder()
                 .status(HttpStatusCode::Forbidden_403)
                 .body("403 Forbidden")
-                .buildMove();
-            auto writer = conn.getWriter();
+                .build_move();
+            auto writer = conn.get_writer();
             while (true) {
-                auto send_result = co_await writer.sendResponse(response);
+                auto send_result = co_await writer.send_response(response);
                 if (!send_result || send_result.value()) break;
             }
             co_return;
@@ -1045,14 +1045,14 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
         // 设置 Content-Type
         std::string extension = canonicalFile.extension().string();
         std::string ext = extension.empty() ? "" : extension.substr(1);
-        std::string mimeType = MimeType::convertToMimeType(ext);
+        std::string mimeType = MimeType::convert_to_mime_type(ext);
         HTTP_LOG_DEBUG("[static]",
                        "request={} file={} size={} mime={}",
                        requestPath,
                        canonicalFile.string(),
                        fileSize,
                        mimeType);
-        co_await sendFileContent(conn,
+        co_await send_file_content(conn,
                                  req,
                                  canonicalFile.string(),
                                  fileSize,
@@ -1063,7 +1063,7 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
     };
 }
 
-void HttpRouter::registerFilesRecursively(const std::string& routePrefix,
+void HttpRouter::register_files_recursively(const std::string& routePrefix,
                                           const std::string& dirPath,
                                           const StaticFileSetting& config,
                                           const std::string& currentPath)
@@ -1106,7 +1106,7 @@ void HttpRouter::registerFilesRecursively(const std::string& routePrefix,
                 continue;
             }
             // 递归处理子目录
-            registerFilesRecursively(routePrefix, dirPath, config, relativePath);
+            register_files_recursively(routePrefix, dirPath, config, relativePath);
             continue;
         }
 
@@ -1127,10 +1127,10 @@ void HttpRouter::registerFilesRecursively(const std::string& routePrefix,
 
             // 创建文件处理器
             std::string filePath = entry.path().string();
-            auto handler = createSingleFileHandler(filePath, config);
+            auto handler = create_single_file_handler(filePath, config);
 
             // 注册路由
-            addHandler<HttpMethod::GET, HttpMethod::HEAD>(routePath, handler);
+            add_handler<HttpMethod::GET, HttpMethod::HEAD>(routePath, handler);
         } else if (entry_error) {
             HTTP_LOG_ERROR("[file] [entry-fail]",
                            "path={} error={}",
@@ -1140,7 +1140,7 @@ void HttpRouter::registerFilesRecursively(const std::string& routePrefix,
     }
 }
 
-HttpRouteHandler HttpRouter::createSingleFileHandler(const std::string& filePath,
+HttpRouteHandler HttpRouter::create_single_file_handler(const std::string& filePath,
                                                      const StaticFileSetting& config)
 {
     // 捕获文件路径和配置
@@ -1150,10 +1150,10 @@ HttpRouteHandler HttpRouter::createSingleFileHandler(const std::string& filePath
             auto response = Http1_1ResponseBuilder()
                 .status(HttpStatusCode::NotFound_404)
                 .body("404 Not Found")
-                .buildMove();
-            auto writer = conn.getWriter();
+                .build_move();
+            auto writer = conn.get_writer();
             while (true) {
-                auto send_result = co_await writer.sendResponse(response);
+                auto send_result = co_await writer.send_response(response);
                 if (!send_result || send_result.value()) break;
             }
             co_return;
@@ -1166,10 +1166,10 @@ HttpRouteHandler HttpRouter::createSingleFileHandler(const std::string& filePath
         std::filesystem::path path(metadata.canonical_path);
         std::string extension = path.extension().string();
         std::string ext = extension.empty() ? "" : extension.substr(1);
-        std::string mimeType = MimeType::convertToMimeType(ext);
+        std::string mimeType = MimeType::convert_to_mime_type(ext);
 
         // 使用配置的传输方式发送文件
-        co_await sendFileContent(conn,
+        co_await send_file_content(conn,
                                  req,
                                  metadata.canonical_path,
                                  fileSize,
@@ -1180,25 +1180,25 @@ HttpRouteHandler HttpRouter::createSingleFileHandler(const std::string& filePath
     };
 }
 
-HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
+HttpRouteHandler HttpRouter::create_proxy_handler(const std::string& routePrefix,
                                                 const std::string& upstreamHost,
                                                 uint16_t upstreamPort,
                                                 ProxyMode mode)
 {
     return [routePrefix, upstreamHost, mode, upstreamPort](HttpConn& conn, HttpRequest req) -> Task<void> {
         const std::string request_uri = req.header().uri();
-        const std::string upstream_uri = rewriteProxyUri(routePrefix, request_uri);
-        const std::string pool_key = buildUpstreamKey(upstreamHost, upstreamPort);
+        const std::string upstream_uri = rewrite_proxy_uri(routePrefix, request_uri);
+        const std::string pool_key = build_upstream_key(upstreamHost, upstreamPort);
         const std::string upstream_connect_url = "http://" + upstreamHost + ":" +
                                                  std::to_string(upstreamPort) + "/";
 
-        auto& headers = req.header().headerPairs();
-        const std::string original_host = getHeaderValueLoose(headers, "Host");
-        const std::string connection = getHeaderValueLoose(headers, "Connection");
-        std::vector<std::string> hop_by_hop_tokens = splitConnectionTokens(connection);
+        auto& headers = req.header().header_pairs();
+        const std::string original_host = get_header_value_loose(headers, "Host");
+        const std::string connection = get_header_value_loose(headers, "Connection");
+        std::vector<std::string> hop_by_hop_tokens = split_connection_tokens(connection);
 
         ProxyMode effective_mode = mode;
-        if (mode == ProxyMode::Http && isLikelyStreamingRequest(upstream_uri, headers)) {
+        if (mode == ProxyMode::Http && is_likely_streaming_request(upstream_uri, headers)) {
             effective_mode = ProxyMode::Raw;
             HTTP_LOG_INFO("[proxy] [stream-upgrade]",
                           "uri={} upstream={}:{}",
@@ -1207,21 +1207,21 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
                           upstreamPort);
         }
 
-        removeHeaderPairLoose(headers, "Connection");
-        removeHeaderPairLoose(headers, "Proxy-Connection");
-        removeHeaderPairLoose(headers, "Keep-Alive");
-        removeHeaderPairLoose(headers, "TE");
-        removeHeaderPairLoose(headers, "Trailer");
-        removeHeaderPairLoose(headers, "Transfer-Encoding");
-        removeHeaderPairLoose(headers, "Upgrade");
+        remove_header_pair_loose(headers, "Connection");
+        remove_header_pair_loose(headers, "Proxy-Connection");
+        remove_header_pair_loose(headers, "Keep-Alive");
+        remove_header_pair_loose(headers, "TE");
+        remove_header_pair_loose(headers, "Trailer");
+        remove_header_pair_loose(headers, "Transfer-Encoding");
+        remove_header_pair_loose(headers, "Upgrade");
         for (const auto& token : hop_by_hop_tokens) {
-            removeHeaderPairLoose(headers, token);
+            remove_header_pair_loose(headers, token);
         }
 
-        applyForwardHeaders(conn, headers, original_host);
-        removeHeaderPairLoose(headers, "Host");
-        headers.addHeaderPair("Host", upstreamHost + ":" + std::to_string(upstreamPort));
-        headers.addHeaderPair("Connection", effective_mode == ProxyMode::Raw ? "close" : "keep-alive");
+        apply_forward_headers(conn, headers, original_host);
+        remove_header_pair_loose(headers, "Host");
+        headers.add_header_pair("Host", upstreamHost + ":" + std::to_string(upstreamPort));
+        headers.add_header_pair("Connection", effective_mode == ProxyMode::Raw ? "close" : "keep-alive");
 
         req.header().uri() = upstream_uri;
 
@@ -1229,15 +1229,15 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             auto client = std::make_unique<HttpClient>();
             bool connect_ok = false;
             std::string connect_err;
-            co_await connectProxyUpstream(*client, upstream_connect_url, connect_ok, connect_err);
+            co_await connect_proxy_upstream(*client, upstream_connect_url, connect_ok, connect_err);
             if (!connect_ok) {
                 HTTP_LOG_ERROR("[proxy-raw] [connect-fail]", "error={}", connect_err);
-                co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
+                co_await send_proxy_error(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: connect upstream failed");
                 co_return;
             }
 
-            auto session_result = client->getSession();
+            auto session_result = client->get_session();
             if (!session_result) {
                 HTTP_LOG_ERROR("[proxy-raw] [session-fail]", "error={}", session_result.error().message());
                 auto close_result = co_await client->close();
@@ -1246,14 +1246,14 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
                                   "context=raw-session-fail error={}",
                                   close_result.error().message());
                 }
-                co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
+                co_await send_proxy_error(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: upstream session failed");
                 co_return;
             }
-            auto& upstream_writer = session_result.value()->getWriter();
+            auto& upstream_writer = session_result.value()->get_writer();
             bool send_ok = false;
             while (true) {
-                auto send_result = co_await upstream_writer.sendRequest(req);
+                auto send_result = co_await upstream_writer.send_request(req);
                 if (!send_result) {
                     HTTP_LOG_WARN("[proxy-raw] [send-fail]",
                                   "error={}",
@@ -1273,7 +1273,7 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
                                   "context=raw-send-fail error={}",
                                   close_result.error().message());
                 }
-                co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
+                co_await send_proxy_error(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: send upstream failed");
                 co_return;
             }
@@ -1289,13 +1289,13 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
                                   "context=raw-socket-fail error={}",
                                   close_result.error().message());
                 }
-                co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
+                co_await send_proxy_error(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: upstream socket failed");
                 co_return;
             }
-            co_await relayRawUpstreamToDownstream(upstream_socket.value().get(),
-                                                  conn.getSocket(),
-                                                  responseWriteTimeoutFromConn(conn),
+            co_await relay_raw_upstream_to_downstream(upstream_socket.value().get(),
+                                                  conn.get_socket(),
+                                                  response_write_timeout_from_conn(conn),
                                                   relay_ok,
                                                   relay_err);
             if (!relay_ok && !relay_err.empty()) {
@@ -1324,10 +1324,10 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             client = std::make_unique<HttpClient>();
             bool connect_ok = false;
             std::string connect_err;
-            co_await connectProxyUpstream(*client, upstream_connect_url, connect_ok, connect_err);
+            co_await connect_proxy_upstream(*client, upstream_connect_url, connect_ok, connect_err);
             if (!connect_ok) {
                 HTTP_LOG_ERROR("[proxy] [connect-fail]", "error={}", connect_err);
-                co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
+                co_await send_proxy_error(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: connect upstream failed");
                 co_return;
             }
@@ -1338,7 +1338,7 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
         bool retried = false;
 
         while (!request_ok) {
-            auto session_result = client->getSession();
+            auto session_result = client->get_session();
             if (!session_result) {
                 HTTP_LOG_ERROR("[proxy] [session-fail]", "error={}", session_result.error().message());
                 auto close_result = co_await client->close();
@@ -1347,14 +1347,14 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
                                   "context=session-fail error={}",
                                   close_result.error().message());
                 }
-                co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
+                co_await send_proxy_error(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: upstream session failed");
                 co_return;
             }
-            auto& upstream_writer = session_result.value()->getWriter();
+            auto& upstream_writer = session_result.value()->get_writer();
             bool send_ok = false;
             while (true) {
-                auto send_result = co_await upstream_writer.sendRequest(req);
+                auto send_result = co_await upstream_writer.send_request(req);
                 if (!send_result) {
                     HTTP_LOG_WARN("[proxy] [send-fail]",
                                   "error={}",
@@ -1380,26 +1380,26 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
                     client = std::make_unique<HttpClient>();
                     bool reconnect_ok = false;
                     std::string reconnect_err;
-                    co_await connectProxyUpstream(*client, upstream_connect_url, reconnect_ok, reconnect_err);
+                    co_await connect_proxy_upstream(*client, upstream_connect_url, reconnect_ok, reconnect_err);
                     if (!reconnect_ok) {
                         HTTP_LOG_ERROR("[proxy] [reconnect-fail]", "error={}", reconnect_err);
-                        co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
+                        co_await send_proxy_error(conn, HttpStatusCode::BadGateway_502,
                                                 "Bad Gateway: send upstream failed");
                         co_return;
                     }
                     continue;
                 }
 
-                co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
+                co_await send_proxy_error(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: send upstream failed");
                 co_return;
             }
 
-            auto& upstream_reader = session_result.value()->getReader();
+            auto& upstream_reader = session_result.value()->get_reader();
             upstream_response.reset();
             bool recv_ok = false;
             while (true) {
-                auto recv_result = co_await upstream_reader.getResponse(upstream_response);
+                auto recv_result = co_await upstream_reader.get_response(upstream_response);
                 if (!recv_result) {
                     HTTP_LOG_WARN("[proxy] [recv-fail]",
                                   "error={}",
@@ -1425,17 +1425,17 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
                     client = std::make_unique<HttpClient>();
                     bool reconnect_ok = false;
                     std::string reconnect_err;
-                    co_await connectProxyUpstream(*client, upstream_connect_url, reconnect_ok, reconnect_err);
+                    co_await connect_proxy_upstream(*client, upstream_connect_url, reconnect_ok, reconnect_err);
                     if (!reconnect_ok) {
                         HTTP_LOG_ERROR("[proxy] [reconnect-fail]", "error={}", reconnect_err);
-                        co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
+                        co_await send_proxy_error(conn, HttpStatusCode::BadGateway_502,
                                                 "Bad Gateway: recv upstream failed");
                         co_return;
                     }
                     continue;
                 }
 
-                co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
+                co_await send_proxy_error(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: recv upstream failed");
                 co_return;
             }
@@ -1443,10 +1443,10 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             request_ok = true;
         }
 
-        auto downstream_writer = conn.getWriter();
+        auto downstream_writer = conn.get_writer();
         bool downstream_ok = false;
         while (true) {
-            auto forward_result = co_await downstream_writer.sendResponse(upstream_response);
+            auto forward_result = co_await downstream_writer.send_response(upstream_response);
             if (!forward_result) {
                 HTTP_LOG_ERROR("[proxy] [forward-fail]",
                                "error={}",
@@ -1460,8 +1460,8 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
         }
 
         bool keep_upstream = downstream_ok &&
-                             upstream_response.header().isKeepAlive() &&
-                             !upstream_response.header().isConnectionClose();
+                             upstream_response.header().is_keep_alive() &&
+                             !upstream_response.header().is_connection_close();
 
         if (keep_upstream) {
             auto& idle = g_proxyClientPools[pool_key];
@@ -1490,7 +1490,7 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
 
 // ==================== 文件传输实现 ====================
 
-Task<void> HttpRouter::sendFileContent(HttpConn& conn,
+Task<void> HttpRouter::send_file_content(HttpConn& conn,
                                        HttpRequest& req,
                                        const std::string& filePath,
                                        size_t fileSize,
@@ -1504,49 +1504,49 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
         lastModified = std::time(nullptr);
     }
 
-    const bool enableEtag = config.isEnableETag();
+    const bool enableEtag = config.is_enable_e_tag();
     std::string etag;
     if (enableEtag) {
-        etag = ETagGenerator::generateStrong(filePath, fileSize, lastModified);
+        etag = ETagGenerator::generate_strong(filePath, fileSize, lastModified);
     }
-    std::string lastModifiedStr = ETagGenerator::formatHttpDate(lastModified);
+    std::string lastModifiedStr = ETagGenerator::format_http_date(lastModified);
 
-    auto writer = conn.getWriter();
+    auto writer = conn.get_writer();
     const bool isHeadRequest = req.header().method() == HttpMethod::HEAD;
 
     // 1. 处理 If-Match (前置条件)
-    std::string ifMatch = req.header().headerPairs().getValue("If-Match");
-    if (enableEtag && !ifMatch.empty() && !ETagGenerator::matchIfMatch(etag, ifMatch)) {
+    std::string ifMatch = req.header().header_pairs().get_value("If-Match");
+    if (enableEtag && !ifMatch.empty() && !ETagGenerator::match_if_match(etag, ifMatch)) {
         auto response = Http1_1ResponseBuilder()
             .status(HttpStatusCode::PreconditionFailed_412)
             .header("ETag", etag)
             .header("Last-Modified", lastModifiedStr)
-            .buildMove();
+            .build_move();
         while (true) {
-            auto send_result = co_await writer.sendResponse(response);
+            auto send_result = co_await writer.send_response(response);
             if (!send_result || send_result.value()) break;
         }
         co_return;
     }
 
     // 2. 处理 If-None-Match (ETag 条件请求)
-    std::string ifNoneMatch = req.header().headerPairs().getValue("If-None-Match");
-    if (enableEtag && ETagGenerator::matchIfNoneMatch(etag, ifNoneMatch)) {
+    std::string ifNoneMatch = req.header().header_pairs().get_value("If-None-Match");
+    if (enableEtag && ETagGenerator::match_if_none_match(etag, ifNoneMatch)) {
         // ETag 匹配，返回 304 Not Modified
         auto response = Http1_1ResponseBuilder()
             .status(HttpStatusCode::NotModified_304)
             .header("ETag", etag)
             .header("Last-Modified", lastModifiedStr)
-            .buildMove();
+            .build_move();
         while (true) {
-            auto send_result = co_await writer.sendResponse(response);
+            auto send_result = co_await writer.send_response(response);
             if (!send_result || send_result.value()) break;
         }
         co_return;
     }
 
     // 3. 处理 Range 请求
-    std::string rangeHeader = req.header().headerPairs().getValue("Range");
+    std::string rangeHeader = req.header().header_pairs().get_value("Range");
     bool hasRange = !rangeHeader.empty();
     RangeParseResult rangeResult;
 
@@ -1555,10 +1555,10 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
         rangeResult = HttpRangeParser::parse(rangeHeader, fileSize);
 
         // 3. 处理 If-Range 条件请求
-        std::string ifRangeHeader = req.header().headerPairs().getValue("If-Range");
+        std::string ifRangeHeader = req.header().header_pairs().get_value("If-Range");
         if (!ifRangeHeader.empty()) {
             // 检查 If-Range 条件
-            if (!HttpRangeParser::checkIfRange(ifRangeHeader, etag, lastModified)) {
+            if (!HttpRangeParser::check_if_range(ifRangeHeader, etag, lastModified)) {
                 // If-Range 条件不满足，忽略 Range 请求，返回完整文件
                 hasRange = false;
                 rangeResult = RangeParseResult();
@@ -1566,7 +1566,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
         }
 
         // 验证 Range 是否有效
-        if (hasRange && !rangeResult.isValid()) {
+        if (hasRange && !rangeResult.is_valid()) {
             // Range 无效，返回 416 Range Not Satisfiable
             const std::string body = "416 Range Not Satisfiable";
             auto response = Http1_1ResponseBuilder()
@@ -1574,17 +1574,17 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 .header("Content-Range", "bytes */" + std::to_string(fileSize))
                 .header("Content-Length", std::to_string(body.size()))
                 .body(body)
-                .buildMove();
+                .build_move();
             if (isHeadRequest) {
                 HttpResponseHeader header = response.header().clone();
                 while (true) {
-                    auto send_result = co_await writer.sendHeader(std::move(header));
+                    auto send_result = co_await writer.send_header(std::move(header));
                     if (!send_result || send_result.value()) break;
                 }
                 co_return;
             }
             while (true) {
-                auto send_result = co_await writer.sendResponse(response);
+                auto send_result = co_await writer.send_response(response);
                 if (!send_result || send_result.value()) break;
             }
             co_return;
@@ -1592,21 +1592,21 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
     }
 
     // 4. 根据是否有 Range 请求决定响应方式
-    if (hasRange && rangeResult.isValid()) {
+    if (hasRange && rangeResult.is_valid()) {
         // 处理 Range 请求
         if (rangeResult.type == RangeType::SINGLE_RANGE) {
             // 单范围请求
-            co_await sendSingleRange(conn, req, filePath, fileSize, mimeType, etag, lastModifiedStr, rangeResult.ranges[0], config);
+            co_await send_single_range(conn, req, filePath, fileSize, mimeType, etag, lastModifiedStr, rangeResult.ranges[0], config);
         } else if (rangeResult.type == RangeType::MULTIPLE_RANGES) {
             // 多范围请求 (multipart/byteranges)
-            co_await sendMultipleRanges(conn, req, filePath, fileSize, mimeType, etag, lastModifiedStr, rangeResult, config);
+            co_await send_multiple_ranges(conn, req, filePath, fileSize, mimeType, etag, lastModifiedStr, rangeResult, config);
         }
         co_return;
     }
 
     // 5. 发送完整文件（无 Range 请求或 Range 无效）
     // 根据配置决定传输模式
-    FileTransferMode mode = config.decideTransferMode(fileSize);
+    FileTransferMode mode = config.decide_transfer_mode(fileSize);
     // 构建响应头
     Http1_1ResponseBuilder responseBuilder;
     responseBuilder
@@ -1617,7 +1617,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
     if (enableEtag) {
         responseBuilder.header("ETag", etag);
     }
-    auto response = responseBuilder.buildMove();
+    auto response = responseBuilder.build_move();
     HTTP_LOG_DEBUG("[send]",
                    "file={} size={} mode={}",
                    filePath,
@@ -1625,10 +1625,10 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                    static_cast<int>(mode));
 
     if (isHeadRequest) {
-        response.header().headerPairs().addHeaderPair("Content-Length", std::to_string(fileSize));
+        response.header().header_pairs().add_header_pair("Content-Length", std::to_string(fileSize));
         HttpResponseHeader header = response.header().clone();
         while (true) {
-            auto result = co_await writer.sendHeader(std::move(header));
+            auto result = co_await writer.send_header(std::move(header));
             if (!result) {
                 HTTP_LOG_ERROR("[send] [head-fail]",
                                "error={}",
@@ -1644,7 +1644,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
 
     switch (mode) {
         case FileTransferMode::MEMORY: {
-            auto awaited_read = co_await StaticFileReader::readAll(filePath, fileSize);
+            auto awaited_read = co_await StaticFileReader::read_all(filePath, fileSize);
             if (!awaited_read.has_value()) {
                 HTTP_LOG_ERROR("[file] [async-read-await-fail]",
                                "path={} error={}",
@@ -1653,8 +1653,8 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 auto error_response = Http1_1ResponseBuilder()
                     .status(HttpStatusCode::InternalServerError_500)
                     .body("500 Internal Server Error")
-                    .buildMove();
-                auto send_result = co_await writer.send(error_response.toString());
+                    .build_move();
+                auto send_result = co_await writer.send(error_response.to_string());
                 if (!send_result) {
                     HTTP_LOG_ERROR("[send] [read-await-error-fail]",
                                    "error={}",
@@ -1669,7 +1669,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 HTTP_LOG_ERROR("[file] [async-read-fail]",
                                "path={} code={} errno={} close_errno={} expected={} actual={}",
                                filePath,
-                               staticFileReadErrorName(read_error.code),
+                               static_file_read_error_name(read_error.code),
                                read_error.error_number,
                                read_error.close_error_number,
                                read_error.expected_bytes,
@@ -1677,8 +1677,8 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 auto error_response = Http1_1ResponseBuilder()
                     .status(HttpStatusCode::InternalServerError_500)
                     .body("500 Internal Server Error")
-                    .buildMove();
-                auto send_result = co_await writer.send(error_response.toString());
+                    .build_move();
+                auto send_result = co_await writer.send(error_response.to_string());
                 if (!send_result) {
                     HTTP_LOG_ERROR("[send] [read-error-fail]",
                                    "error={}",
@@ -1688,10 +1688,10 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
             }
 
             std::string content = std::move(file_read.value());
-            response.setBodyStr(std::move(content));
+            response.set_body_str(std::move(content));
 
             while (true) {
-                auto result = co_await writer.sendResponse(response);
+                auto result = co_await writer.send_response(response);
                 if (!result) {
                     HTTP_LOG_ERROR("[send] [fail]",
                                    "error={}",
@@ -1707,11 +1707,11 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
 
         case FileTransferMode::CHUNK: {
             // Chunk 模式：使用 HTTP chunked 编码分块传输
-            response.header().headerPairs().addHeaderPair("Transfer-Encoding", "chunked");
+            response.header().header_pairs().add_header_pair("Transfer-Encoding", "chunked");
 
             // 发送响应头（只发送头部，不包含 body）
             HttpResponseHeader header = response.header().clone();
-            auto headerResult = co_await writer.sendHeader(std::move(header));
+            auto headerResult = co_await writer.send_header(std::move(header));
             if (!headerResult) {
                 HTTP_LOG_ERROR("[send] [header-fail]",
                                "error={}",
@@ -1720,7 +1720,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
             }
 
             // 分块读取并发送
-            const size_t chunkSize = config.getChunkSize();
+            const size_t chunkSize = config.get_chunk_size();
             size_t offset = 0;
             bool hasError = false;
 
@@ -1730,7 +1730,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                                "path={} error={}",
                                filePath,
                                opened.error().message());
-                co_await writer.sendChunk("", true);
+                co_await writer.send_chunk("", true);
                 co_return;
             }
             StaticFileSessionResult session_result = std::move(opened.value());
@@ -1739,16 +1739,16 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 HTTP_LOG_ERROR("[file] [open-fail] [chunk]",
                                "path={} code={} errno={}",
                                filePath,
-                               staticFileReadErrorName(open_error.code),
+                               static_file_read_error_name(open_error.code),
                                open_error.error_number);
-                co_await writer.sendChunk("", true);
+                co_await writer.send_chunk("", true);
                 co_return;
             }
             StaticFileSession session = std::move(session_result.value());
 
             while (offset < fileSize) {
                 const size_t toRead = std::min(fileSize - offset, chunkSize);
-                auto read_result = co_await session.readAt(offset, toRead);
+                auto read_result = co_await session.read_at(offset, toRead);
                 if (!read_result.has_value()) {
                     HTTP_LOG_ERROR("[file] [read-await-fail] [chunk]",
                                    "path={} error={}",
@@ -1763,7 +1763,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                     HTTP_LOG_ERROR("[file] [read-fail] [chunk]",
                                    "path={} code={} errno={} expected={} actual={}",
                                    filePath,
-                                   staticFileReadErrorName(read_error.code),
+                                   static_file_read_error_name(read_error.code),
                                    read_error.error_number,
                                    read_error.expected_bytes,
                                    read_error.actual_bytes);
@@ -1778,7 +1778,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                     break;
                 }
 
-                auto result = co_await writer.sendChunk(std::move(chunk), false);
+                auto result = co_await writer.send_chunk(std::move(chunk), false);
                 if (!result) {
                     HTTP_LOG_ERROR("[send] [chunk-fail]",
                                    "error={}",
@@ -1791,7 +1791,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
 
             // 发送最后一个空 chunk
             if (!hasError) {
-                co_await writer.sendChunk("", true);
+                co_await writer.send_chunk("", true);
             }
 
             break;
@@ -1799,11 +1799,11 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
 
         case FileTransferMode::SENDFILE: {
             // SendFile 模式：使用零拷贝 sendfile 系统调用
-            response.header().headerPairs().addHeaderPair("Content-Length", std::to_string(fileSize));
+            response.header().header_pairs().add_header_pair("Content-Length", std::to_string(fileSize));
 
             // 发送响应头（只发送头部，不包含 body）
             HttpResponseHeader header = response.header().clone();
-            auto headerResult = co_await writer.sendHeader(std::move(header));
+            auto headerResult = co_await writer.send_header(std::move(header));
             if (!headerResult) {
                 HTTP_LOG_ERROR("[send] [header-fail]",
                                "error={}",
@@ -1811,7 +1811,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 co_return;
             }
 
-            auto opened = co_await StaticFileReader::openForSendfile(filePath);
+            auto opened = co_await StaticFileReader::open_for_sendfile(filePath);
             if (!opened.has_value()) {
                 HTTP_LOG_ERROR("[file] [open-await-fail] [sendfile]",
                                "path={} error={}",
@@ -1824,7 +1824,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 HTTP_LOG_ERROR("[file] [open-fail] [sendfile]",
                                "path={} code={} errno={}",
                                filePath,
-                               staticFileReadErrorName(descriptor_result.error().code),
+                               static_file_read_error_name(descriptor_result.error().code),
                                descriptor_result.error().error_number);
                 co_return;
             }
@@ -1833,8 +1833,8 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
             // 使用 sendfile 零拷贝发送文件内容
             off_t offset = 0;
             size_t remaining = fileSize;
-            size_t sendfileChunkSize = config.getSendFileChunkSize();
-            const auto response_write_timeout = responseWriteTimeoutFromConn(conn);
+            size_t sendfileChunkSize = config.get_send_file_chunk_size();
+            const auto response_write_timeout = response_write_timeout_from_conn(conn);
 
             while (remaining > 0) {
                 size_t toSend = std::min(remaining, sendfileChunkSize);
@@ -1863,7 +1863,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
         }
 
         case FileTransferMode::AUTO:
-            // AUTO 模式应该在 decideTransferMode 中已经被转换为具体模式
+            // AUTO 模式应该在 decide_transfer_mode 中已经被转换为具体模式
             HTTP_LOG_ERROR("[mode] [auto] [invalid]", "file={}", filePath);
             break;
     }
@@ -1873,7 +1873,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
 
 // ==================== Range 请求处理实现 ====================
 
-Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
+Task<void> HttpRouter::send_single_range(HttpConn& conn,
                                        HttpRequest& req,
                                        const std::string& filePath,
                                        size_t fileSize,
@@ -1883,25 +1883,25 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
                                        const HttpRange& range,
                                        const StaticFileSetting& config)
 {
-    auto writer = conn.getWriter();
+    auto writer = conn.get_writer();
 
     // 构建 206 Partial Content 响应
     Http1_1ResponseBuilder responseBuilder;
     responseBuilder
         .status(HttpStatusCode::PartialContent_206)
         .header("Content-Type", mimeType)
-        .header("Content-Range", HttpRangeParser::makeContentRange(range, fileSize))
+        .header("Content-Range", HttpRangeParser::make_content_range(range, fileSize))
         .header("Content-Length", std::to_string(range.length))
         .header("Last-Modified", lastModified)
         .header("Accept-Ranges", "bytes");
     if (!etag.empty()) {
         responseBuilder.header("ETag", etag);
     }
-    auto response = responseBuilder.buildMove();
+    auto response = responseBuilder.build_move();
 
     // 发送响应头
     HttpResponseHeader header = response.header().clone();
-    auto headerResult = co_await writer.sendHeader(std::move(header));
+    auto headerResult = co_await writer.send_header(std::move(header));
     if (!headerResult) {
         HTTP_LOG_ERROR("[send] [header-fail]",
                        "error={}",
@@ -1914,10 +1914,10 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
     }
 
     // 根据配置决定传输模式
-    FileTransferMode mode = config.decideTransferMode(range.length);
+    FileTransferMode mode = config.decide_transfer_mode(range.length);
 
     if (mode == FileTransferMode::SENDFILE) {
-        auto opened = co_await StaticFileReader::openForSendfile(filePath);
+        auto opened = co_await StaticFileReader::open_for_sendfile(filePath);
         if (!opened.has_value()) {
             HTTP_LOG_ERROR("[file] [open-await-fail] [range]",
                            "path={} error={}",
@@ -1930,7 +1930,7 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
             HTTP_LOG_ERROR("[file] [open-fail] [range]",
                            "path={} code={} errno={}",
                            filePath,
-                           staticFileReadErrorName(descriptor_result.error().code),
+                           static_file_read_error_name(descriptor_result.error().code),
                            descriptor_result.error().error_number);
             co_return;
         }
@@ -1939,8 +1939,8 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
         // 使用 sendfile 零拷贝发送范围内容
         off_t offset = range.start;
         size_t remaining = range.length;
-        size_t sendfileChunkSize = config.getSendFileChunkSize();
-        const auto response_write_timeout = responseWriteTimeoutFromConn(conn);
+        size_t sendfileChunkSize = config.get_send_file_chunk_size();
+        const auto response_write_timeout = response_write_timeout_from_conn(conn);
 
         while (remaining > 0) {
             size_t toSend = std::min(remaining, sendfileChunkSize);
@@ -1965,7 +1965,7 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
         }
     } else {
         // 使用统一 reader 读取范围内容，避免在 IO scheduler 上执行同步文件操作。
-        const size_t chunkSize = config.getChunkSize();
+        const size_t chunkSize = config.get_chunk_size();
         size_t offset = range.start;
         size_t remaining = range.length;
 
@@ -1983,7 +1983,7 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
             HTTP_LOG_ERROR("[file] [open-fail] [range]",
                            "path={} code={} errno={}",
                            filePath,
-                           staticFileReadErrorName(open_error.code),
+                           static_file_read_error_name(open_error.code),
                            open_error.error_number);
             co_return;
         }
@@ -1991,7 +1991,7 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
 
         while (remaining > 0) {
             const size_t toRead = std::min(remaining, chunkSize);
-            auto read_result = co_await session.readAt(offset, toRead);
+            auto read_result = co_await session.read_at(offset, toRead);
             if (!read_result.has_value()) {
                 HTTP_LOG_ERROR("[file] [read-await-fail] [range]",
                                "path={} error={}",
@@ -2005,7 +2005,7 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
                 HTTP_LOG_ERROR("[file] [read-fail] [range]",
                                "path={} code={} errno={} expected={} actual={}",
                                filePath,
-                               staticFileReadErrorName(read_error.code),
+                               static_file_read_error_name(read_error.code),
                                read_error.error_number,
                                read_error.expected_bytes,
                                read_error.actual_bytes);
@@ -2033,7 +2033,7 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
     co_return;
 }
 
-Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
+Task<void> HttpRouter::send_multiple_ranges(HttpConn& conn,
                                           HttpRequest& req,
                                           const std::string& filePath,
                                           size_t fileSize,
@@ -2043,7 +2043,7 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
                                           const RangeParseResult& rangeResult,
                                           const StaticFileSetting& config)
 {
-    auto writer = conn.getWriter();
+    auto writer = conn.get_writer();
 
     // 构建 206 Partial Content 响应（multipart/byteranges）
     std::string boundary = rangeResult.boundary;
@@ -2056,7 +2056,7 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
     if (!etag.empty()) {
         responseBuilder.header("ETag", etag);
     }
-    auto response = responseBuilder.buildMove();
+    auto response = responseBuilder.build_move();
 
     // 计算总长度（包括所有边界和头部）
     size_t totalLength = 0;
@@ -2066,7 +2066,7 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
         // Content-Type 头
         totalLength += 14 + mimeType.length() + 2;  // "Content-Type: \r\n"
         // Content-Range 头
-        std::string contentRange = HttpRangeParser::makeContentRange(range, fileSize);
+        std::string contentRange = HttpRangeParser::make_content_range(range, fileSize);
         totalLength += 16 + contentRange.length() + 2;  // "Content-Range: \r\n"
         // 空行
         totalLength += 2;  // "\r\n"
@@ -2078,11 +2078,11 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
     // 最后的边界
     totalLength += 2 + boundary.length() + 4;  // "--boundary--\r\n"
 
-    response.header().headerPairs().addHeaderPair("Content-Length", std::to_string(totalLength));
+    response.header().header_pairs().add_header_pair("Content-Length", std::to_string(totalLength));
 
     // 发送响应头
     HttpResponseHeader header = response.header().clone();
-    auto headerResult = co_await writer.sendHeader(std::move(header));
+    auto headerResult = co_await writer.send_header(std::move(header));
     if (!headerResult) {
         HTTP_LOG_ERROR("[send] [header-fail]",
                        "error={}",
@@ -2108,7 +2108,7 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
         HTTP_LOG_ERROR("[file] [open-fail] [range-multi]",
                        "path={} code={} errno={}",
                        filePath,
-                       staticFileReadErrorName(open_error.code),
+                       static_file_read_error_name(open_error.code),
                        open_error.error_number);
         co_return;
     }
@@ -2138,7 +2138,7 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
 
         // 发送 Content-Range 头
         std::string contentRangeHeader = "Content-Range: " +
-            HttpRangeParser::makeContentRange(range, fileSize) + "\r\n";
+            HttpRangeParser::make_content_range(range, fileSize) + "\r\n";
         auto crResult = co_await writer.send(std::move(contentRangeHeader));
         if (!crResult) {
             HTTP_LOG_ERROR("[send] [crange-fail]",
@@ -2158,13 +2158,13 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
         }
 
         // 读取并发送范围内容
-        const size_t chunkSize = config.getChunkSize();
+        const size_t chunkSize = config.get_chunk_size();
         size_t offset = range.start;
         size_t remaining = range.length;
 
         while (remaining > 0) {
             const size_t toRead = std::min(remaining, chunkSize);
-            auto read_result = co_await session.readAt(offset, toRead);
+            auto read_result = co_await session.read_at(offset, toRead);
             if (!read_result.has_value()) {
                 HTTP_LOG_ERROR("[file] [read-await-fail] [range-multi]",
                                "path={} error={}",
@@ -2178,7 +2178,7 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
                 HTTP_LOG_ERROR("[file] [read-fail] [range-multi]",
                                "path={} code={} errno={} expected={} actual={}",
                                filePath,
-                               staticFileReadErrorName(read_error.code),
+                               static_file_read_error_name(read_error.code),
                                read_error.error_number,
                                read_error.expected_bytes,
                                read_error.actual_bytes);

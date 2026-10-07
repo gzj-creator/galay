@@ -36,7 +36,7 @@ namespace galay::mysql::protocol
  * @param consumed 输出：消耗的字节数
  * @return 解析的整数值
  */
-std::expected<uint64_t, ParseError> readLenEncInt(const char* data, size_t len, size_t& consumed);
+std::expected<uint64_t, ParseError> read_len_enc_int(const char* data, size_t len, size_t& consumed);
 
 /**
  * @brief 读取length-encoded string
@@ -45,7 +45,7 @@ std::expected<uint64_t, ParseError> readLenEncInt(const char* data, size_t len, 
  * @param consumed 输出：消耗的字节数
  * @return 解析的字符串
  */
-std::expected<std::string, ParseError> readLenEncString(const char* data, size_t len, size_t& consumed);
+std::expected<std::string, ParseError> read_len_enc_string(const char* data, size_t len, size_t& consumed);
 
 /**
  * @brief 读取length-encoded string并返回借用视图
@@ -55,38 +55,38 @@ std::expected<std::string, ParseError> readLenEncString(const char* data, size_t
  * @return 指向输入缓冲区内部的字符串视图
  * @note 返回的string_view不拥有数据，仅在调用方提供的缓冲区保持存活且不被修改时有效。
  */
-std::expected<std::string_view, ParseError> readLenEncStringView(const char* data, size_t len, size_t& consumed);
+std::expected<std::string_view, ParseError> read_len_enc_string_view(const char* data, size_t len, size_t& consumed);
 
 /**
  * @brief 读取null-terminated string
  */
-std::expected<std::string, ParseError> readNullTermString(const char* data, size_t len, size_t& consumed);
+std::expected<std::string, ParseError> read_null_term_string(const char* data, size_t len, size_t& consumed);
 
 /**
  * @brief 读取固定长度整数（小端序）
  */
-uint16_t readUint16(const char* data);
-uint32_t readUint24(const char* data);
-uint32_t readUint32(const char* data);
-uint64_t readUint64(const char* data);
+uint16_t read_uint16(const char* data);
+uint32_t read_uint24(const char* data);
+uint32_t read_uint32(const char* data);
+uint64_t read_uint64(const char* data);
 
 /**
  * @brief 写入固定长度整数（小端序）
  */
-void writeUint16(std::string& buf, uint16_t val);
-void writeUint24(std::string& buf, uint32_t val);
-void writeUint32(std::string& buf, uint32_t val);
-void writeUint64(std::string& buf, uint64_t val);
+void write_uint16(std::string& buf, uint16_t val);
+void write_uint24(std::string& buf, uint32_t val);
+void write_uint32(std::string& buf, uint32_t val);
+void write_uint64(std::string& buf, uint64_t val);
 
 /**
  * @brief 写入length-encoded integer
  */
-void writeLenEncInt(std::string& buf, uint64_t val);
+void write_len_enc_int(std::string& buf, uint64_t val);
 
 /**
  * @brief 写入length-encoded string
  */
-void writeLenEncString(std::string& buf, std::string_view str);
+void write_len_enc_string(std::string& buf, std::string_view str);
 
 // ======================== 解析器 ========================
 
@@ -106,28 +106,28 @@ public:
      * @param len 数据长度
      * @return PacketHeader 或 ParseError
      */
-    std::expected<PacketHeader, ParseError> parseHeader(const char* data, size_t len);
+    std::expected<PacketHeader, ParseError> parse_header(const char* data, size_t len);
 
     /**
      * @brief 解析握手包
      * @param data payload数据（不含包头）
      * @param len payload长度
      */
-    std::expected<HandshakeV10, ParseError> parseHandshake(const char* data, size_t len);
+    std::expected<HandshakeV10, ParseError> parse_handshake(const char* data, size_t len);
 
     /**
      * @brief 解析AuthSwitchRequest包
      * @param data payload数据（不含包头，含0xFE标识字节）
      * @param len payload长度
      */
-    std::expected<AuthSwitchRequest, ParseError> parseAuthSwitchRequest(const char* data, size_t len);
+    std::expected<AuthSwitchRequest, ParseError> parse_auth_switch_request(const char* data, size_t len);
 
     /**
      * @brief 判断响应类型
      * @param first_byte payload的第一个字节
      * @param payload_len payload长度
      */
-    ResponseType identifyResponse(uint8_t first_byte, uint32_t payload_len);
+    ResponseType identify_response(uint8_t first_byte, uint32_t payload_len);
 
     /**
      * @brief 解析OK包
@@ -135,7 +135,7 @@ public:
      * @param len payload长度
      * @param capabilities 客户端能力标志
      */
-    std::expected<OkPacket, ParseError> parseOk(const char* data, size_t len, uint32_t capabilities);
+    std::expected<OkPacket, ParseError> parse_ok(const char* data, size_t len, uint32_t capabilities);
 
     /**
      * @brief 解析ERR包
@@ -143,21 +143,21 @@ public:
      * @param len payload长度
      * @param capabilities 客户端能力标志
      */
-    std::expected<ErrPacket, ParseError> parseErr(const char* data, size_t len, uint32_t capabilities);
+    std::expected<ErrPacket, ParseError> parse_err(const char* data, size_t len, uint32_t capabilities);
 
     /**
      * @brief 解析EOF包
      * @param data payload数据（不含包头，含0xFE标识字节）
      * @param len payload长度
      */
-    std::expected<EofPacket, ParseError> parseEof(const char* data, size_t len);
+    std::expected<EofPacket, ParseError> parse_eof(const char* data, size_t len);
 
     /**
      * @brief 解析列定义包
      * @param data payload数据（不含包头）
      * @param len payload长度
      */
-    std::expected<ColumnDefinitionPacket, ParseError> parseColumnDefinition(const char* data, size_t len);
+    std::expected<ColumnDefinitionPacket, ParseError> parse_column_definition(const char* data, size_t len);
 
     /**
      * @brief 解析文本协议行数据
@@ -167,7 +167,7 @@ public:
      * @return 一行数据（每列为optional<string>，NULL用nullopt表示）
      */
     std::expected<std::vector<std::optional<std::string>>, ParseError>
-    parseTextRow(const char* data, size_t len, size_t column_count);
+    parse_text_row(const char* data, size_t len, size_t column_count);
 
     /**
      * @brief 解析文本协议行数据并返回借用视图
@@ -178,14 +178,14 @@ public:
      * @note 返回的string_view不拥有数据，仅在调用方提供的payload缓冲区保持存活且不被修改时有效。
      */
     std::expected<std::vector<std::optional<std::string_view>>, ParseError>
-    parseTextRowView(const char* data, size_t len, size_t column_count);
+    parse_text_row_view(const char* data, size_t len, size_t column_count);
 
     /**
      * @brief 解析COM_STMT_PREPARE响应的OK部分
      * @param data payload数据（不含包头）
      * @param len payload长度
      */
-    std::expected<StmtPrepareOkPacket, ParseError> parseStmtPrepareOk(const char* data, size_t len);
+    std::expected<StmtPrepareOkPacket, ParseError> parse_stmt_prepare_ok(const char* data, size_t len);
 
     /**
      * @brief 从完整的缓冲区中解析一个完整的MySQL包
@@ -199,7 +199,7 @@ public:
         uint32_t payload_len;    ///< payload长度
         uint8_t sequence_id;     ///< 序列号
     };
-    std::expected<PacketView, ParseError> extractPacket(const char* data, size_t len, size_t& consumed);
+    std::expected<PacketView, ParseError> extract_packet(const char* data, size_t len, size_t& consumed);
 };
 
 // ======================== 编码器 ========================
@@ -220,7 +220,7 @@ public:
      * @param sequence_id 序列号
      * @return 完整的MySQL包（包头+payload）
      */
-    std::string encodeHandshakeResponse(const HandshakeResponse41& resp, uint8_t sequence_id);
+    std::string encode_handshake_response(const HandshakeResponse41& resp, uint8_t sequence_id);
 
     /**
      * @brief 编码COM_QUERY命令
@@ -228,7 +228,7 @@ public:
      * @param sequence_id 序列号（通常为0）
      * @return 完整的MySQL包
      */
-    std::string encodeQuery(std::string_view sql, uint8_t sequence_id = 0);
+    std::string encode_query(std::string_view sql, uint8_t sequence_id = 0);
 
     /**
      * @brief 编码COM_STMT_PREPARE命令
@@ -236,7 +236,7 @@ public:
      * @param sequence_id 序列号
      * @return 完整的MySQL包
      */
-    std::string encodeStmtPrepare(std::string_view sql, uint8_t sequence_id = 0);
+    std::string encode_stmt_prepare(std::string_view sql, uint8_t sequence_id = 0);
 
     /**
      * @brief 编码COM_STMT_EXECUTE命令
@@ -246,11 +246,11 @@ public:
      * @param sequence_id 序列号
      * @return 完整的MySQL包
      */
-    std::string encodeStmtExecute(uint32_t stmt_id,
+    std::string encode_stmt_execute(uint32_t stmt_id,
                                    std::span<const std::optional<std::string>> params,
                                    std::span<const uint8_t> param_types,
                                    uint8_t sequence_id = 0);
-    std::string encodeStmtExecute(uint32_t stmt_id,
+    std::string encode_stmt_execute(uint32_t stmt_id,
                                    std::span<const std::optional<std::string_view>> params,
                                    std::span<const uint8_t> param_types,
                                    uint8_t sequence_id = 0);
@@ -261,21 +261,21 @@ public:
      * @param sequence_id 序列号
      * @return 完整的MySQL包
      */
-    std::string encodeStmtClose(uint32_t stmt_id, uint8_t sequence_id = 0);
+    std::string encode_stmt_close(uint32_t stmt_id, uint8_t sequence_id = 0);
 
     /**
      * @brief 编码COM_QUIT命令
      * @param sequence_id 序列号
      * @return 完整的MySQL包
      */
-    std::string encodeQuit(uint8_t sequence_id = 0);
+    std::string encode_quit(uint8_t sequence_id = 0);
 
     /**
      * @brief 编码COM_PING命令
      * @param sequence_id 序列号
      * @return 完整的MySQL包
      */
-    std::string encodePing(uint8_t sequence_id = 0);
+    std::string encode_ping(uint8_t sequence_id = 0);
 
     /**
      * @brief 编码COM_INIT_DB命令
@@ -283,12 +283,12 @@ public:
      * @param sequence_id 序列号
      * @return 完整的MySQL包
      */
-    std::string encodeInitDb(std::string_view database, uint8_t sequence_id = 0);
+    std::string encode_init_db(std::string_view database, uint8_t sequence_id = 0);
 
     /**
      * @brief 编码COM_RESET_CONNECTION命令
      */
-    std::string encodeResetConnection(uint8_t sequence_id = 0);
+    std::string encode_reset_connection(uint8_t sequence_id = 0);
 
 private:
     /**
@@ -297,12 +297,12 @@ private:
      * @param sequence_id 序列号
      * @return 完整的MySQL包
      */
-    std::string wrapPacket(std::string_view payload, uint8_t sequence_id);
+    std::string wrap_packet(std::string_view payload, uint8_t sequence_id);
 
     /**
      * @brief 编码简单命令（1字节命令 + 可选payload）
      */
-    std::string encodeSimpleCommand(CommandType cmd, std::string_view payload, uint8_t sequence_id);
+    std::string encode_simple_command(CommandType cmd, std::string_view payload, uint8_t sequence_id);
 };
 
 } // namespace galay::mysql::protocol

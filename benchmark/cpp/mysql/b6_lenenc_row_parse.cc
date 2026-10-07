@@ -14,7 +14,7 @@ using namespace galay::mysql::protocol;
 namespace
 {
 
-size_t parseSizeArg(int argc, char** argv, int index, size_t fallback)
+size_t parse_size_arg(int argc, char** argv, int index, size_t fallback)
 {
     if (argc <= index) {
         return fallback;
@@ -29,7 +29,7 @@ size_t parseSizeArg(int argc, char** argv, int index, size_t fallback)
     return static_cast<size_t>(parsed);
 }
 
-std::string makeValue(size_t value_size)
+std::string make_value(size_t value_size)
 {
     std::string value;
     value.reserve(value_size);
@@ -39,12 +39,12 @@ std::string makeValue(size_t value_size)
     return value;
 }
 
-std::string makeRowPayload(size_t column_count, std::string_view value)
+std::string make_row_payload(size_t column_count, std::string_view value)
 {
     std::string payload;
     payload.reserve(column_count * (value.size() + 1));
     for (size_t i = 0; i < column_count; ++i) {
-        writeLenEncString(payload, value);
+        write_len_enc_string(payload, value);
     }
     return payload;
 }
@@ -56,13 +56,13 @@ struct BenchResult
     long long elapsed_us = 0;
 };
 
-BenchResult runLenEncOwned(std::string_view payload, size_t iterations)
+BenchResult run_len_enc_owned(std::string_view payload, size_t iterations)
 {
     BenchResult result;
     const auto started = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
         size_t consumed = 0;
-        auto parsed = readLenEncString(payload.data(), payload.size(), consumed);
+        auto parsed = read_len_enc_string(payload.data(), payload.size(), consumed);
         if (!parsed || consumed != payload.size()) {
             return result;
         }
@@ -76,13 +76,13 @@ BenchResult runLenEncOwned(std::string_view payload, size_t iterations)
     return result;
 }
 
-BenchResult runLenEncView(std::string_view payload, size_t iterations)
+BenchResult run_len_enc_view(std::string_view payload, size_t iterations)
 {
     BenchResult result;
     const auto started = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
         size_t consumed = 0;
-        auto parsed = readLenEncStringView(payload.data(), payload.size(), consumed);
+        auto parsed = read_len_enc_string_view(payload.data(), payload.size(), consumed);
         if (!parsed || consumed != payload.size()) {
             return result;
         }
@@ -96,13 +96,13 @@ BenchResult runLenEncView(std::string_view payload, size_t iterations)
     return result;
 }
 
-BenchResult runTextRowOwned(std::string_view payload, size_t column_count, size_t iterations)
+BenchResult run_text_row_owned(std::string_view payload, size_t column_count, size_t iterations)
 {
     MysqlParser parser;
     BenchResult result;
     const auto started = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
-        auto row = parser.parseTextRow(payload.data(), payload.size(), column_count);
+        auto row = parser.parse_text_row(payload.data(), payload.size(), column_count);
         if (!row || row->size() != column_count) {
             return result;
         }
@@ -121,13 +121,13 @@ BenchResult runTextRowOwned(std::string_view payload, size_t column_count, size_
     return result;
 }
 
-BenchResult runTextRowView(std::string_view payload, size_t column_count, size_t iterations)
+BenchResult run_text_row_view(std::string_view payload, size_t column_count, size_t iterations)
 {
     MysqlParser parser;
     BenchResult result;
     const auto started = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
-        auto row = parser.parseTextRowView(payload.data(), payload.size(), column_count);
+        auto row = parser.parse_text_row_view(payload.data(), payload.size(), column_count);
         if (!row || row->size() != column_count) {
             return result;
         }
@@ -146,7 +146,7 @@ BenchResult runTextRowView(std::string_view payload, size_t column_count, size_t
     return result;
 }
 
-void printRate(const char* label, const BenchResult& result, size_t operations)
+void print_rate(const char* label, const BenchResult& result, size_t operations)
 {
     const double seconds = static_cast<double>(result.elapsed_us) / 1'000'000.0;
     const double ops_per_sec = seconds > 0.0 ? static_cast<double>(operations) / seconds : 0.0;
@@ -159,32 +159,32 @@ void printRate(const char* label, const BenchResult& result, size_t operations)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    const size_t iterations = parseSizeArg(argc, argv, 1, 100000);
-    const size_t column_count = parseSizeArg(argc, argv, 2, 10);
-    const size_t value_size = parseSizeArg(argc, argv, 3, 64);
+    const size_t iterations = parse_size_arg(argc, argv, 1, 100000);
+    const size_t column_count = parse_size_arg(argc, argv, 2, 10);
+    const size_t value_size = parse_size_arg(argc, argv, 3, 64);
 
-    const std::string value = makeValue(value_size);
+    const std::string value = make_value(value_size);
     std::string lenenc_payload;
-    writeLenEncString(lenenc_payload, value);
-    const std::string row_payload = makeRowPayload(column_count, value);
+    write_len_enc_string(lenenc_payload, value);
+    const std::string row_payload = make_row_payload(column_count, value);
 
-    const auto lenenc_owned = runLenEncOwned(lenenc_payload, iterations);
-    const auto lenenc_view = runLenEncView(lenenc_payload, iterations);
-    const auto row_owned = runTextRowOwned(row_payload, column_count, iterations);
-    const auto row_view = runTextRowView(row_payload, column_count, iterations);
+    const auto lenenc_owned = run_len_enc_owned(lenenc_payload, iterations);
+    const auto lenenc_view = run_len_enc_view(lenenc_payload, iterations);
+    const auto row_owned = run_text_row_owned(row_payload, column_count, iterations);
+    const auto row_view = run_text_row_view(row_payload, column_count, iterations);
 
     std::cout << "MySQL length-encoded row parse benchmark\n";
     std::cout << "Iterations: " << iterations << '\n';
     std::cout << "Columns: " << column_count << '\n';
     std::cout << "Value bytes: " << value_size << '\n';
-    printRate("Lenenc owned", lenenc_owned, iterations);
-    printRate("Lenenc view", lenenc_view, iterations);
-    printRate("Text row owned", row_owned, iterations);
-    printRate("Text row view", row_view, iterations);
+    print_rate("Lenenc owned", lenenc_owned, iterations);
+    print_rate("Lenenc view", lenenc_view, iterations);
+    print_rate("Text row owned", row_owned, iterations);
+    print_rate("Text row view", row_view, iterations);
 
     return lenenc_owned.ok && lenenc_view.ok && row_owned.ok && row_view.ok ? 0 : 1;
 }

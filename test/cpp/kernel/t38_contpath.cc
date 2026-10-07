@@ -34,7 +34,7 @@ public:
     void stop() {}
 
     bool schedule(TaskRef task) noexcept {
-        if (!bindTask(task)) {
+        if (!bind_task(task)) {
             return false;
         }
         ++schedule_calls;
@@ -42,29 +42,29 @@ public:
         return true;
     }
 
-    bool scheduleResume(TaskRef task) noexcept {
+    bool schedule_resume(TaskRef task) noexcept {
         return schedule(std::move(task));
     }
 
-    bool scheduleDeferred(TaskRef task) noexcept {
+    bool schedule_deferred(TaskRef task) noexcept {
         return schedule(std::move(task));
     }
 
-    bool scheduleImmediately(TaskRef task) noexcept {
-        if (!bindTask(task)) {
+    bool schedule_immediately(TaskRef task) noexcept {
+        if (!bind_task(task)) {
             return false;
         }
         resume(task);
         return true;
     }
 
-    bool addTimer(Timer::ptr) { return true; }
+    bool add_timer(Timer::ptr) { return true; }
 
     SchedulerType type() {
         return kParallelScheduler;
     }
 
-    bool runOne() {
+    bool run_one() {
         if (m_ready.empty()) {
             return false;
         }
@@ -95,27 +95,27 @@ struct ChildSuspendAwaitable {
     void await_resume() const noexcept {}
 };
 
-Task<void> childTask(ChildSuspendState* state) {
+Task<void> child_task(ChildSuspendState* state) {
     co_await ChildSuspendAwaitable{state};
     state->child_done = true;
     co_return;
 }
 
-Task<void> parentTask(ChildSuspendState* child_state, ParentState* parent_state) {
-    auto child_result = co_await childTask(child_state);
+Task<void> parent_task(ChildSuspendState* child_state, ParentState* parent_state) {
+    auto child_result = co_await child_task(child_state);
     assert(child_result.has_value());
     ++parent_state->parent_resumes;
     parent_state->parent_done = true;
     co_return;
 }
 
-bool verifyWaitContinuationReturnsThroughScheduler() {
+bool verify_wait_continuation_returns_through_scheduler() {
     ManualScheduler scheduler;
     ChildSuspendState child_state;
     ParentState parent_state;
 
-    if (!scheduler.scheduleImmediately(detail::TaskAccess::detachTask(
-            parentTask(&child_state, &parent_state)))) {
+    if (!scheduler.schedule_immediately(detail::TaskAccess::detach_task(
+            parent_task(&child_state, &parent_state)))) {
         std::cerr << "[T38] failed to start parent task\n";
         return false;
     }
@@ -125,14 +125,14 @@ bool verifyWaitContinuationReturnsThroughScheduler() {
         return false;
     }
 
-    child_state.waker.wakeUp();
+    child_state.waker.wake_up();
     if (scheduler.schedule_calls != 1) {
         std::cerr << "[T38] expected child wake to schedule once, got "
                   << scheduler.schedule_calls << "\n";
         return false;
     }
 
-    if (!scheduler.runOne()) {
+    if (!scheduler.run_one()) {
         std::cerr << "[T38] expected child task in ready queue\n";
         return false;
     }
@@ -153,7 +153,7 @@ bool verifyWaitContinuationReturnsThroughScheduler() {
         return false;
     }
 
-    if (!scheduler.runOne()) {
+    if (!scheduler.run_one()) {
         std::cerr << "[T38] expected waiter continuation in ready queue\n";
         return false;
     }
@@ -169,7 +169,7 @@ bool verifyWaitContinuationReturnsThroughScheduler() {
 }  // namespace
 
 int main() {
-    if (!verifyWaitContinuationReturnsThroughScheduler()) {
+    if (!verify_wait_continuation_returns_through_scheduler()) {
         return 1;
     }
 

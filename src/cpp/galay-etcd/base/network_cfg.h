@@ -34,7 +34,7 @@ struct EtcdNetworkConfig
      * @brief 判断是否启用了请求超时
      * @return 若超时时间 >= 0ms 则返回 true，否则返回 false
      */
-    [[nodiscard]] bool isRequestTimeoutEnabled() const
+    [[nodiscard]] bool is_request_timeout_enabled() const
     {
         return request_timeout >= std::chrono::milliseconds(0);
     }
@@ -44,7 +44,7 @@ struct EtcdNetworkConfig
      * @param timeout 请求超时时间
      * @return 配置好超时时间的 EtcdNetworkConfig 实例
      */
-    static EtcdNetworkConfig withTimeout(std::chrono::milliseconds timeout)
+    static EtcdNetworkConfig with_timeout(std::chrono::milliseconds timeout)
     {
         EtcdNetworkConfig cfg;
         cfg.request_timeout = timeout;

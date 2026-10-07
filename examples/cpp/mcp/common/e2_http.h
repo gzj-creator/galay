@@ -8,7 +8,7 @@ struct ClientRunState {
     std::atomic<bool> done{false};
 };
 
-static void finishClientRun(int code, int& exitCode, ClientRunState* state) {
+static void finish_client_run(int code, int& exitCode, ClientRunState* state) {
     exitCode = code;
     state->done.store(true, std::memory_order_release);
 }
@@ -18,20 +18,20 @@ static void finishClientRun(int code, int& exitCode, ClientRunState* state) {
  *
  * 创建一个HTTP MCP服务器，提供基本的工具和资源
  */
-void runHttpServer() {
+void run_http_server() {
     // 创建服务器（监听 0.0.0.0:8080）
     McpHttpServer server("0.0.0.0", 8080);
 
     // 设置服务器信息
-    server.setServerInfo("example-http-server", "1.0.0");
+    server.set_server_info("example-http-server", "1.0.0");
 
     // 添加一个简单的计算器工具
     auto calcSchema = SchemaBuilder()
-        .addEnum("operation", "运算类型", {"add", "subtract", "multiply", "divide"}, true)
-        .addNumber("a", "第一个操作数", true)
-        .addNumber("b", "第二个操作数", true)
+        .add_enum("operation", "运算类型", {"add", "subtract", "multiply", "divide"}, true)
+        .add_number("a", "第一个操作数", true)
+        .add_number("b", "第二个操作数", true)
         .build();
-    server.addTool(
+    server.add_tool(
         "calculate",
         "执行基本的数学计算",
         calcSchema,
@@ -111,7 +111,7 @@ void runHttpServer() {
             }
 
             std::string resultJson;
-            auto resWriter = makeJsonWriter(resultJson);
+            auto resWriter = make_json_writer(resultJson);
             // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
             (void)resWriter.start_object();
             (void)resWriter.key("result");
@@ -132,7 +132,7 @@ void runHttpServer() {
     );
 
     // 添加一个时间资源
-    server.addResource(
+    server.add_resource(
         "example://time",
         "current-time",
         "获取当前时间",
@@ -147,9 +147,9 @@ void runHttpServer() {
 
     // 添加一个提示
     auto promptArgs = PromptArgumentBuilder()
-        .addArgument("language", "编程语言", true)
+        .add_argument("language", "编程语言", true)
         .build();
-    server.addPrompt(
+    server.add_prompt(
         "code_review",
         "生成代码审查提示",
         promptArgs,
@@ -172,7 +172,7 @@ void runHttpServer() {
             }
 
             std::string resultJson;
-            auto resWriter = makeJsonWriter(resultJson);
+            auto resWriter = make_json_writer(resultJson);
             // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
             (void)resWriter.start_object();
             (void)resWriter.key("description");
@@ -206,7 +206,7 @@ void runHttpServer() {
 }
 
 // 客户端测试协程
-galay::kernel::Task<void> runClientTest(McpClient& client,
+galay::kernel::Task<void> run_client_test(McpClient& client,
                         const std::string& url,
                         int& exitCode,
                         ClientRunState* state) {
@@ -215,7 +215,7 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     auto connectResult = co_await client.connect();
     if (!connectResult) {
         std::cerr << "Failed to connect: " << connectResult.error().message() << std::endl;
-        finishClientRun(1, exitCode, state);
+        finish_client_run(1, exitCode, state);
         co_return;
     }
 
@@ -225,16 +225,16 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     co_await client.initialize("example-http-client", "1.0.0", initResult);
     if (!initResult) {
         std::cerr << "Failed to initialize: " << initResult.error().message() << std::endl;
-        finishClientRun(1, exitCode, state);
+        finish_client_run(1, exitCode, state);
         co_return;
     }
 
-    std::cout << "Connected to: " << client.getServerInfo().name << std::endl;
+    std::cout << "Connected to: " << client.get_server_info().name << std::endl;
 
     // 列出工具
     std::cout << "\n=== Available Tools ===" << std::endl;
     std::expected<std::vector<Tool>, McpError> toolsResult;
-    co_await client.listTools(toolsResult);
+    co_await client.list_tools(toolsResult);
     if (toolsResult) {
         for (const auto& tool : toolsResult.value()) {
             std::cout << "  - " << tool.name << ": " << tool.description << std::endl;
@@ -244,7 +244,7 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     // 调用计算器工具
     std::cout << "\n=== Calling Calculator Tool ===" << std::endl;
     std::string calcArgs;
-    auto calcArgsWriter = makeJsonWriter(calcArgs);
+    auto calcArgsWriter = make_json_writer(calcArgs);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)calcArgsWriter.start_object();
     (void)calcArgsWriter.key("operation");
@@ -256,11 +256,11 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     (void)calcArgsWriter.end_object();
     if (!calcArgsWriter.finish()) {
         std::cerr << "Failed to encode calculator arguments" << std::endl;
-        finishClientRun(1, exitCode, state);
+        finish_client_run(1, exitCode, state);
         co_return;
     }
     std::expected<std::string, McpError> calcResult;
-    co_await client.callTool("calculate", calcArgs, calcResult);
+    co_await client.call_tool("calculate", calcArgs, calcResult);
     if (calcResult) {
         auto docExp = JsonDocument::parse(calcResult.value());
         if (docExp) {
@@ -284,7 +284,7 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     // 列出资源
     std::cout << "\n=== Available Resources ===" << std::endl;
     std::expected<std::vector<Resource>, McpError> resourcesResult;
-    co_await client.listResources(resourcesResult);
+    co_await client.list_resources(resourcesResult);
     if (resourcesResult) {
         for (const auto& resource : resourcesResult.value()) {
             std::cout << "  - " << resource.uri << ": " << resource.name << std::endl;
@@ -294,7 +294,7 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     // 读取时间资源
     std::cout << "\n=== Reading Time Resource ===" << std::endl;
     std::expected<std::string, McpError> timeResult;
-    co_await client.readResource("example://time", timeResult);
+    co_await client.read_resource("example://time", timeResult);
     if (timeResult) {
         std::cout << "Current time: " << timeResult.value();
     }
@@ -302,7 +302,7 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     // 列出提示
     std::cout << "\n=== Available Prompts ===" << std::endl;
     std::expected<std::vector<Prompt>, McpError> promptsResult;
-    co_await client.listPrompts(promptsResult);
+    co_await client.list_prompts(promptsResult);
     if (promptsResult) {
         for (const auto& prompt : promptsResult.value()) {
             std::cout << "  - " << prompt.name << ": " << prompt.description << std::endl;
@@ -312,7 +312,7 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     // 获取提示
     std::cout << "\n=== Getting Code Review Prompt ===" << std::endl;
     std::string promptArgs;
-    auto promptArgsWriter = makeJsonWriter(promptArgs);
+    auto promptArgsWriter = make_json_writer(promptArgs);
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)promptArgsWriter.start_object();
     (void)promptArgsWriter.key("language");
@@ -320,13 +320,13 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     (void)promptArgsWriter.end_object();
     if (!promptArgsWriter.finish()) {
         std::cerr << "Failed to encode prompt arguments" << std::endl;
-        finishClientRun(1, exitCode, state);
+        finish_client_run(1, exitCode, state);
         co_return;
     }
-    std::expected<std::string, McpError> promptResult;
-    co_await client.getPrompt("code_review", promptArgs, promptResult);
-    if (promptResult) {
-        std::cout << "Prompt: " << promptResult.value() << std::endl;
+    std::expected<std::string, McpError> prompt_result;
+    co_await client.get_prompt("code_review", promptArgs, prompt_result);
+    if (prompt_result) {
+        std::cout << "Prompt: " << prompt_result.value() << std::endl;
     }
 
     // 测试ping
@@ -338,10 +338,10 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     }
 
     // 断开连接
-    co_await client.disconnectAsync();
+    co_await client.disconnect_async();
     std::cout << "\nClient disconnected." << std::endl;
 
-    finishClientRun(0, exitCode, state);
+    finish_client_run(0, exitCode, state);
     co_return;
 }
 
@@ -350,9 +350,9 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
  *
  * 创建一个HTTP MCP客户端，连接到服务器并调用功能
  */
-int runHttpClient(const std::string& url) {
+int run_http_client(const std::string& url) {
     // 创建Runtime
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
     // 创建客户端
@@ -362,8 +362,8 @@ int runHttpClient(const std::string& url) {
     ClientRunState state;
 
     // 在IO调度器上运行测试协程
-    auto* scheduler = runtime.getNextIOScheduler();
-    if (!scheduler || !scheduleTask(scheduler, runClientTest(client, url, exitCode, &state))) {
+    auto* scheduler = runtime.get_next_io_scheduler();
+    if (!scheduler || !schedule_task(scheduler, run_client_test(client, url, exitCode, &state))) {
         std::cerr << "Failed to schedule HTTP MCP client task" << std::endl;
         runtime.stop();
         return 1;
@@ -399,13 +399,13 @@ int main(int argc, char* argv[]) {
     std::string mode = argv[1];
 
     if (mode == "server") {
-        runHttpServer();
+        run_http_server();
     } else if (mode == "client") {
         std::string url = "http://127.0.0.1:8080/mcp";
         if (argc > 2) {
             url = argv[2];
         }
-        return runHttpClient(url);
+        return run_http_client(url);
     } else {
         std::cerr << "Invalid mode: " << mode << std::endl;
         std::cerr << "Use 'server' or 'client'" << std::endl;

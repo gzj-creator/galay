@@ -83,7 +83,7 @@ private:
     uint16_t m_port = 0;
 };
 
-int readTcpNoDelay(int fd)
+int read_tcp_no_delay(int fd)
 {
     int value = 0;
     socklen_t value_len = sizeof(value);
@@ -94,22 +94,22 @@ int readTcpNoDelay(int fd)
     return value;
 }
 
-int observeWsClientTcpNoDelay(bool tcp_no_delay)
+int observe_ws_client_tcp_no_delay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     LoopbackListener listener;
-    WsClient client = WsClientBuilder().tcpNoDelay(tcp_no_delay).build();
+    WsClient client = WsClientBuilder().tcp_no_delay(tcp_no_delay).build();
 
-    auto connect_result = runtime.blockOnIO(
+    auto connect_result = runtime.block_on_io(
         client.connect("ws://127.0.0.1:" + std::to_string(listener.port()) + "/ws"));
     require(connect_result.has_value(), "runtime should run WsClient connect task");
     require(connect_result.value().has_value(), "WsClient connect should succeed against loopback listener");
 
-    auto* socket = client.getSocket();
+    auto* socket = client.get_socket();
     require(socket != nullptr, "WsClient should expose connected socket");
-    const int observed = readTcpNoDelay(socket->handle().fd);
+    const int observed = read_tcp_no_delay(socket->handle().fd);
 
-    auto close_result = runtime.blockOnIO(client.close());
+    auto close_result = runtime.block_on_io(client.close());
     require(close_result.has_value(), "runtime should run WsClient close task");
     require(close_result.value().has_value(), "WsClient close should succeed");
     runtime.stop();
@@ -117,22 +117,22 @@ int observeWsClientTcpNoDelay(bool tcp_no_delay)
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-int observeWssClientTcpNoDelay(bool tcp_no_delay)
+int observe_wss_client_tcp_no_delay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     LoopbackListener listener;
-    WssClient client = WssClientBuilder().tcpNoDelay(tcp_no_delay).build();
+    WssClient client = WssClientBuilder().tcp_no_delay(tcp_no_delay).build();
 
-    auto connect_result = runtime.blockOnIO(
+    auto connect_result = runtime.block_on_io(
         client.connect("wss://127.0.0.1:" + std::to_string(listener.port()) + "/ws"));
     require(connect_result.has_value(), "runtime should run WssClient connect task");
     require(connect_result.value().has_value(), "WssClient connect should succeed against loopback listener");
 
-    auto* socket = client.getSocket();
+    auto* socket = client.get_socket();
     require(socket != nullptr, "WssClient should expose connected socket");
-    const int observed = readTcpNoDelay(socket->handle().fd);
+    const int observed = read_tcp_no_delay(socket->handle().fd);
 
-    auto close_result = runtime.blockOnIO(client.close());
+    auto close_result = runtime.block_on_io(client.close());
     require(close_result.has_value(), "runtime should run WssClient close task");
     require(close_result.value().has_value(), "WssClient close should succeed");
     runtime.stop();
@@ -142,37 +142,37 @@ int observeWssClientTcpNoDelay(bool tcp_no_delay)
 
 void test_builder_config_surface()
 {
-    auto default_ws_config = WsClientBuilder().buildConfig();
+    auto default_ws_config = WsClientBuilder().build_config();
     require(default_ws_config.tcp_no_delay, "WsClientConfig should enable TCP_NODELAY by default");
 
-    auto disabled_ws_config = WsClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_ws_config = WsClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_ws_config.tcp_no_delay, "WsClientBuilder should support disabling TCP_NODELAY");
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    auto default_wss_config = WssClientBuilder().buildConfig();
+    auto default_wss_config = WssClientBuilder().build_config();
     require(default_wss_config.tcp_no_delay, "WssClientConfig should enable TCP_NODELAY by default");
 
-    auto disabled_wss_config = WssClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_wss_config = WssClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_wss_config.tcp_no_delay, "WssClientBuilder should support disabling TCP_NODELAY");
 #endif
 }
 
 void test_plain_client_applies_config_to_connected_socket()
 {
-    const int default_nodelay = observeWsClientTcpNoDelay(true);
+    const int default_nodelay = observe_ws_client_tcp_no_delay(true);
     require(default_nodelay != 0, "default WsClient socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeWsClientTcpNoDelay(false);
+    const int disabled_nodelay = observe_ws_client_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled WsClient socket should leave TCP_NODELAY off");
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 void test_wss_client_applies_config_to_connected_socket()
 {
-    const int default_nodelay = observeWssClientTcpNoDelay(true);
+    const int default_nodelay = observe_wss_client_tcp_no_delay(true);
     require(default_nodelay != 0, "default WssClient socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeWssClientTcpNoDelay(false);
+    const int disabled_nodelay = observe_wss_client_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled WssClient socket should leave TCP_NODELAY off");
 }
 #endif

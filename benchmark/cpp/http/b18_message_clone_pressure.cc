@@ -18,7 +18,7 @@ using namespace galay::http;
 
 namespace {
 
-std::vector<iovec> makeIovecs(std::string& data)
+std::vector<iovec> make_iovecs(std::string& data)
 {
     std::vector<iovec> iovecs(1);
     iovecs[0].iov_base = data.data();
@@ -35,24 +35,24 @@ bool require(bool condition, const char* message)
     return true;
 }
 
-HttpRequest makeRequest()
+HttpRequest make_request()
 {
     return Http1_1RequestBuilder::post("/clone-pressure")
         .header("Host", "example.com")
         .header("X-Trace", "request-before")
         .body("request-body-payload")
-        .buildMove();
+        .build_move();
 }
 
-HttpResponse makeResponse()
+HttpResponse make_response()
 {
     return Http1_1ResponseBuilder::ok()
         .header("X-Trace", "response-before")
         .body("response-body-payload")
-        .buildMove();
+        .build_move();
 }
 
-HttpRequestHeader makeRequestHeader()
+HttpRequestHeader make_request_header()
 {
     std::string raw =
         "POST /clone-pressure HTTP/1.1\r\n"
@@ -61,14 +61,14 @@ HttpRequestHeader makeRequestHeader()
         "Content-Length: 20\r\n"
         "\r\n";
     HttpRequestHeader header;
-    auto result = header.fromString(raw);
+    auto result = header.from_string(raw);
     if (result.first != kNoError || result.second <= 0) {
         std::cerr << "[benchmark_http_message_clone_pressure] request header fixture failed\n";
     }
     return header;
 }
 
-HttpResponseHeader makeResponseHeader()
+HttpResponseHeader make_response_header()
 {
     std::string raw =
         "HTTP/1.1 200 OK\r\n"
@@ -76,41 +76,41 @@ HttpResponseHeader makeResponseHeader()
         "Content-Length: 21\r\n"
         "\r\n";
     HttpResponseHeader header;
-    auto result = header.fromString(raw);
+    auto result = header.from_string(raw);
     if (result.first != kNoError || result.second <= 0) {
         std::cerr << "[benchmark_http_message_clone_pressure] response header fixture failed\n";
     }
     return header;
 }
 
-HeaderPair makeHeaderPair()
+HeaderPair make_header_pair()
 {
     HeaderPair headers(HeaderPair::Mode::ServerSide);
-    if (headers.addHeaderPair("Host", "example.com") != kNoError) {
+    if (headers.add_header_pair("Host", "example.com") != kNoError) {
         std::cerr << "[benchmark_http_message_clone_pressure] Host fixture failed\n";
     }
-    if (headers.addHeaderPair("X-Trace", "trace-value") != kNoError) {
+    if (headers.add_header_pair("X-Trace", "trace-value") != kNoError) {
         std::cerr << "[benchmark_http_message_clone_pressure] X-Trace fixture failed\n";
     }
     return headers;
 }
 
-PlainBody makePlainBody()
+PlainBody make_plain_body()
 {
     PlainBody body;
     std::string payload = "plain-body-payload";
-    if (!body.fromString(std::move(payload))) {
+    if (!body.from_string(std::move(payload))) {
         std::cerr << "[benchmark_http_message_clone_pressure] body fixture failed\n";
     }
     return body;
 }
 
-ChunkParser makePartialChunkParser()
+ChunkParser make_partial_chunk_parser()
 {
     ChunkParser parser;
     std::string first = "5\r\nHe";
     std::string output;
-    auto iovecs = makeIovecs(first);
+    auto iovecs = make_iovecs(first);
     auto result = parser.parse(iovecs, output);
     if (!result.has_value() || result->first || result->second != first.size() || output != "He") {
         std::cerr << "[benchmark_http_message_clone_pressure] chunk parser fixture failed\n";
@@ -119,7 +119,7 @@ ChunkParser makePartialChunkParser()
 }
 
 template <typename Func>
-bool runBench(const char* name, size_t iterations, Func&& func)
+bool run_bench(const char* name, size_t iterations, Func&& func)
 {
     size_t checksum = 0;
     const auto start = std::chrono::steady_clock::now();
@@ -141,7 +141,7 @@ bool runBench(const char* name, size_t iterations, Func&& func)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -153,77 +153,77 @@ int main(int argc, char** argv)
         }
     }
 
-    HttpRequest request = makeRequest();
-    HttpResponse response = makeResponse();
-    HttpRequestHeader request_header = makeRequestHeader();
-    HttpResponseHeader response_header = makeResponseHeader();
-    HeaderPair headers = makeHeaderPair();
-    PlainBody body = makePlainBody();
-    ChunkParser parser = makePartialChunkParser();
+    HttpRequest request = make_request();
+    HttpResponse response = make_response();
+    HttpRequestHeader request_header = make_request_header();
+    HttpResponseHeader response_header = make_response_header();
+    HeaderPair headers = make_header_pair();
+    PlainBody body = make_plain_body();
+    ChunkParser parser = make_partial_chunk_parser();
 
-    if (!runBench("BM_HttpRequestClone", iterations, [&]() {
+    if (!run_bench("BM_HttpRequestClone", iterations, [&]() {
             HttpRequest copy = request.clone();
-            return copy.bodyStr().size() + copy.header().uri().size();
+            return copy.body_str().size() + copy.header().uri().size();
         })) return 1;
 
-    if (!runBench("BM_HttpRequestMove", iterations, [&]() {
-            HttpRequest value = makeRequest();
+    if (!run_bench("BM_HttpRequestMove", iterations, [&]() {
+            HttpRequest value = make_request();
             HttpRequest moved = std::move(value);
-            return moved.bodyStr().size() + moved.header().uri().size();
+            return moved.body_str().size() + moved.header().uri().size();
         })) return 1;
 
-    if (!runBench("BM_HttpResponseClone", iterations, [&]() {
+    if (!run_bench("BM_HttpResponseClone", iterations, [&]() {
             HttpResponse copy = response.clone();
-            return copy.bodyStr().size() + static_cast<size_t>(copy.header().code());
+            return copy.body_str().size() + static_cast<size_t>(copy.header().code());
         })) return 1;
 
-    if (!runBench("BM_HttpResponseMove", iterations, [&]() {
-            HttpResponse value = makeResponse();
+    if (!run_bench("BM_HttpResponseMove", iterations, [&]() {
+            HttpResponse value = make_response();
             HttpResponse moved = std::move(value);
-            return moved.bodyStr().size() + static_cast<size_t>(moved.header().code());
+            return moved.body_str().size() + static_cast<size_t>(moved.header().code());
         })) return 1;
 
-    if (!runBench("BM_RequestHeaderClone", iterations, [&]() {
+    if (!run_bench("BM_RequestHeaderClone", iterations, [&]() {
             HttpRequestHeader copy = request_header.clone();
-            return copy.uri().size() + copy.headerPairs().getValue("host").size();
+            return copy.uri().size() + copy.header_pairs().get_value("host").size();
         })) return 1;
 
-    if (!runBench("BM_ResponseHeaderClone", iterations, [&]() {
+    if (!run_bench("BM_ResponseHeaderClone", iterations, [&]() {
             HttpResponseHeader copy = response_header.clone();
-            return static_cast<size_t>(copy.code()) + copy.headerPairs().getValue("content-type").size();
+            return static_cast<size_t>(copy.code()) + copy.header_pairs().get_value("content-type").size();
         })) return 1;
 
-    if (!runBench("BM_HeaderPairClone", iterations, [&]() {
+    if (!run_bench("BM_HeaderPairClone", iterations, [&]() {
             HeaderPair copy = headers.clone();
-            return copy.getValue("host").size() + copy.getValue("x-trace").size();
+            return copy.get_value("host").size() + copy.get_value("x-trace").size();
         })) return 1;
 
-    if (!runBench("BM_PlainBodyClone", iterations, [&]() {
+    if (!run_bench("BM_PlainBodyClone", iterations, [&]() {
             PlainBody copy = body.clone();
-            return copy.toString().size();
+            return copy.to_string().size();
         })) return 1;
 
-    if (!runBench("BM_PlainBodyMove", iterations, [&]() {
-            PlainBody value = makePlainBody();
+    if (!run_bench("BM_PlainBodyMove", iterations, [&]() {
+            PlainBody value = make_plain_body();
             PlainBody moved = std::move(value);
-            return moved.toString().size();
+            return moved.to_string().size();
         })) return 1;
 
-    if (!runBench("BM_ChunkParserClone", iterations, [&]() {
+    if (!run_bench("BM_ChunkParserClone", iterations, [&]() {
             ChunkParser copy = parser.clone();
             std::string tail = "llo\r\n0\r\n\r\n";
             std::string output = "He";
-            auto iovecs = makeIovecs(tail);
+            auto iovecs = make_iovecs(tail);
             auto result = copy.parse(iovecs, output);
             return result.has_value() && result->first ? output.size() : 0;
         })) return 1;
 
-    if (!runBench("BM_ChunkParserMove", iterations, [&]() {
-            ChunkParser value = makePartialChunkParser();
+    if (!run_bench("BM_ChunkParserMove", iterations, [&]() {
+            ChunkParser value = make_partial_chunk_parser();
             ChunkParser moved = std::move(value);
             std::string tail = "llo\r\n0\r\n\r\n";
             std::string output = "He";
-            auto iovecs = makeIovecs(tail);
+            auto iovecs = make_iovecs(tail);
             auto result = moved.parse(iovecs, output);
             return result.has_value() && result->first ? output.size() : 0;
         })) return 1;

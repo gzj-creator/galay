@@ -34,7 +34,7 @@ namespace galay::utils
          * @param input 输入字符串
          * @return 32 字符的十六进制 MD5 字符串
          */
-        static std::string MD5(const std::string& input);
+        static std::string md5(const std::string& input);
 
         /**
          * @brief 计算原始字节的 MD5 哈希值（十六进制格式）
@@ -42,14 +42,14 @@ namespace galay::utils
          * @param length 数据长度
          * @return 32 字符的十六进制 MD5 字符串
          */
-        static std::string MD5(const unsigned char* data, size_t length);
+        static std::string md5(const unsigned char* data, size_t length);
 
         /**
          * @brief 计算字符串的 MD5 哈希值（原始字节）
          * @param input 输入字符串
          * @return 16 字节的 MD5 哈希数组
          */
-        static std::array<uint8_t, 16> MD5Raw(const std::string& input);
+        static std::array<uint8_t, 16> md5_raw(const std::string& input);
 
         /**
          * @brief 计算原始字节的 MD5 哈希值（原始字节）
@@ -57,7 +57,7 @@ namespace galay::utils
          * @param length 数据长度
          * @return 16 字节的 MD5 哈希数组
          */
-        static std::array<uint8_t, 16> MD5Raw(const unsigned char* data, size_t length);
+        static std::array<uint8_t, 16> md5_raw(const unsigned char* data, size_t length);
 
 #if __cplusplus >= 201703L
         /**
@@ -65,14 +65,14 @@ namespace galay::utils
          * @param input 输入字符串视图
          * @return 32 字符的十六进制 MD5 字符串
          */
-        static std::string MD5View(std::string_view input);
+        static std::string md5_view(std::string_view input);
 
         /**
          * @brief 计算字符串视图的 MD5 哈希值（原始字节，C++17）
          * @param input 输入字符串视图
          * @return 16 字节的 MD5 哈希数组
          */
-        static std::array<uint8_t, 16> MD5RawView(std::string_view input);
+        static std::array<uint8_t, 16> md5_raw_view(std::string_view input);
 #endif
 
     private:
@@ -103,40 +103,40 @@ namespace galay::utils
         static constexpr uint32_t S44 = 21;
 
         // MD5 basic transformation functions
-        static inline uint32_t F(uint32_t x, uint32_t y, uint32_t z) { return (x & y) | (~x & z); }
-        static inline uint32_t G(uint32_t x, uint32_t y, uint32_t z) { return (x & z) | (y & ~z); }
-        static inline uint32_t H(uint32_t x, uint32_t y, uint32_t z) { return x ^ y ^ z; }
-        static inline uint32_t I(uint32_t x, uint32_t y, uint32_t z) { return y ^ (x | ~z); }
+        static inline uint32_t f(uint32_t x, uint32_t y, uint32_t z) { return (x & y) | (~x & z); }
+        static inline uint32_t g(uint32_t x, uint32_t y, uint32_t z) { return (x & z) | (y & ~z); }
+        static inline uint32_t h(uint32_t x, uint32_t y, uint32_t z) { return x ^ y ^ z; }
+        static inline uint32_t i(uint32_t x, uint32_t y, uint32_t z) { return y ^ (x | ~z); }
 
         // Rotate left
-        static inline uint32_t rotateLeft(uint32_t x, uint32_t n) { return (x << n) | (x >> (32 - n)); }
+        static inline uint32_t rotate_left(uint32_t x, uint32_t n) { return (x << n) | (x >> (32 - n)); }
 
         // FF, GG, HH, and II transformations
-        static inline void FF(uint32_t& a, uint32_t b, uint32_t c, uint32_t d, uint32_t x, uint32_t s, uint32_t ac)
+        static inline void ff(uint32_t& a, uint32_t b, uint32_t c, uint32_t d, uint32_t x, uint32_t s, uint32_t ac)
         {
-            a += F(b, c, d) + x + ac;
-            a = rotateLeft(a, s);
+            a += f(b, c, d) + x + ac;
+            a = rotate_left(a, s);
             a += b;
         }
 
-        static inline void GG(uint32_t& a, uint32_t b, uint32_t c, uint32_t d, uint32_t x, uint32_t s, uint32_t ac)
+        static inline void gg(uint32_t& a, uint32_t b, uint32_t c, uint32_t d, uint32_t x, uint32_t s, uint32_t ac)
         {
-            a += G(b, c, d) + x + ac;
-            a = rotateLeft(a, s);
+            a += g(b, c, d) + x + ac;
+            a = rotate_left(a, s);
             a += b;
         }
 
-        static inline void HH(uint32_t& a, uint32_t b, uint32_t c, uint32_t d, uint32_t x, uint32_t s, uint32_t ac)
+        static inline void hh(uint32_t& a, uint32_t b, uint32_t c, uint32_t d, uint32_t x, uint32_t s, uint32_t ac)
         {
-            a += H(b, c, d) + x + ac;
-            a = rotateLeft(a, s);
+            a += h(b, c, d) + x + ac;
+            a = rotate_left(a, s);
             a += b;
         }
 
-        static inline void II(uint32_t& a, uint32_t b, uint32_t c, uint32_t d, uint32_t x, uint32_t s, uint32_t ac)
+        static inline void ii(uint32_t& a, uint32_t b, uint32_t c, uint32_t d, uint32_t x, uint32_t s, uint32_t ac)
         {
-            a += I(b, c, d) + x + ac;
-            a = rotateLeft(a, s);
+            a += i(b, c, d) + x + ac;
+            a = rotate_left(a, s);
             a += b;
         }
 
@@ -149,7 +149,7 @@ namespace galay::utils
         // Utility functions
         static void encode(uint8_t* output, const uint32_t* input, size_t length);
         static void decode(uint32_t* output, const uint8_t* input, size_t length);
-        static std::string toHexString(const uint8_t* data, size_t length);
+        static std::string to_hex_string(const uint8_t* data, size_t length);
     };
 
     // Implementation
@@ -228,76 +228,76 @@ namespace galay::utils
         decode(x, block, 64);
 
         // Round 1
-        FF(a, b, c, d, x[0], S11, 0xd76aa478);
-        FF(d, a, b, c, x[1], S12, 0xe8c7b756);
-        FF(c, d, a, b, x[2], S13, 0x242070db);
-        FF(b, c, d, a, x[3], S14, 0xc1bdceee);
-        FF(a, b, c, d, x[4], S11, 0xf57c0faf);
-        FF(d, a, b, c, x[5], S12, 0x4787c62a);
-        FF(c, d, a, b, x[6], S13, 0xa8304613);
-        FF(b, c, d, a, x[7], S14, 0xfd469501);
-        FF(a, b, c, d, x[8], S11, 0x698098d8);
-        FF(d, a, b, c, x[9], S12, 0x8b44f7af);
-        FF(c, d, a, b, x[10], S13, 0xffff5bb1);
-        FF(b, c, d, a, x[11], S14, 0x895cd7be);
-        FF(a, b, c, d, x[12], S11, 0x6b901122);
-        FF(d, a, b, c, x[13], S12, 0xfd987193);
-        FF(c, d, a, b, x[14], S13, 0xa679438e);
-        FF(b, c, d, a, x[15], S14, 0x49b40821);
+        ff(a, b, c, d, x[0], S11, 0xd76aa478);
+        ff(d, a, b, c, x[1], S12, 0xe8c7b756);
+        ff(c, d, a, b, x[2], S13, 0x242070db);
+        ff(b, c, d, a, x[3], S14, 0xc1bdceee);
+        ff(a, b, c, d, x[4], S11, 0xf57c0faf);
+        ff(d, a, b, c, x[5], S12, 0x4787c62a);
+        ff(c, d, a, b, x[6], S13, 0xa8304613);
+        ff(b, c, d, a, x[7], S14, 0xfd469501);
+        ff(a, b, c, d, x[8], S11, 0x698098d8);
+        ff(d, a, b, c, x[9], S12, 0x8b44f7af);
+        ff(c, d, a, b, x[10], S13, 0xffff5bb1);
+        ff(b, c, d, a, x[11], S14, 0x895cd7be);
+        ff(a, b, c, d, x[12], S11, 0x6b901122);
+        ff(d, a, b, c, x[13], S12, 0xfd987193);
+        ff(c, d, a, b, x[14], S13, 0xa679438e);
+        ff(b, c, d, a, x[15], S14, 0x49b40821);
 
         // Round 2
-        GG(a, b, c, d, x[1], S21, 0xf61e2562);
-        GG(d, a, b, c, x[6], S22, 0xc040b340);
-        GG(c, d, a, b, x[11], S23, 0x265e5a51);
-        GG(b, c, d, a, x[0], S24, 0xe9b6c7aa);
-        GG(a, b, c, d, x[5], S21, 0xd62f105d);
-        GG(d, a, b, c, x[10], S22, 0x2441453);
-        GG(c, d, a, b, x[15], S23, 0xd8a1e681);
-        GG(b, c, d, a, x[4], S24, 0xe7d3fbc8);
-        GG(a, b, c, d, x[9], S21, 0x21e1cde6);
-        GG(d, a, b, c, x[14], S22, 0xc33707d6);
-        GG(c, d, a, b, x[3], S23, 0xf4d50d87);
-        GG(b, c, d, a, x[8], S24, 0x455a14ed);
-        GG(a, b, c, d, x[13], S21, 0xa9e3e905);
-        GG(d, a, b, c, x[2], S22, 0xfcefa3f8);
-        GG(c, d, a, b, x[7], S23, 0x676f02d9);
-        GG(b, c, d, a, x[12], S24, 0x8d2a4c8a);
+        gg(a, b, c, d, x[1], S21, 0xf61e2562);
+        gg(d, a, b, c, x[6], S22, 0xc040b340);
+        gg(c, d, a, b, x[11], S23, 0x265e5a51);
+        gg(b, c, d, a, x[0], S24, 0xe9b6c7aa);
+        gg(a, b, c, d, x[5], S21, 0xd62f105d);
+        gg(d, a, b, c, x[10], S22, 0x2441453);
+        gg(c, d, a, b, x[15], S23, 0xd8a1e681);
+        gg(b, c, d, a, x[4], S24, 0xe7d3fbc8);
+        gg(a, b, c, d, x[9], S21, 0x21e1cde6);
+        gg(d, a, b, c, x[14], S22, 0xc33707d6);
+        gg(c, d, a, b, x[3], S23, 0xf4d50d87);
+        gg(b, c, d, a, x[8], S24, 0x455a14ed);
+        gg(a, b, c, d, x[13], S21, 0xa9e3e905);
+        gg(d, a, b, c, x[2], S22, 0xfcefa3f8);
+        gg(c, d, a, b, x[7], S23, 0x676f02d9);
+        gg(b, c, d, a, x[12], S24, 0x8d2a4c8a);
 
         // Round 3
-        HH(a, b, c, d, x[5], S31, 0xfffa3942);
-        HH(d, a, b, c, x[8], S32, 0x8771f681);
-        HH(c, d, a, b, x[11], S33, 0x6d9d6122);
-        HH(b, c, d, a, x[14], S34, 0xfde5380c);
-        HH(a, b, c, d, x[1], S31, 0xa4beea44);
-        HH(d, a, b, c, x[4], S32, 0x4bdecfa9);
-        HH(c, d, a, b, x[7], S33, 0xf6bb4b60);
-        HH(b, c, d, a, x[10], S34, 0xbebfbc70);
-        HH(a, b, c, d, x[13], S31, 0x289b7ec6);
-        HH(d, a, b, c, x[0], S32, 0xeaa127fa);
-        HH(c, d, a, b, x[3], S33, 0xd4ef3085);
-        HH(b, c, d, a, x[6], S34, 0x4881d05);
-        HH(a, b, c, d, x[9], S31, 0xd9d4d039);
-        HH(d, a, b, c, x[12], S32, 0xe6db99e5);
-        HH(c, d, a, b, x[15], S33, 0x1fa27cf8);
-        HH(b, c, d, a, x[2], S34, 0xc4ac5665);
+        hh(a, b, c, d, x[5], S31, 0xfffa3942);
+        hh(d, a, b, c, x[8], S32, 0x8771f681);
+        hh(c, d, a, b, x[11], S33, 0x6d9d6122);
+        hh(b, c, d, a, x[14], S34, 0xfde5380c);
+        hh(a, b, c, d, x[1], S31, 0xa4beea44);
+        hh(d, a, b, c, x[4], S32, 0x4bdecfa9);
+        hh(c, d, a, b, x[7], S33, 0xf6bb4b60);
+        hh(b, c, d, a, x[10], S34, 0xbebfbc70);
+        hh(a, b, c, d, x[13], S31, 0x289b7ec6);
+        hh(d, a, b, c, x[0], S32, 0xeaa127fa);
+        hh(c, d, a, b, x[3], S33, 0xd4ef3085);
+        hh(b, c, d, a, x[6], S34, 0x4881d05);
+        hh(a, b, c, d, x[9], S31, 0xd9d4d039);
+        hh(d, a, b, c, x[12], S32, 0xe6db99e5);
+        hh(c, d, a, b, x[15], S33, 0x1fa27cf8);
+        hh(b, c, d, a, x[2], S34, 0xc4ac5665);
 
         // Round 4
-        II(a, b, c, d, x[0], S41, 0xf4292244);
-        II(d, a, b, c, x[7], S42, 0x432aff97);
-        II(c, d, a, b, x[14], S43, 0xab9423a7);
-        II(b, c, d, a, x[5], S44, 0xfc93a039);
-        II(a, b, c, d, x[12], S41, 0x655b59c3);
-        II(d, a, b, c, x[3], S42, 0x8f0ccc92);
-        II(c, d, a, b, x[10], S43, 0xffeff47d);
-        II(b, c, d, a, x[1], S44, 0x85845dd1);
-        II(a, b, c, d, x[8], S41, 0x6fa87e4f);
-        II(d, a, b, c, x[15], S42, 0xfe2ce6e0);
-        II(c, d, a, b, x[6], S43, 0xa3014314);
-        II(b, c, d, a, x[13], S44, 0x4e0811a1);
-        II(a, b, c, d, x[4], S41, 0xf7537e82);
-        II(d, a, b, c, x[11], S42, 0xbd3af235);
-        II(c, d, a, b, x[2], S43, 0x2ad7d2bb);
-        II(b, c, d, a, x[9], S44, 0xeb86d391);
+        ii(a, b, c, d, x[0], S41, 0xf4292244);
+        ii(d, a, b, c, x[7], S42, 0x432aff97);
+        ii(c, d, a, b, x[14], S43, 0xab9423a7);
+        ii(b, c, d, a, x[5], S44, 0xfc93a039);
+        ii(a, b, c, d, x[12], S41, 0x655b59c3);
+        ii(d, a, b, c, x[3], S42, 0x8f0ccc92);
+        ii(c, d, a, b, x[10], S43, 0xffeff47d);
+        ii(b, c, d, a, x[1], S44, 0x85845dd1);
+        ii(a, b, c, d, x[8], S41, 0x6fa87e4f);
+        ii(d, a, b, c, x[15], S42, 0xfe2ce6e0);
+        ii(c, d, a, b, x[6], S43, 0xa3014314);
+        ii(b, c, d, a, x[13], S44, 0x4e0811a1);
+        ii(a, b, c, d, x[4], S41, 0xf7537e82);
+        ii(d, a, b, c, x[11], S42, 0xbd3af235);
+        ii(c, d, a, b, x[2], S43, 0x2ad7d2bb);
+        ii(b, c, d, a, x[9], S44, 0xeb86d391);
 
         state[0] += a;
         state[1] += b;
@@ -327,7 +327,7 @@ namespace galay::utils
         }
     }
 
-    inline std::string MD5Util::toHexString(const uint8_t* data, size_t length)
+    inline std::string MD5Util::to_hex_string(const uint8_t* data, size_t length)
     {
         static const char hexChars[] = "0123456789abcdef";
         std::string result;
@@ -342,7 +342,7 @@ namespace galay::utils
         return result;
     }
 
-    inline std::array<uint8_t, 16> MD5Util::MD5Raw(const unsigned char* data, size_t length)
+    inline std::array<uint8_t, 16> MD5Util::md5_raw(const unsigned char* data, size_t length)
     {
         Context ctx;
         init(ctx);
@@ -354,31 +354,31 @@ namespace galay::utils
         return digest;
     }
 
-    inline std::array<uint8_t, 16> MD5Util::MD5Raw(const std::string& input)
+    inline std::array<uint8_t, 16> MD5Util::md5_raw(const std::string& input)
     {
-        return MD5Raw(reinterpret_cast<const unsigned char*>(input.data()), input.length());
+        return md5_raw(reinterpret_cast<const unsigned char*>(input.data()), input.length());
     }
 
-    inline std::string MD5Util::MD5(const unsigned char* data, size_t length)
+    inline std::string MD5Util::md5(const unsigned char* data, size_t length)
     {
-        auto digest = MD5Raw(data, length);
-        return toHexString(digest.data(), digest.size());
+        auto digest = md5_raw(data, length);
+        return to_hex_string(digest.data(), digest.size());
     }
 
-    inline std::string MD5Util::MD5(const std::string& input)
+    inline std::string MD5Util::md5(const std::string& input)
     {
-        return MD5(reinterpret_cast<const unsigned char*>(input.data()), input.length());
+        return md5(reinterpret_cast<const unsigned char*>(input.data()), input.length());
     }
 
 #if __cplusplus >= 201703L
-    inline std::string MD5Util::MD5View(std::string_view input)
+    inline std::string MD5Util::md5_view(std::string_view input)
     {
-        return MD5(reinterpret_cast<const unsigned char*>(input.data()), input.length());
+        return md5(reinterpret_cast<const unsigned char*>(input.data()), input.length());
     }
 
-    inline std::array<uint8_t, 16> MD5Util::MD5RawView(std::string_view input)
+    inline std::array<uint8_t, 16> MD5Util::md5_raw_view(std::string_view input)
     {
-        return MD5Raw(reinterpret_cast<const unsigned char*>(input.data()), input.length());
+        return md5_raw(reinterpret_cast<const unsigned char*>(input.data()), input.length());
     }
 #endif
 

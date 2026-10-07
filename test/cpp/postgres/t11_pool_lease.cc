@@ -25,7 +25,7 @@ int main()
     zero_config.min_connections = 7;
     zero_config.max_connections = 0;
     PostgresConnectionPool zero_pool(nullptr, std::move(zero_config));
-    if (zero_pool.size() != 0 || zero_pool.idleCount() != 0) {
+    if (zero_pool.size() != 0 || zero_pool.idle_count() != 0) {
         return 3;
     }
     zero_pool.release(nullptr);
@@ -34,5 +34,5 @@ int main()
     clamped_config.min_connections = 3;
     clamped_config.max_connections = 1;
     PostgresConnectionPool clamped_pool(nullptr, std::move(clamped_config));
-    return clamped_pool.size() == 1 && clamped_pool.idleCount() == 0 ? 0 : 4;
+    return clamped_pool.size() == 1 && clamped_pool.idle_count() == 0 ? 0 : 4;
 }

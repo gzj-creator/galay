@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 基于 moodycamel ConcurrentQueue 的无锁队列和后台工作线程实现批量 Span 导出，
- * 支持定时刷新、队列溢出丢弃统计、优雅关闭和并发 forceFlush。
+ * 支持定时刷新、队列溢出丢弃统计、优雅关闭和并发 force_flush。
  */
 
 #include "batch_span_processor.h"
@@ -32,7 +32,7 @@ struct SpanQueueTraits : moodycamel::ConcurrentQueueDefaultTraits {
     static constexpr size_t EXPLICIT_INITIAL_INDEX_SIZE = 256;
 };
 
-[[nodiscard]] BatchSpanProcessorConfig normalizeConfig(BatchSpanProcessorConfig config) noexcept {
+[[nodiscard]] BatchSpanProcessorConfig normalize_config(BatchSpanProcessorConfig config) noexcept {
     config.queue_capacity = std::max<std::size_t>(config.queue_capacity, 1);
     config.max_batch_size = std::clamp<std::size_t>(config.max_batch_size, 1, config.queue_capacity);
     if (config.flush_interval <= std::chrono::milliseconds::zero()) {
@@ -43,7 +43,7 @@ struct SpanQueueTraits : moodycamel::ConcurrentQueueDefaultTraits {
 
 } // namespace
 
-bool SpanExporter::forceFlush(std::chrono::milliseconds) {
+bool SpanExporter::force_flush(std::chrono::milliseconds) {
     return true;
 }
 
@@ -63,7 +63,7 @@ struct BatchSpanProcessor::SpanQueue {
           capacity(capacity) {
     }
 
-    [[nodiscard]] PushResult tryPush(
+    [[nodiscard]] PushResult try_push(
         Span&& span,
         const std::atomic<bool>& shutdownRequested,
         std::size_t& queuedCount) {
@@ -86,7 +86,7 @@ struct BatchSpanProcessor::SpanQueue {
         return PushResult::kFull;
     }
 
-    [[nodiscard]] std::size_t tryPopBulk(std::vector<Span>& batch, std::size_t maxCount) {
+    [[nodiscard]] std::size_t try_pop_bulk(std::vector<Span>& batch, std::size_t maxCount) {
         if (maxCount == 0 || size.load(std::memory_order_relaxed) == 0) {
             return 0;
         }
@@ -98,12 +98,12 @@ struct BatchSpanProcessor::SpanQueue {
         return count;
     }
 
-    [[nodiscard]] std::size_t queuedCount() const noexcept {
+    [[nodiscard]] std::size_t queued_count() const noexcept {
         return size.load(std::memory_order_relaxed);
     }
 
     [[nodiscard]] bool empty() const noexcept {
-        return queuedCount() == 0;
+        return queued_count() == 0;
     }
 
     moodycamel::ConcurrentQueue<Span, SpanQueueTraits> spans;
@@ -139,11 +139,11 @@ struct BatchSpanProcessor::WorkerControl {
     std::atomic<bool> shutdownDrainOk{true};
     std::atomic<bool> signalPending{false};
 
-    void setShutdownDeadline(Clock::time_point deadline) noexcept {
+    void set_shutdown_deadline(Clock::time_point deadline) noexcept {
         shutdownDeadlineTicks.store(deadline.time_since_epoch().count(), std::memory_order_release);
     }
 
-    [[nodiscard]] Clock::time_point shutdownDeadline() const noexcept {
+    [[nodiscard]] Clock::time_point shutdown_deadline() const noexcept {
         return Clock::time_point(Clock::duration(
             shutdownDeadlineTicks.load(std::memory_order_acquire)));
     }
@@ -154,13 +154,13 @@ struct BatchSpanProcessor::WorkerControl {
         }
     }
 
-    void forceNotify() noexcept {
+    void force_notify() noexcept {
         signalPending.store(true, std::memory_order_release);
         signal.release();
     }
 
     template <class Rep, class Period>
-    [[nodiscard]] bool waitFor(const std::chrono::duration<Rep, Period>& timeout) {
+    [[nodiscard]] bool wait_for(const std::chrono::duration<Rep, Period>& timeout) {
         const bool acquired = signal.try_acquire_for(timeout);
         if (acquired) {
             signalPending.store(false, std::memory_order_release);
@@ -171,10 +171,10 @@ struct BatchSpanProcessor::WorkerControl {
 
 BatchSpanProcessor::BatchSpanProcessor(std::unique_ptr<SpanExporter> exporter, BatchSpanProcessorConfig config)
     : m_exporter(std::move(exporter)),
-      m_config(normalizeConfig(config)),
+      m_config(normalize_config(config)),
       m_queue(std::make_unique<SpanQueue>(m_config.queue_capacity)),
       m_control(std::make_unique<WorkerControl>()),
-      m_worker(&BatchSpanProcessor::workerLoop, this) {
+      m_worker(&BatchSpanProcessor::worker_loop, this) {
     TRACING_LOG_INFO("[batch_processor]", "created queue_capacity={} max_batch_size={} flush_interval_ms={}",
                      m_config.queue_capacity,
                      m_config.max_batch_size,
@@ -188,14 +188,14 @@ BatchSpanProcessor::~BatchSpanProcessor() noexcept {
     }
 }
 
-void BatchSpanProcessor::onEnd(Span&& span) {
-    if (!span.spanContext().sampled()) {
+void BatchSpanProcessor::on_end(Span&& span) {
+    if (!span.span_context().sampled()) {
         return;
     }
 
     bool shouldNotify = false;
     std::size_t queuedCount = 0;
-    const auto pushResult = m_queue->tryPush(std::move(span), m_control->shutdownRequested, queuedCount);
+    const auto pushResult = m_queue->try_push(std::move(span), m_control->shutdownRequested, queuedCount);
     if (pushResult == SpanQueue::PushResult::kFull) {
         m_droppedSpans.fetch_add(1, std::memory_order_relaxed);
         TRACING_LOG_WARN("[batch_processor]", "drop sampled span because queue cannot accept more items capacity={}",
@@ -222,7 +222,7 @@ void BatchSpanProcessor::onEnd(Span&& span) {
     }
 }
 
-bool BatchSpanProcessor::forceFlush(std::chrono::milliseconds timeout) {
+bool BatchSpanProcessor::force_flush(std::chrono::milliseconds timeout) {
     if (timeout < std::chrono::milliseconds::zero()) {
         return false;
     }
@@ -232,7 +232,7 @@ bool BatchSpanProcessor::forceFlush(std::chrono::milliseconds timeout) {
         m_control->workerStopped.load(std::memory_order_acquire)) {
         if (m_control->activeFlushCallers.fetch_sub(1, std::memory_order_acq_rel) == 1 &&
             m_control->shutdownRequested.load(std::memory_order_acquire)) {
-            m_control->forceNotify();
+            m_control->force_notify();
         }
         return m_queue->empty();
     }
@@ -241,7 +241,7 @@ bool BatchSpanProcessor::forceFlush(std::chrono::milliseconds timeout) {
     if (!m_control->flushRequests.enqueue(request)) {
         if (m_control->activeFlushCallers.fetch_sub(1, std::memory_order_acq_rel) == 1 &&
             m_control->shutdownRequested.load(std::memory_order_acquire)) {
-            m_control->forceNotify();
+            m_control->force_notify();
         }
         TRACING_LOG_WARN("[batch_processor]", "forceFlush request enqueue failed timeout_ms={}", timeout.count());
         return false;
@@ -249,9 +249,9 @@ bool BatchSpanProcessor::forceFlush(std::chrono::milliseconds timeout) {
 
     if (m_control->activeFlushCallers.fetch_sub(1, std::memory_order_acq_rel) == 1 &&
         m_control->shutdownRequested.load(std::memory_order_acquire)) {
-        m_control->forceNotify();
+        m_control->force_notify();
     }
-    m_control->forceNotify();
+    m_control->force_notify();
     const bool completed = request->done.try_acquire_until(request->deadline);
     const bool ok = completed && request->ok.load(std::memory_order_acquire);
     if (!ok) {
@@ -262,9 +262,9 @@ bool BatchSpanProcessor::forceFlush(std::chrono::milliseconds timeout) {
 
 bool BatchSpanProcessor::shutdown(std::chrono::milliseconds timeout) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
-    m_control->setShutdownDeadline(deadline);
+    m_control->set_shutdown_deadline(deadline);
     m_control->shutdownRequested.store(true, std::memory_order_release);
-    m_control->forceNotify();
+    m_control->force_notify();
 
     bool ok = true;
 
@@ -294,33 +294,33 @@ bool BatchSpanProcessor::shutdown(std::chrono::milliseconds timeout) {
     if (!ok) {
         TRACING_LOG_WARN("[batch_processor]", "shutdown finished with failure timeout_ms={}", timeout.count());
     } else if (TRACING_LOG_ENABLED(::galay::kernel::LogLevel::kDebug)) {
-        TRACING_LOG_DEBUG("[batch_processor]", "shutdown finished dropped_spans={}", droppedSpanCount());
+        TRACING_LOG_DEBUG("[batch_processor]", "shutdown finished dropped_spans={}", dropped_span_count());
     }
     return ok && std::chrono::steady_clock::now() <= deadline;
 }
 
-std::size_t BatchSpanProcessor::droppedSpanCount() const noexcept {
+std::size_t BatchSpanProcessor::dropped_span_count() const noexcept {
     return m_droppedSpans.load(std::memory_order_relaxed);
 }
 
-void BatchSpanProcessor::workerLoop() {
+void BatchSpanProcessor::worker_loop() {
     std::vector<Span> batch(m_config.max_batch_size);
 
-    auto drainReadyBatches = [this, &batch](bool drainPartial) {
+    auto drain_ready_batches = [this, &batch](bool drainPartial) {
         bool ok = true;
         while (!m_control->shutdownRequested.load(std::memory_order_acquire) &&
-               (m_queue->queuedCount() >= m_config.max_batch_size ||
+               (m_queue->queued_count() >= m_config.max_batch_size ||
                 (drainPartial && !m_queue->empty()))) {
-            const auto count = drainQueue(batch, m_config.max_batch_size);
+            const auto count = drain_queue(batch, m_config.max_batch_size);
             if (count == 0) {
                 break;
             }
-            ok = exportBatch(std::span<const Span>(batch.data(), count)) && ok;
+            ok = export_batch(std::span<const Span>(batch.data(), count)) && ok;
         }
         return ok;
     };
 
-    auto remainingTimeout = [](std::chrono::steady_clock::time_point deadline) {
+    auto remaining_timeout = [](std::chrono::steady_clock::time_point deadline) {
         const auto now = std::chrono::steady_clock::now();
         if (now >= deadline) {
             return std::chrono::milliseconds::zero();
@@ -328,67 +328,67 @@ void BatchSpanProcessor::workerLoop() {
         return std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
     };
 
-    auto drainUntilIdle = [this, &batch](std::chrono::steady_clock::time_point deadline) {
+    auto drain_until_idle = [this, &batch](std::chrono::steady_clock::time_point deadline) {
         bool ok = true;
         while (std::chrono::steady_clock::now() <= deadline) {
             bool exportedAny = false;
             while (true) {
-                const auto count = drainQueue(batch, m_config.max_batch_size);
+                const auto count = drain_queue(batch, m_config.max_batch_size);
                 if (count == 0) {
                     break;
                 }
                 exportedAny = true;
-                ok = exportBatch(std::span<const Span>(batch.data(), count)) && ok;
+                ok = export_batch(std::span<const Span>(batch.data(), count)) && ok;
             }
             if (m_queue->empty()) {
                 break;
             }
             if (!exportedAny) {
-                static_cast<void>(m_control->waitFor(std::chrono::milliseconds(1)));
+                static_cast<void>(m_control->wait_for(std::chrono::milliseconds(1)));
             }
         }
         return ok && std::chrono::steady_clock::now() <= deadline;
     };
 
-    auto completeFlushRequest = [this, &drainUntilIdle, &remainingTimeout](
+    auto complete_flush_request = [this, &drain_until_idle, &remaining_timeout](
                                     const std::shared_ptr<WorkerControl::FlushRequest>& request) {
-        bool ok = drainUntilIdle(request->deadline);
+        bool ok = drain_until_idle(request->deadline);
         if (m_exporter) {
-            ok = m_exporter->forceFlush(remainingTimeout(request->deadline)) && ok;
+            ok = m_exporter->force_flush(remaining_timeout(request->deadline)) && ok;
         }
         request->ok.store(ok, std::memory_order_release);
         request->done.release();
     };
 
-    auto completeFlushRequests = [this, &completeFlushRequest] {
+    auto complete_flush_requests = [this, &complete_flush_request] {
         bool completedAny = false;
         std::shared_ptr<WorkerControl::FlushRequest> request;
         while (m_control->flushRequests.try_dequeue(request)) {
-            completeFlushRequest(request);
+            complete_flush_request(request);
             completedAny = true;
         }
         return completedAny;
     };
 
     while (true) {
-        const bool intervalElapsed = !m_control->waitFor(m_config.flush_interval);
+        const bool intervalElapsed = !m_control->wait_for(m_config.flush_interval);
         const bool shutdownRequested = m_control->shutdownRequested.load(std::memory_order_acquire);
 
-        if (completeFlushRequests()) {
+        if (complete_flush_requests()) {
             continue;
         }
 
         if (shutdownRequested) {
-            const auto shutdownDeadline = m_control->shutdownDeadline();
-            bool shutdownOk = drainUntilIdle(shutdownDeadline);
-            completeFlushRequests();
+            const auto shutdownDeadline = m_control->shutdown_deadline();
+            bool shutdownOk = drain_until_idle(shutdownDeadline);
+            complete_flush_requests();
             const bool deadlineExpired = std::chrono::steady_clock::now() >= shutdownDeadline;
             if (shutdownRequested &&
                 m_control->activeFlushCallers.load(std::memory_order_acquire) == 0 &&
                 (m_queue->empty() || deadlineExpired) &&
-                !completeFlushRequests()) {
+                !complete_flush_requests()) {
                 if (m_exporter && !deadlineExpired) {
-                    shutdownOk = m_exporter->forceFlush(remainingTimeout(shutdownDeadline)) && shutdownOk;
+                    shutdownOk = m_exporter->force_flush(remaining_timeout(shutdownDeadline)) && shutdownOk;
                 }
                 m_control->shutdownDrainOk.store(shutdownOk && m_queue->empty(), std::memory_order_release);
                 break;
@@ -397,26 +397,26 @@ void BatchSpanProcessor::workerLoop() {
         }
 
         const bool drainPartial = intervalElapsed || m_config.schedule_mode == BatchSpanScheduleMode::kOnEnd;
-        if (!drainPartial && m_queue->queuedCount() < m_config.max_batch_size) {
+        if (!drainPartial && m_queue->queued_count() < m_config.max_batch_size) {
             continue;
         }
 
-        static_cast<void>(drainReadyBatches(drainPartial));
+        static_cast<void>(drain_ready_batches(drainPartial));
     }
 
     m_control->workerStopped.store(true, std::memory_order_release);
 }
 
-std::size_t BatchSpanProcessor::drainQueue(std::vector<Span>& batch, std::size_t maxCount) {
-    return m_queue->tryPopBulk(batch, maxCount);
+std::size_t BatchSpanProcessor::drain_queue(std::vector<Span>& batch, std::size_t maxCount) {
+    return m_queue->try_pop_bulk(batch, maxCount);
 }
 
-bool BatchSpanProcessor::exportBatch(std::span<const Span> spans) {
+bool BatchSpanProcessor::export_batch(std::span<const Span> spans) {
     if (spans.empty() || !m_exporter) {
         return true;
     }
 
-    const bool success = m_exporter->exportSpans(spans) == ExportResult::kSuccess;
+    const bool success = m_exporter->export_spans(spans) == ExportResult::kSuccess;
     if (!success) {
         TRACING_LOG_WARN("[batch_processor]", "export batch failed span_count={}", spans.size());
     } else if (TRACING_LOG_ENABLED(::galay::kernel::LogLevel::kDebug)) {

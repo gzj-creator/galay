@@ -23,7 +23,7 @@ namespace galay::websocket
  * @param use_mask Whether the encoded frame includes a masking key.
  * @return Header length in bytes.
  */
-size_t wsFrameHeaderLength(uint64_t payload_len, bool use_mask);
+size_t ws_frame_header_length(uint64_t payload_len, bool use_mask);
 
 /**
  * @brief Append a serialized WebSocket frame header.
@@ -37,7 +37,7 @@ size_t wsFrameHeaderLength(uint64_t payload_len, bool use_mask);
  * @param use_mask Whether to set MASK and append a generated masking key.
  * @param masking_key Output masking key when use_mask is true.
  */
-void appendWsFrameHeader(std::string& out,
+void append_ws_frame_header(std::string& out,
                          WsOpcode opcode,
                          bool fin,
                          bool rsv1,
@@ -50,7 +50,7 @@ void appendWsFrameHeader(std::string& out,
 /**
  * @brief Append a serialized WebSocket frame header from a WsFrame.
  */
-void appendWsFrameHeader(std::string& out,
+void append_ws_frame_header(std::string& out,
                          const WsFrame& frame,
                          uint64_t payload_len,
                          bool use_mask,
@@ -62,7 +62,7 @@ void appendWsFrameHeader(std::string& out,
  * @param reason Optional close reason appended after the code.
  * @return Close frame payload bytes.
  */
-std::string buildWsClosePayload(WsCloseCode code, const std::string& reason);
+std::string build_ws_close_payload(WsCloseCode code, const std::string& reason);
 
 } // namespace galay::websocket
 

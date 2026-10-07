@@ -41,12 +41,12 @@ Task<void> sender(galay::spsc::UnboundedChannel<int>* channel) {
 }  // namespace
 
 int main() {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
     galay::spsc::UnboundedChannel<int> channel;
-    auto receiver_join = runtime.spawnIO(receiver(&channel));
-    auto sender_join = runtime.spawnIO(sender(&channel));
+    auto receiver_join = runtime.spawn_io(receiver(&channel));
+    auto sender_join = runtime.spawn_io(sender(&channel));
     if (!receiver_join || !sender_join) {
         std::cerr << "runtime.spawn failed\n";
         runtime.stop();

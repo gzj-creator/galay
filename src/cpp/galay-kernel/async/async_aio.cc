@@ -179,7 +179,7 @@ std::expected<void, IOError> AsyncAio::open(const std::string& path, AioOpenMode
  * @param length 要读取的字节数
  * @param offset 起始文件偏移量
  */
-void AsyncAio::preRead(char* buffer, size_t length, off_t offset)
+void AsyncAio::pre_read(char* buffer, size_t length, off_t offset)
 {
     struct iocb cb;
     std::memset(&cb, 0, sizeof(cb));
@@ -195,7 +195,7 @@ void AsyncAio::preRead(char* buffer, size_t length, off_t offset)
  * @param length 要写入的字节数
  * @param offset 起始文件偏移量
  */
-void AsyncAio::preWrite(const char* buffer, size_t length, off_t offset)
+void AsyncAio::pre_write(const char* buffer, size_t length, off_t offset)
 {
     struct iocb cb;
     std::memset(&cb, 0, sizeof(cb));
@@ -206,24 +206,24 @@ void AsyncAio::preWrite(const char* buffer, size_t length, off_t offset)
 }
 
 /**
- * @brief 将多个读操作批量入队，每个转发到 preRead
+ * @brief 将多个读操作批量入队，每个转发到 pre_read
  * @param reads (buffer, length, offset) 元组向量
  */
-void AsyncAio::preReadBatch(const std::vector<std::tuple<char*, size_t, off_t>>& reads)
+void AsyncAio::pre_read_batch(const std::vector<std::tuple<char*, size_t, off_t>>& reads)
 {
     for (const auto& [buffer, length, offset] : reads) {
-        preRead(buffer, length, offset);
+        pre_read(buffer, length, offset);
     }
 }
 
 /**
- * @brief 将多个写操作批量入队，每个转发到 preWrite
+ * @brief 将多个写操作批量入队，每个转发到 pre_write
  * @param writes (buffer, length, offset) 元组向量
  */
-void AsyncAio::preWriteBatch(const std::vector<std::tuple<const char*, size_t, off_t>>& writes)
+void AsyncAio::pre_write_batch(const std::vector<std::tuple<const char*, size_t, off_t>>& writes)
 {
     for (const auto& [buffer, length, offset] : writes) {
-        preWrite(buffer, length, offset);
+        pre_write(buffer, length, offset);
     }
 }
 
@@ -309,7 +309,7 @@ std::expected<void, IOError> AsyncAio::sync()
  * @param alignment 对齐边界（字节，默认 512）
  * @return 指向对齐缓冲区的指针，分配失败时返回 nullptr
  */
-char* AsyncAio::allocAlignedBuffer(size_t size, size_t alignment)
+char* AsyncAio::alloc_aligned_buffer(size_t size, size_t alignment)
 {
     void* ptr = nullptr;
     if (posix_memalign(&ptr, alignment, size) != 0) {
@@ -319,10 +319,10 @@ char* AsyncAio::allocAlignedBuffer(size_t size, size_t alignment)
 }
 
 /**
- * @brief 释放先前由 allocAlignedBuffer 分配的缓冲区
+ * @brief 释放先前由 alloc_aligned_buffer 分配的缓冲区
  * @param buffer 指向待释放缓冲区的指针
  */
-void AsyncAio::freeAlignedBuffer(char* buffer)
+void AsyncAio::free_aligned_buffer(char* buffer)
 {
     free(buffer);
 }

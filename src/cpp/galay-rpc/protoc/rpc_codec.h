@@ -40,7 +40,7 @@ public:
      * @param header 输出消息头
      * @return 解码结果
      */
-    static DecodeResult decodeHeader(const char* data, size_t length, RpcHeader& header) {
+    static DecodeResult decode_header(const char* data, size_t length, RpcHeader& header) {
         if (length < RPC_HEADER_SIZE) {
             return DecodeResult::INCOMPLETE;
         }
@@ -58,9 +58,9 @@ public:
      * @param length 数据长度
      * @return 解码后的请求或错误
      */
-    static std::expected<RpcRequest, RpcError> decodeRequest(const char* data, size_t length) {
+    static std::expected<RpcRequest, RpcError> decode_request(const char* data, size_t length) {
         RpcHeader header;
-        auto result = decodeHeader(data, length, header);
+        auto result = decode_header(data, length, header);
 
         if (result == DecodeResult::INCOMPLETE) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST, "Incomplete data"));
@@ -82,11 +82,11 @@ public:
         }
 
         RpcRequest request;
-        request.requestId(header.m_request_id);
-        request.callMode(rpcDecodeCallMode(header.m_flags));
-        request.endOfStream(rpcIsEndStream(header.m_flags));
+        request.request_id(header.m_request_id);
+        request.call_mode(rpc_decode_call_mode(header.m_flags));
+        request.end_of_stream(rpc_is_end_stream(header.m_flags));
 
-        if (!request.deserializeBody(data + RPC_HEADER_SIZE,
+        if (!request.deserialize_body(data + RPC_HEADER_SIZE,
                                      header.m_body_length,
                                      (header.m_reserved & RPC_RESERVED_METADATA) != 0)) {
             return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Failed to parse request body"));
@@ -101,9 +101,9 @@ public:
      * @param length 数据长度
      * @return 解码后的响应或错误
      */
-    static std::expected<RpcResponse, RpcError> decodeResponse(const char* data, size_t length) {
+    static std::expected<RpcResponse, RpcError> decode_response(const char* data, size_t length) {
         RpcHeader header;
-        auto result = decodeHeader(data, length, header);
+        auto result = decode_header(data, length, header);
 
         if (result == DecodeResult::INCOMPLETE) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_RESPONSE, "Incomplete data"));
@@ -122,11 +122,11 @@ public:
         }
 
         RpcResponse response;
-        response.requestId(header.m_request_id);
-        response.callMode(rpcDecodeCallMode(header.m_flags));
-        response.endOfStream(rpcIsEndStream(header.m_flags));
+        response.request_id(header.m_request_id);
+        response.call_mode(rpc_decode_call_mode(header.m_flags));
+        response.end_of_stream(rpc_is_end_stream(header.m_flags));
 
-        if (!response.deserializeBody(data + RPC_HEADER_SIZE, header.m_body_length)) {
+        if (!response.deserialize_body(data + RPC_HEADER_SIZE, header.m_body_length)) {
             return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Failed to parse response body"));
         }
 
@@ -139,7 +139,7 @@ public:
      * @param length 当前数据长度
      * @return 完整消息长度，0表示数据不足
      */
-    static size_t messageLength(const char* data, size_t length) {
+    static size_t message_length(const char* data, size_t length) {
         if (length < RPC_HEADER_SIZE) {
             return 0;
         }

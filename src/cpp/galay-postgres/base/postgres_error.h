@@ -42,7 +42,7 @@ public:
 
     [[nodiscard]] PostgresErrorType type() const noexcept;
     [[nodiscard]] std::string message() const;
-    [[nodiscard]] const std::string& sqlState() const noexcept;
+    [[nodiscard]] const std::string& sql_state() const noexcept;
     [[nodiscard]] const std::string& severity() const noexcept;
 
 private:

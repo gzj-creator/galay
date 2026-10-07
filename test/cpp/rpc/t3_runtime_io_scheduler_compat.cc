@@ -11,7 +11,7 @@ using namespace galay::rpc;
 
 namespace {
 
-Task<void> markDone(std::atomic<bool>* done)
+Task<void> mark_done(std::atomic<bool>* done)
 {
     done->store(true, std::memory_order_release);
     co_return;
@@ -21,22 +21,22 @@ Task<void> markDone(std::atomic<bool>* done)
 
 int main()
 {
-    const size_t io_count = resolveIoSchedulerCount(0);
+    const size_t io_count = resolve_io_scheduler_count(0);
     if (io_count == 0) {
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_count).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(io_count).parallel_scheduler_count(1).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         return 2;
     }
 
     std::atomic<bool> done{false};
-    if (!scheduleTask(scheduler, markDone(&done))) {
+    if (!schedule_task(scheduler, mark_done(&done))) {
         runtime.stop();
         return 3;
     }

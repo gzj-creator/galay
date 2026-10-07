@@ -87,15 +87,15 @@ public:
     bool await_suspend(Waker waker) noexcept;  ///< 使用外部 Waker 注册等待，用于 C coroutine bridge
     std::expected<void, IOError> await_resume() noexcept
     {
-        cancelWaiter();
+        cancel_waiter();
         m_waiter.reset();
         return m_result;
     }
-    void markTimeout() noexcept;  ///< 标记等待超时，并让残留 waiter 在 unlock() 时失效
+    void mark_timeout() noexcept;  ///< 标记等待超时，并让残留 waiter 在 unlock() 时失效
 
 private:
     friend struct WithTimeout<AsyncMutexAwaitable>;
-    void cancelWaiter() noexcept;  ///< 让当前 waiter 失效，防止后续陈旧唤醒
+    void cancel_waiter() noexcept;  ///< 让当前 waiter 失效，防止后续陈旧唤醒
 
     AsyncMutex* m_mutex;
     std::expected<void, IOError> m_result;
@@ -152,14 +152,14 @@ public:
      */
     void unlock() {
         m_locked.store(false, std::memory_order_release);
-        wakeNextWaiterIfUnlocked();
+        wake_next_waiter_if_unlocked();
     }
 
     /**
      * @brief 观察当前锁状态。
      * @return `true` 表示当前有路径持锁；该结果只适合诊断/断言，不应用作无竞争同步条件
      */
-    bool isLocked() const {
+    bool is_locked() const {
         return m_locked.load(std::memory_order_acquire);
     }
 
@@ -171,7 +171,7 @@ private:
      * @brief 尝试获取锁（非阻塞，仅内部使用）
      * @return true 成功获取锁，false 锁被占用
      */
-    bool tryLock() {
+    bool try_lock() {
         bool expected = false;
         return m_locked.compare_exchange_strong(expected, true,
                                                  std::memory_order_acq_rel,
@@ -182,7 +182,7 @@ private:
      * @brief 当锁空闲时把锁转交给等待队列中的下一个有效 waiter。
      * @note 调用者不需要持锁；本函数不会阻塞线程。
      */
-    void wakeNextWaiterIfUnlocked() {
+    void wake_next_waiter_if_unlocked() {
         if (m_locked.load(std::memory_order_acquire)) {
             return;
         }
@@ -201,9 +201,9 @@ private:
                 continue;
             }
 
-            if (tryLock())
+            if (try_lock())
             {
-                waiter->waker.wakeUp();
+                waiter->waker.wake_up();
                 return;
             } else {
                 waiter->active.store(true, std::memory_order_release);
@@ -219,7 +219,7 @@ private:
 
 // AsyncMutexAwaitable 实现
 inline bool AsyncMutexAwaitable::await_ready() const noexcept {
-    if (m_mutex->tryLock()) {
+    if (m_mutex->try_lock()) {
         const_cast<AsyncMutexAwaitable*>(this)->m_result = {};
         return true;
     }
@@ -232,7 +232,7 @@ inline bool AsyncMutexAwaitable::await_suspend(std::coroutine_handle<Promise> ha
     m_waiter = std::make_shared<AsyncMutexWaiter>(Waker(handle));
     auto waiter = m_waiter;
     mutex->m_waiters.enqueue(std::move(waiter));
-    mutex->wakeNextWaiterIfUnlocked();
+    mutex->wake_next_waiter_if_unlocked();
     return true;
 }
 
@@ -241,16 +241,16 @@ inline bool AsyncMutexAwaitable::await_suspend(Waker waker) noexcept {
     m_waiter = std::make_shared<AsyncMutexWaiter>(std::move(waker));
     auto waiter = m_waiter;
     mutex->m_waiters.enqueue(std::move(waiter));
-    mutex->wakeNextWaiterIfUnlocked();
+    mutex->wake_next_waiter_if_unlocked();
     return true;
 }
 
-inline void AsyncMutexAwaitable::markTimeout() noexcept {
-    cancelWaiter();
+inline void AsyncMutexAwaitable::mark_timeout() noexcept {
+    cancel_waiter();
     m_result = std::unexpected(IOError(kTimeout, 0));
 }
 
-inline void AsyncMutexAwaitable::cancelWaiter() noexcept {
+inline void AsyncMutexAwaitable::cancel_waiter() noexcept {
     if (m_waiter) {
         const bool was_active = m_waiter->active.exchange(false, std::memory_order_acq_rel);
         if (was_active) {

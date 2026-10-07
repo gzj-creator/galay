@@ -10,17 +10,17 @@ namespace galay::mpsc {
 
 struct UnboundedChannelTestAccess {
     template <typename T>
-    static void holdProducerRegistration(UnboundedChannel<T>& channel) {
+    static void hold_producer_registration(UnboundedChannel<T>& channel) {
         channel.m_producerRegistrations.fetch_add(1, std::memory_order_seq_cst);
     }
 
     template <typename T>
-    static void releaseProducerRegistration(UnboundedChannel<T>& channel) {
+    static void release_producer_registration(UnboundedChannel<T>& channel) {
         channel.m_producerRegistrations.fetch_sub(1, std::memory_order_seq_cst);
     }
 
     template <typename T>
-    static size_t allocatedStreamCount(const UnboundedChannel<T>& channel) {
+    static size_t allocated_stream_count(const UnboundedChannel<T>& channel) {
         size_t count = 0;
         auto* stream = channel.m_streamHead.load(std::memory_order_acquire);
         while (stream != nullptr) {
@@ -31,7 +31,7 @@ struct UnboundedChannelTestAccess {
     }
 
     template <typename T>
-    static size_t allocatedBlockCount(const UnboundedChannel<T>& channel) {
+    static size_t allocated_block_count(const UnboundedChannel<T>& channel) {
         size_t count = 0;
         auto* stream = channel.m_streamHead.load(std::memory_order_acquire);
         while (stream != nullptr) {
@@ -51,7 +51,7 @@ struct UnboundedChannelTestAccess {
     }
 
     template <typename T>
-    static size_t recycledBlockCount(const UnboundedChannel<T>& channel) {
+    static size_t recycled_block_count(const UnboundedChannel<T>& channel) {
         size_t count = 0;
         auto* stream = channel.m_streamHead.load(std::memory_order_acquire);
         while (stream != nullptr) {
@@ -67,12 +67,12 @@ struct UnboundedChannelTestAccess {
     }
 
     template <typename T>
-    static size_t prefetchedCount(const UnboundedChannel<T>& channel) {
-        return channel.prefetchedCount();
+    static size_t prefetched_count(const UnboundedChannel<T>& channel) {
+        return channel.prefetched_count();
     }
 
     template <typename T>
-    static bool seedOnlyStreamSequence(UnboundedChannel<T>& channel,
+    static bool seed_only_stream_sequence(UnboundedChannel<T>& channel,
                                        uint64_t sequence) {
         auto* stream = channel.m_streamHead.load(std::memory_order_acquire);
         if (stream == nullptr || stream->next != nullptr) {
@@ -87,7 +87,7 @@ struct UnboundedChannelTestAccess {
     }
 
     template <typename T>
-    static size_t setSyntheticPendingForAllStreams(
+    static size_t set_synthetic_pending_for_all_streams(
         UnboundedChannel<T>& channel, uint64_t pending) {
         size_t count = 0;
         auto* stream = channel.m_streamHead.load(std::memory_order_acquire);
@@ -104,7 +104,7 @@ struct UnboundedChannelTestAccess {
     }
 
     template <typename T>
-    static bool setOnlyStreamObservedCounters(UnboundedChannel<T>& channel,
+    static bool set_only_stream_observed_counters(UnboundedChannel<T>& channel,
                                               uint64_t published,
                                               uint64_t consumed) {
         auto* stream = channel.m_streamHead.load(std::memory_order_acquire);
@@ -117,28 +117,28 @@ struct UnboundedChannelTestAccess {
     }
 
     template <typename T>
-    static bool clearWaiter(UnboundedChannel<T>& channel, TaskState* waiter_state) {
-        if constexpr (std::is_void_v<decltype(channel.clearWaiter(waiter_state))>) {
-            channel.clearWaiter(waiter_state);
+    static bool clear_waiter(UnboundedChannel<T>& channel, TaskState* waiter_state) {
+        if constexpr (std::is_void_v<decltype(channel.clear_waiter(waiter_state))>) {
+            channel.clear_waiter(waiter_state);
             return true;
         } else {
-            return channel.clearWaiter(waiter_state);
+            return channel.clear_waiter(waiter_state);
         }
     }
 
     template <typename T>
-    static bool publishWaiter(UnboundedChannel<T>& channel, TaskState* waiter_state) {
-        return channel.publishWaiter(waiter_state);
+    static bool publish_waiter(UnboundedChannel<T>& channel, TaskState* waiter_state) {
+        return channel.publish_waiter(waiter_state);
     }
 
     template <typename T>
-    static bool beginWaiterRegistration(UnboundedChannel<T>& channel) {
-        return channel.beginWaiterRegistration();
+    static bool begin_waiter_registration(UnboundedChannel<T>& channel) {
+        return channel.begin_waiter_registration();
     }
 
     template <typename T>
-    static void cancelWaiterRegistration(UnboundedChannel<T>& channel) {
-        channel.cancelWaiterRegistration();
+    static void cancel_waiter_registration(UnboundedChannel<T>& channel) {
+        channel.cancel_waiter_registration();
     }
 };
 

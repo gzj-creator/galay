@@ -23,15 +23,15 @@ bool require(bool condition, std::string_view message)
     return true;
 }
 
-std::string initializeRequest(int id = 1)
+std::string initialize_request(int id = 1)
 {
     return std::string(R"({"jsonrpc":"2.0","id":)") + std::to_string(id) +
            R"(,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1"}}})";
 }
 
-void bindStreams(galay::mcp::McpStdioServer& server, std::istream& input, std::ostream& output)
+void bind_streams(galay::mcp::McpStdioServer& server, std::istream& input, std::ostream& output)
 {
-    server.setStreams(input, output);
+    server.set_streams(input, output);
 }
 
 } // namespace
@@ -42,11 +42,11 @@ int main()
         galay::mcp::McpStdioServer server;
         galay::mcp::McpProductionPolicy policy;
         policy.transport.max_stdio_line_bytes = 64;
-        server.setProductionPolicy(policy);
+        server.set_production_policy(policy);
         std::string oversized(policy.transport.max_stdio_line_bytes + 1, 'x');
         std::istringstream input(oversized + "\n");
         std::ostringstream output;
-        bindStreams(server, input, output);
+        bind_streams(server, input, output);
 
         server.run();
 
@@ -60,17 +60,17 @@ int main()
         galay::mcp::McpStdioServer server;
         galay::mcp::McpProductionPolicy policy;
         policy.transport.max_response_bytes = 512;
-        server.setProductionPolicy(policy);
-        server.addTool("boom", "throws", "{}", [](const json::Json&) {
+        server.set_production_policy(policy);
+        server.add_tool("boom", "throws", "{}", [](const json::Json&) {
             throw std::runtime_error("secret-token-should-not-leak");
             return std::expected<std::string, galay::mcp::McpError>{std::string("{}")};
         });
 
         std::istringstream input(
-            initializeRequest(1) + "\n" +
+            initialize_request(1) + "\n" +
             R"({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"boom","arguments":{}}})" + "\n");
         std::ostringstream output;
-        bindStreams(server, input, output);
+        bind_streams(server, input, output);
 
         server.run();
 
@@ -89,17 +89,17 @@ int main()
         galay::mcp::McpStdioServer server;
         galay::mcp::McpProductionPolicy policy;
         policy.transport.max_response_bytes = 256;
-        server.setProductionPolicy(policy);
-        server.addTool("large", "large response", "{}", [](const json::Json&) {
+        server.set_production_policy(policy);
+        server.add_tool("large", "large response", "{}", [](const json::Json&) {
             return std::expected<std::string, galay::mcp::McpError>{
                 std::string(1024, 'x')};
         });
 
         std::istringstream input(
-            initializeRequest(3) + "\n" +
+            initialize_request(3) + "\n" +
             R"({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"large","arguments":{}}})" + "\n");
         std::ostringstream output;
-        bindStreams(server, input, output);
+        bind_streams(server, input, output);
 
         server.run();
 

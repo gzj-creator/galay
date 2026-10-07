@@ -28,7 +28,7 @@ static_assert(!std::is_move_assignable_v<IOController>);
 
 namespace {
 
-bool closeFd(int& fd) {
+bool close_fd(int& fd) {
     if (fd < 0) {
         return true;
     }
@@ -37,18 +37,18 @@ bool closeFd(int& fd) {
     return close_result == 0;
 }
 
-bool setNonBlocking(int fd) {
+bool set_non_blocking(int fd) {
     const int flags = ::fcntl(fd, F_GETFL, 0);
     return flags >= 0 && ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
 #ifdef USE_EPOLL
-bool pendingRegistrationMoveCanBeCancelled() {
+bool pending_registration_move_can_be_cancelled() {
     int fds[2] = {-1, -1};
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) != 0 ||
-        !setNonBlocking(fds[0]) || !setNonBlocking(fds[1])) {
-        const bool first_closed = closeFd(fds[0]);
-        const bool second_closed = closeFd(fds[1]);
+        !set_non_blocking(fds[0]) || !set_non_blocking(fds[1])) {
+        const bool first_closed = close_fd(fds[0]);
+        const bool second_closed = close_fd(fds[1]);
         if (!first_closed || !second_closed) {
             std::cerr << "[T168] pending-move setup cleanup failed\n";
         }
@@ -58,8 +58,8 @@ bool pendingRegistrationMoveCanBeCancelled() {
     std::atomic<uint64_t> last_error{0};
     EpollReactor reactor(8, last_error);
     if (!reactor.start()) {
-        const bool first_closed = closeFd(fds[0]);
-        const bool second_closed = closeFd(fds[1]);
+        const bool first_closed = close_fd(fds[0]);
+        const bool second_closed = close_fd(fds[1]);
         if (!first_closed || !second_closed) {
             std::cerr << "[T168] pending-move start cleanup failed\n";
         }
@@ -69,11 +69,11 @@ bool pendingRegistrationMoveCanBeCancelled() {
     auto source = std::make_unique<IOController>(GHandle{.fd = fds[0]});
     char recv_buffer = 0;
     RecvAwaitable recv_awaitable(source.get(), &recv_buffer, 1);
-    if (!source->fillAwaitable(RECV, &recv_awaitable) ||
-        reactor.addRecv(source.get()) != 0) {
+    if (!source->fill_awaitable(RECV, &recv_awaitable) ||
+        reactor.add_recv(source.get()) != 0) {
         std::cerr << "[T168] failed to queue pending recv before move\n";
-        const bool first_closed = closeFd(fds[0]);
-        const bool second_closed = closeFd(fds[1]);
+        const bool first_closed = close_fd(fds[0]);
+        const bool second_closed = close_fd(fds[1]);
         if (!first_closed || !second_closed) {
             std::cerr << "[T168] pending-move registration cleanup failed\n";
         }
@@ -92,9 +92,9 @@ bool pendingRegistrationMoveCanBeCancelled() {
         std::cerr << "[T168] pending owner transfer changed published identities\n";
         passed = false;
     }
-    moved->removeAwaitable(RECV);
+    moved->remove_awaitable(RECV);
     const int remove_result = reactor.remove(moved.get());
-    const int flush_result = reactor.flushPendingChanges();
+    const int flush_result = reactor.flush_pending_changes();
     if (remove_result != 0 || flush_result != 0) {
         std::cerr << "[T168] failed to cancel moved pending registration\n";
         passed = false;
@@ -104,7 +104,7 @@ bool pendingRegistrationMoveCanBeCancelled() {
         passed = false;
     }
 
-    if (reactor.addClose(moved.get()) != 0) {
+    if (reactor.add_close(moved.get()) != 0) {
         std::cerr << "[T168] pending-move controller cleanup failed\n";
         passed = false;
     } else {
@@ -115,8 +115,8 @@ bool pendingRegistrationMoveCanBeCancelled() {
             passed = false;
         }
     }
-    const bool first_closed = closeFd(fds[0]);
-    const bool second_closed = closeFd(fds[1]);
+    const bool first_closed = close_fd(fds[0]);
+    const bool second_closed = close_fd(fds[1]);
     if (!first_closed || !second_closed || last_error.load() != 0) {
         std::cerr << "[T168] pending-move socket cleanup failed\n";
         passed = false;
@@ -134,7 +134,7 @@ int main() {
 #else
     bool passed = true;
 #ifdef USE_EPOLL
-    passed = pendingRegistrationMoveCanBeCancelled() && passed;
+    passed = pending_registration_move_can_be_cancelled() && passed;
 #endif
 
     int fds[2] = {-1, -1};
@@ -142,10 +142,10 @@ int main() {
         std::cerr << "[T168] socketpair failed\n";
         return 1;
     }
-    if (!setNonBlocking(fds[0]) || !setNonBlocking(fds[1])) {
+    if (!set_non_blocking(fds[0]) || !set_non_blocking(fds[1])) {
         std::cerr << "[T168] nonblocking setup failed\n";
-        const bool first_closed = closeFd(fds[0]);
-        const bool second_closed = closeFd(fds[1]);
+        const bool first_closed = close_fd(fds[0]);
+        const bool second_closed = close_fd(fds[1]);
         if (!first_closed || !second_closed) {
             std::cerr << "[T168] socket cleanup failed\n";
         }
@@ -161,8 +161,8 @@ int main() {
     auto start_result = reactor.start();
     if (!start_result) {
         std::cerr << "[T168] reactor start failed\n";
-        const bool first_closed = closeFd(fds[0]);
-        const bool second_closed = closeFd(fds[1]);
+        const bool first_closed = close_fd(fds[0]);
+        const bool second_closed = close_fd(fds[1]);
         if (!first_closed || !second_closed) {
             std::cerr << "[T168] socket cleanup failed\n";
         }
@@ -172,18 +172,18 @@ int main() {
     auto source = std::make_unique<IOController>(GHandle{.fd = fds[0]});
     char recv_buffer = 0;
     RecvAwaitable recv_awaitable(source.get(), &recv_buffer, 1);
-    if (!source->fillAwaitable(RECV, &recv_awaitable)) {
+    if (!source->fill_awaitable(RECV, &recv_awaitable)) {
         std::cerr << "[T168] failed to attach recv awaitable\n";
         passed = false;
     }
 
     bool registration_added = false;
     if (passed) {
-        const int add_result = reactor.addRecv(source.get());
+        const int add_result = reactor.add_recv(source.get());
         if (add_result != 0) {
             std::cerr << "[T168] recv registration failed: " << add_result << '\n';
             passed = false;
-        } else if (reactor.flushPendingChanges() != 0) {
+        } else if (reactor.flush_pending_changes() != 0) {
             std::cerr << "[T168] registration flush failed\n";
             passed = false;
         } else {
@@ -251,7 +251,7 @@ int main() {
             passed = false;
         }
 #ifdef USE_EPOLL
-        if (reactor.flushPendingChanges() != 0) {
+        if (reactor.flush_pending_changes() != 0) {
             std::cerr << "[T168] remove flush failed\n";
             passed = false;
         }
@@ -259,15 +259,15 @@ int main() {
     }
 
     if (registered_controller != nullptr) {
-        if (reactor.addClose(registered_controller) != 0) {
+        if (reactor.add_close(registered_controller) != 0) {
             std::cerr << "[T168] controller close failed\n";
             passed = false;
         } else {
             fds[0] = -1;
         }
     }
-    const bool first_closed = closeFd(fds[0]);
-    const bool second_closed = closeFd(fds[1]);
+    const bool first_closed = close_fd(fds[0]);
+    const bool second_closed = close_fd(fds[1]);
     if (!first_closed || !second_closed || last_error.load() != 0) {
         std::cerr << "[T168] socket close failed\n";
         passed = false;

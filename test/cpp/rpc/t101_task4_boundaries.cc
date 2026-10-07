@@ -22,23 +22,23 @@ int expect(bool condition, const char* message)
     return 0;
 }
 
-bool writeStateFailed(galay::rpc::detail::RpcRequestWriteState& state)
+bool write_state_failed(galay::rpc::detail::RpcRequestWriteState& state)
 {
-    auto result = state.takeResult();
+    auto result = state.take_result();
     return !result.has_value() &&
            result.error().code() == RpcErrorCode::INVALID_REQUEST;
 }
 
-bool writeStateFailed(galay::rpc::detail::RpcResponseWriteState& state)
+bool write_state_failed(galay::rpc::detail::RpcResponseWriteState& state)
 {
-    auto result = state.takeResult();
+    auto result = state.take_result();
     return !result.has_value() &&
            result.error().code() == RpcErrorCode::INVALID_RESPONSE;
 }
 
-bool writeStateFailed(galay::rpc::detail::StreamFrameWriteState& state)
+bool write_state_failed(galay::rpc::detail::StreamFrameWriteState& state)
 {
-    auto result = state.takeResult();
+    auto result = state.take_result();
     return !result.has_value() &&
            result.error().code() == RpcErrorCode::INVALID_REQUEST;
 }
@@ -63,7 +63,7 @@ int main()
                             std::string(static_cast<size_t>(std::numeric_limits<uint16_t>::max()) + 1U, 's'),
                             "method");
     galay::rpc::detail::RpcRequestWriteState long_service_state(long_service);
-    if (auto rc = expect(writeStateFailed(long_service_state),
+    if (auto rc = expect(write_state_failed(long_service_state),
                          "request writer accepted service length beyond uint16")) {
         return rc;
     }
@@ -72,35 +72,35 @@ int main()
                            "service",
                            std::string(static_cast<size_t>(std::numeric_limits<uint16_t>::max()) + 1U, 'm'));
     galay::rpc::detail::RpcRequestWriteState long_method_state(long_method);
-    if (auto rc = expect(writeStateFailed(long_method_state),
+    if (auto rc = expect(write_state_failed(long_method_state),
                          "request writer accepted method length beyond uint16")) {
         return rc;
     }
 
     RpcRequest oversized_request(3, "service", "method");
-    oversized_request.payloadView(RpcPayloadView{"x", RPC_MAX_BODY_SIZE, "y", 1});
+    oversized_request.payload_view(RpcPayloadView{"x", RPC_MAX_BODY_SIZE, "y", 1});
     galay::rpc::detail::RpcRequestWriteState oversized_request_state(oversized_request);
-    if (auto rc = expect(writeStateFailed(oversized_request_state),
+    if (auto rc = expect(write_state_failed(oversized_request_state),
                          "request writer accepted body beyond RPC_MAX_BODY_SIZE")) {
         return rc;
     }
 
     RpcRequest overflow_request(30, "service", "method");
-    overflow_request.payloadView(RpcPayloadView{
+    overflow_request.payload_view(RpcPayloadView{
         "x",
         std::numeric_limits<size_t>::max(),
         "y",
         1});
     galay::rpc::detail::RpcRequestWriteState overflow_request_state(overflow_request);
-    if (auto rc = expect(writeStateFailed(overflow_request_state),
+    if (auto rc = expect(write_state_failed(overflow_request_state),
                          "request writer accepted overflowing payload length")) {
         return rc;
     }
 
     RpcResponse oversized_response(4, RpcErrorCode::OK);
-    oversized_response.payloadView(RpcPayloadView{"x", RPC_MAX_BODY_SIZE - 1, "y", 1});
+    oversized_response.payload_view(RpcPayloadView{"x", RPC_MAX_BODY_SIZE - 1, "y", 1});
     galay::rpc::detail::RpcResponseWriteState oversized_response_state(oversized_response);
-    if (auto rc = expect(writeStateFailed(oversized_response_state),
+    if (auto rc = expect(write_state_failed(oversized_response_state),
                          "response writer accepted body beyond RPC_MAX_BODY_SIZE")) {
         return rc;
     }
@@ -108,7 +108,7 @@ int main()
     galay::rpc::detail::StreamFrameWriteState oversized_stream_data(
         5,
         RpcPayloadView{"x", RPC_MAX_BODY_SIZE, "y", 1});
-    if (auto rc = expect(writeStateFailed(oversized_stream_data),
+    if (auto rc = expect(write_state_failed(oversized_stream_data),
                          "stream writer accepted data body beyond RPC_MAX_BODY_SIZE")) {
         return rc;
     }
@@ -116,7 +116,7 @@ int main()
     galay::rpc::detail::StreamFrameWriteState overflow_stream_data(
         50,
         RpcPayloadView{"x", std::numeric_limits<size_t>::max(), "y", 1});
-    if (auto rc = expect(writeStateFailed(overflow_stream_data),
+    if (auto rc = expect(write_state_failed(overflow_stream_data),
                          "stream writer accepted overflowing payload length")) {
         return rc;
     }
@@ -125,22 +125,22 @@ int main()
         6,
         std::string(static_cast<size_t>(std::numeric_limits<uint16_t>::max()) + 1U, 's'),
         "method");
-    if (auto rc = expect(writeStateFailed(long_stream_init),
+    if (auto rc = expect(write_state_failed(long_stream_init),
                          "stream init writer accepted service length beyond uint16")) {
         return rc;
     }
 
     RpcChannelState state;
-    auto pending = state.registerPending(7);
+    auto pending = state.register_pending(7);
     if (auto rc = expect(pending.has_value(), "pending registration failed")) {
         return rc;
     }
 
-    auto first = state.failPending(7, RpcError(RpcErrorCode::CANCELLED, "cancelled"));
-    auto second = state.failPending(7, RpcError(RpcErrorCode::UNAVAILABLE, "closed"));
+    auto first = state.fail_pending(7, RpcError(RpcErrorCode::CANCELLED, "cancelled"));
+    auto second = state.fail_pending(7, RpcError(RpcErrorCode::UNAVAILABLE, "closed"));
     if (auto rc = expect(first &&
                              !second &&
-                             state.pendingCount() == 0,
+                             state.pending_count() == 0,
                          "cancel/close cleanup produced a dangling or double pending wakeup")) {
         return rc;
     }

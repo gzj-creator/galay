@@ -36,16 +36,16 @@ namespace {
 std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_test_passed{false};
 
-Task<void> borrowedServer([[maybe_unused]] IOScheduler* scheduler) {
+Task<void> borrowed_server([[maybe_unused]] IOScheduler* scheduler) {
     AsyncTcpSocket listener;
 
-    auto opt = listener.option().handleReuseAddr();
+    auto opt = listener.option().handle_reuse_addr();
     if (!opt) {
         LogError("[Server] reuse addr failed: {}", opt.error().message());
         co_return;
     }
 
-    opt = listener.option().handleNonBlock();
+    opt = listener.option().handle_non_block();
     if (!opt) {
         LogError("[Server] non-block failed: {}", opt.error().message());
         co_return;
@@ -75,7 +75,7 @@ Task<void> borrowedServer([[maybe_unused]] IOScheduler* scheduler) {
     }
 
     AsyncTcpSocket client(acceptResult.value());
-    opt = client.option().handleNonBlock();
+    opt = client.option().handle_non_block();
     if (!opt) {
         LogError("[Server] client non-block failed: {}", opt.error().message());
         co_await client.close();
@@ -124,13 +124,13 @@ Task<void> borrowedServer([[maybe_unused]] IOScheduler* scheduler) {
     co_return;
 }
 
-Task<void> borrowedClient([[maybe_unused]] IOScheduler* scheduler) {
+Task<void> borrowed_client([[maybe_unused]] IOScheduler* scheduler) {
     while (!g_server_ready.load(std::memory_order_acquire)) {
         co_await galay::kernel::sleep(std::chrono::milliseconds(10));
     }
 
     AsyncTcpSocket client;
-    auto opt = client.option().handleNonBlock();
+    auto opt = client.option().handle_non_block();
     if (!opt) {
         LogError("[Client] non-block failed: {}", opt.error().message());
         co_return;
@@ -194,8 +194,8 @@ int main() {
 #endif
 
     scheduler.start();
-    if (!scheduleTask(scheduler, borrowedServer(&scheduler)) ||
-        !scheduleTask(scheduler, borrowedClient(&scheduler))) {
+    if (!schedule_task(scheduler, borrowed_server(&scheduler)) ||
+        !schedule_task(scheduler, borrowed_client(&scheduler))) {
         LogError("T29 failed to schedule server/client task");
         scheduler.stop();
         return 1;

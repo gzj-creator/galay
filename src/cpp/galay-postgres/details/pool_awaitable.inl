@@ -17,7 +17,7 @@ PostgresConnectionPool::AcquireAwaitable::await_resume()
     if (m_state == State::Creating) {
         if (!m_connect_awaitable.has_value()) {
             m_state = State::Invalid;
-            m_pool.recycleDisconnected(std::exchange(m_client, nullptr));
+            m_pool.recycle_disconnected(std::exchange(m_client, nullptr));
             return std::unexpected(PostgresError(
                 POSTGRES_ERROR_INTERNAL,
                 "Missing connect awaitable while creating a pool connection"));
@@ -27,11 +27,11 @@ PostgresConnectionPool::AcquireAwaitable::await_resume()
         m_connect_awaitable.reset();
         m_state = State::Invalid;
         if (!connected) {
-            m_pool.recycleDisconnected(std::exchange(m_client, nullptr));
+            m_pool.recycle_disconnected(std::exchange(m_client, nullptr));
             return std::unexpected(connected.error());
         }
         if (!connected->has_value()) {
-            m_pool.recycleDisconnected(std::exchange(m_client, nullptr));
+            m_pool.recycle_disconnected(std::exchange(m_client, nullptr));
             return std::unexpected(PostgresError(
                 POSTGRES_ERROR_INTERNAL,
                 "Connect awaitable resumed without a final value"));

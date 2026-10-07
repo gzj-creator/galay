@@ -32,13 +32,13 @@ struct CurrentContextState {
  * @brief 获取当前线程的上下文状态快照
  * @return 当前线程的 CurrentContextState
  */
-[[nodiscard]] CurrentContextState currentContextState();
+[[nodiscard]] CurrentContextState current_context_state();
 
 /**
  * @brief 设置当前线程的上下文状态
  * @param state 要设置的上下文状态
  */
-void setCurrentContextState(CurrentContextState state);
+void set_current_context_state(CurrentContextState state);
 
 } // namespace detail
 
@@ -46,25 +46,25 @@ void setCurrentContextState(CurrentContextState state);
  * @brief 获取当前线程的活跃追踪上下文
  * @return 当前线程的 TraceContext，若未设置则返回空
  */
-[[nodiscard]] std::optional<TraceContext> currentContext() noexcept;
+[[nodiscard]] std::optional<TraceContext> current_context() noexcept;
 
 /**
  * @brief 设置当前线程的活跃追踪上下文
  * @param context 要设置的追踪上下文，传入空值表示清除
  */
-void setCurrentContext(std::optional<TraceContext> context);
+void set_current_context(std::optional<TraceContext> context);
 
 /**
  * @brief 设置当前线程的活跃追踪上下文（便捷重载）
  * @param context 要设置的追踪上下文引用
  */
-inline void setCurrentContext(const TraceContext& context) {
-    setCurrentContext(std::optional<TraceContext>(context));
+inline void set_current_context(const TraceContext& context) {
+    set_current_context(std::optional<TraceContext>(context));
 }
 
 /**
  * @brief 清除当前线程的活跃追踪上下文
  */
-void clearCurrentContext() noexcept;
+void clear_current_context() noexcept;
 
 } // namespace galay::tracing

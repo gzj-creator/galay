@@ -142,35 +142,35 @@ namespace galay::http
      * @param version HTTP 版本枚举值
      * @return 版本字符串，如 "HTTP/1.1"
      */
-    extern std::string httpVersionToString(HttpVersion version);
+    extern std::string http_version_to_string(HttpVersion version);
 
     /**
      * @brief 将字符串解析为 HTTP 版本枚举
      * @param str 版本字符串
      * @return 对应的 HTTP 版本枚举值
      */
-    extern HttpVersion stringToHttpVersion(std::string_view str);
+    extern HttpVersion string_to_http_version(std::string_view str);
 
     /**
      * @brief 将 HTTP 方法枚举转换为字符串
      * @param method HTTP 方法枚举值
      * @return 方法字符串，如 "GET"
      */
-    extern std::string httpMethodToString(HttpMethod method);
+    extern std::string http_method_to_string(HttpMethod method);
 
     /**
      * @brief 将字符串解析为 HTTP 方法枚举
      * @param str 方法字符串
      * @return 对应的 HTTP 方法枚举值
      */
-    extern HttpMethod stringToHttpMethod(std::string_view str);
+    extern HttpMethod string_to_http_method(std::string_view str);
 
     /**
      * @brief 将 HTTP 状态码枚举转换为状态描述字符串
      * @param code HTTP 状态码枚举值
      * @return 状态描述字符串，如 "OK"、"Not Found"
      */
-    extern std::string httpStatusCodeToString(HttpStatusCode code);
+    extern std::string http_status_code_to_string(HttpStatusCode code);
 
     /**
      * @brief MIME 类型映射工具类
@@ -185,7 +185,7 @@ namespace galay::http
          * @param type 文件扩展名（不含点号），如 "html"、"json"
          * @return 对应的 MIME 类型字符串，未找到时返回 "application/octet-stream"
          */
-        static std::string convertToMimeType(const std::string& type);
+        static std::string convert_to_mime_type(const std::string& type);
     private:
         static std::unordered_map<std::string, std::string> mimeTypeMap; ///< 文件扩展名到 MIME 类型的映射表
     };

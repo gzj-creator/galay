@@ -10,15 +10,15 @@ int main()
     IOController controller(GHandle{.fd = -1});
     alignas(std::max_align_t) std::byte read_token{};
     alignas(std::max_align_t) std::byte write_token{};
-    assert(controller.fillAwaitable(RECV, &read_token));
-    assert(controller.fillAwaitable(SEND, &write_token));
+    assert(controller.fill_awaitable(RECV, &read_token));
+    assert(controller.fill_awaitable(SEND, &write_token));
     assert(controller.m_awaitable[IOController::READ] == &read_token);
     assert(controller.m_awaitable[IOController::WRITE] == &write_token);
-    controller.removeAwaitable(RECV);
+    controller.remove_awaitable(RECV);
     assert(controller.m_awaitable[IOController::READ] == nullptr);
     assert(controller.m_awaitable[IOController::WRITE] == &write_token);
-    controller.removeAwaitable(SEND);
+    controller.remove_awaitable(SEND);
     assert(controller.m_awaitable[IOController::WRITE] == nullptr);
-    assert(!controller.fillAwaitable(INVALID, nullptr));
+    assert(!controller.fill_awaitable(INVALID, nullptr));
     std::cout << "T184-IOControllerSelfContained PASS\n";
 }

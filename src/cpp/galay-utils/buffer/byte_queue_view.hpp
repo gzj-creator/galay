@@ -161,7 +161,7 @@ public:
             return;
         }
         m_readOffset += length;
-        compactIfNeeded();
+        compact_if_needed();
     }
 
     /**
@@ -176,7 +176,7 @@ private:
     ByteQueueView(const ByteQueueView&) = default;
     ByteQueueView& operator=(const ByteQueueView&) = default;
 
-    void compactIfNeeded() {
+    void compact_if_needed() {
         const size_t readable = size();
         if (m_readOffset == 0) {
             return;

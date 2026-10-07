@@ -121,37 +121,37 @@ namespace galay::redis
             return *this;
         }
 
-        RedisMasterSlaveClientBuilder& sendTimeout(std::chrono::milliseconds timeout) ///< 设置发送超时
+        RedisMasterSlaveClientBuilder& send_timeout(std::chrono::milliseconds timeout) ///< 设置发送超时
         {
             m_config.send_timeout = timeout;
             return *this;
         }
 
-        RedisMasterSlaveClientBuilder& recvTimeout(std::chrono::milliseconds timeout) ///< 设置接收超时
+        RedisMasterSlaveClientBuilder& recv_timeout(std::chrono::milliseconds timeout) ///< 设置接收超时
         {
             m_config.recv_timeout = timeout;
             return *this;
         }
 
-        RedisMasterSlaveClientBuilder& bufferSize(size_t size) ///< 设置缓冲区大小
+        RedisMasterSlaveClientBuilder& buffer_size(size_t size) ///< 设置缓冲区大小
         {
             m_config.buffer_size = size;
             return *this;
         }
 
-        RedisMasterSlaveClientBuilder& retryConfig(RedisTopologyRetryConfig config) ///< 设置拓扑重试配置
+        RedisMasterSlaveClientBuilder& retry_config(RedisTopologyRetryConfig config) ///< 设置拓扑重试配置
         {
             m_retry_config = config;
             return *this;
         }
 
-        RedisMasterSlaveClientBuilder& refreshConfig(RedisTopologyRefreshConfig config) ///< 设置拓扑刷新配置
+        RedisMasterSlaveClientBuilder& refresh_config(RedisTopologyRefreshConfig config) ///< 设置拓扑刷新配置
         {
             m_refresh_config = config;
             return *this;
         }
 
-        RedisMasterSlaveClientBuilder& readPolicy(RedisReadPolicy policy) ///< 设置读路由策略
+        RedisMasterSlaveClientBuilder& read_policy(RedisReadPolicy policy) ///< 设置读路由策略
         {
             m_read_policy = policy;
             return *this;
@@ -167,14 +167,14 @@ namespace galay::redis
          * @brief 获取当前配置
          * @return 异步 Redis 配置
          */
-        AsyncRedisConfig buildConfig() const
+        AsyncRedisConfig build_config() const
         {
             return m_config;
         }
 
     private:
         IOScheduler* m_scheduler = nullptr;                         ///< IO 调度器
-        AsyncRedisConfig m_config = AsyncRedisConfig::noTimeout();  ///< 异步配置
+        AsyncRedisConfig m_config = AsyncRedisConfig::no_timeout();  ///< 异步配置
         RedisTopologyRetryConfig m_retry_config;                    ///< 拓扑重试配置
         RedisTopologyRefreshConfig m_refresh_config;                ///< 拓扑刷新配置
         RedisReadPolicy m_read_policy = RedisReadPolicy::PreferReplica; ///< 读路由策略
@@ -193,7 +193,7 @@ namespace galay::redis
          * @param config 异步 Redis 配置
          */
         explicit RedisMasterSlaveClient(IOScheduler* scheduler,
-                                        AsyncRedisConfig config = AsyncRedisConfig::noTimeout());
+                                        AsyncRedisConfig config = AsyncRedisConfig::no_timeout());
 
         /**
          * @brief 构造主从客户端并保存拓扑配置
@@ -214,14 +214,14 @@ namespace galay::redis
          * @param master 主节点地址
          * @return 连接操作等待体
          */
-        RedisConnectOperation connectMaster(const RedisNodeAddress& master);
+        RedisConnectOperation connect_master(const RedisNodeAddress& master);
 
         /**
          * @brief 添加并连接从节点
          * @param replica 从节点地址
          * @return 连接操作等待体
          */
-        RedisConnectOperation addReplica(const RedisNodeAddress& replica);
+        RedisConnectOperation add_replica(const RedisNodeAddress& replica);
 
         /**
          * @brief 执行 Redis 命令（支持读写分离和自动重试）
@@ -250,25 +250,25 @@ namespace galay::redis
          * @param sentinel Sentinel 节点地址
          * @return 连接操作等待体
          */
-        RedisConnectOperation addSentinel(const RedisNodeAddress& sentinel);
+        RedisConnectOperation add_sentinel(const RedisNodeAddress& sentinel);
 
         /**
          * @brief 设置 Sentinel 监控的主节点名称
          * @param master_name 主节点名称
          */
-        void setSentinelMasterName(std::string master_name);
+        void set_sentinel_master_name(std::string master_name);
 
         /**
          * @brief 设置自动重试次数
          * @param attempts 最大重试次数
          */
-        void setAutoRetryAttempts(size_t attempts) noexcept;
+        void set_auto_retry_attempts(size_t attempts) noexcept;
 
         /**
          * @brief 从 Sentinel 刷新主节点信息
          * @return 命令执行结果协程任务
          */
-        Task<RedisCommandResult> refreshFromSentinel();
+        Task<RedisCommandResult> refresh_from_sentinel();
 
         RedisClient<>& master(); ///< 获取主节点客户端引用
         /**
@@ -277,13 +277,13 @@ namespace galay::redis
          * @return 从节点客户端引用（若索引越界返回空）
          */
         std::optional<std::reference_wrapper<RedisClient<>>> replica(size_t index);
-        size_t replicaCount() const noexcept; ///< 获取从节点数量
+        size_t replica_count() const noexcept; ///< 获取从节点数量
 
         /**
          * @brief 获取拓扑统计信息
          * @return 当前已配置节点、连接标记和拓扑配置快照
          */
-        RedisTopologyStats getStats() const noexcept;
+        RedisTopologyStats get_stats() const noexcept;
 
     private:
         /**
@@ -296,18 +296,18 @@ namespace galay::redis
             bool connected = false;                            ///< 连接状态
         };
 
-        Task<RedisCommandResult> runAutoTask(bool prefer_read,
+        Task<RedisCommandResult> run_auto_task(bool prefer_read,
                                              std::string cmd,
                                              std::vector<std::string> args,
                                              size_t max_attempts); ///< 自动重试执行协程
-        Task<RedisCommandResult> refreshSentinelTask(); ///< Sentinel 刷新协程
+        Task<RedisCommandResult> refresh_sentinel_task(); ///< Sentinel 刷新协程
 
-        bool isRetryableConnectionError(const RedisError& error) const noexcept; ///< 判断是否为可重试的连接错误
-        RedisClient<>* chooseReadClient(); ///< 选择读客户端（轮询从节点）
-        RedisClient<>* ensureMaster(); ///< 确保主节点可用
-        RedisClient<>* chooseAvailableSentinel(); ///< 选择可用的 Sentinel 节点
-        bool parseMasterAddressReply(const std::vector<RedisValue>& values, RedisNodeAddress* out_addr) const; ///< 解析主节点地址回复
-        bool parseReplicaListReply(const std::vector<RedisValue>& values, std::vector<RedisNodeAddress>* replicas) const; ///< 解析从节点列表回复
+        bool is_retryable_connection_error(const RedisError& error) const noexcept; ///< 判断是否为可重试的连接错误
+        RedisClient<>* choose_read_client(); ///< 选择读客户端（轮询从节点）
+        RedisClient<>* ensure_master(); ///< 确保主节点可用
+        RedisClient<>* choose_available_sentinel(); ///< 选择可用的 Sentinel 节点
+        bool parse_master_address_reply(const std::vector<RedisValue>& values, RedisNodeAddress* out_addr) const; ///< 解析主节点地址回复
+        bool parse_replica_list_reply(const std::vector<RedisValue>& values, std::vector<RedisNodeAddress>* replicas) const; ///< 解析从节点列表回复
 
         IOScheduler* m_scheduler;                                     ///< IO 调度器
         AsyncRedisConfig m_config;                                    ///< 异步配置
@@ -357,37 +357,37 @@ namespace galay::redis
             return *this;
         }
 
-        RedisClusterClientBuilder& sendTimeout(std::chrono::milliseconds timeout) ///< 设置发送超时
+        RedisClusterClientBuilder& send_timeout(std::chrono::milliseconds timeout) ///< 设置发送超时
         {
             m_config.send_timeout = timeout;
             return *this;
         }
 
-        RedisClusterClientBuilder& recvTimeout(std::chrono::milliseconds timeout) ///< 设置接收超时
+        RedisClusterClientBuilder& recv_timeout(std::chrono::milliseconds timeout) ///< 设置接收超时
         {
             m_config.recv_timeout = timeout;
             return *this;
         }
 
-        RedisClusterClientBuilder& bufferSize(size_t size) ///< 设置缓冲区大小
+        RedisClusterClientBuilder& buffer_size(size_t size) ///< 设置缓冲区大小
         {
             m_config.buffer_size = size;
             return *this;
         }
 
-        RedisClusterClientBuilder& retryConfig(RedisTopologyRetryConfig config) ///< 设置拓扑重试配置
+        RedisClusterClientBuilder& retry_config(RedisTopologyRetryConfig config) ///< 设置拓扑重试配置
         {
             m_retry_config = config;
             return *this;
         }
 
-        RedisClusterClientBuilder& refreshConfig(RedisTopologyRefreshConfig config) ///< 设置拓扑刷新配置
+        RedisClusterClientBuilder& refresh_config(RedisTopologyRefreshConfig config) ///< 设置拓扑刷新配置
         {
             m_refresh_config = config;
             return *this;
         }
 
-        RedisClusterClientBuilder& readPolicy(RedisReadPolicy policy) ///< 设置读路由策略
+        RedisClusterClientBuilder& read_policy(RedisReadPolicy policy) ///< 设置读路由策略
         {
             m_read_policy = policy;
             return *this;
@@ -403,14 +403,14 @@ namespace galay::redis
          * @brief 获取当前配置
          * @return 异步 Redis 配置
          */
-        AsyncRedisConfig buildConfig() const
+        AsyncRedisConfig build_config() const
         {
             return m_config;
         }
 
     private:
         IOScheduler* m_scheduler = nullptr;                         ///< IO 调度器
-        AsyncRedisConfig m_config = AsyncRedisConfig::noTimeout();  ///< 异步配置
+        AsyncRedisConfig m_config = AsyncRedisConfig::no_timeout();  ///< 异步配置
         RedisTopologyRetryConfig m_retry_config;                    ///< 拓扑重试配置
         RedisTopologyRefreshConfig m_refresh_config;                ///< 拓扑刷新配置
         RedisReadPolicy m_read_policy = RedisReadPolicy::PreferReplica; ///< 读路由策略
@@ -430,7 +430,7 @@ namespace galay::redis
          * @param config 异步 Redis 配置
          */
         explicit RedisClusterClient(IOScheduler* scheduler,
-                                    AsyncRedisConfig config = AsyncRedisConfig::noTimeout());
+                                    AsyncRedisConfig config = AsyncRedisConfig::no_timeout());
 
         /**
          * @brief 构造集群客户端并保存拓扑配置
@@ -451,7 +451,7 @@ namespace galay::redis
          * @param node 集群节点地址（含槽位范围）
          * @return 连接操作等待体
          */
-        RedisConnectOperation addNode(const RedisClusterNodeAddress& node);
+        RedisConnectOperation add_node(const RedisClusterNodeAddress& node);
 
         /**
          * @brief 设置指定节点的槽位范围
@@ -459,13 +459,13 @@ namespace galay::redis
          * @param slot_start 槽位起始
          * @param slot_end 槽位结束
          */
-        void setSlotRange(size_t node_index, uint16_t slot_start, uint16_t slot_end);
+        void set_slot_range(size_t node_index, uint16_t slot_start, uint16_t slot_end);
 
         /**
          * @brief 设置自动刷新槽位信息的间隔
          * @param interval 刷新间隔
          */
-        void setAutoRefreshInterval(std::chrono::milliseconds interval);
+        void set_auto_refresh_interval(std::chrono::milliseconds interval);
 
         /**
          * @brief 执行 Redis 命令（支持自动路由和重试）
@@ -493,16 +493,16 @@ namespace galay::redis
          * @brief 刷新集群槽位映射
          * @return 命令执行结果协程任务
          */
-        Task<RedisCommandResult> refreshSlots();
+        Task<RedisCommandResult> refresh_slots();
 
         /**
          * @brief 计算键对应的槽位号
          * @param key Redis 键
          * @return 槽位号（0-16383）
          */
-        uint16_t keySlot(const std::string& key) const;
+        uint16_t key_slot(const std::string& key) const;
 
-        size_t nodeCount() const noexcept; ///< 获取节点数量
+        size_t node_count() const noexcept; ///< 获取节点数量
         /**
          * @brief 获取指定索引的节点客户端
          * @param index 节点索引
@@ -514,7 +514,7 @@ namespace galay::redis
          * @brief 获取拓扑统计信息
          * @return 当前节点、槽位缓存和拓扑配置快照
          */
-        RedisTopologyStats getStats() const noexcept;
+        RedisTopologyStats get_stats() const noexcept;
 
     private:
         /**
@@ -548,8 +548,8 @@ namespace galay::redis
             uint16_t slot = 0;       ///< 目标槽位
         };
 
-        Task<RedisCommandResult> refreshSlotsTask(); ///< 刷新槽位协程
-        Task<RedisCommandResult> runAutoTask(std::string routing_key,
+        Task<RedisCommandResult> refresh_slots_task(); ///< 刷新槽位协程
+        Task<RedisCommandResult> run_auto_task(std::string routing_key,
                                              std::string cmd,
                                              std::vector<std::string> args,
                                              bool force_key_routing,
@@ -557,16 +557,16 @@ namespace galay::redis
                                              size_t max_attempts); ///< 自动重试执行协程
 
         static uint16_t crc16(const uint8_t* data, size_t len); ///< CRC16 校验和计算
-        static std::string extractHashTag(const std::string& key); ///< 提取哈希标签
-        static std::optional<RedirectInfo> parseRedirect(const RedisValue& value); ///< 解析重定向响应
+        static std::string extract_hash_tag(const std::string& key); ///< 提取哈希标签
+        static std::optional<RedirectInfo> parse_redirect(const RedisValue& value); ///< 解析重定向响应
 
-        RedisClient<>* chooseNodeBySlot(uint16_t slot) noexcept; ///< 根据槽位选择节点
-        RedisClient<>* chooseNodeByKey(const std::string& key) noexcept; ///< 根据键选择节点
-        ClusterNode* chooseNodeHandleBySlot(uint16_t slot) noexcept; ///< 根据槽位选择节点句柄
-        ClusterNode* chooseNodeHandleByKey(const std::string& key) noexcept; ///< 根据键选择节点句柄
-        ClusterNode* findOrCreateNode(const std::string& host, int32_t port); ///< 查找或创建节点
-        bool applyClusterSlots(const std::vector<RedisValue>& values, std::string* error_message); ///< 应用集群槽位信息
-        bool shouldAutoRefresh() const noexcept; ///< 是否需要自动刷新
+        RedisClient<>* choose_node_by_slot(uint16_t slot) noexcept; ///< 根据槽位选择节点
+        RedisClient<>* choose_node_by_key(const std::string& key) noexcept; ///< 根据键选择节点
+        ClusterNode* choose_node_handle_by_slot(uint16_t slot) noexcept; ///< 根据槽位选择节点句柄
+        ClusterNode* choose_node_handle_by_key(const std::string& key) noexcept; ///< 根据键选择节点句柄
+        ClusterNode* find_or_create_node(const std::string& host, int32_t port); ///< 查找或创建节点
+        bool apply_cluster_slots(const std::vector<RedisValue>& values, std::string* error_message); ///< 应用集群槽位信息
+        bool should_auto_refresh() const noexcept; ///< 是否需要自动刷新
 
         IOScheduler* m_scheduler;                                     ///< IO 调度器
         AsyncRedisConfig m_config;                                    ///< 异步配置
@@ -603,43 +603,43 @@ namespace galay::redis
             return *this;
         }
 
-        RedissMasterSlaveClientBuilder& tlsConfig(RedissClientConfig config) ///< 设置 TLS 配置
+        RedissMasterSlaveClientBuilder& tls_config(RedissClientConfig config) ///< 设置 TLS 配置
         {
             m_tls_config = std::move(config);
             return *this;
         }
 
-        RedissMasterSlaveClientBuilder& sendTimeout(std::chrono::milliseconds timeout) ///< 设置发送超时
+        RedissMasterSlaveClientBuilder& send_timeout(std::chrono::milliseconds timeout) ///< 设置发送超时
         {
             m_config.send_timeout = timeout;
             return *this;
         }
 
-        RedissMasterSlaveClientBuilder& recvTimeout(std::chrono::milliseconds timeout) ///< 设置接收超时
+        RedissMasterSlaveClientBuilder& recv_timeout(std::chrono::milliseconds timeout) ///< 设置接收超时
         {
             m_config.recv_timeout = timeout;
             return *this;
         }
 
-        RedissMasterSlaveClientBuilder& bufferSize(size_t size) ///< 设置缓冲区大小
+        RedissMasterSlaveClientBuilder& buffer_size(size_t size) ///< 设置缓冲区大小
         {
             m_config.buffer_size = size;
             return *this;
         }
 
-        RedissMasterSlaveClientBuilder& retryConfig(RedisTopologyRetryConfig config) ///< 设置拓扑重试配置
+        RedissMasterSlaveClientBuilder& retry_config(RedisTopologyRetryConfig config) ///< 设置拓扑重试配置
         {
             m_retry_config = config;
             return *this;
         }
 
-        RedissMasterSlaveClientBuilder& refreshConfig(RedisTopologyRefreshConfig config) ///< 设置拓扑刷新配置
+        RedissMasterSlaveClientBuilder& refresh_config(RedisTopologyRefreshConfig config) ///< 设置拓扑刷新配置
         {
             m_refresh_config = config;
             return *this;
         }
 
-        RedissMasterSlaveClientBuilder& readPolicy(RedisReadPolicy policy) ///< 设置读路由策略
+        RedissMasterSlaveClientBuilder& read_policy(RedisReadPolicy policy) ///< 设置读路由策略
         {
             m_read_policy = policy;
             return *this;
@@ -647,12 +647,12 @@ namespace galay::redis
 
         RedissMasterSlaveClient build() const; ///< 构建 Rediss 主从客户端
 
-        AsyncRedisConfig buildConfig() const { return m_config; } ///< 获取当前配置
-        RedissClientConfig buildTlsConfig() const { return m_tls_config; } ///< 获取 TLS 配置
+        AsyncRedisConfig build_config() const { return m_config; } ///< 获取当前配置
+        RedissClientConfig build_tls_config() const { return m_tls_config; } ///< 获取 TLS 配置
 
     private:
         IOScheduler* m_scheduler = nullptr;
-        AsyncRedisConfig m_config = AsyncRedisConfig::noTimeout();
+        AsyncRedisConfig m_config = AsyncRedisConfig::no_timeout();
         RedissClientConfig m_tls_config;
         RedisTopologyRetryConfig m_retry_config;
         RedisTopologyRefreshConfig m_refresh_config;
@@ -673,7 +673,7 @@ namespace galay::redis
          * @param tls_config TLS 配置
          */
         explicit RedissMasterSlaveClient(IOScheduler* scheduler,
-                                         AsyncRedisConfig config = AsyncRedisConfig::noTimeout(),
+                                         AsyncRedisConfig config = AsyncRedisConfig::no_timeout(),
                                          RedissClientConfig tls_config = {});
 
         /**
@@ -692,8 +692,8 @@ namespace galay::redis
                                          RedisTopologyRefreshConfig refresh_config,
                                          RedisReadPolicy read_policy);
 
-        detail::RedissConnectOperation connectMaster(const RedisNodeAddress& master); ///< 连接到主节点
-        detail::RedissConnectOperation addReplica(const RedisNodeAddress& replica); ///< 添加从节点
+        detail::RedissConnectOperation connect_master(const RedisNodeAddress& master); ///< 连接到主节点
+        detail::RedissConnectOperation add_replica(const RedisNodeAddress& replica); ///< 添加从节点
 
         /**
          * @brief 执行 Redis 命令（支持读写分离和自动重试）
@@ -716,15 +716,15 @@ namespace galay::redis
          */
         detail::RedissExchangeOperation batch(std::span<const RedisCommandView> commands,
                                               bool prefer_read = false);
-        detail::RedissConnectOperation addSentinel(const RedisNodeAddress& sentinel); ///< 添加 Sentinel 节点
-        void setSentinelMasterName(std::string master_name); ///< 设置 Sentinel 监控的主节点名称
-        void setAutoRetryAttempts(size_t attempts) noexcept; ///< 设置自动重试次数
-        Task<RedisCommandResult> refreshFromSentinel(); ///< 从 Sentinel 刷新主节点信息
+        detail::RedissConnectOperation add_sentinel(const RedisNodeAddress& sentinel); ///< 添加 Sentinel 节点
+        void set_sentinel_master_name(std::string master_name); ///< 设置 Sentinel 监控的主节点名称
+        void set_auto_retry_attempts(size_t attempts) noexcept; ///< 设置自动重试次数
+        Task<RedisCommandResult> refresh_from_sentinel(); ///< 从 Sentinel 刷新主节点信息
 
         RedissClient& master(); ///< 获取主节点客户端引用
         std::optional<std::reference_wrapper<RedissClient>> replica(size_t index); ///< 获取从节点客户端
-        size_t replicaCount() const noexcept; ///< 获取从节点数量
-        RedisTopologyStats getStats() const noexcept; ///< 获取拓扑统计信息
+        size_t replica_count() const noexcept; ///< 获取从节点数量
+        RedisTopologyStats get_stats() const noexcept; ///< 获取拓扑统计信息
 
     private:
         /**
@@ -737,17 +737,17 @@ namespace galay::redis
             bool connected = false;                            ///< 连接状态
         };
 
-        Task<RedisCommandResult> runAutoTask(bool prefer_read,
+        Task<RedisCommandResult> run_auto_task(bool prefer_read,
                                              std::string cmd,
                                              std::vector<std::string> args,
                                              size_t max_attempts); ///< 自动重试执行协程
-        Task<RedisCommandResult> refreshSentinelTask(); ///< Sentinel 刷新协程
+        Task<RedisCommandResult> refresh_sentinel_task(); ///< Sentinel 刷新协程
 
-        bool isRetryableConnectionError(const RedisError& error) const noexcept; ///< 判断是否为可重试的连接错误
-        RedissClient* chooseReadClient(); ///< 选择读客户端
-        RedissClient* ensureMaster(); ///< 确保主节点可用
-        bool parseMasterAddressReply(const std::vector<RedisValue>& values, RedisNodeAddress* out_addr) const; ///< 解析主节点地址回复
-        bool parseReplicaListReply(const std::vector<RedisValue>& values, std::vector<RedisNodeAddress>* replicas) const; ///< 解析从节点列表回复
+        bool is_retryable_connection_error(const RedisError& error) const noexcept; ///< 判断是否为可重试的连接错误
+        RedissClient* choose_read_client(); ///< 选择读客户端
+        RedissClient* ensure_master(); ///< 确保主节点可用
+        bool parse_master_address_reply(const std::vector<RedisValue>& values, RedisNodeAddress* out_addr) const; ///< 解析主节点地址回复
+        bool parse_replica_list_reply(const std::vector<RedisValue>& values, std::vector<RedisNodeAddress>* replicas) const; ///< 解析从节点列表回复
 
         IOScheduler* m_scheduler;                                     ///< IO 调度器
         AsyncRedisConfig m_config;                                    ///< 异步配置
@@ -788,43 +788,43 @@ namespace galay::redis
             return *this;
         }
 
-        RedissClusterClientBuilder& tlsConfig(RedissClientConfig config) ///< 设置 TLS 配置
+        RedissClusterClientBuilder& tls_config(RedissClientConfig config) ///< 设置 TLS 配置
         {
             m_tls_config = std::move(config);
             return *this;
         }
 
-        RedissClusterClientBuilder& sendTimeout(std::chrono::milliseconds timeout) ///< 设置发送超时
+        RedissClusterClientBuilder& send_timeout(std::chrono::milliseconds timeout) ///< 设置发送超时
         {
             m_config.send_timeout = timeout;
             return *this;
         }
 
-        RedissClusterClientBuilder& recvTimeout(std::chrono::milliseconds timeout) ///< 设置接收超时
+        RedissClusterClientBuilder& recv_timeout(std::chrono::milliseconds timeout) ///< 设置接收超时
         {
             m_config.recv_timeout = timeout;
             return *this;
         }
 
-        RedissClusterClientBuilder& bufferSize(size_t size) ///< 设置缓冲区大小
+        RedissClusterClientBuilder& buffer_size(size_t size) ///< 设置缓冲区大小
         {
             m_config.buffer_size = size;
             return *this;
         }
 
-        RedissClusterClientBuilder& retryConfig(RedisTopologyRetryConfig config) ///< 设置拓扑重试配置
+        RedissClusterClientBuilder& retry_config(RedisTopologyRetryConfig config) ///< 设置拓扑重试配置
         {
             m_retry_config = config;
             return *this;
         }
 
-        RedissClusterClientBuilder& refreshConfig(RedisTopologyRefreshConfig config) ///< 设置拓扑刷新配置
+        RedissClusterClientBuilder& refresh_config(RedisTopologyRefreshConfig config) ///< 设置拓扑刷新配置
         {
             m_refresh_config = config;
             return *this;
         }
 
-        RedissClusterClientBuilder& readPolicy(RedisReadPolicy policy) ///< 设置读路由策略
+        RedissClusterClientBuilder& read_policy(RedisReadPolicy policy) ///< 设置读路由策略
         {
             m_read_policy = policy;
             return *this;
@@ -832,12 +832,12 @@ namespace galay::redis
 
         RedissClusterClient build() const; ///< 构建 Rediss 集群客户端
 
-        AsyncRedisConfig buildConfig() const { return m_config; } ///< 获取当前配置
-        RedissClientConfig buildTlsConfig() const { return m_tls_config; } ///< 获取 TLS 配置
+        AsyncRedisConfig build_config() const { return m_config; } ///< 获取当前配置
+        RedissClientConfig build_tls_config() const { return m_tls_config; } ///< 获取 TLS 配置
 
     private:
         IOScheduler* m_scheduler = nullptr;
-        AsyncRedisConfig m_config = AsyncRedisConfig::noTimeout();
+        AsyncRedisConfig m_config = AsyncRedisConfig::no_timeout();
         RedissClientConfig m_tls_config;
         RedisTopologyRetryConfig m_retry_config;
         RedisTopologyRefreshConfig m_refresh_config;
@@ -858,7 +858,7 @@ namespace galay::redis
          * @param tls_config TLS 配置
          */
         explicit RedissClusterClient(IOScheduler* scheduler,
-                                     AsyncRedisConfig config = AsyncRedisConfig::noTimeout(),
+                                     AsyncRedisConfig config = AsyncRedisConfig::no_timeout(),
                                      RedissClientConfig tls_config = {});
 
         /**
@@ -877,9 +877,9 @@ namespace galay::redis
                                      RedisTopologyRefreshConfig refresh_config,
                                      RedisReadPolicy read_policy);
 
-        detail::RedissConnectOperation addNode(const RedisClusterNodeAddress& node); ///< 添加集群节点
-        void setSlotRange(size_t node_index, uint16_t slot_start, uint16_t slot_end); ///< 设置槽位范围
-        void setAutoRefreshInterval(std::chrono::milliseconds interval); ///< 设置自动刷新间隔
+        detail::RedissConnectOperation add_node(const RedisClusterNodeAddress& node); ///< 添加集群节点
+        void set_slot_range(size_t node_index, uint16_t slot_start, uint16_t slot_end); ///< 设置槽位范围
+        void set_auto_refresh_interval(std::chrono::milliseconds interval); ///< 设置自动刷新间隔
 
         /**
          * @brief 执行 Redis 命令（支持自动路由和重试）
@@ -902,12 +902,12 @@ namespace galay::redis
          */
         detail::RedissExchangeOperation batch(std::span<const RedisCommandView> commands,
                                               std::string routing_key = std::string());
-        Task<RedisCommandResult> refreshSlots(); ///< 刷新集群槽位映射
+        Task<RedisCommandResult> refresh_slots(); ///< 刷新集群槽位映射
 
-        uint16_t keySlot(const std::string& key) const; ///< 计算键对应的槽位号
-        size_t nodeCount() const noexcept; ///< 获取节点数量
+        uint16_t key_slot(const std::string& key) const; ///< 计算键对应的槽位号
+        size_t node_count() const noexcept; ///< 获取节点数量
         std::optional<std::reference_wrapper<RedissClient>> node(size_t index); ///< 获取指定节点客户端
-        RedisTopologyStats getStats() const noexcept; ///< 获取拓扑统计信息
+        RedisTopologyStats get_stats() const noexcept; ///< 获取拓扑统计信息
 
     private:
         /**
@@ -940,8 +940,8 @@ namespace galay::redis
             uint16_t slot = 0;       ///< 目标槽位
         };
 
-        Task<RedisCommandResult> refreshSlotsTask(); ///< 刷新槽位协程
-        Task<RedisCommandResult> runAutoTask(std::string routing_key,
+        Task<RedisCommandResult> refresh_slots_task(); ///< 刷新槽位协程
+        Task<RedisCommandResult> run_auto_task(std::string routing_key,
                                              std::string cmd,
                                              std::vector<std::string> args,
                                              bool force_key_routing,
@@ -949,16 +949,16 @@ namespace galay::redis
                                              size_t max_attempts); ///< 自动重试执行协程
 
         static uint16_t crc16(const uint8_t* data, size_t len); ///< CRC16 校验和计算
-        static std::string extractHashTag(const std::string& key); ///< 提取哈希标签
-        static std::optional<RedirectInfo> parseRedirect(const RedisValue& value); ///< 解析重定向响应
+        static std::string extract_hash_tag(const std::string& key); ///< 提取哈希标签
+        static std::optional<RedirectInfo> parse_redirect(const RedisValue& value); ///< 解析重定向响应
 
-        RedissClient* chooseNodeBySlot(uint16_t slot) noexcept; ///< 根据槽位选择节点
-        RedissClient* chooseNodeByKey(const std::string& key) noexcept; ///< 根据键选择节点
-        ClusterNode* chooseNodeHandleBySlot(uint16_t slot) noexcept; ///< 根据槽位选择节点句柄
-        ClusterNode* chooseNodeHandleByKey(const std::string& key) noexcept; ///< 根据键选择节点句柄
-        ClusterNode* findOrCreateNode(const std::string& host, int32_t port); ///< 查找或创建节点
-        bool applyClusterSlots(const std::vector<RedisValue>& values, std::string* error_message); ///< 应用集群槽位信息
-        bool shouldAutoRefresh() const noexcept; ///< 是否需要自动刷新
+        RedissClient* choose_node_by_slot(uint16_t slot) noexcept; ///< 根据槽位选择节点
+        RedissClient* choose_node_by_key(const std::string& key) noexcept; ///< 根据键选择节点
+        ClusterNode* choose_node_handle_by_slot(uint16_t slot) noexcept; ///< 根据槽位选择节点句柄
+        ClusterNode* choose_node_handle_by_key(const std::string& key) noexcept; ///< 根据键选择节点句柄
+        ClusterNode* find_or_create_node(const std::string& host, int32_t port); ///< 查找或创建节点
+        bool apply_cluster_slots(const std::vector<RedisValue>& values, std::string* error_message); ///< 应用集群槽位信息
+        bool should_auto_refresh() const noexcept; ///< 是否需要自动刷新
 
         IOScheduler* m_scheduler;                                     ///< IO 调度器
         AsyncRedisConfig m_config;                                    ///< 异步配置
@@ -992,7 +992,7 @@ namespace galay::redis
         m_retry_config.max_attempts = m_auto_retry_attempts;
     }
 
-    inline RedisTopologyStats RedisMasterSlaveClient::getStats() const noexcept
+    inline RedisTopologyStats RedisMasterSlaveClient::get_stats() const noexcept
     {
         RedisTopologyStats stats;
         stats.master_count = m_master ? 1 : 0;
@@ -1039,7 +1039,7 @@ namespace galay::redis
         m_slot_owner.fill(-1);
     }
 
-    inline RedisTopologyStats RedisClusterClient::getStats() const noexcept
+    inline RedisTopologyStats RedisClusterClient::get_stats() const noexcept
     {
         RedisTopologyStats stats;
         stats.cluster_node_count = m_nodes.size();
@@ -1085,7 +1085,7 @@ namespace galay::redis
         m_retry_config.max_attempts = m_auto_retry_attempts;
     }
 
-    inline RedisTopologyStats RedissMasterSlaveClient::getStats() const noexcept
+    inline RedisTopologyStats RedissMasterSlaveClient::get_stats() const noexcept
     {
         RedisTopologyStats stats;
         stats.master_count = m_master ? 1 : 0;
@@ -1134,7 +1134,7 @@ namespace galay::redis
         m_slot_owner.fill(-1);
     }
 
-    inline RedisTopologyStats RedissClusterClient::getStats() const noexcept
+    inline RedisTopologyStats RedissClusterClient::get_stats() const noexcept
     {
         RedisTopologyStats stats;
         stats.cluster_node_count = m_nodes.size();

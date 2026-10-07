@@ -67,7 +67,7 @@ public:
      *
      * @return 之前的等待者地址，若无注册则返回 nullptr
      */
-    void* consumeWake() noexcept {
+    void* consume_wake() noexcept {
         void* waiter = m_waiter.exchange(nullptr, std::memory_order_acq_rel);
         if (waiter == nullptr) {
             m_pending_wake.store(true, std::memory_order_release);
@@ -80,15 +80,15 @@ public:
      *
      * @return true 表示有一次唤醒早于 arm() 到达，调用方应自行调度刚注册的等待者。
      */
-    bool consumePendingWake() noexcept {
+    bool consume_pending_wake() noexcept {
         return m_pending_wake.exchange(false, std::memory_order_acq_rel);
     }
 
     /**
      * @brief 清理过期的提前唤醒标记。
-     * @note 当等待者通过 await_ready()/tryRecv() 等同步路径直接拿到数据时调用。
+     * @note 当等待者通过 await_ready()/try_recv() 等同步路径直接拿到数据时调用。
      */
-    void clearPendingWake() noexcept {
+    void clear_pending_wake() noexcept {
         m_pending_wake.store(false, std::memory_order_release);
     }
 
@@ -96,7 +96,7 @@ public:
      * @brief 检查当前是否有等待者注册
      * @return true 存在等待者
      */
-    bool hasWaiter() const noexcept {
+    bool has_waiter() const noexcept {
         return m_waiter.load(std::memory_order_acquire) != nullptr;
     }
 

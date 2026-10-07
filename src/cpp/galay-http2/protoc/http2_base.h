@@ -128,21 +128,21 @@ enum class Http2StreamState
  * @param type 帧类型枚举
  * @return 帧类型名称字符串
  */
-std::string http2FrameTypeToString(Http2FrameType type);
+std::string http2_frame_type_to_string(Http2FrameType type);
 
 /**
  * @brief 将错误码转换为字符串
  * @param code 错误码枚举
  * @return 错误码名称字符串
  */
-std::string http2ErrorCodeToString(Http2ErrorCode code);
+std::string http2_error_code_to_string(Http2ErrorCode code);
 
 /**
  * @brief 将流状态转换为字符串
  * @param state 流状态枚举
  * @return 流状态名称字符串
  */
-std::string http2StreamStateToString(Http2StreamState state);
+std::string http2_stream_state_to_string(Http2StreamState state);
 
 } // namespace galay::http2
 

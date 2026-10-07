@@ -19,15 +19,15 @@ using namespace galay::kernel;
 
 namespace {
 
-Task<void> noopTask() {
+Task<void> noop_task() {
     co_return;
 }
 
 template <typename SchedulerT>
 concept HasTaskScheduleHelpers = requires(SchedulerT& scheduler) {
-    { scheduleTask(scheduler, noopTask()) } -> std::same_as<bool>;
-    { scheduleTaskDeferred(scheduler, noopTask()) } -> std::same_as<bool>;
-    { scheduleTaskImmediately(scheduler, noopTask()) } -> std::same_as<bool>;
+    { schedule_task(scheduler, noop_task()) } -> std::same_as<bool>;
+    { schedule_task_deferred(scheduler, noop_task()) } -> std::same_as<bool>;
+    { schedule_task_immediately(scheduler, noop_task()) } -> std::same_as<bool>;
 };
 
 static_assert(HasTaskScheduleHelpers<ParallelScheduler>,

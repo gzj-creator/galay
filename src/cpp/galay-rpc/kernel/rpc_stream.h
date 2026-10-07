@@ -9,26 +9,26 @@
  * 使用方式（单次co_await等待完整发送/接收）：
  * @code
  * // 客户端双向流
- * Task<void> biStreamExample(RpcStream& stream) {
- *     auto& writer = stream.getWriter();
- *     auto& reader = stream.getReader();
+ * Task<void> bi_stream_example(RpcStream& stream) {
+ *     auto& writer = stream.get_writer();
+ *     auto& reader = stream.get_reader();
  *
  *     // 发送消息（内部会自动续发直到完成）
- *     auto send_result = co_await writer.sendData("Hello");
+ *     auto send_result = co_await writer.send_data("Hello");
  *     if (!send_result) {
  *         co_return;
  *     }
  *
  *     // 接收消息（内部会自动续读直到完整消息）
  *     StreamMessage msg;
- *     auto recv_result = co_await reader.getMessage(msg);
+ *     auto recv_result = co_await reader.get_message(msg);
  *     if (!recv_result) {
  *         co_return;
  *     }
- *     std::cout << "Received: " << msg.payloadStr() << "\n";
+ *     std::cout << "Received: " << msg.payload_str() << "\n";
  *
  *     // 结束流
- *     auto end_result = co_await writer.sendEnd();
+ *     auto end_result = co_await writer.send_end();
  *     if (!end_result) {
  *         co_return;
  *     }
@@ -83,13 +83,13 @@ public:
 
     StreamMessage(StreamMessage&& other) noexcept
     {
-        moveFrom(std::move(other));
+        move_from(std::move(other));
     }
 
     StreamMessage& operator=(StreamMessage&& other) noexcept
     {
         if (this != &other) {
-            moveFrom(std::move(other));
+            move_from(std::move(other));
         }
         return *this;
     }
@@ -120,20 +120,20 @@ public:
         copy.m_stream_id = m_stream_id;
         copy.m_is_end = m_is_end;
         copy.m_msg_type = m_msg_type;
-        copy.copyPayloadFromView(payloadView());
+        copy.copy_payload_from_view(payload_view());
         return copy;
     }
 
     /// @brief 获取流ID
-    uint32_t streamId() const { return m_stream_id; }
+    uint32_t stream_id() const { return m_stream_id; }
     /// @brief 设置流ID
-    void streamId(uint32_t id) { m_stream_id = id; }
+    void stream_id(uint32_t id) { m_stream_id = id; }
 
     const std::vector<char>& payload() const {
-        materializePayloadIfNeeded();
+        materialize_payload_if_needed();
         return m_payload;
     }
-    size_t payloadSize() const {
+    size_t payload_size() const {
         return m_payload_owned ? m_payload.size() : m_payload_view.size();
     }
     /**
@@ -141,9 +141,9 @@ public:
      * @return 若消息持有自有缓冲则返回单段视图；若消息借用外部内存则返回对应借用视图
      *
      * @note 借用视图的生命周期由外部内存决定；若需要长期持有，请调用 `payload()` /
-     *       `payloadStr()` 触发实体化副本。
+     *       `payload_str()` 触发实体化副本。
      */
-    RpcPayloadView payloadView() const {
+    RpcPayloadView payload_view() const {
         if (m_payload_owned) {
             return RpcPayloadView{
                 m_payload.data(),
@@ -154,12 +154,12 @@ public:
         }
         return m_payload_view;
     }
-    std::string payloadStr() const {
-        materializePayloadIfNeeded();
+    std::string payload_str() const {
+        materialize_payload_if_needed();
         return std::string(m_payload.begin(), m_payload.end());
     }
-    bool payloadEquals(std::string_view expected) const {
-        const auto view = payloadView();
+    bool payload_equals(std::string_view expected) const {
+        const auto view = payload_view();
         if (view.size() != expected.size()) {
             return false;
         }
@@ -204,27 +204,27 @@ public:
      * @note 调用方必须保证 `view` 指向的内存在消息被消费完成前保持有效；
      *       如需脱离外部缓冲长期持有，请改用 `payload(...)`。
      */
-    void payloadView(const RpcPayloadView& view) {
+    void payload_view(const RpcPayloadView& view) {
         m_payload.clear();
         m_payload_view = view;
         m_payload_owned = false;
     }
 
     /// @brief 判断是否为流结束帧
-    bool isEnd() const { return m_is_end; }
+    bool is_end() const { return m_is_end; }
     /// @brief 设置流结束标志
-    void setEnd(bool end = true) { m_is_end = end; }
+    void set_end(bool end = true) { m_is_end = end; }
 
     /// @brief 获取消息类型
-    RpcMessageType messageType() const { return m_msg_type; }
+    RpcMessageType message_type() const { return m_msg_type; }
     /// @brief 设置消息类型
-    void messageType(RpcMessageType type) { m_msg_type = type; }
+    void message_type(RpcMessageType type) { m_msg_type = type; }
 
     /**
      * @brief 序列化流消息
      */
     std::vector<char> serialize(RpcMessageType type) const {
-        const RpcPayloadView payload_view = payloadView();
+        const RpcPayloadView payload_view = this->payload_view();
         size_t body_size = payload_view.size();
         std::vector<char> buffer(RPC_HEADER_SIZE + body_size);
 
@@ -249,7 +249,7 @@ public:
     /**
      * @brief 反序列化流消息体
      */
-    bool deserializeBody(const char* body, size_t length) {
+    bool deserialize_body(const char* body, size_t length) {
         if (length > 0) {
             payload(body, length);
         } else {
@@ -266,7 +266,7 @@ public:
      * @return 成功或RESOURCE_EXHAUSTED
      */
     std::expected<void, RpcError> validate(const RpcStreamLimits& limits) const {
-        if (payloadSize() > limits.max_frame_bytes) {
+        if (payload_size() > limits.max_frame_bytes) {
             return std::unexpected(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
                                             "RPC stream frame limit exceeded"));
         }
@@ -274,18 +274,18 @@ public:
     }
 
 private:
-    void moveFrom(StreamMessage&& other) noexcept {
+    void move_from(StreamMessage&& other) noexcept {
         m_stream_id = other.m_stream_id;
         m_payload = std::move(other.m_payload);
         m_payload_view = other.m_payload_view;
         m_payload_owned = other.m_payload_owned;
         m_is_end = other.m_is_end;
         m_msg_type = other.m_msg_type;
-        updateOwnedPayloadView();
-        other.resetMovedPayload();
+        update_owned_payload_view();
+        other.reset_moved_payload();
     }
 
-    void updateOwnedPayloadView() const {
+    void update_owned_payload_view() const {
         if (!m_payload_owned) {
             return;
         }
@@ -297,13 +297,13 @@ private:
         };
     }
 
-    void resetMovedPayload() noexcept {
+    void reset_moved_payload() noexcept {
         m_payload.clear();
         m_payload_view = RpcPayloadView{};
         m_payload_owned = true;
     }
 
-    void copyPayloadFromView(const RpcPayloadView& view) {
+    void copy_payload_from_view(const RpcPayloadView& view) {
         const size_t total = view.size();
         m_payload.resize(total);
         size_t offset = 0;
@@ -315,10 +315,10 @@ private:
             std::memcpy(m_payload.data() + offset, view.segment2, view.segment2_len);
         }
         m_payload_owned = true;
-        updateOwnedPayloadView();
+        update_owned_payload_view();
     }
 
-    void materializePayloadIfNeeded() const {
+    void materialize_payload_if_needed() const {
         if (m_payload_owned) {
             return;
         }
@@ -373,17 +373,17 @@ public:
         , m_method_name(method) {}
 
     /// @brief 获取流ID
-    uint32_t streamId() const { return m_stream_id; }
+    uint32_t stream_id() const { return m_stream_id; }
     /// @brief 设置流ID
-    void streamId(uint32_t id) { m_stream_id = id; }
+    void stream_id(uint32_t id) { m_stream_id = id; }
     /// @brief 获取服务名
-    const std::string& serviceName() const { return m_service_name; }
+    const std::string& service_name() const { return m_service_name; }
     /// @brief 设置服务名
-    void serviceName(std::string_view name) { m_service_name = name; }
+    void service_name(std::string_view name) { m_service_name = name; }
     /// @brief 获取方法名
-    const std::string& methodName() const { return m_method_name; }
+    const std::string& method_name() const { return m_method_name; }
     /// @brief 设置方法名
-    void methodName(std::string_view name) { m_method_name = name; }
+    void method_name(std::string_view name) { m_method_name = name; }
 
     std::vector<char> serialize() const {
         size_t body_size = 2 + m_service_name.size() + 2 + m_method_name.size();
@@ -398,13 +398,13 @@ public:
         char* body = buffer.data() + RPC_HEADER_SIZE;
         size_t offset = 0;
 
-        uint16_t service_len = rpcHtons(static_cast<uint16_t>(m_service_name.size()));
+        uint16_t service_len = rpc_htons(static_cast<uint16_t>(m_service_name.size()));
         std::memcpy(body + offset, &service_len, 2);
         offset += 2;
         std::memcpy(body + offset, m_service_name.data(), m_service_name.size());
         offset += m_service_name.size();
 
-        uint16_t method_len = rpcHtons(static_cast<uint16_t>(m_method_name.size()));
+        uint16_t method_len = rpc_htons(static_cast<uint16_t>(m_method_name.size()));
         std::memcpy(body + offset, &method_len, 2);
         offset += 2;
         std::memcpy(body + offset, m_method_name.data(), m_method_name.size());
@@ -412,14 +412,14 @@ public:
         return buffer;
     }
 
-    bool deserializeBody(const char* body, size_t length) {
+    bool deserialize_body(const char* body, size_t length) {
         if (length < 4) return false;
 
         size_t offset = 0;
 
         uint16_t service_len;
         std::memcpy(&service_len, body + offset, 2);
-        service_len = rpcNtohs(service_len);
+        service_len = rpc_ntohs(service_len);
         offset += 2;
 
         if (offset + service_len > length) return false;
@@ -429,7 +429,7 @@ public:
         if (offset + 2 > length) return false;
         uint16_t method_len;
         std::memcpy(&method_len, body + offset, 2);
-        method_len = rpcNtohs(method_len);
+        method_len = rpc_ntohs(method_len);
         offset += 2;
 
         if (offset + method_len > length) return false;
@@ -471,13 +471,13 @@ public:
     {
     }
 
-    bool parseFromRingBuffer()
+    bool parse_from_ring_buffer()
     {
-        auto& rb = this->ringBuffer();
+        auto& rb = this->ring_buffer();
         std::array<struct iovec, 2> read_iovecs_storage{};
-        size_t read_iovecs_count = rb.getReadIovecs(read_iovecs_storage);
+        size_t read_iovecs_count = rb.get_read_iovecs(read_iovecs_storage);
         std::span<const struct iovec> read_iovecs(read_iovecs_storage.data(), read_iovecs_count);
-        size_t total_readable = iovecsReadableBytes(read_iovecs);
+        size_t total_readable = iovecs_readable_bytes(read_iovecs);
 
         if (m_state == State::DiscardInvalidControlBody) {
             if (total_readable < m_body_length) {
@@ -485,7 +485,7 @@ public:
             }
             rb.consume(m_body_length);
             m_state = State::ReadHeader;
-            this->setReadError(RpcError(RpcErrorCode::INVALID_REQUEST,
+            this->set_read_error(RpcError(RpcErrorCode::INVALID_REQUEST,
                                         "RPC stream control frame must not carry a body"));
             return true;
         }
@@ -496,23 +496,23 @@ public:
             }
 
             char header_buf[RPC_HEADER_SIZE];
-            copyFromIovecs(read_iovecs, 0, header_buf, RPC_HEADER_SIZE);
+            copy_from_iovecs(read_iovecs, 0, header_buf, RPC_HEADER_SIZE);
 
             if (!m_header.deserialize(header_buf)) {
-                this->setReadError(RpcError(RpcErrorCode::INVALID_REQUEST, "Invalid header"));
+                this->set_read_error(RpcError(RpcErrorCode::INVALID_REQUEST, "Invalid header"));
                 return true;
             }
 
             m_body_length = m_header.m_body_length;
-            m_message->streamId(m_header.m_request_id);
+            m_message->stream_id(m_header.m_request_id);
 
             auto msg_type = static_cast<RpcMessageType>(m_header.m_type);
-            m_message->messageType(msg_type);
+            m_message->message_type(msg_type);
 
             if (msg_type == RpcMessageType::STREAM_END || msg_type == RpcMessageType::STREAM_CANCEL) {
                 if (m_body_length != 0) {
-                    m_message->setEnd(true);
-                    m_message->payloadView(RpcPayloadView{});
+                    m_message->set_end(true);
+                    m_message->payload_view(RpcPayloadView{});
                     if (total_readable < RPC_HEADER_SIZE + m_body_length) {
                         rb.consume(RPC_HEADER_SIZE);
                         m_state = State::DiscardInvalidControlBody;
@@ -520,26 +520,26 @@ public:
                     }
                     rb.consume(RPC_HEADER_SIZE + m_body_length);
                     m_state = State::ReadHeader;
-                    this->setReadError(RpcError(RpcErrorCode::INVALID_REQUEST,
+                    this->set_read_error(RpcError(RpcErrorCode::INVALID_REQUEST,
                                                 "RPC stream control frame must not carry a body"));
                     return true;
                 }
                 rb.consume(RPC_HEADER_SIZE);
-                m_message->setEnd(true);
-                m_message->payloadView(RpcPayloadView{});
+                m_message->set_end(true);
+                m_message->payload_view(RpcPayloadView{});
                 m_state = State::ReadHeader;
                 return true;
             }
 
             if (m_body_length == 0) {
                 rb.consume(RPC_HEADER_SIZE);
-                m_message->payloadView(RpcPayloadView{});
+                m_message->payload_view(RpcPayloadView{});
                 m_state = State::ReadHeader;
                 return true;
             }
 
             if (m_body_length > m_limits.max_frame_bytes) {
-                this->setReadError(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
+                this->set_read_error(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
                                             "RPC stream frame limit exceeded"));
                 m_state = State::ReadHeader;
                 return true;
@@ -550,19 +550,19 @@ public:
         }
 
         if (m_state == State::ReadBody) {
-            read_iovecs_count = rb.getReadIovecs(read_iovecs_storage);
+            read_iovecs_count = rb.get_read_iovecs(read_iovecs_storage);
             read_iovecs = std::span<const struct iovec>(read_iovecs_storage.data(), read_iovecs_count);
-            if (iovecsReadableBytes(read_iovecs) < m_body_length) {
+            if (iovecs_readable_bytes(read_iovecs) < m_body_length) {
                 return false;
             }
 
             RpcPayloadView payload_view;
-            if (!payloadViewFromIovecs(read_iovecs, 0, m_body_length, payload_view)) {
-                this->setReadError(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Invalid stream payload view"));
+            if (!payload_view_from_iovecs(read_iovecs, 0, m_body_length, payload_view)) {
+                this->set_read_error(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Invalid stream payload view"));
                 return true;
             }
 
-            m_message->payloadView(payload_view);
+            m_message->payload_view(payload_view);
             rb.consume(m_body_length);
             m_state = State::ReadHeader;
             return true;
@@ -607,7 +607,7 @@ public:
         header.m_body_length = 0;
         header.serialize(m_header.data());
 
-        auto& iovecs = mutableIovecs();
+        auto& iovecs = mutable_iovecs();
         iovecs.reserve(1);
         iovecs.push_back(iovec{m_header.data(), RPC_HEADER_SIZE});
     }
@@ -630,7 +630,7 @@ public:
         if (len > 0) {
             m_owned_payload.assign(data, data + len);
         }
-        buildDataFrame(stream_id, payloadView());
+        build_data_frame(stream_id, payload_view());
     }
 
     /**
@@ -640,7 +640,7 @@ public:
      */
     StreamFrameWriteState(uint32_t stream_id, const RpcPayloadView& payload_view)
     {
-        buildDataFrame(stream_id, payload_view);
+        build_data_frame(stream_id, payload_view);
     }
 
     /**
@@ -656,18 +656,18 @@ public:
         , m_method(method)
     {
         if (m_service.size() > std::numeric_limits<uint16_t>::max()) {
-            setWriteError(RpcError(RpcErrorCode::INVALID_REQUEST,
+            set_write_error(RpcError(RpcErrorCode::INVALID_REQUEST,
                                    "RPC stream service name too large"));
             return;
         }
         if (m_method.size() > std::numeric_limits<uint16_t>::max()) {
-            setWriteError(RpcError(RpcErrorCode::INVALID_REQUEST,
+            set_write_error(RpcError(RpcErrorCode::INVALID_REQUEST,
                                    "RPC stream method name too large"));
             return;
         }
         const size_t body_size = 2 + m_service.size() + 2 + m_method.size();
         if (body_size > RPC_MAX_BODY_SIZE) {
-            setWriteError(RpcError(RpcErrorCode::INVALID_REQUEST,
+            set_write_error(RpcError(RpcErrorCode::INVALID_REQUEST,
                                    "RPC stream init body too large"));
             return;
         }
@@ -678,9 +678,9 @@ public:
         header.m_body_length = static_cast<uint32_t>(body_size);
         header.serialize(m_header.data());
 
-        m_service_len = rpcHtons(static_cast<uint16_t>(m_service.size()));
-        m_method_len = rpcHtons(static_cast<uint16_t>(m_method.size()));
-        auto& iovecs = mutableIovecs();
+        m_service_len = rpc_htons(static_cast<uint16_t>(m_service.size()));
+        m_method_len = rpc_htons(static_cast<uint16_t>(m_method.size()));
+        auto& iovecs = mutable_iovecs();
         iovecs.reserve(5);
         iovecs.push_back(iovec{m_header.data(), RPC_HEADER_SIZE});
         iovecs.push_back(iovec{&m_service_len, sizeof(m_service_len)});
@@ -694,7 +694,7 @@ public:
     }
 
 private:
-    RpcPayloadView payloadView() const
+    RpcPayloadView payload_view() const
     {
         if (m_owned_payload.empty()) {
             return RpcPayloadView{};
@@ -707,10 +707,10 @@ private:
         };
     }
 
-    void buildDataFrame(uint32_t stream_id, const RpcPayloadView& payload_view)
+    void build_data_frame(uint32_t stream_id, const RpcPayloadView& payload_view)
     {
         if (payload_view.size() > RPC_MAX_BODY_SIZE) {
-            setWriteError(RpcError(RpcErrorCode::INVALID_REQUEST,
+            set_write_error(RpcError(RpcErrorCode::INVALID_REQUEST,
                                    "RPC stream data body too large"));
             return;
         }
@@ -720,7 +720,7 @@ private:
         header.m_request_id = stream_id;
         header.m_body_length = static_cast<uint32_t>(payload_view.size());
         header.serialize(m_header.data());
-        auto& iovecs = mutableIovecs();
+        auto& iovecs = mutable_iovecs();
         iovecs.reserve(3);
         iovecs.push_back(iovec{m_header.data(), RPC_HEADER_SIZE});
         if (payload_view.segment1_len > 0) {
@@ -762,7 +762,7 @@ public:
     SendStreamDataAwaitable(SocketType& socket, std::shared_ptr<detail::StreamFrameWriteState> state)
         : m_state(std::move(state))
         , m_inner(
-            AwaitableBuilder<Result>::fromStateMachine(
+            AwaitableBuilder<Result>::from_state_machine(
                 socket.controller(),
                 detail::RpcWritevMachine<detail::StreamFrameWriteState>(m_state))
                 .build())
@@ -802,7 +802,7 @@ public:
                               RpcStreamLimits limits = {})
         : m_state(std::make_shared<ReadState>(ring_buffer, msg, limits))
         , m_inner(
-            AwaitableBuilder<Result>::fromStateMachine(
+            AwaitableBuilder<Result>::from_state_machine(
                 socket.controller(),
                 detail::RpcRingBufferReadMachine<ReadState>(m_state))
                 .build())
@@ -856,7 +856,7 @@ public:
      * @param msg 输出消息
      * @return 等待体，co_await返回后表示一条完整流消息
      */
-    GetStreamMessageAwaitable<SocketType, Strategy> getMessage(StreamMessage& msg) {
+    GetStreamMessageAwaitable<SocketType, Strategy> get_message(StreamMessage& msg) {
         return GetStreamMessageAwaitable<SocketType, Strategy>(*m_ring_buffer, *m_socket, msg, m_limits);
     }
 
@@ -903,19 +903,19 @@ public:
      * @brief 更新当前写入器绑定的 stream_id
      * @param stream_id 后续发送帧要使用的逻辑流 ID
      */
-    void streamId(uint32_t stream_id) { m_stream_id = stream_id; }
+    void stream_id(uint32_t stream_id) { m_stream_id = stream_id; }
 
     /**
      * @brief 发送流数据
      */
-    SendStreamDataAwaitable<SocketType> sendData(const char* data, size_t len) {
+    SendStreamDataAwaitable<SocketType> send_data(const char* data, size_t len) {
         return SendStreamDataAwaitable<SocketType>(
             *m_socket,
             std::make_shared<detail::StreamFrameWriteState>(m_stream_id, data, len));
     }
 
-    SendStreamDataAwaitable<SocketType> sendData(const std::string& data) {
-        return sendData(data.data(), data.size());
+    SendStreamDataAwaitable<SocketType> send_data(const std::string& data) {
+        return send_data(data.data(), data.size());
     }
 
     /**
@@ -924,7 +924,7 @@ public:
      *
      * @note 调用方需保证 payload 所指向内存在本次 `co_await` 完成前保持有效。
      */
-    SendStreamDataAwaitable<SocketType> sendData(const RpcPayloadView& payload_view) {
+    SendStreamDataAwaitable<SocketType> send_data(const RpcPayloadView& payload_view) {
         return SendStreamDataAwaitable<SocketType>(
             *m_socket,
             std::make_shared<detail::StreamFrameWriteState>(m_stream_id, payload_view));
@@ -933,7 +933,7 @@ public:
     /**
      * @brief 发送流初始化请求
      */
-    SendStreamDataAwaitable<SocketType> sendInit(const std::string& service, const std::string& method) {
+    SendStreamDataAwaitable<SocketType> send_init(const std::string& service, const std::string& method) {
         return SendStreamDataAwaitable<SocketType>(
             *m_socket,
             std::make_shared<detail::StreamFrameWriteState>(m_stream_id, service, method));
@@ -942,7 +942,7 @@ public:
     /**
      * @brief 发送流初始化确认
      */
-    SendStreamDataAwaitable<SocketType> sendInitAck() {
+    SendStreamDataAwaitable<SocketType> send_init_ack() {
         return SendStreamDataAwaitable<SocketType>(
             *m_socket,
             std::make_shared<detail::StreamFrameWriteState>(m_stream_id, RpcMessageType::STREAM_INIT_ACK));
@@ -951,7 +951,7 @@ public:
     /**
      * @brief 发送流结束
      */
-    SendStreamDataAwaitable<SocketType> sendEnd() {
+    SendStreamDataAwaitable<SocketType> send_end() {
         return SendStreamDataAwaitable<SocketType>(
             *m_socket,
             std::make_shared<detail::StreamFrameWriteState>(m_stream_id, RpcMessageType::STREAM_END));
@@ -960,7 +960,7 @@ public:
     /**
      * @brief 发送流取消
      */
-    SendStreamDataAwaitable<SocketType> sendCancel() {
+    SendStreamDataAwaitable<SocketType> send_cancel() {
         return SendStreamDataAwaitable<SocketType>(
             *m_socket,
             std::make_shared<detail::StreamFrameWriteState>(m_stream_id, RpcMessageType::STREAM_CANCEL));
@@ -1024,73 +1024,73 @@ public:
     RpcStreamImpl& operator=(RpcStreamImpl&&) = delete;
 
     /// @brief 获取流ID
-    uint32_t streamId() const { return m_stream_id; }
+    uint32_t stream_id() const { return m_stream_id; }
     /**
      * @brief 更新逻辑流 ID，并同步到底层写入器
      * @param stream_id 新的逻辑流 ID
      */
-    void streamId(uint32_t stream_id) {
+    void stream_id(uint32_t stream_id) {
         m_stream_id = stream_id;
-        m_writer.streamId(stream_id);
+        m_writer.stream_id(stream_id);
     }
     /// @brief 获取服务名
-    const std::string& serviceName() const { return m_service_name; }
+    const std::string& service_name() const { return m_service_name; }
     /// @brief 获取方法名
-    const std::string& methodName() const { return m_method_name; }
+    const std::string& method_name() const { return m_method_name; }
 
     /**
      * @brief 设置路由信息
      * @param service_name 服务名
      * @param method_name 方法名
      */
-    void setRoute(std::string service_name, std::string method_name) {
+    void set_route(std::string service_name, std::string method_name) {
         m_service_name = std::move(service_name);
         m_method_name = std::move(method_name);
     }
 
     /// @brief 获取流读取器
-    StreamReaderImpl<SocketType, Strategy>& getReader() { return m_reader; }
+    StreamReaderImpl<SocketType, Strategy>& get_reader() { return m_reader; }
     /// @brief 获取流写入器
-    StreamWriterImpl<SocketType>& getWriter() { return m_writer; }
+    StreamWriterImpl<SocketType>& get_writer() { return m_writer; }
 
     /// @brief 读取流消息
     GetStreamMessageAwaitable<SocketType, Strategy> read(StreamMessage& msg) {
-        return m_reader.getMessage(msg);
+        return m_reader.get_message(msg);
     }
 
     /// @brief 发送流初始化（使用已有路由信息）
-    SendStreamDataAwaitable<SocketType> sendInit() {
-        return m_writer.sendInit(m_service_name, m_method_name);
+    SendStreamDataAwaitable<SocketType> send_init() {
+        return m_writer.send_init(m_service_name, m_method_name);
     }
 
     /// @brief 发送流初始化（更新路由信息）
-    SendStreamDataAwaitable<SocketType> sendInit(const std::string& service, const std::string& method) {
+    SendStreamDataAwaitable<SocketType> send_init(const std::string& service, const std::string& method) {
         m_service_name = service;
         m_method_name = method;
-        return m_writer.sendInit(service, method);
+        return m_writer.send_init(service, method);
     }
 
-    SendStreamDataAwaitable<SocketType> sendInitAck() { return m_writer.sendInitAck(); }
+    SendStreamDataAwaitable<SocketType> send_init_ack() { return m_writer.send_init_ack(); }
     /// @brief 发送流数据（指针+长度）
-    SendStreamDataAwaitable<SocketType> sendData(const char* data, size_t len) { return m_writer.sendData(data, len); }
+    SendStreamDataAwaitable<SocketType> send_data(const char* data, size_t len) { return m_writer.send_data(data, len); }
     /// @brief 发送流数据（字符串）
-    SendStreamDataAwaitable<SocketType> sendData(const std::string& data) { return m_writer.sendData(data); }
+    SendStreamDataAwaitable<SocketType> send_data(const std::string& data) { return m_writer.send_data(data); }
     /**
      * @brief 发送借用型 payload 视图
      * @param payload_view 调用方拥有的 payload 视图
      *
      * @note 调用方需保证 payload 所指向内存在本次 `co_await` 完成前保持有效。
      */
-    SendStreamDataAwaitable<SocketType> sendData(const RpcPayloadView& payload_view) { return m_writer.sendData(payload_view); }
+    SendStreamDataAwaitable<SocketType> send_data(const RpcPayloadView& payload_view) { return m_writer.send_data(payload_view); }
     /// @brief 发送流结束帧
-    SendStreamDataAwaitable<SocketType> sendEnd() { return m_writer.sendEnd(); }
+    SendStreamDataAwaitable<SocketType> send_end() { return m_writer.send_end(); }
     /// @brief 发送流取消帧
-    SendStreamDataAwaitable<SocketType> sendCancel() { return m_writer.sendCancel(); }
+    SendStreamDataAwaitable<SocketType> send_cancel() { return m_writer.send_cancel(); }
 
     /// @brief 获取底层Socket
     SocketType& socket() { return *m_socket; }
     /// @brief 获取环形缓冲区
-    RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return *m_ring_buffer; }
+    RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return *m_ring_buffer; }
 
 private:
     SocketType* m_socket = nullptr;                          ///< Socket指针

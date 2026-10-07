@@ -66,7 +66,7 @@ int main()
 
     std::expected<galay::mcp::v2::DiscoverResult, galay::mcp::McpError> firstResult;
     std::expected<galay::mcp::v2::DiscoverResult, galay::mcp::McpError> secondResult =
-        std::unexpected(galay::mcp::McpError::invalidResponse("pending"));
+        std::unexpected(galay::mcp::McpError::invalid_response("pending"));
 
     std::thread first([&] {
         firstResult = client.discover();

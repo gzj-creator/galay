@@ -153,7 +153,7 @@ void require_uninstalled(PreparedApi& api, const DocsConfig& config,
     require(*api.document == document, "failed install must not change document");
     for (const auto& path : docs_paths(config)) {
         if (path == existing) continue;
-        require(api.router.findHandler(HttpMethod::GET, path).handler == nullptr,
+        require(api.router.find_handler(HttpMethod::GET, path).handler == nullptr,
                 "failed install partially registered " + path);
     }
 }
@@ -229,7 +229,7 @@ void invalid_paths_and_document()
             require(!result && result.error().code == ApiErrorCode::kInvalidPath,
                     "unsafe or unrouteable docs path must fail explicitly");
             require(!api.docs_installed, "invalid path must not install docs");
-            require(api.router.findHandler(HttpMethod::GET, "/openapi.json").handler == nullptr,
+            require(api.router.find_handler(HttpMethod::GET, "/openapi.json").handler == nullptr,
                     "invalid path must not partially register docs");
         }
     }
@@ -248,7 +248,7 @@ void invalid_paths_and_document()
         auto result = install_docs(api, config);
         require(!result, "absent document must fail");
         require(!api.docs_installed, "absent document must not install routes");
-        require(api.router.findHandler(HttpMethod::GET, config.ui_path).handler == nullptr,
+        require(api.router.find_handler(HttpMethod::GET, config.ui_path).handler == nullptr,
                 "absent document must not install UI");
     }
     auto long_api = prepared();
@@ -263,27 +263,27 @@ void preflight_conflicts(const DocsConfig& config)
 {
     for (const auto& path : docs_paths(config)) {
         auto api = prepared();
-        api.router.addHandler<HttpMethod::GET>(path, sentinel);
-        const auto* original = api.router.findHandler(HttpMethod::GET, path).handler;
+        api.router.add_handler<HttpMethod::GET>(path, sentinel);
+        const auto* original = api.router.find_handler(HttpMethod::GET, path).handler;
         auto result = install_docs(api, config);
         require(!result && result.error().code == ApiErrorCode::kRouteConflict,
                 "every existing router path must be preflighted");
-        require(api.router.findHandler(HttpMethod::GET, path).handler == original,
+        require(api.router.find_handler(HttpMethod::GET, path).handler == original,
                 "conflicting route must not be replaced");
         require_uninstalled(api, config, path);
     }
     for (const auto& pattern : {child(config.ui_path, ":asset"), child(config.ui_path, "*"),
                                 child(config.ui_path, "**")}) {
         auto api = prepared();
-        api.router.addHandler<HttpMethod::GET>(pattern, sentinel);
+        api.router.add_handler<HttpMethod::GET>(pattern, sentinel);
         const auto old_size = api.router.size();
-        const auto* spec_handler = api.router.findHandler(HttpMethod::GET, config.spec_path).handler;
+        const auto* spec_handler = api.router.find_handler(HttpMethod::GET, config.spec_path).handler;
         auto result = install_docs(api, config);
         require(!result && result.error().code == ApiErrorCode::kRouteConflict,
                 "parameter and wildcard router conflicts must fail");
         require(!api.docs_installed, "fuzzy conflict must not install docs");
         require(api.router.size() == old_size &&
-                    api.router.findHandler(HttpMethod::GET, config.spec_path).handler == spec_handler,
+                    api.router.find_handler(HttpMethod::GET, config.spec_path).handler == spec_handler,
                 "late fuzzy conflict must preserve existing matches without registering a spec");
     }
     for (const auto& path : docs_paths(config)) {
@@ -302,7 +302,7 @@ void preflight_conflicts(const DocsConfig& config)
     require_uninstalled(dynamic, config);
 
     auto post_router = prepared();
-    post_router.router.addHandler<HttpMethod::POST>(child(config.ui_path, "SHA256SUMS"), sentinel);
+    post_router.router.add_handler<HttpMethod::POST>(child(config.ui_path, "SHA256SUMS"), sentinel);
     auto post_conflict = install_docs(post_router, config);
     require(!post_conflict && post_conflict.error().code == ApiErrorCode::kRouteConflict,
             "docs paths must be checked against existing router methods, not only GET");
@@ -322,7 +322,7 @@ void preflight_conflicts(const DocsConfig& config)
     Assets assets;
     auto api = prepared();
     const auto reserved = child(config.ui_path, "SHA256SUMS");
-    api.router.addHandler<HttpMethod::GET>(reserved, sentinel);
+    api.router.add_handler<HttpMethod::GET>(reserved, sentinel);
     assets.remove(asset_names.front());
     auto failure = install_docs_from_directory(api, config, assets.path.string());
     require(!failure && failure.error().code == ApiErrorCode::kResourceError,
@@ -405,8 +405,8 @@ HttpResponse request(std::uint16_t port, const std::string& path)
     close_fd(fd);
     HttpResponse response;
     std::vector<iovec> views{{.iov_base = bytes.data(), .iov_len = bytes.size()}};
-    const auto [error, consumed] = response.fromIOVec(views);
-    require(error == kNoError && consumed > 0 && response.isComplete(),
+    const auto [error, consumed] = response.from_io_vec(views);
+    require(error == kNoError && consumed > 0 && response.is_complete(),
             "invalid or truncated HTTP response for " + path);
     require(response.header().code() == HttpStatusCode::OK_200, "docs response must be 200");
     return response;
@@ -437,16 +437,16 @@ void loopback_and_lifetime(const DocsConfig& config, bool from_directory)
         require(installed.has_value(), installed ? "" : installed.error().message);
         require(api.docs_installed, "success must mark docs installed");
         for (const auto& path : docs_paths(config)) {
-            const auto match = api.router.findHandler(HttpMethod::GET, path);
+            const auto match = api.router.find_handler(HttpMethod::GET, path);
             require(match.handler != nullptr, "docs route not registered: " + path);
-            detached.addHandler<HttpMethod::GET>(path, *match.handler);
+            detached.add_handler<HttpMethod::GET>(path, *match.handler);
         }
         auto repeated_config = config;
         repeated_config.ui_path = "/second-docs";
         auto repeated = install_docs(api, repeated_config);
         require(!repeated && repeated.error().code == ApiErrorCode::kRouteConflict,
                 "install_docs must reject a second installation even at different paths");
-        require(api.router.findHandler(HttpMethod::GET, "/second-docs").handler == nullptr,
+        require(api.router.find_handler(HttpMethod::GET, "/second-docs").handler == nullptr,
                 "second install must not mutate router");
         api.router.clear();
         api.document.reset();
@@ -455,40 +455,40 @@ void loopback_and_lifetime(const DocsConfig& config, bool from_directory)
 
     const auto port = free_port();
     HttpServer server(HttpServerBuilder().host("127.0.0.1").port(port)
-                          .ioSchedulerCount(1).parallelSchedulerCount(1).build());
+                          .io_scheduler_count(1).parallel_scheduler_count(1).build());
     server.start(std::move(detached));
-    require(server.isRunning(), "docs loopback server failed to start");
+    require(server.is_running(), "docs loopback server failed to start");
     auto spec = request(port, config.spec_path);
-    require(spec.bodyStr() == document, "served document must match offline snapshot");
-    require(spec.header().headerPairs().getValue("Content-Type") == "application/json; charset=utf-8",
+    require(spec.body_str() == document, "served document must match offline snapshot");
+    require(spec.header().header_pairs().get_value("Content-Type") == "application/json; charset=utf-8",
             "spec content type must be JSON");
     auto html = request(port, config.ui_path);
-    require(html.header().headerPairs().getValue("Content-Type") == "text/html; charset=utf-8",
+    require(html.header().header_pairs().get_value("Content-Type") == "text/html; charset=utf-8",
             "UI content type must be HTML");
-    require(html.bodyStr().find("https://") == std::string::npos &&
-                html.bodyStr().find("http://") == std::string::npos,
+    require(html.body_str().find("https://") == std::string::npos &&
+                html.body_str().find("http://") == std::string::npos,
             "HTML must reference only same-origin assets");
-    require(html.bodyStr().find("width=device-width") != std::string::npos,
+    require(html.body_str().find("width=device-width") != std::string::npos,
             "UI must use the mobile viewport");
     for (const auto name : {"swagger-ui.css", "swagger-ui-bundle.js",
                             "swagger-ui-standalone-preset.js", "swagger-initializer.js",
                             "favicon-16x16.png", "favicon-32x32.png"}) {
-        require(html.bodyStr().find(child(config.ui_path, name)) != std::string::npos,
+        require(html.body_str().find(child(config.ui_path, name)) != std::string::npos,
                 "HTML asset paths must use the configured UI prefix");
     }
     if (config.ui_path != "/") {
         auto slash = request(port, config.ui_path + "/");
-        require(slash.bodyStr() == html.bodyStr(), "UI slash alias must serve the same page");
+        require(slash.body_str() == html.body_str(), "UI slash alias must serve the same page");
     }
     auto initializer = request(port, child(config.ui_path, "swagger-initializer.js"));
-    require(initializer.header().headerPairs().getValue("Content-Type") ==
+    require(initializer.header().header_pairs().get_value("Content-Type") ==
                 "application/javascript; charset=utf-8", "initializer must be JavaScript");
     constexpr std::string_view marker = "const config = ";
-    const auto begin = initializer.bodyStr().find(marker);
+    const auto begin = initializer.body_str().find(marker);
     require(begin != std::string::npos, "initializer must contain serialized configuration");
-    const auto end = initializer.bodyStr().find(';', begin);
+    const auto end = initializer.body_str().find(';', begin);
     require(end != std::string::npos, "initializer configuration must terminate");
-    auto parsed = json::parse(std::string_view(initializer.bodyStr()).substr(
+    auto parsed = json::parse(std::string_view(initializer.body_str()).substr(
         begin + marker.size(), end - begin - marker.size()));
     require(parsed.has_value(), "initializer config must be valid JSON");
     const auto url = parsed->at("url").as_string();
@@ -500,12 +500,12 @@ void loopback_and_lifetime(const DocsConfig& config, bool from_directory)
     require(query && !*query, "query strings must not override the offline UI configuration");
     for (std::size_t i = 0; i < asset_names.size(); ++i) {
         auto resource = request(port, child(config.ui_path, asset_names[i]));
-        require(resource.bodyStr() == expected_assets[i],
+        require(resource.body_str() == expected_assets[i],
                 from_directory ? "explicit custom resource must survive owners and disk removal, not use embedded bytes"
                                : "embedded browser and metadata bytes must exactly match official fixtures, including NUL");
-        require(resource.header().headerPairs().getValue("Content-Type") == content_types[i],
+        require(resource.header().header_pairs().get_value("Content-Type") == content_types[i],
                 "every browser and metadata resource must use the expected Content-Type");
-        require(resource.header().headerPairs().getValue("X-Content-Type-Options") == "nosniff",
+        require(resource.header().header_pairs().get_value("X-Content-Type-Options") == "nosniff",
                 "asset response must not permit MIME sniffing");
     }
     server.stop();

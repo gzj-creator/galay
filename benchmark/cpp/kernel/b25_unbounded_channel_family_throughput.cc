@@ -38,20 +38,20 @@ namespace galay::mpmc {
 struct UnboundedChannelTestAccess
 {
     template <UnboundedValue T>
-    static bool rawSend(UnboundedChannel<T>& channel,
+    static bool raw_send(UnboundedChannel<T>& channel,
                         typename UnboundedChannel<T>::ProducerToken& token,
                         T&& value)
     {
-        return token.validFor(channel) &&
-            channel.template sendTokenFast<false>(token, std::move(value));
+        return token.valid_for(channel) &&
+            channel.template send_token_fast<false>(token, std::move(value));
     }
 
     template <UnboundedValue T>
-    static bool rawRecv(UnboundedChannel<T>& channel,
+    static bool raw_recv(UnboundedChannel<T>& channel,
                         typename UnboundedChannel<T>::ConsumerToken& token,
                         T& value)
     {
-        auto received = channel.tryRecv(token);
+        auto received = channel.try_recv(token);
         if (!received.has_value()) {
             return false;
         }
@@ -60,13 +60,13 @@ struct UnboundedChannelTestAccess
     }
 
     template <UnboundedValue T>
-    static constexpr size_t blockSize() noexcept
+    static constexpr size_t block_size() noexcept
     {
         return UnboundedChannel<T>::kSlotsPerBlock;
     }
 
     template <UnboundedValue T>
-    static BlockScanMeasurement measurePartiallyFreeBlock(
+    static BlockScanMeasurement measure_partially_free_block(
         size_t sampleCount,
         size_t scansPerSample)
     {
@@ -109,7 +109,7 @@ struct UnboundedChannelTestAccess
 
             const auto reverseBegin = std::chrono::steady_clock::now();
             for (size_t scan = 0; scan < scansPerSample; ++scan) {
-                valid = valid && !channel.blockSlotsAreFree(block);
+                valid = valid && !channel.block_slots_are_free(block);
             }
             const auto reverseElapsed = std::chrono::steady_clock::now() -
                 reverseBegin;
@@ -157,7 +157,7 @@ struct Measurement
 };
 
 template <ChannelPath Path>
-Measurement runChannel(int producerCount, int consumerCount)
+Measurement run_channel(int producerCount, int consumerCount)
 {
     using Channel = galay::mpmc::UnboundedChannel<int64_t>;
     Channel channel;
@@ -180,8 +180,8 @@ Measurement runChannel(int producerCount, int consumerCount)
     for (int producer = 0; producer < producerCount; ++producer) {
         producers.emplace_back([&, producer]() {
             placements[static_cast<size_t>(producer)] =
-                galay::benchmark::pinCurrentThread(static_cast<size_t>(producer));
-            auto token = channel.makeProducerToken();
+                galay::benchmark::pin_current_thread(static_cast<size_t>(producer));
+            auto token = channel.make_producer_token();
             if (!token.valid()) {
                 setupFailed.store(true, std::memory_order_release);
             }
@@ -198,7 +198,7 @@ Measurement runChannel(int producerCount, int consumerCount)
                 bool sent = false;
                 do {
                     if constexpr (Path == ChannelPath::kRaw) {
-                        sent = galay::mpmc::UnboundedChannelTestAccess::rawSend(
+                        sent = galay::mpmc::UnboundedChannelTestAccess::raw_send(
                             channel, token, std::move(value));
                     } else {
                         sent = channel.send(token, std::move(value));
@@ -216,9 +216,9 @@ Measurement runChannel(int producerCount, int consumerCount)
     for (int consumer = 0; consumer < consumerCount; ++consumer) {
         consumers.emplace_back([&, consumer]() {
             placements[static_cast<size_t>(producerCount + consumer)] =
-                galay::benchmark::pinCurrentThread(
+                galay::benchmark::pin_current_thread(
                     static_cast<size_t>(producerCount + consumer));
-            auto token = channel.makeConsumerToken();
+            auto token = channel.make_consumer_token();
             if (!token.valid()) {
                 setupFailed.store(true, std::memory_order_release);
             }
@@ -234,10 +234,10 @@ Measurement runChannel(int producerCount, int consumerCount)
                 int64_t value = 0;
                 bool received = false;
                 if constexpr (Path == ChannelPath::kRaw) {
-                    received = galay::mpmc::UnboundedChannelTestAccess::rawRecv(
+                    received = galay::mpmc::UnboundedChannelTestAccess::raw_recv(
                         channel, token, value);
                 } else {
-                    std::optional<int64_t> result = channel.tryRecv(token);
+                    std::optional<int64_t> result = channel.try_recv(token);
                     if (result.has_value()) {
                         value = *result;
                         received = true;
@@ -248,7 +248,7 @@ Measurement runChannel(int producerCount, int consumerCount)
                     localSum += value;
                     continue;
                 }
-                if (channel.isClosed()) {
+                if (channel.is_closed()) {
                     break;
                 }
                 ++localEmptyRetries;
@@ -298,7 +298,7 @@ Measurement runChannel(int producerCount, int consumerCount)
 
 /** @brief 在相同 MPMC harness 中测量指定 traits 的独立 raw moodycamel 队列。 */
 template <typename QueueTraits>
-Measurement runRawQueue(int producerCount, int consumerCount)
+Measurement run_raw_queue(int producerCount, int consumerCount)
 {
     using Queue = moodycamel::ConcurrentQueue<int64_t, QueueTraits>;
     static_assert(kMoodyInitialPoolElements % QueueTraits::BLOCK_SIZE == 0);
@@ -323,7 +323,7 @@ Measurement runRawQueue(int producerCount, int consumerCount)
     for (int producer = 0; producer < producerCount; ++producer) {
         producers.emplace_back([&, producer]() {
             placements[static_cast<size_t>(producer)] =
-                galay::benchmark::pinCurrentThread(static_cast<size_t>(producer));
+                galay::benchmark::pin_current_thread(static_cast<size_t>(producer));
             moodycamel::ProducerToken token(queue);
             if (!token.valid()) {
                 setupFailed.store(true, std::memory_order_release);
@@ -352,7 +352,7 @@ Measurement runRawQueue(int producerCount, int consumerCount)
     for (int consumer = 0; consumer < consumerCount; ++consumer) {
         consumers.emplace_back([&, consumer]() {
             placements[static_cast<size_t>(producerCount + consumer)] =
-                galay::benchmark::pinCurrentThread(
+                galay::benchmark::pin_current_thread(
                     static_cast<size_t>(producerCount + consumer));
             moodycamel::ConsumerToken token(queue);
             ready.arrive();
@@ -423,7 +423,7 @@ Measurement runRawQueue(int producerCount, int consumerCount)
     };
 }
 
-bool validMeasurement(const Measurement& measurement)
+bool valid_measurement(const Measurement& measurement)
 {
     bool placementValid = true;
 #if defined(__APPLE__)
@@ -439,7 +439,7 @@ bool validMeasurement(const Measurement& measurement)
         measurement.sendRetries == 0 && measurement.finalSize == 0;
 }
 
-void printSummary(const char* name,
+void print_summary(const char* name,
                   const char* topology,
                   int producerCount,
                   int consumerCount,
@@ -487,18 +487,18 @@ void printSummary(const char* name,
               << " messages=" << kMessages
               << " samples=" << samples.size()
               << " median_msg_s="
-              << galay::benchmark::medianElement(std::move(throughput))
+              << galay::benchmark::median_element(std::move(throughput))
               << " min_msg_s=" << minimumThroughput
               << " max_msg_s=" << maximumThroughput
               << " median_send_retries="
-              << galay::benchmark::medianElement(std::move(sendRetries))
+              << galay::benchmark::median_element(std::move(sendRetries))
               << " median_empty_retries="
-              << galay::benchmark::medianElement(std::move(emptyRetries))
-              << " placement=" << galay::benchmark::threadPlacementName(placement)
+              << galay::benchmark::median_element(std::move(emptyRetries))
+              << " placement=" << galay::benchmark::thread_placement_name(placement)
               << '\n';
 }
 
-bool printRatioSummary(const char* name,
+bool print_ratio_summary(const char* name,
                        const char* topology,
                        const std::vector<Measurement>& numerator,
                        const std::vector<Measurement>& denominator)
@@ -524,7 +524,7 @@ bool printRatioSummary(const char* name,
     std::cout << name << " topology=" << topology
               << " samples=" << ratios.size()
               << " median_ratio="
-              << galay::benchmark::medianElement(std::move(ratios))
+              << galay::benchmark::median_element(std::move(ratios))
               << " min_ratio=" << minimumRatio
               << " max_ratio=" << maximumRatio << '\n';
     return true;
@@ -546,7 +546,7 @@ struct QueueCase
 };
 
 template <size_t CaseCount>
-bool runCases(const char* topology,
+bool run_cases(const char* topology,
               int producerCount,
               int consumerCount,
               const std::array<QueueCase, CaseCount>& cases,
@@ -556,7 +556,7 @@ bool runCases(const char* topology,
     for (int warmup = 0; warmup < kWarmupSamples; ++warmup) {
         for (size_t offset = 0; offset < CaseCount; ++offset) {
             const size_t index = (round + offset) % CaseCount;
-            if (!validMeasurement(
+            if (!valid_measurement(
                     cases[index].runner(producerCount, consumerCount))) {
                 std::cout << cases[index].name
                           << " warmup_failed topology=" << topology
@@ -575,7 +575,7 @@ bool runCases(const char* topology,
             const size_t index = (round + offset) % CaseCount;
             Measurement measurement =
                 cases[index].runner(producerCount, consumerCount);
-            if (!validMeasurement(measurement)) {
+            if (!valid_measurement(measurement)) {
                 std::cout << cases[index].name
                           << " sample_failed topology=" << topology
                           << " sample=" << sample << '\n';
@@ -587,7 +587,7 @@ bool runCases(const char* topology,
     }
 
     for (size_t index = 0; index < CaseCount; ++index) {
-        printSummary(cases[index].name,
+        print_summary(cases[index].name,
                      topology,
                      producerCount,
                      consumerCount,
@@ -603,10 +603,10 @@ bool runCases(const char* topology,
     return true;
 }
 
-bool runComparison(const char* topology, int producerCount, int consumerCount)
+bool run_comparison(const char* topology, int producerCount, int consumerCount)
 {
     constexpr size_t kCurrentBlockSize =
-        galay::mpmc::UnboundedChannelTestAccess::blockSize<int64_t>();
+        galay::mpmc::UnboundedChannelTestAccess::block_size<int64_t>();
     const std::array<QueueCase, 3> cases = {{
         {"moody_raw_default",
          DefaultQueueTraits::BLOCK_SIZE,
@@ -616,7 +616,7 @@ bool runComparison(const char* topology, int producerCount, int consumerCount)
          kMoodyInitialPoolElements,
          DefaultQueueTraits::EXPLICIT_CONSUMER_CONSUMPTION_QUOTA_BEFORE_ROTATE,
          true,
-         &runRawQueue<DefaultQueueTraits>},
+         &run_raw_queue<DefaultQueueTraits>},
         {"mpmc_raw_current",
          kCurrentBlockSize,
          0,
@@ -625,7 +625,7 @@ bool runComparison(const char* topology, int producerCount, int consumerCount)
          kCurrentBlockSize,
          0,
          false,
-         &runChannel<ChannelPath::kRaw>},
+         &run_channel<ChannelPath::kRaw>},
         {"mpmc_token",
          kCurrentBlockSize,
          0,
@@ -634,32 +634,32 @@ bool runComparison(const char* topology, int producerCount, int consumerCount)
          kCurrentBlockSize,
          0,
          false,
-         &runChannel<ChannelPath::kToken>},
+         &run_channel<ChannelPath::kToken>},
     }};
     std::array<std::vector<Measurement>, 3> samples;
-    if (!runCases(topology,
+    if (!run_cases(topology,
                   producerCount,
                   consumerCount,
                   cases,
                   samples)) {
         return false;
     }
-    bool ok = printRatioSummary(
+    bool ok = print_ratio_summary(
         "ratio_embedded_raw_over_default", topology, samples[1], samples[0]);
-    ok = printRatioSummary(
+    ok = print_ratio_summary(
              "ratio_token_over_embedded_raw", topology, samples[2], samples[1]) &&
         ok;
-    ok = printRatioSummary(
+    ok = print_ratio_summary(
              "ratio_token_over_default_raw", topology, samples[2], samples[0]) &&
         ok;
     return ok;
 }
 
-bool runBlockScanLatency()
+bool run_block_scan_latency()
 {
-    const auto placement = galay::benchmark::pinCurrentThread(0);
+    const auto placement = galay::benchmark::pin_current_thread(0);
     BlockScanMeasurement measurement =
-        galay::mpmc::UnboundedChannelTestAccess::measurePartiallyFreeBlock<int64_t>(
+        galay::mpmc::UnboundedChannelTestAccess::measure_partially_free_block<int64_t>(
             kBlockScanSamples, kBlockScansPerSample);
     if (!measurement.valid ||
         measurement.forwardNs.size() != kBlockScanSamples ||
@@ -688,7 +688,7 @@ bool runBlockScanLatency()
               << " scenario=free_prefix_busy_tail"
               << " measurement_scope=normalized_batch_scan"
               << " slots="
-              << galay::mpmc::UnboundedChannelTestAccess::blockSize<int64_t>()
+              << galay::mpmc::UnboundedChannelTestAccess::block_size<int64_t>()
               << " samples=" << kBlockScanSamples
               << " scans_per_sample=" << kBlockScansPerSample
               << " forward_p99_ns_per_scan=" << forwardP99 / scansPerSample
@@ -700,7 +700,7 @@ bool runBlockScanLatency()
               << " p999_speedup="
               << static_cast<double>(forwardP999) / static_cast<double>(reverseP999)
               << " placement="
-              << galay::benchmark::threadPlacementName(placement) << '\n';
+              << galay::benchmark::thread_placement_name(placement) << '\n';
     return reverseP99 < forwardP99 && reverseP999 < forwardP999;
 }
 
@@ -708,12 +708,12 @@ bool runBlockScanLatency()
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    bool ok = runBlockScanLatency();
-    ok = runComparison("2p2c", 2, 2) && ok;
-    ok = runComparison("4p4c", 4, 4) && ok;
+    bool ok = run_block_scan_latency();
+    ok = run_comparison("2p2c", 2, 2) && ok;
+    ok = run_comparison("4p4c", 4, 4) && ok;
     return ok ? 0 : 1;
 }

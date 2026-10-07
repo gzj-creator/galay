@@ -46,9 +46,9 @@ struct Http2FrameHeader
     static Http2FrameHeader deserialize(const uint8_t* buffer);
 
     // 检查标志位
-    bool hasFlag(uint8_t flag) const { return (flags & flag) != 0; }
-    void setFlag(uint8_t flag) { flags |= flag; }
-    void clearFlag(uint8_t flag) { flags &= ~flag; }
+    bool has_flag(uint8_t flag) const { return (flags & flag) != 0; }
+    void set_flag(uint8_t flag) { flags |= flag; }
+    void clear_flag(uint8_t flag) { flags &= ~flag; }
 };
 
 // 前向声明所有帧子类（用于基类中的 asXXX 方法声明）
@@ -84,54 +84,54 @@ public:
     Http2FrameType type() const { return m_header.type; }
 
     // 获取流 ID
-    uint32_t streamId() const { return m_header.stream_id; }
+    uint32_t stream_id() const { return m_header.stream_id; }
 
     // 类型判断
-    bool isData() const { return m_header.type == Http2FrameType::Data; }
-    bool isHeaders() const { return m_header.type == Http2FrameType::Headers; }
-    bool isPriority() const { return m_header.type == Http2FrameType::Priority; }
-    bool isRstStream() const { return m_header.type == Http2FrameType::RstStream; }
-    bool isSettings() const { return m_header.type == Http2FrameType::Settings; }
-    bool isPushPromise() const { return m_header.type == Http2FrameType::PushPromise; }
-    bool isPing() const { return m_header.type == Http2FrameType::Ping; }
-    bool isGoAway() const { return m_header.type == Http2FrameType::GoAway; }
-    bool isWindowUpdate() const { return m_header.type == Http2FrameType::WindowUpdate; }
-    bool isContinuation() const { return m_header.type == Http2FrameType::Continuation; }
+    bool is_data() const { return m_header.type == Http2FrameType::Data; }
+    bool is_headers() const { return m_header.type == Http2FrameType::Headers; }
+    bool is_priority() const { return m_header.type == Http2FrameType::Priority; }
+    bool is_rst_stream() const { return m_header.type == Http2FrameType::RstStream; }
+    bool is_settings() const { return m_header.type == Http2FrameType::Settings; }
+    bool is_push_promise() const { return m_header.type == Http2FrameType::PushPromise; }
+    bool is_ping() const { return m_header.type == Http2FrameType::Ping; }
+    bool is_go_away() const { return m_header.type == Http2FrameType::GoAway; }
+    bool is_window_update() const { return m_header.type == Http2FrameType::WindowUpdate; }
+    bool is_continuation() const { return m_header.type == Http2FrameType::Continuation; }
 
     // END_STREAM 判断（DATA 和 HEADERS 帧通用）
-    bool isEndStream() const {
+    bool is_end_stream() const {
         return (m_header.type == Http2FrameType::Data || m_header.type == Http2FrameType::Headers)
-            && m_header.hasFlag(Http2FrameFlags::kEndStream);
+            && m_header.has_flag(Http2FrameFlags::kEndStream);
     }
 
     // 安全向下转型（定义在文件末尾，所有子类声明之后）
-    inline Http2DataFrame* asData();
-    inline Http2HeadersFrame* asHeaders();
-    inline Http2PriorityFrame* asPriority();
-    inline Http2RstStreamFrame* asRstStream();
-    inline Http2SettingsFrame* asSettings();
-    inline Http2PushPromiseFrame* asPushPromise();
-    inline Http2PingFrame* asPing();
-    inline Http2GoAwayFrame* asGoAway();
-    inline Http2WindowUpdateFrame* asWindowUpdate();
-    inline Http2ContinuationFrame* asContinuation();
+    inline Http2DataFrame* as_data();
+    inline Http2HeadersFrame* as_headers();
+    inline Http2PriorityFrame* as_priority();
+    inline Http2RstStreamFrame* as_rst_stream();
+    inline Http2SettingsFrame* as_settings();
+    inline Http2PushPromiseFrame* as_push_promise();
+    inline Http2PingFrame* as_ping();
+    inline Http2GoAwayFrame* as_go_away();
+    inline Http2WindowUpdateFrame* as_window_update();
+    inline Http2ContinuationFrame* as_continuation();
 
-    inline const Http2DataFrame* asData() const;
-    inline const Http2HeadersFrame* asHeaders() const;
-    inline const Http2PriorityFrame* asPriority() const;
-    inline const Http2RstStreamFrame* asRstStream() const;
-    inline const Http2SettingsFrame* asSettings() const;
-    inline const Http2PushPromiseFrame* asPushPromise() const;
-    inline const Http2PingFrame* asPing() const;
-    inline const Http2GoAwayFrame* asGoAway() const;
-    inline const Http2WindowUpdateFrame* asWindowUpdate() const;
-    inline const Http2ContinuationFrame* asContinuation() const;
+    inline const Http2DataFrame* as_data() const;
+    inline const Http2HeadersFrame* as_headers() const;
+    inline const Http2PriorityFrame* as_priority() const;
+    inline const Http2RstStreamFrame* as_rst_stream() const;
+    inline const Http2SettingsFrame* as_settings() const;
+    inline const Http2PushPromiseFrame* as_push_promise() const;
+    inline const Http2PingFrame* as_ping() const;
+    inline const Http2GoAwayFrame* as_go_away() const;
+    inline const Http2WindowUpdateFrame* as_window_update() const;
+    inline const Http2ContinuationFrame* as_continuation() const;
 
     // 序列化整个帧
     virtual std::string serialize() const = 0;
 
     // 从负载解析帧（帧头已解析）
-    virtual Http2ErrorCode parsePayload(const uint8_t* data, size_t length) = 0;
+    virtual Http2ErrorCode parse_payload(const uint8_t* data, size_t length) = 0;
 
 protected:
     Http2Frame(Http2Frame&&) noexcept = default;
@@ -156,25 +156,25 @@ public:
     Http2DataFrame& operator=(Http2DataFrame&&) noexcept = default;
 
     // 设置数据
-    void setData(std::string data) { m_data = std::move(data); }
-    void setData(const uint8_t* data, size_t length) { m_data.assign(reinterpret_cast<const char*>(data), length); }
+    void set_data(std::string data) { m_data = std::move(data); }
+    void set_data(const uint8_t* data, size_t length) { m_data.assign(reinterpret_cast<const char*>(data), length); }
 
     // 获取数据
     const std::string& data() const { return m_data; }
     std::string& data() { return m_data; }
 
     // END_STREAM 标志
-    bool isEndStream() const { return m_header.hasFlag(Http2FrameFlags::kEndStream); }
-    void setEndStream(bool value) {
-        if (value) m_header.setFlag(Http2FrameFlags::kEndStream);
-        else m_header.clearFlag(Http2FrameFlags::kEndStream);
+    bool is_end_stream() const { return m_header.has_flag(Http2FrameFlags::kEndStream); }
+    void set_end_stream(bool value) {
+        if (value) m_header.set_flag(Http2FrameFlags::kEndStream);
+        else m_header.clear_flag(Http2FrameFlags::kEndStream);
     }
 
     // PADDED 标志
-    bool isPadded() const { return m_header.hasFlag(Http2FrameFlags::kPadded); }
+    bool is_padded() const { return m_header.has_flag(Http2FrameFlags::kPadded); }
 
     std::string serialize() const override;
-    Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2ErrorCode parse_payload(const uint8_t* data, size_t length) override;
     Http2DataFrame clone() const {
         Http2DataFrame copy;
         copy.m_header = m_header;
@@ -203,44 +203,44 @@ public:
     Http2HeadersFrame& operator=(Http2HeadersFrame&&) noexcept = default;
 
     // 设置头部块片段
-    void setHeaderBlock(std::string block) { m_header_block = std::move(block); }
-    const std::string& headerBlock() const { return m_header_block; }
-    std::string& headerBlock() { return m_header_block; }
+    void set_header_block(std::string block) { m_header_block = std::move(block); }
+    const std::string& header_block() const { return m_header_block; }
+    std::string& header_block() { return m_header_block; }
 
     // END_STREAM 标志
-    bool isEndStream() const { return m_header.hasFlag(Http2FrameFlags::kEndStream); }
-    void setEndStream(bool value) {
-        if (value) m_header.setFlag(Http2FrameFlags::kEndStream);
-        else m_header.clearFlag(Http2FrameFlags::kEndStream);
+    bool is_end_stream() const { return m_header.has_flag(Http2FrameFlags::kEndStream); }
+    void set_end_stream(bool value) {
+        if (value) m_header.set_flag(Http2FrameFlags::kEndStream);
+        else m_header.clear_flag(Http2FrameFlags::kEndStream);
     }
 
     // END_HEADERS 标志
-    bool isEndHeaders() const { return m_header.hasFlag(Http2FrameFlags::kEndHeaders); }
-    void setEndHeaders(bool value) {
-        if (value) m_header.setFlag(Http2FrameFlags::kEndHeaders);
-        else m_header.clearFlag(Http2FrameFlags::kEndHeaders);
+    bool is_end_headers() const { return m_header.has_flag(Http2FrameFlags::kEndHeaders); }
+    void set_end_headers(bool value) {
+        if (value) m_header.set_flag(Http2FrameFlags::kEndHeaders);
+        else m_header.clear_flag(Http2FrameFlags::kEndHeaders);
     }
 
     // PRIORITY 标志
-    bool hasPriority() const { return m_header.hasFlag(Http2FrameFlags::kPriority); }
+    bool has_priority() const { return m_header.has_flag(Http2FrameFlags::kPriority); }
 
     // PADDED 标志
-    bool isPadded() const { return m_header.hasFlag(Http2FrameFlags::kPadded); }
+    bool is_padded() const { return m_header.has_flag(Http2FrameFlags::kPadded); }
 
     // 优先级字段
     bool exclusive() const { return m_exclusive; }
-    uint32_t streamDependency() const { return m_stream_dependency; }
+    uint32_t stream_dependency() const { return m_stream_dependency; }
     uint8_t weight() const { return m_weight; }
 
-    void setPriority(bool exclusive, uint32_t stream_dependency, uint8_t weight) {
-        m_header.setFlag(Http2FrameFlags::kPriority);
+    void set_priority(bool exclusive, uint32_t stream_dependency, uint8_t weight) {
+        m_header.set_flag(Http2FrameFlags::kPriority);
         m_exclusive = exclusive;
         m_stream_dependency = stream_dependency;
         m_weight = weight;
     }
 
     std::string serialize() const override;
-    Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2ErrorCode parse_payload(const uint8_t* data, size_t length) override;
     Http2HeadersFrame clone() const {
         Http2HeadersFrame copy;
         copy.m_header = m_header;
@@ -275,17 +275,17 @@ public:
     Http2PriorityFrame& operator=(Http2PriorityFrame&&) noexcept = default;
 
     bool exclusive() const { return m_exclusive; }
-    uint32_t streamDependency() const { return m_stream_dependency; }
+    uint32_t stream_dependency() const { return m_stream_dependency; }
     uint8_t weight() const { return m_weight; }
 
-    void setPriority(bool exclusive, uint32_t stream_dependency, uint8_t weight) {
+    void set_priority(bool exclusive, uint32_t stream_dependency, uint8_t weight) {
         m_exclusive = exclusive;
         m_stream_dependency = stream_dependency;
         m_weight = weight;
     }
 
     std::string serialize() const override;
-    Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2ErrorCode parse_payload(const uint8_t* data, size_t length) override;
     Http2PriorityFrame clone() const {
         Http2PriorityFrame copy;
         copy.m_header = m_header;
@@ -315,11 +315,11 @@ public:
     Http2RstStreamFrame(Http2RstStreamFrame&&) noexcept = default;
     Http2RstStreamFrame& operator=(Http2RstStreamFrame&&) noexcept = default;
 
-    Http2ErrorCode errorCode() const { return m_error_code; }
-    void setErrorCode(Http2ErrorCode code) { m_error_code = code; }
+    Http2ErrorCode error_code() const { return m_error_code; }
+    void set_error_code(Http2ErrorCode code) { m_error_code = code; }
 
     std::string serialize() const override;
-    Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2ErrorCode parse_payload(const uint8_t* data, size_t length) override;
     Http2RstStreamFrame clone() const {
         Http2RstStreamFrame copy;
         copy.m_header = m_header;
@@ -346,10 +346,10 @@ public:
     Http2SettingsFrame& operator=(Http2SettingsFrame&&) noexcept = default;
 
     // ACK 标志
-    bool isAck() const { return m_header.hasFlag(Http2FrameFlags::kAck); }
-    void setAck(bool value) {
-        if (value) m_header.setFlag(Http2FrameFlags::kAck);
-        else m_header.clearFlag(Http2FrameFlags::kAck);
+    bool is_ack() const { return m_header.has_flag(Http2FrameFlags::kAck); }
+    void set_ack(bool value) {
+        if (value) m_header.set_flag(Http2FrameFlags::kAck);
+        else m_header.clear_flag(Http2FrameFlags::kAck);
     }
 
     // 设置参数
@@ -358,14 +358,14 @@ public:
         Http2SettingsId id;
     };
 
-    void addSetting(Http2SettingsId id, uint32_t value) {
+    void add_setting(Http2SettingsId id, uint32_t value) {
         m_settings.push_back(Setting{.value = value, .id = id});
     }
 
     const std::vector<Setting>& settings() const { return m_settings; }
 
     // 获取特定设置值
-    std::optional<uint32_t> getSetting(Http2SettingsId id) const {
+    std::optional<uint32_t> get_setting(Http2SettingsId id) const {
         for (const auto& s : m_settings) {
             if (s.id == id) return s.value;
         }
@@ -373,7 +373,7 @@ public:
     }
 
     std::string serialize() const override;
-    Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2ErrorCode parse_payload(const uint8_t* data, size_t length) override;
     Http2SettingsFrame clone() const {
         Http2SettingsFrame copy;
         copy.m_header = m_header;
@@ -399,23 +399,23 @@ public:
     Http2PushPromiseFrame(Http2PushPromiseFrame&&) noexcept = default;
     Http2PushPromiseFrame& operator=(Http2PushPromiseFrame&&) noexcept = default;
 
-    uint32_t promisedStreamId() const { return m_promised_stream_id; }
-    void setPromisedStreamId(uint32_t id) { m_promised_stream_id = id; }
+    uint32_t promised_stream_id() const { return m_promised_stream_id; }
+    void set_promised_stream_id(uint32_t id) { m_promised_stream_id = id; }
 
-    const std::string& headerBlock() const { return m_header_block; }
-    void setHeaderBlock(std::string block) { m_header_block = std::move(block); }
+    const std::string& header_block() const { return m_header_block; }
+    void set_header_block(std::string block) { m_header_block = std::move(block); }
 
-    bool isEndHeaders() const { return m_header.hasFlag(Http2FrameFlags::kEndHeaders); }
-    void setEndHeaders(bool value) {
-        if (value) m_header.setFlag(Http2FrameFlags::kEndHeaders);
-        else m_header.clearFlag(Http2FrameFlags::kEndHeaders);
+    bool is_end_headers() const { return m_header.has_flag(Http2FrameFlags::kEndHeaders); }
+    void set_end_headers(bool value) {
+        if (value) m_header.set_flag(Http2FrameFlags::kEndHeaders);
+        else m_header.clear_flag(Http2FrameFlags::kEndHeaders);
     }
 
     // PADDED 标志
-    bool isPadded() const { return m_header.hasFlag(Http2FrameFlags::kPadded); }
+    bool is_padded() const { return m_header.has_flag(Http2FrameFlags::kPadded); }
 
     std::string serialize() const override;
-    Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2ErrorCode parse_payload(const uint8_t* data, size_t length) override;
     Http2PushPromiseFrame clone() const {
         Http2PushPromiseFrame copy;
         copy.m_header = m_header;
@@ -449,20 +449,20 @@ public:
     Http2PingFrame& operator=(Http2PingFrame&&) noexcept = default;
 
     // ACK 标志
-    bool isAck() const { return m_header.hasFlag(Http2FrameFlags::kAck); }
-    void setAck(bool value) {
-        if (value) m_header.setFlag(Http2FrameFlags::kAck);
-        else m_header.clearFlag(Http2FrameFlags::kAck);
+    bool is_ack() const { return m_header.has_flag(Http2FrameFlags::kAck); }
+    void set_ack(bool value) {
+        if (value) m_header.set_flag(Http2FrameFlags::kAck);
+        else m_header.clear_flag(Http2FrameFlags::kAck);
     }
 
     // 8 字节不透明数据
-    const uint8_t* opaqueData() const { return m_opaque_data; }
-    void setOpaqueData(const uint8_t* data) {
+    const uint8_t* opaque_data() const { return m_opaque_data; }
+    void set_opaque_data(const uint8_t* data) {
         std::memcpy(m_opaque_data, data, 8);
     }
 
     std::string serialize() const override;
-    Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2ErrorCode parse_payload(const uint8_t* data, size_t length) override;
     Http2PingFrame clone() const {
         Http2PingFrame copy;
         copy.m_header = m_header;
@@ -491,17 +491,17 @@ public:
     Http2GoAwayFrame(Http2GoAwayFrame&&) noexcept = default;
     Http2GoAwayFrame& operator=(Http2GoAwayFrame&&) noexcept = default;
 
-    uint32_t lastStreamId() const { return m_last_stream_id; }
-    void setLastStreamId(uint32_t id) { m_last_stream_id = id; }
+    uint32_t last_stream_id() const { return m_last_stream_id; }
+    void set_last_stream_id(uint32_t id) { m_last_stream_id = id; }
 
-    Http2ErrorCode errorCode() const { return m_error_code; }
-    void setErrorCode(Http2ErrorCode code) { m_error_code = code; }
+    Http2ErrorCode error_code() const { return m_error_code; }
+    void set_error_code(Http2ErrorCode code) { m_error_code = code; }
 
-    const std::string& debugData() const { return m_debug_data; }
-    void setDebugData(std::string data) { m_debug_data = std::move(data); }
+    const std::string& debug_data() const { return m_debug_data; }
+    void set_debug_data(std::string data) { m_debug_data = std::move(data); }
 
     std::string serialize() const override;
-    Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2ErrorCode parse_payload(const uint8_t* data, size_t length) override;
     Http2GoAwayFrame clone() const {
         Http2GoAwayFrame copy;
         copy.m_header = m_header;
@@ -531,11 +531,11 @@ public:
     Http2WindowUpdateFrame(Http2WindowUpdateFrame&&) noexcept = default;
     Http2WindowUpdateFrame& operator=(Http2WindowUpdateFrame&&) noexcept = default;
 
-    uint32_t windowSizeIncrement() const { return m_window_size_increment; }
-    void setWindowSizeIncrement(uint32_t increment) { m_window_size_increment = increment; }
+    uint32_t window_size_increment() const { return m_window_size_increment; }
+    void set_window_size_increment(uint32_t increment) { m_window_size_increment = increment; }
 
     std::string serialize() const override;
-    Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2ErrorCode parse_payload(const uint8_t* data, size_t length) override;
     Http2WindowUpdateFrame clone() const {
         Http2WindowUpdateFrame copy;
         copy.m_header = m_header;
@@ -561,17 +561,17 @@ public:
     Http2ContinuationFrame(Http2ContinuationFrame&&) noexcept = default;
     Http2ContinuationFrame& operator=(Http2ContinuationFrame&&) noexcept = default;
 
-    const std::string& headerBlock() const { return m_header_block; }
-    void setHeaderBlock(std::string block) { m_header_block = std::move(block); }
+    const std::string& header_block() const { return m_header_block; }
+    void set_header_block(std::string block) { m_header_block = std::move(block); }
 
-    bool isEndHeaders() const { return m_header.hasFlag(Http2FrameFlags::kEndHeaders); }
-    void setEndHeaders(bool value) {
-        if (value) m_header.setFlag(Http2FrameFlags::kEndHeaders);
-        else m_header.clearFlag(Http2FrameFlags::kEndHeaders);
+    bool is_end_headers() const { return m_header.has_flag(Http2FrameFlags::kEndHeaders); }
+    void set_end_headers(bool value) {
+        if (value) m_header.set_flag(Http2FrameFlags::kEndHeaders);
+        else m_header.clear_flag(Http2FrameFlags::kEndHeaders);
     }
 
     std::string serialize() const override;
-    Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2ErrorCode parse_payload(const uint8_t* data, size_t length) override;
     Http2ContinuationFrame clone() const {
         Http2ContinuationFrame copy;
         copy.m_header = m_header;
@@ -588,27 +588,27 @@ private:
 
 // ==================== Http2Frame::asXXX 内联定义 ====================
 
-inline Http2DataFrame* Http2Frame::asData() { return isData() ? static_cast<Http2DataFrame*>(this) : nullptr; }
-inline Http2HeadersFrame* Http2Frame::asHeaders() { return isHeaders() ? static_cast<Http2HeadersFrame*>(this) : nullptr; }
-inline Http2PriorityFrame* Http2Frame::asPriority() { return isPriority() ? static_cast<Http2PriorityFrame*>(this) : nullptr; }
-inline Http2RstStreamFrame* Http2Frame::asRstStream() { return isRstStream() ? static_cast<Http2RstStreamFrame*>(this) : nullptr; }
-inline Http2SettingsFrame* Http2Frame::asSettings() { return isSettings() ? static_cast<Http2SettingsFrame*>(this) : nullptr; }
-inline Http2PushPromiseFrame* Http2Frame::asPushPromise() { return isPushPromise() ? static_cast<Http2PushPromiseFrame*>(this) : nullptr; }
-inline Http2PingFrame* Http2Frame::asPing() { return isPing() ? static_cast<Http2PingFrame*>(this) : nullptr; }
-inline Http2GoAwayFrame* Http2Frame::asGoAway() { return isGoAway() ? static_cast<Http2GoAwayFrame*>(this) : nullptr; }
-inline Http2WindowUpdateFrame* Http2Frame::asWindowUpdate() { return isWindowUpdate() ? static_cast<Http2WindowUpdateFrame*>(this) : nullptr; }
-inline Http2ContinuationFrame* Http2Frame::asContinuation() { return isContinuation() ? static_cast<Http2ContinuationFrame*>(this) : nullptr; }
+inline Http2DataFrame* Http2Frame::as_data() { return is_data() ? static_cast<Http2DataFrame*>(this) : nullptr; }
+inline Http2HeadersFrame* Http2Frame::as_headers() { return is_headers() ? static_cast<Http2HeadersFrame*>(this) : nullptr; }
+inline Http2PriorityFrame* Http2Frame::as_priority() { return is_priority() ? static_cast<Http2PriorityFrame*>(this) : nullptr; }
+inline Http2RstStreamFrame* Http2Frame::as_rst_stream() { return is_rst_stream() ? static_cast<Http2RstStreamFrame*>(this) : nullptr; }
+inline Http2SettingsFrame* Http2Frame::as_settings() { return is_settings() ? static_cast<Http2SettingsFrame*>(this) : nullptr; }
+inline Http2PushPromiseFrame* Http2Frame::as_push_promise() { return is_push_promise() ? static_cast<Http2PushPromiseFrame*>(this) : nullptr; }
+inline Http2PingFrame* Http2Frame::as_ping() { return is_ping() ? static_cast<Http2PingFrame*>(this) : nullptr; }
+inline Http2GoAwayFrame* Http2Frame::as_go_away() { return is_go_away() ? static_cast<Http2GoAwayFrame*>(this) : nullptr; }
+inline Http2WindowUpdateFrame* Http2Frame::as_window_update() { return is_window_update() ? static_cast<Http2WindowUpdateFrame*>(this) : nullptr; }
+inline Http2ContinuationFrame* Http2Frame::as_continuation() { return is_continuation() ? static_cast<Http2ContinuationFrame*>(this) : nullptr; }
 
-inline const Http2DataFrame* Http2Frame::asData() const { return isData() ? static_cast<const Http2DataFrame*>(this) : nullptr; }
-inline const Http2HeadersFrame* Http2Frame::asHeaders() const { return isHeaders() ? static_cast<const Http2HeadersFrame*>(this) : nullptr; }
-inline const Http2PriorityFrame* Http2Frame::asPriority() const { return isPriority() ? static_cast<const Http2PriorityFrame*>(this) : nullptr; }
-inline const Http2RstStreamFrame* Http2Frame::asRstStream() const { return isRstStream() ? static_cast<const Http2RstStreamFrame*>(this) : nullptr; }
-inline const Http2SettingsFrame* Http2Frame::asSettings() const { return isSettings() ? static_cast<const Http2SettingsFrame*>(this) : nullptr; }
-inline const Http2PushPromiseFrame* Http2Frame::asPushPromise() const { return isPushPromise() ? static_cast<const Http2PushPromiseFrame*>(this) : nullptr; }
-inline const Http2PingFrame* Http2Frame::asPing() const { return isPing() ? static_cast<const Http2PingFrame*>(this) : nullptr; }
-inline const Http2GoAwayFrame* Http2Frame::asGoAway() const { return isGoAway() ? static_cast<const Http2GoAwayFrame*>(this) : nullptr; }
-inline const Http2WindowUpdateFrame* Http2Frame::asWindowUpdate() const { return isWindowUpdate() ? static_cast<const Http2WindowUpdateFrame*>(this) : nullptr; }
-inline const Http2ContinuationFrame* Http2Frame::asContinuation() const { return isContinuation() ? static_cast<const Http2ContinuationFrame*>(this) : nullptr; }
+inline const Http2DataFrame* Http2Frame::as_data() const { return is_data() ? static_cast<const Http2DataFrame*>(this) : nullptr; }
+inline const Http2HeadersFrame* Http2Frame::as_headers() const { return is_headers() ? static_cast<const Http2HeadersFrame*>(this) : nullptr; }
+inline const Http2PriorityFrame* Http2Frame::as_priority() const { return is_priority() ? static_cast<const Http2PriorityFrame*>(this) : nullptr; }
+inline const Http2RstStreamFrame* Http2Frame::as_rst_stream() const { return is_rst_stream() ? static_cast<const Http2RstStreamFrame*>(this) : nullptr; }
+inline const Http2SettingsFrame* Http2Frame::as_settings() const { return is_settings() ? static_cast<const Http2SettingsFrame*>(this) : nullptr; }
+inline const Http2PushPromiseFrame* Http2Frame::as_push_promise() const { return is_push_promise() ? static_cast<const Http2PushPromiseFrame*>(this) : nullptr; }
+inline const Http2PingFrame* Http2Frame::as_ping() const { return is_ping() ? static_cast<const Http2PingFrame*>(this) : nullptr; }
+inline const Http2GoAwayFrame* Http2Frame::as_go_away() const { return is_go_away() ? static_cast<const Http2GoAwayFrame*>(this) : nullptr; }
+inline const Http2WindowUpdateFrame* Http2Frame::as_window_update() const { return is_window_update() ? static_cast<const Http2WindowUpdateFrame*>(this) : nullptr; }
+inline const Http2ContinuationFrame* Http2Frame::as_continuation() const { return is_continuation() ? static_cast<const Http2ContinuationFrame*>(this) : nullptr; }
 
 /**
  * @brief HTTP/2 帧解析器
@@ -621,7 +621,7 @@ public:
      * @param data 数据指针（至少 9 字节）
      * @return 帧头
      */
-    static Http2FrameHeader parseHeader(const uint8_t* data);
+    static Http2FrameHeader parse_header(const uint8_t* data);
 
     /**
      * @brief 解析完整帧
@@ -629,14 +629,14 @@ public:
      * @param length 数据长度
      * @return 解析结果：帧指针或错误码
      */
-    static std::expected<Http2Frame::uptr, Http2ErrorCode> parseFrame(const uint8_t* data, size_t length);
+    static std::expected<Http2Frame::uptr, Http2ErrorCode> parse_frame(const uint8_t* data, size_t length);
 
     /**
      * @brief 根据帧类型创建帧对象
      * @param type 帧类型
      * @return 帧对象
      */
-    static Http2Frame::uptr createFrame(Http2FrameType type);
+    static Http2Frame::uptr create_frame(Http2FrameType type);
 };
 
 /**

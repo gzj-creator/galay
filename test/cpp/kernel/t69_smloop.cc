@@ -46,7 +46,7 @@ struct ReadWriteLoopMachine {
 
         switch (m_phase) {
         case Phase::ReadHello:
-            return MachineAction<result_type>::waitRead(
+            return MachineAction<result_type>::wait_read(
                 m_hello.data() + m_hello_received,
                 m_hello.size() - m_hello_received
             );
@@ -54,12 +54,12 @@ struct ReadWriteLoopMachine {
             m_phase = Phase::WritePong;
             return MachineAction<result_type>::continue_();
         case Phase::WritePong:
-            return MachineAction<result_type>::waitWrite(
+            return MachineAction<result_type>::wait_write(
                 m_pong.data() + m_pong_sent,
                 m_pong.size() - m_pong_sent
             );
         case Phase::ReadWorld:
-            return MachineAction<result_type>::waitRead(
+            return MachineAction<result_type>::wait_read(
                 m_world.data() + m_world_received,
                 m_world.size() - m_world_received
             );
@@ -69,7 +69,7 @@ struct ReadWriteLoopMachine {
         return MachineAction<result_type>::fail(IOError(kParamInvalid, 0));
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
             m_result = std::unexpected(result.error());
             m_phase = Phase::Done;
@@ -106,7 +106,7 @@ struct ReadWriteLoopMachine {
         m_phase = Phase::Done;
     }
 
-    void onWrite(std::expected<size_t, IOError> result) {
+    void on_write(std::expected<size_t, IOError> result) {
         if (!result) {
             m_result = std::unexpected(result.error());
             m_phase = Phase::Done;
@@ -149,7 +149,7 @@ struct TestState {
     std::atomic<bool> success{false};
 };
 
-Task<void> machineTask(TestState* state, int fd) {
+Task<void> machine_task(TestState* state, int fd) {
     IOController controller(GHandle{.fd = fd});
     StateMachineAwaitable<ReadWriteLoopMachine> awaitable(&controller, ReadWriteLoopMachine{});
 
@@ -158,7 +158,7 @@ Task<void> machineTask(TestState* state, int fd) {
     state->done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -171,7 +171,7 @@ bool waitUntil(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-bool sendAll(int fd, const char* buffer, size_t length) {
+bool send_all(int fd, const char* buffer, size_t length) {
     size_t sent = 0;
     while (sent < length) {
         const ssize_t n = ::send(fd, buffer + sent, length - sent, 0);
@@ -183,7 +183,7 @@ bool sendAll(int fd, const char* buffer, size_t length) {
     return true;
 }
 
-bool recvExact(int fd, char* buffer, size_t length) {
+bool recv_exact(int fd, char* buffer, size_t length) {
     size_t received = 0;
     while (received < length) {
         const ssize_t n = ::recv(fd, buffer + received, length - received, 0);
@@ -213,16 +213,16 @@ int main() {
         constexpr char world[] = "world";
         char pong[4]{};
 
-        if (sendAll(fds[1], hello, sizeof(hello) - 1) &&
-            recvExact(fds[1], pong, sizeof(pong)) &&
+        if (send_all(fds[1], hello, sizeof(hello) - 1) &&
+            recv_exact(fds[1], pong, sizeof(pong)) &&
             std::string(pong, sizeof(pong)) == "pong") {
-            sendAll(fds[1], world, sizeof(world) - 1);
+            send_all(fds[1], world, sizeof(world) - 1);
         }
     });
 
-    scheduleTask(scheduler, machineTask(&state, fds[0]));
+    schedule_task(scheduler, machine_task(&state, fds[0]));
 
-    const bool completed = waitUntil(state.done);
+    const bool completed = wait_until(state.done);
     scheduler.stop();
     close(fds[0]);
     peer.join();

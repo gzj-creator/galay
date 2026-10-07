@@ -41,20 +41,20 @@ namespace {
 
 template <typename BuilderT>
 concept AcceptsProductionConfig = requires(BuilderT builder, EtcdProductionConfig config) {
-    { builder.productionConfig(config) } -> std::same_as<BuilderT&>;
-    builder.buildConfig().production.endpoints;
+    { builder.production_config(config) } -> std::same_as<BuilderT&>;
+    builder.build_config().production.endpoints;
 };
 
 template <typename ClientT>
 concept HasStatsSnapshot = requires(const ClientT& client) {
-    { client.getStats() } -> std::same_as<EtcdClientStats>;
+    { client.get_stats() } -> std::same_as<EtcdClientStats>;
 };
 
 template <typename PoolT, typename AcquireResultT>
 concept HasPoolSurface = requires(PoolT& pool, const PoolT& const_pool) {
-    { pool.tryAcquire() } -> std::same_as<AcquireResultT>;
+    { pool.try_acquire() } -> std::same_as<AcquireResultT>;
     { const_pool.size() } -> std::same_as<size_t>;
-    { const_pool.idleCount() } -> std::same_as<size_t>;
+    { const_pool.idle_count() } -> std::same_as<size_t>;
 };
 
 static_assert(std::is_enum_v<EtcdEndpointPolicy>);
@@ -96,8 +96,8 @@ int main()
     production.connections_per_endpoint = 2;
 
     const auto sync_config = EtcdClientBuilder()
-        .productionConfig(production)
-        .buildConfig();
+        .production_config(production)
+        .build_config();
     if (sync_config.production.endpoints.size() != 2 ||
         sync_config.production.retry.attempts != 5 ||
         sync_config.endpoint != "http://127.0.0.1:2379") {
@@ -105,15 +105,15 @@ int main()
     }
 
     const auto async_config = AsyncEtcdClientBuilder()
-        .productionConfig(production)
-        .buildConfig();
+        .production_config(production)
+        .build_config();
     if (async_config.production.endpoint_policy != EtcdEndpointPolicy::RoundRobin) {
         return 3;
     }
 
     const auto async_cluster_config = AsyncEtcdClusterClientBuilder()
-        .productionConfig(production)
-        .buildConfig();
+        .production_config(production)
+        .build_config();
     if (async_cluster_config.production.endpoints.size() != 2 ||
         async_cluster_config.production.connections_per_endpoint != 2 ||
         async_cluster_config.endpoint != "http://127.0.0.1:2379") {
@@ -138,7 +138,7 @@ int main()
     credentials.password = "plain-password";
     credentials.bearer_token = "bearer-token";
 
-    const std::string redacted = credentials.redactedString();
+    const std::string redacted = credentials.redacted_string();
     if (!contains(redacted, "root") ||
         contains(redacted, "plain-password") ||
         contains(redacted, "bearer-token")) {

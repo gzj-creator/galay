@@ -20,7 +20,7 @@ namespace {
 
 constexpr std::size_t kIterations = 1'000'000;
 
-double opsPerSecond(std::chrono::steady_clock::duration elapsed,
+double ops_per_second(std::chrono::steady_clock::duration elapsed,
                     std::size_t operations) {
     const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
     return ns > 0
@@ -28,7 +28,7 @@ double opsPerSecond(std::chrono::steady_clock::duration elapsed,
         : 0.0;
 }
 
-bool benchReadyPath() {
+bool bench_ready_path() {
     std::size_t completed = 0;
     const auto start = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < kIterations; ++i) {
@@ -47,11 +47,11 @@ bool benchReadyPath() {
     const auto elapsed = std::chrono::steady_clock::now() - start;
     std::cout << "TimeoutReadyPath iterations=" << completed
               << " ops_per_sec=" << std::fixed << std::setprecision(0)
-              << opsPerSecond(elapsed, completed) << "\n";
+              << ops_per_second(elapsed, completed) << "\n";
     return true;
 }
 
-void benchEagerTimerControl() {
+void bench_eager_timer_control() {
     const auto start = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < kIterations; ++i) {
         auto timer = std::make_shared<TimeoutTimer>(5ms);
@@ -60,18 +60,18 @@ void benchEagerTimerControl() {
     const auto elapsed = std::chrono::steady_clock::now() - start;
     std::cout << "EagerTimerControl iterations=" << kIterations
               << " ops_per_sec=" << std::fixed << std::setprecision(0)
-              << opsPerSecond(elapsed, kIterations) << "\n";
+              << ops_per_second(elapsed, kIterations) << "\n";
 }
 
 }  // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    benchEagerTimerControl();
-    if (!benchReadyPath()) {
+    bench_eager_timer_control();
+    if (!bench_ready_path()) {
         return 1;
     }
     std::cout << "B33-TimeoutReadyPath PASS\n";

@@ -31,7 +31,7 @@ public:
      * @param salt 服务器发送的salt（20字节）
      * @return 认证数据（20字节）
      */
-    static std::string nativePasswordAuth(const std::string& password, const std::string& salt);
+    static std::string native_password_auth(const std::string& password, const std::string& salt);
 
     /**
      * @brief caching_sha2_password 认证
@@ -40,7 +40,7 @@ public:
      * @param salt 服务器发送的salt（20字节）
      * @return 认证数据（32字节）
      */
-    static std::string cachingSha2Auth(const std::string& password, const std::string& salt);
+    static std::string caching_sha2_auth(const std::string& password, const std::string& salt);
 
     /**
      * @brief 根据认证插件名计算认证响应
@@ -49,7 +49,7 @@ public:
      * @param salt 服务器发送的 salt
      * @return 认证响应数据，或不支持的插件错误
      */
-    static std::expected<std::string, std::string> authResponseForPlugin(std::string_view plugin_name,
+    static std::expected<std::string, std::string> auth_response_for_plugin(std::string_view plugin_name,
                                                                          const std::string& password,
                                                                          const std::string& salt);
 
@@ -61,7 +61,7 @@ public:
      * @param pem_public_key 服务端返回的 PEM 公钥
      * @return 加密后的认证数据
      */
-    static std::expected<std::string, std::string> cachingSha2FullAuth(const std::string& password,
+    static std::expected<std::string, std::string> caching_sha2_full_auth(const std::string& password,
                                                                        const std::string& salt,
                                                                        std::string_view pem_public_key);
 
@@ -78,7 +78,7 @@ public:
     /**
      * @brief XOR两个等长字符串
      */
-    static std::string xorStrings(const std::string& a, const std::string& b);
+    static std::string xor_strings(const std::string& a, const std::string& b);
 };
 
 } // namespace galay::mysql::protocol

@@ -122,11 +122,11 @@ public:
      *             - 路径参数：/user/:id 或 /user/:id/posts/:postId
      *             - 通配符：/static/\* 或 /files/\*\*
      * @param handler 处理函数
-     * @details 支持多个HTTP方法，例如: addHandler<HttpMethod::GET, HttpMethod::POST>("/api", handler)
+     * @details 支持多个HTTP方法，例如: add_handler<HttpMethod::GET, HttpMethod::POST>("/api", handler)
      */
     template<HttpMethod... Methods>
-    void addHandler(const std::string& path, HttpRouteHandler handler) {
-        (addHandlerInternal(Methods, path, handler), ...);
+    void add_handler(const std::string& path, HttpRouteHandler handler) {
+        (add_handler_internal(Methods, path, handler), ...);
     }
 
     /**
@@ -135,7 +135,7 @@ public:
      * @param path 请求路径
      * @return RouteMatch 匹配结果，包含处理器和路径参数
      */
-    RouteMatch findHandler(HttpMethod method, const std::string& path);
+    RouteMatch find_handler(HttpMethod method, const std::string& path);
 
     /**
      * @brief 移除路由处理器
@@ -143,7 +143,7 @@ public:
      * @param path 路由路径
      * @return 是否成功移除
      */
-    bool delHandler(HttpMethod method, const std::string& path);
+    bool del_handler(HttpMethod method, const std::string& path);
 
     /**
      * @brief 清空所有路由
@@ -155,7 +155,7 @@ public:
      * @param policy route-mode 默认策略，按值保存，调用方可安全释放原对象
      * @details Task 1 仅保存该策略；后续限流、超时、代理和静态文件任务会读取这些值。
      */
-    void setDefaultPolicy(HttpServerPolicy policy) {
+    void set_default_policy(HttpServerPolicy policy) {
         m_defaultPolicy = std::move(policy);
     }
 
@@ -163,7 +163,7 @@ public:
      * @brief 获取路由器默认生产策略
      * @return 当前默认策略引用，生命周期与路由器一致
      */
-    const HttpServerPolicy& defaultPolicy() const {
+    const HttpServerPolicy& default_policy() const {
         return m_defaultPolicy;
     }
 
@@ -197,12 +197,12 @@ public:
      * @param dirPath 本地文件系统目录路径
      * @param setting 静态文件传输配置（可选）
      * @details 在调用时遍历目录，为所有文件创建精确路由并注册到 map
-     *          例如：mountHardly("/static", "./public")
+     *          例如：mount_hardly("/static", "./public")
      *          会为 ./public 下的所有文件创建精确路由
      *
      *          支持三种传输模式（同 mount）
      */
-    void mountHardly(const std::string& routePrefix, const std::string& dirPath,
+    void mount_hardly(const std::string& routePrefix, const std::string& dirPath,
                      const StaticFileSetting& setting = StaticFileSetting());
 
     /**
@@ -216,7 +216,7 @@ public:
      * @details 行为等价于：
      *          location /static/ { try_files $uri @upstream; }
      */
-    void tryFiles(const std::string& routePrefix,
+    void try_files(const std::string& routePrefix,
                   const std::string& dirPath,
                   const std::string& upstreamHost,
                   uint16_t upstreamPort,
@@ -240,8 +240,8 @@ public:
                ProxyMode mode = ProxyMode::Http);
 
 private:
-    bool hasFallbackProxy() const;
-    HttpRouteHandler* fallbackProxyHandler();
+    bool has_fallback_proxy() const;
+    HttpRouteHandler* fallback_proxy_handler();
 
     /**
      * @brief 内部添加路由处理器的实现
@@ -249,21 +249,21 @@ private:
      * @param path 路由路径
      * @param handler 处理函数
      */
-    void addHandlerInternal(HttpMethod method, const std::string& path, HttpRouteHandler handler);
+    void add_handler_internal(HttpMethod method, const std::string& path, HttpRouteHandler handler);
 
     /**
      * @brief 判断路径是否为模糊匹配模式
      * @param path 路径
      * @return 是否为模糊匹配
      */
-    bool isFuzzyPattern(const std::string& path) const;
+    bool is_fuzzy_pattern(const std::string& path) const;
 
     /**
      * @brief 分割路径为段
      * @param path 路径
      * @return 路径段列表
      */
-    std::vector<std::string> splitPath(const std::string& path) const;
+    std::vector<std::string> split_path(const std::string& path) const;
 
     /**
      * @brief 验证路径格式是否合法
@@ -271,7 +271,7 @@ private:
      * @param error 错误信息（输出参数）
      * @return 是否合法
      */
-    bool validatePath(const std::string& path, std::string& error) const;
+    bool validate_path(const std::string& path, std::string& error) const;
 
     /**
      * @brief 在Trie树中插入路由
@@ -279,7 +279,7 @@ private:
      * @param segments 路径段列表
      * @param handler 处理函数
      */
-    void insertRoute(RouteTrieNode* root, const std::vector<std::string>& segments,
+    void insert_route(RouteTrieNode* root, const std::vector<std::string>& segments,
                      HttpRouteHandler handler);
 
     /**
@@ -289,7 +289,7 @@ private:
      * @param params 输出参数：提取的路径参数
      * @return 处理函数指针，未找到返回nullptr
      */
-    HttpRouteHandler* searchRoute(RouteTrieNode* root, const std::vector<std::string>& segments,
+    HttpRouteHandler* search_route(RouteTrieNode* root, const std::vector<std::string>& segments,
                                   RouteParams& params);
 
     /**
@@ -299,11 +299,11 @@ private:
      * @param params 输出参数：提取的路径参数
      * @return 处理函数指针，未找到返回nullptr
      */
-    HttpRouteHandler* searchRoutePath(RouteTrieNode* root,
+    HttpRouteHandler* search_route_path(RouteTrieNode* root,
                                       std::string_view path,
                                       RouteParams& params);
 
-    HttpRouteHandler* searchRoutePathRecursive(RouteTrieNode* node,
+    HttpRouteHandler* search_route_path_recursive(RouteTrieNode* node,
                                                std::string_view path,
                                                size_t offset,
                                                std::vector<std::string_view>& paramValues,
@@ -316,10 +316,10 @@ private:
      * @param config 静态文件传输配置
      * @return 处理函数
      */
-    HttpRouteHandler createStaticFileHandler(const std::string& routePrefix,
+    HttpRouteHandler create_static_file_handler(const std::string& routePrefix,
                                              const std::string& dirPath,
                                              const StaticFileSetting& config,
-                                             HttpRouteHandler fallbackHandler = HttpRouteHandler());
+                                             HttpRouteHandler fallback_handler = HttpRouteHandler());
 
     /**
      * @brief 递归遍历目录并注册所有文件
@@ -328,7 +328,7 @@ private:
      * @param config 静态文件传输配置
      * @param currentPath 当前遍历的相对路径
      */
-    void registerFilesRecursively(const std::string& routePrefix,
+    void register_files_recursively(const std::string& routePrefix,
                                    const std::string& dirPath,
                                    const StaticFileSetting& config,
                                    const std::string& currentPath = "");
@@ -339,7 +339,7 @@ private:
      * @param config 静态文件传输配置
      * @return 处理函数
      */
-    HttpRouteHandler createSingleFileHandler(const std::string& filePath,
+    HttpRouteHandler create_single_file_handler(const std::string& filePath,
                                              const StaticFileSetting& config);
 
     /**
@@ -349,7 +349,7 @@ private:
      * @param upstreamPort 上游端口
      * @return 处理函数
      */
-    HttpRouteHandler createProxyHandler(const std::string& routePrefix,
+    HttpRouteHandler create_proxy_handler(const std::string& routePrefix,
                                         const std::string& upstreamHost,
                                         uint16_t upstreamPort,
                                         ProxyMode mode);
@@ -359,13 +359,13 @@ private:
      * @param conn HTTP连接
      * @param req HTTP请求（用于处理 Range 和条件请求）
      * @param filePath 文件路径
-     * @param fileSize 文件大小
+     * @param file_size 文件大小
      * @param mimeType MIME类型
      * @param config 静态文件传输配置
      * @param lastModified 文件最后修改时间；为 0 时在发送前生成回退值
      * @return 协程
      */
-    static Task<void> sendFileContent(HttpConn& conn,
+    static Task<void> send_file_content(HttpConn& conn,
                                       HttpRequest& req,
                                       const std::string& filePath,
                                       size_t fileSize,
@@ -378,7 +378,7 @@ private:
      * @param conn HTTP连接
      * @param req HTTP请求
      * @param filePath 文件路径
-     * @param fileSize 文件大小
+     * @param file_size 文件大小
      * @param mimeType MIME类型
      * @param etag ETag
      * @param lastModified 最后修改时间
@@ -386,7 +386,7 @@ private:
      * @param config 静态文件传输配置
      * @return 协程
      */
-    static Task<void> sendSingleRange(HttpConn& conn,
+    static Task<void> send_single_range(HttpConn& conn,
                                       HttpRequest& req,
                                       const std::string& filePath,
                                       size_t fileSize,
@@ -401,7 +401,7 @@ private:
      * @param conn HTTP连接
      * @param req HTTP请求
      * @param filePath 文件路径
-     * @param fileSize 文件大小
+     * @param file_size 文件大小
      * @param mimeType MIME类型
      * @param etag ETag
      * @param lastModified 最后修改时间
@@ -409,7 +409,7 @@ private:
      * @param config 静态文件传输配置
      * @return 协程
      */
-    static Task<void> sendMultipleRanges(HttpConn& conn,
+    static Task<void> send_multiple_ranges(HttpConn& conn,
                                          HttpRequest& req,
                                          const std::string& filePath,
                                          size_t fileSize,

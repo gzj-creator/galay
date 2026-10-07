@@ -11,17 +11,33 @@
 
 ## [Unreleased]
 
+## [v6.2.0] - 2026-10-07
+
 ### Changed
 
+- Galay 自有函数统一迁移为 `snake_case`，覆盖公开/私有成员、静态/模板方法、自由函数、内部 helper 与命名回调；同步 C/C++ 桥接、C++23 模块消费、测试、示例、benchmark 和当前使用文档。包括 `get_next_io_scheduler`、`block_on_io`、`io_scheduler_count`、`add_handler`、`is_running`、`handle_non_block` 和 `base64_encode`。
+- 删除旧函数拼写，不保留别名、包装或 fallback；类型名称、C API 模块前缀、标准/外部契约、协议字段和稳定日志/错误字符串不变。`Deadline::deadline_time` 与 `BlackListConfig::set_client_key_mode` / `set_exclude_ips` 避免与既有类型别名或字段重名。
+- 复核两份旧重构文档：IO 配置模板和公共调度逻辑已实现，Timer 已支持 tick 配置与启动前替换；保留 `std::expected`，不增加第二套错误传播协议、Timer 模板层或未被生产使用的并行配置入口。撤销没有真实负载成对测量支持的 5-15% / 3-8% 性能预期。
 - `ApiErrorCode` 的全部 16 个枚举项统一改为 `k` 前缀加 `PascalCase`，例如 `kBusinessError`、`kBadRequest`；同步 API 实现、示例、测试和安装消费者，不保留旧名别名。枚举值、HTTP 状态以及 JSON/日志中的 snake_case 错误码字符串保持不变。
+- CMake、Bazel 和 mcpp 版本元数据统一为 `6.2.0`。按用户指定的小/中版本范围选择中版本；这不是源码兼容或 C++ ABI 兼容承诺，消费者必须更新调用并重新编译。
+
+### Fixed
+
+- 命名迁移同步源码边界测试的函数签名与调用标记，不削弱正向/负向断言；API 安装消费者测试改用符合既有 `tNN_<scenario>.cc` 规则的文件名，修复全量回归发现的既有 style audit 阻断。
+- 修复 API policy 回归的既有 procfs 资源基线竞态：只在下一场景启动前等待前一 Runtime 的线程退出，再捕获单线程基线；启动/安装后的 fd 与线程数仍立即严格比较，不以重试掩盖资源副作用。迁移前 sanitizer 程序可复现，修复后开启泄漏检查连续 30 次通过。
 
 ### Docs
 
+- 新增 `docs/cpp/modules/kernel/21-重构评估.md`，记录优化完成状态、取舍依据、命名对照及验证边界；修正调度器配置注释中的无依据性能保证。根目录两份原已忽略的中间文档仅在本地更新，历史 release 和原始 benchmark 证据不改写。
 - 在 `AGENTS.md` 明确 C++ 错误码枚举项的 `k` 前缀命名规则，保留类型 `PascalCase`、函数 `snake_case` 和 C API 模块前缀加 `UPPER_SNAKE_CASE` 的约定；更新 API 快速开始、参考、使用指南和示例中的错误码名称。
 
 ### Validation
 
-- 新增回归覆盖全部 16 个错误码的稳定名称和 JSON 编码、默认 Bad Request 与未知枚举值诊断；API 示例及九个测试目标构建成功，API 回归 12/12（含配置和安装消费）通过，提交前单测复跑 9/9 通过。
+- 新增 `t197_api_naming.cc`，覆盖新名可用、旧名不存在、Base64 与实际 Runtime 执行；确认标量 IO expected 平凡析构且 `IOError(kDisconnectError, 0)` 仍是失败，补充 blacklist 配置 setter 链式调用回归。
+- 自上次 tag 以来的错误码提交已验证全部 16 个稳定名称与 JSON 编码、默认 Bad Request 和未知枚举值诊断；该提交的 API 12/12（含配置和安装消费）及提交前九项单测通过。
+- GCC 14 / C++23 / Linux epoll / Release 共享库全量构建通过，启用所有模块、可选 API、C ABI、示例、benchmark 与 RPC etcd 接入；最终串行 CTest 共 642 项：601 通过、36 跳过、5 禁用、0 失败。前一轮并行测试曾出现 RPC PID 派生端口的 `EADDRINUSE`，该用例连续 20 次通过后再完整串行验证，保留端口碰撞风险记录。
+- io_uring 定向回归 6/6、ASan/UBSan/泄漏检查 16/16、移动安装前缀的 API 消费者 3/3 通过；mcpp / LLVM 22.1.8 `full` Release 原生模块构建通过，21 个程序中 19 通过、2 个后端条件跳过；14 个模块 prelude 校验通过。
+- Bazel、原生 macOS/BSD kqueue、Windows、可选 API 原生模块和所有后端/链接方式组合未实跑，外部数据库/集群门控项保持跳过；本轮未运行性能对比，不宣称吞吐或延迟改善。
 
 ## [v6.1.0] - 2026-10-07
 

@@ -21,13 +21,13 @@ using namespace galay::kernel;
 
 namespace {
 
-Task<void> pendingTask() {
+Task<void> pending_task() {
     co_return;
 }
 
 template <typename SchedulerT>
-bool startWakeReactor(SchedulerT& scheduler) {
-    auto started = SchedulerTestAccess::startReactor(scheduler);
+bool start_wake_reactor(SchedulerT& scheduler) {
+    auto started = SchedulerTestAccess::start_reactor(scheduler);
     if (!started) {
         std::cerr << "[T42] failed to start reactor: " << started.error().message() << "\n";
         return false;
@@ -36,14 +36,14 @@ bool startWakeReactor(SchedulerT& scheduler) {
 }
 
 template <typename SchedulerT>
-bool injectBurstFromEmptyQueue(SchedulerT& scheduler, int count) {
+bool inject_burst_from_empty_queue(SchedulerT& scheduler, int count) {
     SchedulerTestAccess::sleeping(scheduler).store(false, std::memory_order_release);
-    SchedulerTestAccess::wakeupPending(scheduler).store(false, std::memory_order_release);
+    SchedulerTestAccess::wakeup_pending(scheduler).store(false, std::memory_order_release);
 
     for (int i = 0; i < count; ++i) {
-        Task<void> task = pendingTask();
-        detail::setTaskScheduler(detail::TaskAccess::taskRef(task), &scheduler);
-        if (!scheduler.schedule(detail::TaskAccess::taskRef(task))) {
+        Task<void> task = pending_task();
+        detail::set_task_scheduler(detail::TaskAccess::task_ref(task), &scheduler);
+        if (!scheduler.schedule(detail::TaskAccess::task_ref(task))) {
             std::cerr << "[T42] failed to inject task " << i << "\n";
             return false;
         }
@@ -52,7 +52,7 @@ bool injectBurstFromEmptyQueue(SchedulerT& scheduler, int count) {
 }
 
 #if defined(USE_KQUEUE)
-bool readKqueueWakeEvents(int kqueue_fd, int& total) {
+bool read_kqueue_wake_events(int kqueue_fd, int& total) {
     total = 0;
     while (true) {
         struct kevent ev{};
@@ -77,19 +77,19 @@ bool readKqueueWakeEvents(int kqueue_fd, int& total) {
     }
 }
 
-bool verifyQueueEdgeWakeup() {
+bool verify_queue_edge_wakeup() {
     KqueueScheduler scheduler;
 
-    if (!startWakeReactor(scheduler)) {
+    if (!start_wake_reactor(scheduler)) {
         return false;
     }
 
-    if (!injectBurstFromEmptyQueue(scheduler, 3)) {
+    if (!inject_burst_from_empty_queue(scheduler, 3)) {
         return false;
     }
 
     int total = 0;
-    if (!readKqueueWakeEvents(SchedulerTestAccess::wakeReadFd(scheduler), total)) {
+    if (!read_kqueue_wake_events(SchedulerTestAccess::wake_read_fd(scheduler), total)) {
         return false;
     }
 
@@ -101,19 +101,19 @@ bool verifyQueueEdgeWakeup() {
     return true;
 }
 #elif defined(USE_EPOLL)
-bool verifyQueueEdgeWakeup() {
+bool verify_queue_edge_wakeup() {
     EpollScheduler scheduler;
 
-    if (!startWakeReactor(scheduler)) {
+    if (!start_wake_reactor(scheduler)) {
         return false;
     }
 
-    if (!injectBurstFromEmptyQueue(scheduler, 3)) {
+    if (!inject_burst_from_empty_queue(scheduler, 3)) {
         return false;
     }
 
     uint64_t wake_count = 0;
-    const ssize_t n = read(SchedulerTestAccess::wakeReadFd(scheduler), &wake_count, sizeof(wake_count));
+    const ssize_t n = read(SchedulerTestAccess::wake_read_fd(scheduler), &wake_count, sizeof(wake_count));
     if (n != static_cast<ssize_t>(sizeof(wake_count))) {
         std::cerr << "[T42] failed to read eventfd wake count\n";
         return false;
@@ -127,19 +127,19 @@ bool verifyQueueEdgeWakeup() {
     return true;
 }
 #elif defined(USE_IOURING)
-bool verifyQueueEdgeWakeup() {
+bool verify_queue_edge_wakeup() {
     IOUringScheduler scheduler;
 
-    if (!startWakeReactor(scheduler)) {
+    if (!start_wake_reactor(scheduler)) {
         return false;
     }
 
-    if (!injectBurstFromEmptyQueue(scheduler, 3)) {
+    if (!inject_burst_from_empty_queue(scheduler, 3)) {
         return false;
     }
 
     uint64_t wake_count = 0;
-    const ssize_t n = read(SchedulerTestAccess::wakeReadFd(scheduler), &wake_count, sizeof(wake_count));
+    const ssize_t n = read(SchedulerTestAccess::wake_read_fd(scheduler), &wake_count, sizeof(wake_count));
     if (n != static_cast<ssize_t>(sizeof(wake_count))) {
         std::cerr << "[T42] failed to read eventfd wake count\n";
         return false;
@@ -153,7 +153,7 @@ bool verifyQueueEdgeWakeup() {
     return true;
 }
 #else
-bool verifyQueueEdgeWakeup() {
+bool verify_queue_edge_wakeup() {
     std::cout << "T42-SchedulerQueueEdgeWakeup SKIP\n";
     return true;
 }
@@ -162,7 +162,7 @@ bool verifyQueueEdgeWakeup() {
 }  // namespace
 
 int main() {
-    if (!verifyQueueEdgeWakeup()) {
+    if (!verify_queue_edge_wakeup()) {
         return 1;
     }
 

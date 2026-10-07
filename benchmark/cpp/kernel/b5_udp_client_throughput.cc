@@ -52,24 +52,24 @@ int g_server_port = 9090;          // 服务器端口
 IOScheduler* g_scheduler = nullptr;
 
 // 信号处理函数
-void signalHandler(int signum) {
+void signal_handler(int signum) {
     LogInfo("\nReceived signal {}, shutting down clients...", signum);
     g_running.store(false, std::memory_order_relaxed);
 }
 
 // UDP客户端协程 - 流水线模式
-Task<void> udpBenchmarkClient(int client_id) {
+Task<void> udp_benchmark_client(int client_id) {
     g_active_clients.fetch_add(1, std::memory_order_relaxed);
 
     AsyncUdpSocket socket;
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     // 设置发送缓冲区大小
     int send_buf_size = 2 * 1024 * 1024; // 2MB
     setsockopt(socket.handle().fd, SOL_SOCKET, SO_SNDBUF,
                &send_buf_size, sizeof(send_buf_size));
 
-    Host serverHost(IPType::IPV4, g_server_host, g_server_port);
+    Host server_host(IPType::IPV4, g_server_host, g_server_port);
 
     // 准备测试数据
     std::vector<char> message(g_message_size);
@@ -85,7 +85,7 @@ Task<void> udpBenchmarkClient(int client_id) {
     for (int batch = 0; batch < g_messages_per_client / PIPELINE_SIZE && g_running.load(std::memory_order_relaxed); ++batch) {
         // 批量发送
         for (int i = 0; i < PIPELINE_SIZE; ++i) {
-            auto sendResult = co_await socket.sendto(message.data(), g_message_size, serverHost);
+            auto sendResult = co_await socket.sendto(message.data(), g_message_size, server_host);
             if (sendResult) {
                 local_sent++;
             }
@@ -116,7 +116,7 @@ Task<void> udpBenchmarkClient(int client_id) {
     co_return;
 }
 
-void printBenchmarkResults(std::chrono::steady_clock::time_point start_time) {
+void print_benchmark_results(std::chrono::steady_clock::time_point start_time) {
     auto end_time = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
     double duration_sec = duration / 1000.0;
@@ -151,7 +151,7 @@ void printBenchmarkResults(std::chrono::steady_clock::time_point start_time) {
     LogInfo("===========================================\n");
 }
 
-void printUsage(const char* program_name) {
+void print_usage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [options]\n"
               << "Options:\n"
               << "  -h, --host <host>       Server host (default: 127.0.0.1)\n"
@@ -164,7 +164,7 @@ void printUsage(const char* program_name) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -172,7 +172,7 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--help") {
-            printUsage(argv[0]);
+            print_usage(argv[0]);
             return 0;
         } else if ((arg == "-h" || arg == "--host") && i + 1 < argc) {
             g_server_host = argv[++i];
@@ -188,7 +188,7 @@ int main(int argc, char* argv[]) {
             g_test_duration_sec = std::atoi(argv[++i]);
         } else {
             std::cerr << "Unknown option: " << arg << "\n";
-            printUsage(argv[0]);
+            print_usage(argv[0]);
             return 1;
         }
     }
@@ -199,8 +199,8 @@ int main(int argc, char* argv[]) {
     LogInfo("Target Server: {}:{}", g_server_host, g_server_port);
 
     // 注册信号处理
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
 #ifdef USE_KQUEUE
     LogInfo("Using KqueueScheduler (macOS)");
@@ -225,7 +225,7 @@ int main(int argc, char* argv[]) {
     // 启动多个客户端
     LogInfo("Starting {} clients...", g_num_clients);
     for (int i = 0; i < g_num_clients; ++i) {
-        scheduleTask(scheduler, udpBenchmarkClient(i));
+        schedule_task(scheduler, udp_benchmark_client(i));
     }
 
     // 运行测试
@@ -246,7 +246,7 @@ int main(int argc, char* argv[]) {
     LogInfo("Scheduler stopped");
 
     // 打印结果
-    printBenchmarkResults(start_time);
+    print_benchmark_results(start_time);
 
     return 0;
 }

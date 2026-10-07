@@ -67,8 +67,8 @@ struct Implementation {
     std::optional<std::string> websiteUrl;
     std::string icons;
 
-    std::string toJson() const;
-    static std::expected<Implementation, McpError> fromJson(const json::Json& element);
+    std::string to_json() const;
+    static std::expected<Implementation, McpError> from_json(const json::Json& element);
 };
 
 /** @brief 每个 2026-07-28 请求必须携带的元数据。 */
@@ -79,8 +79,8 @@ struct RequestMeta {
     std::optional<std::string> logLevel;
     std::optional<RequestId> progressToken;
 
-    std::string toJson() const;
-    static std::expected<RequestMeta, McpError> fromJson(const json::Json& element);
+    std::string to_json() const;
+    static std::expected<RequestMeta, McpError> from_json(const json::Json& element);
 };
 
 /** @brief 服务器发现所返回的能力集合。 */
@@ -96,8 +96,8 @@ struct ServerCapabilities {
     bool resourceSubscriptions = false;
     bool promptsListChanged = false;
 
-    std::string toJson() const;
-    static std::expected<ServerCapabilities, McpError> fromJson(const json::Json& element);
+    std::string to_json() const;
+    static std::expected<ServerCapabilities, McpError> from_json(const json::Json& element);
 };
 
 /** @brief 2026-07-28 工具描述；JSON Schema 以已校验的原始 JSON 保存。 */
@@ -111,8 +111,8 @@ struct Tool {
     std::optional<std::string> icons;
     std::optional<std::string> meta;
 
-    std::string toJson() const;
-    static std::expected<Tool, McpError> fromJson(const json::Json& element);
+    std::string to_json() const;
+    static std::expected<Tool, McpError> from_json(const json::Json& element);
 };
 
 struct Resource {
@@ -126,8 +126,8 @@ struct Resource {
     std::optional<std::string> icons;
     std::optional<std::string> meta;
 
-    std::string toJson() const;
-    static std::expected<Resource, McpError> fromJson(const json::Json& element);
+    std::string to_json() const;
+    static std::expected<Resource, McpError> from_json(const json::Json& element);
 };
 
 struct PromptArgument {
@@ -136,8 +136,8 @@ struct PromptArgument {
     std::optional<std::string> description;
     bool required = false;
 
-    std::string toJson() const;
-    static std::expected<PromptArgument, McpError> fromJson(const json::Json& element);
+    std::string to_json() const;
+    static std::expected<PromptArgument, McpError> from_json(const json::Json& element);
 };
 
 struct Prompt {
@@ -148,8 +148,8 @@ struct Prompt {
     std::optional<std::string> icons;
     std::optional<std::string> meta;
 
-    std::string toJson() const;
-    static std::expected<Prompt, McpError> fromJson(const json::Json& element);
+    std::string to_json() const;
+    static std::expected<Prompt, McpError> from_json(const json::Json& element);
 };
 
 enum class CacheScope {
@@ -189,8 +189,8 @@ struct DiscoverResult {
     uint64_t ttlMs = 0;
     CacheScope cacheScope{CacheScope::Private};
 
-    std::string toJson() const;
-    static std::expected<DiscoverResult, McpError> fromJson(const json::Json& element);
+    std::string to_json() const;
+    static std::expected<DiscoverResult, McpError> from_json(const json::Json& element);
 };
 
 /** @brief tools/resources/prompts 列表结果的公共编码器。 */
@@ -202,7 +202,7 @@ struct ListResult {
     CacheScope cacheScope{CacheScope::Private};
     std::optional<Implementation> serverInfo;
 
-    std::string toJson() const;
+    std::string to_json() const;
 };
 
 struct JsonRpcRequest {
@@ -210,7 +210,7 @@ struct JsonRpcRequest {
     std::string method;
     std::optional<std::string> params;
 
-    std::string toJson() const;
+    std::string to_json() const;
 };
 
 /** @brief 工具执行结果。content 中每项必须是一个完整内容块 JSON 对象。 */
@@ -221,7 +221,7 @@ struct ToolCallResult {
     std::optional<Implementation> serverInfo;
 
     static ToolCallResult text(std::string value);
-    std::string toJson() const;
+    std::string to_json() const;
 };
 
 /** @brief 资源读取结果。contents 中每项必须是 Text/BlobResourceContents JSON。 */
@@ -234,7 +234,7 @@ struct ReadResourceResult {
     static ReadResourceResult text(std::string uri,
                                    std::string value,
                                    std::optional<std::string> mimeType = std::nullopt);
-    std::string toJson() const;
+    std::string to_json() const;
 };
 
 /** @brief 提示获取结果。messages 中每项必须是完整 PromptMessage JSON。 */
@@ -243,7 +243,7 @@ struct GetPromptResult {
     std::optional<std::string> description;
     std::optional<Implementation> serverInfo;
 
-    std::string toJson() const;
+    std::string to_json() const;
 };
 
 struct RequestView {
@@ -290,58 +290,58 @@ struct SubscriptionFilter {
     bool resourcesListChanged = false;
     bool promptsListChanged = false;
 
-    std::string toJson() const;
-    static std::expected<SubscriptionFilter, McpError> fromJson(
+    std::string to_json() const;
+    static std::expected<SubscriptionFilter, McpError> from_json(
         const json::Json& element);
 };
 
 /** @brief 构建只包含必需 `_meta` 的请求参数对象。 */
-std::string makeRequestParams(const RequestMeta& meta);
+std::string make_request_params(const RequestMeta& meta);
 
 /** @brief 合并业务参数对象与必需 `_meta`；fieldsJson 必须是 JSON 对象。 */
-std::expected<std::string, McpError> makeRequestParams(const RequestMeta& meta,
+std::expected<std::string, McpError> make_request_params(const RequestMeta& meta,
                                                       std::string_view fieldsJson);
 
 /** @brief 解析并校验 2026-07-28 JSON-RPC 请求和必需的每请求元数据。 */
-std::expected<ParsedRequest, McpError> parseRequest(std::string_view body);
+std::expected<ParsedRequest, McpError> parse_request(std::string_view body);
 
 /** @brief 解析 2026-07-28 结果；该版本缺失 `resultType` 视为错误。 */
-std::expected<ParsedResult, McpError> parseResult(std::string_view body);
+std::expected<ParsedResult, McpError> parse_result(std::string_view body);
 
-std::expected<ParsedResponse, McpError> parseResponse(std::string_view body);
+std::expected<ParsedResponse, McpError> parse_response(std::string_view body);
 
-std::string makeResultResponse(const RequestId& id, std::string_view resultJson);
-std::string makeErrorResponse(const std::optional<RequestId>& id,
+std::string make_result_response(const RequestId& id, std::string_view resultJson);
+std::string make_error_response(const std::optional<RequestId>& id,
                              int code,
                              std::string_view message,
                              std::optional<std::string_view> details = std::nullopt);
-std::string makeUnsupportedProtocolVersionResponse(
+std::string make_unsupported_protocol_version_response(
     const RequestId& id,
     std::string_view requested,
     const std::vector<std::string>& supported);
 
 /** @brief 构建 listen 流的首条确认通知。 */
-std::string makeSubscriptionAcknowledgedNotification(
+std::string make_subscription_acknowledged_notification(
     const RequestId& id,
     const SubscriptionFilter& accepted);
 
 /** @brief 构建带 subscriptionId 的列表或资源变更通知。 */
-std::string makeSubscriptionNotification(
+std::string make_subscription_notification(
     std::string_view method,
     const RequestId& id,
     std::optional<std::string_view> uri = std::nullopt);
 
 /** @brief 构建服务端主动结束 listen 流时的最终响应。 */
-std::string makeSubscriptionCompleteResponse(const RequestId& id);
+std::string make_subscription_complete_response(const RequestId& id);
 
 /** @brief 把一条 JSON-RPC 消息编码为 SSE data event。 */
-std::string encodeSseEvent(std::string_view message);
+std::string encode_sse_event(std::string_view message);
 
 /**
  * @brief 解析一个完整 SSE event。
  * @return data event 返回 JSON 字符串，comment/空 event 返回 nullopt。
  */
-std::expected<std::optional<std::string>, McpError> parseSseEvent(
+std::expected<std::optional<std::string>, McpError> parse_sse_event(
     std::string_view event);
 
 } // namespace galay::mcp::v2

@@ -52,7 +52,7 @@ struct LatencyStats {
     double p999Us = 0.0;
 };
 
-LatencyStats summarizeLatencies(std::vector<int64_t> latencies)
+LatencyStats summarize_latencies(std::vector<int64_t> latencies)
 {
     if (latencies.empty()) {
         return {};
@@ -64,7 +64,7 @@ LatencyStats summarizeLatencies(std::vector<int64_t> latencies)
         totalNs += static_cast<long double>(latency);
     }
 
-    const auto percentileUs = [&latencies](double percentile) {
+    const auto percentile_us = [&latencies](double percentile) {
         const size_t index = static_cast<size_t>(
             percentile * static_cast<double>(latencies.size() - 1));
         return static_cast<double>(latencies[index]) / 1000.0;
@@ -73,22 +73,22 @@ LatencyStats summarizeLatencies(std::vector<int64_t> latencies)
     return {
         .samples = latencies.size(),
         .averageUs = static_cast<double>(totalNs / latencies.size()) / 1000.0,
-        .p50Us = percentileUs(0.50),
-        .p95Us = percentileUs(0.95),
-        .p99Us = percentileUs(0.99),
-        .p999Us = percentileUs(0.999),
+        .p50Us = percentile_us(0.50),
+        .p95Us = percentile_us(0.95),
+        .p99Us = percentile_us(0.99),
+        .p999Us = percentile_us(0.999),
     };
 }
 
 template <typename Receive, typename Send>
-ThroughputResult runThreaded(int producerCount,
+ThroughputResult run_threaded(int producerCount,
                              int consumerCount,
                              int64_t totalMessages,
                              Receive receive,
                              Send send)
 {
     std::atomic<bool> producersDone{false};
-    galay::benchmark::CompletionLatch consumerDone(static_cast<size_t>(consumerCount));
+    galay::benchmark::CompletionLatch consumer_done(static_cast<size_t>(consumerCount));
     galay::benchmark::CompletionLatch allThreadsReady(
         static_cast<size_t>(producerCount + consumerCount));
     galay::benchmark::StartGate startGate;
@@ -103,7 +103,7 @@ ThroughputResult runThreaded(int producerCount,
     for (int producer = 0; producer < producerCount; ++producer) {
         producers.emplace_back([&, producer]() {
             placement[static_cast<size_t>(producer)] =
-                galay::benchmark::pinCurrentThread(static_cast<size_t>(producer));
+                galay::benchmark::pin_current_thread(static_cast<size_t>(producer));
             allThreadsReady.arrive();
             startGate.wait();
             const int64_t first = producer * perProducer;
@@ -117,7 +117,7 @@ ThroughputResult runThreaded(int producerCount,
     for (int consumer = 0; consumer < consumerCount; ++consumer) {
         consumers.emplace_back([&, consumer]() {
             placement[static_cast<size_t>(producerCount + consumer)] =
-                galay::benchmark::pinCurrentThread(
+                galay::benchmark::pin_current_thread(
                     static_cast<size_t>(producerCount + consumer));
             allThreadsReady.arrive();
             startGate.wait();
@@ -130,7 +130,7 @@ ThroughputResult runThreaded(int producerCount,
                 }
                 if (producersDone.load(std::memory_order_acquire)) {
                     receivedByConsumer[static_cast<size_t>(consumer)] = localReceived;
-                    consumerDone.arrive();
+                    consumer_done.arrive();
                     return;
                 }
                 std::this_thread::yield();
@@ -144,7 +144,7 @@ ThroughputResult runThreaded(int producerCount,
         producer.join();
     }
     producersDone.store(true, std::memory_order_release);
-    consumerDone.wait();
+    consumer_done.wait();
     for (auto& consumer : consumers) {
         consumer.join();
     }
@@ -176,29 +176,29 @@ ThroughputResult runThreaded(int producerCount,
 }
 
 template <typename Channel>
-ThroughputResult runBounded(int producerCount, int consumerCount, size_t capacity)
+ThroughputResult run_bounded(int producerCount, int consumerCount, size_t capacity)
 {
     Channel channel(capacity);
-    return runThreaded(
+    return run_threaded(
         producerCount,
         consumerCount,
         kMessages,
-        [&channel]() { return channel.tryRecv(); },
-        [&channel](int64_t value) { return channel.trySend(std::move(value)); });
+        [&channel]() { return channel.try_recv(); },
+        [&channel](int64_t value) { return channel.try_send(std::move(value)); });
 }
 
-ThroughputResult runMpsc(int producerCount)
+ThroughputResult run_mpsc(int producerCount)
 {
     galay::mpsc::UnboundedChannel<int64_t> channel;
-    return runThreaded(
+    return run_threaded(
         producerCount,
         1,
         kMessages,
-        [&channel]() { return channel.tryRecv(); },
+        [&channel]() { return channel.try_recv(); },
         [&channel](int64_t value) { return channel.send(std::move(value)); });
 }
 
-LatencyStats runLatency(size_t capacity, int64_t messageCount)
+LatencyStats run_latency(size_t capacity, int64_t messageCount)
 {
     galay::mpmc::BoundedChannel<TimestampedMessage> channel(capacity);
     std::atomic<bool> producerDone{false};
@@ -208,11 +208,11 @@ LatencyStats runLatency(size_t capacity, int64_t messageCount)
     std::atomic<galay::benchmark::ThreadPlacement> consumerPlacement{
         galay::benchmark::ThreadPlacement::kUnsupported};
     std::thread consumer([&]() {
-        consumerPlacement.store(galay::benchmark::pinCurrentThread(1),
+        consumerPlacement.store(galay::benchmark::pin_current_thread(1),
                                 std::memory_order_release);
         int64_t received = 0;
         while (!producerDone.load(std::memory_order_acquire) || received < messageCount) {
-            auto message = channel.tryRecv();
+            auto message = channel.try_recv();
             if (!message.has_value()) {
                 std::this_thread::yield();
                 continue;
@@ -224,16 +224,16 @@ LatencyStats runLatency(size_t capacity, int64_t messageCount)
         }
     });
 
-    const auto latencyPlacement = galay::benchmark::pinCurrentThread(0);
+    const auto latencyPlacement = galay::benchmark::pin_current_thread(0);
     for (int64_t i = 0; i < messageCount; ++i) {
         TimestampedMessage message{.id = i, .sent_at = std::chrono::steady_clock::now()};
-        while (!channel.trySend(std::move(message))) {
+        while (!channel.try_send(std::move(message))) {
             std::this_thread::yield();
         }
     }
     producerDone.store(true, std::memory_order_release);
     consumer.join();
-    auto stats = summarizeLatencies(std::move(latencies));
+    auto stats = summarize_latencies(std::move(latencies));
     // 两个线程取较弱的放置结果，避免只有一端绑上就标成已绑核。
     const auto consumerResult = consumerPlacement.load(std::memory_order_acquire);
     stats.placement =
@@ -249,7 +249,7 @@ struct AsyncBenchmarkState {
     std::atomic<int64_t> received{0};
 };
 
-Task<void> asyncConsumer(galay::mpmc::BoundedChannel<int64_t>* channel,
+Task<void> async_consumer(galay::mpmc::BoundedChannel<int64_t>* channel,
                          int64_t messageCount,
                          AsyncBenchmarkState* state)
 {
@@ -264,21 +264,21 @@ Task<void> asyncConsumer(galay::mpmc::BoundedChannel<int64_t>* channel,
     co_return;
 }
 
-double runAsyncHandoff(size_t capacity, int64_t messageCount)
+double run_async_handoff(size_t capacity, int64_t messageCount)
 {
     galay::mpmc::BoundedChannel<int64_t> channel(capacity);
     AsyncBenchmarkState state;
     ParallelScheduler scheduler;
     auto started = scheduler.start();
-    if (!started || !scheduleTask(scheduler, asyncConsumer(&channel, messageCount, &state)) ||
-        !galay::benchmark::waitForFlag(state.ready, 2s)) {
+    if (!started || !schedule_task(scheduler, async_consumer(&channel, messageCount, &state)) ||
+        !galay::benchmark::wait_for_flag(state.ready, 2s)) {
         scheduler.stop();
         return 0.0;
     }
     const auto start = std::chrono::steady_clock::now();
     std::thread producer([&]() {
         for (int64_t i = 0; i < messageCount; ++i) {
-            while (!channel.trySend(i)) {
+            while (!channel.try_send(i)) {
                 std::this_thread::yield();
             }
         }
@@ -293,18 +293,18 @@ double runAsyncHandoff(size_t capacity, int64_t messageCount)
         : 0.0;
 }
 
-bool runCloseCheck()
+bool run_close_check()
 {
     galay::mpmc::BoundedChannel<int64_t> channel(256);
     std::atomic<int64_t> received{0};
     std::thread consumer([&]() {
         for (;;) {
-            auto value = channel.tryRecv();
+            auto value = channel.try_recv();
             if (value.has_value()) {
                 received.fetch_add(1, std::memory_order_relaxed);
                 continue;
             }
-            if (channel.isClosed()) {
+            if (channel.is_closed()) {
                 return;
             }
             std::this_thread::yield();
@@ -312,7 +312,7 @@ bool runCloseCheck()
     });
 
     for (int64_t i = 0; i < kMessages / 10; ++i) {
-        while (!channel.trySend(i)) {
+        while (!channel.try_send(i)) {
             std::this_thread::yield();
         }
     }
@@ -322,10 +322,10 @@ bool runCloseCheck()
     return received.load(std::memory_order_acquire) == kMessages / 10;
 }
 
-void printThroughput(const char* name, int producerCount, int consumerCount, size_t capacity)
+void print_throughput(const char* name, int producerCount, int consumerCount, size_t capacity)
 {
     for (int sample = 0; sample < kWarmupSamples; ++sample) {
-        const auto warmup = runBounded<galay::mpmc::BoundedChannel<int64_t>>(
+        const auto warmup = run_bounded<galay::mpmc::BoundedChannel<int64_t>>(
             producerCount, consumerCount, capacity);
         if (warmup.received != kMessages) {
             std::cout << name << " warmup_failed received=" << warmup.received << '\n';
@@ -338,7 +338,7 @@ void printThroughput(const char* name, int producerCount, int consumerCount, siz
     int64_t received = 0;
     auto placement = galay::benchmark::ThreadPlacement::kUnsupported;
     for (int sample = 0; sample < kSamples; ++sample) {
-        const auto result = runBounded<galay::mpmc::BoundedChannel<int64_t>>(
+        const auto result = run_bounded<galay::mpmc::BoundedChannel<int64_t>>(
             producerCount, consumerCount, capacity);
         samples.push_back(result.messagesPerSecond);
         received = result.received;
@@ -348,16 +348,16 @@ void printThroughput(const char* name, int producerCount, int consumerCount, siz
               << " consumers=" << consumerCount
               << " capacity=" << capacity
               << " median_msg_s="
-              << galay::benchmark::medianElement(std::move(samples))
+              << galay::benchmark::median_element(std::move(samples))
               << " received=" << received
-              << " placement=" << galay::benchmark::threadPlacementName(placement)
+              << " placement=" << galay::benchmark::thread_placement_name(placement)
               << '\n';
 }
 
-void printMpscThroughput(int producerCount)
+void print_mpsc_throughput(int producerCount)
 {
     for (int sample = 0; sample < kWarmupSamples; ++sample) {
-        const auto warmup = runMpsc(producerCount);
+        const auto warmup = run_mpsc(producerCount);
         if (warmup.received != kMessages) {
             std::cout << "mpsc warmup_failed received=" << warmup.received << '\n';
             return;
@@ -368,13 +368,13 @@ void printMpscThroughput(int producerCount)
     samples.reserve(kSamples);
     int64_t received = 0;
     for (int sample = 0; sample < kSamples; ++sample) {
-        const auto result = runMpsc(producerCount);
+        const auto result = run_mpsc(producerCount);
         samples.push_back(result.messagesPerSecond);
         received = result.received;
     }
     std::cout << "mpsc producers=" << producerCount
               << " median_msg_s="
-              << galay::benchmark::medianElement(std::move(samples))
+              << galay::benchmark::median_element(std::move(samples))
               << " received=" << received << '\n';
 }
 
@@ -382,34 +382,34 @@ void printMpscThroughput(int producerCount)
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    printThroughput("bounded", 1, 1, 256);
-    printThroughput("bounded", 1, 1, 4096);
-    printThroughput("bounded", 4, 1, 256);
-    printThroughput("bounded", 1, 4, 256);
-    printThroughput("bounded", 4, 4, 256);
-    printThroughput("bounded", 4, 4, 4096);
-    printMpscThroughput(2);
-    printMpscThroughput(4);
-    const double asyncWarmup = runAsyncHandoff(256, kMessages);
+    print_throughput("bounded", 1, 1, 256);
+    print_throughput("bounded", 1, 1, 4096);
+    print_throughput("bounded", 4, 1, 256);
+    print_throughput("bounded", 1, 4, 256);
+    print_throughput("bounded", 4, 4, 256);
+    print_throughput("bounded", 4, 4, 4096);
+    print_mpsc_throughput(2);
+    print_mpsc_throughput(4);
+    const double asyncWarmup = run_async_handoff(256, kMessages);
     if (asyncWarmup <= 0.0) {
         std::cout << "bounded async_handoff warmup_failed\n";
         return 1;
     }
     std::cout << "bounded async_handoff capacity=256 median_msg_s="
-              << galay::benchmark::medianElement(std::vector<double>{
-                     runAsyncHandoff(256, kMessages),
-                     runAsyncHandoff(256, kMessages),
-                     runAsyncHandoff(256, kMessages)}) << '\n';
-    const auto latencyWarmup = runLatency(256, 10'000);
+              << galay::benchmark::median_element(std::vector<double>{
+                     run_async_handoff(256, kMessages),
+                     run_async_handoff(256, kMessages),
+                     run_async_handoff(256, kMessages)}) << '\n';
+    const auto latencyWarmup = run_latency(256, 10'000);
     if (latencyWarmup.samples != 10'000) {
         std::cout << "bounded latency warmup_failed samples=" << latencyWarmup.samples << '\n';
         return 1;
     }
-    const auto latency = runLatency(256, 50'000);
+    const auto latency = run_latency(256, 50'000);
     std::cout << "bounded capacity=256 latency_samples=" << latency.samples
               << " avg_latency_us=" << latency.averageUs
               << " p50_latency_us=" << latency.p50Us
@@ -417,7 +417,7 @@ int main()
               << " p99_latency_us=" << latency.p99Us
               << " p999_latency_us=" << latency.p999Us
               << " placement="
-              << galay::benchmark::threadPlacementName(latency.placement) << '\n';
-    std::cout << "close_check=" << (runCloseCheck() ? "PASS" : "FAIL") << '\n';
+              << galay::benchmark::thread_placement_name(latency.placement) << '\n';
+    std::cout << "close_check=" << (run_close_check() ? "PASS" : "FAIL") << '\n';
     return 0;
 }

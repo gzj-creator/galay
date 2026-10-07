@@ -74,7 +74,7 @@ struct BenchmarkState {
     std::mutex latency_mutex;
     std::vector<uint64_t> latencies_ns;
 
-    void recordError(std::string message)
+    void record_error(std::string message)
     {
         std::lock_guard<std::mutex> lock(error_mutex);
         if (first_error.empty()) {
@@ -83,22 +83,22 @@ struct BenchmarkState {
     }
 };
 
-Task<void> runWorker(IOScheduler* scheduler,
+Task<void> run_worker(IOScheduler* scheduler,
                     BenchmarkState* state,
                     mysql_benchmark::DbBenchmarkConfig cfg)
 {
     auto client = AsyncMysqlClientBuilder()
         .scheduler(scheduler)
-        .bufferSize(cfg.buffer_size)
+        .buffer_size(cfg.buffer_size)
         .build();
 
     auto connect_result = co_await client.connect(cfg.host, cfg.port, cfg.user, cfg.password, cfg.database);
     if (!connect_result || !connect_result->has_value()) {
         state->failed.fetch_add(static_cast<uint64_t>(cfg.queries_per_client), std::memory_order_relaxed);
         if (!connect_result) {
-            state->recordError("connect failed: " + connect_result.error().message());
+            state->record_error("connect failed: " + connect_result.error().message());
         } else {
-            state->recordError("connect failed: awaitable resumed without value");
+            state->record_error("connect failed: awaitable resumed without value");
         }
         state->finished_clients.fetch_add(1, std::memory_order_release);
         co_return;
@@ -123,7 +123,7 @@ Task<void> runWorker(IOScheduler* scheduler,
         const size_t reserve_per_cmd = protocol::MYSQL_PACKET_HEADER_SIZE + 1 + cfg.sql.size();
         pipeline_builder_full.reserve(configured_batch_size, configured_batch_size * reserve_per_cmd);
         for (size_t i = 0; i < configured_batch_size; ++i) {
-            pipeline_builder_full.appendQuery(cfg.sql);
+            pipeline_builder_full.append_query(cfg.sql);
         }
         pipeline_commands_full = pipeline_builder_full.commands();
 
@@ -131,7 +131,7 @@ Task<void> runWorker(IOScheduler* scheduler,
         if (pipeline_tail_size > 0) {
             pipeline_builder_tail.reserve(pipeline_tail_size, pipeline_tail_size * reserve_per_cmd);
             for (size_t i = 0; i < pipeline_tail_size; ++i) {
-                pipeline_builder_tail.appendQuery(cfg.sql);
+                pipeline_builder_tail.append_query(cfg.sql);
             }
             pipeline_commands_tail = pipeline_builder_tail.commands();
         }
@@ -146,10 +146,10 @@ Task<void> runWorker(IOScheduler* scheduler,
             : 1;
 
         if (is_batch) {
-            auto begin_tx = co_await client.beginTransaction();
+            auto begin_tx = co_await client.begin_transaction();
             if (!begin_tx || !begin_tx->has_value()) {
                 state->failed.fetch_add(static_cast<uint64_t>(batch_size), std::memory_order_relaxed);
-                state->recordError("begin transaction failed");
+                state->record_error("begin transaction failed");
                 done += batch_size;
                 continue;
             }
@@ -180,11 +180,11 @@ Task<void> runWorker(IOScheduler* scheduler,
             }
 
             if (!pipeline_result) {
-                state->recordError("pipeline failed: " + pipeline_result.error().message());
+                state->record_error("pipeline failed: " + pipeline_result.error().message());
             } else if (!pipeline_result->has_value()) {
-                state->recordError("pipeline failed: awaitable resumed without value");
+                state->record_error("pipeline failed: awaitable resumed without value");
             } else if (pipeline_result->value().size() != batch_size) {
-                state->recordError("pipeline response count mismatch");
+                state->record_error("pipeline response count mismatch");
             } else {
                 batch_success = batch_size;
             }
@@ -201,9 +201,9 @@ Task<void> runWorker(IOScheduler* scheduler,
 
                 if (!query_result || !query_result->has_value()) {
                     if (!query_result) {
-                        state->recordError("query failed: " + query_result.error().message());
+                        state->record_error("query failed: " + query_result.error().message());
                     } else {
-                        state->recordError("query failed: awaitable resumed without value");
+                        state->record_error("query failed: awaitable resumed without value");
                     }
                 } else {
                     ++batch_success;
@@ -220,7 +220,7 @@ Task<void> runWorker(IOScheduler* scheduler,
         if (is_batch) {
             auto end_tx = co_await client.commit();
             if (!end_tx || !end_tx->has_value()) {
-                state->recordError("commit failed");
+                state->record_error("commit failed");
             }
         }
 
@@ -251,7 +251,7 @@ Task<void> runWorker(IOScheduler* scheduler,
     state->finished_clients.fetch_add(1, std::memory_order_release);
 }
 
-void printSummary(const mysql_benchmark::DbBenchmarkConfig& cfg,
+void print_summary(const mysql_benchmark::DbBenchmarkConfig& cfg,
                   BenchmarkState& state,
                   std::chrono::steady_clock::time_point started,
                   std::chrono::steady_clock::time_point finished)
@@ -278,7 +278,7 @@ void printSummary(const mysql_benchmark::DbBenchmarkConfig& cfg,
     }
 
     std::cout << "\n=== B2 Async Pressure Summary ===\n"
-              << "mode: " << mysql_benchmark::modeToString(cfg.mode) << '\n'
+              << "mode: " << mysql_benchmark::mode_to_string(cfg.mode) << '\n'
               << "clients: " << cfg.clients << '\n'
               << "queries_per_client: " << cfg.queries_per_client << '\n'
               << "total_queries: " << total << '\n'
@@ -308,17 +308,17 @@ void printSummary(const mysql_benchmark::DbBenchmarkConfig& cfg,
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    auto cfg = mysql_benchmark::loadDbBenchmarkConfig();
-    if (!mysql_benchmark::parseArgs(cfg, argc, argv, std::cerr)) {
-        mysql_benchmark::printUsage(argv[0]);
+    auto cfg = mysql_benchmark::load_db_benchmark_config();
+    if (!mysql_benchmark::parse_args(cfg, argc, argv, std::cerr)) {
+        mysql_benchmark::print_usage(argv[0]);
         return 2;
     }
 
-    mysql_benchmark::printConfig(cfg);
+    mysql_benchmark::print_config(cfg);
     std::cout << "Running async pressure benchmark..." << std::endl;
 
     Runtime runtime;
@@ -331,13 +331,13 @@ int main(int argc, char* argv[])
     }
 
     for (size_t i = 0; i < cfg.clients; ++i) {
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (scheduler == nullptr) {
             runtime.stop();
             std::cerr << "failed to get IO scheduler" << std::endl;
             return 1;
         }
-        if (!scheduleTask(scheduler, runWorker(scheduler, &state, cfg))) {
+        if (!schedule_task(scheduler, run_worker(scheduler, &state, cfg))) {
             runtime.stop();
             std::cerr << "failed to schedule async benchmark worker on IO scheduler" << std::endl;
             return 1;
@@ -359,6 +359,6 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    printSummary(cfg, state, started, finished);
+    print_summary(cfg, state, started, finished);
     return state.failed.load(std::memory_order_relaxed) == 0 ? 0 : 1;
 }

@@ -64,7 +64,7 @@ public:
      * @param version 目标版本号
      * @return 值指针，版本不存在或已删除时返回 nullptr
      */
-    const T* getValue(Version version) const {
+    const T* get_value(Version version) const {
         std::shared_lock<std::shared_mutex> lock(m_mutex);
 
         auto it = m_versions.upper_bound(version);
@@ -84,8 +84,8 @@ public:
      * @brief 获取当前最新版本的值
      * @return 值指针，无值时返回 nullptr
      */
-    const T* getCurrentValue() const {
-        return getValue(m_currentVersion.load());
+    const T* get_current_value() const {
+        return get_value(m_currentVersion.load());
     }
 
     /**
@@ -93,7 +93,7 @@ public:
      * @param version 目标版本号
      * @return 值指针和实际版本号的键值对
      */
-    std::pair<const T*, Version> getValueWithVersion(Version version) const {
+    std::pair<const T*, Version> get_value_with_version(Version version) const {
         std::shared_lock<std::shared_mutex> lock(m_mutex);
 
         auto it = m_versions.upper_bound(version);
@@ -114,7 +114,7 @@ public:
      * @param value 新值（unique_ptr）
      * @return 新版本号
      */
-    Version putValue(std::unique_ptr<T> value) {
+    Version put_value(std::unique_ptr<T> value) {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
 
         Version newVersion = ++m_currentVersion;
@@ -129,16 +129,16 @@ public:
      * @param value 新值
      * @return 新版本号
      */
-    Version putValue(const T& value) {
-        return putValue(std::make_unique<T>(value));
+    Version put_value(const T& value) {
+        return put_value(std::make_unique<T>(value));
     }
 
     /**
      * @brief 基于当前值更新
-     * @param updateFn 更新函数，接收当前值指针，返回新值
+     * @param update_fn 更新函数，接收当前值指针，返回新值
      * @return 新版本号
      */
-    Version updateValue(std::function<std::unique_ptr<T>(const T*)> updateFn) {
+    Version update_value(std::function<std::unique_ptr<T>(const T*)> update_fn) {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
 
         const T* current = nullptr;
@@ -149,7 +149,7 @@ public:
             }
         }
 
-        auto newValue = updateFn(current);
+        auto newValue = update_fn(current);
         Version newVersion = ++m_currentVersion;
         m_versions[newVersion] = std::make_unique<VersionedValue<T>>(
             newVersion, std::move(newValue), false);
@@ -163,7 +163,7 @@ public:
      * @param newValue 新值
      * @return 成功返回新版本号，失败返回 0
      */
-    Version compareAndSwap(Version expectedVersion, std::unique_ptr<T> newValue) {
+    Version compare_and_swap(Version expectedVersion, std::unique_ptr<T> newValue) {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
 
         if (m_currentVersion.load() != expectedVersion) {
@@ -182,7 +182,7 @@ public:
      * @param version 目标版本号
      * @return 成功返回 true
      */
-    bool removeValue(Version version) {
+    bool remove_value(Version version) {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
 
         auto it = m_versions.find(version);
@@ -198,7 +198,7 @@ public:
      * @brief 标记当前值为已删除
      * @return 新版本号
      */
-    Version deleteValue() {
+    Version delete_value() {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
 
         Version newVersion = ++m_currentVersion;
@@ -213,7 +213,7 @@ public:
      * @param version 目标版本号
      * @return 存在返回 true
      */
-    bool isValid(Version version) const {
+    bool is_valid(Version version) const {
         std::shared_lock<std::shared_mutex> lock(m_mutex);
         return m_versions.find(version) != m_versions.end();
     }
@@ -222,7 +222,7 @@ public:
      * @brief 获取当前版本号
      * @return 当前版本号
      */
-    Version currentVersion() const {
+    Version current_version() const {
         return m_currentVersion.load();
     }
 
@@ -230,7 +230,7 @@ public:
      * @brief 获取版本总数
      * @return 版本数量
      */
-    size_t versionCount() const {
+    size_t version_count() const {
         std::shared_lock<std::shared_mutex> lock(m_mutex);
         return m_versions.size();
     }
@@ -251,7 +251,7 @@ public:
      * @brief 垃圾回收，删除早于指定版本的所有版本
      * @param olderThan 版本号阈值
      */
-    void gcOlderThan(Version olderThan) {
+    void gc_older_than(Version olderThan) {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
 
         auto it = m_versions.begin();
@@ -264,7 +264,7 @@ public:
      * @brief 获取所有版本号列表
      * @return 版本号向量
      */
-    std::vector<Version> getAllVersions() const {
+    std::vector<Version> get_all_versions() const {
         std::shared_lock<std::shared_mutex> lock(m_mutex);
 
         std::vector<Version> result;
@@ -316,7 +316,7 @@ public:
      */
     template<typename T>
     const T* read(const Mvcc<T>& mvcc) const {
-        return mvcc.getValue(m_version);
+        return mvcc.get_value(m_version);
     }
 
 private:
@@ -337,7 +337,7 @@ public:
      */
     explicit Transaction(Mvcc<T>& mvcc)
         : m_mvcc(mvcc)
-        , m_startVersion(mvcc.currentVersion())
+        , m_startVersion(mvcc.current_version())
         , m_committed(false) {}
 
     Transaction(Transaction&&) = delete;
@@ -348,7 +348,7 @@ public:
      * @return 值指针
      */
     const T* read() const {
-        return m_mvcc.getValue(m_startVersion);
+        return m_mvcc.get_value(m_startVersion);
     }
 
     /**
@@ -368,7 +368,7 @@ public:
             return false;
         }
 
-        Version newVersion = m_mvcc.compareAndSwap(m_startVersion, std::move(m_pendingValue));
+        Version newVersion = m_mvcc.compare_and_swap(m_startVersion, std::move(m_pendingValue));
         m_committed = (newVersion != 0);
         return m_committed;
     }
@@ -377,7 +377,7 @@ public:
      * @brief 检查事务是否已提交
      * @return 已提交返回 true
      */
-    bool isCommitted() const { return m_committed; }
+    bool is_committed() const { return m_committed; }
 
 private:
     Transaction(const Transaction&) = delete;

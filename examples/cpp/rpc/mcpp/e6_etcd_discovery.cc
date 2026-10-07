@@ -22,7 +22,7 @@ int main()
         std::cerr << watched.error().message() << "\n";
         return 1;
     }
-    auto registered = registry.registerEndpoint(endpoint);
+    auto registered = registry.register_endpoint(endpoint);
     if (!registered.has_value()) {
         std::cerr << registered.error().message() << "\n";
         return 1;

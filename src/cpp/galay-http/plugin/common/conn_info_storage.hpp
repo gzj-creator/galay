@@ -42,15 +42,15 @@ private:
         std::uint32_t scope_id = 0;
         std::array<std::uint8_t, 16> address{};
 
-        static HostKey fromHost(const kernel::Host& host, bool include_port = true) noexcept {
+        static HostKey from_host(const kernel::Host& host, bool include_port = true) noexcept {
             HostKey key;
-            if (host.isIPv4()) {
-                const auto* addr4 = reinterpret_cast<const sockaddr_in*>(host.sockAddr());
+            if (host.is_ipv4()) {
+                const auto* addr4 = reinterpret_cast<const sockaddr_in*>(host.sock_addr());
                 key.family = AF_INET;
                 key.port = include_port ? addr4->sin_port : 0;
                 std::memcpy(key.address.data(), &addr4->sin_addr, sizeof(addr4->sin_addr));
             } else {
-                const auto* addr6 = reinterpret_cast<const sockaddr_in6*>(host.sockAddr());
+                const auto* addr6 = reinterpret_cast<const sockaddr_in6*>(host.sock_addr());
                 key.family = AF_INET6;
                 key.port = include_port ? addr6->sin6_port : 0;
                 key.scope_id = addr6->sin6_scope_id;
@@ -65,26 +65,26 @@ private:
     struct HostKeyHash {
         std::size_t operator()(const HostKey& key) const noexcept {
             std::size_t hash = 1469598103934665603ull;
-            mixValue(hash, key.family);
-            mixValue(hash, key.port);
-            mixValue(hash, key.scope_id);
+            mix_value(hash, key.family);
+            mix_value(hash, key.port);
+            mix_value(hash, key.scope_id);
             for (std::uint8_t byte : key.address) {
-                mixByte(hash, byte);
+                mix_byte(hash, byte);
             }
             return hash;
         }
 
     private:
-        static void mixByte(std::size_t& hash, std::uint8_t byte) noexcept {
+        static void mix_byte(std::size_t& hash, std::uint8_t byte) noexcept {
             hash ^= byte;
             hash *= 1099511628211ull;
         }
 
         template <typename T>
-        static void mixValue(std::size_t& hash, const T& value) noexcept {
+        static void mix_value(std::size_t& hash, const T& value) noexcept {
             const auto* bytes = reinterpret_cast<const std::uint8_t*>(&value);
             for (std::size_t i = 0; i < sizeof(T); ++i) {
-                mixByte(hash, bytes[i]);
+                mix_byte(hash, bytes[i]);
             }
         }
     };
@@ -102,9 +102,9 @@ public:
      * @return 找到时返回连接信息引用；不存在时返回 std::nullopt。
      * @note 返回的引用在对应元素删除或 clear 后失效。
      */
-    std::optional<std::reference_wrapper<ConnInfo>> getConnInfoRef(const kernel::Host& host,
+    std::optional<std::reference_wrapper<ConnInfo>> get_conn_info_ref(const kernel::Host& host,
                                                                    bool include_port = true) {
-        auto iter = m_conn_info.find(HostKey::fromHost(host, include_port));
+        auto iter = m_conn_info.find(HostKey::from_host(host, include_port));
         if (iter == m_conn_info.end()) {
             return std::nullopt;
         }
@@ -118,8 +118,8 @@ public:
      * @return 该 host 对应的连接信息引用。
      * @note 返回的引用在对应元素删除或 clear 后失效。
      */
-    ConnInfo& getOrCreateConnInfo(const kernel::Host& host, bool include_port = true) {
-        auto [iter, inserted] = m_conn_info.try_emplace(HostKey::fromHost(host, include_port));
+    ConnInfo& get_or_create_conn_info(const kernel::Host& host, bool include_port = true) {
+        auto [iter, inserted] = m_conn_info.try_emplace(HostKey::from_host(host, include_port));
         (void)inserted;
         return iter->second;
     }
@@ -130,9 +130,9 @@ public:
      * @param include_port true 时地址 key 包含端口；false 时只按 IP/协议族聚合。
      * @return 找到时返回连接信息副本；不存在时返回 std::nullopt。
      */
-    std::optional<ConnInfo> getConnInfo(const kernel::Host& host,
+    std::optional<ConnInfo> get_conn_info(const kernel::Host& host,
                                         bool include_port = true) const {
-        auto iter = m_conn_info.find(HostKey::fromHost(host, include_port));
+        auto iter = m_conn_info.find(HostKey::from_host(host, include_port));
         if (iter == m_conn_info.end()) {
             return std::nullopt;
         }
@@ -146,10 +146,10 @@ public:
      * @param include_port true 时地址 key 包含端口；false 时只按 IP/协议族聚合。
      * @return 新增成功返回 true；host 已存在时不覆盖并返回 false。
      */
-    bool addConnInfo(const kernel::Host& host,
+    bool add_conn_info(const kernel::Host& host,
                      ConnInfo conn_info = ConnInfo{},
                      bool include_port = true) {
-        auto [iter, inserted] = m_conn_info.try_emplace(HostKey::fromHost(host, include_port),
+        auto [iter, inserted] = m_conn_info.try_emplace(HostKey::from_host(host, include_port),
                                                         std::move(conn_info));
         (void)iter;
         return inserted;
@@ -162,10 +162,10 @@ public:
      * @param include_port true 时地址 key 包含端口；false 时只按 IP/协议族聚合。
      * @return 修改成功返回 true；host 不存在时不创建记录并返回 false。
      */
-    bool updateConnInfo(const kernel::Host& host,
+    bool update_conn_info(const kernel::Host& host,
                         ConnInfo conn_info,
                         bool include_port = true) {
-        auto iter = m_conn_info.find(HostKey::fromHost(host, include_port));
+        auto iter = m_conn_info.find(HostKey::from_host(host, include_port));
         if (iter == m_conn_info.end()) {
             return false;
         }
@@ -180,18 +180,18 @@ public:
      * @param include_port true 时地址 key 包含端口；false 时只按 IP/协议族聚合。
      * @return 删除成功返回 true；host 不存在时返回 false。
      */
-    bool deleteConnInfo(const kernel::Host& host, bool include_port = true) {
-        return m_conn_info.erase(HostKey::fromHost(host, include_port)) > 0;
+    bool delete_conn_info(const kernel::Host& host, bool include_port = true) {
+        return m_conn_info.erase(HostKey::from_host(host, include_port)) > 0;
     }
 
     /**
-     * @brief deleteConnInfo 的同义接口，便于按 remove 语义调用。
+     * @brief delete_conn_info 的同义接口，便于按 remove 语义调用。
      * @param host 连接对端地址。
      * @param include_port true 时地址 key 包含端口；false 时只按 IP/协议族聚合。
      * @return 删除成功返回 true；host 不存在时返回 false。
      */
-    bool removeConnInfo(const kernel::Host& host, bool include_port = true) {
-        return deleteConnInfo(host, include_port);
+    bool remove_conn_info(const kernel::Host& host, bool include_port = true) {
+        return delete_conn_info(host, include_port);
     }
 
     /**
@@ -200,14 +200,14 @@ public:
      * @param include_port true 时地址 key 包含端口；false 时只按 IP/协议族聚合。
      * @return 已存在返回 true；否则返回 false。
      */
-    bool containsConnInfo(const kernel::Host& host, bool include_port = true) const {
-        return m_conn_info.contains(HostKey::fromHost(host, include_port));
+    bool contains_conn_info(const kernel::Host& host, bool include_port = true) const {
+        return m_conn_info.contains(HostKey::from_host(host, include_port));
     }
 
     /**
      * @brief 清空全部连接信息；此前返回的 ConnInfo 引用或指针全部失效。
      */
-    void clearConnInfo() {
+    void clear_conn_info() {
         m_conn_info.clear();
     }
 

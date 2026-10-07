@@ -46,14 +46,14 @@ public:
      * @param spans 待导出的 Span 只读视图
      * @return 导出结果
      */
-    ExportResult exportSpans(std::span<const Span> spans) override;
+    ExportResult export_spans(std::span<const Span> spans) override;
 
     /**
      * @brief 刷新文件输出流
      * @param timeout 超时时间（本实现忽略，立即刷新）
      * @return 成功返回 true
      */
-    bool forceFlush(std::chrono::milliseconds timeout) override;
+    bool force_flush(std::chrono::milliseconds timeout) override;
 
     /**
      * @brief 关闭文件输出流

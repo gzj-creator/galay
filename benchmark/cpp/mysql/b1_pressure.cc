@@ -109,7 +109,7 @@ struct BenchmarkState {
     std::mutex latency_mutex;
     std::vector<uint64_t> latencies_ns;
 
-    void recordError(std::string message)
+    void record_error(std::string message)
     {
         std::lock_guard<std::mutex> lock(error_mutex);
         if (first_error.empty()) {
@@ -118,7 +118,7 @@ struct BenchmarkState {
     }
 };
 
-bool runSingleQuery(MysqlClient& client,
+bool run_single_query(MysqlClient& client,
                 const mysql_benchmark::DbBenchmarkConfig& cfg,
                 uint64_t& elapsed_ns,
                 uint64_t& alloc_count_delta,
@@ -144,13 +144,13 @@ bool runSingleQuery(MysqlClient& client,
     return query_result.has_value();
 }
 
-void runWorker(const mysql_benchmark::DbBenchmarkConfig& cfg, BenchmarkState* state)
+void run_worker(const mysql_benchmark::DbBenchmarkConfig& cfg, BenchmarkState* state)
 {
     MysqlClient client;
     auto connect_result = client.connect(cfg.host, cfg.port, cfg.user, cfg.password, cfg.database);
     if (!connect_result) {
         state->failed.fetch_add(static_cast<uint64_t>(cfg.queries_per_client), std::memory_order_relaxed);
-        state->recordError("connect failed: " + connect_result.error().message());
+        state->record_error("connect failed: " + connect_result.error().message());
         return;
     }
 
@@ -173,7 +173,7 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig& cfg, BenchmarkState* st
         const size_t reserve_per_cmd = protocol::MYSQL_PACKET_HEADER_SIZE + 1 + cfg.sql.size();
         pipeline_builder_full.reserve(configured_batch_size, configured_batch_size * reserve_per_cmd);
         for (size_t i = 0; i < configured_batch_size; ++i) {
-            pipeline_builder_full.appendQuery(cfg.sql);
+            pipeline_builder_full.append_query(cfg.sql);
         }
         pipeline_commands_full = pipeline_builder_full.commands();
 
@@ -181,7 +181,7 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig& cfg, BenchmarkState* st
         if (pipeline_tail_size > 0) {
             pipeline_builder_tail.reserve(pipeline_tail_size, pipeline_tail_size * reserve_per_cmd);
             for (size_t i = 0; i < pipeline_tail_size; ++i) {
-                pipeline_builder_tail.appendQuery(cfg.sql);
+                pipeline_builder_tail.append_query(cfg.sql);
             }
             pipeline_commands_tail = pipeline_builder_tail.commands();
         }
@@ -196,10 +196,10 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig& cfg, BenchmarkState* st
             : 1;
 
         if (is_batch) {
-            auto begin_tx = client.beginTransaction();
+            auto begin_tx = client.begin_transaction();
             if (!begin_tx) {
                 state->failed.fetch_add(static_cast<uint64_t>(batch_size), std::memory_order_relaxed);
-                state->recordError("begin transaction failed: " + begin_tx.error().message());
+                state->record_error("begin transaction failed: " + begin_tx.error().message());
                 done += batch_size;
                 continue;
             }
@@ -230,9 +230,9 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig& cfg, BenchmarkState* st
             }
 
             if (!pipeline_result) {
-                state->recordError("pipeline failed: " + pipeline_result.error().message());
+                state->record_error("pipeline failed: " + pipeline_result.error().message());
             } else if (pipeline_result->size() != batch_size) {
-                state->recordError("pipeline response count mismatch");
+                state->record_error("pipeline response count mismatch");
             } else {
                 batch_success = batch_size;
             }
@@ -241,7 +241,7 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig& cfg, BenchmarkState* st
                 uint64_t elapsed_ns = 0;
                 uint64_t alloc_count_delta = 0;
                 uint64_t alloc_bytes_delta = 0;
-                const bool ok = runSingleQuery(client, cfg, elapsed_ns, alloc_count_delta, alloc_bytes_delta);
+                const bool ok = run_single_query(client, cfg, elapsed_ns, alloc_count_delta, alloc_bytes_delta);
 
                 batch_elapsed += elapsed_ns;
                 batch_alloc_count += alloc_count_delta;
@@ -249,7 +249,7 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig& cfg, BenchmarkState* st
                 if (ok) {
                     ++batch_success;
                 } else {
-                    state->recordError("query failed in worker");
+                    state->record_error("query failed in worker");
                 }
             }
         }
@@ -257,7 +257,7 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig& cfg, BenchmarkState* st
         if (is_batch) {
             auto end_tx = client.commit();
             if (!end_tx) {
-                state->recordError("commit failed: " + end_tx.error().message());
+                state->record_error("commit failed: " + end_tx.error().message());
             }
         }
 
@@ -283,7 +283,7 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig& cfg, BenchmarkState* st
     }
 }
 
-void printSummary(const mysql_benchmark::DbBenchmarkConfig& cfg,
+void print_summary(const mysql_benchmark::DbBenchmarkConfig& cfg,
                   BenchmarkState& state,
                   std::chrono::steady_clock::time_point started,
                   std::chrono::steady_clock::time_point finished)
@@ -310,7 +310,7 @@ void printSummary(const mysql_benchmark::DbBenchmarkConfig& cfg,
     }
 
     std::cout << "\n=== B1 Sync Pressure Summary ===\n"
-              << "mode: " << mysql_benchmark::modeToString(cfg.mode) << '\n'
+              << "mode: " << mysql_benchmark::mode_to_string(cfg.mode) << '\n'
               << "clients: " << cfg.clients << '\n'
               << "queries_per_client: " << cfg.queries_per_client << '\n'
               << "total_queries: " << total << '\n'
@@ -340,17 +340,17 @@ void printSummary(const mysql_benchmark::DbBenchmarkConfig& cfg,
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    auto cfg = mysql_benchmark::loadDbBenchmarkConfig();
-    if (!mysql_benchmark::parseArgs(cfg, argc, argv, std::cerr)) {
-        mysql_benchmark::printUsage(argv[0]);
+    auto cfg = mysql_benchmark::load_db_benchmark_config();
+    if (!mysql_benchmark::parse_args(cfg, argc, argv, std::cerr)) {
+        mysql_benchmark::print_usage(argv[0]);
         return 2;
     }
 
-    mysql_benchmark::printConfig(cfg);
+    mysql_benchmark::print_config(cfg);
     std::cout << "Running sync pressure benchmark..." << std::endl;
 
     BenchmarkState state;
@@ -363,7 +363,7 @@ int main(int argc, char* argv[])
 
     const auto started = std::chrono::steady_clock::now();
     for (size_t i = 0; i < cfg.clients; ++i) {
-        workers.emplace_back(runWorker, std::cref(cfg), &state);
+        workers.emplace_back(run_worker, std::cref(cfg), &state);
     }
 
     for (auto& worker : workers) {
@@ -371,6 +371,6 @@ int main(int argc, char* argv[])
     }
     const auto finished = std::chrono::steady_clock::now();
 
-    printSummary(cfg, state, started, finished);
+    print_summary(cfg, state, started, finished);
     return state.failed.load(std::memory_order_relaxed) == 0 ? 0 : 1;
 }

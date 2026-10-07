@@ -26,23 +26,23 @@ namespace {
 template <typename T, void (*Deleter)(T*)>
 using OpenSslPtr = std::unique_ptr<T, decltype(Deleter)>;
 
-void freeBio(BIO* bio)
+void free_bio(BIO* bio)
 {
     BIO_free(bio);
 }
 
-std::string readAll(const std::filesystem::path& path)
+std::string read_all(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 
-std::filesystem::path projectRoot()
+std::filesystem::path project_root()
 {
     return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path();
 }
 
-OpenSslPtr<EVP_PKEY, EVP_PKEY_free> generateRsaKey()
+OpenSslPtr<EVP_PKEY, EVP_PKEY_free> generate_rsa_key()
 {
     OpenSslPtr<EVP_PKEY_CTX, EVP_PKEY_CTX_free> ctx(EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr), EVP_PKEY_CTX_free);
     assert(ctx);
@@ -54,9 +54,9 @@ OpenSslPtr<EVP_PKEY, EVP_PKEY_free> generateRsaKey()
     return OpenSslPtr<EVP_PKEY, EVP_PKEY_free>(raw, EVP_PKEY_free);
 }
 
-std::string publicKeyPem(EVP_PKEY* key)
+std::string public_key_pem(EVP_PKEY* key)
 {
-    OpenSslPtr<BIO, freeBio> bio(BIO_new(BIO_s_mem()), freeBio);
+    OpenSslPtr<BIO, free_bio> bio(BIO_new(BIO_s_mem()), free_bio);
     assert(bio);
     assert(PEM_write_bio_PUBKEY(bio.get(), key) == 1);
 
@@ -66,7 +66,7 @@ std::string publicKeyPem(EVP_PKEY* key)
     return {memory->data, memory->length};
 }
 
-bool decryptsWithOaep(EVP_PKEY* key,
+bool decrypts_with_oaep(EVP_PKEY* key,
                       std::string_view ciphertext,
                       const EVP_MD* digest,
                       std::string_view expectedPlaintext)
@@ -103,64 +103,64 @@ bool decryptsWithOaep(EVP_PKEY* key,
     return plaintext == expectedPlaintext;
 }
 
-void openSslGlobalInitIsCallOnce()
+void open_ssl_global_init_is_call_once()
 {
-    const auto source = readAll(projectRoot() / "src/cpp/galay-ssl/ssl/ssl_context.cc");
+    const auto source = read_all(project_root() / "src/cpp/galay-ssl/ssl/ssl_context.cc");
     assert(source.find("std::once_flag") != std::string::npos);
     assert(source.find("std::call_once") != std::string::npos);
 }
 
-void hostnameReturnValueIsChecked()
+void hostname_return_value_is_checked()
 {
-    const auto source = readAll(projectRoot() / "src/cpp/galay-ssl/ssl/ssl_engine.cc");
+    const auto source = read_all(project_root() / "src/cpp/galay-ssl/ssl/ssl_engine.cc");
     assert(source.find("SSL_set1_host(m_ssl, hostname.c_str()) != 1") != std::string::npos);
 }
 
-void memoryBioInitializationIsIdempotent()
+void memory_bio_initialization_is_idempotent()
 {
     galay::ssl::SslContext context(galay::ssl::SslMethod::TLS_Client);
     galay::ssl::SslEngine engine(&context);
 
-    assert(engine.initMemoryBIO().has_value());
+    assert(engine.init_memory_bio().has_value());
     BIO* firstReadBio = SSL_get_rbio(engine.native());
     BIO* firstWriteBio = SSL_get_wbio(engine.native());
     assert(firstReadBio != nullptr);
     assert(firstWriteBio != nullptr);
 
-    assert(engine.initMemoryBIO().has_value());
+    assert(engine.init_memory_bio().has_value());
     assert(SSL_get_rbio(engine.native()) == firstReadBio);
     assert(SSL_get_wbio(engine.native()) == firstWriteBio);
 }
 
-void rsaOaepUsesSha256ForOaepAndMgf1()
+void rsa_oaep_uses_sha256_for_oaep_and_mgf1()
 {
-    auto key = generateRsaKey();
-    const auto publicPem = publicKeyPem(key.get());
-    auto encrypted = galay::ssl::rsaOaepEncryptWithPemPublicKey("galay-rsa-oaep-sha256", publicPem);
+    auto key = generate_rsa_key();
+    const auto publicPem = public_key_pem(key.get());
+    auto encrypted = galay::ssl::rsa_oaep_encrypt_with_pem_public_key("galay-rsa-oaep-sha256", publicPem);
     assert(encrypted.has_value());
-    assert(decryptsWithOaep(key.get(), *encrypted, EVP_sha256(), "galay-rsa-oaep-sha256"));
+    assert(decrypts_with_oaep(key.get(), *encrypted, EVP_sha256(), "galay-rsa-oaep-sha256"));
 }
 
-void rsaOaepSha1VariantUsesSha1ForOaepAndMgf1()
+void rsa_oaep_sha1_variant_uses_sha1_for_oaep_and_mgf1()
 {
-    auto key = generateRsaKey();
-    const auto publicPem = publicKeyPem(key.get());
-    auto encrypted = galay::ssl::rsaOaepSha1EncryptWithPemPublicKey(
+    auto key = generate_rsa_key();
+    const auto publicPem = public_key_pem(key.get());
+    auto encrypted = galay::ssl::rsa_oaep_sha1_encrypt_with_pem_public_key(
         "galay-rsa-oaep-sha1",
         publicPem);
     assert(encrypted.has_value());
-    assert(decryptsWithOaep(key.get(), *encrypted, EVP_sha1(), "galay-rsa-oaep-sha1"));
+    assert(decrypts_with_oaep(key.get(), *encrypted, EVP_sha1(), "galay-rsa-oaep-sha1"));
 }
 
 } // namespace
 
 int main()
 {
-    openSslGlobalInitIsCallOnce();
-    hostnameReturnValueIsChecked();
-    memoryBioInitializationIsIdempotent();
-    rsaOaepUsesSha256ForOaepAndMgf1();
-    rsaOaepSha1VariantUsesSha1ForOaepAndMgf1();
+    open_ssl_global_init_is_call_once();
+    hostname_return_value_is_checked();
+    memory_bio_initialization_is_idempotent();
+    rsa_oaep_uses_sha256_for_oaep_and_mgf1();
+    rsa_oaep_sha1_variant_uses_sha1_for_oaep_and_mgf1();
     std::cout << "T14-SslSecurityLifecycle PASS\n";
     return 0;
 }

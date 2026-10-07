@@ -2,7 +2,7 @@
  * @file t124_runtime_expected_src.cc
  * @brief 用途：锁定 kernel/C wrapper 公开边界通过 std::expected 返回错误。
  * 关键覆盖点：runtime、scheduler、socket、reactor 和 C wrapper 边界不包含显式异常源码；
- * `Runtime::spawnBlocking` 只允许在阻塞线程池 callable 边界隔离第三方异常并映射为任务错误。
+ * `Runtime::spawn_blocking` 只允许在阻塞线程池 callable 边界隔离第三方异常并映射为任务错误。
  * 通过条件：kernel 启动与 socket 创建路径只通过返回值传播错误，测试返回 0。
  */
 
@@ -16,17 +16,17 @@
 
 namespace {
 
-std::filesystem::path projectRoot()
+std::filesystem::path project_root()
 {
     return std::filesystem::path(GALAY_PROJECT_ROOT);
 }
 
-std::filesystem::path cppRoot()
+std::filesystem::path cpp_root()
 {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path)
+std::string read_all(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -40,7 +40,7 @@ bool contains(const std::string& text, const std::string& needle)
     return text.find(needle) != std::string::npos;
 }
 
-bool containsWord(const std::string& text, const std::string& word)
+bool contains_word(const std::string& text, const std::string& word)
 {
     size_t pos = text.find(word);
     while (pos != std::string::npos) {
@@ -57,7 +57,7 @@ bool containsWord(const std::string& text, const std::string& word)
     return false;
 }
 
-std::string eraseAllowedRuntimeExceptionBoundary(const std::filesystem::path& path, const std::string& text)
+std::string erase_allowed_runtime_exception_boundary(const std::filesystem::path& path, const std::string& text)
 {
     if (path.filename() != "runtime.h") {
         return text;
@@ -65,7 +65,7 @@ std::string eraseAllowedRuntimeExceptionBoundary(const std::filesystem::path& pa
 
     const std::string start_marker = "auto submitted = m_blockingExecutor.submit(";
     const std::string error_marker =
-        "completion->setError(detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));";
+        "completion->set_error(detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));";
     const std::string end_marker = "        });";
 
     const size_t start = text.find(start_marker);
@@ -80,7 +80,7 @@ std::string eraseAllowedRuntimeExceptionBoundary(const std::filesystem::path& pa
     return filtered;
 }
 
-void checkRuntimeSource(const std::filesystem::path& path,
+void check_runtime_source(const std::filesystem::path& path,
                         const std::string& text,
                         std::vector<std::string>& failures)
 {
@@ -88,8 +88,8 @@ void checkRuntimeSource(const std::filesystem::path& path,
         failures.push_back(path.string() + ": failed to read source");
         return;
     }
-    const std::string checked_text = eraseAllowedRuntimeExceptionBoundary(path, text);
-    if (containsWord(checked_text, "throw")) {
+    const std::string checked_text = erase_allowed_runtime_exception_boundary(path, text);
+    if (contains_word(checked_text, "throw")) {
         failures.push_back(path.string() + ": runtime API boundary must not throw");
     }
     if (contains(checked_text, "@throws")) {
@@ -98,15 +98,15 @@ void checkRuntimeSource(const std::filesystem::path& path,
     if (contains(checked_text, "std::runtime_error")) {
         failures.push_back(path.string() + ": runtime API boundary must not depend on runtime_error");
     }
-    if (containsWord(checked_text, "try")) {
+    if (contains_word(checked_text, "try")) {
         failures.push_back(path.string() + ": runtime API boundary must not use try/catch");
     }
-    if (containsWord(checked_text, "catch")) {
+    if (contains_word(checked_text, "catch")) {
         failures.push_back(path.string() + ": runtime API boundary must not catch exceptions");
     }
 }
 
-void requireContains(const std::filesystem::path& path,
+void require_contains(const std::filesystem::path& path,
                      const std::string& text,
                      const std::string& needle,
                      const std::string& message,
@@ -121,8 +121,8 @@ void requireContains(const std::filesystem::path& path,
 
 int main()
 {
-    const auto project_root = projectRoot();
-    const auto root = cppRoot();
+    const auto project_root = ::project_root();
+    const auto root = cpp_root();
     const std::vector<std::filesystem::path> source_paths = {
         project_root / "src" / "c" / "galay-kernel-c" / "core-c" / "runtime.c",
         project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "tcp_socket.c",
@@ -159,32 +159,32 @@ int main()
 
     std::vector<std::string> failures;
     for (const auto& source_path : source_paths) {
-        checkRuntimeSource(source_path, readAll(source_path), failures);
+        check_runtime_source(source_path, read_all(source_path), failures);
     }
 
-    const auto scheduler_h = readAll(root / "galay-kernel" / "core" / "scheduler.hpp");
-    requireContains(root / "galay-kernel" / "core" / "scheduler.hpp",
+    const auto scheduler_h = read_all(root / "galay-kernel" / "core" / "scheduler.hpp");
+    require_contains(root / "galay-kernel" / "core" / "scheduler.hpp",
                     scheduler_h,
                     "std::expected<void, IOError> start();",
                     "Scheduler::start() must return std::expected<void, IOError>",
                     failures);
 
-    const auto runtime_h = readAll(root / "galay-kernel" / "core" / "runtime.h");
-    requireContains(root / "galay-kernel" / "core" / "runtime.h",
+    const auto runtime_h = read_all(root / "galay-kernel" / "core" / "runtime.h");
+    require_contains(root / "galay-kernel" / "core" / "runtime.h",
                     runtime_h,
                     "std::expected<void, RuntimeError> start();",
                     "Runtime::start() must return std::expected<void, RuntimeError>",
                     failures);
 
-    const auto tcp_h = readAll(root / "galay-kernel" / "async" / "async_tcp.h");
-    requireContains(root / "galay-kernel" / "async" / "async_tcp.h",
+    const auto tcp_h = read_all(root / "galay-kernel" / "async" / "async_tcp.h");
+    require_contains(root / "galay-kernel" / "async" / "async_tcp.h",
                     tcp_h,
                     "static std::expected<AsyncTcpSocket, galay::kernel::IOError> create(",
                     "AsyncTcpSocket must expose an expected-based create factory",
                     failures);
 
-    const auto udp_h = readAll(root / "galay-kernel" / "async" / "async_udp.h");
-    requireContains(root / "galay-kernel" / "async" / "async_udp.h",
+    const auto udp_h = read_all(root / "galay-kernel" / "async" / "async_udp.h");
+    require_contains(root / "galay-kernel" / "async" / "async_udp.h",
                     udp_h,
                     "static std::expected<AsyncUdpSocket, galay::kernel::IOError> create(",
                     "AsyncUdpSocket must expose an expected-based create factory",
@@ -196,8 +196,8 @@ int main()
         {root / "galay-kernel" / "core" / "uring_reactor.h", "IOUringReactor"},
     };
     for (const auto& [path, reactor_name] : reactor_headers) {
-        const auto text = readAll(path);
-        requireContains(path,
+        const auto text = read_all(path);
+        require_contains(path,
                         text,
                         "std::expected<void, IOError> start();",
                         reactor_name + " must expose an expected-based explicit start()",
@@ -213,11 +213,11 @@ int main()
         {root / "galay-kernel" / "core" / "uring_reactor.cc", "IOUringReactor"},
     };
     for (const auto& [path, reactor_name] : reactor_sources) {
-        const auto text = readAll(path);
+        const auto text = read_all(path);
         if (contains(text, "(void)initialize();")) {
             failures.push_back(path.string() + ": " + reactor_name + " constructor must not discard initialization errors");
         }
-        requireContains(path,
+        require_contains(path,
                         text,
                         reactor_name + "::start()",
                         reactor_name + " must implement explicit start()",

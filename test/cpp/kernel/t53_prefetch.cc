@@ -35,7 +35,7 @@ struct ConcurrentPrefetchResult
     bool producerDoneAtDeadline = false;
 };
 
-ConcurrentPrefetchResult runConcurrentPrefetchCase(size_t prefetchLimit)
+ConcurrentPrefetchResult run_concurrent_prefetch_case(size_t prefetchLimit)
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     constexpr uint64_t kMessages = 5'000'000;
@@ -43,7 +43,7 @@ ConcurrentPrefetchResult runConcurrentPrefetchCase(size_t prefetchLimit)
     constexpr auto kDoneEmptyDeadline = std::chrono::milliseconds(200);
 
     Channel channel(Channel::DEFAULT_BATCH_SIZE, prefetchLimit);
-    auto token = channel.makeProducerToken();
+    auto token = channel.make_producer_token();
     if (!token.valid()) {
         return {};
     }
@@ -74,7 +74,7 @@ ConcurrentPrefetchResult runConcurrentPrefetchCase(size_t prefetchLimit)
         bool waitingAfterProducerDone = false;
         while (result.received < kMessages &&
                !sendFailed.load(std::memory_order_acquire)) {
-            auto value = channel.tryRecv();
+            auto value = channel.try_recv();
             if (value.has_value()) {
                 waitingAfterProducerDone = false;
                 if (*value != result.received) {
@@ -108,11 +108,11 @@ ConcurrentPrefetchResult runConcurrentPrefetchCase(size_t prefetchLimit)
     result.sendOk = !sendFailed.load(std::memory_order_acquire);
     result.pending = channel.size();
     result.prefetched =
-        galay::mpsc::UnboundedChannelTestAccess::prefetchedCount(channel);
+        galay::mpsc::UnboundedChannelTestAccess::prefetched_count(channel);
     return result;
 }
 
-bool testConcurrentPrefetchAcrossRecycledBlocks()
+bool test_concurrent_prefetch_across_recycled_blocks()
 {
     constexpr uint64_t kMessages = 5'000'000;
     constexpr uint64_t kExpectedChecksum =
@@ -123,7 +123,7 @@ bool testConcurrentPrefetchAcrossRecycledBlocks()
     for (const size_t prefetchLimit : kPrefetchLimits) {
         for (size_t repetition = 0; repetition < kRepetitions; ++repetition) {
             const ConcurrentPrefetchResult result =
-                runConcurrentPrefetchCase(prefetchLimit);
+                run_concurrent_prefetch_case(prefetchLimit);
             if (!result.tokenValid || !result.sendOk || !result.fifoOk ||
                 result.deadlineExpired || result.received != kMessages ||
                 result.checksum != kExpectedChecksum || result.pending != 0 ||
@@ -164,13 +164,13 @@ int main() {
         }
     }
 
-    auto first = channel.tryRecv();
+    auto first = channel.try_recv();
     if (!first || *first != 0) {
         std::cerr << "[T53] expected first value 0\n";
         return 1;
     }
 
-    const size_t prefetched = galay::mpsc::UnboundedChannelTestAccess::prefetchedCount(channel);
+    const size_t prefetched = galay::mpsc::UnboundedChannelTestAccess::prefetched_count(channel);
     if (prefetched == 0) {
         std::cerr << "[T53] expected single recv prefetch buffer to be populated\n";
         return 1;
@@ -186,7 +186,7 @@ int main() {
         return 1;
     }
 
-    auto firstBatch = channel.tryRecvBatch();
+    auto firstBatch = channel.try_recv_batch();
     if (!firstBatch || firstBatch->size() != kDefaultBatchSize) {
         std::cerr << "[T53] expected no-arg tryRecvBatch to use configured batch size\n";
         return 1;
@@ -199,7 +199,7 @@ int main() {
         }
     }
 
-    auto rest = channel.tryRecvBatch(kMessageCount);
+    auto rest = channel.try_recv_batch(kMessageCount);
     if (!rest || rest->size() != static_cast<size_t>(kMessageCount - 1 - kDefaultBatchSize)) {
         std::cerr << "[T53] expected second batch to drain remaining messages\n";
         return 1;
@@ -213,7 +213,7 @@ int main() {
         }
     }
 
-    if (galay::mpsc::UnboundedChannelTestAccess::prefetchedCount(channel) != 0) {
+    if (galay::mpsc::UnboundedChannelTestAccess::prefetched_count(channel) != 0) {
         std::cerr << "[T53] expected prefetch buffer to be empty after full drain\n";
         return 1;
     }
@@ -223,32 +223,32 @@ int main() {
         return 1;
     }
 
-    galay::mpsc::UnboundedChannel<int> multiStreamChannel(
+    galay::mpsc::UnboundedChannel<int> multi_stream_channel(
         kDefaultBatchSize, kPrefetchLimit);
-    auto firstProducer = multiStreamChannel.makeProducerToken();
-    auto secondProducer = multiStreamChannel.makeProducerToken();
+    auto firstProducer = multi_stream_channel.make_producer_token();
+    auto secondProducer = multi_stream_channel.make_producer_token();
     if (!firstProducer.valid() || !secondProducer.valid() ||
-        !multiStreamChannel.send(firstProducer, 101) ||
-        !multiStreamChannel.send(secondProducer, 202)) {
+        !multi_stream_channel.send(firstProducer, 101) ||
+        !multi_stream_channel.send(secondProducer, 202)) {
         std::cerr << "[T53] failed to prepare multi-stream prefetch case\n";
         return 1;
     }
 
-    auto multiFirst = multiStreamChannel.tryRecv();
+    auto multiFirst = multi_stream_channel.try_recv();
     if (!multiFirst ||
-        galay::mpsc::UnboundedChannelTestAccess::prefetchedCount(
-            multiStreamChannel) != 0) {
+        galay::mpsc::UnboundedChannelTestAccess::prefetched_count(
+            multi_stream_channel) != 0) {
         std::cerr << "[T53] multi-stream receive must not build a prefetch cache\n";
         return 1;
     }
-    auto multiSecond = multiStreamChannel.tryRecv();
+    auto multiSecond = multi_stream_channel.try_recv();
     if (!multiSecond || *multiFirst + *multiSecond != 303 ||
-        !multiStreamChannel.empty()) {
+        !multi_stream_channel.empty()) {
         std::cerr << "[T53] multi-stream receive ordering or drain failed\n";
         return 1;
     }
 
-    if (!testConcurrentPrefetchAcrossRecycledBlocks()) {
+    if (!test_concurrent_prefetch_across_recycled_blocks()) {
         return 1;
     }
 

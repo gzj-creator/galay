@@ -127,20 +127,20 @@ struct WsFrame
     }
 
     // 便捷的帧类型判断方法
-    bool isPing() const { return header.opcode == WsOpcode::Ping; }
-    bool isPong() const { return header.opcode == WsOpcode::Pong; }
-    bool isClose() const { return header.opcode == WsOpcode::Close; }
-    bool isText() const { return header.opcode == WsOpcode::Text; }
-    bool isBinary() const { return header.opcode == WsOpcode::Binary; }
-    bool isContinuation() const { return header.opcode == WsOpcode::Continuation; }
+    bool is_ping() const { return header.opcode == WsOpcode::Ping; }
+    bool is_pong() const { return header.opcode == WsOpcode::Pong; }
+    bool is_close() const { return header.opcode == WsOpcode::Close; }
+    bool is_text() const { return header.opcode == WsOpcode::Text; }
+    bool is_binary() const { return header.opcode == WsOpcode::Binary; }
+    bool is_continuation() const { return header.opcode == WsOpcode::Continuation; }
 
-    bool isControlFrame() const {
+    bool is_control_frame() const {
         return header.opcode == WsOpcode::Close ||
                header.opcode == WsOpcode::Ping ||
                header.opcode == WsOpcode::Pong;
     }
 
-    bool isDataFrame() const {
+    bool is_data_frame() const {
         return header.opcode == WsOpcode::Text ||
                header.opcode == WsOpcode::Binary ||
                header.opcode == WsOpcode::Continuation;
@@ -150,7 +150,7 @@ struct WsFrame
 /**
  * @brief 获取操作码名称
  */
-inline const char* getOpcodeName(WsOpcode opcode)
+inline const char* get_opcode_name(WsOpcode opcode)
 {
     switch (opcode) {
         case WsOpcode::Continuation: return "Continuation";
@@ -166,7 +166,7 @@ inline const char* getOpcodeName(WsOpcode opcode)
 /**
  * @brief 检查操作码是否是控制帧
  */
-inline bool isControlFrame(WsOpcode opcode)
+inline bool is_control_frame(WsOpcode opcode)
 {
     return opcode == WsOpcode::Close ||
            opcode == WsOpcode::Ping ||
@@ -176,7 +176,7 @@ inline bool isControlFrame(WsOpcode opcode)
 /**
  * @brief 检查操作码是否是数据帧
  */
-inline bool isDataFrame(WsOpcode opcode)
+inline bool is_data_frame(WsOpcode opcode)
 {
     return opcode == WsOpcode::Text ||
            opcode == WsOpcode::Binary ||

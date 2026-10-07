@@ -60,11 +60,11 @@ std::atomic<size_t> g_workers_finished{0};
 std::mutex g_latency_mutex;
 std::vector<uint64_t> g_stream_latencies; // us
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running.store(false, std::memory_order_relaxed);
 }
 
-Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
+Task<void> bench_worker(const BenchConfig& config, uint32_t worker_id) {
     const size_t client_ring_buffer_size =
         std::max<size_t>(kDefaultRpcRingBufferSize,
                          config.payload_size * config.frames_per_stream * 2 + RPC_HEADER_SIZE * 64);
@@ -78,7 +78,7 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
     };
     std::vector<uint64_t> local_latencies;
     local_latencies.reserve(kLatencyReserve);
-    auto flushLocalLatencies = [&local_latencies]() {
+    auto flush_local_latencies = [&local_latencies]() {
         if (local_latencies.empty()) {
             return;
         }
@@ -91,7 +91,7 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
 
     while (g_running.load(std::memory_order_relaxed)) {
         auto client = RpcClientBuilder()
-            .ringBufferSize(client_ring_buffer_size)
+            .ring_buffer_size(client_ring_buffer_size)
             .build();
 
         bool connected = false;
@@ -116,7 +116,7 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
         }
 
         bool reconnect_needed = false;
-        auto stream_result = client.createStream(next_stream_id++, "StreamBenchService", "echo");
+        auto stream_result = client.create_stream(next_stream_id++, "StreamBenchService", "echo");
         if (!stream_result.has_value()) {
             break;
         }
@@ -127,11 +127,11 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
 
         while (g_running.load(std::memory_order_relaxed) && !reconnect_needed) {
             const uint32_t stream_id = next_stream_id++;
-            stream.streamId(stream_id);
+            stream.stream_id(stream_id);
 
             const auto stream_start = std::chrono::steady_clock::now();
 
-            auto send_result = co_await stream.sendInit();
+            auto send_result = co_await stream.send_init();
             if (!send_result.has_value()) {
                 reconnect_needed = true;
             }
@@ -147,8 +147,8 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
                 break;
             }
 
-            if (init_ack.messageType() != RpcMessageType::STREAM_INIT_ACK ||
-                init_ack.streamId() != stream_id) {
+            if (init_ack.message_type() != RpcMessageType::STREAM_INIT_ACK ||
+                init_ack.stream_id() != stream_id) {
                 reconnect_needed = true;
                 break;
             }
@@ -160,7 +160,7 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
                 while (sent_frames < config.frames_per_stream &&
                        sent_frames - recv_frames < frame_window &&
                        g_running.load(std::memory_order_relaxed)) {
-                    send_result = co_await stream.sendData(payload_view);
+                    send_result = co_await stream.send_data(payload_view);
                     if (!send_result.has_value()) {
                         reconnect_needed = true;
                     }
@@ -185,9 +185,9 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
                     break;
                 }
 
-                if (echo_frame.messageType() != RpcMessageType::STREAM_DATA ||
-                    echo_frame.streamId() != stream_id ||
-                    !echo_frame.payloadEquals(payload)) {
+                if (echo_frame.message_type() != RpcMessageType::STREAM_DATA ||
+                    echo_frame.stream_id() != stream_id ||
+                    !echo_frame.payload_equals(payload)) {
                     reconnect_needed = true;
                     break;
                 }
@@ -203,7 +203,7 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
                 break;
             }
 
-            send_result = co_await stream.sendEnd();
+            send_result = co_await stream.send_end();
             if (!send_result.has_value()) {
                 reconnect_needed = true;
             }
@@ -222,9 +222,9 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
                     break;
                 }
 
-                if (tail_frame.messageType() == RpcMessageType::STREAM_END) {
+                if (tail_frame.message_type() == RpcMessageType::STREAM_END) {
                     got_end = true;
-                } else if (tail_frame.messageType() == RpcMessageType::STREAM_CANCEL) {
+                } else if (tail_frame.message_type() == RpcMessageType::STREAM_CANCEL) {
                     reconnect_needed = true;
                     break;
                 }
@@ -239,7 +239,7 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
                 std::chrono::duration_cast<std::chrono::microseconds>(stream_end - stream_start).count();
             local_latencies.push_back(static_cast<uint64_t>(latency_us));
             if (local_latencies.size() >= kLatencyFlushBatch) {
-                flushLocalLatencies();
+                flush_local_latencies();
             }
 
             g_total_streams.fetch_add(1, std::memory_order_relaxed);
@@ -255,13 +255,13 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
         }
     }
 
-    flushLocalLatencies();
+    flush_local_latencies();
     g_workers_finished.fetch_add(1, std::memory_order_relaxed);
 
     co_return;
 }
 
-void printUsage(const char* prog) {
+void print_usage(const char* prog) {
     std::cout << "Usage: " << prog << " [options]\n"
               << "Options:\n"
               << "  -h <host>        Server host (default: 127.0.0.1)\n"
@@ -276,12 +276,12 @@ void printUsage(const char* prog) {
 } // namespace
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 #if defined(SIGPIPE)
     std::signal(SIGPIPE, SIG_IGN);
 #endif
@@ -292,13 +292,13 @@ int main(int argc, char* argv[]) {
         std::string opt = argv[i];
 
         if (opt == "--help") {
-            printUsage(argv[0]);
+            print_usage(argv[0]);
             return 0;
         }
 
         if (i + 1 >= argc) {
             std::cerr << "Missing value for option: " << opt << "\n";
-            printUsage(argv[0]);
+            print_usage(argv[0]);
             return 1;
         }
 
@@ -314,7 +314,7 @@ int main(int argc, char* argv[]) {
         else if (opt == "-i") config.io_schedulers = std::stoul(val);
         else {
             std::cerr << "Unknown option: " << opt << "\n";
-            printUsage(argv[0]);
+            print_usage(argv[0]);
             return 1;
         }
     }
@@ -326,7 +326,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Frames per stream: " << config.frames_per_stream << "\n";
     std::cout << "Frame window: " << std::max<size_t>(1, std::min(config.frame_window, config.frames_per_stream)) << "\n";
     std::cout << "Duration: " << config.duration_sec << " seconds\n";
-    const size_t resolved_io_schedulers = resolveIoSchedulerCount(config.io_schedulers);
+    const size_t resolved_io_schedulers = resolve_io_scheduler_count(config.io_schedulers);
     std::cout << "IO Schedulers: "
               << (config.io_schedulers == 0
                       ? "auto (" + std::to_string(resolved_io_schedulers) + ")"
@@ -335,15 +335,15 @@ int main(int argc, char* argv[]) {
 
     g_stream_latencies.reserve(config.connections * std::max<size_t>(config.duration_sec, size_t{1}) * 512);
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(resolved_io_schedulers).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(resolved_io_schedulers).parallel_scheduler_count(1).build();
     runtime.start();
 
     std::cout << "Starting " << config.connections << " stream connections...\n";
     bool schedule_failed = false;
     for (size_t i = 0; i < config.connections; ++i) {
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (scheduler == nullptr ||
-            !scheduleTask(scheduler, benchWorker(config, static_cast<uint32_t>(i)))) {
+            !schedule_task(scheduler, bench_worker(config, static_cast<uint32_t>(i)))) {
             schedule_failed = true;
             break;
         }

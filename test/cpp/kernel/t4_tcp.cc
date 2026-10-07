@@ -38,11 +38,11 @@ using namespace std::chrono_literals;
 
 namespace {
 
-uint16_t tcpTestPort() {
-    return galay::test::resolvePortFromEnv("GALAY_TEST_TCP_PORT", 28080);
+uint16_t tcp_test_port() {
+    return galay::test::resolve_port_from_env("GALAY_TEST_TCP_PORT", 28080);
 }
 
-bool waitForFlag(const std::atomic<bool>& flag, std::chrono::milliseconds timeout)
+bool wait_for_flag(const std::atomic<bool>& flag, std::chrono::milliseconds timeout)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
@@ -63,16 +63,16 @@ std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_test_done{false};
 
 // 客户端协程
-Task<void> echoClient() {
+Task<void> echo_client() {
     g_total++;
     LogInfo("TCP Client starting...");
     AsyncTcpSocket client;
     LogDebug("Client socket created, fd={}", client.handle().fd);
 
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     // 连接服务器
-    Host serverHost(IPType::IPV4, "127.0.0.1", tcpTestPort());
+    Host serverHost(IPType::IPV4, "127.0.0.1", tcp_test_port());
     LogDebug("Client connecting to server...");
     auto connectResult = co_await client.connect(serverHost);
     if (!connectResult) {
@@ -140,12 +140,12 @@ Task<void> echoClient() {
     co_return;
 }
 
-Task<void> peerEchoServer() {
+Task<void> peer_echo_server() {
     AsyncTcpSocket listener;
-    listener.option().handleReuseAddr();
-    listener.option().handleNonBlock();
+    listener.option().handle_reuse_addr();
+    listener.option().handle_non_block();
 
-    Host bindHost(IPType::IPV4, "127.0.0.1", tcpTestPort());
+    Host bindHost(IPType::IPV4, "127.0.0.1", tcp_test_port());
     auto bindResult = listener.bind(bindHost);
     if (!bindResult || !listener.listen(128)) {
         LogError("Peer server failed to listen");
@@ -166,7 +166,7 @@ Task<void> peerEchoServer() {
     }
 
     AsyncTcpSocket client(acceptResult.value());
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     char buffer[1024];
     for (size_t i = 0; i < 3; ++i) {
@@ -204,13 +204,13 @@ int main() {
     scheduler.start();
     LogDebug("Scheduler started");
 
-    if (!scheduleTask(scheduler, peerEchoServer())) {
+    if (!schedule_task(scheduler, peer_echo_server())) {
         LogError("Failed to schedule async peer server");
         g_failed++;
         g_test_done = true;
     }
 
-    if (!waitForFlag(g_server_ready, 5s) && !g_test_done.load()) {
+    if (!wait_for_flag(g_server_ready, 5s) && !g_test_done.load()) {
         LogError("Peer server did not become ready in time");
         g_failed++;
         g_test_done = true;
@@ -218,11 +218,11 @@ int main() {
 
     // 启动客户端
     if (!g_test_done.load()) {
-        scheduleTask(scheduler, echoClient());
+        schedule_task(scheduler, echo_client());
         LogDebug("Client task submitted");
     }
 
-    if (!waitForFlag(g_test_done, 5s)) {
+    if (!wait_for_flag(g_test_done, 5s)) {
         LogError("TCP client test timed out waiting for completion");
         g_failed++;
     }
@@ -235,14 +235,14 @@ int main() {
 #endif
 
     // 写入测试结果
-    writer.addTest();
+    writer.add_test();
     if (g_passed > 0) {
-        writer.addPassed();
+        writer.add_passed();
     }
     if (g_failed > 0) {
-        writer.addFailed();
+        writer.add_failed();
     }
-    writer.writeResult();
+    writer.write_result();
 
     LogInfo("========================================");
     LogInfo("Test Results: Total={}, Passed={}, Failed={}", g_total.load(), g_passed.load(), g_failed.load());

@@ -113,14 +113,14 @@ struct NodeStatus {
     std::atomic<uint64_t> failureCount{0}; ///< 失败计数
     std::atomic<bool> healthy{true}; ///< 是否健康
 
-    void recordRequest() {
+    void record_request() {
         const uint64_t previous = requestCount.fetch_add(1, std::memory_order_relaxed);
         if (previous == std::numeric_limits<uint64_t>::max()) {
             requestCount.store(previous, std::memory_order_relaxed);
         }
     } ///< 记录一次请求
 
-    void recordFailure() {
+    void record_failure() {
         const uint64_t previous = failureCount.fetch_add(1, std::memory_order_relaxed);
         if (previous == std::numeric_limits<uint64_t>::max()) {
             failureCount.store(previous, std::memory_order_relaxed);
@@ -128,7 +128,7 @@ struct NodeStatus {
         healthy.store(false, std::memory_order_release);
     } ///< 记录一次失败并标记为不健康
 
-    void markHealthy() { healthy.store(true, std::memory_order_release); } ///< 标记为健康
+    void mark_healthy() { healthy.store(true, std::memory_order_release); } ///< 标记为健康
 
     void reset() {
         requestCount.store(0, std::memory_order_relaxed);
@@ -212,12 +212,12 @@ public:
     /**
      * @brief 构造一致性哈希环
      * @param virtualNodes 每个物理节点对应的虚拟节点数量（默认 150）
-     * @param hashFunc 自定义哈希函数，为空时使用 MurmurHash3
+     * @param hash_func 自定义哈希函数，为空时使用 MurmurHash3
      */
     explicit ConsistentHash(size_t virtualNodes = 150,
-                            HashFunc hashFunc = nullptr)
+                            HashFunc hash_func = nullptr)
         : m_virtualNodes(virtualNodes)
-        , m_hashFunc(hashFunc ? std::move(hashFunc) :
+        , m_hash_func(hash_func ? std::move(hash_func) :
                      [](const std::string& key) { return MurmurHash3::hash32(key); })
         , m_state(nullptr)
         , m_retired(nullptr)
@@ -251,20 +251,20 @@ public:
      * @brief 添加节点到哈希环
      * @param config 节点配置
      */
-    void addNode(const NodeConfig& config) {
+    void add_node(const NodeConfig& config) {
         auto node = std::make_shared<PhysicalNode>(config);
         const RingSnapshot* retired = nullptr;
         {
             SnapshotGuard guard(*this);
             const RingSnapshot* current = guard.get();
             while (true) {
-                RingSnapshot* next = cloneSnapshot(*current);
+                RingSnapshot* next = clone_snapshot(*current);
                 next->nodes[config.id] = node;
 
                 size_t vnodes = m_virtualNodes * config.weight;
                 for (size_t i = 0; i < vnodes; ++i) {
                     std::string virtualKey = config.id + "#" + std::to_string(i);
-                    uint32_t hash = m_hashFunc(virtualKey);
+                    uint32_t hash = m_hash_func(virtualKey);
                     next->ring[hash] = node;
                 }
 
@@ -281,14 +281,14 @@ public:
                 current = expected;
             }
         }
-        retireSnapshot(retired);
+        retire_snapshot(retired);
     }
 
     /**
      * @brief 从哈希环移除节点
      * @param nodeId 节点标识
      */
-    void removeNode(const std::string& nodeId) {
+    void remove_node(const std::string& nodeId) {
         const RingSnapshot* retired = nullptr;
         {
             SnapshotGuard guard(*this);
@@ -299,13 +299,13 @@ public:
                     return;
                 }
 
-                RingSnapshot* next = cloneSnapshot(*current);
+                RingSnapshot* next = clone_snapshot(*current);
                 const auto& config = it->second->config;
                 size_t vnodes = m_virtualNodes * config.weight;
 
                 for (size_t i = 0; i < vnodes; ++i) {
                     std::string virtualKey = nodeId + "#" + std::to_string(i);
-                    uint32_t hash = m_hashFunc(virtualKey);
+                    uint32_t hash = m_hash_func(virtualKey);
                     const size_t erased = next->ring.erase(hash);
                     if (erased == 0) {
                         continue;
@@ -330,7 +330,7 @@ public:
                 current = expected;
             }
         }
-        retireSnapshot(retired);
+        retire_snapshot(retired);
     }
 
     /**
@@ -338,7 +338,7 @@ public:
      * @param key 查找键
      * @return 节点配置，环为空时返回 std::nullopt
      */
-    std::optional<NodeConfig> getNode(const std::string& key) const {
+    std::optional<NodeConfig> get_node(const std::string& key) const {
         SnapshotGuard guard(*this);
         const RingSnapshot* state = guard.get();
 
@@ -346,14 +346,14 @@ public:
             return std::nullopt;
         }
 
-        uint32_t hash = m_hashFunc(key);
+        uint32_t hash = m_hash_func(key);
         auto it = state->ring.lower_bound(hash);
 
         if (it == state->ring.end()) {
             it = state->ring.begin();
         }
 
-        it->second->status.recordRequest();
+        it->second->status.record_request();
         return it->second->config;
     }
 
@@ -363,7 +363,7 @@ public:
      * @param maxRetries 最大重试次数（默认 3）
      * @return 健康的节点配置，未找到时返回 std::nullopt
      */
-    std::optional<NodeConfig> getHealthyNode(const std::string& key, size_t maxRetries = 3) const {
+    std::optional<NodeConfig> get_healthy_node(const std::string& key, size_t maxRetries = 3) const {
         SnapshotGuard guard(*this);
         const RingSnapshot* state = guard.get();
 
@@ -371,7 +371,7 @@ public:
             return std::nullopt;
         }
 
-        uint32_t hash = m_hashFunc(key);
+        uint32_t hash = m_hash_func(key);
         auto it = state->ring.lower_bound(hash);
 
         for (size_t retry = 0; retry < maxRetries; ++retry) {
@@ -380,7 +380,7 @@ public:
             }
 
             if (it->second->status.healthy.load(std::memory_order_acquire)) {
-                it->second->status.recordRequest();
+                it->second->status.record_request();
                 return it->second->config;
             }
 
@@ -396,7 +396,7 @@ public:
      * @param count 需要的节点数量
      * @return 节点配置列表
      */
-    std::vector<NodeConfig> getNodes(const std::string& key, size_t count) const {
+    std::vector<NodeConfig> get_nodes(const std::string& key, size_t count) const {
         SnapshotGuard guard(*this);
         const RingSnapshot* state = guard.get();
 
@@ -405,7 +405,7 @@ public:
             return result;
         }
 
-        uint32_t hash = m_hashFunc(key);
+        uint32_t hash = m_hash_func(key);
         auto it = state->ring.lower_bound(hash);
 
         std::set<std::string> seen;
@@ -432,25 +432,25 @@ public:
         return result;
     }
 
-    void markUnhealthy(const std::string& nodeId) {
+    void mark_unhealthy(const std::string& nodeId) {
         SnapshotGuard guard(*this);
         const RingSnapshot* state = guard.get();
         auto it = state->nodes.find(nodeId);
         if (it != state->nodes.end()) {
-            it->second->status.recordFailure();
+            it->second->status.record_failure();
         }
     }
 
-    void markHealthy(const std::string& nodeId) {
+    void mark_healthy(const std::string& nodeId) {
         SnapshotGuard guard(*this);
         const RingSnapshot* state = guard.get();
         auto it = state->nodes.find(nodeId);
         if (it != state->nodes.end()) {
-            it->second->status.markHealthy();
+            it->second->status.mark_healthy();
         }
     }
 
-    std::vector<NodeConfig> getAllNodes() const {
+    std::vector<NodeConfig> get_all_nodes() const {
         SnapshotGuard guard(*this);
         const RingSnapshot* state = guard.get();
         std::vector<NodeConfig> result;
@@ -461,13 +461,13 @@ public:
         return result;
     }
 
-    size_t nodeCount() const {
+    size_t node_count() const {
         SnapshotGuard guard(*this);
         const RingSnapshot* state = guard.get();
         return state->nodes.size();
     }
 
-    size_t virtualNodeCount() const {
+    size_t virtual_node_count() const {
         SnapshotGuard guard(*this);
         const RingSnapshot* state = guard.get();
         return state->ring.size();
@@ -500,18 +500,18 @@ public:
                 current = expected;
             }
         }
-        retireSnapshot(retired);
+        retire_snapshot(retired);
     }
 
 private:
-    RingSnapshot* cloneSnapshot(const RingSnapshot& source) {
+    RingSnapshot* clone_snapshot(const RingSnapshot& source) {
         auto next = std::make_unique<RingSnapshot>();
         next->ring = source.ring;
         next->nodes = source.nodes;
         return next.release();
     }
 
-    void retireSnapshot(const RingSnapshot* snapshot) {
+    void retire_snapshot(const RingSnapshot* snapshot) {
         RingSnapshot* retired = const_cast<RingSnapshot*>(snapshot);
         RingSnapshot* head = m_retired.load(std::memory_order_acquire);
         do {
@@ -521,10 +521,10 @@ private:
             retired,
             std::memory_order_release,
             std::memory_order_acquire));
-        collectRetiredSnapshots();
+        collect_retired_snapshots();
     }
 
-    void collectRetiredSnapshots() const {
+    void collect_retired_snapshots() const {
         if (m_readers.load(std::memory_order_acquire) != 0) {
             return;
         }
@@ -538,7 +538,7 @@ private:
     }
 
     size_t m_virtualNodes;
-    HashFunc m_hashFunc;
+    HashFunc m_hash_func;
     std::atomic<const RingSnapshot*> m_state;
     mutable std::atomic<RingSnapshot*> m_retired;
     mutable std::atomic<size_t> m_readers;

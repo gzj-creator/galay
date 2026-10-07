@@ -26,7 +26,7 @@ struct BenchmarkResult
     std::uint64_t checksum = 0;
 };
 
-bool parseSizeArg(std::string_view text, size_t* value)
+bool parse_size_arg(std::string_view text, size_t* value)
 {
     if (value == nullptr || text.empty()) {
         return false;
@@ -44,7 +44,7 @@ bool parseSizeArg(std::string_view text, size_t* value)
     return true;
 }
 
-RedisReply makeNestedReply(size_t width, size_t payload_size)
+RedisReply make_nested_reply(size_t width, size_t payload_size)
 {
     std::vector<RedisReply> outer;
     outer.reserve(width);
@@ -66,7 +66,7 @@ RedisReply makeNestedReply(size_t width, size_t payload_size)
     return RedisReply(RespType::Array, std::move(outer));
 }
 
-RedisCommandBuilder makeCommandBuilder(size_t width, size_t payload_size)
+RedisCommandBuilder make_command_builder(size_t width, size_t payload_size)
 {
     RedisCommandBuilder builder;
     builder.reserve(width, width * 2, width * (payload_size + 32));
@@ -81,34 +81,34 @@ RedisCommandBuilder makeCommandBuilder(size_t width, size_t payload_size)
     return builder;
 }
 
-BenchmarkResult runReplyCloneMove(const RedisReply& source, size_t iterations)
+BenchmarkResult run_reply_clone_move(const RedisReply& source, size_t iterations)
 {
     std::uint64_t checksum = 0;
     const auto started = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
         RedisReply cloned = source.clone();
         RedisReply moved = std::move(cloned);
-        checksum += moved.asArray().size();
+        checksum += moved.as_array().size();
     }
     const auto finished = std::chrono::steady_clock::now();
     return BenchmarkResult{true, std::chrono::duration<double>(finished - started).count(), checksum};
 }
 
-BenchmarkResult runValueCloneMove(const RedisValue& source, size_t iterations)
+BenchmarkResult run_value_clone_move(const RedisValue& source, size_t iterations)
 {
     std::uint64_t checksum = 0;
     const auto started = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
         RedisValue cloned = source.clone();
         RedisValue moved = std::move(cloned);
-        std::vector<RedisValue> values = moved.toArray();
+        std::vector<RedisValue> values = moved.to_array();
         checksum += values.size();
     }
     const auto finished = std::chrono::steady_clock::now();
     return BenchmarkResult{true, std::chrono::duration<double>(finished - started).count(), checksum};
 }
 
-BenchmarkResult runBuilderCloneMove(const RedisCommandBuilder& source, size_t iterations)
+BenchmarkResult run_builder_clone_move(const RedisCommandBuilder& source, size_t iterations)
 {
     std::uint64_t checksum = 0;
     const auto started = std::chrono::steady_clock::now();
@@ -123,7 +123,7 @@ BenchmarkResult runBuilderCloneMove(const RedisCommandBuilder& source, size_t it
     return BenchmarkResult{true, std::chrono::duration<double>(finished - started).count(), checksum};
 }
 
-BenchmarkResult runEncodedCommandCloneMove(const RedisEncodedCommand& source, size_t iterations)
+BenchmarkResult run_encoded_command_clone_move(const RedisEncodedCommand& source, size_t iterations)
 {
     std::uint64_t checksum = 0;
     const auto started = std::chrono::steady_clock::now();
@@ -136,7 +136,7 @@ BenchmarkResult runEncodedCommandCloneMove(const RedisEncodedCommand& source, si
     return BenchmarkResult{true, std::chrono::duration<double>(finished - started).count(), checksum};
 }
 
-bool reportScenario(const char* name, BenchmarkResult result, size_t iterations)
+bool report_scenario(const char* name, BenchmarkResult result, size_t iterations)
 {
     if (!result.ok || result.seconds <= 0.0) {
         std::cerr << name << " benchmark failed\n";
@@ -155,7 +155,7 @@ bool reportScenario(const char* name, BenchmarkResult result, size_t iterations)
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -163,22 +163,22 @@ int main(int argc, char* argv[])
     size_t width = 8;
     size_t payload_size = 64;
 
-    if (argc > 1 && !parseSizeArg(argv[1], &iterations)) {
+    if (argc > 1 && !parse_size_arg(argv[1], &iterations)) {
         std::cerr << "usage: " << argv[0] << " [iterations] [width] [payload-size]\n";
         return 2;
     }
-    if (argc > 2 && !parseSizeArg(argv[2], &width)) {
+    if (argc > 2 && !parse_size_arg(argv[2], &width)) {
         std::cerr << "usage: " << argv[0] << " [iterations] [width] [payload-size]\n";
         return 2;
     }
-    if (argc > 3 && !parseSizeArg(argv[3], &payload_size)) {
+    if (argc > 3 && !parse_size_arg(argv[3], &payload_size)) {
         std::cerr << "usage: " << argv[0] << " [iterations] [width] [payload-size]\n";
         return 2;
     }
 
-    RedisReply reply = makeNestedReply(width, payload_size);
+    RedisReply reply = make_nested_reply(width, payload_size);
     RedisValue value(reply.clone());
-    RedisCommandBuilder builder = makeCommandBuilder(width, payload_size);
+    RedisCommandBuilder builder = make_command_builder(width, payload_size);
     const auto cached_views = builder.commands();
     if (cached_views.size() != width) {
         std::cerr << "builder setup produced unexpected command count\n";
@@ -191,16 +191,16 @@ int main(int argc, char* argv[])
               << " width=" << width
               << " payload_size=" << payload_size << "\n";
 
-    if (!reportScenario("redis-reply", runReplyCloneMove(reply, iterations), iterations)) {
+    if (!report_scenario("redis-reply", run_reply_clone_move(reply, iterations), iterations)) {
         return 1;
     }
-    if (!reportScenario("redis-value", runValueCloneMove(value, iterations), iterations)) {
+    if (!report_scenario("redis-value", run_value_clone_move(value, iterations), iterations)) {
         return 1;
     }
-    if (!reportScenario("command-builder", runBuilderCloneMove(builder, iterations), iterations)) {
+    if (!report_scenario("command-builder", run_builder_clone_move(builder, iterations), iterations)) {
         return 1;
     }
-    if (!reportScenario("encoded-command", runEncodedCommandCloneMove(encoded, iterations), iterations)) {
+    if (!report_scenario("encoded-command", run_encoded_command_clone_move(encoded, iterations), iterations)) {
         return 1;
     }
 

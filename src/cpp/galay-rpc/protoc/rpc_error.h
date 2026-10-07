@@ -36,7 +36,7 @@ public:
      */
     RpcError(RpcErrorCode code)
         : m_code(code)
-        , m_message(rpcErrorCodeToString(code)) {}
+        , m_message(rpc_error_code_to_string(code)) {}
 
     /**
      * @brief 从错误码和自定义消息构造
@@ -53,10 +53,10 @@ public:
     const std::string& message() const { return m_message; }
 
     /// @brief 判断是否为成功状态
-    bool isOk() const { return m_code == RpcErrorCode::OK; }
+    bool is_ok() const { return m_code == RpcErrorCode::OK; }
 
     /// @brief 判断是否存在错误（非OK时返回true）
-    explicit operator bool() const { return !isOk(); }
+    explicit operator bool() const { return !is_ok(); }
 
     /**
      * @brief 从IOError创建RpcError
@@ -77,8 +77,8 @@ public:
     }
 
     /// @brief 转换为字符串表示（错误码: 消息）
-    std::string toString() const {
-        return std::string(rpcErrorCodeToString(m_code)) + ": " + m_message;
+    std::string to_string() const {
+        return std::string(rpc_error_code_to_string(m_code)) + ": " + m_message;
     }
 
 private:

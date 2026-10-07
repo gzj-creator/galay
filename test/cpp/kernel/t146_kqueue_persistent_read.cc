@@ -62,7 +62,7 @@ struct SuspendProbeAwaitable {
     }
 };
 
-Task<void> recvOne(RecvState* state) {
+Task<void> recv_one(RecvState* state) {
     char byte = 0;
     SuspendProbeAwaitable<RecvAwaitable> awaitable{
         .inner = RecvAwaitable(&state->controller, &byte, 1),
@@ -76,7 +76,7 @@ Task<void> recvOne(RecvState* state) {
     state->done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -89,12 +89,12 @@ bool waitUntil(auto&& predicate,
     return predicate();
 }
 
-bool setNonBlocking(int fd) {
+bool set_non_blocking(int fd) {
     const int flags = fcntl(fd, F_GETFL, 0);
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool sendByte(int fd, char byte) {
+bool send_byte(int fd, char byte) {
     while (true) {
         const ssize_t written = ::send(fd, &byte, 1, 0);
         if (written == 1) {
@@ -107,13 +107,13 @@ bool sendByte(int fd, char byte) {
     }
 }
 
-bool removeReadRegistration(int kqueue_fd, int fd) {
+bool remove_read_registration(int kqueue_fd, int fd) {
     struct kevent change{};
     EV_SET(&change, fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
     return kevent(kqueue_fd, &change, 1, nullptr, 0, nullptr) == 0;
 }
 
-bool closeFd(int fd) {
+bool close_fd(int fd) {
     if (::close(fd) == 0) {
         return true;
     }
@@ -135,21 +135,21 @@ int main() {
         socketpair(AF_UNIX, SOCK_STREAM, 0, repeat_fds) != 0) {
         std::cerr << "[T146] socketpair failed, errno=" << errno << '\n';
         if (persistent_fds[0] >= 0) {
-            const bool first_closed = closeFd(persistent_fds[0]);
-            const bool second_closed = closeFd(persistent_fds[1]);
+            const bool first_closed = close_fd(persistent_fds[0]);
+            const bool second_closed = close_fd(persistent_fds[1]);
             if (!first_closed || !second_closed) {
                 return 2;
             }
         }
         return 1;
     }
-    if (!setNonBlocking(persistent_fds[0]) || !setNonBlocking(persistent_fds[1]) ||
-        !setNonBlocking(repeat_fds[0]) || !setNonBlocking(repeat_fds[1])) {
+    if (!set_non_blocking(persistent_fds[0]) || !set_non_blocking(persistent_fds[1]) ||
+        !set_non_blocking(repeat_fds[0]) || !set_non_blocking(repeat_fds[1])) {
         std::cerr << "[T146] failed to set non-blocking mode\n";
-        const bool first_closed = closeFd(persistent_fds[0]);
-        const bool second_closed = closeFd(persistent_fds[1]);
-        const bool third_closed = closeFd(repeat_fds[0]);
-        const bool fourth_closed = closeFd(repeat_fds[1]);
+        const bool first_closed = close_fd(persistent_fds[0]);
+        const bool second_closed = close_fd(persistent_fds[1]);
+        const bool third_closed = close_fd(repeat_fds[0]);
+        const bool fourth_closed = close_fd(repeat_fds[1]);
         return first_closed && second_closed && third_closed && fourth_closed ? 1 : 2;
     }
 
@@ -159,31 +159,31 @@ int main() {
     auto started = scheduler.start();
     if (!started) {
         std::cerr << "[T146] scheduler start failed: " << started.error().message() << '\n';
-        const bool first_closed = closeFd(persistent_fds[0]);
-        const bool second_closed = closeFd(persistent_fds[1]);
-        const bool third_closed = closeFd(repeat_fds[0]);
-        const bool fourth_closed = closeFd(repeat_fds[1]);
+        const bool first_closed = close_fd(persistent_fds[0]);
+        const bool second_closed = close_fd(persistent_fds[1]);
+        const bool third_closed = close_fd(repeat_fds[0]);
+        const bool fourth_closed = close_fd(repeat_fds[1]);
         return first_closed && second_closed && third_closed && fourth_closed ? 1 : 2;
     }
 
-    const int kqueue_fd = SchedulerTestAccess::kqueueFd(scheduler);
+    const int kqueue_fd = SchedulerTestAccess::kqueue_fd(scheduler);
     bool passed = true;
 
-    if (!scheduleTask(scheduler, recvOne(&persistent_state))) {
+    if (!schedule_task(scheduler, recv_one(&persistent_state))) {
         std::cerr << "[T146] failed to schedule first recv\n";
         passed = false;
     }
-    if (passed && !waitUntil([&]() {
+    if (passed && !wait_until([&]() {
             return persistent_state.suspend_done.load(std::memory_order_acquire);
         })) {
         std::cerr << "[T146] first recv did not reach await_suspend\n";
         passed = false;
     }
-    if (passed && !sendByte(persistent_fds[1], 'a')) {
+    if (passed && !send_byte(persistent_fds[1], 'a')) {
         std::cerr << "[T146] failed to send first byte\n";
         passed = false;
     }
-    if (passed && !waitUntil([&]() {
+    if (passed && !wait_until([&]() {
             return persistent_state.done.load(std::memory_order_acquire);
         })) {
         std::cerr << "[T146] first recv did not complete\n";
@@ -194,26 +194,26 @@ int main() {
         std::cerr << "[T146] first recv result mismatch\n";
         passed = false;
     }
-    if (passed && !removeReadRegistration(kqueue_fd, persistent_fds[0])) {
+    if (passed && !remove_read_registration(kqueue_fd, persistent_fds[0])) {
         std::cerr << "[T146] recv completion removed persistent EVFILT_READ\n";
         passed = false;
     }
 
-    if (passed && !scheduleTask(scheduler, recvOne(&repeat_state))) {
+    if (passed && !schedule_task(scheduler, recv_one(&repeat_state))) {
         std::cerr << "[T146] failed to schedule second recv\n";
         passed = false;
     }
-    if (passed && !waitUntil([&]() {
+    if (passed && !wait_until([&]() {
             return repeat_state.suspend_done.load(std::memory_order_acquire);
         })) {
         std::cerr << "[T146] second recv did not reach await_suspend\n";
         passed = false;
     }
-    if (passed && !sendByte(repeat_fds[1], 'b')) {
+    if (passed && !send_byte(repeat_fds[1], 'b')) {
         std::cerr << "[T146] failed to send second byte\n";
         passed = false;
     }
-    if (passed && !waitUntil([&]() {
+    if (passed && !wait_until([&]() {
             return repeat_state.done.load(std::memory_order_acquire);
         })) {
         std::cerr << "[T146] second recv did not complete\n";
@@ -228,21 +228,21 @@ int main() {
     repeat_state.done.store(false, std::memory_order_release);
     repeat_state.value.store(0, std::memory_order_release);
     repeat_state.error.store(0, std::memory_order_release);
-    if (passed && !scheduleTask(scheduler, recvOne(&repeat_state))) {
+    if (passed && !schedule_task(scheduler, recv_one(&repeat_state))) {
         std::cerr << "[T146] failed to schedule third recv\n";
         passed = false;
     }
-    if (passed && !waitUntil([&]() {
+    if (passed && !wait_until([&]() {
             return repeat_state.suspend_done.load(std::memory_order_acquire);
         })) {
         std::cerr << "[T146] third recv did not reach await_suspend\n";
         passed = false;
     }
-    if (passed && !sendByte(repeat_fds[1], 'c')) {
+    if (passed && !send_byte(repeat_fds[1], 'c')) {
         std::cerr << "[T146] failed to send third byte\n";
         passed = false;
     }
-    if (passed && !waitUntil([&]() {
+    if (passed && !wait_until([&]() {
             return repeat_state.done.load(std::memory_order_acquire);
         })) {
         std::cerr << "[T146] third recv did not complete\n";
@@ -255,10 +255,10 @@ int main() {
     }
 
     scheduler.stop();
-    const bool first_closed = closeFd(persistent_fds[0]);
-    const bool second_closed = closeFd(persistent_fds[1]);
-    const bool third_closed = closeFd(repeat_fds[0]);
-    const bool fourth_closed = closeFd(repeat_fds[1]);
+    const bool first_closed = close_fd(persistent_fds[0]);
+    const bool second_closed = close_fd(persistent_fds[1]);
+    const bool third_closed = close_fd(repeat_fds[0]);
+    const bool fourth_closed = close_fd(repeat_fds[1]);
     if (!first_closed || !second_closed || !third_closed || !fourth_closed) {
         passed = false;
     }

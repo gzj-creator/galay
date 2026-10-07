@@ -42,9 +42,9 @@ std::atomic<bool> g_test_passed{false};
 // ============ 单元测试 ============
 
 template<galay::utils::RingBufferBackendStrategy Strategy>
-std::string collectReadable(const RingBuffer<Strategy, std::dynamic_extent>& buffer) {
+std::string collect_readable(const RingBuffer<Strategy, std::dynamic_extent>& buffer) {
     std::array<struct iovec, 2> iovecs{};
-    const size_t count = buffer.getReadIovecs(iovecs);
+    const size_t count = buffer.get_read_iovecs(iovecs);
     std::string collected;
     for (size_t i = 0; i < count; ++i) {
         const auto& iov = iovecs[i];
@@ -65,7 +65,7 @@ void test_basic_operations() {
 
     // 写入数据
     const char* data = "Hello World";
-    size_t written = buf.tryWriteBatch(data, strlen(data));
+    size_t written = buf.try_write_batch(data, strlen(data));
     assert(written == 11);
     assert(buf.readable() == 11);
     assert(buf.writable() == 89);
@@ -88,7 +88,7 @@ void test_wrap_around() {
     VectorRingBuffer buf(20);
 
     // 写入15字节
-    assert(buf.tryWriteBatch("123456789012345", 15) == 15);
+    assert(buf.try_write_batch("123456789012345", 15) == 15);
     assert(buf.readable() == 15);
 
     // 消费10字节，readIndex=10, writeIndex=15, size=5
@@ -98,12 +98,12 @@ void test_wrap_around() {
     // 再写入10字节，会环绕
     // writeIndex: 15 -> 20 -> 0 -> 5
     // 数据布局: [10,15)="12345", [15,20)="ABCDE", [0,5)="FGHIJ"
-    assert(buf.tryWriteBatch("ABCDEFGHIJ", 10) == 10);
+    assert(buf.try_write_batch("ABCDEFGHIJ", 10) == 10);
     assert(buf.readable() == 15);
 
-    // 验证 getReadIovecs 返回两段
+    // 验证 get_read_iovecs 返回两段
     std::array<struct iovec, 2> readIovecs{};
-    const size_t readCount = buf.getReadIovecs(readIovecs);
+    const size_t readCount = buf.get_read_iovecs(readIovecs);
     assert(readCount == 2);
 
     // 第一段: [10, 20) = "12345ABCDE" (10字节)
@@ -124,16 +124,16 @@ void test_get_write_iovecs() {
 
     // 空缓冲区，应该返回一段 [0, 20)
     std::array<struct iovec, 2> iovecs1{};
-    const size_t iovecs1Count = buf.getWriteIovecs(iovecs1);
+    const size_t iovecs1Count = buf.get_write_iovecs(iovecs1);
     assert(iovecs1Count == 1);
     assert(iovecs1[0].iov_len == 20);
 
     // 写入10字节
-    assert(buf.tryWriteBatch("0123456789", 10) == 10);
+    assert(buf.try_write_batch("0123456789", 10) == 10);
 
     // 应该返回一段 [10, 20)
     std::array<struct iovec, 2> iovecs2{};
-    const size_t iovecs2Count = buf.getWriteIovecs(iovecs2);
+    const size_t iovecs2Count = buf.get_write_iovecs(iovecs2);
     assert(iovecs2Count == 1);
     assert(iovecs2[0].iov_len == 10);
 
@@ -142,7 +142,7 @@ void test_get_write_iovecs() {
 
     // 应该返回两段 [10, 20) 和 [0, 5)
     std::array<struct iovec, 2> iovecs3{};
-    const size_t iovecs3Count = buf.getWriteIovecs(iovecs3);
+    const size_t iovecs3Count = buf.get_write_iovecs(iovecs3);
     assert(iovecs3Count == 2);
     assert(iovecs3[0].iov_len == 10);
     assert(iovecs3[1].iov_len == 5);
@@ -157,24 +157,24 @@ void test_get_read_iovecs() {
 
     // 空缓冲区
     std::array<struct iovec, 2> iovecs1{};
-    const size_t iovecs1Count = buf.getReadIovecs(iovecs1);
+    const size_t iovecs1Count = buf.get_read_iovecs(iovecs1);
     assert(iovecs1Count == 0);
 
     // 写入数据（连续）
-    assert(buf.tryWriteBatch("Hello", 5) == 5);
+    assert(buf.try_write_batch("Hello", 5) == 5);
     std::array<struct iovec, 2> iovecs2{};
-    const size_t iovecs2Count = buf.getReadIovecs(iovecs2);
+    const size_t iovecs2Count = buf.get_read_iovecs(iovecs2);
     assert(iovecs2Count == 1);
     assert(iovecs2[0].iov_len == 5);
 
     // 制造环绕情况
     buf.consume(5);
-    assert(buf.tryWriteBatch("12345678901234567890", 20) == 20); // 写满
+    assert(buf.try_write_batch("12345678901234567890", 20) == 20); // 写满
     buf.consume(15); // 消费15字节
-    assert(buf.tryWriteBatch("ABCDE", 5) == 5); // 环绕写入
+    assert(buf.try_write_batch("ABCDE", 5) == 5); // 环绕写入
 
     std::array<struct iovec, 2> iovecs3{};
-    const size_t iovecs3Count = buf.getReadIovecs(iovecs3);
+    const size_t iovecs3Count = buf.get_read_iovecs(iovecs3);
     assert(iovecs3Count == 2);
 
     LogInfo("Test: getReadIovecs PASSED");
@@ -188,14 +188,14 @@ void test_full_and_empty() {
     assert(buf.empty());
     assert(!buf.full());
 
-    assert(buf.tryWriteBatch("1234567890", 10) == 10);
+    assert(buf.try_write_batch("1234567890", 10) == 10);
     assert(!buf.empty());
     assert(buf.full());
     assert(buf.writable() == 0);
 
-    // 满时 getWriteIovecs 应该返回空
+    // 满时 get_write_iovecs 应该返回空
     std::array<struct iovec, 2> iovecs{};
-    const size_t iovecCount = buf.getWriteIovecs(iovecs);
+    const size_t iovecCount = buf.get_write_iovecs(iovecs);
     assert(iovecCount == 0);
 
     buf.consume(10);
@@ -209,7 +209,7 @@ void test_move_semantics() {
     LogInfo("=== Test: Move Semantics ===");
 
     VectorRingBuffer buf1(100);
-    assert(buf1.tryWriteBatch("Test Data", 9) == 9);
+    assert(buf1.try_write_batch("Test Data", 9) == 9);
 
     // 移动构造
     VectorRingBuffer buf2(std::move(buf1));
@@ -228,16 +228,16 @@ void test_move_semantics() {
 // ============ 集成测试（网络 IO）============
 
 // 服务器协程 - 使用 RingBuffer + readv 接收数据
-Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
+Task<void> ring_buffer_server([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("[Server] Starting...");
     AsyncTcpSocket listener;
 
-    auto optionResult = listener.option().handleReuseAddr();
+    auto optionResult = listener.option().handle_reuse_addr();
     if (!optionResult) {
         LogError("[Server] Failed to enable reuse addr: {}", optionResult.error().message());
         co_return;
     }
-    optionResult = listener.option().handleNonBlock();
+    optionResult = listener.option().handle_non_block();
     if (!optionResult) {
         LogError("[Server] Failed to enable non-block: {}", optionResult.error().message());
         co_return;
@@ -269,7 +269,7 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("[Server] Client connected from {}:{}", clientHost.ip(), clientHost.port());
 
     AsyncTcpSocket client(acceptResult.value());
-    optionResult = client.option().handleNonBlock();
+    optionResult = client.option().handle_non_block();
     if (!optionResult) {
         LogError("[Server] Failed to enable client non-block: {}", optionResult.error().message());
         co_await client.close();
@@ -283,7 +283,7 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
     std::array<struct iovec, 2> sendReadIovecs{};
 
     // 获取可写 iovec 用于 readv
-    size_t recvWriteCount = recvBuffer.getWriteIovecs(recvWriteIovecs);
+    size_t recvWriteCount = recvBuffer.get_write_iovecs(recvWriteIovecs);
     LogInfo("[Server] Prepared {} iovecs for readv", recvWriteCount);
 
     auto readvResult = co_await client.readv(recvWriteIovecs, recvWriteCount);
@@ -299,7 +299,7 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("[Server] readv received {} bytes, readable: {}", bytesRead, recvBuffer.readable());
 
     // 获取可读数据验证
-    const std::string received = collectReadable(recvBuffer);
+    const std::string received = collect_readable(recvBuffer);
     LogInfo("[Server] Received data: '{}'", received);
 
     bool dataOk = (received.find("Hello from RingBuffer client!") != std::string::npos);
@@ -314,7 +314,7 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
     DefaultRingBuffer sendBuffer(1024);
     std::string response = "Response: " + received + " [echoed]";
     const size_t prepared =
-        sendBuffer.tryWriteBatch(response.data(), response.size());
+        sendBuffer.try_write_batch(response.data(), response.size());
     if (prepared != response.size()) {
         LogError("[Server] Response does not fit RingBuffer");
         co_await client.close();
@@ -324,7 +324,7 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
 
     LogInfo("[Server] Sending {} bytes via writev", sendBuffer.readable());
 
-    size_t sendReadCount = sendBuffer.getReadIovecs(sendReadIovecs);
+    size_t sendReadCount = sendBuffer.get_read_iovecs(sendReadIovecs);
     if (sendReadCount != 0) {
         auto writevResult = co_await client.writev(sendReadIovecs, sendReadCount);
         if (!writevResult) {
@@ -342,7 +342,7 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
 }
 
 // 客户端协程 - 使用 RingBuffer + writev 发送数据
-Task<void> ringBufferClient([[maybe_unused]] IOScheduler* scheduler) {
+Task<void> ring_buffer_client([[maybe_unused]] IOScheduler* scheduler) {
     // 等待服务器就绪
     while (!g_server_ready) {
         co_await galay::kernel::sleep(std::chrono::milliseconds(10));
@@ -350,7 +350,7 @@ Task<void> ringBufferClient([[maybe_unused]] IOScheduler* scheduler) {
 
     LogInfo("[Client] Starting...");
     AsyncTcpSocket client;
-    auto optionResult = client.option().handleNonBlock();
+    auto optionResult = client.option().handle_non_block();
     if (!optionResult) {
         LogError("[Client] Failed to enable non-block: {}", optionResult.error().message());
         co_return;
@@ -368,7 +368,7 @@ Task<void> ringBufferClient([[maybe_unused]] IOScheduler* scheduler) {
     // 使用 RingBuffer 准备发送数据
     DefaultRingBuffer sendBuffer(1024);
     const char* msg = "Hello from RingBuffer client!";
-    const size_t prepared = sendBuffer.tryWriteBatch(msg, strlen(msg));
+    const size_t prepared = sendBuffer.try_write_batch(msg, strlen(msg));
     if (prepared != strlen(msg)) {
         LogError("[Client] Request does not fit RingBuffer");
         co_await client.close();
@@ -380,7 +380,7 @@ Task<void> ringBufferClient([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("[Client] Sending {} bytes via writev", sendBuffer.readable());
 
     // 使用 writev 发送
-    size_t sendReadCount = sendBuffer.getReadIovecs(sendReadIovecs);
+    size_t sendReadCount = sendBuffer.get_read_iovecs(sendReadIovecs);
     auto writevResult = co_await client.writev(sendReadIovecs, sendReadCount);
     if (!writevResult) {
         LogError("[Client] writev failed: {}", writevResult.error().message());
@@ -394,7 +394,7 @@ Task<void> ringBufferClient([[maybe_unused]] IOScheduler* scheduler) {
     // 使用 RingBuffer + readv 接收响应
     DefaultRingBuffer recvBuffer(1024);
 
-    size_t recvWriteCount = recvBuffer.getWriteIovecs(recvWriteIovecs);
+    size_t recvWriteCount = recvBuffer.get_write_iovecs(recvWriteIovecs);
     auto readvResult = co_await client.readv(recvWriteIovecs, recvWriteCount);
     if (!readvResult) {
         LogError("[Client] readv failed: {}", readvResult.error().message());
@@ -402,7 +402,7 @@ Task<void> ringBufferClient([[maybe_unused]] IOScheduler* scheduler) {
         recvBuffer.produce(readvResult.value());
 
         // 读取响应内容
-        const std::string response = collectReadable(recvBuffer);
+        const std::string response = collect_readable(recvBuffer);
         LogInfo("[Client] Received {} bytes: '{}'", recvBuffer.readable(), response);
     }
 
@@ -442,8 +442,8 @@ int main() {
 
     scheduler.start();
 
-    if (!scheduleTask(scheduler, ringBufferServer(&scheduler)) ||
-        !scheduleTask(scheduler, ringBufferClient(&scheduler))) {
+    if (!schedule_task(scheduler, ring_buffer_server(&scheduler)) ||
+        !schedule_task(scheduler, ring_buffer_client(&scheduler))) {
         LogError("Failed to schedule RingBuffer server/client task");
         scheduler.stop();
         return 1;

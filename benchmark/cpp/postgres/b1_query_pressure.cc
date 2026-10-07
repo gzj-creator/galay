@@ -33,7 +33,7 @@ struct BenchmarkState
     std::atomic<uint64_t> failed{0};
 };
 
-void rememberError(BenchmarkState* state, std::string message)
+void remember_error(BenchmarkState* state, std::string message)
 {
     std::lock_guard lock(state->error_mutex);
     if (state->first_error.empty()) {
@@ -41,7 +41,7 @@ void rememberError(BenchmarkState* state, std::string message)
     }
 }
 
-uint64_t resultBytes(const galay::postgres::PostgresResultSet& result)
+uint64_t result_bytes(const galay::postgres::PostgresResultSet& result)
 {
     uint64_t bytes = 0;
     for (const auto& row : result.rows()) {
@@ -54,7 +54,7 @@ uint64_t resultBytes(const galay::postgres::PostgresResultSet& result)
     return bytes;
 }
 
-void runWorker(const postgres_benchmark::Config* config,
+void run_worker(const postgres_benchmark::Config* config,
                BenchmarkState* state,
                std::barrier<>* ready_barrier,
                std::barrier<>* start_barrier,
@@ -68,14 +68,14 @@ void runWorker(const postgres_benchmark::Config* config,
                                     config->database);
     bool ready = connected.has_value();
     if (!ready) {
-        rememberError(state, connected.error().message());
+        remember_error(state, connected.error().message());
     }
 
     if (ready) {
         for (size_t index = 0; index < kWarmupQueries; ++index) {
             auto result = client.query(config->sql);
             if (!result) {
-                rememberError(state, result.error().message());
+                remember_error(state, result.error().message());
                 ready = false;
                 break;
             }
@@ -103,10 +103,10 @@ void runWorker(const postgres_benchmark::Config* config,
             std::chrono::duration_cast<std::chrono::nanoseconds>(finished - started).count()));
         if (result) {
             ++local_succeeded;
-            local_response_bytes += resultBytes(*result);
+            local_response_bytes += result_bytes(*result);
         } else {
             ++local_failed;
-            rememberError(state, result.error().message());
+            remember_error(state, result.error().message());
         }
     }
 
@@ -122,7 +122,7 @@ void runWorker(const postgres_benchmark::Config* config,
     }
 }
 
-double percentileMs(const std::vector<uint64_t>& sorted_samples, double fraction)
+double percentile_ms(const std::vector<uint64_t>& sorted_samples, double fraction)
 {
     if (sorted_samples.empty()) {
         return 0.0;
@@ -136,16 +136,16 @@ double percentileMs(const std::vector<uint64_t>& sorted_samples, double fraction
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    auto config = postgres_benchmark::loadConfig();
-    if (!postgres_benchmark::parseArgs(config, argc, argv)) {
-        postgres_benchmark::printUsage(argv[0]);
+    auto config = postgres_benchmark::load_config();
+    if (!postgres_benchmark::parse_args(config, argc, argv)) {
+        postgres_benchmark::print_usage(argv[0]);
         return 2;
     }
-    postgres_benchmark::printConfig(config);
+    postgres_benchmark::print_config(config);
 
     BenchmarkState state;
     state.samples_ns.reserve(config.clients * config.queries);
@@ -156,7 +156,7 @@ int main(int argc, char** argv)
     std::vector<std::thread> workers;
     workers.reserve(config.clients);
     for (size_t index = 0; index < config.clients; ++index) {
-        workers.emplace_back(runWorker,
+        workers.emplace_back(run_worker,
                              &config,
                              &state,
                              &ready_barrier,
@@ -189,10 +189,10 @@ int main(int argc, char** argv)
               << state.response_bytes.load(std::memory_order_relaxed) << '\n'
               << "elapsed_sec: " << seconds << '\n'
               << "qps: " << qps << '\n'
-              << "p50_latency_ms: " << percentileMs(state.samples_ns, 0.50) << '\n'
-              << "p95_latency_ms: " << percentileMs(state.samples_ns, 0.95) << '\n'
-              << "p99_latency_ms: " << percentileMs(state.samples_ns, 0.99) << '\n'
-              << "max_latency_ms: " << percentileMs(state.samples_ns, 1.0) << '\n';
+              << "p50_latency_ms: " << percentile_ms(state.samples_ns, 0.50) << '\n'
+              << "p95_latency_ms: " << percentile_ms(state.samples_ns, 0.95) << '\n'
+              << "p99_latency_ms: " << percentile_ms(state.samples_ns, 0.99) << '\n'
+              << "max_latency_ms: " << percentile_ms(state.samples_ns, 1.0) << '\n';
     if (!state.first_error.empty()) {
         std::cout << "first_error: " << state.first_error;
         if (state.first_error.back() != '\n') {

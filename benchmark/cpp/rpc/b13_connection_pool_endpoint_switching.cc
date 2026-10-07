@@ -23,7 +23,7 @@ struct Result {
     double qps = 0.0;
 };
 
-std::vector<RpcEndpoint> makeEndpoints(size_t count)
+std::vector<RpcEndpoint> make_endpoints(size_t count)
 {
     std::vector<RpcEndpoint> endpoints;
     endpoints.reserve(count);
@@ -33,16 +33,16 @@ std::vector<RpcEndpoint> makeEndpoints(size_t count)
     return endpoints;
 }
 
-Task<void> runEndpointSwitching(size_t operations, size_t endpoint_count, Result* result)
+Task<void> run_endpoint_switching(size_t operations, size_t endpoint_count, Result* result)
 {
     RpcConnectionPoolConfig config;
     config.max_connections_per_endpoint = 1;
     config.max_waiters_per_endpoint = 0;
 
     RpcConnectionPool pool(config);
-    auto endpoints = makeEndpoints(endpoint_count);
+    auto endpoints = make_endpoints(endpoint_count);
     for (const auto& endpoint : endpoints) {
-        auto ensure_result = pool.ensureEndpoint(endpoint);
+        auto ensure_result = pool.ensure_endpoint(endpoint);
         if (!ensure_result.has_value()) {
             ++result->errors;
             result->done.store(true, std::memory_order_release);
@@ -76,7 +76,7 @@ Task<void> runEndpointSwitching(size_t operations, size_t endpoint_count, Result
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -87,11 +87,11 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
     Result result;
-    auto scheduled = runtime.spawnIO(runEndpointSwitching(operations, endpoint_count, &result));
+    auto scheduled = runtime.spawn_io(run_endpoint_switching(operations, endpoint_count, &result));
     if (!scheduled.has_value()) {
         runtime.stop();
         std::cerr << "failed to schedule endpoint-switching pool pressure\n";

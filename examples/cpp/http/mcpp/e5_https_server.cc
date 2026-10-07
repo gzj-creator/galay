@@ -17,18 +17,18 @@ using namespace galay::kernel;
 
 static std::atomic<bool> g_running{true};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
-Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
-    auto reader = conn.getReader();
-    auto writer = conn.getWriter();
+Task<void> https_handler(HttpConnImpl<galay::ssl::SslSocket> conn) {
+    auto reader = conn.get_reader();
+    auto writer = conn.get_writer();
 
     while (true) {
         HttpRequest request;
         while (true) {
-            auto read_result = co_await reader.getRequest(request);
+            auto read_result = co_await reader.get_request(request);
             if (!read_result) {
                 (void)co_await conn.close();
                 co_return;
@@ -39,8 +39,8 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
         }
 
         const bool keep_alive =
-            request.header().isKeepAlive() && !request.header().isConnectionClose();
-        const std::string request_body = request.getBodyStr();
+            request.header().is_keep_alive() && !request.header().is_connection_close();
+        const std::string request_body = request.get_body_str();
         const std::string response_body = request_body.empty()
             ? "Echo: (empty body)"
             : "Echo: " + request_body;
@@ -52,7 +52,7 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
             .build();
 
         while (true) {
-            auto send_result = co_await writer.sendResponse(response);
+            auto send_result = co_await writer.send_response(response);
             if (!send_result) {
                 (void)co_await conn.close();
                 co_return;
@@ -86,19 +86,19 @@ int main(int argc, char* argv[]) {
         key_path = argv[3];
     }
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
         HttpsServer server(HttpsServerBuilder()
             .host("0.0.0.0")
             .port(port)
-            .certPath(cert_path)
-            .keyPath(key_path)
-            .ioSchedulerCount(2)
+            .cert_path(cert_path)
+            .key_path(key_path)
+            .io_scheduler_count(2)
             .build());
         std::cout << "Import HTTPS server: https://127.0.0.1:" << port << "\n";
-        server.start(httpsHandler);
+        server.start(https_handler);
 
         while (g_running) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));

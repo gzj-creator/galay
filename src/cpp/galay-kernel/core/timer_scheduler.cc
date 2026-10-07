@@ -19,7 +19,7 @@ namespace galay::kernel
  * @details 使用 Meyers' Singleton 模式（C++11 保证静态局部变量初始化的线程安全）。
  * @return TimerScheduler 单例指针
  */
-TimerScheduler* TimerScheduler::getInstance()
+TimerScheduler* TimerScheduler::get_instance()
 {
     static TimerScheduler instance;
     return &instance;
@@ -45,7 +45,7 @@ TimerScheduler::~TimerScheduler()
 /**
  * @brief 启动定时轮后台线程
  * @details 使用 compare_exchange_strong 保证只启动一次。若已在运行则直接返回。
- * 启动后创建独立线程执行 timerLoop()。
+ * 启动后创建独立线程执行 timer_loop()。
  */
 void TimerScheduler::start()
 {
@@ -57,7 +57,7 @@ void TimerScheduler::start()
     m_stopFlag.store(false, std::memory_order_release);
 
     m_thread = std::thread([this]() {
-        timerLoop();
+        timer_loop();
     });
 }
 
@@ -89,7 +89,7 @@ void TimerScheduler::stop()
  * @param timer 定时器共享指针
  * @return true 添加成功，false 添加失败
  */
-bool TimerScheduler::addTimer(Timer::ptr timer)
+bool TimerScheduler::add_timer(Timer::ptr timer)
 {
     if (!timer || !m_running.load(std::memory_order_acquire)) {
         return false;
@@ -101,18 +101,18 @@ bool TimerScheduler::addTimer(Timer::ptr timer)
 
 /**
  * @brief 批量添加定时器
- * @details 通过 ThreadSafeTimerManager 的 pushBatch 批量加入队列。
+ * @details 通过 ThreadSafeTimerManager 的 push_batch 批量加入队列。
  * 若调度器未运行则返回 0。
  * @param timers 定时器列表
  * @return 成功添加的数量
  */
-size_t TimerScheduler::addTimerBatch(const std::vector<Timer::ptr>& timers)
+size_t TimerScheduler::add_timer_batch(const std::vector<Timer::ptr>& timers)
 {
     if (!m_running.load(std::memory_order_acquire)) {
         return 0;
     }
 
-    return m_timerManager.pushBatch(timers);
+    return m_timerManager.push_batch(timers);
 }
 
 /**
@@ -121,7 +121,7 @@ size_t TimerScheduler::addTimerBatch(const std::vector<Timer::ptr>& timers)
  * 每次循环调用 m_timerManager.tick() 驱动定时轮处理到期定时器。
  * 退出前额外执行一次 tick 处理残余定时器。
  */
-void TimerScheduler::timerLoop()
+void TimerScheduler::timer_loop()
 {
     // tick 间隔（纳秒转毫秒，至少 1ms）
     auto tickMs = std::max(1ULL, m_timerManager.during() / 1000000ULL);

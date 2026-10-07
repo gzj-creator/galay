@@ -8,17 +8,17 @@
 namespace
 {
 
-bool isPrimary(const galay::mongo::MongoDocument& hello)
+bool is_primary(const galay::mongo::MongoDocument& hello)
 {
-    return hello.getBool("isWritablePrimary", false) ||
-           hello.getBool("ismaster", false);
+    return hello.get_bool("isWritablePrimary", false) ||
+           hello.get_bool("ismaster", false);
 }
 
-bool verifySelectedRole(const mongo_test::MongoReplicaSetItConfig& it_cfg,
+bool verify_selected_role(const mongo_test::MongoReplicaSetItConfig& it_cfg,
                         galay::mongo::MongoReadPreference preference,
                         bool expect_primary)
 {
-    auto config = mongo_test::toMongoConfig(it_cfg.mongo);
+    auto config = mongo_test::to_mongo_config(it_cfg.mongo);
     config.seeds.reserve(it_cfg.seeds.size());
     for (const auto& seed : it_cfg.seeds) {
         config.seeds.push_back({seed.host, seed.port});
@@ -48,13 +48,13 @@ bool verifySelectedRole(const mongo_test::MongoReplicaSetItConfig& it_cfg,
     }
 
     const auto& document = hello->document();
-    if (document.getString("setName") != it_cfg.replica_set_name) {
+    if (document.get_string("setName") != it_cfg.replica_set_name) {
         std::cerr << "FAIL: selected server replica set mismatch" << std::endl;
         return false;
     }
 
-    const bool primary = isPrimary(document);
-    const bool secondary = document.getBool("secondary", false);
+    const bool primary = is_primary(document);
+    const bool secondary = document.get_bool("secondary", false);
     if ((expect_primary && !primary) || (!expect_primary && !secondary)) {
         std::cerr << "FAIL: selected server role mismatch: primary=" << primary
                   << " secondary=" << secondary << std::endl;
@@ -70,10 +70,10 @@ int main()
 {
     std::cout << "=== T11: Replica Set Discovery Integration Test ===" << std::endl;
 
-    const auto cfg = mongo_test::loadMongoReplicaSetItConfig();
+    const auto cfg = mongo_test::load_mongo_replica_set_it_config();
 
     std::string skip_reason;
-    if (mongo_test::shouldSkipReplicaSetIt(cfg, &skip_reason)) {
+    if (mongo_test::should_skip_replica_set_it(cfg, &skip_reason)) {
         std::cout << "[SKIP] " << skip_reason
                   << " to run Mongo replica set discovery integration test" << std::endl;
         return 0;
@@ -91,7 +91,7 @@ int main()
     size_t secondary_count = 0;
     for (const auto& seed : cfg.seeds) {
         galay::mongo::MongoClient client;
-        auto config = mongo_test::toMongoConfig(cfg.mongo);
+        auto config = mongo_test::to_mongo_config(cfg.mongo);
         config.host = seed.host;
         config.port = seed.port;
 
@@ -112,14 +112,14 @@ int main()
         }
 
         const auto& document = hello->document();
-        if (document.getString("setName") != cfg.replica_set_name) {
+        if (document.get_string("setName") != cfg.replica_set_name) {
             std::cerr << "FAIL: seed replica set mismatch for " << seed.host << ":"
                       << seed.port << std::endl;
             return 1;
         }
 
-        primary_count += isPrimary(document) ? 1U : 0U;
-        secondary_count += document.getBool("secondary", false) ? 1U : 0U;
+        primary_count += is_primary(document) ? 1U : 0U;
+        secondary_count += document.get_bool("secondary", false) ? 1U : 0U;
     }
 
     if (primary_count != 1 || secondary_count < 1) {
@@ -128,22 +128,22 @@ int main()
         return 1;
     }
 
-    if (!verifySelectedRole(cfg, galay::mongo::MongoReadPreference::kPrimary, true)) {
+    if (!verify_selected_role(cfg, galay::mongo::MongoReadPreference::kPrimary, true)) {
         return 1;
     }
-    if (!verifySelectedRole(cfg, galay::mongo::MongoReadPreference::kSecondary, false)) {
+    if (!verify_selected_role(cfg, galay::mongo::MongoReadPreference::kSecondary, false)) {
         return 1;
     }
 
     auto single_seed_cfg = cfg;
     single_seed_cfg.seeds.resize(1);
-    if (!verifySelectedRole(single_seed_cfg,
+    if (!verify_selected_role(single_seed_cfg,
                             galay::mongo::MongoReadPreference::kPrimary,
                             true)) {
         std::cerr << "FAIL: primary was not discovered from a single seed" << std::endl;
         return 1;
     }
-    if (!verifySelectedRole(single_seed_cfg,
+    if (!verify_selected_role(single_seed_cfg,
                             galay::mongo::MongoReadPreference::kSecondary,
                             false)) {
         std::cerr << "FAIL: secondary was not discovered from a single seed" << std::endl;
@@ -152,14 +152,14 @@ int main()
 
     auto partial_outage_cfg = single_seed_cfg;
     partial_outage_cfg.seeds.insert(partial_outage_cfg.seeds.begin(), {"127.0.0.1", 1});
-    if (!verifySelectedRole(partial_outage_cfg,
+    if (!verify_selected_role(partial_outage_cfg,
                             galay::mongo::MongoReadPreference::kPrimary,
                             true)) {
         std::cerr << "FAIL: healthy member was not discovered after a failed seed" << std::endl;
         return 1;
     }
 
-    auto mismatch_config = mongo_test::toMongoConfig(cfg.mongo);
+    auto mismatch_config = mongo_test::to_mongo_config(cfg.mongo);
     for (const auto& seed : cfg.seeds) {
         mismatch_config.seeds.push_back({seed.host, seed.port});
     }

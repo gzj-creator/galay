@@ -8,7 +8,7 @@ namespace galay::postgres::protocol
 namespace
 {
 
-bool producesReadyForQuery(PostgresCommandKind kind) noexcept
+bool produces_ready_for_query(PostgresCommandKind kind) noexcept
 {
     return kind == PostgresCommandKind::Query || kind == PostgresCommandKind::Sync;
 }
@@ -82,80 +82,80 @@ void PostgresCommandBuilder::reserve(size_t command_count, size_t encoded_bytes)
     m_views_dirty = true;
 }
 
-PostgresCommandBuilder& PostgresCommandBuilder::appendQuery(std::string_view sql)
+PostgresCommandBuilder& PostgresCommandBuilder::append_query(std::string_view sql)
 {
-    return appendEncoded(PostgresEncoder{}.encodeQuery(sql), PostgresCommandKind::Query);
+    return append_encoded(PostgresEncoder{}.encode_query(sql), PostgresCommandKind::Query);
 }
 
-PostgresCommandBuilder& PostgresCommandBuilder::appendParse(
+PostgresCommandBuilder& PostgresCommandBuilder::append_parse(
     std::string_view statement_name,
     std::string_view sql,
     std::span<const uint32_t> parameter_type_oids)
 {
-    return appendEncoded(PostgresEncoder{}.encodeParse(statement_name, sql, parameter_type_oids),
+    return append_encoded(PostgresEncoder{}.encode_parse(statement_name, sql, parameter_type_oids),
                          PostgresCommandKind::Parse);
 }
 
-PostgresCommandBuilder& PostgresCommandBuilder::appendBind(
+PostgresCommandBuilder& PostgresCommandBuilder::append_bind(
     std::string_view portal_name,
     std::string_view statement_name,
     std::span<const std::optional<std::string_view>> parameters)
 {
-    return appendEncoded(PostgresEncoder{}.encodeBind(portal_name, statement_name, parameters),
+    return append_encoded(PostgresEncoder{}.encode_bind(portal_name, statement_name, parameters),
                          PostgresCommandKind::Bind);
 }
 
-PostgresCommandBuilder& PostgresCommandBuilder::appendBind(
+PostgresCommandBuilder& PostgresCommandBuilder::append_bind(
     std::string_view portal_name,
     std::string_view statement_name,
     std::span<const std::optional<std::string>> parameters)
 {
-    return appendEncoded(PostgresEncoder{}.encodeBind(portal_name, statement_name, parameters),
+    return append_encoded(PostgresEncoder{}.encode_bind(portal_name, statement_name, parameters),
                          PostgresCommandKind::Bind);
 }
 
 PostgresCommandBuilder&
-PostgresCommandBuilder::appendDescribeStatement(std::string_view statement_name)
+PostgresCommandBuilder::append_describe_statement(std::string_view statement_name)
 {
-    return appendEncoded(PostgresEncoder{}.encodeDescribeStatement(statement_name),
+    return append_encoded(PostgresEncoder{}.encode_describe_statement(statement_name),
                          PostgresCommandKind::Describe);
 }
 
 PostgresCommandBuilder&
-PostgresCommandBuilder::appendDescribePortal(std::string_view portal_name)
+PostgresCommandBuilder::append_describe_portal(std::string_view portal_name)
 {
-    return appendEncoded(PostgresEncoder{}.encodeDescribePortal(portal_name),
+    return append_encoded(PostgresEncoder{}.encode_describe_portal(portal_name),
                          PostgresCommandKind::Describe);
 }
 
-PostgresCommandBuilder& PostgresCommandBuilder::appendExecute(std::string_view portal_name,
+PostgresCommandBuilder& PostgresCommandBuilder::append_execute(std::string_view portal_name,
                                                               uint32_t max_rows)
 {
-    return appendEncoded(PostgresEncoder{}.encodeExecute(portal_name, max_rows),
+    return append_encoded(PostgresEncoder{}.encode_execute(portal_name, max_rows),
                          PostgresCommandKind::Execute);
 }
 
-PostgresCommandBuilder& PostgresCommandBuilder::appendSync()
+PostgresCommandBuilder& PostgresCommandBuilder::append_sync()
 {
-    return appendEncoded(PostgresEncoder{}.encodeSync(), PostgresCommandKind::Sync);
+    return append_encoded(PostgresEncoder{}.encode_sync(), PostgresCommandKind::Sync);
 }
 
 PostgresCommandBuilder&
-PostgresCommandBuilder::appendCloseStatement(std::string_view statement_name)
+PostgresCommandBuilder::append_close_statement(std::string_view statement_name)
 {
-    return appendEncoded(PostgresEncoder{}.encodeCloseStatement(statement_name),
+    return append_encoded(PostgresEncoder{}.encode_close_statement(statement_name),
                          PostgresCommandKind::Close);
 }
 
-PostgresCommandBuilder& PostgresCommandBuilder::appendClosePortal(std::string_view portal_name)
+PostgresCommandBuilder& PostgresCommandBuilder::append_close_portal(std::string_view portal_name)
 {
-    return appendEncoded(PostgresEncoder{}.encodeClosePortal(portal_name),
+    return append_encoded(PostgresEncoder{}.encode_close_portal(portal_name),
                          PostgresCommandKind::Close);
 }
 
 std::span<const PostgresCommandView> PostgresCommandBuilder::commands() const
 {
-    rebuildViewsIfNeeded();
+    rebuild_views_if_needed();
     return std::span<const PostgresCommandView>(m_command_views);
 }
 
@@ -176,7 +176,7 @@ const std::string& PostgresCommandBuilder::encoded() const noexcept
 
 PostgresEncodedBatch PostgresCommandBuilder::build() const
 {
-    if (hasInvalidCommand()) {
+    if (has_invalid_command()) {
         return {};
     }
     return PostgresEncodedBatch(m_encoded, m_expected_ready);
@@ -184,7 +184,7 @@ PostgresEncodedBatch PostgresCommandBuilder::build() const
 
 PostgresEncodedBatch PostgresCommandBuilder::release()
 {
-    if (hasInvalidCommand()) {
+    if (has_invalid_command()) {
         clear();
         return {};
     }
@@ -194,11 +194,11 @@ PostgresEncodedBatch PostgresCommandBuilder::release()
     return batch;
 }
 
-PostgresCommandBuilder& PostgresCommandBuilder::appendEncoded(std::string encoded,
+PostgresCommandBuilder& PostgresCommandBuilder::append_encoded(std::string encoded,
                                                               PostgresCommandKind kind)
 {
     if (encoded.empty()) {
-        appendInvalid(kind);
+        append_invalid(kind);
         return *this;
     }
 
@@ -208,14 +208,14 @@ PostgresCommandBuilder& PostgresCommandBuilder::appendEncoded(std::string encode
         .encoded = Slice{offset, encoded.size()},
         .kind = kind,
     });
-    if (producesReadyForQuery(kind)) {
+    if (produces_ready_for_query(kind)) {
         ++m_expected_ready;
     }
     m_views_dirty = true;
     return *this;
 }
 
-void PostgresCommandBuilder::appendInvalid(PostgresCommandKind kind)
+void PostgresCommandBuilder::append_invalid(PostgresCommandKind kind)
 {
     m_commands.push_back(CommandMeta{
         .encoded = Slice{m_encoded.size(), 0},
@@ -224,7 +224,7 @@ void PostgresCommandBuilder::appendInvalid(PostgresCommandKind kind)
     m_views_dirty = true;
 }
 
-bool PostgresCommandBuilder::hasInvalidCommand() const noexcept
+bool PostgresCommandBuilder::has_invalid_command() const noexcept
 {
     for (const auto& command : m_commands) {
         if (command.encoded.length == 0) {
@@ -234,7 +234,7 @@ bool PostgresCommandBuilder::hasInvalidCommand() const noexcept
     return false;
 }
 
-void PostgresCommandBuilder::rebuildViewsIfNeeded() const
+void PostgresCommandBuilder::rebuild_views_if_needed() const
 {
     if (!m_views_dirty) {
         return;

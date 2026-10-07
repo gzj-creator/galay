@@ -19,7 +19,7 @@ namespace galay::mysql
 namespace
 {
 
-inline std::string_view linearizeReadIovecs(std::span<const struct iovec> iovecs, std::string& scratch)
+inline std::string_view linearize_read_iovecs(std::span<const struct iovec> iovecs, std::string& scratch)
 {
     if (iovecs.empty()) {
         return {};
@@ -36,12 +36,12 @@ inline std::string_view linearizeReadIovecs(std::span<const struct iovec> iovecs
     return std::string_view(scratch);
 }
 
-inline MysqlError makeSysError(MysqlErrorType type, const std::string& prefix)
+inline MysqlError make_sys_error(MysqlErrorType type, const std::string& prefix)
 {
     return MysqlError(type, prefix + ": " + std::string(strerror(errno)));
 }
 
-inline std::string encodeRawPacket(std::string_view payload, uint8_t sequence_id)
+inline std::string encode_raw_packet(std::string_view payload, uint8_t sequence_id)
 {
     std::string packet;
     packet.reserve(protocol::MYSQL_PACKET_HEADER_SIZE + payload.size());
@@ -104,26 +104,26 @@ MysqlClient& MysqlClient::operator=(MysqlClient&& other) noexcept
     return *this;
 }
 
-MysqlVoidResult MysqlClient::connectSocket(const std::string& host, uint16_t port,
+MysqlVoidResult MysqlClient::connect_socket(const std::string& host, uint16_t port,
                                            uint32_t timeout_ms,
                                            bool tcp_no_delay)
 {
-    closeSocket();
+    close_socket();
 
     m_socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (m_socket_fd < 0) {
-        return std::unexpected(makeSysError(MYSQL_ERROR_CONNECTION, "Failed to create socket"));
+        return std::unexpected(make_sys_error(MYSQL_ERROR_CONNECTION, "Failed to create socket"));
     }
 
     const int original_flags = fcntl(m_socket_fd, F_GETFL, 0);
     if (original_flags < 0) {
-        closeSocket();
-        return std::unexpected(makeSysError(MYSQL_ERROR_CONNECTION, "Failed to get socket flags"));
+        close_socket();
+        return std::unexpected(make_sys_error(MYSQL_ERROR_CONNECTION, "Failed to get socket flags"));
     }
 
     if (fcntl(m_socket_fd, F_SETFL, original_flags | O_NONBLOCK) < 0) {
-        closeSocket();
-        return std::unexpected(makeSysError(MYSQL_ERROR_CONNECTION, "Failed to set non-block socket"));
+        close_socket();
+        return std::unexpected(make_sys_error(MYSQL_ERROR_CONNECTION, "Failed to set non-block socket"));
     }
 
     struct sockaddr_in addr{};
@@ -138,7 +138,7 @@ MysqlVoidResult MysqlClient::connectSocket(const std::string& host, uint16_t por
         struct addrinfo* result = nullptr;
         const int ret = ::getaddrinfo(host.c_str(), nullptr, &hints, &result);
         if (ret != 0 || result == nullptr) {
-            closeSocket();
+            close_socket();
             return std::unexpected(MysqlError(MYSQL_ERROR_CONNECTION, "Failed to resolve host: " + host));
         }
 
@@ -148,8 +148,8 @@ MysqlVoidResult MysqlClient::connectSocket(const std::string& host, uint16_t por
 
     int ret = ::connect(m_socket_fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr));
     if (ret < 0 && errno != EINPROGRESS) {
-        closeSocket();
-        return std::unexpected(makeSysError(MYSQL_ERROR_CONNECTION, "Connect failed"));
+        close_socket();
+        return std::unexpected(make_sys_error(MYSQL_ERROR_CONNECTION, "Connect failed"));
     }
 
     if (ret < 0) {
@@ -158,33 +158,33 @@ MysqlVoidResult MysqlClient::connectSocket(const std::string& host, uint16_t por
         pfd.events = POLLOUT;
         const int poll_ret = ::poll(&pfd, 1, static_cast<int>(timeout_ms));
         if (poll_ret <= 0) {
-            closeSocket();
+            close_socket();
             return std::unexpected(MysqlError(MYSQL_ERROR_TIMEOUT, "Connection timed out"));
         }
 
         int sock_error = 0;
         socklen_t sock_error_len = sizeof(sock_error);
         if (::getsockopt(m_socket_fd, SOL_SOCKET, SO_ERROR, &sock_error, &sock_error_len) < 0) {
-            closeSocket();
-            return std::unexpected(makeSysError(MYSQL_ERROR_CONNECTION, "getsockopt failed"));
+            close_socket();
+            return std::unexpected(make_sys_error(MYSQL_ERROR_CONNECTION, "getsockopt failed"));
         }
         if (sock_error != 0) {
-            closeSocket();
+            close_socket();
             return std::unexpected(MysqlError(MYSQL_ERROR_CONNECTION,
                                               "Connect failed: " + std::string(strerror(sock_error))));
         }
     }
 
     if (fcntl(m_socket_fd, F_SETFL, original_flags) < 0) {
-        closeSocket();
-        return std::unexpected(makeSysError(MYSQL_ERROR_CONNECTION, "Failed to restore socket flags"));
+        close_socket();
+        return std::unexpected(make_sys_error(MYSQL_ERROR_CONNECTION, "Failed to restore socket flags"));
     }
 
     if (tcp_no_delay) {
         const int nodelay = 1;
         if (::setsockopt(m_socket_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) != 0) {
-            auto error = makeSysError(MYSQL_ERROR_CONNECTION, "Failed to set TCP_NODELAY");
-            closeSocket();
+            auto error = make_sys_error(MYSQL_ERROR_CONNECTION, "Failed to set TCP_NODELAY");
+            close_socket();
             return std::unexpected(std::move(error));
         }
     }
@@ -195,7 +195,7 @@ MysqlVoidResult MysqlClient::connectSocket(const std::string& host, uint16_t por
     return {};
 }
 
-void MysqlClient::closeSocket() noexcept
+void MysqlClient::close_socket() noexcept
 {
     if (m_socket_fd >= 0) {
         ::close(m_socket_fd);
@@ -208,12 +208,12 @@ void MysqlClient::closeSocket() noexcept
 
 MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
 {
-    auto conn_result = connectSocket(config.host, config.port, config.connect_timeout_ms, config.tcp_no_delay);
+    auto conn_result = connect_socket(config.host, config.port, config.connect_timeout_ms, config.tcp_no_delay);
     if (!conn_result) {
         return std::unexpected(conn_result.error());
     }
 
-    auto pkt_result = recvPacket();
+    auto pkt_result = recv_packet();
     if (!pkt_result) {
         return std::unexpected(pkt_result.error());
     }
@@ -224,14 +224,14 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
     }
 
     if (static_cast<uint8_t>(payload[0]) == 0xFF) {
-        auto err = m_parser.parseErr(payload.data(), payload.size(), protocol::CLIENT_PROTOCOL_41);
+        auto err = m_parser.parse_err(payload.data(), payload.size(), protocol::CLIENT_PROTOCOL_41);
         if (err) {
             return std::unexpected(MysqlError(MYSQL_ERROR_SERVER, err->error_code, err->error_message));
         }
         return std::unexpected(MysqlError(MYSQL_ERROR_CONNECTION, "Server sent error during handshake"));
     }
 
-    auto hs = m_parser.parseHandshake(payload.data(), payload.size());
+    auto hs = m_parser.parse_handshake(payload.data(), payload.size());
     if (!hs) {
         return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse handshake"));
     }
@@ -260,26 +260,26 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
 
     std::string auth_plugin_name = hs->auth_plugin_name;
     std::string auth_plugin_data = hs->auth_plugin_data;
-    auto initial_auth = protocol::AuthPlugin::authResponseForPlugin(
+    auto initial_auth = protocol::AuthPlugin::auth_response_for_plugin(
         auth_plugin_name,
         config.password,
         auth_plugin_data);
     if (initial_auth) {
         resp.auth_response = std::move(initial_auth.value());
     } else {
-        resp.auth_response = protocol::AuthPlugin::nativePasswordAuth(config.password, hs->auth_plugin_data);
+        resp.auth_response = protocol::AuthPlugin::native_password_auth(config.password, hs->auth_plugin_data);
         resp.auth_plugin_name = "mysql_native_password";
         auth_plugin_name = resp.auth_plugin_name;
     }
 
-    auto auth_packet = m_encoder.encodeHandshakeResponse(resp, static_cast<uint8_t>(seq_id + 1));
-    auto send_result = sendAll(auth_packet);
+    auto auth_packet = m_encoder.encode_handshake_response(resp, static_cast<uint8_t>(seq_id + 1));
+    auto send_result = send_all(auth_packet);
     if (!send_result) {
         return std::unexpected(send_result.error());
     }
 
     while (true) {
-        auto auth_result = recvPacket();
+        auto auth_result = recv_packet();
         if (!auth_result) {
             return std::unexpected(auth_result.error());
         }
@@ -295,7 +295,7 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
         }
 
         if (first_byte == 0xFF) {
-            auto err = m_parser.parseErr(auth_payload.data(), auth_payload.size(), m_server_capabilities);
+            auto err = m_parser.parse_err(auth_payload.data(), auth_payload.size(), m_server_capabilities);
             if (err) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, err->error_code, err->error_message));
             }
@@ -303,14 +303,14 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
         }
 
         if (first_byte == 0xFE) {
-            auto auth_switch = m_parser.parseAuthSwitchRequest(auth_payload.data(), auth_payload.size());
+            auto auth_switch = m_parser.parse_auth_switch_request(auth_payload.data(), auth_payload.size());
             if (!auth_switch) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Failed to parse auth switch request"));
             }
 
             auth_plugin_name = std::move(auth_switch->auth_plugin_name);
             auth_plugin_data = std::move(auth_switch->auth_plugin_data);
-            auto switched_auth = protocol::AuthPlugin::authResponseForPlugin(
+            auto switched_auth = protocol::AuthPlugin::auth_response_for_plugin(
                 auth_plugin_name,
                 config.password,
                 auth_plugin_data);
@@ -318,8 +318,8 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
                 return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, switched_auth.error()));
             }
 
-            auto switched_packet = encodeRawPacket(*switched_auth, static_cast<uint8_t>(auth_seq + 1));
-            auto switched_result = sendAll(switched_packet);
+            auto switched_packet = encode_raw_packet(*switched_auth, static_cast<uint8_t>(auth_seq + 1));
+            auto switched_result = send_all(switched_packet);
             if (!switched_result) {
                 return std::unexpected(switched_result.error());
             }
@@ -338,13 +338,13 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
             static_cast<uint8_t>(auth_payload[1]) == 0x04 &&
             auth_plugin_name == "caching_sha2_password") {
             const std::string public_key_request(1, '\x02');
-            auto request_packet = encodeRawPacket(public_key_request, static_cast<uint8_t>(auth_seq + 1));
-            auto request_result = sendAll(request_packet);
+            auto request_packet = encode_raw_packet(public_key_request, static_cast<uint8_t>(auth_seq + 1));
+            auto request_result = send_all(request_packet);
             if (!request_result) {
                 return std::unexpected(request_result.error());
             }
 
-            auto public_key_result = recvPacket();
+            auto public_key_result = recv_packet();
             if (!public_key_result) {
                 return std::unexpected(public_key_result.error());
             }
@@ -354,7 +354,7 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
                 return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Empty public key response"));
             }
             if (static_cast<uint8_t>(public_key_payload[0]) == 0xFF) {
-                auto err = m_parser.parseErr(public_key_payload.data(),
+                auto err = m_parser.parse_err(public_key_payload.data(),
                                              public_key_payload.size(),
                                              m_server_capabilities);
                 if (err) {
@@ -372,16 +372,16 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
                 public_key_data.remove_prefix(1);
             }
 
-            auto encrypted = protocol::AuthPlugin::cachingSha2FullAuth(config.password,
+            auto encrypted = protocol::AuthPlugin::caching_sha2_full_auth(config.password,
                                                                        auth_plugin_data,
                                                                        public_key_data);
             if (!encrypted) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, encrypted.error()));
             }
 
-            auto encrypted_packet = encodeRawPacket(*encrypted,
+            auto encrypted_packet = encode_raw_packet(*encrypted,
                                                     static_cast<uint8_t>(public_key_seq + 1));
-            auto encrypted_result = sendAll(encrypted_packet);
+            auto encrypted_result = send_all(encrypted_packet);
             if (!encrypted_result) {
                 return std::unexpected(encrypted_result.error());
             }
@@ -399,7 +399,7 @@ MysqlVoidResult MysqlClient::connect(const std::string& host, uint16_t port,
     return connect(MysqlConfig::create(host, port, user, password, database));
 }
 
-MysqlVoidResult MysqlClient::sendAll(std::string_view data)
+MysqlVoidResult MysqlClient::send_all(std::string_view data)
 {
     if (!m_connected) {
         return std::unexpected(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED, "Not connected"));
@@ -416,7 +416,7 @@ MysqlVoidResult MysqlClient::sendAll(std::string_view data)
                 continue;
             }
             m_connected = false;
-            return std::unexpected(makeSysError(MYSQL_ERROR_SEND, "Send failed"));
+            return std::unexpected(make_sys_error(MYSQL_ERROR_SEND, "Send failed"));
         }
         if (n == 0) {
             m_connected = false;
@@ -429,7 +429,7 @@ MysqlVoidResult MysqlClient::sendAll(std::string_view data)
     return {};
 }
 
-MysqlVoidResult MysqlClient::sendAllv(std::span<const struct iovec> iovecs)
+MysqlVoidResult MysqlClient::send_allv(std::span<const struct iovec> iovecs)
 {
     if (!m_connected) {
         return std::unexpected(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED, "Not connected"));
@@ -485,7 +485,7 @@ MysqlVoidResult MysqlClient::sendAllv(std::span<const struct iovec> iovecs)
                 continue;
             }
             m_connected = false;
-            return std::unexpected(makeSysError(MYSQL_ERROR_SEND, "Writev failed"));
+            return std::unexpected(make_sys_error(MYSQL_ERROR_SEND, "Writev failed"));
         }
         if (n == 0) {
             m_connected = false;
@@ -517,14 +517,14 @@ MysqlVoidResult MysqlClient::sendAllv(std::span<const struct iovec> iovecs)
     return {};
 }
 
-MysqlVoidResult MysqlClient::recvIntoRingBuffer()
+MysqlVoidResult MysqlClient::recv_into_ring_buffer()
 {
     if (!m_connected) {
         return std::unexpected(MysqlError(MYSQL_ERROR_CONNECTION_CLOSED, "Not connected"));
     }
 
     struct iovec write_iovecs[2];
-    const size_t write_count = m_recv_ring_buffer.getWriteIovecs(write_iovecs, 2);
+    const size_t write_count = m_recv_ring_buffer.get_write_iovecs(write_iovecs, 2);
     if (write_count == 0) {
         return std::unexpected(MysqlError(MYSQL_ERROR_RECV,
                                           "Ring buffer exhausted before parsing complete MySQL responses"));
@@ -541,7 +541,7 @@ MysqlVoidResult MysqlClient::recvIntoRingBuffer()
 
     if (n < 0) {
         m_connected = false;
-        return std::unexpected(makeSysError(MYSQL_ERROR_RECV, "Readv failed"));
+        return std::unexpected(make_sys_error(MYSQL_ERROR_RECV, "Readv failed"));
     }
 
     if (n == 0) {
@@ -554,21 +554,21 @@ MysqlVoidResult MysqlClient::recvIntoRingBuffer()
     return {};
 }
 
-std::expected<std::optional<MysqlClient::Packet>, MysqlError> MysqlClient::tryExtractPacket()
+std::expected<std::optional<MysqlClient::Packet>, MysqlError> MysqlClient::try_extract_packet()
 {
     struct iovec read_iovecs[2];
-    const size_t read_count = m_recv_ring_buffer.getReadIovecs(read_iovecs, 2);
+    const size_t read_count = m_recv_ring_buffer.get_read_iovecs(read_iovecs, 2);
     if (read_count == 0) {
         return std::optional<Packet>{};
     }
 
-    auto linear = linearizeReadIovecs(std::span<const struct iovec>(read_iovecs, read_count), m_parse_scratch);
+    auto linear = linearize_read_iovecs(std::span<const struct iovec>(read_iovecs, read_count), m_parse_scratch);
     if (linear.empty()) {
         return std::optional<Packet>{};
     }
 
     size_t consumed = 0;
-    auto packet = m_parser.extractPacket(linear.data(), linear.size(), consumed);
+    auto packet = m_parser.extract_packet(linear.data(), linear.size(), consumed);
     if (!packet) {
         if (packet.error() == protocol::ParseError::Incomplete) {
             return std::optional<Packet>{};
@@ -584,10 +584,10 @@ std::expected<std::optional<MysqlClient::Packet>, MysqlError> MysqlClient::tryEx
     return std::optional<Packet>(std::move(out));
 }
 
-std::expected<MysqlClient::Packet, MysqlError> MysqlClient::recvPacket()
+std::expected<MysqlClient::Packet, MysqlError> MysqlClient::recv_packet()
 {
     while (true) {
-        auto parsed = tryExtractPacket();
+        auto parsed = try_extract_packet();
         if (!parsed) {
             return std::unexpected(parsed.error());
         }
@@ -595,7 +595,7 @@ std::expected<MysqlClient::Packet, MysqlError> MysqlClient::recvPacket()
             return std::move(parsed->value());
         }
 
-        auto recv_result = recvIntoRingBuffer();
+        auto recv_result = recv_into_ring_buffer();
         if (!recv_result) {
             return std::unexpected(recv_result.error());
         }
@@ -604,17 +604,17 @@ std::expected<MysqlClient::Packet, MysqlError> MysqlClient::recvPacket()
 
 MysqlResult MysqlClient::query(const std::string& sql)
 {
-    auto cmd = m_encoder.encodeQuery(sql, 0);
+    auto cmd = m_encoder.encode_query(sql, 0);
     if (cmd.empty()) {
         return std::unexpected(MysqlError(MYSQL_ERROR_INVALID_PARAM,
                                           "MySQL query exceeds single-packet limit"));
     }
 
-    auto send_result = sendAll(cmd);
+    auto send_result = send_all(cmd);
     if (!send_result) {
         return std::unexpected(send_result.error());
     }
-    return receiveResultSet();
+    return receive_result_set();
 }
 
 MysqlBatchResult MysqlClient::batch(std::span<const protocol::MysqlCommandView> commands)
@@ -637,14 +637,14 @@ MysqlBatchResult MysqlClient::batch(std::span<const protocol::MysqlCommandView> 
         iovecs.push_back(iov);
     }
 
-    auto send_result = sendAllv(std::span<const struct iovec>(iovecs.data(), iovecs.size()));
+    auto send_result = send_allv(std::span<const struct iovec>(iovecs.data(), iovecs.size()));
     if (!send_result) {
         return std::unexpected(send_result.error());
     }
 
     results.reserve(commands.size());
     for (size_t i = 0; i < commands.size(); ++i) {
-        auto one = receiveResultSet();
+        auto one = receive_result_set();
         if (!one) {
             return std::unexpected(one.error());
         }
@@ -668,15 +668,15 @@ MysqlBatchResult MysqlClient::pipeline(std::span<const std::string_view> sqls)
     protocol::MysqlCommandBuilder builder;
     builder.reserve(sqls.size(), reserve_bytes);
     for (const auto sql : sqls) {
-        builder.appendQuery(sql);
+        builder.append_query(sql);
     }
 
     return batch(builder.commands());
 }
 
-MysqlResult MysqlClient::receiveResultSet()
+MysqlResult MysqlClient::receive_result_set()
 {
-    auto pkt_result = recvPacket();
+    auto pkt_result = recv_packet();
     if (!pkt_result) {
         return std::unexpected(pkt_result.error());
     }
@@ -691,7 +691,7 @@ MysqlResult MysqlClient::receiveResultSet()
     const uint8_t first_byte = static_cast<uint8_t>(payload[0]);
 
     if (first_byte == 0xFF) {
-        auto err = m_parser.parseErr(payload.data(), payload.size(), m_server_capabilities);
+        auto err = m_parser.parse_err(payload.data(), payload.size(), m_server_capabilities);
         if (err) {
             return std::unexpected(MysqlError(MYSQL_ERROR_SERVER, err->error_code, err->error_message));
         }
@@ -699,22 +699,22 @@ MysqlResult MysqlClient::receiveResultSet()
     }
 
     if (first_byte == 0x00) {
-        auto ok = m_parser.parseOk(payload.data(), payload.size(), m_server_capabilities);
+        auto ok = m_parser.parse_ok(payload.data(), payload.size(), m_server_capabilities);
         if (!ok) {
             return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse OK packet"));
         }
 
         MysqlResultSet rs;
-        rs.setAffectedRows(ok->affected_rows);
-        rs.setLastInsertId(ok->last_insert_id);
-        rs.setWarnings(ok->warnings);
-        rs.setStatusFlags(ok->status_flags);
-        rs.setInfo(ok->info);
+        rs.set_affected_rows(ok->affected_rows);
+        rs.set_last_insert_id(ok->last_insert_id);
+        rs.set_warnings(ok->warnings);
+        rs.set_status_flags(ok->status_flags);
+        rs.set_info(ok->info);
         return rs;
     }
 
     size_t int_consumed = 0;
-    auto col_count_result = protocol::readLenEncInt(payload.data(), payload.size(), int_consumed);
+    auto col_count_result = protocol::read_len_enc_int(payload.data(), payload.size(), int_consumed);
     if (!col_count_result) {
         return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse column count"));
     }
@@ -723,14 +723,14 @@ MysqlResult MysqlClient::receiveResultSet()
     MysqlResultSet rs;
 
     for (uint64_t i = 0; i < col_count; ++i) {
-        auto col_pkt = recvPacket();
+        auto col_pkt = recv_packet();
         if (!col_pkt) {
             return std::unexpected(col_pkt.error());
         }
 
         auto& [cseq, cpayload] = col_pkt.value();
         (void)cseq;
-        auto col = m_parser.parseColumnDefinition(cpayload.data(), cpayload.size());
+        auto col = m_parser.parse_column_definition(cpayload.data(), cpayload.size());
         if (!col) {
             return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse column definition"));
         }
@@ -740,24 +740,24 @@ MysqlResult MysqlClient::receiveResultSet()
                          col->flags,
                          col->column_length,
                          col->decimals);
-        field.setCatalog(col->catalog);
-        field.setSchema(col->schema);
-        field.setTable(col->table);
-        field.setOrgTable(col->org_table);
-        field.setOrgName(col->org_name);
-        field.setCharacterSet(col->character_set);
-        rs.addField(std::move(field));
+        field.set_catalog(col->catalog);
+        field.set_schema(col->schema);
+        field.set_table(col->table);
+        field.set_org_table(col->org_table);
+        field.set_org_name(col->org_name);
+        field.set_character_set(col->character_set);
+        rs.add_field(std::move(field));
     }
 
     if (!(m_server_capabilities & protocol::CLIENT_DEPRECATE_EOF)) {
-        auto eof_pkt = recvPacket();
+        auto eof_pkt = recv_packet();
         if (!eof_pkt) {
             return std::unexpected(eof_pkt.error());
         }
     }
 
     while (true) {
-        auto row_pkt = recvPacket();
+        auto row_pkt = recv_packet();
         if (!row_pkt) {
             return std::unexpected(row_pkt.error());
         }
@@ -772,34 +772,34 @@ MysqlResult MysqlClient::receiveResultSet()
         const uint8_t fb = static_cast<uint8_t>(rpayload[0]);
         if (fb == 0xFE && rpayload.size() < 0xFFFFFF) {
             if (m_server_capabilities & protocol::CLIENT_DEPRECATE_EOF) {
-                auto ok = m_parser.parseOk(rpayload.data(), rpayload.size(), m_server_capabilities);
+                auto ok = m_parser.parse_ok(rpayload.data(), rpayload.size(), m_server_capabilities);
                 if (ok) {
-                    rs.setWarnings(ok->warnings);
-                    rs.setStatusFlags(ok->status_flags);
+                    rs.set_warnings(ok->warnings);
+                    rs.set_status_flags(ok->status_flags);
                 }
             } else {
-                auto eof = m_parser.parseEof(rpayload.data(), rpayload.size());
+                auto eof = m_parser.parse_eof(rpayload.data(), rpayload.size());
                 if (eof) {
-                    rs.setWarnings(eof->warnings);
-                    rs.setStatusFlags(eof->status_flags);
+                    rs.set_warnings(eof->warnings);
+                    rs.set_status_flags(eof->status_flags);
                 }
             }
             break;
         }
 
         if (fb == 0xFF) {
-            auto err = m_parser.parseErr(rpayload.data(), rpayload.size(), m_server_capabilities);
+            auto err = m_parser.parse_err(rpayload.data(), rpayload.size(), m_server_capabilities);
             if (err) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_SERVER, err->error_code, err->error_message));
             }
             return std::unexpected(MysqlError(MYSQL_ERROR_QUERY, "Error during row fetch"));
         }
 
-        auto row = m_parser.parseTextRow(rpayload.data(), rpayload.size(), col_count);
+        auto row = m_parser.parse_text_row(rpayload.data(), rpayload.size(), col_count);
         if (!row) {
             return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse text row"));
         }
-        rs.addRow(MysqlRow(std::move(row.value())));
+        rs.add_row(MysqlRow(std::move(row.value())));
     }
 
     return rs;
@@ -807,18 +807,18 @@ MysqlResult MysqlClient::receiveResultSet()
 
 std::expected<MysqlClient::PrepareResult, MysqlError> MysqlClient::prepare(const std::string& sql)
 {
-    auto cmd = m_encoder.encodeStmtPrepare(sql, 0);
+    auto cmd = m_encoder.encode_stmt_prepare(sql, 0);
     if (cmd.empty()) {
         return std::unexpected(MysqlError(MYSQL_ERROR_INVALID_PARAM,
                                           "MySQL prepare exceeds single-packet limit"));
     }
 
-    auto send_result = sendAll(cmd);
+    auto send_result = send_all(cmd);
     if (!send_result) {
         return std::unexpected(send_result.error());
     }
 
-    auto pkt_result = recvPacket();
+    auto pkt_result = recv_packet();
     if (!pkt_result) {
         return std::unexpected(pkt_result.error());
     }
@@ -831,7 +831,7 @@ std::expected<MysqlClient::PrepareResult, MysqlError> MysqlClient::prepare(const
     }
 
     if (static_cast<uint8_t>(payload[0]) == 0xFF) {
-        auto err = m_parser.parseErr(payload.data(), payload.size(), m_server_capabilities);
+        auto err = m_parser.parse_err(payload.data(), payload.size(), m_server_capabilities);
         if (err) {
             return std::unexpected(MysqlError(MYSQL_ERROR_PREPARED_STMT,
                                               err->error_code,
@@ -840,56 +840,56 @@ std::expected<MysqlClient::PrepareResult, MysqlError> MysqlClient::prepare(const
         return std::unexpected(MysqlError(MYSQL_ERROR_PREPARED_STMT, "Prepare failed"));
     }
 
-    auto ok = m_parser.parseStmtPrepareOk(payload.data(), payload.size());
+    auto ok = m_parser.parse_stmt_prepare_ok(payload.data(), payload.size());
     if (!ok) {
         return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse prepare ok"));
     }
 
     for (uint16_t i = 0; i < ok->num_params; ++i) {
-        auto p = recvPacket();
+        auto p = recv_packet();
         if (!p) return std::unexpected(p.error());
     }
     if (ok->num_params > 0 && !(m_server_capabilities & protocol::CLIENT_DEPRECATE_EOF)) {
-        auto eof = recvPacket();
+        auto eof = recv_packet();
         if (!eof) return std::unexpected(eof.error());
     }
 
     for (uint16_t i = 0; i < ok->num_columns; ++i) {
-        auto c = recvPacket();
+        auto c = recv_packet();
         if (!c) return std::unexpected(c.error());
     }
     if (ok->num_columns > 0 && !(m_server_capabilities & protocol::CLIENT_DEPRECATE_EOF)) {
-        auto eof = recvPacket();
+        auto eof = recv_packet();
         if (!eof) return std::unexpected(eof.error());
     }
 
     return PrepareResult{ok->statement_id, ok->num_columns, ok->num_params};
 }
 
-MysqlResult MysqlClient::stmtExecute(uint32_t stmt_id,
+MysqlResult MysqlClient::stmt_execute(uint32_t stmt_id,
                                      const std::vector<std::optional<std::string>>& params,
                                      const std::vector<uint8_t>& param_types)
 {
-    auto cmd = m_encoder.encodeStmtExecute(stmt_id, params, param_types, 0);
+    auto cmd = m_encoder.encode_stmt_execute(stmt_id, params, param_types, 0);
     if (cmd.empty()) {
         return std::unexpected(MysqlError(MYSQL_ERROR_INVALID_PARAM,
                                           "MySQL statement execute exceeds single-packet limit"));
     }
 
-    auto send_result = sendAll(cmd);
+    auto send_result = send_all(cmd);
     if (!send_result) {
         return std::unexpected(send_result.error());
     }
-    return receiveResultSet();
+    return receive_result_set();
 }
 
-MysqlVoidResult MysqlClient::stmtClose(uint32_t stmt_id)
+MysqlVoidResult MysqlClient::stmt_close(uint32_t stmt_id)
 {
-    auto cmd = m_encoder.encodeStmtClose(stmt_id, 0);
-    return sendAll(cmd);
+    auto cmd = m_encoder.encode_stmt_close(stmt_id, 0);
+    return send_all(cmd);
 }
 
-MysqlVoidResult MysqlClient::runSimpleStatement(const std::string& sql)
+MysqlVoidResult MysqlClient::run_simple_statement(const std::string& sql)
 {
     auto result = query(sql);
     if (!result) {
@@ -898,22 +898,22 @@ MysqlVoidResult MysqlClient::runSimpleStatement(const std::string& sql)
     return {};
 }
 
-MysqlVoidResult MysqlClient::beginTransaction() { return runSimpleStatement("BEGIN"); }
-MysqlVoidResult MysqlClient::commit() { return runSimpleStatement("COMMIT"); }
-MysqlVoidResult MysqlClient::rollback() { return runSimpleStatement("ROLLBACK"); }
-MysqlVoidResult MysqlClient::ping() { return runSimpleStatement("SELECT 1"); }
-MysqlVoidResult MysqlClient::useDatabase(const std::string& database) { return runSimpleStatement("USE " + database); }
+MysqlVoidResult MysqlClient::begin_transaction() { return run_simple_statement("BEGIN"); }
+MysqlVoidResult MysqlClient::commit() { return run_simple_statement("COMMIT"); }
+MysqlVoidResult MysqlClient::rollback() { return run_simple_statement("ROLLBACK"); }
+MysqlVoidResult MysqlClient::ping() { return run_simple_statement("SELECT 1"); }
+MysqlVoidResult MysqlClient::use_database(const std::string& database) { return run_simple_statement("USE " + database); }
 
 void MysqlClient::close()
 {
     if (!m_connected) {
-        closeSocket();
+        close_socket();
         return;
     }
 
-    auto quit = m_encoder.encodeQuit(0);
-    (void)sendAll(quit);  // best effort
-    closeSocket();
+    auto quit = m_encoder.encode_quit(0);
+    (void)send_all(quit);  // best effort
+    close_socket();
 }
 
 } // namespace galay::mysql

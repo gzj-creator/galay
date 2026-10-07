@@ -49,14 +49,14 @@ public:
      * @param name 服务器名称
      * @param version 服务器版本
      */
-    void setServerInfo(const std::string& name, const std::string& version);
+    void set_server_info(const std::string& name, const std::string& version);
 
     /**
      * @brief 设置生产运行策略
      * @details 策略按值保存；应在 run() 前配置，运行中修改不保证并发可见性。
      * @param policy 传输限制、超时和会话策略
      */
-    void setProductionPolicy(McpProductionPolicy policy);
+    void set_production_policy(McpProductionPolicy policy);
 
     /**
      * @brief 注入 stdio 输入输出流
@@ -64,7 +64,7 @@ public:
      * @param input JSON-RPC line 输入流
      * @param output JSON-RPC line 输出流
      */
-    void setStreams(std::istream& input, std::ostream& output) noexcept;
+    void set_streams(std::istream& input, std::ostream& output) noexcept;
 
     /**
      * @brief 添加工具
@@ -73,7 +73,7 @@ public:
      * @param inputSchema 输入参数的JSON Schema
      * @param handler 工具处理函数
      */
-    void addTool(std::string name,
+    void add_tool(std::string name,
                  std::string description,
                  std::string inputSchema,
                  ToolHandler handler);
@@ -86,7 +86,7 @@ public:
      * @param mimeType MIME类型
      * @param reader 资源读取函数
      */
-    void addResource(std::string uri,
+    void add_resource(std::string uri,
                      std::string name,
                      std::string description,
                      std::string mimeType,
@@ -99,7 +99,7 @@ public:
      * @param arguments 参数定义
      * @param getter 提示获取函数
      */
-    void addPrompt(std::string name,
+    void add_prompt(std::string name,
                    std::string description,
                    std::vector<PromptArgument> arguments,
                    PromptGetter getter);
@@ -119,68 +119,68 @@ public:
     /**
      * @brief 检查服务器是否正在运行
      */
-    bool isRunning() const;
+    bool is_running() const;
 
 private:
     /**
      * @brief 处理JSON-RPC请求
      * @param request 请求视图
      */
-    void handleRequest(const JsonRpcRequestView& request);
+    void handle_request(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理initialize方法
      * @param request 请求视图
      */
-    void handleInitialize(const JsonRpcRequestView& request);
+    void handle_initialize(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理tools/list方法
      * @param request 请求视图
      */
-    void handleToolsList(const JsonRpcRequestView& request);
+    void handle_tools_list(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理tools/call方法
      * @param request 请求视图
      */
-    void handleToolsCall(const JsonRpcRequestView& request);
+    void handle_tools_call(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理resources/list方法
      * @param request 请求视图
      */
-    void handleResourcesList(const JsonRpcRequestView& request);
+    void handle_resources_list(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理resources/read方法
      * @param request 请求视图
      */
-    void handleResourcesRead(const JsonRpcRequestView& request);
+    void handle_resources_read(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理prompts/list方法
      * @param request 请求视图
      */
-    void handlePromptsList(const JsonRpcRequestView& request);
+    void handle_prompts_list(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理prompts/get方法
      * @param request 请求视图
      */
-    void handlePromptsGet(const JsonRpcRequestView& request);
+    void handle_prompts_get(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理ping方法
      * @param request 请求视图
      */
-    void handlePing(const JsonRpcRequestView& request);
+    void handle_ping(const JsonRpcRequestView& request);
 
     /**
      * @brief 发送JSON-RPC响应
      * @param response 响应对象
      */
-    void sendResponse(const JsonRpcResponse& response);
+    void send_response(const JsonRpcResponse& response);
 
     /**
      * @brief 发送错误响应
@@ -189,27 +189,27 @@ private:
      * @param message 错误消息
      * @param details 错误详情
      */
-    void sendError(int64_t id, int code, const std::string& message, const std::string& details = "");
+    void send_error(int64_t id, int code, const std::string& message, const std::string& details = "");
 
     /**
      * @brief 发送JSON-RPC通知
      * @param method 通知方法名
      * @param params 通知参数JSON
      */
-    void sendNotification(const std::string& method, const std::string& params);
+    void send_notification(const std::string& method, const std::string& params);
 
     /**
      * @brief 从输入流读取一行JSON消息
      * @return 成功返回JSON字符串，失败返回McpError
      */
-    std::expected<std::string, McpError> readMessage();
+    std::expected<std::string, McpError> read_message();
 
     /**
      * @brief 向输出流写入一行JSON消息
      * @param message 要发送的JSON字符串
      * @return 成功返回void，失败返回McpError
      */
-    std::expected<void, McpError> writeMessage(const std::string& message);
+    std::expected<void, McpError> write_message(const std::string& message);
 
 private:
     std::string m_serverName; ///< 服务器名称

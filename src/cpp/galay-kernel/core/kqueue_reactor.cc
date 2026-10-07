@@ -21,25 +21,25 @@ namespace galay::kernel {
 
 namespace {
 
-inline bool sequenceMaskUsesSlot(uint8_t mask, IOController::Index slot) {
-    return (mask & detail::sequenceSlotMask(slot)) != 0;
+inline bool sequence_mask_uses_slot(uint8_t mask, IOController::Index slot) {
+    return (mask & detail::sequence_slot_mask(slot)) != 0;
 }
 
-inline uint8_t simpleEventMask(IOEventType type) {
+inline uint8_t simple_event_mask(IOEventType type) {
     const uint32_t value = static_cast<uint32_t>(type);
     uint8_t mask = 0;
     if ((value & (ACCEPT | RECV | READV | RECVFROM | FILEREAD)) != 0) {
-        mask = static_cast<uint8_t>(mask | detail::sequenceSlotMask(IOController::READ));
+        mask = static_cast<uint8_t>(mask | detail::sequence_slot_mask(IOController::READ));
     }
     if ((value & (CONNECT | SEND | WRITEV | SENDTO | FILEWRITE | SENDFILE)) != 0) {
-        mask = static_cast<uint8_t>(mask | detail::sequenceSlotMask(IOController::WRITE));
+        mask = static_cast<uint8_t>(mask | detail::sequence_slot_mask(IOController::WRITE));
     }
     return mask;
 }
 
 }  // namespace
 
-KqueueReactor::RegistrationEntry* KqueueReactor::registrationEntryForController(IOController* controller) {
+KqueueReactor::RegistrationEntry* KqueueReactor::registration_entry_for_controller(IOController* controller) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
         return nullptr;
     }
@@ -49,16 +49,16 @@ KqueueReactor::RegistrationEntry* KqueueReactor::registrationEntryForController(
     if (it == m_registration_entries.end()) {
         auto entry = std::make_unique<RegistrationEntry>();
         auto* raw = entry.get();
-        controller->bindRegistrationOwnerSlot(&raw->controller);
+        controller->bind_registration_owner_slot(&raw->controller);
         m_registration_entries.emplace(fd, std::move(entry));
         return raw;
     }
 
-    controller->bindRegistrationOwnerSlot(&it->second->controller);
+    controller->bind_registration_owner_slot(&it->second->controller);
     return it->second.get();
 }
 
-void KqueueReactor::retireRegistrationEntry(IOController* controller) {
+void KqueueReactor::retire_registration_entry(IOController* controller) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
         return;
     }
@@ -72,7 +72,7 @@ void KqueueReactor::retireRegistrationEntry(IOController* controller) {
         return;
     }
 
-    controller->releaseRegistrationOwnerSlot();
+    controller->release_registration_owner_slot();
     m_retired_entries.push_back(std::move(it->second));
     m_registration_entries.erase(it);
 }
@@ -91,7 +91,7 @@ std::expected<void, IOError> KqueueReactor::start()
 
     m_kqueue_fd = kqueue();
     if (m_kqueue_fd == -1) {
-        detail::storeBackendError(m_last_error_code, kOpenFailed, static_cast<uint32_t>(errno));
+        detail::store_backend_error(m_last_error_code, kOpenFailed, static_cast<uint32_t>(errno));
         return std::unexpected(IOError(kOpenFailed, static_cast<uint32_t>(errno)));
     }
 
@@ -101,10 +101,10 @@ std::expected<void, IOError> KqueueReactor::start()
         const uint32_t registration_errno = static_cast<uint32_t>(errno);
         const int close_result = galay_close(m_kqueue_fd);
         if (close_result != 0) {
-            detail::storeBackendError(
+            detail::store_backend_error(
                 m_last_error_code, kDisconnectError, static_cast<uint32_t>(errno));
         } else {
-            detail::storeBackendError(m_last_error_code, kOpenFailed, registration_errno);
+            detail::store_backend_error(m_last_error_code, kOpenFailed, registration_errno);
         }
         m_kqueue_fd = -1;
         return std::unexpected(IOError(kOpenFailed, registration_errno));
@@ -118,13 +118,13 @@ KqueueReactor::~KqueueReactor() {
     for (auto& [fd, entry] : m_registration_entries) {
         (void)fd;
         if (entry && entry->controller) {
-            entry->controller->releaseRegistrationOwnerSlot();
+            entry->controller->release_registration_owner_slot();
         }
     }
     if (m_kqueue_fd != -1) {
         const int close_result = galay_close(m_kqueue_fd);
         if (close_result != 0) {
-            detail::storeBackendError(
+            detail::store_backend_error(
                 m_last_error_code, kDisconnectError, static_cast<uint32_t>(errno));
         }
     }
@@ -134,16 +134,16 @@ void KqueueReactor::notify() {
     struct kevent ev;
     EV_SET(&ev, WAKE_IDENT, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);
     if (kevent(m_kqueue_fd, &ev, 1, nullptr, 0, nullptr) < 0) {
-        detail::storeBackendError(
+        detail::store_backend_error(
             m_last_error_code, kNotReady, static_cast<uint32_t>(errno));
     }
 }
 
-GHandle KqueueReactor::getHandle() const {
+GHandle KqueueReactor::get_handle() const {
     return {m_kqueue_fd};
 }
 
-int KqueueReactor::updateSimpleInterest(IOController* controller,
+int KqueueReactor::update_simple_interest(IOController* controller,
                                         IOController::Index slot,
                                         bool desired) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
@@ -153,13 +153,13 @@ int KqueueReactor::updateSimpleInterest(IOController* controller,
     RegistrationEntry* entry = nullptr;
     if (desired) {
         // controller 移动后 fd 不变，重复 arm 也必须把稳定入口重绑到新对象。
-        entry = registrationEntryForController(controller);
+        entry = registration_entry_for_controller(controller);
         if (entry == nullptr) {
             return -1;
         }
     }
 
-    const uint8_t slot_mask = detail::sequenceSlotMask(slot);
+    const uint8_t slot_mask = detail::sequence_slot_mask(slot);
     const uint8_t old_simple = controller->m_simple_armed_mask;
     const uint8_t new_simple = desired
         ? static_cast<uint8_t>(old_simple | slot_mask)
@@ -189,23 +189,23 @@ int KqueueReactor::updateSimpleInterest(IOController* controller,
     controller->m_simple_armed_mask = new_simple;
 
     if (m_pending_changes.size() >= BATCH_THRESHOLD) {
-        return flushPendingChanges();
+        return flush_pending_changes();
     }
     return 0;
 }
 
-void KqueueReactor::deleteOneShotRegistration(int fd, int16_t filter) {
+void KqueueReactor::delete_one_shot_registration(int fd, int16_t filter) {
     struct kevent delete_event;
     EV_SET(&delete_event, fd, filter, EV_DELETE, 0, 0, nullptr);
     const int delete_result = kevent(
         m_kqueue_fd, &delete_event, 1, nullptr, 0, nullptr);
     if (delete_result < 0 && errno != ENOENT) {
-        detail::storeBackendError(
+        detail::store_backend_error(
             m_last_error_code, kNotReady, static_cast<uint32_t>(errno));
     }
 }
 
-void KqueueReactor::discardPendingChanges(IOController* controller) {
+void KqueueReactor::discard_pending_changes(IOController* controller) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
         return;
     }
@@ -222,95 +222,95 @@ void KqueueReactor::discardPendingChanges(IOController* controller) {
     }
 }
 
-int KqueueReactor::addAccept(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<AcceptAwaitable>();
+int KqueueReactor::add_accept(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<AcceptAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
-    auto* entry = registrationEntryForController(controller);
+    auto* entry = registration_entry_for_controller(controller);
     if (entry == nullptr) return -1;
     struct kevent ev;
     EV_SET(&ev, controller->m_handle.fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, entry);
     return kevent(m_kqueue_fd, &ev, 1, nullptr, 0, nullptr);
 }
 
-int KqueueReactor::addConnect(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<ConnectAwaitable>();
+int KqueueReactor::add_connect(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<ConnectAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
-    auto* entry = registrationEntryForController(controller);
+    auto* entry = registration_entry_for_controller(controller);
     if (entry == nullptr) return -1;
     struct kevent ev;
     EV_SET(&ev, controller->m_handle.fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, entry);
     return kevent(m_kqueue_fd, &ev, 1, nullptr, 0, nullptr);
 }
 
-int KqueueReactor::addRecv(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<RecvAwaitable>();
+int KqueueReactor::add_recv(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<RecvAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
-    return updateSimpleInterest(controller, IOController::READ, true);
+    return update_simple_interest(controller, IOController::READ, true);
 }
 
-int KqueueReactor::addSend(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<SendAwaitable>();
+int KqueueReactor::add_send(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<SendAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
-    return updateSimpleInterest(controller, IOController::WRITE, true);
+    return update_simple_interest(controller, IOController::WRITE, true);
 }
 
-int KqueueReactor::addReadv(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<ReadvAwaitable>();
+int KqueueReactor::add_readv(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<ReadvAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
-    return updateSimpleInterest(controller, IOController::READ, true);
+    return update_simple_interest(controller, IOController::READ, true);
 }
 
-int KqueueReactor::addWritev(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<WritevAwaitable>();
+int KqueueReactor::add_writev(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<WritevAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
-    return updateSimpleInterest(controller, IOController::WRITE, true);
+    return update_simple_interest(controller, IOController::WRITE, true);
 }
 
-int KqueueReactor::addClose(IOController* controller) {
+int KqueueReactor::add_close(IOController* controller) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
         return 0;
     }
 
     const int fd = controller->m_handle.fd;
-    discardPendingChanges(controller);
+    discard_pending_changes(controller);
 
     Waker accept_waker;
     if ((static_cast<uint32_t>(controller->m_type) & ACCEPT) != 0) {
-        if (auto* awaitable = controller->getAwaitable<AcceptAwaitable>(); awaitable != nullptr) {
+        if (auto* awaitable = controller->get_awaitable<AcceptAwaitable>(); awaitable != nullptr) {
             awaitable->m_result = std::unexpected(IOError(kClosed, 0));
-            awaitable->cancelBoundTimeoutTimer();
+            awaitable->cancel_bound_timeout_timer();
             accept_waker = std::move(awaitable->m_waker);
         }
     }
-    retireRegistrationEntry(controller);
+    retire_registration_entry(controller);
     const uint8_t armed_mask = static_cast<uint8_t>(
         controller->m_simple_armed_mask |
         controller->m_sequence_armed_mask |
-        simpleEventMask(controller->m_type));
+        simple_event_mask(controller->m_type));
     struct kevent evs[3];
     int ev_count = 0;
-    if (sequenceMaskUsesSlot(armed_mask, IOController::READ)) {
+    if (sequence_mask_uses_slot(armed_mask, IOController::READ)) {
         EV_SET(&evs[ev_count++], fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
     }
-    if (sequenceMaskUsesSlot(armed_mask, IOController::WRITE)) {
+    if (sequence_mask_uses_slot(armed_mask, IOController::WRITE)) {
         EV_SET(&evs[ev_count++], fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
     }
     if ((static_cast<uint32_t>(controller->m_type) & FILEWATCH) != 0) {
@@ -319,7 +319,7 @@ int KqueueReactor::addClose(IOController* controller) {
     if (ev_count > 0) {
         const int delete_result = kevent(m_kqueue_fd, evs, ev_count, nullptr, 0, nullptr);
         if (delete_result < 0 && errno != ENOENT) {
-            detail::storeBackendError(
+            detail::store_backend_error(
                 m_last_error_code, kNotReady, static_cast<uint32_t>(errno));
         }
     }
@@ -330,75 +330,75 @@ int KqueueReactor::addClose(IOController* controller) {
     controller->m_sequence_owner[IOController::READ] = nullptr;
     controller->m_sequence_owner[IOController::WRITE] = nullptr;
     controller->m_simple_armed_mask = 0;
-    detail::clearSequenceInterestMask(controller);
+    detail::clear_sequence_interest_mask(controller);
 
     const int close_result = galay_close(fd);
     const uint32_t close_errno = close_result == 0 ? 0 : static_cast<uint32_t>(errno);
     if (close_result != 0) {
-        detail::storeBackendError(m_last_error_code, kDisconnectError, close_errno);
+        detail::store_backend_error(m_last_error_code, kDisconnectError, close_errno);
         return -static_cast<int>(close_errno);
     }
     controller->m_handle = GHandle::invalid();
-    accept_waker.wakeUp();
+    accept_waker.wake_up();
     return 0;
 }
 
-int KqueueReactor::addFileRead(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<FileReadAwaitable>();
+int KqueueReactor::add_file_read(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<FileReadAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
-    auto* entry = registrationEntryForController(controller);
+    auto* entry = registration_entry_for_controller(controller);
     if (entry == nullptr) return -1;
     struct kevent ev;
     EV_SET(&ev, controller->m_handle.fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, entry);
     return kevent(m_kqueue_fd, &ev, 1, nullptr, 0, nullptr);
 }
 
-int KqueueReactor::addFileWrite(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<FileWriteAwaitable>();
+int KqueueReactor::add_file_write(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<FileWriteAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
-    auto* entry = registrationEntryForController(controller);
+    auto* entry = registration_entry_for_controller(controller);
     if (entry == nullptr) return -1;
     struct kevent ev;
     EV_SET(&ev, controller->m_handle.fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, entry);
     return kevent(m_kqueue_fd, &ev, 1, nullptr, 0, nullptr);
 }
 
-int KqueueReactor::addRecvFrom(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<RecvFromAwaitable>();
+int KqueueReactor::add_recv_from(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<RecvFromAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
-    auto* entry = registrationEntryForController(controller);
+    auto* entry = registration_entry_for_controller(controller);
     if (entry == nullptr) return -1;
     struct kevent ev;
     EV_SET(&ev, controller->m_handle.fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, entry);
     return kevent(m_kqueue_fd, &ev, 1, nullptr, 0, nullptr);
 }
 
-int KqueueReactor::addSendTo(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<SendToAwaitable>();
+int KqueueReactor::add_send_to(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<SendToAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
-    auto* entry = registrationEntryForController(controller);
+    auto* entry = registration_entry_for_controller(controller);
     if (entry == nullptr) return -1;
     struct kevent ev;
     EV_SET(&ev, controller->m_handle.fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, entry);
     return kevent(m_kqueue_fd, &ev, 1, nullptr, 0, nullptr);
 }
 
-int KqueueReactor::addFileWatch(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<FileWatchAwaitable>();
+int KqueueReactor::add_file_watch(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<FileWatchAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* entry = registrationEntryForController(controller);
+    auto* entry = registration_entry_for_controller(controller);
     if (entry == nullptr) return -1;
 
     unsigned int fflags = 0;
@@ -414,24 +414,24 @@ int KqueueReactor::addFileWatch(IOController* controller) {
     return kevent(m_kqueue_fd, &ev, 1, nullptr, 0, nullptr);
 }
 
-int KqueueReactor::addSendFile(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<SendFileAwaitable>();
+int KqueueReactor::add_send_file(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<SendFileAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
-    auto* entry = registrationEntryForController(controller);
+    auto* entry = registration_entry_for_controller(controller);
     if (entry == nullptr) return -1;
     struct kevent ev;
     EV_SET(&ev, controller->m_handle.fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, entry);
     return kevent(m_kqueue_fd, &ev, 1, nullptr, 0, nullptr);
 }
 
-int KqueueReactor::addSequence(IOController* controller) {
+int KqueueReactor::add_sequence(IOController* controller) {
     if (controller == nullptr) {
         return -1;
     }
-    return syncSequenceRegistration(controller);
+    return sync_sequence_registration(controller);
 }
 
 int KqueueReactor::remove(IOController* controller) {
@@ -439,18 +439,18 @@ int KqueueReactor::remove(IOController* controller) {
         return 0;
     }
     const int fd = controller->m_handle.fd;
-    discardPendingChanges(controller);
-    retireRegistrationEntry(controller);
+    discard_pending_changes(controller);
+    retire_registration_entry(controller);
     const uint8_t armed_mask = static_cast<uint8_t>(
         controller->m_simple_armed_mask |
         controller->m_sequence_armed_mask |
-        simpleEventMask(controller->m_type));
+        simple_event_mask(controller->m_type));
     struct kevent evs[3];
     int ev_count = 0;
-    if (sequenceMaskUsesSlot(armed_mask, IOController::READ)) {
+    if (sequence_mask_uses_slot(armed_mask, IOController::READ)) {
         EV_SET(&evs[ev_count++], fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
     }
-    if (sequenceMaskUsesSlot(armed_mask, IOController::WRITE)) {
+    if (sequence_mask_uses_slot(armed_mask, IOController::WRITE)) {
         EV_SET(&evs[ev_count++], fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
     }
     if ((static_cast<uint32_t>(controller->m_type) & FILEWATCH) != 0) {
@@ -465,12 +465,12 @@ int KqueueReactor::remove(IOController* controller) {
     if (result == 0 || errno == ENOENT) {
         return 0;
     }
-    detail::storeBackendError(
+    detail::store_backend_error(
         m_last_error_code, kNotReady, static_cast<uint32_t>(errno));
     return -static_cast<int>(errno);
 }
 
-int KqueueReactor::flushPendingChanges() {
+int KqueueReactor::flush_pending_changes() {
     if (m_pending_changes.empty()) {
         return 0;
     }
@@ -486,13 +486,13 @@ int KqueueReactor::flushPendingChanges() {
             continue;
         }
         const uint32_t sys = static_cast<uint32_t>(errno);
-        detail::storeBackendError(m_last_error_code, kNotReady, sys);
+        detail::store_backend_error(m_last_error_code, kNotReady, sys);
         return -1;
     }
 }
 
 void KqueueReactor::poll(const struct timespec& timeout, WakeCoordinator& wake_coordinator) {
-    if (flushPendingChanges() < 0) {
+    if (flush_pending_changes() < 0) {
         return;
     }
     const int nev = kevent(m_kqueue_fd, nullptr, 0, m_events.data(), m_max_events, &timeout);
@@ -500,7 +500,7 @@ void KqueueReactor::poll(const struct timespec& timeout, WakeCoordinator& wake_c
         if (errno == EINTR) {
             return;
         }
-        detail::storeBackendError(
+        detail::store_backend_error(
             m_last_error_code, kNotReady, static_cast<uint32_t>(errno));
         return;
     }
@@ -508,12 +508,12 @@ void KqueueReactor::poll(const struct timespec& timeout, WakeCoordinator& wake_c
     for (int i = 0; i < nev; ++i) {
         struct kevent& ev = m_events[i];
         if (ev.filter == EVFILT_USER && ev.ident == WAKE_IDENT) {
-            wake_coordinator.cancelPendingWake();
+            wake_coordinator.cancel_pending_wake();
             continue;
         }
         if (ev.flags & EV_ERROR) {
             if (ev.data > 0) {
-                detail::storeBackendError(
+                detail::store_backend_error(
                     m_last_error_code, kNotReady, static_cast<uint32_t>(ev.data));
             }
             continue;
@@ -521,11 +521,11 @@ void KqueueReactor::poll(const struct timespec& timeout, WakeCoordinator& wake_c
         if (!ev.udata) {
             continue;
         }
-        processEvent(ev);
+        process_event(ev);
     }
 }
 
-void KqueueReactor::processEvent(struct kevent& ev) {
+void KqueueReactor::process_event(struct kevent& ev) {
     auto* entry = static_cast<RegistrationEntry*>(ev.udata);
     auto* controller = entry ? entry->controller : nullptr;
     if (!controller || controller->m_type == IOEventType::INVALID ||
@@ -538,64 +538,64 @@ void KqueueReactor::processEvent(struct kevent& ev) {
     const auto complete_one_shot = [this, controller](auto* awaitable,
                                                       IOEventType event_type,
                                                       int16_t filter) {
-        if (awaitable == nullptr || !awaitable->handleComplete(controller->m_handle)) {
+        if (awaitable == nullptr || !awaitable->handle_complete(controller->m_handle)) {
             return;
         }
 
-        controller->removeAwaitable(event_type);
+        controller->remove_awaitable(event_type);
         const auto slot = filter == EVFILT_READ ? IOController::READ : IOController::WRITE;
         const bool uses_cached_interest =
             event_type == RECV || event_type == READV ||
             event_type == SEND || event_type == WRITEV;
         const bool keep_armed = event_type == RECV || event_type == READV;
         if (uses_cached_interest && !keep_armed) {
-            const int interest_result = updateSimpleInterest(controller, slot, false);
+            const int interest_result = update_simple_interest(controller, slot, false);
             if (interest_result < 0) {
-                detail::storeBackendError(
+                detail::store_backend_error(
                     m_last_error_code, kNotReady, static_cast<uint32_t>(errno));
             }
         } else if (!uses_cached_interest) {
-            deleteOneShotRegistration(controller->m_handle.fd, filter);
+            delete_one_shot_registration(controller->m_handle.fd, filter);
         }
 
         const uint8_t armed_mask = static_cast<uint8_t>(
             controller->m_simple_armed_mask | controller->m_sequence_armed_mask);
         if (controller->m_type == IOEventType::INVALID && armed_mask == 0) {
-            retireRegistrationEntry(controller);
+            retire_registration_entry(controller);
         }
-        awaitable->cancelBoundTimeoutTimer();
-        awaitable->m_waker.wakeUp();
+        awaitable->cancel_bound_timeout_timer();
+        awaitable->m_waker.wake_up();
     };
 
     if (ev.filter == EVFILT_READ) {
         if (t & ACCEPT) {
-            complete_one_shot(controller->getAwaitable<AcceptAwaitable>(), ACCEPT, EVFILT_READ);
+            complete_one_shot(controller->get_awaitable<AcceptAwaitable>(), ACCEPT, EVFILT_READ);
         } else if (t & RECV) {
-            complete_one_shot(controller->getAwaitable<RecvAwaitable>(), RECV, EVFILT_READ);
+            complete_one_shot(controller->get_awaitable<RecvAwaitable>(), RECV, EVFILT_READ);
         } else if (t & READV) {
-            complete_one_shot(controller->getAwaitable<ReadvAwaitable>(), READV, EVFILT_READ);
+            complete_one_shot(controller->get_awaitable<ReadvAwaitable>(), READV, EVFILT_READ);
         } else if (t & RECVFROM) {
-            complete_one_shot(controller->getAwaitable<RecvFromAwaitable>(), RECVFROM, EVFILT_READ);
+            complete_one_shot(controller->get_awaitable<RecvFromAwaitable>(), RECVFROM, EVFILT_READ);
         } else if (t & FILEREAD) {
-            complete_one_shot(controller->getAwaitable<FileReadAwaitable>(), FILEREAD, EVFILT_READ);
+            complete_one_shot(controller->get_awaitable<FileReadAwaitable>(), FILEREAD, EVFILT_READ);
         }
     } else if (ev.filter == EVFILT_WRITE) {
         if (t & CONNECT) {
-            complete_one_shot(controller->getAwaitable<ConnectAwaitable>(), CONNECT, EVFILT_WRITE);
+            complete_one_shot(controller->get_awaitable<ConnectAwaitable>(), CONNECT, EVFILT_WRITE);
         } else if (t & SEND) {
-            complete_one_shot(controller->getAwaitable<SendAwaitable>(), SEND, EVFILT_WRITE);
+            complete_one_shot(controller->get_awaitable<SendAwaitable>(), SEND, EVFILT_WRITE);
         } else if (t & WRITEV) {
-            complete_one_shot(controller->getAwaitable<WritevAwaitable>(), WRITEV, EVFILT_WRITE);
+            complete_one_shot(controller->get_awaitable<WritevAwaitable>(), WRITEV, EVFILT_WRITE);
         } else if (t & SENDTO) {
-            complete_one_shot(controller->getAwaitable<SendToAwaitable>(), SENDTO, EVFILT_WRITE);
+            complete_one_shot(controller->get_awaitable<SendToAwaitable>(), SENDTO, EVFILT_WRITE);
         } else if (t & FILEWRITE) {
-            complete_one_shot(controller->getAwaitable<FileWriteAwaitable>(), FILEWRITE, EVFILT_WRITE);
+            complete_one_shot(controller->get_awaitable<FileWriteAwaitable>(), FILEWRITE, EVFILT_WRITE);
         } else if (t & SENDFILE) {
-            complete_one_shot(controller->getAwaitable<SendFileAwaitable>(), SENDFILE, EVFILT_WRITE);
+            complete_one_shot(controller->get_awaitable<SendFileAwaitable>(), SENDFILE, EVFILT_WRITE);
         }
     } else if (ev.filter == EVFILT_VNODE) {
         if (t & FILEWATCH) {
-            auto* awaitable = controller->getAwaitable<FileWatchAwaitable>();
+            auto* awaitable = controller->get_awaitable<FileWatchAwaitable>();
             if (awaitable) {
                 FileWatchResult result;
                 result.isDir = false;
@@ -609,17 +609,17 @@ void KqueueReactor::processEvent(struct kevent& ev) {
                 result.event = static_cast<FileWatchEvent>(mask);
 
                 awaitable->m_result = std::move(result);
-                const bool completed = awaitable->handleComplete(controller->m_handle);
-                controller->removeAwaitable(FILEWATCH);
-                deleteOneShotRegistration(controller->m_handle.fd, EVFILT_VNODE);
+                const bool completed = awaitable->handle_complete(controller->m_handle);
+                controller->remove_awaitable(FILEWATCH);
+                delete_one_shot_registration(controller->m_handle.fd, EVFILT_VNODE);
                 if (controller->m_type == IOEventType::INVALID) {
-                    retireRegistrationEntry(controller);
+                    retire_registration_entry(controller);
                 }
                 if (!completed) {
                     return;
                 }
-                awaitable->cancelBoundTimeoutTimer();
-                awaitable->m_waker.wakeUp();
+                awaitable->cancel_bound_timeout_timer();
+                awaitable->m_waker.wake_up();
             }
         }
     }
@@ -628,12 +628,12 @@ void KqueueReactor::processEvent(struct kevent& ev) {
         SequenceAwaitableBase* owner = nullptr;
         if (ev.filter == EVFILT_READ) {
             owner = controller->m_sequence_owner[IOController::READ];
-            if (owner != nullptr && !owner->waitsOn(IOController::READ)) {
+            if (owner != nullptr && !owner->waits_on(IOController::READ)) {
                 owner = nullptr;
             }
         } else if (ev.filter == EVFILT_WRITE) {
             owner = controller->m_sequence_owner[IOController::WRITE];
-            if (owner != nullptr && !owner->waitsOn(IOController::WRITE)) {
+            if (owner != nullptr && !owner->waits_on(IOController::WRITE)) {
                 owner = nullptr;
             }
         }
@@ -642,55 +642,55 @@ void KqueueReactor::processEvent(struct kevent& ev) {
             return;
         }
 
-        const auto progress = owner->onActiveEvent(controller->m_handle);
+        const auto progress = owner->on_active_event(controller->m_handle);
         if (progress == SequenceProgress::kCompleted) {
-            owner->onCompleted();
-            const uint8_t remaining_interest = detail::syncSequenceInterestMask(controller);
+            owner->on_completed();
+            const uint8_t remaining_interest = detail::sync_sequence_interest_mask(controller);
             if (remaining_interest == 0 &&
                 controller->m_type == IOEventType::INVALID &&
                 controller->m_simple_armed_mask == 0) {
-                retireRegistrationEntry(controller);
+                retire_registration_entry(controller);
             }
-            owner->m_waker.wakeUp();
+            owner->m_waker.wake_up();
             return;
         }
 
-        const int ret = addSequence(controller);
+        const int ret = add_sequence(controller);
         if (ret == 1) {
-            owner->onCompleted();
-            const uint8_t remaining_interest = detail::syncSequenceInterestMask(controller);
+            owner->on_completed();
+            const uint8_t remaining_interest = detail::sync_sequence_interest_mask(controller);
             if (remaining_interest == 0 &&
                 controller->m_type == IOEventType::INVALID &&
                 controller->m_simple_armed_mask == 0) {
-                retireRegistrationEntry(controller);
+                retire_registration_entry(controller);
             }
-            owner->m_waker.wakeUp();
+            owner->m_waker.wake_up();
         } else if (ret < 0) {
             const uint32_t sys = (ret != -1)
                 ? static_cast<uint32_t>(-ret)
                 : static_cast<uint32_t>(errno);
-            detail::storeBackendError(m_last_error_code, kNotReady, sys);
-            owner->onCompleted();
-            const uint8_t remaining_interest = detail::syncSequenceInterestMask(controller);
+            detail::store_backend_error(m_last_error_code, kNotReady, sys);
+            owner->on_completed();
+            const uint8_t remaining_interest = detail::sync_sequence_interest_mask(controller);
             if (remaining_interest == 0 &&
                 controller->m_type == IOEventType::INVALID &&
                 controller->m_simple_armed_mask == 0) {
-                retireRegistrationEntry(controller);
+                retire_registration_entry(controller);
             }
-            owner->m_waker.wakeUp();
+            owner->m_waker.wake_up();
         }
     }
 }
 
-int KqueueReactor::syncSequenceRegistration(IOController* controller) {
+int KqueueReactor::sync_sequence_registration(IOController* controller) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
         return -1;
     }
-    const auto desired_mask = detail::syncSequenceInterestMask(controller);
-    return applySequenceInterest(controller, desired_mask);
+    const auto desired_mask = detail::sync_sequence_interest_mask(controller);
+    return apply_sequence_interest(controller, desired_mask);
 }
 
-int KqueueReactor::applySequenceInterest(IOController* controller, uint8_t desired_mask) {
+int KqueueReactor::apply_sequence_interest(IOController* controller, uint8_t desired_mask) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
         return -1;
     }
@@ -704,7 +704,7 @@ int KqueueReactor::applySequenceInterest(IOController* controller, uint8_t desir
     const uint8_t to_add = static_cast<uint8_t>(new_combined & ~old_combined);
 
     if ((to_delete | to_add) == 0) {
-        if (new_combined != 0 && registrationEntryForController(controller) == nullptr) {
+        if (new_combined != 0 && registration_entry_for_controller(controller) == nullptr) {
             return -1;
         }
         controller->m_sequence_armed_mask = desired_mask;
@@ -716,7 +716,7 @@ int KqueueReactor::applySequenceInterest(IOController* controller, uint8_t desir
     const int fd = controller->m_handle.fd;
     RegistrationEntry* entry = nullptr;
     if (to_add != 0) {
-        entry = registrationEntryForController(controller);
+        entry = registration_entry_for_controller(controller);
         if (entry == nullptr) {
             return -1;
         }
@@ -737,16 +737,16 @@ int KqueueReactor::applySequenceInterest(IOController* controller, uint8_t desir
                (flags & EV_ADD) != 0 ? entry : nullptr);
     };
 
-    if (sequenceMaskUsesSlot(to_delete, IOController::READ)) {
+    if (sequence_mask_uses_slot(to_delete, IOController::READ)) {
         append_change(IOController::READ, EV_DELETE);
     }
-    if (sequenceMaskUsesSlot(to_delete, IOController::WRITE)) {
+    if (sequence_mask_uses_slot(to_delete, IOController::WRITE)) {
         append_change(IOController::WRITE, EV_DELETE);
     }
-    if (sequenceMaskUsesSlot(to_add, IOController::READ)) {
+    if (sequence_mask_uses_slot(to_add, IOController::READ)) {
         append_change(IOController::READ, EV_ADD | EV_CLEAR);
     }
-    if (sequenceMaskUsesSlot(to_add, IOController::WRITE)) {
+    if (sequence_mask_uses_slot(to_add, IOController::WRITE)) {
         append_change(IOController::WRITE, EV_ADD | EV_CLEAR);
     }
 

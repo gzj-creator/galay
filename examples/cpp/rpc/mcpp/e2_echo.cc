@@ -19,7 +19,7 @@ namespace {
 
 std::atomic<bool> g_ok{true};
 
-const char* callModeToString(RpcCallMode mode) {
+const char* call_mode_to_string(RpcCallMode mode) {
     switch (mode) {
         case RpcCallMode::UNARY:
             return "unary";
@@ -35,7 +35,7 @@ const char* callModeToString(RpcCallMode mode) {
 }
 
 template<typename AwaitResult>
-Task<void> callEchoWithMode(std::string_view title,
+Task<void> call_echo_with_mode(std::string_view title,
                            RpcCallMode expected_mode,
                            const std::string& payload,
                            AwaitResult result) {
@@ -50,7 +50,7 @@ Task<void> callEchoWithMode(std::string_view title,
 
     RpcCallResult call_result = std::move(result.value());
     if (!call_result.has_value()) {
-        std::cerr << "RPC error: " << rpcErrorCodeToString(call_result.error().code()) << "\n\n";
+        std::cerr << "RPC error: " << rpc_error_code_to_string(call_result.error().code()) << "\n\n";
         g_ok.store(false, std::memory_order_release);
         co_return;
     }
@@ -62,20 +62,20 @@ Task<void> callEchoWithMode(std::string_view title,
     }
 
     const auto& response = call_result.value().value();
-    if (!response.isOk()) {
-        std::cerr << "RPC error: " << rpcErrorCodeToString(response.errorCode()) << "\n\n";
+    if (!response.is_ok()) {
+        std::cerr << "RPC error: " << rpc_error_code_to_string(response.error_code()) << "\n\n";
         g_ok.store(false, std::memory_order_release);
         co_return;
     }
 
     std::string output(response.payload().begin(), response.payload().end());
     std::cout << "Output: " << output << "\n";
-    std::cout << "Response mode: " << callModeToString(response.callMode())
-              << ", end_of_stream=" << (response.endOfStream() ? "true" : "false") << "\n";
+    std::cout << "Response mode: " << call_mode_to_string(response.call_mode())
+              << ", end_of_stream=" << (response.end_of_stream() ? "true" : "false") << "\n";
 
-    if (response.callMode() != expected_mode) {
-        std::cerr << "Mode mismatch: expected=" << callModeToString(expected_mode)
-                  << ", actual=" << callModeToString(response.callMode()) << "\n";
+    if (response.call_mode() != expected_mode) {
+        std::cerr << "Mode mismatch: expected=" << call_mode_to_string(expected_mode)
+                  << ", actual=" << call_mode_to_string(response.call_mode()) << "\n";
         g_ok.store(false, std::memory_order_release);
     }
 
@@ -85,7 +85,7 @@ Task<void> callEchoWithMode(std::string_view title,
 
 } // namespace
 
-Task<void> runClient(Runtime& runtime, const std::string& host, uint16_t port) {
+Task<void> run_client(Runtime& runtime, const std::string& host, uint16_t port) {
     (void)runtime;
     std::cout << "Connecting to " << host << ":" << port << "...\n";
 
@@ -102,32 +102,32 @@ Task<void> runClient(Runtime& runtime, const std::string& host, uint16_t port) {
 
     const std::string payload = "Hello, 4-mode RPC World!";
 
-    co_await callEchoWithMode("Unary Echo",
+    co_await call_echo_with_mode("Unary Echo",
                               RpcCallMode::UNARY,
                               payload,
                               co_await client.call("EchoService", "echo", payload));
 
-    co_await callEchoWithMode("Client Streaming Echo (single frame)",
+    co_await call_echo_with_mode("Client Streaming Echo (single frame)",
                               RpcCallMode::CLIENT_STREAMING,
                               payload,
-                              co_await client.callClientStreamFrame("EchoService",
+                              co_await client.call_client_stream_frame("EchoService",
                                                                     "echo",
                                                                     payload.data(),
                                                                     payload.size(),
                                                                     true));
 
-    co_await callEchoWithMode("Server Streaming Echo (single response frame)",
+    co_await call_echo_with_mode("Server Streaming Echo (single response frame)",
                               RpcCallMode::SERVER_STREAMING,
                               payload,
-                              co_await client.callServerStreamRequest("EchoService",
+                              co_await client.call_server_stream_request("EchoService",
                                                                       "echo",
                                                                       payload.data(),
                                                                       payload.size()));
 
-    co_await callEchoWithMode("Bidi Streaming Echo (single frame)",
+    co_await call_echo_with_mode("Bidi Streaming Echo (single frame)",
                               RpcCallMode::BIDI_STREAMING,
                               payload,
-                              co_await client.callBidiStreamFrame("EchoService",
+                              co_await client.call_bidi_stream_frame("EchoService",
                                                                   "echo",
                                                                   payload.data(),
                                                                   payload.size(),
@@ -151,11 +151,11 @@ int main(int argc, char* argv[]) {
 
     std::cout << "=== Echo RPC Client Example (4 Modes, import) ===\n\n";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
-    (void)scheduleTask(scheduler, runClient(runtime, host, port));
+    auto* scheduler = runtime.get_next_io_scheduler();
+    (void)schedule_task(scheduler, run_client(runtime, host, port));
 
     std::this_thread::sleep_for(std::chrono::seconds(4));
 

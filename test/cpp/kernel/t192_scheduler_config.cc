@@ -42,7 +42,7 @@ void require(bool value, const char* message) {
     }
 }
 
-void waitFor(const std::atomic<bool>& flag) {
+void wait_for(const std::atomic<bool>& flag) {
     const auto deadline = std::chrono::steady_clock::now() + 5s;
     while (!flag.load(std::memory_order_acquire)) {
         require(std::chrono::steady_clock::now() < deadline, "task progress deadline");
@@ -52,7 +52,7 @@ void waitFor(const std::atomic<bool>& flag) {
 
 template <typename Config>
 struct SchedulerProbe final : ConfiguredScheduler<Config> {
-    int batchBudget() const { return this->m_batch_size; }
+    int batch_budget() const { return this->m_batch_size; }
 };
 
 struct State {
@@ -98,14 +98,14 @@ Task<void> exercise(State* state) {
 }
 
 template <typename Config>
-void checkConfig(const char* name) {
+void check_config(const char* name) {
     SchedulerProbe<Config> scheduler;
-    require(scheduler.batchBudget() == Config::kBatchSize, "configured batch budget");
+    require(scheduler.batch_budget() == Config::kBatchSize, "configured batch budget");
     Scheduler* borrowed = &scheduler;
     const auto started = borrowed->start();
     require(started.has_value(), "start through borrowed scheduler");
     require(!borrowed->schedule(TaskRef{}), "reject invalid task");
-    require(!borrowed->scheduleResume(TaskRef{}), "reject invalid resume");
+    require(!borrowed->schedule_resume(TaskRef{}), "reject invalid resume");
 
     int fds[2];
     require(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0, "socketpair");
@@ -114,14 +114,14 @@ void checkConfig(const char* name) {
         require(flags >= 0 && ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0, "nonblocking socket");
     }
     State state(fds[0]);
-    require(scheduleTaskDeferred(borrowed, exercise(&state)), "submit through borrowed scheduler");
-    waitFor(state.parked);
-    state.waker.wakeUp();
-    waitFor(state.receiving);
+    require(schedule_task_deferred(borrowed, exercise(&state)), "submit through borrowed scheduler");
+    wait_for(state.parked);
+    state.waker.wake_up();
+    wait_for(state.receiving);
     require(::send(fds[1], "x", 1, 0) == 1, "send peer byte");
-    waitFor(state.done);
+    wait_for(state.done);
     borrowed->stop();
-    require(state.resumed_thread == scheduler.threadId(), "resume on owner thread");
+    require(state.resumed_thread == scheduler.thread_id(), "resume on owner thread");
     require(::close(fds[1]) == 0, "close peer");
     const auto restarted = borrowed->start();
     require(restarted.has_value(), "restart through borrowed scheduler");
@@ -145,8 +145,8 @@ int main() {
     }
     probe.stop();
 #endif
-    checkConfig<DefaultIOSchedulerConfig>("default");
-    checkConfig<HighPerformanceIOSchedulerConfig>("high performance");
-    checkConfig<LowLatencyIOSchedulerConfig>("low latency");
-    checkConfig<CustomConfig>("custom");
+    check_config<DefaultIOSchedulerConfig>("default");
+    check_config<HighPerformanceIOSchedulerConfig>("high performance");
+    check_config<LowLatencyIOSchedulerConfig>("low latency");
+    check_config<CustomConfig>("custom");
 }

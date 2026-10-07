@@ -24,36 +24,36 @@ static std::atomic<bool> g_done{false};
 static std::atomic<bool> g_ok{false};
 static std::string g_error;
 
-bool waitForServerReady(const H2cServer& server,
+bool wait_for_server_ready(const H2cServer& server,
                         std::chrono::milliseconds timeout)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
-        if (server.isReady()) {
+        if (server.is_ready()) {
             return true;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    return server.isReady();
+    return server.is_ready();
 }
 
-Task<void> handleStream(Http2Stream::ptr stream) {
-    auto request_done = co_await stream->waitRequestComplete();
+Task<void> handle_stream(Http2Stream::ptr stream) {
+    auto request_done = co_await stream->wait_request_complete();
     if (!request_done) {
         co_return;
     }
 
-    auto body = stream->request().takeCoalescedBody();
-    stream->sendHeaders(
-        Http2Headers().status(200).contentType("text/plain").contentLength(body.size()),
+    auto body = stream->request().take_coalesced_body();
+    stream->send_headers(
+        Http2Headers().status(200).content_type("text/plain").content_length(body.size()),
         body.empty(), true);
     if (!body.empty()) {
-        stream->sendData(std::move(body), true);
+        stream->send_data(std::move(body), true);
     }
     co_return;
 }
 
-Task<void> runClient(uint16_t port) {
+Task<void> run_client(uint16_t port) {
     H2cClient<> client(H2cClientBuilder().build());
 
     auto connect_result = co_await client.connect("127.0.0.1", port);
@@ -71,7 +71,7 @@ Task<void> runClient(uint16_t port) {
 
     auto upgrade_result = co_await client.upgrade("/shutdown");
     if (!upgrade_result) {
-        g_error = upgrade_result.error().toString();
+        g_error = upgrade_result.error().to_string();
         g_done = true;
         co_return;
     }
@@ -84,7 +84,7 @@ Task<void> runClient(uint16_t port) {
         co_return;
     }
 
-    auto response_done = co_await stream->waitResponseComplete();
+    auto response_done = co_await stream->wait_response_complete();
     if (!response_done ||
         stream->response().status != 200 ||
         stream->response().body != "ping") {
@@ -101,7 +101,7 @@ Task<void> runClient(uint16_t port) {
         co_return;
     }
     if (!shutdown_result.value()) {
-        g_error = shutdown_result.value().error().toString();
+        g_error = shutdown_result.value().error().to_string();
         g_done = true;
         co_return;
     }
@@ -119,19 +119,19 @@ int main() {
     H2cServer server(H2cServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
-        .streamHandler(handleStream)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
+        .stream_handler(handle_stream)
         .build());
     server.start();
-    const bool listener_ready = waitForServerReady(server, std::chrono::seconds(5));
+    const bool listener_ready = wait_for_server_ready(server, std::chrono::seconds(5));
     if (!listener_ready) {
         std::cerr << "[T43] h2c listener did not become ready\n";
         server.stop();
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto runtime_start = runtime.start();
     if (!runtime_start.has_value()) {
         std::cerr << "[T43] client runtime failed to start: "
@@ -139,14 +139,14 @@ int main() {
         server.stop();
         return 1;
     }
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "[T43] missing IO scheduler\n";
         runtime.stop();
         server.stop();
         return 1;
     }
-    const bool scheduled = scheduleTask(scheduler, runClient(port));
+    const bool scheduled = schedule_task(scheduler, run_client(port));
     if (!scheduled) {
         std::cerr << "[T43] failed to schedule client task\n";
         runtime.stop();

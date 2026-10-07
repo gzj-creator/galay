@@ -47,7 +47,7 @@ public:
     /**
      * @brief 声明版本选项
      * @param text 触发版本选项时输出的文本
-     * @param shortName 短选项名，`'\0'` 表示仅注册 `--version`
+     * @param short_name 短选项名，`'\0'` 表示仅注册 `--version`
      * @return 当前应用引用
      */
     App& version(std::string text, char shortName = '\0') {
@@ -67,7 +67,7 @@ public:
     int run(int argc, const char* const* argv, std::ostream& out = std::cout,
             std::ostream& err = std::cerr) {
         if (argc <= 1) {
-            printHelp(out);
+            print_help(out);
             return 0;
         }
 
@@ -78,7 +78,7 @@ public:
 
         const CliError& error = parsed.error();
         if (error.code == CliErrorCode::HelpRequested) {
-            selected().printHelp(out);
+            selected().print_help(out);
             return 0;
         }
         if (error.code == CliErrorCode::VersionRequested) {
@@ -89,7 +89,7 @@ public:
 
         err << m_name << ": " << error.message() << '\n';
         err.flush();
-        selected().printHelp(err);
+        selected().print_help(err);
         return 1;
     }
 };

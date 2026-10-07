@@ -13,12 +13,12 @@ IOUringSchedulerBackend::~IOUringSchedulerBackend()
     stop();
 }
 
-void IOUringSchedulerBackend::pollBackend()
+void IOUringSchedulerBackend::poll_backend()
 {
-    m_reactor.poll(schedulerPollTimeoutIoUringNanoseconds(), m_wake_coordinator);
+    m_reactor.poll(scheduler_poll_timeout_io_uring_nanoseconds(), m_wake_coordinator);
 }
 
-void IOUringSchedulerBackend::flushBackend()
+void IOUringSchedulerBackend::flush_backend()
 {
     // io_uring 请求由 reactor 提交，不需要 readiness 后端的延后注册 flush。
 }

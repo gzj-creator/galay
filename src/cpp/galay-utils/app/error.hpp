@@ -34,7 +34,7 @@ enum class CliErrorCode {
  * @param code 错误码
  * @return 静态字符串，覆盖所有枚举值
  */
-inline constexpr const char* cliErrorString(CliErrorCode code) noexcept {
+inline constexpr const char* cli_error_string(CliErrorCode code) noexcept {
     switch (code) {
     case CliErrorCode::UnknownOption:
         return "unknown option";
@@ -66,13 +66,13 @@ struct CliError {
     std::string detail;
 
     /// 判断是否为帮助/版本这类正常终止
-    [[nodiscard]] bool isTermination() const noexcept {
+    [[nodiscard]] bool is_termination() const noexcept {
         return code == CliErrorCode::HelpRequested || code == CliErrorCode::VersionRequested;
     }
 
     /// 拼装可直接输出的错误信息
     [[nodiscard]] std::string message() const {
-        std::string text = cliErrorString(code);
+        std::string text = cli_error_string(code);
         if (!source.empty()) {
             text += ": ";
             text += source;
@@ -87,7 +87,7 @@ struct CliError {
 };
 
 /// 构造错误对象的便捷函数
-inline CliError makeCliError(CliErrorCode code, std::string source, std::string detail = {}) {
+inline CliError make_cli_error(CliErrorCode code, std::string source, std::string detail = {}) {
     return CliError{code, std::move(source), std::move(detail)};
 }
 

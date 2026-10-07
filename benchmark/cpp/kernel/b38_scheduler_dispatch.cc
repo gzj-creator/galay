@@ -22,7 +22,7 @@ using namespace galay::kernel;
 namespace {
 
 template <typename T>
-void doNotOptimize(const T& value) noexcept
+void do_not_optimize(const T& value) noexcept
 {
 #if defined(__GNUC__) || defined(__clang__)
     asm volatile("" : : "r,m"(value) : "memory");
@@ -34,12 +34,12 @@ void doNotOptimize(const T& value) noexcept
 class VirtualDispatch {
 public:
     virtual ~VirtualDispatch() = default;
-    virtual bool scheduleImmediately(uint64_t value) noexcept = 0;
+    virtual bool schedule_immediately(uint64_t value) noexcept = 0;
 };
 
 class VirtualDispatchProbeA final : public VirtualDispatch {
 public:
-    [[gnu::noinline]] bool scheduleImmediately(uint64_t value) noexcept override
+    [[gnu::noinline]] bool schedule_immediately(uint64_t value) noexcept override
     {
         m_value += value | 1U;
         return true;
@@ -54,7 +54,7 @@ private:
 
 class VirtualDispatchProbeB final : public VirtualDispatch {
 public:
-    [[gnu::noinline]] bool scheduleImmediately(uint64_t value) noexcept override
+    [[gnu::noinline]] bool schedule_immediately(uint64_t value) noexcept override
     {
         m_value += value | 1U;
         return true;
@@ -69,15 +69,15 @@ private:
 template <typename Derived>
 class StaticDispatch {
 public:
-    static bool scheduleImmediately(Derived* scheduler, uint64_t value) noexcept
+    static bool schedule_immediately(Derived* scheduler, uint64_t value) noexcept
     {
-        return scheduler->scheduleImmediatelyImpl(value);
+        return scheduler->schedule_immediately_impl(value);
     }
 };
 
 class OptVirtualProbe final : public VirtualDispatch {
 public:
-    bool scheduleImmediately(uint64_t value) noexcept override
+    bool schedule_immediately(uint64_t value) noexcept override
     {
         m_value += value | 1U;
         return true;
@@ -91,7 +91,7 @@ private:
 
 class CrtpDispatchProbe {
 public:
-    bool scheduleImmediatelyImpl(uint64_t value) noexcept
+    bool schedule_immediately_impl(uint64_t value) noexcept
     {
         m_value += value | 1U;
         return true;
@@ -105,7 +105,7 @@ private:
 
 class OptCrtpProbe {
 public:
-    bool scheduleImmediatelyImpl(uint64_t value) noexcept
+    bool schedule_immediately_impl(uint64_t value) noexcept
     {
         m_value += value | 1U;
         return true;
@@ -132,14 +132,14 @@ __attribute__((noinline, noipa))
 #else
 [[gnu::noinline]]
 #endif
-bool scheduleVirtual(VirtualDispatch* scheduler, uint64_t value) noexcept
+bool schedule_virtual(VirtualDispatch* scheduler, uint64_t value) noexcept
 {
-    return scheduler->scheduleImmediately(value);
+    return scheduler->schedule_immediately(value);
 }
 
-bool scheduleCrtp(CrtpDispatchProbe* scheduler, uint64_t value) noexcept
+bool schedule_crtp(CrtpDispatchProbe* scheduler, uint64_t value) noexcept
 {
-    return StaticDispatch<CrtpDispatchProbe>::scheduleImmediately(scheduler, value);
+    return StaticDispatch<CrtpDispatchProbe>::schedule_immediately(scheduler, value);
 }
 
 #if defined(__GNUC__) && !defined(__clang__)
@@ -147,7 +147,7 @@ __attribute__((noinline, noipa))
 #else
 [[gnu::noinline]]
 #endif
-VirtualDispatch* selectVirtualProbe(bool use_alternate,
+VirtualDispatch* select_virtual_probe(bool use_alternate,
                                     VirtualDispatch* primary,
                                     VirtualDispatch* alternate) noexcept
 {
@@ -159,12 +159,12 @@ __attribute__((noinline, noipa))
 #else
 [[gnu::noinline]]
 #endif
-bool scheduleErasedCrtp(ErasedCrtpDispatch scheduler, uint64_t value) noexcept
+bool schedule_erased_crtp(ErasedCrtpDispatch scheduler, uint64_t value) noexcept
 {
     if (scheduler.kind != SchedulerKind::kParallel) {
         return false;
     }
-    return StaticDispatch<CrtpDispatchProbe>::scheduleImmediately(
+    return StaticDispatch<CrtpDispatchProbe>::schedule_immediately(
         static_cast<CrtpDispatchProbe*>(scheduler.scheduler), value);
 }
 
@@ -173,11 +173,11 @@ __attribute__((noinline, noipa))
 #else
 [[gnu::noinline]]
 #endif
-double measureOptVirtualNs(VirtualDispatch* scheduler, size_t iterations)
+double measure_opt_virtual_ns(VirtualDispatch* scheduler, size_t iterations)
 {
     const auto begin = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
-        if (!scheduler->scheduleImmediately(i)) {
+        if (!scheduler->schedule_immediately(i)) {
             return -1;
         }
     }
@@ -190,11 +190,11 @@ __attribute__((noinline, noipa))
 #else
 [[gnu::noinline]]
 #endif
-double measureOptCrtpNs(OptCrtpProbe* scheduler, size_t iterations)
+double measure_opt_crtp_ns(OptCrtpProbe* scheduler, size_t iterations)
 {
     const auto begin = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
-        if (!StaticDispatch<OptCrtpProbe>::scheduleImmediately(scheduler, i)) {
+        if (!StaticDispatch<OptCrtpProbe>::schedule_immediately(scheduler, i)) {
             return -1;
         }
     }
@@ -213,7 +213,7 @@ struct SampleSummary {
     double p95_ns;
 };
 
-Task<void> countResumes(uint64_t& completed, size_t iterations)
+Task<void> count_resumes(uint64_t& completed, size_t iterations)
 {
     for (size_t i = 0; i < iterations; ++i) {
         ++completed;
@@ -224,28 +224,28 @@ Task<void> countResumes(uint64_t& completed, size_t iterations)
 // Allocate once outside timing; each submission still owns its TaskRef and
 // executes the real binding/resume protocol with normal compiler optimization.
 template <typename SchedulerT>
-double measureReusedTaskResumeNs(SchedulerT& scheduler, size_t iterations)
+double measure_reused_task_resume_ns(SchedulerT& scheduler, size_t iterations)
 {
     uint64_t completed = 0;
-    auto task = countResumes(completed, iterations);
-    const TaskRef& ref = detail::TaskAccess::taskRef(task);
-    detail::setTaskScheduler(ref, &scheduler);
+    auto task = count_resumes(completed, iterations);
+    const TaskRef& ref = detail::TaskAccess::task_ref(task);
+    detail::set_task_scheduler(ref, &scheduler);
     const auto begin = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
-        if (!scheduler.scheduleImmediately(ref)) {
+        if (!scheduler.schedule_immediately(ref)) {
             return -1;
         }
     }
     const auto end = std::chrono::steady_clock::now();
-    if (completed != iterations || !scheduler.scheduleImmediately(ref)) {
+    if (completed != iterations || !scheduler.schedule_immediately(ref)) {
         return -1;
     }
-    doNotOptimize(completed);
+    do_not_optimize(completed);
     return std::chrono::duration<double, std::nano>(end - begin).count() / iterations;
 }
 
 template <typename Function>
-double measureCallNs(Function&& function, size_t iterations)
+double measure_call_ns(Function&& function, size_t iterations)
 {
     const auto begin = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
@@ -258,12 +258,12 @@ double measureCallNs(Function&& function, size_t iterations)
 }
 
 template <typename SchedulerT>
-double measureTaskResumeNs(SchedulerT& scheduler, size_t iterations)
+double measure_task_resume_ns(SchedulerT& scheduler, size_t iterations)
 {
     uint64_t completed = 0;
     const auto begin = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
-        if (!scheduleTaskImmediately(scheduler, increment(completed))) {
+        if (!schedule_task_immediately(scheduler, increment(completed))) {
             return -1;
         }
     }
@@ -271,17 +271,17 @@ double measureTaskResumeNs(SchedulerT& scheduler, size_t iterations)
     if (completed != iterations) {
         return -1;
     }
-    doNotOptimize(completed);
+    do_not_optimize(completed);
     return std::chrono::duration<double, std::nano>(end - begin).count() / iterations;
 }
 
-double measureErasedTaskResumeNs(Scheduler& scheduler, size_t iterations)
+double measure_erased_task_resume_ns(Scheduler& scheduler, size_t iterations)
 {
     uint64_t completed = 0;
     const auto begin = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
         Task<void> task = increment(completed);
-        if (!scheduler.scheduleImmediately(detail::TaskAccess::detachTask(std::move(task)))) {
+        if (!scheduler.schedule_immediately(detail::TaskAccess::detach_task(std::move(task)))) {
             return -1;
         }
     }
@@ -289,26 +289,26 @@ double measureErasedTaskResumeNs(Scheduler& scheduler, size_t iterations)
     if (completed != iterations) {
         return -1;
     }
-    doNotOptimize(completed);
+    do_not_optimize(completed);
     return std::chrono::duration<double, std::nano>(end - begin).count() / iterations;
 }
 
 template <typename SchedulerT>
-double measureRejectedTaskNs(SchedulerT& scheduler, size_t iterations)
+double measure_rejected_task_ns(SchedulerT& scheduler, size_t iterations)
 {
     const auto begin = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
         TaskRef invalid_task;
-        if (scheduler.scheduleImmediately(std::move(invalid_task))) {
+        if (scheduler.schedule_immediately(std::move(invalid_task))) {
             return -1;
         }
     }
     const auto end = std::chrono::steady_clock::now();
-    doNotOptimize(scheduler);
+    do_not_optimize(scheduler);
     return std::chrono::duration<double, std::nano>(end - begin).count() / iterations;
 }
 
-void printSummary(const char* name, SampleSummary summary)
+void print_summary(const char* name, SampleSummary summary)
 {
     std::cout << name << " median_ns=" << summary.median_ns
               << " batch_mean_p95_ns=" << summary.p95_ns << '\n';
@@ -318,7 +318,7 @@ void printSummary(const char* name, SampleSummary summary)
 
 int main(int argc, char**)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -329,10 +329,10 @@ int main(int argc, char**)
 
     VirtualDispatchProbeA virtual_probe_a;
     VirtualDispatchProbeB virtual_probe_b;
-    VirtualDispatch* virtual_probe = selectVirtualProbe(
+    VirtualDispatch* virtual_probe = select_virtual_probe(
         argc == 2, &virtual_probe_a, &virtual_probe_b);
     OptVirtualProbe opt_virtual_probe;
-    VirtualDispatch* opt_virtual = selectVirtualProbe(false, &opt_virtual_probe, &virtual_probe_b);
+    VirtualDispatch* opt_virtual = select_virtual_probe(false, &opt_virtual_probe, &virtual_probe_b);
     CrtpDispatchProbe crtp_probe;
     OptCrtpProbe opt_crtp_probe;
     ErasedCrtpDispatch erased_probe{SchedulerKind::kParallel, &crtp_probe};
@@ -340,33 +340,33 @@ int main(int argc, char**)
     Scheduler& erased_scheduler = scheduler;
 
     auto noinline_virtual = [&](size_t iterations) {
-        return measureCallNs(
-            [&](uint64_t value) { return scheduleVirtual(virtual_probe, value); }, iterations);
+        return measure_call_ns(
+            [&](uint64_t value) { return schedule_virtual(virtual_probe, value); }, iterations);
     };
     auto noinline_crtp = [&](size_t iterations) {
-        return measureCallNs(
-            [&](uint64_t value) { return scheduleCrtp(&crtp_probe, value); }, iterations);
+        return measure_call_ns(
+            [&](uint64_t value) { return schedule_crtp(&crtp_probe, value); }, iterations);
     };
     auto erased_crtp = [&](size_t iterations) {
-        return measureCallNs(
-            [&](uint64_t value) { return scheduleErasedCrtp(erased_probe, value); }, iterations);
+        return measure_call_ns(
+            [&](uint64_t value) { return schedule_erased_crtp(erased_probe, value); }, iterations);
     };
     auto opt_virtual_call = [&](size_t iterations) {
-        return measureOptVirtualNs(opt_virtual, iterations);
+        return measure_opt_virtual_ns(opt_virtual, iterations);
     };
     auto opt_crtp = [&](size_t iterations) {
-        return measureOptCrtpNs(&opt_crtp_probe, iterations);
+        return measure_opt_crtp_ns(&opt_crtp_probe, iterations);
     };
 
     if (noinline_virtual(kWarmupIterations) < 0 || noinline_crtp(kWarmupIterations) < 0 ||
         erased_crtp(kWarmupIterations) < 0 || opt_virtual_call(kWarmupIterations) < 0 ||
         opt_crtp(kWarmupIterations) < 0 ||
-        measureRejectedTaskNs(scheduler, kWarmupIterations) < 0 ||
-        measureRejectedTaskNs(erased_scheduler, kWarmupIterations) < 0 ||
-        measureTaskResumeNs(scheduler, kWarmupIterations) < 0 ||
-        measureErasedTaskResumeNs(erased_scheduler, kWarmupIterations) < 0 ||
-        measureReusedTaskResumeNs(scheduler, kWarmupIterations) < 0 ||
-        measureReusedTaskResumeNs(erased_scheduler, kWarmupIterations) < 0) {
+        measure_rejected_task_ns(scheduler, kWarmupIterations) < 0 ||
+        measure_rejected_task_ns(erased_scheduler, kWarmupIterations) < 0 ||
+        measure_task_resume_ns(scheduler, kWarmupIterations) < 0 ||
+        measure_erased_task_resume_ns(erased_scheduler, kWarmupIterations) < 0 ||
+        measure_reused_task_resume_ns(scheduler, kWarmupIterations) < 0 ||
+        measure_reused_task_resume_ns(erased_scheduler, kWarmupIterations) < 0) {
         return 1;
     }
 
@@ -390,12 +390,12 @@ int main(int argc, char**)
             case 2: erased_samples[round] = erased_crtp(kDispatchIterations); break;
             case 3: opt_virtual_samples[round] = opt_virtual_call(kDispatchIterations); break;
             case 4: opt_crtp_samples[round] = opt_crtp(kDispatchIterations); break;
-            case 5: concrete_reject_samples[round] = measureRejectedTaskNs(scheduler, kDispatchIterations); break;
-            case 6: erased_reject_samples[round] = measureRejectedTaskNs(erased_scheduler, kDispatchIterations); break;
-            case 7: concrete_task_samples[round] = measureTaskResumeNs(scheduler, kTaskIterations); break;
-            case 8: erased_task_samples[round] = measureErasedTaskResumeNs(erased_scheduler, kTaskIterations); break;
-            case 9: concrete_reused_samples[round] = measureReusedTaskResumeNs(scheduler, kTaskIterations); break;
-            case 10: erased_reused_samples[round] = measureReusedTaskResumeNs(erased_scheduler, kTaskIterations); break;
+            case 5: concrete_reject_samples[round] = measure_rejected_task_ns(scheduler, kDispatchIterations); break;
+            case 6: erased_reject_samples[round] = measure_rejected_task_ns(erased_scheduler, kDispatchIterations); break;
+            case 7: concrete_task_samples[round] = measure_task_resume_ns(scheduler, kTaskIterations); break;
+            case 8: erased_task_samples[round] = measure_erased_task_resume_ns(erased_scheduler, kTaskIterations); break;
+            case 9: concrete_reused_samples[round] = measure_reused_task_resume_ns(scheduler, kTaskIterations); break;
+            case 10: erased_reused_samples[round] = measure_reused_task_resume_ns(erased_scheduler, kTaskIterations); break;
             }
         }
     }
@@ -437,20 +437,20 @@ int main(int argc, char**)
               << " repetitions=" << kRepetitions
               << " rotating_order=1\n";
     std::cout << "arithmetic reports throughput, not call latency; constant-empty rejection may optimize away; p95 is across batch means\n";
-    printSummary("noinline_virtual_call", virtual_summary);
-    printSummary("inline_crtp_throughput", crtp_summary);
-    printSummary("noinline_erased_crtp_call", erased_crtp_summary);
-    printSummary("opt_virtual_call", opt_virtual_summary);
-    printSummary("opt_crtp_throughput", opt_crtp_summary);
-    printSummary("constant_empty_reject_concrete", concrete_reject_summary);
-    printSummary("constant_empty_reject_erased", erased_reject_summary);
-    printSummary("concrete_task_resume", concrete_task_summary);
-    printSummary("erased_task_resume", erased_task_summary);
-    printSummary("concrete_reused_task_resume", concrete_reused_summary);
-    printSummary("erased_reused_task_resume", erased_reused_summary);
-    doNotOptimize(virtual_probe_a.value());
-    doNotOptimize(virtual_probe_b.value());
-    doNotOptimize(opt_virtual_probe.value());
-    doNotOptimize(crtp_probe.value());
-    doNotOptimize(opt_crtp_probe.value());
+    print_summary("noinline_virtual_call", virtual_summary);
+    print_summary("inline_crtp_throughput", crtp_summary);
+    print_summary("noinline_erased_crtp_call", erased_crtp_summary);
+    print_summary("opt_virtual_call", opt_virtual_summary);
+    print_summary("opt_crtp_throughput", opt_crtp_summary);
+    print_summary("constant_empty_reject_concrete", concrete_reject_summary);
+    print_summary("constant_empty_reject_erased", erased_reject_summary);
+    print_summary("concrete_task_resume", concrete_task_summary);
+    print_summary("erased_task_resume", erased_task_summary);
+    print_summary("concrete_reused_task_resume", concrete_reused_summary);
+    print_summary("erased_reused_task_resume", erased_reused_summary);
+    do_not_optimize(virtual_probe_a.value());
+    do_not_optimize(virtual_probe_b.value());
+    do_not_optimize(opt_virtual_probe.value());
+    do_not_optimize(crtp_probe.value());
+    do_not_optimize(opt_crtp_probe.value());
 }

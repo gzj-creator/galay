@@ -29,7 +29,7 @@ void require(bool condition, const char* message)
     }
 }
 
-std::string readFile(const std::filesystem::path& path)
+std::string read_file(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input) {
@@ -81,13 +81,13 @@ void test_http_server_config_surface()
 void test_passthrough_source_boundaries()
 {
     const std::filesystem::path source_root = GALAY_PROJECT_SOURCE_DIR;
-    const auto client_source = readFile(source_root / "src/cpp/galay-mcp/v1/client/client.cc");
-    const auto transport_source = readFile(source_root / "src/cpp/galay-mcp/v1/client/http_transport.cc");
-    const auto server_source = readFile(source_root / "src/cpp/galay-mcp/v1/server/http_server.cc");
+    const auto client_source = read_file(source_root / "src/cpp/galay-mcp/v1/client/client.cc");
+    const auto transport_source = read_file(source_root / "src/cpp/galay-mcp/v1/client/http_transport.cc");
+    const auto server_source = read_file(source_root / "src/cpp/galay-mcp/v1/server/http_server.cc");
 
     require(contains(client_source, "HttpClientTransport>(runtime, std::move(config))"),
             "McpClient should pass the full HTTP client config into HttpClientTransport");
-    require(contains(transport_source, ".tcpNoDelay(config.tcp_no_delay)"),
+    require(contains(transport_source, ".tcp_no_delay(config.tcp_no_delay)"),
             "HttpClientTransport should pass TCP_NODELAY into HttpClientBuilder");
     require(contains(server_source, "config.tcp_no_delay = m_tcpNoDelay;"),
             "McpHttpServer::start should pass TCP_NODELAY into HttpServerConfig");

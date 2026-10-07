@@ -16,7 +16,7 @@ using galay::kernel::Task;
 namespace
 {
 
-Task<void> runExample(IOScheduler* scheduler,
+Task<void> run_example(IOScheduler* scheduler,
                       std::string endpoint,
                       std::atomic<bool>* done,
                       int* exit_code)
@@ -76,10 +76,10 @@ int main(int argc, char** argv)
 {
     const std::string endpoint = argc > 1 ? argv[1] : "http://127.0.0.1:2379";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         std::cerr << "failed to get io scheduler\n";
@@ -88,7 +88,7 @@ int main(int argc, char** argv)
 
     std::atomic<bool> done{false};
     int exit_code = 1;
-    if (!galay::kernel::scheduleTask(scheduler, runExample(scheduler, endpoint, &done, &exit_code))) {
+    if (!galay::kernel::schedule_task(scheduler, run_example(scheduler, endpoint, &done, &exit_code))) {
         runtime.stop();
         std::cerr << "failed to schedule async example task\n";
         return 1;

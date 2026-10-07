@@ -30,7 +30,7 @@ struct WsWriterSetting
      * @brief 创建客户端写入器配置
      * @return 客户端模式的 WsWriterSetting
      */
-    static WsWriterSetting byClient() {
+    static WsWriterSetting by_client() {
         return WsWriterSetting(true);
     }
 
@@ -38,7 +38,7 @@ struct WsWriterSetting
      * @brief 创建服务器端写入器配置
      * @return 服务器端模式的 WsWriterSetting
      */
-    static WsWriterSetting byServer() {
+    static WsWriterSetting by_server() {
         return WsWriterSetting(false);
     }
 

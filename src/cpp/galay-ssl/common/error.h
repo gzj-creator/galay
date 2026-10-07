@@ -75,19 +75,19 @@ public:
      * @param code SSL 错误码
      * @return SslError 对象
      */
-    static SslError fromOpenSSL(SslErrorCode code) {
+    static SslError from_open_ssl(SslErrorCode code) {
         return SslError(code, ERR_get_error());
     }
 
     /**
      * @brief 检查是否成功
      */
-    bool isSuccess() const { return m_code == SslErrorCode::kSuccess; }
+    bool is_success() const { return m_code == SslErrorCode::kSuccess; }
 
     /**
      * @brief 检查是否需要重试（WANT_READ/WANT_WRITE）
      */
-    bool needsRetry() const {
+    bool needs_retry() const {
         return m_code == SslErrorCode::kHandshakeWantRead ||
                m_code == SslErrorCode::kHandshakeWantWrite;
     }
@@ -100,7 +100,7 @@ public:
     /**
      * @brief 获取 OpenSSL 错误码
      */
-    unsigned long sslError() const { return m_ssl_error; }
+    unsigned long ssl_error() const { return m_ssl_error; }
 
     /**
      * @brief 获取错误消息
@@ -110,7 +110,7 @@ public:
     /**
      * @brief 获取 OpenSSL 错误字符串
      */
-    std::string sslErrorString() const;
+    std::string ssl_error_string() const;
 
 private:
     unsigned long m_ssl_error;  ///< OpenSSL 错误码

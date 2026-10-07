@@ -36,7 +36,7 @@ std::atomic<bool> g_consumer_done{false};
 std::atomic<bool> g_producer_done{false};
 std::atomic<bool> g_benchmark_failed{false};
 
-void resetCounters() {
+void reset_counters() {
     g_sent = 0;
     g_received = 0;
     g_sum = 0;
@@ -65,7 +65,7 @@ struct ThroughputSample {
     int64_t sum;
 };
 
-ThroughputMeasurement measureThroughput(int64_t message_count,
+ThroughputMeasurement measure_throughput(int64_t message_count,
                                         std::chrono::steady_clock::duration elapsed) {
     const auto elapsed_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
@@ -78,11 +78,11 @@ ThroughputMeasurement measureThroughput(int64_t message_count,
 }
 
 template <typename Runner>
-ThroughputSample measureThroughputSample(int64_t message_count, Runner&& runner) {
+ThroughputSample measure_throughput_sample(int64_t message_count, Runner&& runner) {
     int64_t sample_message_count = message_count;
     while (true) {
         const auto elapsed = runner(sample_message_count);
-        const auto measurement = measureThroughput(sample_message_count, elapsed);
+        const auto measurement = measure_throughput(sample_message_count, elapsed);
         if (elapsed >= THROUGHPUT_MIN_SAMPLE_DURATION ||
             g_benchmark_failed.load(std::memory_order_acquire)) {
             return {
@@ -98,7 +98,7 @@ ThroughputSample measureThroughputSample(int64_t message_count, Runner&& runner)
 
 // ============== galay::spsc::UnboundedChannel 消费者协程 ==============
 
-Task<void> unsafeSimpleConsumer(galay::spsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
+Task<void> unsafe_simple_consumer(galay::spsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
     int64_t received = 0;
     int64_t sum = 0;
     while (received < expected_count) {
@@ -120,7 +120,7 @@ Task<void> unsafeSimpleConsumer(galay::spsc::UnboundedChannel<int64_t>* channel,
     co_return;
 }
 
-Task<void> unsafeBatchConsumer(galay::spsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
+Task<void> unsafe_batch_consumer(galay::spsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
     int64_t received = 0;
     int64_t sum = 0;
     while (received < expected_count) {
@@ -128,7 +128,7 @@ Task<void> unsafeBatchConsumer(galay::spsc::UnboundedChannel<int64_t>* channel, 
             g_producer_done.load(std::memory_order_acquire)) {
             break;
         }
-        auto batch = co_await channel->recvBatch(256);
+        auto batch = co_await channel->recv_batch(256);
         if (!batch) {
             g_benchmark_failed.store(true, std::memory_order_release);
             break;
@@ -144,7 +144,7 @@ Task<void> unsafeBatchConsumer(galay::spsc::UnboundedChannel<int64_t>* channel, 
     co_return;
 }
 
-Task<void> unsafeBatchedConsumer(galay::spsc::UnboundedChannel<int64_t>* channel, int64_t expected_count, int64_t batch_limit) {
+Task<void> unsafe_batched_consumer(galay::spsc::UnboundedChannel<int64_t>* channel, int64_t expected_count, int64_t batch_limit) {
     int64_t received = 0;
     int64_t sum = 0;
     while (received < expected_count) {
@@ -152,7 +152,7 @@ Task<void> unsafeBatchedConsumer(galay::spsc::UnboundedChannel<int64_t>* channel
             g_producer_done.load(std::memory_order_acquire)) {
             break;
         }
-        auto batch = co_await channel->recvBatched(batch_limit);
+        auto batch = co_await channel->recv_batched(batch_limit);
         if (!batch) {
             g_benchmark_failed.store(true, std::memory_order_release);
             break;
@@ -168,7 +168,7 @@ Task<void> unsafeBatchedConsumer(galay::spsc::UnboundedChannel<int64_t>* channel
     co_return;
 }
 
-Task<void> unsafeLatencyConsumer(galay::spsc::UnboundedChannel<TimestampedMessage>* channel, int64_t expected_count) {
+Task<void> unsafe_latency_consumer(galay::spsc::UnboundedChannel<TimestampedMessage>* channel, int64_t expected_count) {
     int64_t received = 0;
     int64_t latency_sum_ns = 0;
     while (received < expected_count) {
@@ -196,7 +196,7 @@ Task<void> unsafeLatencyConsumer(galay::spsc::UnboundedChannel<TimestampedMessag
 
 // ============== galay::spsc::UnboundedChannel 生产者协程 ==============
 
-Task<void> unsafeSimpleProducer(galay::spsc::UnboundedChannel<int64_t>* channel, int64_t count) {
+Task<void> unsafe_simple_producer(galay::spsc::UnboundedChannel<int64_t>* channel, int64_t count) {
     int64_t sent = 0;
     for (int64_t i = 0; i < count; ++i) {
         const bool flush_tail = i + 1 == count;
@@ -215,7 +215,7 @@ Task<void> unsafeSimpleProducer(galay::spsc::UnboundedChannel<int64_t>* channel,
     co_return;
 }
 
-Task<void> unsafeLatencyProducer(galay::spsc::UnboundedChannel<TimestampedMessage>* channel, int64_t count) {
+Task<void> unsafe_latency_producer(galay::spsc::UnboundedChannel<TimestampedMessage>* channel, int64_t count) {
     int64_t sent = 0;
     for (int64_t i = 0; i < count; ++i) {
         TimestampedMessage msg;
@@ -238,7 +238,7 @@ Task<void> unsafeLatencyProducer(galay::spsc::UnboundedChannel<TimestampedMessag
 
 // ============== galay::mpsc::UnboundedChannel 消费者协程（用于对比）==============
 
-Task<void> mpscSimpleConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
+Task<void> mpsc_simple_consumer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
     int64_t received = 0;
     int64_t sum = 0;
     while (received < expected_count) {
@@ -262,13 +262,13 @@ Task<void> mpscSimpleConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel, i
 
 // ============== galay::mpsc::UnboundedChannel 生产者协程（用于对比）==============
 
-Task<void> mpscSimpleProducer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t count) {
+Task<void> mpsc_simple_producer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t count) {
     int64_t sent = 0;
     for (int64_t i = 0; i < count; ++i) {
         if (!channel->send(i)) {
             LogError("  mpsc producer send failed after {} messages", sent);
             g_benchmark_failed.store(true, std::memory_order_release);
-            if (!channel->close() && !channel->isClosed()) {
+            if (!channel->close() && !channel->is_closed()) {
                 LogError("  mpsc channel close failed after send failure");
             }
             break;
@@ -286,7 +286,7 @@ Task<void> mpscSimpleProducer(galay::mpsc::UnboundedChannel<int64_t>* channel, i
 // ============== 压测函数 ==============
 
 // 1. galay::spsc::UnboundedChannel 单生产者吞吐量测试
-void benchUnsafeChannelThroughput(int64_t message_count) {
+void bench_unsafe_channel_throughput(int64_t message_count) {
     LogInfo("--- galay::spsc::UnboundedChannel Throughput Test ({} messages) ---", message_count);
     std::vector<ThroughputSample> samples;
     samples.reserve(THROUGHPUT_SAMPLE_COUNT);
@@ -294,8 +294,8 @@ void benchUnsafeChannelThroughput(int64_t message_count) {
     for (std::size_t sample_index = 0;
          sample_index < THROUGHPUT_SAMPLE_COUNT;
          ++sample_index) {
-        samples.push_back(measureThroughputSample(message_count, [&](int64_t sample_message_count) {
-            resetCounters();
+        samples.push_back(measure_throughput_sample(message_count, [&](int64_t sample_message_count) {
+            reset_counters();
 
             galay::spsc::UnboundedChannel<int64_t> channel;
             ParallelScheduler scheduler;
@@ -309,8 +309,8 @@ void benchUnsafeChannelThroughput(int64_t message_count) {
 
             const auto start = std::chrono::steady_clock::now();
 
-            if (!scheduleTask(scheduler, unsafeSimpleConsumer(&channel, sample_message_count)) ||
-                !scheduleTask(scheduler, unsafeSimpleProducer(&channel, sample_message_count))) {
+            if (!schedule_task(scheduler, unsafe_simple_consumer(&channel, sample_message_count)) ||
+                !schedule_task(scheduler, unsafe_simple_producer(&channel, sample_message_count))) {
                 LogError("  failed to schedule spsc throughput tasks");
                 g_benchmark_failed.store(true, std::memory_order_release);
                 scheduler.stop();
@@ -330,7 +330,7 @@ void benchUnsafeChannelThroughput(int64_t message_count) {
         }
     }
 
-    const auto median_sample = galay::benchmark::medianElement(
+    const auto median_sample = galay::benchmark::median_element(
         std::move(samples),
         [](const ThroughputSample& lhs, const ThroughputSample& rhs) {
             return lhs.throughput < rhs.throughput;
@@ -349,7 +349,7 @@ void benchUnsafeChannelThroughput(int64_t message_count) {
 }
 
 // 2. galay::spsc::UnboundedChannel 批量接收吞吐量测试
-void benchUnsafeChannelBatchThroughput(int64_t message_count) {
+void bench_unsafe_channel_batch_throughput(int64_t message_count) {
     LogInfo("--- galay::spsc::UnboundedChannel Batch Receive Throughput Test ({} messages) ---", message_count);
     std::vector<ThroughputSample> samples;
     samples.reserve(THROUGHPUT_SAMPLE_COUNT);
@@ -357,8 +357,8 @@ void benchUnsafeChannelBatchThroughput(int64_t message_count) {
     for (std::size_t sample_index = 0;
          sample_index < THROUGHPUT_SAMPLE_COUNT;
          ++sample_index) {
-        samples.push_back(measureThroughputSample(message_count, [&](int64_t sample_message_count) {
-            resetCounters();
+        samples.push_back(measure_throughput_sample(message_count, [&](int64_t sample_message_count) {
+            reset_counters();
 
             galay::spsc::UnboundedChannel<int64_t> channel;
             ParallelScheduler scheduler;
@@ -372,8 +372,8 @@ void benchUnsafeChannelBatchThroughput(int64_t message_count) {
 
             const auto start = std::chrono::steady_clock::now();
 
-            if (!scheduleTask(scheduler, unsafeBatchConsumer(&channel, sample_message_count)) ||
-                !scheduleTask(scheduler, unsafeSimpleProducer(&channel, sample_message_count))) {
+            if (!schedule_task(scheduler, unsafe_batch_consumer(&channel, sample_message_count)) ||
+                !schedule_task(scheduler, unsafe_simple_producer(&channel, sample_message_count))) {
                 LogError("  failed to schedule spsc batch tasks");
                 g_benchmark_failed.store(true, std::memory_order_release);
                 scheduler.stop();
@@ -393,7 +393,7 @@ void benchUnsafeChannelBatchThroughput(int64_t message_count) {
         }
     }
 
-    const auto median_sample = galay::benchmark::medianElement(
+    const auto median_sample = galay::benchmark::median_element(
         std::move(samples),
         [](const ThroughputSample& lhs, const ThroughputSample& rhs) {
             return lhs.throughput < rhs.throughput;
@@ -411,8 +411,8 @@ void benchUnsafeChannelBatchThroughput(int64_t message_count) {
             median_sample.sum, expected_sum, correct ? "YES" : "NO");
 }
 
-// 2b. galay::spsc::UnboundedChannel recvBatched 攒批接收吞吐量测试
-void benchUnsafeChannelBatchedThroughput(int64_t message_count, int64_t batch_limit) {
+// 2b. galay::spsc::UnboundedChannel recv_batched 攒批接收吞吐量测试
+void bench_unsafe_channel_batched_throughput(int64_t message_count, int64_t batch_limit) {
     LogInfo("--- galay::spsc::UnboundedChannel recvBatched Throughput Test ({} messages, limit={}) ---",
             message_count, batch_limit);
     std::vector<ThroughputSample> samples;
@@ -421,8 +421,8 @@ void benchUnsafeChannelBatchedThroughput(int64_t message_count, int64_t batch_li
     for (std::size_t sample_index = 0;
          sample_index < THROUGHPUT_SAMPLE_COUNT;
          ++sample_index) {
-        samples.push_back(measureThroughputSample(message_count, [&](int64_t sample_message_count) {
-            resetCounters();
+        samples.push_back(measure_throughput_sample(message_count, [&](int64_t sample_message_count) {
+            reset_counters();
 
             galay::spsc::UnboundedChannel<int64_t> channel;
             ParallelScheduler scheduler;
@@ -436,10 +436,10 @@ void benchUnsafeChannelBatchedThroughput(int64_t message_count, int64_t batch_li
 
             const auto start = std::chrono::steady_clock::now();
 
-            if (!scheduleTask(
+            if (!schedule_task(
                     scheduler,
-                    unsafeBatchedConsumer(&channel, sample_message_count, batch_limit)) ||
-                !scheduleTask(scheduler, unsafeSimpleProducer(&channel, sample_message_count))) {
+                    unsafe_batched_consumer(&channel, sample_message_count, batch_limit)) ||
+                !schedule_task(scheduler, unsafe_simple_producer(&channel, sample_message_count))) {
                 LogError("  failed to schedule spsc recvBatched tasks");
                 g_benchmark_failed.store(true, std::memory_order_release);
                 scheduler.stop();
@@ -459,7 +459,7 @@ void benchUnsafeChannelBatchedThroughput(int64_t message_count, int64_t batch_li
         }
     }
 
-    const auto median_sample = galay::benchmark::medianElement(
+    const auto median_sample = galay::benchmark::median_element(
         std::move(samples),
         [](const ThroughputSample& lhs, const ThroughputSample& rhs) {
             return lhs.throughput < rhs.throughput;
@@ -478,9 +478,9 @@ void benchUnsafeChannelBatchedThroughput(int64_t message_count, int64_t batch_li
 }
 
 // 3. galay::spsc::UnboundedChannel 延迟测试
-void benchUnsafeChannelLatency(int64_t message_count) {
+void bench_unsafe_channel_latency(int64_t message_count) {
     LogInfo("--- galay::spsc::UnboundedChannel Latency Test ({} messages) ---", message_count);
-    resetCounters();
+    reset_counters();
 
     galay::spsc::UnboundedChannel<TimestampedMessage> channel;
     ParallelScheduler scheduler;
@@ -492,8 +492,8 @@ void benchUnsafeChannelLatency(int64_t message_count) {
         return;
     }
 
-    if (!scheduleTask(scheduler, unsafeLatencyConsumer(&channel, message_count)) ||
-        !scheduleTask(scheduler, unsafeLatencyProducer(&channel, message_count))) {
+    if (!schedule_task(scheduler, unsafe_latency_consumer(&channel, message_count)) ||
+        !schedule_task(scheduler, unsafe_latency_producer(&channel, message_count))) {
         LogError("  failed to schedule spsc latency tasks");
         g_benchmark_failed.store(true, std::memory_order_release);
         scheduler.stop();
@@ -520,7 +520,7 @@ void benchUnsafeChannelLatency(int64_t message_count) {
 }
 
 // 4. galay::mpsc::UnboundedChannel 吞吐量测试（同调度器，用于对比）
-void benchMpscChannelThroughput(int64_t message_count) {
+void bench_mpsc_channel_throughput(int64_t message_count) {
     LogInfo("--- galay::mpsc::UnboundedChannel Throughput Test (same scheduler, {} messages) ---", message_count);
     std::vector<ThroughputSample> samples;
     samples.reserve(THROUGHPUT_SAMPLE_COUNT);
@@ -528,8 +528,8 @@ void benchMpscChannelThroughput(int64_t message_count) {
     for (std::size_t sample_index = 0;
          sample_index < THROUGHPUT_SAMPLE_COUNT;
          ++sample_index) {
-        samples.push_back(measureThroughputSample(message_count, [&](int64_t sample_message_count) {
-            resetCounters();
+        samples.push_back(measure_throughput_sample(message_count, [&](int64_t sample_message_count) {
+            reset_counters();
 
             galay::mpsc::UnboundedChannel<int64_t> channel;
             ParallelScheduler scheduler;
@@ -543,8 +543,8 @@ void benchMpscChannelThroughput(int64_t message_count) {
 
             const auto start = std::chrono::steady_clock::now();
 
-            if (!scheduleTask(scheduler, mpscSimpleConsumer(&channel, sample_message_count)) ||
-                !scheduleTask(scheduler, mpscSimpleProducer(&channel, sample_message_count))) {
+            if (!schedule_task(scheduler, mpsc_simple_consumer(&channel, sample_message_count)) ||
+                !schedule_task(scheduler, mpsc_simple_producer(&channel, sample_message_count))) {
                 LogError("  failed to schedule mpsc throughput tasks");
                 g_benchmark_failed.store(true, std::memory_order_release);
                 scheduler.stop();
@@ -564,7 +564,7 @@ void benchMpscChannelThroughput(int64_t message_count) {
         }
     }
 
-    const auto median_sample = galay::benchmark::medianElement(
+    const auto median_sample = galay::benchmark::median_element(
         std::move(samples),
         [](const ThroughputSample& lhs, const ThroughputSample& rhs) {
             return lhs.throughput < rhs.throughput;
@@ -583,11 +583,11 @@ void benchMpscChannelThroughput(int64_t message_count) {
 }
 
 // 5. 性能对比总结
-void benchComparison(int64_t message_count) {
+void bench_comparison(int64_t message_count) {
     LogInfo("\n=== Performance Comparison ({} messages) ===", message_count);
 
     // galay::spsc::UnboundedChannel 测试
-    resetCounters();
+    reset_counters();
     galay::spsc::UnboundedChannel<int64_t> unsafeChannel;
     ParallelScheduler scheduler1;
 
@@ -598,8 +598,8 @@ void benchComparison(int64_t message_count) {
         return;
     }
     auto start1 = std::chrono::steady_clock::now();
-    if (!scheduleTask(scheduler1, unsafeSimpleConsumer(&unsafeChannel, message_count)) ||
-        !scheduleTask(scheduler1, unsafeSimpleProducer(&unsafeChannel, message_count))) {
+    if (!schedule_task(scheduler1, unsafe_simple_consumer(&unsafeChannel, message_count)) ||
+        !schedule_task(scheduler1, unsafe_simple_producer(&unsafeChannel, message_count))) {
         LogError("  failed to schedule spsc comparison tasks");
         g_benchmark_failed.store(true, std::memory_order_release);
         scheduler1.stop();
@@ -609,14 +609,14 @@ void benchComparison(int64_t message_count) {
         std::this_thread::sleep_for(1ms);
     }
     auto elapsed1 = std::chrono::steady_clock::now() - start1;
-    const auto measurement1 = measureThroughput(message_count, elapsed1);
+    const auto measurement1 = measure_throughput(message_count, elapsed1);
     scheduler1.stop();
     if (g_benchmark_failed.load(std::memory_order_acquire)) {
         return;
     }
 
     // galay::mpsc::UnboundedChannel 测试
-    resetCounters();
+    reset_counters();
     galay::mpsc::UnboundedChannel<int64_t> mpscChannel;
     ParallelScheduler scheduler2;
 
@@ -627,8 +627,8 @@ void benchComparison(int64_t message_count) {
         return;
     }
     auto start2 = std::chrono::steady_clock::now();
-    if (!scheduleTask(scheduler2, mpscSimpleConsumer(&mpscChannel, message_count)) ||
-        !scheduleTask(scheduler2, mpscSimpleProducer(&mpscChannel, message_count))) {
+    if (!schedule_task(scheduler2, mpsc_simple_consumer(&mpscChannel, message_count)) ||
+        !schedule_task(scheduler2, mpsc_simple_producer(&mpscChannel, message_count))) {
         LogError("  failed to schedule mpsc comparison tasks");
         g_benchmark_failed.store(true, std::memory_order_release);
         scheduler2.stop();
@@ -638,7 +638,7 @@ void benchComparison(int64_t message_count) {
         std::this_thread::sleep_for(1ms);
     }
     auto elapsed2 = std::chrono::steady_clock::now() - start2;
-    const auto measurement2 = measureThroughput(message_count, elapsed2);
+    const auto measurement2 = measure_throughput(message_count, elapsed2);
     scheduler2.stop();
 
     // 输出对比结果
@@ -658,7 +658,7 @@ void benchComparison(int64_t message_count) {
 }
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -668,52 +668,52 @@ int main() {
     LogInfo("");
 
     // 1. galay::spsc::UnboundedChannel 吞吐量
-    benchUnsafeChannelThroughput(THROUGHPUT_MESSAGES);
+    bench_unsafe_channel_throughput(THROUGHPUT_MESSAGES);
     if (g_benchmark_failed.load(std::memory_order_acquire)) {
         return 1;
     }
     LogInfo("");
 
     // 2. galay::spsc::UnboundedChannel 批量接收吞吐量
-    benchUnsafeChannelBatchThroughput(THROUGHPUT_MESSAGES);
+    bench_unsafe_channel_batch_throughput(THROUGHPUT_MESSAGES);
     if (g_benchmark_failed.load(std::memory_order_acquire)) {
         return 1;
     }
     LogInfo("");
 
-    // 2b. galay::spsc::UnboundedChannel recvBatched 攒批接收吞吐量（不同 limit）
-    benchUnsafeChannelBatchedThroughput(THROUGHPUT_MESSAGES, 100);
+    // 2b. galay::spsc::UnboundedChannel recv_batched 攒批接收吞吐量（不同 limit）
+    bench_unsafe_channel_batched_throughput(THROUGHPUT_MESSAGES, 100);
     if (g_benchmark_failed.load(std::memory_order_acquire)) {
         return 1;
     }
     LogInfo("");
-    benchUnsafeChannelBatchedThroughput(THROUGHPUT_MESSAGES, 500);
+    bench_unsafe_channel_batched_throughput(THROUGHPUT_MESSAGES, 500);
     if (g_benchmark_failed.load(std::memory_order_acquire)) {
         return 1;
     }
     LogInfo("");
-    benchUnsafeChannelBatchedThroughput(THROUGHPUT_MESSAGES, 1000);
+    bench_unsafe_channel_batched_throughput(THROUGHPUT_MESSAGES, 1000);
     if (g_benchmark_failed.load(std::memory_order_acquire)) {
         return 1;
     }
     LogInfo("");
 
     // 3. galay::spsc::UnboundedChannel 延迟测试
-    benchUnsafeChannelLatency(LATENCY_MESSAGES);
+    bench_unsafe_channel_latency(LATENCY_MESSAGES);
     if (g_benchmark_failed.load(std::memory_order_acquire)) {
         return 1;
     }
     LogInfo("");
 
     // 4. galay::mpsc::UnboundedChannel 吞吐量（对比）
-    benchMpscChannelThroughput(THROUGHPUT_MESSAGES);
+    bench_mpsc_channel_throughput(THROUGHPUT_MESSAGES);
     if (g_benchmark_failed.load(std::memory_order_acquire)) {
         return 1;
     }
     LogInfo("");
 
     // 5. 性能对比
-    benchComparison(THROUGHPUT_MESSAGES);
+    bench_comparison(THROUGHPUT_MESSAGES);
     if (g_benchmark_failed.load(std::memory_order_acquire)) {
         return 1;
     }

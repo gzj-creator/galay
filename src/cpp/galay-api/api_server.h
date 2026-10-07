@@ -38,7 +38,7 @@ public:
         document_ = prepared.document;
         server_.emplace(config_);
         server_->start(std::move(prepared.router));
-        if (!server_->isRunning()) {
+        if (!server_->is_running()) {
             server_->stop();
             return std::unexpected(ApiError{ApiErrorCode::kTransportError,
                 "HTTP/1 server failed to start on " + config_.host + ":" + std::to_string(config_.port), 500});
@@ -53,7 +53,7 @@ public:
 
     bool is_running() const noexcept
     {
-        return server_.has_value() && server_->isRunning();
+        return server_.has_value() && server_->is_running();
     }
 
     std::shared_ptr<const std::string> document() const noexcept

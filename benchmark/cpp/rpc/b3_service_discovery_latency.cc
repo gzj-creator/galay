@@ -27,14 +27,14 @@ std::atomic<uint64_t> g_deregister_ops{0};
 std::atomic<uint64_t> g_errors{0};
 std::atomic<bool> g_running{true};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running.store(false);
 }
 
 /**
  * @brief 压测协程 - 每个 worker 使用独立的 registry
  */
-Task<void> benchWorker(size_t worker_id) {
+Task<void> bench_worker(size_t worker_id) {
     // 每个 worker 独立的 registry，避免共享状态竞争
     AsyncLocalServiceRegistry registry;
 
@@ -47,24 +47,24 @@ Task<void> benchWorker(size_t worker_id) {
 
     while (g_running.load(std::memory_order_relaxed)) {
         // 注册服务
-        co_await registry.registerServiceAsync(endpoint);
-        if (!registry.lastError().isOk()) {
+        co_await registry.register_service_async(endpoint);
+        if (!registry.last_error().is_ok()) {
             g_errors.fetch_add(1, std::memory_order_relaxed);
             continue;
         }
         g_register_ops.fetch_add(1, std::memory_order_relaxed);
 
         // 发现服务
-        co_await registry.discoverServiceAsync(endpoint.service_name);
-        if (!registry.lastError().isOk()) {
+        co_await registry.discover_service_async(endpoint.service_name);
+        if (!registry.last_error().is_ok()) {
             g_errors.fetch_add(1, std::memory_order_relaxed);
         } else {
             g_discover_ops.fetch_add(1, std::memory_order_relaxed);
         }
 
         // 注销服务
-        co_await registry.deregisterServiceAsync(endpoint);
-        if (!registry.lastError().isOk()) {
+        co_await registry.deregister_service_async(endpoint);
+        if (!registry.last_error().is_ok()) {
             g_errors.fetch_add(1, std::memory_order_relaxed);
         } else {
             g_deregister_ops.fetch_add(1, std::memory_order_relaxed);
@@ -75,12 +75,12 @@ Task<void> benchWorker(size_t worker_id) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 
     size_t num_workers = 100;
     size_t duration_sec = 10;
@@ -107,21 +107,21 @@ int main(int argc, char* argv[]) {
     std::cout << "=== ServiceDiscovery Benchmark ===\n";
     std::cout << "Workers: " << num_workers << "\n";
     std::cout << "Duration: " << duration_sec << " seconds\n";
-    const size_t resolved_io_schedulers = resolveIoSchedulerCount(io_schedulers);
+    const size_t resolved_io_schedulers = resolve_io_scheduler_count(io_schedulers);
     std::cout << "IO Schedulers: "
               << (io_schedulers == 0
                       ? "auto (" + std::to_string(resolved_io_schedulers) + ")"
                       : std::to_string(resolved_io_schedulers))
               << "\n\n";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(resolved_io_schedulers).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(resolved_io_schedulers).parallel_scheduler_count(1).build();
     runtime.start();
 
     std::cout << "Starting " << num_workers << " workers...\n";
     bool schedule_failed = false;
     for (size_t i = 0; i < num_workers; ++i) {
-        auto* scheduler = runtime.getNextIOScheduler();
-        if (scheduler == nullptr || !scheduleTask(scheduler, benchWorker(i))) {
+        auto* scheduler = runtime.get_next_io_scheduler();
+        if (scheduler == nullptr || !schedule_task(scheduler, bench_worker(i))) {
             schedule_failed = true;
             break;
         }

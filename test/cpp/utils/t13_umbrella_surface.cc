@@ -15,24 +15,24 @@ int main()
         std::cerr << "[t13] Env should be visible and reject invalid names\n";
         return 1;
     }
-    const auto pageSize = galay::utils::Memory::pageSize();
+    const auto pageSize = galay::utils::Memory::page_size();
     if (!pageSize || *pageSize == 0) {
         return 1;
     }
     static_assert(galay::utils::Numa::kMaxNodes > 0);
     static_assert(galay::utils::Memory::kMaxNodes > 0);
     galay::utils::CountingSemaphore semaphore(2);
-    if (!semaphore.tryAcquire(2)) {
+    if (!semaphore.try_acquire(2)) {
         std::cerr << "[t13] CountingSemaphore should be visible through galay_utils.hpp\n";
         return 1;
     }
-    if (semaphore.tryAcquire(1)) {
+    if (semaphore.try_acquire(1)) {
         std::cerr << "[t13] CountingSemaphore boundary should still enforce capacity\n";
         return 1;
     }
 
     galay::utils::TokenBucketLimiter limiter(0.0, 1);
-    if (!limiter.tryAcquire(1) || limiter.tryAcquire(1)) {
+    if (!limiter.try_acquire(1) || limiter.try_acquire(1)) {
         std::cerr << "[t13] TokenBucketLimiter should be visible and enforce capacity\n";
         return 1;
     }
@@ -40,11 +40,11 @@ int main()
     galay::utils::TypeRingBuffer<int> ring(2);
     int value = 7;
     if (ring.error() != galay::utils::TypeRingBufferError::kNone ||
-        !ring.tryWrite(std::move(value))) {
+        !ring.try_write(std::move(value))) {
         std::cerr << "[t13] TypeRingBuffer should be visible through galay_utils.hpp\n";
         return 1;
     }
-    auto received = ring.tryRead();
+    auto received = ring.try_read();
     if (!received.has_value() || *received != 7) {
         std::cerr << "[t13] TypeRingBuffer umbrella surface should preserve values\n";
         return 1;

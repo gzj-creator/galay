@@ -6,24 +6,24 @@ void test_system() {
 
     // File operations
     static std::atomic_uint64_t testPathCounter{0};
-    const std::string testSuffix = std::to_string(Time::currentTimeNs()) + "_" +
+    const std::string testSuffix = std::to_string(Time::current_time_ns()) + "_" +
                                    std::to_string(testPathCounter.fetch_add(1));
     std::string testFile = "/tmp/galay_test_file_" + testSuffix + ".txt";
-    assert(System::writeFile(testFile, "Hello, World!"));
-    assert(System::fileExists(testFile));
+    assert(System::write_file(testFile, "Hello, World!"));
+    assert(System::file_exists(testFile));
 
-    auto content = System::readFile(testFile);
+    auto content = System::read_file(testFile);
     assert(content.has_value());
     assert(*content == "Hello, World!");
 
-    assert(System::fileSize(testFile) == 13);
+    assert(System::file_size(testFile) == 13);
     assert(System::remove(testFile));
-    assert(!System::fileExists(testFile));
+    assert(!System::file_exists(testFile));
 
     // Directory
     std::string testDir = "/tmp/galay_test_dir_" + testSuffix;
-    assert(System::createDirectory(testDir));
-    assert(System::isDirectory(testDir));
+    assert(System::create_directory(testDir));
+    assert(System::is_directory(testDir));
     assert(System::remove(testDir));
 
     // System info
@@ -32,20 +32,20 @@ void test_system() {
         std::exit(1);
     }
     assert(!System::hostname().empty());
-    assert(!System::currentDir().empty());
+    assert(!System::current_dir().empty());
 
     std::cout << "  CPU count: " << CPU::count() << std::endl;
     std::cout << "  Hostname: " << System::hostname() << std::endl;
 
     // Edge cases for file operations
     // Reading non-existent file
-    auto nonExistent = System::readFile("/tmp/non_existent_file.txt");
+    auto nonExistent = System::read_file("/tmp/non_existent_file.txt");
     assert(!nonExistent.has_value());
 
     // Writing empty content
-    assert(System::writeFile("/tmp/empty_file.txt", ""));
-    assert(System::fileExists("/tmp/empty_file.txt"));
-    assert(System::fileSize("/tmp/empty_file.txt") == 0);
+    assert(System::write_file("/tmp/empty_file.txt", ""));
+    assert(System::file_exists("/tmp/empty_file.txt"));
+    assert(System::file_size("/tmp/empty_file.txt") == 0);
     System::remove("/tmp/empty_file.txt");
 
     std::cout << "System tests passed!" << std::endl;
@@ -56,10 +56,10 @@ void test_system() {
 void test_back_trace() {
     std::cout << "=== Testing BackTrace ===" << std::endl;
 
-    auto frames = BackTrace::getStackTrace(10, 0);
+    auto frames = BackTrace::get_stack_trace(10, 0);
     assert(!frames.empty());
 
-    std::string traceStr = BackTrace::getStackTraceString(5, 0);
+    std::string traceStr = BackTrace::get_stack_trace_string(5, 0);
     assert(!traceStr.empty());
 
     std::cout << "  Got " << frames.size() << " stack frames" << std::endl;
@@ -74,18 +74,18 @@ void test_signal_handler() {
     auto& handler = SignalHandler::instance();
 
     bool signalReceived = false;
-    handler.setHandler(SIGUSR1, [&signalReceived](int) {
+    handler.set_handler(SIGUSR1, [&signalReceived](int) {
         signalReceived = true;
     });
 
-    assert(handler.hasHandler(SIGUSR1));
+    assert(handler.has_handler(SIGUSR1));
 
     // Send signal to self
     raise(SIGUSR1);
     assert(signalReceived);
 
-    handler.removeHandler(SIGUSR1);
-    assert(!handler.hasHandler(SIGUSR1));
+    handler.remove_handler(SIGUSR1);
+    assert(!handler.has_handler(SIGUSR1));
 
     std::cout << "SignalHandler tests passed!" << std::endl;
 }
@@ -103,13 +103,13 @@ void test_process_priority_errors() {
     };
 
     for (ProcessPriorityError error : errors) {
-        assert(processPriorityErrorString(error)[0] != '\0');
+        assert(process_priority_error_string(error)[0] != '\0');
     }
 }
 
 void test_process_affinity() {
-    ProcessId pid = Process::currentId();
-    auto original = Process::cpuAffinity(pid);
+    ProcessId pid = Process::current_id();
+    auto original = Process::cpu_affinity(pid);
 
 #if !defined(_WIN32) && !defined(__linux__)
     if (original || original.error() != ProcessAffinityError::Unsupported) {
@@ -121,28 +121,28 @@ void test_process_affinity() {
     }
 
 #if defined(__linux__)
-    const auto current = CPU::cpuAffinity();
+    const auto current = CPU::cpu_affinity();
     if (!current || *current != *original) {
         std::cerr << "Process must enumerate the entire actual Linux mask\n";
         std::exit(1);
     }
 #endif
 
-    auto sameAffinity = Process::setCpuAffinity(pid, *original);
-    auto after = Process::cpuAffinity(pid);
+    auto sameAffinity = Process::set_cpu_affinity(pid, *original);
+    auto after = Process::cpu_affinity(pid);
     if (!sameAffinity || !after || *after != *original) {
         std::exit(1);
     }
 #endif
 
     const std::array<unsigned int, 0> empty{};
-    auto emptyResult = Process::setCpuAffinity(pid, empty);
+    auto emptyResult = Process::set_cpu_affinity(pid, empty);
     if (emptyResult || emptyResult.error() != ProcessAffinityError::EmptyCpuSet) {
         std::exit(1);
     }
 
     const std::array<unsigned int, 1> invalid{std::numeric_limits<unsigned>::max()};
-    auto invalidResult = Process::setCpuAffinity(pid, invalid);
+    auto invalidResult = Process::set_cpu_affinity(pid, invalid);
 #if defined(_WIN32) || defined(__linux__)
     if (invalidResult || invalidResult.error() != ProcessAffinityError::InvalidCpu) {
         std::exit(1);
@@ -162,7 +162,7 @@ void test_process_affinity() {
         ProcessAffinityError::SystemError,
     };
     for (ProcessAffinityError error : errors) {
-        assert(processAffinityErrorString(error)[0] != '\0');
+        assert(process_affinity_error_string(error)[0] != '\0');
     }
 }
 
@@ -170,34 +170,34 @@ void test_process() {
     std::cout << "=== Testing Process ===" << std::endl;
 
     // Current process info
-    ProcessId pid = Process::currentId();
+    ProcessId pid = Process::current_id();
     assert(pid > 0);
 
-    ProcessId ppid = Process::parentId();
+    ProcessId ppid = Process::parent_id();
     assert(ppid > 0);
 
     std::cout << "  Current PID: " << pid << std::endl;
     std::cout << "  Parent PID: " << ppid << std::endl;
 
     // Execute command
-    auto [status, output] = Process::executeWithOutput("echo hello");
+    auto [status, output] = Process::execute_with_output("echo hello");
     assert(status.success());
     assert(output.find("hello") != std::string::npos);
 
     // Check if process is running
-    assert(Process::isRunning(pid));
+    assert(Process::is_running(pid));
 
     auto priority = Process::priority(pid);
     assert(priority.has_value());
 
-    auto samePriority = Process::setPriority(pid, *priority);
+    auto samePriority = Process::set_priority(pid, *priority);
     assert(samePriority.has_value());
 
     auto updatedPriority = Process::priority(pid);
     assert(updatedPriority.has_value());
     assert(*updatedPriority == *priority);
 
-    auto invalidPriority = Process::setPriority(pid, 20);
+    auto invalidPriority = Process::set_priority(pid, 20);
     assert(!invalidPriority.has_value());
     assert(invalidPriority.error() == ProcessPriorityError::InvalidPriority);
 

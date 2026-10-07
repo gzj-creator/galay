@@ -37,10 +37,10 @@ AsyncFile::AsyncFile()
  */
 AsyncFile::~AsyncFile()
 {
-    releaseOwnedHandle();
+    release_owned_handle();
 }
 
-void AsyncFile::releaseOwnedHandle() noexcept
+void AsyncFile::release_owned_handle() noexcept
 {
     if (m_controller && m_controller->m_handle != GHandle::invalid()) {
         const int fd = std::exchange(m_controller->m_handle, GHandle::invalid()).fd;
@@ -69,7 +69,7 @@ AsyncFile::AsyncFile(AsyncFile&& other) noexcept
 AsyncFile& AsyncFile::operator=(AsyncFile&& other) noexcept
 {
     if (this != &other) {
-        releaseOwnedHandle();
+        release_owned_handle();
         m_controller = std::move(other.m_controller);
     }
     return *this;
@@ -106,7 +106,7 @@ void AsyncFile::adopt(int fd) noexcept
     if (!m_controller) {
         m_controller = std::make_unique<IOController>(GHandle::invalid());
     }
-    releaseOwnedHandle();
+    release_owned_handle();
     m_controller->m_handle.fd = fd;
 }
 

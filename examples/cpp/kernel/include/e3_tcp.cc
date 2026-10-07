@@ -39,10 +39,10 @@ std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_done{false};
 std::atomic<bool> g_ok{false};
 
-Task<void> tinyServer() {
+Task<void> tiny_server() {
     AsyncTcpSocket listener;
-    listener.option().handleReuseAddr();
-    listener.option().handleNonBlock();
+    listener.option().handle_reuse_addr();
+    listener.option().handle_non_block();
 
     if (!listener.bind(Host(IPType::IPV4, "127.0.0.1", kPort))) {
         g_done.store(true, std::memory_order_release);
@@ -64,7 +64,7 @@ Task<void> tinyServer() {
     }
 
     AsyncTcpSocket client(accepted.value());
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     char buffer[256]{};
     auto recvResult = co_await client.recv(buffer, sizeof(buffer));
@@ -78,13 +78,13 @@ Task<void> tinyServer() {
     co_await listener.close();
 }
 
-Task<void> tcpClient() {
+Task<void> tcp_client() {
     while (!g_server_ready.load(std::memory_order_acquire)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     AsyncTcpSocket socket;
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     auto connected = co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", kPort));
     if (!connected) {
@@ -116,8 +116,8 @@ int main() {
     IOSchedulerType scheduler;
     scheduler.start();
 
-    scheduleTask(scheduler, tinyServer());
-    scheduleTask(scheduler, tcpClient());
+    schedule_task(scheduler, tiny_server());
+    schedule_task(scheduler, tcp_client());
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!g_done.load(std::memory_order_acquire) &&

@@ -54,7 +54,7 @@ public:
      * @param value 整数值
      * @return LogFieldValue 实例
      */
-    [[nodiscard]] static constexpr LogFieldValue fromInt64(std::int64_t value) noexcept {
+    [[nodiscard]] static constexpr LogFieldValue from_int64(std::int64_t value) noexcept {
         return LogFieldValue(LogFieldType::kInt64, Storage(value));
     }
 
@@ -63,7 +63,7 @@ public:
      * @param value 无符号整数值
      * @return LogFieldValue 实例
      */
-    [[nodiscard]] static constexpr LogFieldValue fromUInt64(std::uint64_t value) noexcept {
+    [[nodiscard]] static constexpr LogFieldValue from_uint64(std::uint64_t value) noexcept {
         return LogFieldValue(LogFieldType::kUInt64, Storage(value));
     }
 
@@ -72,7 +72,7 @@ public:
      * @param value 浮点数值
      * @return LogFieldValue 实例
      */
-    [[nodiscard]] static constexpr LogFieldValue fromDouble(double value) noexcept {
+    [[nodiscard]] static constexpr LogFieldValue from_double(double value) noexcept {
         return LogFieldValue(LogFieldType::kDouble, Storage(value));
     }
 
@@ -81,7 +81,7 @@ public:
      * @param value 布尔值
      * @return LogFieldValue 实例
      */
-    [[nodiscard]] static constexpr LogFieldValue fromBool(bool value) noexcept {
+    [[nodiscard]] static constexpr LogFieldValue from_bool(bool value) noexcept {
         return LogFieldValue(LogFieldType::kBool, Storage(value));
     }
 
@@ -90,7 +90,7 @@ public:
      * @param value 字符串视图（须保持有效直到 write 返回）
      * @return LogFieldValue 实例
      */
-    [[nodiscard]] static constexpr LogFieldValue fromString(std::string_view value) noexcept {
+    [[nodiscard]] static constexpr LogFieldValue from_string(std::string_view value) noexcept {
         return LogFieldValue(LogFieldType::kString, Storage(value));
     }
 
@@ -105,35 +105,35 @@ public:
     /**
      * @brief 以 int64 获取值
      */
-    [[nodiscard]] constexpr std::int64_t asInt64() const noexcept {
+    [[nodiscard]] constexpr std::int64_t as_int64() const noexcept {
         return m_storage.int64Value;
     }
 
     /**
      * @brief 以 uint64 获取值
      */
-    [[nodiscard]] constexpr std::uint64_t asUInt64() const noexcept {
+    [[nodiscard]] constexpr std::uint64_t as_uint64() const noexcept {
         return m_storage.uint64Value;
     }
 
     /**
      * @brief 以 double 获取值
      */
-    [[nodiscard]] constexpr double asDouble() const noexcept {
+    [[nodiscard]] constexpr double as_double() const noexcept {
         return m_storage.doubleValue;
     }
 
     /**
      * @brief 以 bool 获取值
      */
-    [[nodiscard]] constexpr bool asBool() const noexcept {
+    [[nodiscard]] constexpr bool as_bool() const noexcept {
         return m_storage.boolValue;
     }
 
     /**
      * @brief 以 string_view 获取值
      */
-    [[nodiscard]] constexpr std::string_view asString() const noexcept {
+    [[nodiscard]] constexpr std::string_view as_string() const noexcept {
         return m_storage.stringValue;
     }
 
@@ -197,7 +197,7 @@ struct LogField {
  * @return LogField 键值对
  */
 [[nodiscard]] constexpr LogField field(std::string_view name, std::int64_t value) noexcept {
-    return LogField{.name = name, .value = LogFieldValue::fromInt64(value)};
+    return LogField{.name = name, .value = LogFieldValue::from_int64(value)};
 }
 
 /**
@@ -217,7 +217,7 @@ struct LogField {
  * @return LogField 键值对
  */
 [[nodiscard]] constexpr LogField field(std::string_view name, std::uint64_t value) noexcept {
-    return LogField{.name = name, .value = LogFieldValue::fromUInt64(value)};
+    return LogField{.name = name, .value = LogFieldValue::from_uint64(value)};
 }
 
 /**
@@ -227,7 +227,7 @@ struct LogField {
  * @return LogField 键值对
  */
 [[nodiscard]] constexpr LogField field(std::string_view name, double value) noexcept {
-    return LogField{.name = name, .value = LogFieldValue::fromDouble(value)};
+    return LogField{.name = name, .value = LogFieldValue::from_double(value)};
 }
 
 /**
@@ -237,7 +237,7 @@ struct LogField {
  * @return LogField 键值对
  */
 [[nodiscard]] constexpr LogField field(std::string_view name, bool value) noexcept {
-    return LogField{.name = name, .value = LogFieldValue::fromBool(value)};
+    return LogField{.name = name, .value = LogFieldValue::from_bool(value)};
 }
 
 /**
@@ -247,7 +247,7 @@ struct LogField {
  * @return LogField 键值对
  */
 [[nodiscard]] constexpr LogField field(std::string_view name, std::string_view value) noexcept {
-    return LogField{.name = name, .value = LogFieldValue::fromString(value)};
+    return LogField{.name = name, .value = LogFieldValue::from_string(value)};
 }
 
 /**

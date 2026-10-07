@@ -12,7 +12,7 @@ using galay::etcd::EtcdClient;
 namespace
 {
 
-std::string nowSuffix()
+std::string now_suffix()
 {
     const auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
     return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(now).count());
@@ -28,7 +28,7 @@ int fail(const std::string& message)
 
 int main(int argc, char** argv)
 {
-    if (const int skip_code = etcd_test::requireIntegrationEnabledOrSkip("etcd.pipe");
+    if (const int skip_code = etcd_test::require_integration_enabled_or_skip("etcd.pipe");
         skip_code != 0) {
         return skip_code;
     }
@@ -44,7 +44,7 @@ int main(int argc, char** argv)
         return fail("connect failed: " + conn.error().message());
     }
 
-    const std::string base = "/galay-etcd/pipeline/" + nowSuffix();
+    const std::string base = "/galay-etcd/pipeline/" + now_suffix();
     const std::string k1 = base + "/k1";
     const std::string k2 = base + "/k2";
     const std::string v1 = "seed";
@@ -56,9 +56,9 @@ int main(int argc, char** argv)
     }
 
     std::vector<EtcdClient::PipelineOp> ops;
-    ops.push_back(EtcdClient::PipelineOp::Get(k1));
-    ops.push_back(EtcdClient::PipelineOp::Put(k2, v2));
-    ops.push_back(EtcdClient::PipelineOp::Del(k1));
+    ops.push_back(EtcdClient::PipelineOp::get(k1));
+    ops.push_back(EtcdClient::PipelineOp::put(k2, v2));
+    ops.push_back(EtcdClient::PipelineOp::del(k1));
 
     auto pipeline = session.pipeline(std::move(ops));
     if (!pipeline.has_value()) {

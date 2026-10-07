@@ -18,18 +18,18 @@ namespace galay::mpsc {
 
 struct BoundedChannelTestAccess
 {
-    static size_t normalizeCapacity(size_t capacity) noexcept
+    static size_t normalize_capacity(size_t capacity) noexcept
     {
-        return BoundedChannel<int>::normalizeCapacity(capacity);
+        return BoundedChannel<int>::normalize_capacity(capacity);
     }
 
-    static constexpr size_t maxRingCapacity() noexcept
+    static constexpr size_t max_ring_capacity() noexcept
     {
         return BoundedChannel<int>::kMaxRingCapacity;
     }
 
     template <BoundedValue T>
-    static void seedEmptyPosition(BoundedChannel<T>& channel, size_t position)
+    static void seed_empty_position(BoundedChannel<T>& channel, size_t position)
     {
         channel.m_head.store(position, std::memory_order_relaxed);
         channel.m_tail.store(position, std::memory_order_relaxed);
@@ -45,52 +45,52 @@ struct BoundedChannelTestAccess
     }
 
     template <BoundedValue T>
-    static size_t tailPosition(const BoundedChannel<T>& channel) noexcept
+    static size_t tail_position(const BoundedChannel<T>& channel) noexcept
     {
         return channel.m_tail.load(std::memory_order_acquire) &
             BoundedChannel<T>::kTailPositionMask;
     }
 
     template <BoundedValue T>
-    static void* rawStorageAddress(BoundedChannel<T>& channel, size_t index) noexcept
+    static void* raw_storage_address(BoundedChannel<T>& channel, size_t index) noexcept
     {
-        return channel.m_slots[index].rawStorage();
+        return channel.m_slots[index].raw_storage();
     }
 
     template <BoundedValue T>
-    static T* liveValueAddress(BoundedChannel<T>& channel, size_t index) noexcept
+    static T* live_value_address(BoundedChannel<T>& channel, size_t index) noexcept
     {
         return channel.m_slots[index].value();
     }
 
     template <BoundedValue T>
-    static bool enqueueRecvWaiter(
+    static bool enqueue_recv_waiter(
         BoundedChannel<T>& channel,
         const std::shared_ptr<bounded_detail::ChannelWaiter<T>>& waiter) noexcept
     {
-        return channel.enqueueWaiter(channel.m_recvWaiters,
+        return channel.enqueue_waiter(channel.m_recvWaiters,
                                      channel.m_recvWaiterCount,
                                      waiter);
     }
 
     template <BoundedValue T>
-    static bool enqueueSendWaiter(
+    static bool enqueue_send_waiter(
         BoundedChannel<T>& channel,
         const std::shared_ptr<bounded_detail::ChannelWaiter<T>>& waiter) noexcept
     {
-        return channel.enqueueWaiter(channel.m_sendWaiters,
+        return channel.enqueue_waiter(channel.m_sendWaiters,
                                      channel.m_sendWaiterCount,
                                      waiter);
     }
 
     template <BoundedValue T>
-    static size_t recvWaiterCount(const BoundedChannel<T>& channel) noexcept
+    static size_t recv_waiter_count(const BoundedChannel<T>& channel) noexcept
     {
         return channel.m_recvWaiterCount.load(std::memory_order_seq_cst);
     }
 
     template <BoundedValue T>
-    static size_t sendWaiterCount(const BoundedChannel<T>& channel) noexcept
+    static size_t send_waiter_count(const BoundedChannel<T>& channel) noexcept
     {
         return channel.m_sendWaiterCount.load(std::memory_order_seq_cst);
     }
@@ -142,68 +142,68 @@ struct TrackedValue
     }
 };
 
-bool runCapacityNormalization()
+bool run_capacity_normalization()
 {
     const size_t maxCapacity =
-        galay::mpsc::BoundedChannelTestAccess::maxRingCapacity();
-    return galay::mpsc::BoundedChannelTestAccess::normalizeCapacity(0) == 2 &&
-        galay::mpsc::BoundedChannelTestAccess::normalizeCapacity(3) == 4 &&
-        galay::mpsc::BoundedChannelTestAccess::normalizeCapacity(
+        galay::mpsc::BoundedChannelTestAccess::max_ring_capacity();
+    return galay::mpsc::BoundedChannelTestAccess::normalize_capacity(0) == 2 &&
+        galay::mpsc::BoundedChannelTestAccess::normalize_capacity(3) == 4 &&
+        galay::mpsc::BoundedChannelTestAccess::normalize_capacity(
             maxCapacity - 1) == maxCapacity &&
-        galay::mpsc::BoundedChannelTestAccess::normalizeCapacity(maxCapacity) ==
+        galay::mpsc::BoundedChannelTestAccess::normalize_capacity(maxCapacity) ==
             maxCapacity &&
-        galay::mpsc::BoundedChannelTestAccess::normalizeCapacity(
+        galay::mpsc::BoundedChannelTestAccess::normalize_capacity(
             maxCapacity + 1) == maxCapacity;
 }
 
-bool runStorageLifetimeAccess()
+bool run_storage_lifetime_access()
 {
     galay::mpsc::BoundedChannel<TrackedValue> channel(2);
     TrackedValue input(17);
-    if (!channel.trySend(std::move(input))) {
+    if (!channel.try_send(std::move(input))) {
         return false;
     }
     void* const raw =
-        galay::mpsc::BoundedChannelTestAccess::rawStorageAddress(channel, 0);
+        galay::mpsc::BoundedChannelTestAccess::raw_storage_address(channel, 0);
     TrackedValue* const live =
-        galay::mpsc::BoundedChannelTestAccess::liveValueAddress(channel, 0);
-    auto received = channel.tryRecv();
+        galay::mpsc::BoundedChannelTestAccess::live_value_address(channel, 0);
+    auto received = channel.try_recv();
     return raw == static_cast<void*>(live) && received.has_value() &&
         received->value == 17;
 }
 
-bool runPerProducerRings()
+bool run_per_producer_rings()
 {
     using Channel = galay::mpsc::BoundedChannel<TrackedValue>;
     Channel zeroProducers(8, 0);
     Channel tooManyProducers(2, 3);
-    if (!zeroProducers.isClosed() || !tooManyProducers.isClosed() ||
-        zeroProducers.makeProducerToken().valid() ||
-        tooManyProducers.makeProducerToken().valid()) {
+    if (!zeroProducers.is_closed() || !tooManyProducers.is_closed() ||
+        zeroProducers.make_producer_token().valid() ||
+        tooManyProducers.make_producer_token().valid()) {
         return false;
     }
 
     Channel channel(8, 2);
-    auto first = channel.makeProducerToken();
-    auto second = channel.makeProducerToken();
-    auto extra = channel.makeProducerToken();
+    auto first = channel.make_producer_token();
+    auto second = channel.make_producer_token();
+    auto extra = channel.make_producer_token();
     if (!first.valid() || !second.valid() || extra.valid() ||
         channel.capacity() != 8) {
         return false;
     }
 
     for (int value = 0; value < 4; ++value) {
-        TrackedValue firstValue(value);
+        TrackedValue first_value(value);
         TrackedValue secondValue(100 + value);
-        if (!channel.trySend(first, std::move(firstValue)) ||
-            !channel.trySend(second, std::move(secondValue))) {
+        if (!channel.try_send(first, std::move(first_value)) ||
+            !channel.try_send(second, std::move(secondValue))) {
             return false;
         }
     }
     TrackedValue fullValue(9);
     TrackedValue directValue(10);
-    if (channel.trySend(first, std::move(fullValue)) || fullValue.value != 9 ||
-        channel.trySend(std::move(directValue)) || directValue.value != 10 ||
+    if (channel.try_send(first, std::move(fullValue)) || fullValue.value != 9 ||
+        channel.try_send(std::move(directValue)) || directValue.value != 10 ||
         channel.size() != 8 || !channel.full()) {
         return false;
     }
@@ -221,14 +221,14 @@ bool runPerProducerRings()
 
     channel.close();
     TrackedValue closedValue(11);
-    if (channel.trySend(second, std::move(closedValue)) ||
+    if (channel.try_send(second, std::move(closedValue)) ||
         closedValue.value != 11) {
         return false;
     }
 
     std::array<int, 2> expected{0, 100};
     for (size_t received = 0; received < 8; ++received) {
-        auto value = channel.tryRecv();
+        auto value = channel.try_recv();
         if (!value.has_value()) {
             return false;
         }
@@ -237,17 +237,17 @@ bool runPerProducerRings()
             return false;
         }
     }
-    return channel.empty() && !channel.tryRecv().has_value();
+    return channel.empty() && !channel.try_recv().has_value();
 }
 
-bool runConcurrentPerProducerRings()
+bool run_concurrent_per_producer_rings()
 {
     using Channel = galay::mpsc::BoundedChannel<uint64_t>;
     constexpr size_t kProducerCount = 2;
     constexpr uint64_t kMessagesPerProducer = 20'000;
     Channel channel(1024, kProducerCount);
     std::array<Channel::ProducerToken, kProducerCount> tokens{
-        channel.makeProducerToken(), channel.makeProducerToken()};
+        channel.make_producer_token(), channel.make_producer_token()};
     if (!tokens[0].valid() || !tokens[1].valid()) {
         return false;
     }
@@ -262,7 +262,7 @@ bool runConcurrentPerProducerRings()
                  ++sequence) {
                 uint64_t value =
                     (static_cast<uint64_t>(producer) << 32U) | sequence;
-                while (!channel.trySend(tokens[producer], std::move(value))) {
+                while (!channel.try_send(tokens[producer], std::move(value))) {
                     std::this_thread::yield();
                 }
             }
@@ -275,7 +275,7 @@ bool runConcurrentPerProducerRings()
     uint64_t received = 0;
     bool fifoOk = true;
     while (received < kProducerCount * kMessagesPerProducer) {
-        auto value = channel.tryRecv();
+        auto value = channel.try_recv();
         if (!value.has_value()) {
             std::this_thread::yield();
             continue;
@@ -296,80 +296,80 @@ bool runConcurrentPerProducerRings()
     return fifoOk && channel.empty();
 }
 
-bool runActiveWaiterAccounting()
+bool run_active_waiter_accounting()
 {
     galay::mpsc::BoundedChannel<int> recvChannel(2);
     auto recvWaiter =
         std::make_shared<galay::mpsc::bounded_detail::ChannelWaiter<int>>(
             galay::kernel::Waker());
-    if (!galay::mpsc::BoundedChannelTestAccess::enqueueRecvWaiter(
+    if (!galay::mpsc::BoundedChannelTestAccess::enqueue_recv_waiter(
             recvChannel, recvWaiter) ||
-        galay::mpsc::BoundedChannelTestAccess::recvWaiterCount(recvChannel) !=
+        galay::mpsc::BoundedChannelTestAccess::recv_waiter_count(recvChannel) !=
             1 ||
-        !recvChannel.trySend(21) ||
+        !recvChannel.try_send(21) ||
         recvWaiter->state.load(std::memory_order_acquire) !=
             galay::mpsc::bounded_detail::WaiterState::kFulfilled ||
         !recvWaiter->value.has_value() || *recvWaiter->value != 21 ||
-        galay::mpsc::BoundedChannelTestAccess::recvWaiterCount(recvChannel) !=
+        galay::mpsc::BoundedChannelTestAccess::recv_waiter_count(recvChannel) !=
             0 ||
         !recvChannel.empty()) {
         return false;
     }
 
     galay::mpsc::BoundedChannel<int> sendChannel(2);
-    if (!sendChannel.trySend(31) || !sendChannel.trySend(32)) {
+    if (!sendChannel.try_send(31) || !sendChannel.try_send(32)) {
         return false;
     }
     auto sendWaiter =
         std::make_shared<galay::mpsc::bounded_detail::ChannelWaiter<int>>(
             galay::kernel::Waker());
     sendWaiter->value.emplace(33);
-    if (!galay::mpsc::BoundedChannelTestAccess::enqueueSendWaiter(
+    if (!galay::mpsc::BoundedChannelTestAccess::enqueue_send_waiter(
             sendChannel, sendWaiter) ||
-        galay::mpsc::BoundedChannelTestAccess::sendWaiterCount(sendChannel) !=
+        galay::mpsc::BoundedChannelTestAccess::send_waiter_count(sendChannel) !=
             1) {
         return false;
     }
-    auto first = sendChannel.tryRecv();
-    auto rest = sendChannel.tryRecvBatch(2);
+    auto first = sendChannel.try_recv();
+    auto rest = sendChannel.try_recv_batch(2);
     return first.has_value() && *first == 31 && rest.has_value() &&
         rest->size() == 2 && (*rest)[0] == 32 && (*rest)[1] == 33 &&
         sendWaiter->state.load(std::memory_order_acquire) ==
             galay::mpsc::bounded_detail::WaiterState::kFulfilled &&
         !sendWaiter->value.has_value() &&
-        galay::mpsc::BoundedChannelTestAccess::sendWaiterCount(sendChannel) ==
+        galay::mpsc::BoundedChannelTestAccess::send_waiter_count(sendChannel) ==
             0;
 }
 
-bool runTailCloseBitBoundary()
+bool run_tail_close_bit_boundary()
 {
     constexpr size_t kPositionMask =
         (size_t{1} << (sizeof(size_t) * 8U - 1U)) - 1U;
 
     galay::mpsc::BoundedChannel<TrackedValue> lastReservation(2);
-    galay::mpsc::BoundedChannelTestAccess::seedEmptyPosition(
+    galay::mpsc::BoundedChannelTestAccess::seed_empty_position(
         lastReservation, kPositionMask - 1U);
     TrackedValue finalValue(91);
-    if (!lastReservation.trySend(std::move(finalValue)) ||
-        lastReservation.isClosed() || finalValue.value != -1 ||
-        galay::mpsc::BoundedChannelTestAccess::tailPosition(lastReservation) !=
+    if (!lastReservation.try_send(std::move(finalValue)) ||
+        lastReservation.is_closed() || finalValue.value != -1 ||
+        galay::mpsc::BoundedChannelTestAccess::tail_position(lastReservation) !=
             kPositionMask) {
         return false;
     }
     lastReservation.close();
-    auto received = lastReservation.tryRecv();
-    if (!lastReservation.isClosed() || !received.has_value() ||
+    auto received = lastReservation.try_recv();
+    if (!lastReservation.is_closed() || !received.has_value() ||
         received->value != 91 || !lastReservation.empty()) {
         return false;
     }
 
     galay::mpsc::BoundedChannel<TrackedValue> exhausted(2);
-    galay::mpsc::BoundedChannelTestAccess::seedEmptyPosition(exhausted,
+    galay::mpsc::BoundedChannelTestAccess::seed_empty_position(exhausted,
                                                             kPositionMask);
     TrackedValue rejected(92);
-    return !exhausted.trySend(std::move(rejected)) && rejected.value == 92 &&
-        exhausted.isClosed() && exhausted.tryRecv() == std::nullopt &&
-        galay::mpsc::BoundedChannelTestAccess::tailPosition(exhausted) ==
+    return !exhausted.try_send(std::move(rejected)) && rejected.value == 92 &&
+        exhausted.is_closed() && exhausted.try_recv() == std::nullopt &&
+        galay::mpsc::BoundedChannelTestAccess::tail_position(exhausted) ==
             kPositionMask;
 }
 
@@ -377,27 +377,27 @@ bool runTailCloseBitBoundary()
 
 int main()
 {
-    if (!runCapacityNormalization()) {
+    if (!run_capacity_normalization()) {
         std::cerr << "[T163] MPSC bounded capacity normalization failed\n";
         return 1;
     }
-    if (!runStorageLifetimeAccess()) {
+    if (!run_storage_lifetime_access()) {
         std::cerr << "[T163] MPSC bounded slot lifetime access failed\n";
         return 1;
     }
-    if (!runPerProducerRings()) {
+    if (!run_per_producer_rings()) {
         std::cerr << "[T163] MPSC bounded per-producer ring failed\n";
         return 1;
     }
-    if (!runConcurrentPerProducerRings()) {
+    if (!run_concurrent_per_producer_rings()) {
         std::cerr << "[T163] MPSC bounded concurrent per-producer ring failed\n";
         return 1;
     }
-    if (!runActiveWaiterAccounting()) {
+    if (!run_active_waiter_accounting()) {
         std::cerr << "[T163] MPSC bounded active waiter accounting failed\n";
         return 1;
     }
-    if (!runTailCloseBitBoundary()) {
+    if (!run_tail_close_bit_boundary()) {
         std::cerr << "[T163] MPSC bounded tail exhaustion hardening failed\n";
         return 1;
     }

@@ -25,16 +25,16 @@ std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_server_done{false};
 std::atomic<bool> g_client_done{false};
 
-Task<void> echoServer() {
+Task<void> echo_server() {
     AsyncTcpSocket listener;
 
-    auto optResult = listener.option().handleReuseAddr();
+    auto optResult = listener.option().handle_reuse_addr();
     if (!optResult) {
         g_server_done.store(true, std::memory_order_release);
         co_return;
     }
 
-    optResult = listener.option().handleNonBlock();
+    optResult = listener.option().handle_non_block();
     if (!optResult) {
         g_server_done.store(true, std::memory_order_release);
         co_return;
@@ -63,7 +63,7 @@ Task<void> echoServer() {
     }
 
     AsyncTcpSocket client(accepted.value());
-    optResult = client.option().handleNonBlock();
+    optResult = client.option().handle_non_block();
     if (!optResult) {
         co_await client.close();
         co_await listener.close();
@@ -86,13 +86,13 @@ Task<void> echoServer() {
     g_server_done.store(true, std::memory_order_release);
 }
 
-Task<void> echoClient() {
+Task<void> echo_client() {
     while (!g_server_ready.load(std::memory_order_acquire)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     AsyncTcpSocket socket;
-    auto optResult = socket.option().handleNonBlock();
+    auto optResult = socket.option().handle_non_block();
     if (!optResult) {
         g_client_done.store(true, std::memory_order_release);
         co_return;
@@ -124,12 +124,12 @@ Task<void> echoClient() {
 }  // namespace
 
 int main() {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
-    auto* io = runtime.getNextIOScheduler();
-    scheduleTask(io, echoServer());
-    scheduleTask(io, echoClient());
+    auto* io = runtime.get_next_io_scheduler();
+    schedule_task(io, echo_server());
+    schedule_task(io, echo_client());
 
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while ((!g_server_done.load(std::memory_order_acquire) ||

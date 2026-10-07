@@ -42,7 +42,7 @@ public:
     };
 
     /** @brief 返回以字节计的系统基础页大小（非 huge page 大小），必须为正数。 */
-    [[nodiscard]] static std::expected<std::size_t, std::error_code> pageSize()
+    [[nodiscard]] static std::expected<std::size_t, std::error_code> page_size()
     {
 #if defined(__linux__) || defined(__APPLE__)
         errno = 0;
@@ -66,7 +66,7 @@ public:
     }
 
     /** @brief 读取调用线程当前的默认内存策略。 */
-    [[nodiscard]] static std::expected<PolicyState, std::error_code> numaPolicy()
+    [[nodiscard]] static std::expected<PolicyState, std::error_code> numa_policy()
     {
 #if defined(__linux__)
         NodeMask mask{};
@@ -75,7 +75,7 @@ public:
                     static_cast<unsigned long>(kMaxNodes), nullptr, 0UL) != 0) {
             return std::unexpected(std::error_code(errno, std::generic_category()));
         }
-        state.nodes = nodesFromMask(mask);
+        state.nodes = nodes_from_mask(mask);
         return state;
 #else
         return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
@@ -87,7 +87,7 @@ public:
      * @details Default 要求空节点集；Bind 和 Interleave 要求非空节点集。
      */
     [[nodiscard]] static std::expected<void, std::error_code>
-    setNumaPolicy(Policy policy, std::span<const unsigned> nodes)
+    set_numa_policy(Policy policy, std::span<const unsigned> nodes)
     {
 #if defined(__linux__)
         if ((policy != Policy::Default && policy != Policy::Bind &&
@@ -96,7 +96,7 @@ public:
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
         }
 #endif
-        return setNativeNumaPolicy(static_cast<int>(policy), nodes);
+        return set_native_numa_policy(static_cast<int>(policy), nodes);
     }
 
     /**
@@ -106,14 +106,14 @@ public:
      *          节点/cpuset 变化或内核权限限制可能导致恢复失败，必须检查结果。
      */
     [[nodiscard]] static std::expected<void, std::error_code>
-    restoreNumaPolicy(const PolicyState& state)
+    restore_numa_policy(const PolicyState& state)
     {
-        return setNativeNumaPolicy(state.native_mode, state.nodes);
+        return set_native_numa_policy(state.native_mode, state.nodes);
     }
 
 private:
     [[nodiscard]] static std::expected<void, std::error_code>
-    setNativeNumaPolicy(int nativeMode, std::span<const unsigned> nodes)
+    set_native_numa_policy(int nativeMode, std::span<const unsigned> nodes)
     {
 #if defined(__linux__)
         const int mode = nativeMode & ~MPOL_MODE_FLAGS;
@@ -155,7 +155,7 @@ private:
     static constexpr unsigned kWordBits = sizeof(unsigned long) * 8;
     using NodeMask = std::array<unsigned long, kMaxNodes / kWordBits>;
 
-    static std::vector<unsigned> nodesFromMask(const NodeMask& mask)
+    static std::vector<unsigned> nodes_from_mask(const NodeMask& mask)
     {
         std::vector<unsigned> nodes;
         for (unsigned node = 0; node < kMaxNodes; ++node) {

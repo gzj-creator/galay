@@ -99,7 +99,7 @@ struct ByteMetaData {
  * @return Metadata with size 0 and capacity `length`; empty when length is 0
  * @throws std::bad_alloc when allocation fails
  */
-inline ByteMetaData mallocBytes(size_t length) {
+inline ByteMetaData malloc_bytes(size_t length) {
     ByteMetaData meta;
     if (length == 0) {
         return meta;
@@ -120,8 +120,8 @@ inline ByteMetaData mallocBytes(size_t length) {
  * @return New metadata owning an independent allocation
  * @throws std::bad_alloc when allocation fails
  */
-inline ByteMetaData deepCopyBytes(const ByteMetaData& meta) {
-    ByteMetaData copy = mallocBytes(meta.capacity);
+inline ByteMetaData deep_copy_bytes(const ByteMetaData& meta) {
+    ByteMetaData copy = malloc_bytes(meta.capacity);
     copy.size = std::min(meta.size, copy.capacity);
     if (copy.data != nullptr && meta.data != nullptr && copy.size > 0) {
         std::memcpy(copy.data, meta.data, copy.size);
@@ -135,7 +135,7 @@ inline ByteMetaData deepCopyBytes(const ByteMetaData& meta) {
  * @param length New capacity; 0 frees and resets the metadata
  * @throws std::bad_alloc when allocation fails
  */
-inline void reallocBytes(ByteMetaData& meta, size_t length) {
+inline void realloc_bytes(ByteMetaData& meta, size_t length) {
     if (length == 0) {
         if (meta.data != nullptr) {
             std::free(meta.data);
@@ -162,7 +162,7 @@ inline void reallocBytes(ByteMetaData& meta, size_t length) {
  * @brief Clear bytes without freeing allocated storage
  * @param meta Metadata whose storage should be zeroed and marked empty
  */
-inline void clearBytes(ByteMetaData& meta) noexcept {
+inline void clear_bytes(ByteMetaData& meta) noexcept {
     if (meta.data != nullptr && meta.capacity > 0) {
         std::memset(meta.data, 0, meta.capacity);
     }
@@ -173,7 +173,7 @@ inline void clearBytes(ByteMetaData& meta) noexcept {
  * @brief Free raw byte metadata storage and reset all fields
  * @param meta Metadata to release
  */
-inline void freeBytes(ByteMetaData& meta) noexcept {
+inline void free_bytes(ByteMetaData& meta) noexcept {
     if (meta.data != nullptr) {
         std::free(meta.data);
     }
@@ -184,8 +184,8 @@ inline void freeBytes(ByteMetaData& meta) noexcept {
 
 /**
  * @brief Move-only byte sequence container with optional ownership
- * @details Owning constructors deep-copy source bytes. `fromString()` and
- *          `fromCString()` create non-owning views, so the backing storage must
+ * @details Owning constructors deep-copy source bytes. `from_string()` and
+ *          `from_c_string()` create non-owning views, so the backing storage must
  *          outlive the returned `Bytes` object.
  */
 class Bytes {
@@ -229,7 +229,7 @@ public:
      * @param length Number of bytes to copy
      */
     Bytes(const char* str, size_t length) {
-        assignOwned(reinterpret_cast<const uint8_t*>(str), length);
+        assign_owned(reinterpret_cast<const uint8_t*>(str), length);
     }
 
     /**
@@ -238,7 +238,7 @@ public:
      * @param length Number of bytes to copy
      */
     Bytes(const uint8_t* str, size_t length) {
-        assignOwned(str, length);
+        assign_owned(str, length);
     }
 
     /**
@@ -246,7 +246,7 @@ public:
      * @param capacity Number of bytes to allocate
      */
     explicit Bytes(size_t capacity)
-        : m_meta(mallocBytes(capacity))
+        : m_meta(malloc_bytes(capacity))
         , m_owned(capacity > 0) {}
 
     /**
@@ -298,7 +298,7 @@ public:
      * @param str Source string that must outlive the returned object
      * @return Non-owning byte container
      */
-    static Bytes fromString(std::string& str) noexcept {
+    static Bytes from_string(std::string& str) noexcept {
         Bytes bytes;
         bytes.m_meta = ByteMetaData(str);
         bytes.m_owned = false;
@@ -310,7 +310,7 @@ public:
      * @param str Source view whose backing storage must outlive the returned object
      * @return Non-owning byte container
      */
-    static Bytes fromString(std::string_view str) noexcept {
+    static Bytes from_string(std::string_view str) noexcept {
         Bytes bytes;
         bytes.m_meta = ByteMetaData(str);
         bytes.m_owned = false;
@@ -324,7 +324,7 @@ public:
      * @param capacity Total available capacity
      * @return Non-owning byte container
      */
-    static Bytes fromCString(const char* str, size_t length, size_t capacity) noexcept {
+    static Bytes from_c_string(const char* str, size_t length, size_t capacity) noexcept {
         Bytes bytes;
         bytes.m_meta.data = reinterpret_cast<uint8_t*>(const_cast<char*>(str));
         bytes.m_meta.size = str == nullptr ? 0 : length;
@@ -386,7 +386,7 @@ public:
      */
     void clear() noexcept {
         if (m_owned) {
-            freeBytes(m_meta);
+            free_bytes(m_meta);
         } else {
             reset();
         }
@@ -396,7 +396,7 @@ public:
      * @brief Copy readable bytes into a string
      * @return String containing current bytes
      */
-    [[nodiscard]] std::string toString() const {
+    [[nodiscard]] std::string to_string() const {
         if (m_meta.data == nullptr || m_meta.size == 0) {
             return {};
         }
@@ -407,7 +407,7 @@ public:
      * @brief View readable bytes as a string view
      * @return Non-owning view into current bytes
      */
-    [[nodiscard]] std::string_view toStringView() const noexcept {
+    [[nodiscard]] std::string_view to_string_view() const noexcept {
         if (m_meta.data == nullptr || m_meta.size == 0) {
             return {};
         }
@@ -445,13 +445,13 @@ public:
     }
 
 private:
-    void assignOwned(const uint8_t* data, size_t length) {
+    void assign_owned(const uint8_t* data, size_t length) {
         if (data == nullptr || length == 0) {
             reset();
             return;
         }
 
-        m_meta = mallocBytes(length + 1);
+        m_meta = malloc_bytes(length + 1);
         m_meta.capacity = length;
         std::memcpy(m_meta.data, data, length);
         m_meta.size = length;

@@ -26,7 +26,7 @@ std::atomic<bool> g_send_failed{false};
 std::atomic<int64_t> g_received{0};
 std::atomic<int64_t> g_sum{0};
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 3000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -39,14 +39,14 @@ bool waitUntil(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-Task<void> batchConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel) {
+Task<void> batch_consumer(galay::mpsc::UnboundedChannel<int64_t>* channel) {
     int64_t received = 0;
     int64_t sum = 0;
     while (received < kMessageCount) {
-        auto batch = co_await channel->recvBatch(256);
+        auto batch = co_await channel->recv_batch(256);
         if (!batch) {
             if (g_send_failed.load(std::memory_order_acquire) ||
-                channel->isClosed()) {
+                channel->is_closed()) {
                 g_done.store(true, std::memory_order_release);
                 co_return;
             }
@@ -75,7 +75,7 @@ int main() {
         return 1;
     }
     const bool scheduled = scheduler.schedule(
-        detail::TaskAccess::detachTask(batchConsumer(&channel)));
+        detail::TaskAccess::detach_task(batch_consumer(&channel)));
     if (!scheduled) {
         scheduler.stop();
         std::cerr << "[T32] failed to schedule batch consumer\n";
@@ -86,7 +86,7 @@ int main() {
         for (int64_t i = 0; i < kMessageCount; ++i) {
             if (!channel.send(i)) {
                 g_send_failed.store(true, std::memory_order_release);
-                if (!channel.close() && !channel.isClosed()) {
+                if (!channel.close() && !channel.is_closed()) {
                     g_send_failed.store(true, std::memory_order_release);
                 }
                 break;
@@ -94,12 +94,12 @@ int main() {
         }
     });
 
-    const bool done = waitUntil(g_done);
+    const bool done = wait_until(g_done);
     producer.join();
     scheduler.stop();
 
     if (!done) {
-        const auto tail = channel.tryRecvBatch(256);
+        const auto tail = channel.try_recv_batch(256);
         std::cerr << "[T32] batch consumer did not make progress to completion, send_failed="
                   << g_send_failed.load(std::memory_order_acquire)
                   << " received="

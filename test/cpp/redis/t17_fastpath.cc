@@ -31,7 +31,7 @@ void finish(TestState& state, bool success, std::string message)
     state.cv.notify_one();
 }
 
-Task<void> runBorrowedCommandSmoke(IOScheduler* scheduler, TestState* state)
+Task<void> run_borrowed_command_smoke(IOScheduler* scheduler, TestState* state)
 {
     auto client = RedisClientBuilder().scheduler(scheduler).build();
     protocol::RespEncoder encoder;
@@ -49,32 +49,32 @@ Task<void> runBorrowedCommandSmoke(IOScheduler* scheduler, TestState* state)
 
     const std::array<std::string_view, 2> set_args{key, value};
     set_encoded.clear();
-    set_encoded.reserve(encoder.estimateCommandBytes("SET", set_args));
+    set_encoded.reserve(encoder.estimate_command_bytes("SET", set_args));
     encoder.append(set_encoded, "SET", set_args);
     RedisBorrowedCommand set_packet(set_encoded, 1);
-    auto set_result = co_await client.commandBorrowed(set_packet).timeout(5s);
+    auto set_result = co_await client.command_borrowed(set_packet).timeout(5s);
     if (!set_result || !set_result.value() || set_result.value()->empty()) {
         finish(*state, false, "borrowed SET failed");
         co_return;
     }
-    if (!(*set_result.value())[0].isStatus() ||
-        (*set_result.value())[0].toStatus() != "OK") {
+    if (!(*set_result.value())[0].is_status() ||
+        (*set_result.value())[0].to_status() != "OK") {
         finish(*state, false, "borrowed SET returned unexpected reply");
         co_return;
     }
 
     const std::array<std::string_view, 1> get_args{key};
     get_encoded.clear();
-    get_encoded.reserve(encoder.estimateCommandBytes("GET", get_args));
+    get_encoded.reserve(encoder.estimate_command_bytes("GET", get_args));
     encoder.append(get_encoded, "GET", get_args);
     RedisBorrowedCommand get_packet(get_encoded, 1);
-    auto get_result = co_await client.commandBorrowed(get_packet).timeout(5s);
+    auto get_result = co_await client.command_borrowed(get_packet).timeout(5s);
     if (!get_result || !get_result.value() || get_result.value()->empty()) {
         finish(*state, false, "borrowed GET failed");
         co_return;
     }
-    if (!(*get_result.value())[0].isString() ||
-        (*get_result.value())[0].toString() != value) {
+    if (!(*get_result.value())[0].is_string() ||
+        (*get_result.value())[0].to_string() != value) {
         finish(*state, false, "borrowed GET returned wrong value");
         co_return;
     }
@@ -87,15 +87,15 @@ Task<void> runBorrowedCommandSmoke(IOScheduler* scheduler, TestState* state)
 
 int main()
 {
-    if (const int skip_code = redis_test::requireIntegrationEnabledOrSkip("redis.t22.fastpath");
+    if (const int skip_code = redis_test::require_integration_enabled_or_skip("redis.t22.fastpath");
         skip_code != 0) {
         return skip_code;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "Failed to get IO scheduler\n";
         runtime.stop();
@@ -103,7 +103,7 @@ int main()
     }
 
     TestState state;
-    scheduleTask(scheduler, runBorrowedCommandSmoke(scheduler, &state));
+    schedule_task(scheduler, run_borrowed_command_smoke(scheduler, &state));
 
     std::unique_lock<std::mutex> lock(state.mutex);
     const bool done = state.cv.wait_for(lock, 10s, [&state]() { return state.done; });

@@ -76,26 +76,26 @@ public:
     }
 };
 
-galay::tracing::TraceContext makeContext(std::string spanId = "00f067aa0ba902b7") {
+galay::tracing::TraceContext make_context(std::string spanId = "00f067aa0ba902b7") {
     auto context = galay::tracing::TraceContext(
-        galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
-        galay::tracing::SpanId::fromHex(spanId),
+        galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"),
+        galay::tracing::SpanId::from_hex(spanId),
         0x01,
         "vendor=value");
-    context.setParentSpanId(galay::tracing::SpanId::fromHex("1111111111111111"));
+    context.set_parent_span_id(galay::tracing::SpanId::from_hex("1111111111111111"));
     return context;
 }
 
-void spanCloneDuplicatesOwnedState() {
-    galay::tracing::Span span("operation", makeContext());
-    span.setKind(galay::tracing::SpanKind::kClient);
-    span.setStatus(galay::tracing::SpanStatusCode::kError, "timeout");
-    assert(span.setAttribute("http.method", "GET"));
-    assert(span.addEvent("retry", {galay::tracing::spanAttribute("attempt", 1)}));
-    assert(span.addLink(
-        galay::tracing::SpanContext(makeContext("2222222222222222")),
+void span_clone_duplicates_owned_state() {
+    galay::tracing::Span span("operation", make_context());
+    span.set_kind(galay::tracing::SpanKind::kClient);
+    span.set_status(galay::tracing::SpanStatusCode::kError, "timeout");
+    assert(span.set_attribute("http.method", "GET"));
+    assert(span.add_event("retry", {galay::tracing::span_attribute("attempt", 1)}));
+    assert(span.add_link(
+        galay::tracing::SpanContext(make_context("2222222222222222")),
         "linked=1",
-        {galay::tracing::spanAttribute("link.kind", "batch")}));
+        {galay::tracing::span_attribute("link.kind", "batch")}));
     span.end();
 
     auto cloned = span.clone();
@@ -108,10 +108,10 @@ void spanCloneDuplicatesOwnedState() {
     assert(cloned.links().size() == 1);
     assert(cloned.ended());
 
-    cloned.setStatus(galay::tracing::SpanStatusCode::kOk, "ok");
-    assert(cloned.setAttribute("http.status_code", 200));
-    assert(cloned.addEvent("done"));
-    assert(cloned.addLink(galay::tracing::SpanContext(makeContext("3333333333333333"))));
+    cloned.set_status(galay::tracing::SpanStatusCode::kOk, "ok");
+    assert(cloned.set_attribute("http.status_code", 200));
+    assert(cloned.add_event("done"));
+    assert(cloned.add_link(galay::tracing::SpanContext(make_context("3333333333333333"))));
 
     assert(span.status().message == "timeout");
     assert(span.attributes().size() == 1);
@@ -119,13 +119,13 @@ void spanCloneDuplicatesOwnedState() {
     assert(span.links().size() == 1);
 }
 
-void logRecordCloneDuplicatesOwnedState() {
-    auto context = makeContext();
+void log_record_clone_duplicates_owned_state() {
+    auto context = make_context();
     galay::tracing::LogRecord record(
         galay::tracing::LogLevel::kWarn,
         "original message",
         {"test.cc", 17, "logRecordCloneDuplicatesOwnedState"},
-        galay::tracing::makeLogContext(context),
+        galay::tracing::make_log_context(context),
         std::chrono::system_clock::time_point(std::chrono::seconds(42)));
 
     auto cloned = record.clone();
@@ -140,7 +140,7 @@ void logRecordCloneDuplicatesOwnedState() {
     assert(record.timestamp == std::chrono::system_clock::time_point(std::chrono::seconds(42)));
 }
 
-void sinkSnapshotCloneDuplicatesContainerState() {
+void sink_snapshot_clone_duplicates_container_state() {
     auto first = std::make_shared<NoopSink>();
     auto second = std::make_shared<NoopSink>();
 
@@ -160,7 +160,7 @@ void sinkSnapshotCloneDuplicatesContainerState() {
 } // namespace
 
 int main() {
-    spanCloneDuplicatesOwnedState();
-    logRecordCloneDuplicatesOwnedState();
-    sinkSnapshotCloneDuplicatesContainerState();
+    span_clone_duplicates_owned_state();
+    log_record_clone_duplicates_owned_state();
+    sink_snapshot_clone_duplicates_container_state();
 }

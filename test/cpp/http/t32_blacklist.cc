@@ -50,7 +50,22 @@ private:
     std::abort();
 }
 
-uint16_t pickFreePort()
+void test_config_snake_setters()
+{
+    BlackListConfig config;
+    auto& configured = config.set_client_key_mode(BlackListConfig::ClientKeyMode::IpAndPort)
+        .exclude_ip("127.0.0.1")
+        .set_exclude_ips({"192.0.2.1"})
+        .auto_close(false);
+    if (&configured != &config ||
+        config.client_key_mode != BlackListConfig::ClientKeyMode::IpAndPort ||
+        config.exclude_ips != std::unordered_set<std::string>{"192.0.2.1"} ||
+        config.close_blocked_socket) {
+        fail("snake_case setters must update fields and retain chaining");
+    }
+}
+
+uint16_t pick_free_port()
 {
     int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -84,7 +99,7 @@ uint16_t pickFreePort()
     return port;
 }
 
-int connectWithRetry(uint16_t port)
+int connect_with_retry(uint16_t port)
 {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -126,7 +141,7 @@ int connectWithRetry(uint16_t port)
     fail("connect retry exhausted");
 }
 
-bool sendAllBestEffort(int fd, const std::string& data)
+bool send_all_best_effort(int fd, const std::string& data)
 {
     size_t sent = 0;
     while (sent < data.size()) {
@@ -142,7 +157,7 @@ bool sendAllBestEffort(int fd, const std::string& data)
     return true;
 }
 
-std::string recvAvailableUntilClosed(int fd)
+std::string recv_available_until_closed(int fd)
 {
     std::string response;
     char buffer[4096];
@@ -167,10 +182,10 @@ std::string recvAvailableUntilClosed(int fd)
     return response;
 }
 
-std::string sendRawHttpBestEffort(uint16_t port)
+std::string send_raw_http_best_effort(uint16_t port)
 {
-    int fd = connectWithRetry(port);
-    bool sent = sendAllBestEffort(
+    int fd = connect_with_retry(port);
+    bool sent = send_all_best_effort(
         fd,
         "GET / HTTP/1.1\r\n"
         "Host: 127.0.0.1\r\n"
@@ -178,19 +193,19 @@ std::string sendRawHttpBestEffort(uint16_t port)
         "\r\n");
     std::string response;
     if (sent) {
-        response = recvAvailableUntilClosed(fd);
+        response = recv_available_until_closed(fd);
     }
     ::close(fd);
     return response;
 }
 
-Task<void> respondOk(HttpConn conn, TestState* state)
+Task<void> respond_ok(HttpConn conn, TestState* state)
 {
     state->conn_count.fetch_add(1);
 
     HttpRequest request;
-    auto reader = conn.getReader();
-    auto read_result = co_await reader.getRequest(request);
+    auto reader = conn.get_reader();
+    auto read_result = co_await reader.get_request(request);
     if (!read_result) {
         co_await conn.close();
         co_return;
@@ -200,15 +215,15 @@ Task<void> respondOk(HttpConn conn, TestState* state)
         .status(HttpStatusCode::OK_200)
         .header("Connection", "close")
         .text("ok")
-        .buildMove();
+        .build_move();
 
-    auto writer = conn.getWriter();
-    (void) co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    (void) co_await writer.send_response(response);
     co_await conn.close();
     co_return;
 }
 
-void waitForCount(const std::atomic<int>& value, int expected, const char* message)
+void wait_for_count(const std::atomic<int>& value, int expected, const char* message)
 {
     for (int i = 0; i < 100; ++i) {
         if (value.load() >= expected) {
@@ -219,7 +234,7 @@ void waitForCount(const std::atomic<int>& value, int expected, const char* messa
     fail(message);
 }
 
-bool containsOkResponse(const std::string& response)
+bool contains_ok_response(const std::string& response)
 {
     return response.find("HTTP/1.1 200 OK") != std::string::npos;
 }
@@ -229,27 +244,27 @@ struct ScenarioResult {
     int handled_count = 0;
 };
 
-ScenarioResult runScenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket>> plugin,
+ScenarioResult run_scenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket>> plugin,
                            std::vector<std::chrono::milliseconds> delays,
                            int expected_handled_count)
 {
     TestState state;
 
-    uint16_t port = pickFreePort();
+    uint16_t port = pick_free_port();
     HttpServer server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build());
 
-    bool registered_blacklist = server.addAcceptPlugin(std::move(plugin));
+    bool registered_blacklist = server.add_accept_plugin(std::move(plugin));
     if (!registered_blacklist) {
         fail("blacklist plugin should register before start");
     }
 
     server.start([&state](HttpConn conn) -> Task<void> {
-        co_await respondOk(std::move(conn), &state);
+        co_await respond_ok(std::move(conn), &state);
     });
 
     ScenarioResult result;
@@ -258,11 +273,11 @@ ScenarioResult runScenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket>> plugin,
         if (delay > 0ms) {
             std::this_thread::sleep_for(delay);
         }
-        result.responses.push_back(sendRawHttpBestEffort(port));
+        result.responses.push_back(send_raw_http_best_effort(port));
     }
 
     if (expected_handled_count > 0) {
-        waitForCount(state.conn_count, expected_handled_count,
+        wait_for_count(state.conn_count, expected_handled_count,
                      "expected allowed connections did not reach handler");
     }
 
@@ -271,28 +286,28 @@ ScenarioResult runScenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket>> plugin,
     return result;
 }
 
-ScenarioResult runConcurrentScenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket>> plugin,
+ScenarioResult run_concurrent_scenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket>> plugin,
                                      int client_count,
                                      int io_scheduler_count,
                                      int expected_handled_count)
 {
     TestState state;
 
-    uint16_t port = pickFreePort();
+    uint16_t port = pick_free_port();
     HttpServer server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(static_cast<size_t>(io_scheduler_count))
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(static_cast<size_t>(io_scheduler_count))
+        .parallel_scheduler_count(1)
         .build());
 
-    bool registered_blacklist = server.addAcceptPlugin(std::move(plugin));
+    bool registered_blacklist = server.add_accept_plugin(std::move(plugin));
     if (!registered_blacklist) {
         fail("blacklist plugin should register before concurrent scenario");
     }
 
     server.start([&state](HttpConn conn) -> Task<void> {
-        co_await respondOk(std::move(conn), &state);
+        co_await respond_ok(std::move(conn), &state);
     });
 
     ScenarioResult result;
@@ -308,7 +323,7 @@ ScenarioResult runConcurrentScenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket
             while (!start_clients.load()) {
                 std::this_thread::yield();
             }
-            result.responses[static_cast<size_t>(i)] = sendRawHttpBestEffort(port);
+            result.responses[static_cast<size_t>(i)] = send_raw_http_best_effort(port);
         });
     }
 
@@ -322,7 +337,7 @@ ScenarioResult runConcurrentScenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket
     }
 
     if (expected_handled_count > 0) {
-        waitForCount(state.conn_count, expected_handled_count,
+        wait_for_count(state.conn_count, expected_handled_count,
                      "expected concurrent allowed connections did not reach handler");
     }
 
@@ -331,41 +346,41 @@ ScenarioResult runConcurrentScenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket
     return result;
 }
 
-void expectResponseOk(const std::string& response, const char* message)
+void expect_response_ok(const std::string& response, const char* message)
 {
-    if (!containsOkResponse(response)) {
+    if (!contains_ok_response(response)) {
         fail(message);
     }
 }
 
-void expectResponseBlocked(const std::string& response, const char* message)
+void expect_response_blocked(const std::string& response, const char* message)
 {
-    if (containsOkResponse(response)) {
+    if (contains_ok_response(response)) {
         fail(message);
     }
 }
 
 void test_count_limit_compatibility()
 {
-    BlackList<AsyncTcpSocket>::clearConnInfo();
-    ScenarioResult result = runScenario(
+    BlackList<AsyncTcpSocket>::clear_conn_info();
+    ScenarioResult result = run_scenario(
         std::make_unique<BlackList<AsyncTcpSocket>>(2),
         {0ms, 0ms, 0ms},
         2);
 
-    expectResponseOk(result.responses[0], "first connection should be allowed");
-    expectResponseOk(result.responses[1], "second connection should be allowed");
-    expectResponseBlocked(result.responses[2],
+    expect_response_ok(result.responses[0], "first connection should be allowed");
+    expect_response_ok(result.responses[1], "second connection should be allowed");
+    expect_response_blocked(result.responses[2],
                           "third connection should be blocked after the count limit");
     if (result.handled_count != 2) {
         fail("blocked count-limit connection should not reach the handler");
     }
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 }
 
 void test_interval_block_policy_unblocks_and_resets_counter()
 {
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
     BlackListConfig config;
     BlackListConfig::IntervalBlockPolicy policy;
     policy.max_attempts_per_interval = 1;
@@ -374,25 +389,25 @@ void test_interval_block_policy_unblocks_and_resets_counter()
     policy.reset_counter_after_unblock = true;
     config.policy = policy;
 
-    ScenarioResult result = runScenario(
+    ScenarioResult result = run_scenario(
         std::make_unique<BlackList<AsyncTcpSocket>>(config),
         {0ms, 0ms, 180ms},
         2);
 
-    expectResponseOk(result.responses[0], "first interval-policy connection should be allowed");
-    expectResponseBlocked(result.responses[1],
+    expect_response_ok(result.responses[0], "first interval-policy connection should be allowed");
+    expect_response_blocked(result.responses[1],
                           "second interval-policy connection should trigger the temporary block");
-    expectResponseOk(result.responses[2],
+    expect_response_ok(result.responses[2],
                      "connection after block_duration should be allowed after counter reset");
     if (result.handled_count != 2) {
         fail("interval policy should only deliver allowed connections to the handler");
     }
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 }
 
 void test_interval_block_policy_blocks_all_when_limit_is_zero()
 {
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
     BlackListConfig config;
     BlackListConfig::IntervalBlockPolicy policy;
     policy.max_attempts_per_interval = 0;
@@ -400,24 +415,24 @@ void test_interval_block_policy_blocks_all_when_limit_is_zero()
     policy.block_duration = 80ms;
     config.policy = policy;
 
-    ScenarioResult result = runScenario(
+    ScenarioResult result = run_scenario(
         std::make_unique<BlackList<AsyncTcpSocket>>(config),
         {0ms, 120ms},
         0);
 
-    expectResponseBlocked(result.responses[0],
+    expect_response_blocked(result.responses[0],
                           "zero interval-policy limit should block the first connection");
-    expectResponseBlocked(result.responses[1],
+    expect_response_blocked(result.responses[1],
                           "zero interval-policy limit should still block after block_duration");
     if (result.handled_count != 0) {
         fail("zero interval-policy limit should not reach the handler");
     }
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 }
 
 void test_interval_block_policy_expires_window_without_blocking()
 {
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
     BlackListConfig config;
     BlackListConfig::IntervalBlockPolicy policy;
     policy.max_attempts_per_interval = 1;
@@ -425,24 +440,24 @@ void test_interval_block_policy_expires_window_without_blocking()
     policy.block_duration = 5s;
     config.policy = policy;
 
-    ScenarioResult result = runScenario(
+    ScenarioResult result = run_scenario(
         std::make_unique<BlackList<AsyncTcpSocket>>(config),
         {0ms, 140ms},
         2);
 
-    expectResponseOk(result.responses[0],
+    expect_response_ok(result.responses[0],
                      "first connection in an interval window should be allowed");
-    expectResponseOk(result.responses[1],
+    expect_response_ok(result.responses[1],
                      "connection after interval expiry should start a new window");
     if (result.handled_count != 2) {
         fail("expired interval window should allow the second connection");
     }
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 }
 
 void test_decay_counter_policy_restores_access_after_decay()
 {
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
     BlackListConfig config;
     BlackListConfig::DecayCounterPolicy policy;
     policy.max_attempts = 2;
@@ -451,26 +466,26 @@ void test_decay_counter_policy_restores_access_after_decay()
     policy.max_counter_value = 8;
     config.policy = policy;
 
-    ScenarioResult result = runScenario(
+    ScenarioResult result = run_scenario(
         std::make_unique<BlackList<AsyncTcpSocket>>(config),
         {0ms, 0ms, 0ms, 140ms},
         3);
 
-    expectResponseOk(result.responses[0], "first decay-policy connection should be allowed");
-    expectResponseOk(result.responses[1], "second decay-policy connection should be allowed");
-    expectResponseBlocked(result.responses[2],
+    expect_response_ok(result.responses[0], "first decay-policy connection should be allowed");
+    expect_response_ok(result.responses[1], "second decay-policy connection should be allowed");
+    expect_response_blocked(result.responses[2],
                           "third decay-policy connection should be blocked before decay");
-    expectResponseOk(result.responses[3],
+    expect_response_ok(result.responses[3],
                      "connection after enough decay should be allowed again");
     if (result.handled_count != 3) {
         fail("decay policy should only deliver allowed connections to the handler");
     }
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 }
 
 void test_decay_counter_policy_does_not_decay_before_full_interval()
 {
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
     BlackListConfig config;
     BlackListConfig::DecayCounterPolicy policy;
     policy.max_attempts = 1;
@@ -479,24 +494,24 @@ void test_decay_counter_policy_does_not_decay_before_full_interval()
     policy.max_counter_value = 4;
     config.policy = policy;
 
-    ScenarioResult result = runScenario(
+    ScenarioResult result = run_scenario(
         std::make_unique<BlackList<AsyncTcpSocket>>(config),
         {0ms, 70ms},
         1);
 
-    expectResponseOk(result.responses[0],
+    expect_response_ok(result.responses[0],
                      "first decay boundary connection should be allowed");
-    expectResponseBlocked(result.responses[1],
+    expect_response_blocked(result.responses[1],
                           "decay should not restore access before a full decay interval");
     if (result.handled_count != 1) {
         fail("pre-interval decay boundary should only deliver one connection");
     }
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 }
 
 void test_separate_plugin_instances_share_blacklist_state()
 {
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 
     BlackListConfig config;
     BlackListConfig::IntervalBlockPolicy policy;
@@ -505,28 +520,28 @@ void test_separate_plugin_instances_share_blacklist_state()
     policy.block_duration = 5s;
     config.policy = policy;
 
-    ScenarioResult first = runScenario(
+    ScenarioResult first = run_scenario(
         std::make_unique<BlackList<AsyncTcpSocket>>(config),
         {0ms},
         1);
-    ScenarioResult second = runScenario(
+    ScenarioResult second = run_scenario(
         std::make_unique<BlackList<AsyncTcpSocket>>(config),
         {0ms},
         0);
 
-    expectResponseOk(first.responses[0],
+    expect_response_ok(first.responses[0],
                      "first plugin instance should allow the first connection");
-    expectResponseBlocked(second.responses[0],
+    expect_response_blocked(second.responses[0],
                           "second plugin instance should share blacklist state and block");
     if (first.handled_count != 1 || second.handled_count != 0) {
         fail("shared blacklist state should only deliver the first connection");
     }
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 }
 
 void test_concurrent_pressure_shares_limit_across_server_loops()
 {
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 
     constexpr int allowed_limit = 8;
     constexpr int client_count = 32;
@@ -538,26 +553,26 @@ void test_concurrent_pressure_shares_limit_across_server_loops()
     policy.block_duration = 30s;
     config.policy = policy;
 
-    ScenarioResult result = runConcurrentScenario(
+    ScenarioResult result = run_concurrent_scenario(
         std::make_unique<BlackList<AsyncTcpSocket>>(config),
         client_count,
         4,
         allowed_limit);
 
     int ok_count = static_cast<int>(std::count_if(
-        result.responses.begin(), result.responses.end(), containsOkResponse));
+        result.responses.begin(), result.responses.end(), contains_ok_response));
     if (ok_count != allowed_limit) {
         fail("concurrent pressure should allow exactly the configured limit");
     }
     if (result.handled_count != allowed_limit) {
         fail("concurrent pressure should deliver exactly the allowed connections");
     }
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 }
 
 void test_decay_counter_policy_concurrent_pressure_shares_limit_across_server_loops()
 {
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 
     constexpr int allowed_limit = 8;
     constexpr int client_count = 32;
@@ -570,26 +585,26 @@ void test_decay_counter_policy_concurrent_pressure_shares_limit_across_server_lo
     policy.max_counter_value = allowed_limit + 1;
     config.policy = policy;
 
-    ScenarioResult result = runConcurrentScenario(
+    ScenarioResult result = run_concurrent_scenario(
         std::make_unique<BlackList<AsyncTcpSocket>>(config),
         client_count,
         4,
         allowed_limit);
 
     int ok_count = static_cast<int>(std::count_if(
-        result.responses.begin(), result.responses.end(), containsOkResponse));
+        result.responses.begin(), result.responses.end(), contains_ok_response));
     if (ok_count != allowed_limit) {
         fail("concurrent decay policy should allow exactly the configured limit");
     }
     if (result.handled_count != allowed_limit) {
         fail("concurrent decay policy should deliver exactly the allowed connections");
     }
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 }
 
 void test_excluded_ip_bypasses_blacklist_but_continues_plugin_chain()
 {
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 
     TestState state;
     std::atomic<int> downstream_count{0};
@@ -602,35 +617,35 @@ void test_excluded_ip_bypasses_blacklist_but_continues_plugin_chain()
     config.policy = policy;
     config.exclude_ips.insert("127.0.0.1");
 
-    uint16_t port = pickFreePort();
+    uint16_t port = pick_free_port();
     HttpServer server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build());
 
-    bool registered_blacklist = server.addAcceptPlugin(std::make_unique<BlackList<AsyncTcpSocket>>(config));
-    bool registered_downstream = server.addAcceptPlugin(
+    bool registered_blacklist = server.add_accept_plugin(std::make_unique<BlackList<AsyncTcpSocket>>(config));
+    bool registered_downstream = server.add_accept_plugin(
         std::make_unique<CountingTcpPlugin>(&downstream_count));
     if (!registered_blacklist || !registered_downstream) {
         fail("excluded-ip blacklist and downstream plugins should register before start");
     }
 
     server.start([&state](HttpConn conn) -> Task<void> {
-        co_await respondOk(std::move(conn), &state);
+        co_await respond_ok(std::move(conn), &state);
     });
 
-    std::string first_response = sendRawHttpBestEffort(port);
-    std::string second_response = sendRawHttpBestEffort(port);
+    std::string first_response = send_raw_http_best_effort(port);
+    std::string second_response = send_raw_http_best_effort(port);
 
-    waitForCount(state.conn_count, 2,
+    wait_for_count(state.conn_count, 2,
                  "excluded IP connections should both reach handler");
     server.stop();
 
-    expectResponseOk(first_response,
+    expect_response_ok(first_response,
                      "excluded IP should bypass zero-limit blacklist on first connection");
-    expectResponseOk(second_response,
+    expect_response_ok(second_response,
                      "excluded IP should bypass zero-limit blacklist on repeated connection");
     if (downstream_count.load() != 2) {
         fail("excluded IP should continue downstream accept plugins");
@@ -638,12 +653,12 @@ void test_excluded_ip_bypasses_blacklist_but_continues_plugin_chain()
     if (state.conn_count.load() != 2) {
         fail("excluded IP should continue business handling");
     }
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 }
 
 void test_blacklist_stops_downstream_accept_plugin_and_handler()
 {
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 
     TestState state;
     std::atomic<int> downstream_count{0};
@@ -655,33 +670,33 @@ void test_blacklist_stops_downstream_accept_plugin_and_handler()
     policy.block_duration = 5s;
     config.policy = policy;
 
-    uint16_t port = pickFreePort();
+    uint16_t port = pick_free_port();
     HttpServer server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build());
 
-    bool registered_blacklist = server.addAcceptPlugin(std::make_unique<BlackList<AsyncTcpSocket>>(config));
-    bool registered_downstream = server.addAcceptPlugin(
+    bool registered_blacklist = server.add_accept_plugin(std::make_unique<BlackList<AsyncTcpSocket>>(config));
+    bool registered_downstream = server.add_accept_plugin(
         std::make_unique<CountingTcpPlugin>(&downstream_count));
     if (!registered_blacklist || !registered_downstream) {
         fail("blacklist and downstream accept plugins should register before start");
     }
 
     server.start([&state](HttpConn conn) -> Task<void> {
-        co_await respondOk(std::move(conn), &state);
+        co_await respond_ok(std::move(conn), &state);
     });
 
-    std::string first_response = sendRawHttpBestEffort(port);
-    std::string second_response = sendRawHttpBestEffort(port);
+    std::string first_response = send_raw_http_best_effort(port);
+    std::string second_response = send_raw_http_best_effort(port);
 
-    waitForCount(state.conn_count, 1, "first plugin-chain connection should reach handler");
+    wait_for_count(state.conn_count, 1, "first plugin-chain connection should reach handler");
     server.stop();
 
-    expectResponseOk(first_response, "first plugin-chain connection should be allowed");
-    expectResponseBlocked(second_response,
+    expect_response_ok(first_response, "first plugin-chain connection should be allowed");
+    expect_response_blocked(second_response,
                           "second plugin-chain connection should be blocked by blacklist");
     if (downstream_count.load() != 1) {
         fail("blacklist should stop downstream accept plugins after blocking");
@@ -689,13 +704,14 @@ void test_blacklist_stops_downstream_accept_plugin_and_handler()
     if (state.conn_count.load() != 1) {
         fail("blacklist should stop handler after blocking");
     }
-    BlackList<AsyncTcpSocket>::clearConnInfo();
+    BlackList<AsyncTcpSocket>::clear_conn_info();
 }
 
 } // namespace
 
 int main()
 {
+    test_config_snake_setters();
     test_count_limit_compatibility();
     test_interval_block_policy_unblocks_and_resets_counter();
     test_interval_block_policy_blocks_all_when_limit_is_zero();

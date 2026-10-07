@@ -104,20 +104,20 @@ namespace galay::redis
          * @param db_index 数据库索引
          * @return 状态回复
          */
-        std::expected<RedisValue, RedisError> selectDB(int32_t db_index);
+        std::expected<RedisValue, RedisError> select_db(int32_t db_index);
 
         /**
          * @brief 清空当前数据库
          * @return 状态回复
          */
-        std::expected<RedisValue, RedisError> flushDB();
+        std::expected<RedisValue, RedisError> flush_db();
 
         /**
          * @brief 切换 RESP 协议版本
          * @param version 协议版本（2 或 3）
          * @return RESP2 返回 array，RESP3 返回 map
          */
-        std::expected<RedisValue, RedisError> switchVersion(int version);
+        std::expected<RedisValue, RedisError> switch_version(int version);
 
         /**
          * @brief 检查键是否存在
@@ -173,7 +173,7 @@ namespace galay::redis
          * @param value 值
          * @return 状态回复
          */
-        std::expected<RedisValue, RedisError> setEx(const std::string& key, int64_t seconds, const std::string& value);
+        std::expected<RedisValue, RedisError> set_ex(const std::string& key, int64_t seconds, const std::string& value);
 
         /**
          * @brief 设置带过期时间的键值对（毫秒）
@@ -182,7 +182,7 @@ namespace galay::redis
          * @param value 值
          * @return 状态回复
          */
-        std::expected<RedisValue, RedisError> psetEx(const std::string& key, int64_t milliseconds, const std::string& value);
+        std::expected<RedisValue, RedisError> pset_ex(const std::string& key, int64_t milliseconds, const std::string& value);
 
         /**
          * @brief 自增
@@ -197,7 +197,7 @@ namespace galay::redis
          * @param value 增量
          * @return 自增后的值（整数）
          */
-        std::expected<RedisValue, RedisError> incrBy(std::string key, int64_t value);
+        std::expected<RedisValue, RedisError> incr_by(std::string key, int64_t value);
 
         /**
          * @brief 自减
@@ -258,7 +258,7 @@ namespace galay::redis
          * @param key 键名
          * @return RedisValue map 或 array
          */
-        std::expected<RedisValue, RedisError> hgetAll(const std::string& key);
+        std::expected<RedisValue, RedisError> hget_all(const std::string& key);
 
         /**
          * @brief 哈希字段自增
@@ -267,7 +267,7 @@ namespace galay::redis
          * @param value 增量
          * @return 自增后的值（整数）
          */
-        std::expected<RedisValue, RedisError> hincrBy(const std::string& key, std::string field, int64_t value);
+        std::expected<RedisValue, RedisError> hincr_by(const std::string& key, std::string field, int64_t value);
 
         /**
          * @brief 从列表左端推入值
@@ -294,7 +294,7 @@ namespace galay::redis
          * @param key 键名
          * @return 列表长度（整数）
          */
-        std::expected<RedisValue, RedisError> lLen(const std::string& key);
+        std::expected<RedisValue, RedisError> l_len(const std::string& key);
 
         /**
          * @brief 获取列表范围内的元素
@@ -417,7 +417,7 @@ namespace galay::redis
          * @param cmd 原始命令字符串
          * @return RedisValue
          */
-        std::expected<RedisValue, RedisError> redisCommand(const std::string& cmd);
+        std::expected<RedisValue, RedisError> redis_command(const std::string& cmd);
 
         ~RedisSession();
 

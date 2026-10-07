@@ -32,7 +32,7 @@ struct Sample {
     double timers_per_sec = 0.0;
 };
 
-Sample makeSample(std::size_t count, std::chrono::steady_clock::duration elapsed)
+Sample make_sample(std::size_t count, std::chrono::steady_clock::duration elapsed)
 {
     const auto elapsed_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
@@ -44,7 +44,7 @@ Sample makeSample(std::size_t count, std::chrono::steady_clock::duration elapsed
     };
 }
 
-bool pushTimers(ThreadSafeTimerManager& manager,
+bool push_timers(ThreadSafeTimerManager& manager,
                 std::vector<Timer::ptr>& timers,
                 std::chrono::milliseconds delay,
                 std::atomic<std::size_t>& fired)
@@ -64,22 +64,22 @@ bool pushTimers(ThreadSafeTimerManager& manager,
     return true;
 }
 
-bool benchFuturePendingDrain()
+bool bench_future_pending_drain()
 {
     ThreadSafeTimerManager manager(kTickNs);
     std::vector<Timer::ptr> timers;
     std::atomic<std::size_t> fired{0};
 
-    if (!pushTimers(manager, timers, 1h, fired)) {
+    if (!push_timers(manager, timers, 1h, fired)) {
         return false;
     }
 
     const auto start = std::chrono::steady_clock::now();
     manager.tick();
-    const auto sample = makeSample(kTimerCount, std::chrono::steady_clock::now() - start);
+    const auto sample = make_sample(kTimerCount, std::chrono::steady_clock::now() - start);
 
-    const auto pending = manager.pendingSize();
-    const auto wheel = manager.wheelSize();
+    const auto pending = manager.pending_size();
+    const auto wheel = manager.wheel_size();
     const auto fired_count = fired.load(std::memory_order_relaxed);
     std::cout << "ThreadSafeTimerManagerFutureDrain timers=" << kTimerCount
               << " elapsed_ms=" << std::fixed << std::setprecision(3) << sample.elapsed_ms
@@ -98,22 +98,22 @@ bool benchFuturePendingDrain()
     return true;
 }
 
-bool benchExpiredPendingDrain()
+bool bench_expired_pending_drain()
 {
     ThreadSafeTimerManager manager(kTickNs);
     std::vector<Timer::ptr> timers;
     std::atomic<std::size_t> fired{0};
 
-    if (!pushTimers(manager, timers, 0ms, fired)) {
+    if (!push_timers(manager, timers, 0ms, fired)) {
         return false;
     }
 
     const auto start = std::chrono::steady_clock::now();
     manager.tick();
-    const auto sample = makeSample(kTimerCount, std::chrono::steady_clock::now() - start);
+    const auto sample = make_sample(kTimerCount, std::chrono::steady_clock::now() - start);
 
-    const auto pending = manager.pendingSize();
-    const auto wheel = manager.wheelSize();
+    const auto pending = manager.pending_size();
+    const auto wheel = manager.wheel_size();
     const auto fired_count = fired.load(std::memory_order_relaxed);
     std::cout << "ThreadSafeTimerManagerExpiredDrain timers=" << kTimerCount
               << " elapsed_ms=" << std::fixed << std::setprecision(3) << sample.elapsed_ms
@@ -136,14 +136,14 @@ bool benchExpiredPendingDrain()
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    if (!benchFuturePendingDrain()) {
+    if (!bench_future_pending_drain()) {
         return 1;
     }
-    if (!benchExpiredPendingDrain()) {
+    if (!bench_expired_pending_drain()) {
         return 1;
     }
 

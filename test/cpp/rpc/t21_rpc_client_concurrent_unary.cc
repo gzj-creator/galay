@@ -22,7 +22,7 @@ public:
     ConcurrentUnaryService()
         : RpcService("ConcurrentUnaryService")
     {
-        registerMethod("echo", &ConcurrentUnaryService::echo);
+        register_method("echo", &ConcurrentUnaryService::echo);
     }
 
     Task<void> echo(RpcContext& ctx)
@@ -32,7 +32,7 @@ public:
             const unsigned char tail = static_cast<unsigned char>(payload.back());
             co_await sleep(std::chrono::milliseconds(tail % 5));
         }
-        ctx.setPayload(ctx.request().payloadView());
+        ctx.set_payload(ctx.request().payload_view());
         co_return;
     }
 };
@@ -42,19 +42,19 @@ struct SharedState {
     std::atomic<int> failed{0};
 };
 
-uint16_t loopbackPort()
+uint16_t loopback_port()
 {
     return static_cast<uint16_t>(26000 + (::getpid() % 16000));
 }
 
-bool payloadEquals(const RpcResponse& response, const std::string& expected)
+bool payload_equals(const RpcResponse& response, const std::string& expected)
 {
     const auto& payload = response.payload();
     return std::string(payload.begin(), payload.end()) == expected;
 }
 
 template<typename AwaitResult>
-const RpcResponse* responsePtr(const AwaitResult& result)
+const RpcResponse* response_ptr(const AwaitResult& result)
 {
     if (!result.has_value()) {
         return nullptr;
@@ -66,19 +66,19 @@ const RpcResponse* responsePtr(const AwaitResult& result)
     return &call_result->value();
 }
 
-Task<void> runOneCall(RpcClient* client, int index, SharedState* state)
+Task<void> run_one_call(RpcClient* client, int index, SharedState* state)
 {
     const std::string payload = "payload-" + std::to_string(index);
     auto result = co_await client->call("ConcurrentUnaryService", "echo", payload);
-    const RpcResponse* response = responsePtr(result);
-    if (response == nullptr || !response->isOk() || !payloadEquals(*response, payload)) {
+    const RpcResponse* response = response_ptr(result);
+    if (response == nullptr || !response->is_ok() || !payload_equals(*response, payload)) {
         state->failed.fetch_add(1, std::memory_order_relaxed);
     }
     state->completed.fetch_add(1, std::memory_order_release);
     co_return;
 }
 
-Task<void> runConcurrentClient(uint16_t port, SharedState* state)
+Task<void> run_concurrent_client(uint16_t port, SharedState* state)
 {
     RpcClient client;
     bool connected = false;
@@ -105,7 +105,7 @@ Task<void> runConcurrentClient(uint16_t port, SharedState* state)
     }
 
     for (int i = 0; i < 64; ++i) {
-        auto spawned = runtime->spawnIO(runOneCall(&client, i, state));
+        auto spawned = runtime->spawn_io(run_one_call(&client, i, state));
         if (!spawned.has_value()) {
             state->failed.fetch_add(1, std::memory_order_relaxed);
             state->completed.fetch_add(1, std::memory_order_release);
@@ -124,16 +124,16 @@ Task<void> runConcurrentClient(uint16_t port, SharedState* state)
 
 int main()
 {
-    const uint16_t port = loopbackPort();
+    const uint16_t port = loopback_port();
 
     auto server = RpcServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     ConcurrentUnaryService service;
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register concurrent unary service: "
                   << registered.error().message() << "\n";
@@ -146,7 +146,7 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(2).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(2).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();
@@ -156,7 +156,7 @@ int main()
     }
 
     SharedState state;
-    auto root = runtime.spawnIO(runConcurrentClient(port, &state));
+    auto root = runtime.spawn_io(run_concurrent_client(port, &state));
     if (!root.has_value()) {
         runtime.stop();
         server.stop();

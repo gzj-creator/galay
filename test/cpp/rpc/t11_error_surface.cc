@@ -10,17 +10,17 @@ using namespace galay::rpc;
 namespace {
 
 void expect(test::TestResultWriter& writer, const std::string& name, bool passed) {
-    writer.writeTestCase(name, passed);
+    writer.write_test_case(name, passed);
 }
 
-bool roundTripError(RpcErrorCode code) {
+bool round_trip_error(RpcErrorCode code) {
     RpcResponse response(77, code);
     response.payload("error-payload", 13);
     auto serialized = response.serialize();
-    auto decoded = RpcCodec::decodeResponse(serialized.data(), serialized.size());
+    auto decoded = RpcCodec::decode_response(serialized.data(), serialized.size());
     return decoded.has_value() &&
-           decoded->requestId() == 77 &&
-           decoded->errorCode() == code &&
+           decoded->request_id() == 77 &&
+           decoded->error_code() == code &&
            std::string(decoded->payload().data(), decoded->payload().size()) == "error-payload";
 }
 
@@ -43,42 +43,42 @@ int main() {
            static_cast<uint16_t>(RpcErrorCode::INTERNAL_ERROR) == 10);
 
     expect(writer, "existing error strings stay stable",
-           std::string(rpcErrorCodeToString(RpcErrorCode::OK)) == "OK" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::UNKNOWN_ERROR)) == "Unknown error" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::SERVICE_NOT_FOUND)) == "Service not found" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::METHOD_NOT_FOUND)) == "Method not found" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::INVALID_REQUEST)) == "Invalid request" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::INVALID_RESPONSE)) == "Invalid response" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::REQUEST_TIMEOUT)) == "Request timeout" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::CONNECTION_CLOSED)) == "Connection closed" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::SERIALIZATION_ERROR)) == "Serialization error" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::DESERIALIZATION_ERROR)) == "Deserialization error" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::INTERNAL_ERROR)) == "Internal error");
+           std::string(rpc_error_code_to_string(RpcErrorCode::OK)) == "OK" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::UNKNOWN_ERROR)) == "Unknown error" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::SERVICE_NOT_FOUND)) == "Service not found" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::METHOD_NOT_FOUND)) == "Method not found" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::INVALID_REQUEST)) == "Invalid request" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::INVALID_RESPONSE)) == "Invalid response" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::REQUEST_TIMEOUT)) == "Request timeout" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::CONNECTION_CLOSED)) == "Connection closed" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::SERIALIZATION_ERROR)) == "Serialization error" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::DESERIALIZATION_ERROR)) == "Deserialization error" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::INTERNAL_ERROR)) == "Internal error");
 
     expect(writer, "new error strings are stable",
-           std::string(rpcErrorCodeToString(RpcErrorCode::CANCELLED)) == "Cancelled" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::DEADLINE_EXCEEDED)) == "Deadline exceeded" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::RESOURCE_EXHAUSTED)) == "Resource exhausted" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::RATE_LIMITED)) == "Rate limited" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::CIRCUIT_OPEN)) == "Circuit open" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::UNAUTHENTICATED)) == "Unauthenticated" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::PERMISSION_DENIED)) == "Permission denied" &&
-           std::string(rpcErrorCodeToString(RpcErrorCode::UNAVAILABLE)) == "Unavailable");
+           std::string(rpc_error_code_to_string(RpcErrorCode::CANCELLED)) == "Cancelled" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::DEADLINE_EXCEEDED)) == "Deadline exceeded" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::RESOURCE_EXHAUSTED)) == "Resource exhausted" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::RATE_LIMITED)) == "Rate limited" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::CIRCUIT_OPEN)) == "Circuit open" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::UNAUTHENTICATED)) == "Unauthenticated" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::PERMISSION_DENIED)) == "Permission denied" &&
+           std::string(rpc_error_code_to_string(RpcErrorCode::UNAVAILABLE)) == "Unavailable");
 
     expect(writer, "new error codes round trip through response codec",
-           roundTripError(RpcErrorCode::CANCELLED) &&
-           roundTripError(RpcErrorCode::DEADLINE_EXCEEDED) &&
-           roundTripError(RpcErrorCode::RESOURCE_EXHAUSTED) &&
-           roundTripError(RpcErrorCode::RATE_LIMITED) &&
-           roundTripError(RpcErrorCode::CIRCUIT_OPEN) &&
-           roundTripError(RpcErrorCode::UNAUTHENTICATED) &&
-           roundTripError(RpcErrorCode::PERMISSION_DENIED) &&
-           roundTripError(RpcErrorCode::UNAVAILABLE));
+           round_trip_error(RpcErrorCode::CANCELLED) &&
+           round_trip_error(RpcErrorCode::DEADLINE_EXCEEDED) &&
+           round_trip_error(RpcErrorCode::RESOURCE_EXHAUSTED) &&
+           round_trip_error(RpcErrorCode::RATE_LIMITED) &&
+           round_trip_error(RpcErrorCode::CIRCUIT_OPEN) &&
+           round_trip_error(RpcErrorCode::UNAUTHENTICATED) &&
+           round_trip_error(RpcErrorCode::PERMISSION_DENIED) &&
+           round_trip_error(RpcErrorCode::UNAVAILABLE));
 
     RpcError timeout = RpcError(RpcErrorCode::DEADLINE_EXCEEDED);
     expect(writer, "deadline error default message uses new error string",
            timeout.message() == "Deadline exceeded");
 
-    writer.writeSummary();
+    writer.write_summary();
     return writer.failed() == 0 ? 0 : 1;
 }

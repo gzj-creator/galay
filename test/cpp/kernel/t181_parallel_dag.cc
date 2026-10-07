@@ -25,11 +25,11 @@ bool require(bool condition, const char* message)
     return condition;
 }
 
-bool verifyGraphInputErrors()
+bool verify_graph_input_errors()
 {
     ParallelGraph graph;
-    const auto first = graph.add(makeParallelWork([]() noexcept {}));
-    const auto second = graph.add(makeParallelWork([]() noexcept {}));
+    const auto first = graph.add(make_parallel_work([]() noexcept {}));
+    const auto second = graph.add(make_parallel_work([]() noexcept {}));
     if (!require(first.has_value() && second.has_value(),
                  "graph setup failed")) {
         return false;
@@ -58,23 +58,23 @@ bool verifyGraphInputErrors()
                     "duplicate dependency must return kDuplicateDependency");
 }
 
-Task<void> runDiamond(std::atomic<int>* completed,
+Task<void> run_diamond(std::atomic<int>* completed,
                       std::atomic<bool>* parent_resumed,
                       std::atomic<bool>* ok)
 {
     ParallelGraph graph;
-    auto first = graph.add(makeParallelWork([completed]() noexcept {
+    auto first = graph.add(make_parallel_work([completed]() noexcept {
         completed->fetch_or(1, std::memory_order_release);
     }));
-    auto left = graph.add(makeParallelWork([completed]() noexcept {
+    auto left = graph.add(make_parallel_work([completed]() noexcept {
         assert((completed->load(std::memory_order_acquire) & 1) != 0);
         completed->fetch_or(2, std::memory_order_release);
     }));
-    auto right = graph.add(makeParallelWork([completed]() noexcept {
+    auto right = graph.add(make_parallel_work([completed]() noexcept {
         assert((completed->load(std::memory_order_acquire) & 1) != 0);
         completed->fetch_or(4, std::memory_order_release);
     }));
-    auto last = graph.add(makeParallelWork([completed]() noexcept {
+    auto last = graph.add(make_parallel_work([completed]() noexcept {
         const auto value = completed->load(std::memory_order_acquire);
         assert((value & 6) == 6);
         completed->fetch_or(8, std::memory_order_release);
@@ -91,23 +91,23 @@ Task<void> runDiamond(std::atomic<int>* completed,
     co_return;
 }
 
-Task<void> runFailure(std::atomic<int>* completed,
+Task<void> run_failure(std::atomic<int>* completed,
                       std::atomic<bool>* ok,
                       std::atomic<bool>* skipped)
 {
     ParallelGraph graph;
-    auto first = graph.add(makeParallelWork([completed]() noexcept {
+    auto first = graph.add(make_parallel_work([completed]() noexcept {
         completed->fetch_or(1, std::memory_order_release);
     }));
-    auto failing = graph.add(makeParallelWork([]() noexcept -> std::expected<void, ParallelError> {
+    auto failing = graph.add(make_parallel_work([]() noexcept -> std::expected<void, ParallelError> {
         return std::unexpected(ParallelError(ParallelErrorCode::kWorkFailed));
     }));
-    auto independent = graph.add(makeParallelWork([completed]() noexcept {
+    auto independent = graph.add(make_parallel_work([completed]() noexcept {
         for (std::size_t i = 0; i < 10000; ++i) {
             completed->fetch_or(4, std::memory_order_relaxed);
         }
     }));
-    auto dependent = graph.add(makeParallelWork([skipped]() noexcept {
+    auto dependent = graph.add(make_parallel_work([skipped]() noexcept {
         skipped->store(false, std::memory_order_release);
     }));
     assert(first.has_value() && failing.has_value() && independent.has_value() && dependent.has_value());
@@ -120,11 +120,11 @@ Task<void> runFailure(std::atomic<int>* completed,
     co_return;
 }
 
-Task<void> runCycle(std::atomic<bool>* detected)
+Task<void> run_cycle(std::atomic<bool>* detected)
 {
     ParallelGraph graph;
-    auto first = graph.add(makeParallelWork([]() noexcept {}));
-    auto second = graph.add(makeParallelWork([]() noexcept {}));
+    auto first = graph.add(make_parallel_work([]() noexcept {}));
+    auto second = graph.add(make_parallel_work([]() noexcept {}));
     assert(first.has_value() && second.has_value());
     assert(graph.then(*first, *second).has_value());
     assert(graph.then(*second, *first).has_value());
@@ -136,10 +136,10 @@ Task<void> runCycle(std::atomic<bool>* detected)
     co_return;
 }
 
-Task<void> runSingle(std::atomic<int>* count, std::atomic<bool>* ok)
+Task<void> run_single(std::atomic<int>* count, std::atomic<bool>* ok)
 {
     ParallelGraph graph;
-    auto node = graph.add(makeParallelWork([count]() noexcept {
+    auto node = graph.add(make_parallel_work([count]() noexcept {
         count->fetch_add(1, std::memory_order_release);
     }));
     assert(node.has_value());
@@ -148,11 +148,11 @@ Task<void> runSingle(std::atomic<int>* count, std::atomic<bool>* ok)
     co_return;
 }
 
-Task<void> runInlineFailure(std::atomic<bool>* ran,
+Task<void> run_inline_failure(std::atomic<bool>* ran,
                             std::atomic<bool>* observed)
 {
     ParallelGraph graph;
-    auto node = graph.add(makeParallelWork([ran]() noexcept
+    auto node = graph.add(make_parallel_work([ran]() noexcept
         -> std::expected<void, ParallelError> {
         ran->store(true, std::memory_order_release);
         return std::unexpected(ParallelError(ParallelErrorCode::kWorkFailed));
@@ -166,17 +166,17 @@ Task<void> runInlineFailure(std::atomic<bool>* ran,
     co_return;
 }
 
-Task<void> runFirstError(std::atomic<bool>* fast_failed,
+Task<void> run_first_error(std::atomic<bool>* fast_failed,
                          std::atomic<std::size_t>* error_node,
                          std::atomic<bool>* ok)
 {
     ParallelGraph graph;
-    auto fast = graph.add(makeParallelWork([fast_failed]() noexcept
+    auto fast = graph.add(make_parallel_work([fast_failed]() noexcept
         -> std::expected<void, ParallelError> {
         fast_failed->store(true, std::memory_order_release);
         return std::unexpected(ParallelError(ParallelErrorCode::kWorkFailed));
     }));
-    auto slow = graph.add(makeParallelWork([fast_failed]() noexcept
+    auto slow = graph.add(make_parallel_work([fast_failed]() noexcept
         -> std::expected<void, ParallelError> {
         while (!fast_failed->load(std::memory_order_acquire)) {
             std::this_thread::yield();
@@ -195,11 +195,11 @@ Task<void> runFirstError(std::atomic<bool>* fast_failed,
     co_return;
 }
 
-Task<void> runScheduleFailure(std::atomic<bool>* observed)
+Task<void> run_schedule_failure(std::atomic<bool>* observed)
 {
     ParallelGraph graph;
-    auto first = graph.add(makeParallelWork([]() noexcept {}));
-    auto second = graph.add(makeParallelWork([]() noexcept {}));
+    auto first = graph.add(make_parallel_work([]() noexcept {}));
+    auto second = graph.add(make_parallel_work([]() noexcept {}));
     assert(first.has_value() && second.has_value());
     assert(graph.then(*first, *second).has_value());
     const auto result = co_await parallel(std::move(graph));
@@ -210,21 +210,21 @@ Task<void> runScheduleFailure(std::atomic<bool>* observed)
     co_return;
 }
 
-Task<void> runEmpty(std::atomic<bool>* ok)
+Task<void> run_empty(std::atomic<bool>* ok)
 {
     const auto result = co_await parallel(ParallelGraph{});
     ok->store(result.has_value(), std::memory_order_release);
     co_return;
 }
 
-Task<void> runLargeReverseChain(std::atomic<bool>* ok)
+Task<void> run_large_reverse_chain(std::atomic<bool>* ok)
 {
     constexpr std::size_t kNodes = 2048;
     ParallelGraph graph;
     std::vector<ParallelNodeId> nodes;
     nodes.reserve(kNodes);
     for (std::size_t index = 0; index < kNodes; ++index) {
-        auto node = graph.add(makeParallelWork([]() noexcept {}));
+        auto node = graph.add(make_parallel_work([]() noexcept {}));
         if (!node.has_value()) {
             ok->store(false, std::memory_order_release);
             co_return;
@@ -245,10 +245,10 @@ Task<void> runLargeReverseChain(std::atomic<bool>* ok)
     co_return;
 }
 
-Task<void> runWithoutParallelScheduler(std::atomic<bool>* rejected)
+Task<void> run_without_parallel_scheduler(std::atomic<bool>* rejected)
 {
     ParallelGraph graph;
-    auto node = graph.add(makeParallelWork([]() noexcept {}));
+    auto node = graph.add(make_parallel_work([]() noexcept {}));
     assert(node.has_value());
     const auto result = co_await parallel(std::move(graph));
     rejected->store(!result.has_value() &&
@@ -261,30 +261,30 @@ Task<void> runWithoutParallelScheduler(std::atomic<bool>* rejected)
 
 int main()
 {
-    assert(verifyGraphInputErrors());
+    assert(verify_graph_input_errors());
 
     // 两个失败节点按 FIFO 顺序提交到同一个 worker。这样首个错误的断言是
     // 确定性的，同时其他测试仍继续覆盖多 scheduler 执行。
     Runtime first_error_runtime = RuntimeBuilder()
-        .ioSchedulerCount(0)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(0)
+        .parallel_scheduler_count(1)
         .build();
     std::atomic<bool> fast_failed{false};
     std::atomic<std::size_t> first_error_node{ParallelGraph::kInvalidNode};
     std::atomic<bool> first_error_ok{false};
-    auto first_error = first_error_runtime.blockOnCpu(
-        runFirstError(&fast_failed, &first_error_node, &first_error_ok));
+    auto first_error = first_error_runtime.block_on_cpu(
+        run_first_error(&fast_failed, &first_error_node, &first_error_ok));
     assert(first_error.has_value());
     assert(first_error_ok.load(std::memory_order_acquire));
     assert(first_error_node.load(std::memory_order_acquire) == 0);
     first_error_runtime.stop();
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(0).parallelSchedulerCount(2).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(0).parallel_scheduler_count(2).build();
 
     std::atomic<int> diamond_completed{0};
     std::atomic<bool> diamond_parent{false};
     std::atomic<bool> diamond_ok{false};
-    auto diamond = runtime.blockOnCpu(runDiamond(&diamond_completed, &diamond_parent, &diamond_ok));
+    auto diamond = runtime.block_on_cpu(run_diamond(&diamond_completed, &diamond_parent, &diamond_ok));
     assert(diamond.has_value());
     assert(diamond_ok.load(std::memory_order_acquire));
     assert(diamond_parent.load(std::memory_order_acquire));
@@ -293,61 +293,61 @@ int main()
     std::atomic<int> failure_completed{0};
     std::atomic<bool> failure_ok{false};
     std::atomic<bool> dependent_ran{true};
-    auto failure = runtime.blockOnCpu(runFailure(&failure_completed, &failure_ok, &dependent_ran));
+    auto failure = runtime.block_on_cpu(run_failure(&failure_completed, &failure_ok, &dependent_ran));
     assert(failure.has_value());
     assert(failure_ok.load(std::memory_order_acquire));
     assert(dependent_ran.load(std::memory_order_acquire));
     assert((failure_completed.load(std::memory_order_acquire) & 4) != 0);
 
     std::atomic<bool> cycle_detected{false};
-    auto cycle = runtime.blockOnCpu(runCycle(&cycle_detected));
+    auto cycle = runtime.block_on_cpu(run_cycle(&cycle_detected));
     assert(cycle.has_value());
     assert(cycle_detected.load(std::memory_order_acquire));
 
     std::atomic<int> single_count{0};
     std::atomic<bool> single_ok{false};
-    auto single = runtime.blockOnCpu(runSingle(&single_count, &single_ok));
+    auto single = runtime.block_on_cpu(run_single(&single_count, &single_ok));
     assert(single.has_value());
     assert(single_ok.load(std::memory_order_acquire));
     assert(single_count.load(std::memory_order_acquire) == 1);
 
     std::atomic<bool> inline_ran{false};
     std::atomic<bool> inline_failure_observed{false};
-    auto inline_failure = runtime.blockOnCpu(
-        runInlineFailure(&inline_ran, &inline_failure_observed));
+    auto inline_failure = runtime.block_on_cpu(
+        run_inline_failure(&inline_ran, &inline_failure_observed));
     assert(inline_failure.has_value());
     assert(inline_ran.load(std::memory_order_acquire));
     assert(inline_failure_observed.load(std::memory_order_acquire));
 
     std::atomic<bool> empty_ok{false};
-    auto empty = runtime.blockOnCpu(runEmpty(&empty_ok));
+    auto empty = runtime.block_on_cpu(run_empty(&empty_ok));
     assert(empty.has_value());
     assert(empty_ok.load(std::memory_order_acquire));
 
     std::atomic<bool> large_chain_ok{false};
-    auto large_chain = runtime.blockOnCpu(runLargeReverseChain(&large_chain_ok));
+    auto large_chain = runtime.block_on_cpu(run_large_reverse_chain(&large_chain_ok));
     assert(large_chain.has_value());
     assert(large_chain_ok.load(std::memory_order_acquire));
 
     runtime.stop();
 
-    Runtime no_parallel = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime no_parallel = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     std::atomic<bool> scheduler_rejected{false};
-    auto rejected = no_parallel.blockOnIO(runWithoutParallelScheduler(&scheduler_rejected));
+    auto rejected = no_parallel.block_on_io(run_without_parallel_scheduler(&scheduler_rejected));
     assert(rejected.has_value());
     assert(scheduler_rejected.load(std::memory_order_acquire));
     no_parallel.stop();
 
     Runtime stopped_parallel = RuntimeBuilder()
-        .ioSchedulerCount(0)
-        .parallelSchedulerCount(2)
+        .io_scheduler_count(0)
+        .parallel_scheduler_count(2)
         .build();
     assert(stopped_parallel.start().has_value());
     // 根任务使用 scheduler 0；首个图节点选择 scheduler 1，并在提交前停止它。
-    stopped_parallel.getParallelScheduler(1)->stop();
+    stopped_parallel.get_parallel_scheduler(1)->stop();
     std::atomic<bool> schedule_failure_observed{false};
-    auto schedule_failure = stopped_parallel.spawnCpu(
-        runScheduleFailure(&schedule_failure_observed));
+    auto schedule_failure = stopped_parallel.spawn_cpu(
+        run_schedule_failure(&schedule_failure_observed));
     assert(schedule_failure.has_value());
     const auto joined_schedule_failure = schedule_failure->join();
     assert(joined_schedule_failure.has_value());

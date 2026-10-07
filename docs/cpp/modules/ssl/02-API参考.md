@@ -95,13 +95,13 @@
 
 `SslError` 本身提供：
 
-- `bool isSuccess() const`
-- `bool needsRetry() const`
+- `bool is_success() const`
+- `bool needs_retry() const`
 - `SslErrorCode code() const`
-- `unsigned long sslError() const`
+- `unsigned long ssl_error() const`
 - `std::string message() const`
-- `std::string sslErrorString() const`
-- `static SslError fromOpenSSL(SslErrorCode code)`
+- `std::string ssl_error_string() const`
+- `static SslError from_open_ssl(SslErrorCode code)`
 
 ## `SslContext`
 
@@ -113,30 +113,30 @@
 - `~SslContext()`
 - `SslContext(SslContext&& other) noexcept`
 - `SslContext& operator=(SslContext&& other) noexcept`
-- `bool isValid() const`
+- `bool is_valid() const`
 - `SSL_CTX* native() const`
 - `const SslError& error() const`
 
 ### 证书与 CA
 
-- `std::expected<void, SslError> loadCertificate(const std::string& certFile, SslFileType type = SslFileType::PEM)`
-- `std::expected<void, SslError> loadCertificateChain(const std::string& certChainFile)`
-- `std::expected<void, SslError> loadPrivateKey(const std::string& keyFile, SslFileType type = SslFileType::PEM)`
-- `std::expected<void, SslError> loadCACertificate(const std::string& caFile)`
-- `std::expected<void, SslError> loadCAPath(const std::string& caPath)`
-- `std::expected<void, SslError> useDefaultCA()`
+- `std::expected<void, SslError> load_certificate(const std::string& certFile, SslFileType type = SslFileType::PEM)`
+- `std::expected<void, SslError> load_certificate_chain(const std::string& certChainFile)`
+- `std::expected<void, SslError> load_private_key(const std::string& keyFile, SslFileType type = SslFileType::PEM)`
+- `std::expected<void, SslError> load_ca_certificate(const std::string& caFile)`
+- `std::expected<void, SslError> load_ca_path(const std::string& ca_path)`
+- `std::expected<void, SslError> use_default_ca()`
 
 ### 验证与 TLS 策略
 
-- `void setVerifyMode(SslVerifyMode mode, std::function<bool(bool, X509_STORE_CTX*)> callback = nullptr)`
-- `void setVerifyDepth(int depth)`
-- `std::expected<void, SslError> setCiphers(const std::string& ciphers)`
-- `std::expected<void, SslError> setCiphersuites(const std::string& ciphersuites)`
-- `std::expected<void, SslError> setALPNProtocols(const std::vector<std::string>& protocols)`
-- `void setMinProtocolVersion(int version)`
-- `void setMaxProtocolVersion(int version)`
-- `void setSessionCacheMode(long mode)`
-- `void setSessionTimeout(long timeout)`
+- `void set_verify_mode(SslVerifyMode mode, std::function<bool(bool, X509_STORE_CTX*)> callback = nullptr)`
+- `void set_verify_depth(int depth)`
+- `std::expected<void, SslError> set_ciphers(const std::string& ciphers)`
+- `std::expected<void, SslError> set_ciphersuites(const std::string& ciphersuites)`
+- `std::expected<void, SslError> set_alpn_protocols(const std::vector<std::string>& protocols)`
+- `void set_min_protocol_version(int version)`
+- `void set_max_protocol_version(int version)`
+- `void set_session_cache_mode(long mode)`
+- `void set_session_timeout(long timeout)`
 
 ## `SslEngine`
 
@@ -150,41 +150,41 @@
 - `~SslEngine()`
 - `SslEngine(SslEngine&& other) noexcept`
 - `SslEngine& operator=(SslEngine&& other) noexcept`
-- `bool isValid() const`
+- `bool is_valid() const`
 - `SSL* native() const`
-- `SslHandshakeState handshakeState() const`
-- `bool isHandshakeCompleted() const`
+- `SslHandshakeState handshake_state() const`
+- `bool is_handshake_completed() const`
 
 ### BIO 与握手
 
-- `std::expected<void, SslError> setFd(int fd)`（旧模式，头文件中标注 deprecated）
-- `std::expected<void, SslError> initMemoryBIO()`
-- `int feedEncryptedInput(const char* data, size_t length)`
-- `int extractEncryptedOutput(char* buffer, size_t length)`
-- `size_t pendingEncryptedOutput() const`
-- `std::expected<void, SslError> setHostname(const std::string& hostname)`
-- `void setConnectState()`
-- `void setAcceptState()`
-- `SslIOResult doHandshake()`
+- `std::expected<void, SslError> set_fd(int fd)`（旧模式，头文件中标注 deprecated）
+- `std::expected<void, SslError> init_memory_bio()`
+- `int feed_encrypted_input(const char* data, size_t length)`
+- `int extract_encrypted_output(char* buffer, size_t length)`
+- `size_t pending_encrypted_output() const`
+- `std::expected<void, SslError> set_hostname(const std::string& hostname)`
+- `void set_connect_state()`
+- `void set_accept_state()`
+- `SslIOResult do_handshake()`
 - `SslIOResult shutdown()`
 
 ### 数据读写
 
 - `SslIOResult read(char* buffer, size_t length, size_t& bytesRead)`
 - `SslIOResult write(const char* buffer, size_t length, size_t& bytesWritten)`
-- `int getError(int ret) const`
+- `int get_error(int ret) const`
 - `size_t pending() const`
 
 ### 协商结果与 Session
 
-- `X509* getPeerCertificate() const`
-- `long getVerifyResult() const`
-- `std::string getProtocolVersion() const`
-- `std::string getCipher() const`
-- `std::string getALPNProtocol() const`
-- `bool setSession(SSL_SESSION* session)`
-- `SSL_SESSION* getSession() const`
-- `bool isSessionReused() const`
+- `X509* get_peer_certificate() const`
+- `long get_verify_result() const`
+- `std::string get_protocol_version() const`
+- `std::string get_cipher() const`
+- `std::string get_alpn_protocol() const`
+- `bool set_session(SSL_SESSION* session)`
+- `SSL_SESSION* get_session() const`
+- `bool is_session_reused() const`
 
 ## `SslSocket` 返回的 awaitable 对象
 
@@ -212,15 +212,15 @@
 - `GHandle handle() const`
 - `galay::kernel::IOController* controller()`
 - `SslEngine* engine()`
-- `bool isValid() const`
-- `bool isHandshakeCompleted() const`
+- `bool is_valid() const`
+- `bool is_handshake_completed() const`
 - `galay::kernel::HandleOption option()`
 
 ### 建连与监听
 
 - `std::expected<void, galay::kernel::IOError> bind(const galay::kernel::Host& host)`
 - `std::expected<void, galay::kernel::IOError> listen(int backlog = 128)`
-- `std::expected<void, SslError> setHostname(const std::string& hostname)`
+- `std::expected<void, SslError> set_hostname(const std::string& hostname)`
 - `galay::kernel::AcceptAwaitable accept(galay::kernel::Host* clientHost)`
 - `galay::kernel::ConnectAwaitable connect(const galay::kernel::Host& host)`
 - `galay::ssl::SslHandshakeAwaitable handshake()`
@@ -234,14 +234,14 @@
 
 ### 连接属性与 Session
 
-- `X509* getPeerCertificate() const`
-- `long getVerifyResult() const`
-- `std::string getProtocolVersion() const`
-- `std::string getCipher() const`
-- `std::string getALPNProtocol() const`
-- `bool setSession(SSL_SESSION* session)`
-- `SSL_SESSION* getSession() const`
-- `bool isSessionReused() const`
+- `X509* get_peer_certificate() const`
+- `long get_verify_result() const`
+- `std::string get_protocol_version() const`
+- `std::string get_cipher() const`
+- `std::string get_alpn_protocol() const`
+- `bool set_session(SSL_SESSION* session)`
+- `SSL_SESSION* get_session() const`
+- `bool is_session_reused() const`
 
 ## 返回值、生命周期与协程语义
 
@@ -249,7 +249,7 @@
 - `SslSocket` 的业务路径统一是 awaitable 风格：`connect()`、`accept()`、`handshake()`、`recv()`、`send()`、`shutdown()`、`close()` 都应通过 `co_await` 使用
 - 配置失败、证书失败、握手失败、读写失败等都统一通过 `SslError` / `SslErrorCode` 解释，而不是依赖 OpenSSL 原始错误文本做业务分支
 - `SslSocket` 与 `SslEngine` 构造函数都接收 `SslContext*`，因此 `SslContext` 必须至少活到相关 `SslEngine` / `SslSocket` 生命周期结束
-- `connect()` / `bind()` / `listen()` 只处理 TCP / 句柄层，不等价于 TLS 握手；TLS 建连是否完成应看 `handshake()` 或 `isHandshakeCompleted()`
+- `connect()` / `bind()` / `listen()` 只处理 TCP / 句柄层，不等价于 TLS 握手；TLS 建连是否完成应看 `handshake()` 或 `is_handshake_completed()`
 - `SslEngine` 是单连接低层抽象；如果你已经在协程里处理网络 I/O，优先使用 `SslSocket`，不要把 `SslEngine` 当成共享 TLS 全局对象
 - 平台 I/O 后端由 `galay-kernel` 决定；`galay-ssl` 的公开 API 不按 `kqueue/epoll/io_uring` 拆成不同类型
 
@@ -266,11 +266,11 @@
 以下内容在头文件中可以确认：
 
 - `ssl_socket.h` 是稳定的协程入口；`galay-ssl/async/awaitable.h` 只是其传递包含的内部支撑头
-- 有 ALPN API：`SslContext::setALPNProtocols()`、`SslEngine::getALPNProtocol()`、`SslSocket::getALPNProtocol()`
-- 有 Session API：`setSessionCacheMode()`、`setSessionTimeout()`、`setSession()`、`getSession()`、`isSessionReused()`
-- 有 CA 文件、CA 路径与系统默认 CA API：`loadCACertificate()`、`loadCAPath()`、`useDefaultCA()`
+- 有 ALPN API：`SslContext::set_alpn_protocols()`、`SslEngine::get_alpn_protocol()`、`SslSocket::get_alpn_protocol()`
+- 有 Session API：`set_session_cache_mode()`、`set_session_timeout()`、`set_session()`、`get_session()`、`is_session_reused()`
+- 有 CA 文件、CA 路径与系统默认 CA API：`load_ca_certificate()`、`load_ca_path()`、`use_default_ca()`
 
 以下内容在头文件中不能确认，文档不应臆造：
 
-- 没有公开的 `SslSocket::setTimeout()` 之类的显式超时配置接口
+- 没有公开的 `SslSocket::set_timeout()` 之类的显式超时配置接口
 - 安装包没有单独的 `-modules` target

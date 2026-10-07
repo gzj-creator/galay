@@ -40,8 +40,8 @@ galay::kernel::Task<void> query(galay::kernel::IOScheduler* scheduler,
     if (!result || !result->has_value()) {
         state->ok = false;
         state->error = !result ? result.error().message() : "query produced no result";
-    } else if (result->value().rowCount() != 0) {
-        std::cout << "SELECT 1 => " << result->value().row(0).getString(0) << '\n';
+    } else if (result->value().row_count() != 0) {
+        std::cout << "SELECT 1 => " << result->value().row(0).get_string(0) << '\n';
     }
     auto closed = co_await client.close();
     if (!closed && state->ok) {
@@ -55,17 +55,17 @@ galay::kernel::Task<void> query(galay::kernel::IOScheduler* scheduler,
 
 int main()
 {
-    const auto config = postgres_example::loadConfig();
+    const auto config = postgres_example::load_config();
     galay::kernel::Runtime runtime;
     const auto started = runtime.start();
     if (!started) {
         std::cerr << started.error().message() << '\n';
         return 1;
     }
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     State state;
     if (scheduler == nullptr ||
-        !galay::kernel::scheduleTask(scheduler, query(scheduler, &state, config))) {
+        !galay::kernel::schedule_task(scheduler, query(scheduler, &state, config))) {
         runtime.stop();
         return 1;
     }

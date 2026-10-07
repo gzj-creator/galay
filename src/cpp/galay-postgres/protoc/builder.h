@@ -76,26 +76,26 @@ public:
     void clear() noexcept;
     void reserve(size_t command_count, size_t encoded_bytes);
 
-    PostgresCommandBuilder& appendQuery(std::string_view sql);
-    PostgresCommandBuilder& appendParse(
+    PostgresCommandBuilder& append_query(std::string_view sql);
+    PostgresCommandBuilder& append_parse(
         std::string_view statement_name,
         std::string_view sql,
         std::span<const uint32_t> parameter_type_oids = {});
-    PostgresCommandBuilder& appendBind(
+    PostgresCommandBuilder& append_bind(
         std::string_view portal_name,
         std::string_view statement_name,
         std::span<const std::optional<std::string_view>> parameters);
-    PostgresCommandBuilder& appendBind(
+    PostgresCommandBuilder& append_bind(
         std::string_view portal_name,
         std::string_view statement_name,
         std::span<const std::optional<std::string>> parameters);
-    PostgresCommandBuilder& appendDescribeStatement(std::string_view statement_name);
-    PostgresCommandBuilder& appendDescribePortal(std::string_view portal_name);
-    PostgresCommandBuilder& appendExecute(std::string_view portal_name,
+    PostgresCommandBuilder& append_describe_statement(std::string_view statement_name);
+    PostgresCommandBuilder& append_describe_portal(std::string_view portal_name);
+    PostgresCommandBuilder& append_execute(std::string_view portal_name,
                                           uint32_t max_rows = 0);
-    PostgresCommandBuilder& appendSync();
-    PostgresCommandBuilder& appendCloseStatement(std::string_view statement_name);
-    PostgresCommandBuilder& appendClosePortal(std::string_view portal_name);
+    PostgresCommandBuilder& append_sync();
+    PostgresCommandBuilder& append_close_statement(std::string_view statement_name);
+    PostgresCommandBuilder& append_close_portal(std::string_view portal_name);
 
     [[nodiscard]] std::span<const PostgresCommandView> commands() const;
     [[nodiscard]] size_t size() const noexcept;
@@ -117,10 +117,10 @@ private:
         PostgresCommandKind kind = PostgresCommandKind::Raw;
     };
 
-    PostgresCommandBuilder& appendEncoded(std::string encoded, PostgresCommandKind kind);
-    void appendInvalid(PostgresCommandKind kind);
-    [[nodiscard]] bool hasInvalidCommand() const noexcept;
-    void rebuildViewsIfNeeded() const;
+    PostgresCommandBuilder& append_encoded(std::string encoded, PostgresCommandKind kind);
+    void append_invalid(PostgresCommandKind kind);
+    [[nodiscard]] bool has_invalid_command() const noexcept;
+    void rebuild_views_if_needed() const;
 
     std::string m_encoded;
     std::vector<CommandMeta> m_commands;

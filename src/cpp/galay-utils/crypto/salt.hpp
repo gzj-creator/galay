@@ -33,21 +33,21 @@ namespace galay::utils
          * @param length 盐值字节长度（默认 32）
          * @return 十六进制格式的盐值字符串
          */
-        static std::string generateHex(size_t length = 32);
+        static std::string generate_hex(size_t length = 32);
 
         /**
          * @brief 生成 Base64 格式的盐值
          * @param length 盐值字节长度（默认 32）
          * @return Base64 格式的盐值字符串
          */
-        static std::string generateBase64(size_t length = 32);
+        static std::string generate_base64(size_t length = 32);
 
         /**
          * @brief 生成原始字节的盐值
          * @param length 盐值字节长度（默认 32）
          * @return 原始字节向量
          */
-        static std::vector<uint8_t> generateBytes(size_t length = 32);
+        static std::vector<uint8_t> generate_bytes(size_t length = 32);
 
         /**
          * @brief 使用自定义字符集生成盐值
@@ -55,65 +55,65 @@ namespace galay::utils
          * @param charset 自定义字符集
          * @return 自定义字符集生成的盐值字符串
          */
-        static std::string generateCustom(size_t length, const std::string& charset);
+        static std::string generate_custom(size_t length, const std::string& charset);
 
         /**
          * @brief 生成密码学安全的十六进制盐值
          * @param length 盐值字节长度（默认 32）
          * @return 十六进制格式的安全盐值字符串
          */
-        static std::string generateSecureHex(size_t length = 32);
+        static std::string generate_secure_hex(size_t length = 32);
 
         /**
          * @brief 生成密码学安全的 Base64 盐值
          * @param length 盐值字节长度（默认 32）
          * @return Base64 格式的安全盐值字符串
          */
-        static std::string generateSecureBase64(size_t length = 32);
+        static std::string generate_secure_base64(size_t length = 32);
 
         /**
          * @brief 生成密码学安全的随机字节
          * @param length 字节长度（默认 32）
          * @return 安全随机字节向量
          */
-        static std::vector<uint8_t> generateSecureBytes(size_t length = 32);
+        static std::vector<uint8_t> generate_secure_bytes(size_t length = 32);
 
         /**
          * @brief 生成 bcrypt 风格的盐值（22 字符 Base64）
          * @return 22 字符的 bcrypt 风格盐值
          */
-        static std::string generateBcryptSalt();
+        static std::string generate_bcrypt_salt();
 
         /**
          * @brief 生成带时间戳前缀的盐值
          * @param length 盐值总长度（默认 32）
          * @return 以十六进制时间戳开头的盐值字符串
          */
-        static std::string generateTimestamped(size_t length = 32);
+        static std::string generate_timestamped(size_t length = 32);
 
         /**
          * @brief 验证是否为有效的十六进制字符串
          * @param salt 待验证的字符串
          * @return 是否为有效十六进制格式
          */
-        static bool isValidHex(const std::string& salt);
+        static bool is_valid_hex(const std::string& salt);
 
         /**
          * @brief 验证是否为有效的 Base64 字符串
          * @param salt 待验证的字符串
          * @return 是否为有效 Base64 格式
          */
-        static bool isValidBase64(const std::string& salt);
+        static bool is_valid_base64(const std::string& salt);
 
     private:
         // Base64 encoding for salt
-        static std::string toBase64(const uint8_t* data, size_t length);
+        static std::string to_base64(const uint8_t* data, size_t length);
 
         // Hex encoding
-        static std::string toHex(const uint8_t* data, size_t length);
+        static std::string to_hex(const uint8_t* data, size_t length);
 
         // Get cryptographically secure random bytes
-        static void getSecureRandomBytes(uint8_t* buffer, size_t length);
+        static void get_secure_random_bytes(uint8_t* buffer, size_t length);
 
         // Base64 charset for bcrypt
         static constexpr const char* BCRYPT_BASE64 =
@@ -122,7 +122,7 @@ namespace galay::utils
 
     // Implementation
 
-    inline std::string SaltGenerator::toHex(const uint8_t* data, size_t length)
+    inline std::string SaltGenerator::to_hex(const uint8_t* data, size_t length)
     {
         static const char hexChars[] = "0123456789abcdef";
         std::string result;
@@ -137,7 +137,7 @@ namespace galay::utils
         return result;
     }
 
-    inline std::string SaltGenerator::toBase64(const uint8_t* data, size_t length)
+    inline std::string SaltGenerator::to_base64(const uint8_t* data, size_t length)
     {
         static const char base64Chars[] =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -160,7 +160,7 @@ namespace galay::utils
         return result;
     }
 
-    inline void SaltGenerator::getSecureRandomBytes(uint8_t* buffer, size_t length)
+    inline void SaltGenerator::get_secure_random_bytes(uint8_t* buffer, size_t length)
     {
         std::random_device rd;
 
@@ -171,7 +171,7 @@ namespace galay::utils
         }
     }
 
-    inline std::vector<uint8_t> SaltGenerator::generateBytes(size_t length)
+    inline std::vector<uint8_t> SaltGenerator::generate_bytes(size_t length)
     {
         std::vector<uint8_t> salt(length);
         std::random_device rd;
@@ -186,38 +186,38 @@ namespace galay::utils
         return salt;
     }
 
-    inline std::vector<uint8_t> SaltGenerator::generateSecureBytes(size_t length)
+    inline std::vector<uint8_t> SaltGenerator::generate_secure_bytes(size_t length)
     {
         std::vector<uint8_t> salt(length);
-        getSecureRandomBytes(salt.data(), length);
+        get_secure_random_bytes(salt.data(), length);
         return salt;
     }
 
-    inline std::string SaltGenerator::generateHex(size_t length)
+    inline std::string SaltGenerator::generate_hex(size_t length)
     {
-        auto bytes = generateBytes(length);
-        return toHex(bytes.data(), bytes.size());
+        auto bytes = generate_bytes(length);
+        return to_hex(bytes.data(), bytes.size());
     }
 
-    inline std::string SaltGenerator::generateSecureHex(size_t length)
+    inline std::string SaltGenerator::generate_secure_hex(size_t length)
     {
-        auto bytes = generateSecureBytes(length);
-        return toHex(bytes.data(), bytes.size());
+        auto bytes = generate_secure_bytes(length);
+        return to_hex(bytes.data(), bytes.size());
     }
 
-    inline std::string SaltGenerator::generateBase64(size_t length)
+    inline std::string SaltGenerator::generate_base64(size_t length)
     {
-        auto bytes = generateBytes(length);
-        return toBase64(bytes.data(), bytes.size());
+        auto bytes = generate_bytes(length);
+        return to_base64(bytes.data(), bytes.size());
     }
 
-    inline std::string SaltGenerator::generateSecureBase64(size_t length)
+    inline std::string SaltGenerator::generate_secure_base64(size_t length)
     {
-        auto bytes = generateSecureBytes(length);
-        return toBase64(bytes.data(), bytes.size());
+        auto bytes = generate_secure_bytes(length);
+        return to_base64(bytes.data(), bytes.size());
     }
 
-    inline std::string SaltGenerator::generateCustom(size_t length, const std::string& charset)
+    inline std::string SaltGenerator::generate_custom(size_t length, const std::string& charset)
     {
         if (charset.empty() || length == 0)
             return "";
@@ -237,10 +237,10 @@ namespace galay::utils
         return result;
     }
 
-    inline std::string SaltGenerator::generateBcryptSalt()
+    inline std::string SaltGenerator::generate_bcrypt_salt()
     {
         // Bcrypt uses 22 characters of base64-encoded salt
-        std::vector<uint8_t> bytes = generateSecureBytes(16);
+        std::vector<uint8_t> bytes = generate_secure_bytes(16);
 
         std::string result;
         result.reserve(22);
@@ -265,7 +265,7 @@ namespace galay::utils
         return result;
     }
 
-    inline std::string SaltGenerator::generateTimestamped(size_t length)
+    inline std::string SaltGenerator::generate_timestamped(size_t length)
     {
         // Get current timestamp
         auto now = std::chrono::system_clock::now();
@@ -279,12 +279,12 @@ namespace galay::utils
 
         // Generate random part
         size_t randomLength = (length > 16) ? (length - 16) / 2 : 0;
-        std::string randomPart = generateSecureHex(randomLength);
+        std::string randomPart = generate_secure_hex(randomLength);
 
         return timestampHex + randomPart;
     }
 
-    inline bool SaltGenerator::isValidHex(const std::string& salt)
+    inline bool SaltGenerator::is_valid_hex(const std::string& salt)
     {
         if (salt.empty())
             return false;
@@ -302,7 +302,7 @@ namespace galay::utils
         return true;
     }
 
-    inline bool SaltGenerator::isValidBase64(const std::string& salt)
+    inline bool SaltGenerator::is_valid_base64(const std::string& salt)
     {
         if (salt.empty())
             return false;

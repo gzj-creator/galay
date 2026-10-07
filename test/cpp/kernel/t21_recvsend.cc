@@ -53,14 +53,14 @@ static std::shared_ptr<AsyncTcpSocket> g_server_listener;
 static std::shared_ptr<AsyncTcpSocket> g_client_sock;
 
 // 构造填充数据：用可辨识的 pattern 方便调试
-static std::vector<char> makeSendBuf(char tag) {
+static std::vector<char> make_send_buf(char tag) {
     std::vector<char> buf(kMsgLen);
     std::memset(buf.data(), tag, kMsgLen);
     return buf;
 }
 
 // 压小内核 socket 缓冲区，迫使 send 更快触发 EAGAIN
-static void shrinkSocketBuf(int fd) {
+static void shrink_socket_buf(int fd) {
     int val = kSockBuf;
     setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &val, sizeof(val));
     setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &val, sizeof(val));
@@ -69,7 +69,7 @@ static void shrinkSocketBuf(int fd) {
 // ==================== 通用收发协程 ====================
 
 // recv 端：用小 buffer 接收，制造背压
-Task<void> recvLoop(std::shared_ptr<AsyncTcpSocket> sock,
+Task<void> recv_loop(std::shared_ptr<AsyncTcpSocket> sock,
                     std::atomic<int64_t>& counter,
                     const char* label) {
     char buffer[kRecvBuf];
@@ -93,11 +93,11 @@ Task<void> recvLoop(std::shared_ptr<AsyncTcpSocket> sock,
 }
 
 // send 端：每轮发 256KB，处理 partial write
-Task<void> sendLoop(std::shared_ptr<AsyncTcpSocket> sock,
+Task<void> send_loop(std::shared_ptr<AsyncTcpSocket> sock,
                     std::atomic<int>& counter,
                     const char* label,
                     char tag) {
-    auto buf = makeSendBuf(tag);
+    auto buf = make_send_buf(tag);
     for (int i = 0; i < kRounds; ++i) {
         size_t sent = 0;
         while (sent < kMsgLen) {
@@ -117,10 +117,10 @@ Task<void> sendLoop(std::shared_ptr<AsyncTcpSocket> sock,
 
 // ==================== Server ====================
 
-Task<void> serverMain(IOScheduler* scheduler) {
+Task<void> server_main(IOScheduler* scheduler) {
     g_server_listener = std::make_shared<AsyncTcpSocket>();
-    g_server_listener->option().handleReuseAddr();
-    g_server_listener->option().handleNonBlock();
+    g_server_listener->option().handle_reuse_addr();
+    g_server_listener->option().handle_non_block();
 
     Host bindHost(IPType::IPV4, "127.0.0.1", kPort);
     auto bindResult = g_server_listener->bind(bindHost);
@@ -147,25 +147,25 @@ Task<void> serverMain(IOScheduler* scheduler) {
     LogInfo("[Server] client connected from {}:{}", clientHost.ip(), clientHost.port());
 
     g_server_client = std::make_shared<AsyncTcpSocket>(acceptResult.value());
-    g_server_client->option().handleNonBlock();
-    shrinkSocketBuf(g_server_client->handle().fd);
+    g_server_client->option().handle_non_block();
+    shrink_socket_buf(g_server_client->handle().fd);
 
     // 关键：同一个 socket 同时提交读和写任务
-    scheduleTask(scheduler, recvLoop(g_server_client, g_server_recv_bytes, "S-Recv"));
-    scheduleTask(scheduler, sendLoop(g_server_client, g_server_send_rounds, "S-Send", 'S'));
+    schedule_task(scheduler, recv_loop(g_server_client, g_server_recv_bytes, "S-Recv"));
+    schedule_task(scheduler, send_loop(g_server_client, g_server_send_rounds, "S-Send", 'S'));
     co_return;
 }
 
 // ==================== Client ====================
 
-Task<void> clientMain(IOScheduler* scheduler) {
+Task<void> client_main(IOScheduler* scheduler) {
     while (!g_server_ready.load()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     g_client_sock = std::make_shared<AsyncTcpSocket>();
-    g_client_sock->option().handleNonBlock();
-    shrinkSocketBuf(g_client_sock->handle().fd);
+    g_client_sock->option().handle_non_block();
+    shrink_socket_buf(g_client_sock->handle().fd);
 
     Host serverHost(IPType::IPV4, "127.0.0.1", kPort);
     auto connectResult = co_await g_client_sock->connect(serverHost);
@@ -177,8 +177,8 @@ Task<void> clientMain(IOScheduler* scheduler) {
     LogInfo("[Client] connected");
 
     // 关键：同一个 socket 同时提交读和写任务
-    scheduleTask(scheduler, recvLoop(g_client_sock, g_client_recv_bytes, "C-Recv"));
-    scheduleTask(scheduler, sendLoop(g_client_sock, g_client_send_rounds, "C-Send", 'C'));
+    schedule_task(scheduler, recv_loop(g_client_sock, g_client_recv_bytes, "C-Recv"));
+    schedule_task(scheduler, send_loop(g_client_sock, g_client_send_rounds, "C-Send", 'C'));
     co_return;
 }
 
@@ -207,8 +207,8 @@ int main() {
     serverScheduler.start();
     clientScheduler.start();
 
-    scheduleTask(serverScheduler, serverMain(&serverScheduler));
-    scheduleTask(clientScheduler, clientMain(&clientScheduler));
+    schedule_task(serverScheduler, server_main(&serverScheduler));
+    schedule_task(clientScheduler, client_main(&clientScheduler));
 
     // 在 main 线程等待
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);

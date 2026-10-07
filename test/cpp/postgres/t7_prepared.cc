@@ -25,7 +25,7 @@ using galay::postgres::AsyncPostgresClient;
 using galay::postgres::PostgresConfig;
 using galay::postgres::PostgresOid;
 
-Task<int> runPrepared(IOScheduler* scheduler, PostgresConfig config)
+Task<int> run_prepared(IOScheduler* scheduler, PostgresConfig config)
 {
     AsyncPostgresClient<> client(scheduler);
     auto connected = co_await client.connect(std::move(config)).timeout(5s);
@@ -63,13 +63,13 @@ Task<int> runPrepared(IOScheduler* scheduler, PostgresConfig config)
     auto null_result = co_await client.execute(
         kStatement,
         std::span<const std::optional<std::string>>(null_params)).timeout(5s);
-    if (!null_result || !null_result->has_value() || null_result->value().rowCount() != 1) {
+    if (!null_result || !null_result->has_value() || null_result->value().row_count() != 1) {
         std::cerr << "prepared execution with NULL failed\n";
         co_return 4;
     }
     const auto& null_row = null_result->value().row(0);
-    if (null_row.getString(0) != "hello" || null_row.getInt64(1, -1) != 42 ||
-        null_row.getString(2) != "t" || !null_row.isNull(3)) {
+    if (null_row.get_string(0) != "hello" || null_row.get_int64(1, -1) != 42 ||
+        null_row.get_string(2) != "t" || !null_row.is_null(3)) {
         std::cerr << "prepared NULL result did not match\n";
         co_return 5;
     }
@@ -79,14 +79,14 @@ Task<int> runPrepared(IOScheduler* scheduler, PostgresConfig config)
     auto empty_result = co_await client.execute(
         kStatement,
         std::span<const std::optional<std::string>>(empty_params)).timeout(5s);
-    if (!empty_result || !empty_result->has_value() || empty_result->value().rowCount() != 1) {
+    if (!empty_result || !empty_result->has_value() || empty_result->value().row_count() != 1) {
         std::cerr << "prepared execution with empty text failed\n";
         co_return 6;
     }
     const auto& empty_row = empty_result->value().row(0);
-    if (empty_row.getString(0) != "world" || empty_row.getInt64(1, -1) != 7 ||
-        empty_row.getString(2) != "f" || empty_row.isNull(3) ||
-        empty_row.getString(3) != "") {
+    if (empty_row.get_string(0) != "world" || empty_row.get_int64(1, -1) != 7 ||
+        empty_row.get_string(2) != "f" || empty_row.is_null(3) ||
+        empty_row.get_string(3) != "") {
         std::cerr << "empty text was not kept distinct from SQL NULL\n";
         co_return 7;
     }
@@ -103,27 +103,27 @@ Task<int> runPrepared(IOScheduler* scheduler, PostgresConfig config)
 
 int main()
 {
-    auto config = galay::postgres::test::integrationConfig();
+    auto config = galay::postgres::test::integration_config();
     if (!config) {
         std::cerr << "t7_prepared skipped: set GALAY_IT_ENABLE=1 and "
                      "GALAY_POSTGRES_TEST_{HOST,PORT,USER,PASSWORD,DATABASE}.\n";
         return 125;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto started = runtime.start();
     if (!started) {
         std::cerr << "runtime start failed: " << started.error().message() << '\n';
         return EXIT_FAILURE;
     }
-    IOScheduler* scheduler = runtime.getNextIOScheduler();
+    IOScheduler* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         std::cerr << "runtime has no IO scheduler\n";
         return EXIT_FAILURE;
     }
 
-    auto result = runtime.blockOnIO(runPrepared(scheduler, std::move(*config)));
+    auto result = runtime.block_on_io(run_prepared(scheduler, std::move(*config)));
     runtime.stop();
     if (!result) {
         std::cerr << "runtime blockOn failed: " << result.error().message() << '\n';

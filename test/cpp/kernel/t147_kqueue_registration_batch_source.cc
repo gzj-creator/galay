@@ -10,7 +10,7 @@
 
 namespace {
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -19,7 +19,7 @@ std::string readAll(const std::filesystem::path& path) {
                        std::istreambuf_iterator<char>());
 }
 
-std::string extractSection(const std::string& content,
+std::string extract_section(const std::string& content,
                            const std::string& begin,
                            const std::string& end) {
     const auto begin_pos = content.find(begin);
@@ -37,12 +37,12 @@ bool contains(const std::string& content, const std::string& token) {
     return content.find(token) != std::string::npos;
 }
 
-bool expectSection(const std::string& content,
+bool expect_section(const std::string& content,
                    const std::string& begin,
                    const std::string& end,
                    const std::string& expected,
                    const char* label) {
-    const std::string section = extractSection(content, begin, end);
+    const std::string section = extract_section(content, begin, end);
     if (section.empty() || !contains(section, expected)) {
         std::cerr << "[T147] " << label << " missing token: " << expected << '\n';
         return false;
@@ -58,8 +58,8 @@ bool expectSection(const std::string& content,
 
 int main() {
     const auto root = std::filesystem::path(GALAY_SOURCE_ROOT) / "galay-kernel" / "core";
-    const std::string controller = readAll(root / "io_controller.hpp");
-    const std::string reactor = readAll(root / "kqueue_reactor.cc");
+    const std::string controller = read_all(root / "io_controller.hpp");
+    const std::string reactor = read_all(root / "kqueue_reactor.cc");
     if (controller.empty() || reactor.empty()) {
         std::cerr << "[T147] failed to read kqueue sources\n";
         return 1;
@@ -70,47 +70,47 @@ int main() {
         std::cerr << "[T147] IOController lacks simple armed mask\n";
         passed = false;
     }
-    passed = expectSection(
+    passed = expect_section(
                  reactor,
-                 "int KqueueReactor::addRecv(IOController* controller) {",
-                 "int KqueueReactor::addSend(IOController* controller) {",
-                 "updateSimpleInterest(controller, IOController::READ, true)",
-                 "addRecv") && passed;
-    passed = expectSection(
+                 "int KqueueReactor::add_recv(IOController* controller) {",
+                 "int KqueueReactor::add_send(IOController* controller) {",
+                 "update_simple_interest(controller, IOController::READ, true)",
+                 "add_recv") && passed;
+    passed = expect_section(
                  reactor,
-                 "int KqueueReactor::addSend(IOController* controller) {",
-                 "int KqueueReactor::addReadv(IOController* controller) {",
-                 "updateSimpleInterest(controller, IOController::WRITE, true)",
-                 "addSend") && passed;
-    passed = expectSection(
+                 "int KqueueReactor::add_send(IOController* controller) {",
+                 "int KqueueReactor::add_readv(IOController* controller) {",
+                 "update_simple_interest(controller, IOController::WRITE, true)",
+                 "add_send") && passed;
+    passed = expect_section(
                  reactor,
-                 "int KqueueReactor::addReadv(IOController* controller) {",
-                 "int KqueueReactor::addWritev(IOController* controller) {",
-                 "updateSimpleInterest(controller, IOController::READ, true)",
-                 "addReadv") && passed;
-    passed = expectSection(
+                 "int KqueueReactor::add_readv(IOController* controller) {",
+                 "int KqueueReactor::add_writev(IOController* controller) {",
+                 "update_simple_interest(controller, IOController::READ, true)",
+                 "add_readv") && passed;
+    passed = expect_section(
                  reactor,
-                 "int KqueueReactor::addWritev(IOController* controller) {",
-                 "int KqueueReactor::addClose(IOController* controller) {",
-                 "updateSimpleInterest(controller, IOController::WRITE, true)",
-                 "addWritev") && passed;
+                 "int KqueueReactor::add_writev(IOController* controller) {",
+                 "int KqueueReactor::add_close(IOController* controller) {",
+                 "update_simple_interest(controller, IOController::WRITE, true)",
+                 "add_writev") && passed;
 
-    const std::string update = extractSection(
+    const std::string update = extract_section(
         reactor,
-        "int KqueueReactor::updateSimpleInterest",
-        "int KqueueReactor::addAccept");
+        "int KqueueReactor::update_simple_interest",
+        "int KqueueReactor::add_accept");
     if (!contains(update, "m_pending_changes.push_back") ||
         !contains(update, "BATCH_THRESHOLD")) {
         std::cerr << "[T147] simple interest changes are not buffered with threshold flush\n";
         passed = false;
     }
 
-    const std::string completion = extractSection(
+    const std::string completion = extract_section(
         reactor,
         "const auto complete_one_shot",
         "if (ev.filter == EVFILT_READ)");
     if (!contains(completion, "event_type == RECV || event_type == READV") ||
-        !contains(completion, "updateSimpleInterest(controller, slot, false)")) {
+        !contains(completion, "update_simple_interest(controller, slot, false)")) {
         std::cerr << "[T147] completion path does not preserve READ and disarm WRITE\n";
         passed = false;
     }

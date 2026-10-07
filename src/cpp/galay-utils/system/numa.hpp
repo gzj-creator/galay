@@ -35,38 +35,38 @@ public:
     explicit NumaTopology(std::string root = "/sys/devices/system/node")
         : m_root(std::move(root)) {}
 
-    [[nodiscard]] std::expected<std::vector<unsigned>, std::error_code> onlineNodes() const
+    [[nodiscard]] std::expected<std::vector<unsigned>, std::error_code> online_nodes() const
     {
-        return readSystemIds(m_root + "/online", kMaxNodes);
+        return read_system_ids(m_root + "/online", kMaxNodes);
     }
 
     [[nodiscard]] std::expected<std::vector<unsigned>, std::error_code>
-    cpusOfNode(unsigned node) const
+    cpus_of_node(unsigned node) const
     {
         if (node >= kMaxNodes) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
         }
-        const auto online = onlineNodes();
+        const auto online = online_nodes();
         if (!online) {
             return std::unexpected(online.error());
         }
         if (!std::binary_search(online->begin(), online->end(), node)) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
         }
-        return readNodeCpus(node);
+        return read_node_cpus(node);
     }
 
-    [[nodiscard]] std::expected<unsigned, std::error_code> nodeOfCpu(unsigned cpu) const
+    [[nodiscard]] std::expected<unsigned, std::error_code> node_of_cpu(unsigned cpu) const
     {
         if (cpu >= static_cast<unsigned>(std::numeric_limits<int>::max())) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
         }
-        const auto online = onlineNodes();
+        const auto online = online_nodes();
         if (!online) {
             return std::unexpected(online.error());
         }
         for (const unsigned node : *online) {
-            const auto cpus = readNodeCpus(node);
+            const auto cpus = read_node_cpus(node);
             if (!cpus) {
                 return std::unexpected(cpus.error());
             }
@@ -83,7 +83,7 @@ public:
         if (from >= kMaxNodes || to >= kMaxNodes) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
         }
-        const auto online = onlineNodes();
+        const auto online = online_nodes();
         if (!online) {
             return std::unexpected(online.error());
         }
@@ -92,11 +92,11 @@ public:
             target == online->end() || *target != to) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
         }
-        const auto file = readSystemText(nodePath(from) + "/distance");
+        const auto file = read_system_text(node_path(from) + "/distance");
         if (!file) {
             return std::unexpected(file.error());
         }
-        auto text = trimSystemText(*file);
+        auto text = trim_system_text(*file);
         std::vector<unsigned> distances;
         while (!text.empty()) {
             const auto end = text.find_first_of(" \t\n\r\f\v");
@@ -111,7 +111,7 @@ public:
             }
             distances.push_back(value);
             text = end == std::string_view::npos ? std::string_view{}
-                : trimSystemText(text.substr(end));
+                : trim_system_text(text.substr(end));
         }
         // Linux lists distance columns in online-node order, not at column
         // `node ID`. This matters when online nodes are e.g. {0, 2}.
@@ -122,15 +122,15 @@ public:
     }
 
 private:
-    std::string nodePath(unsigned node) const
+    std::string node_path(unsigned node) const
     {
         return m_root + "/node" + std::to_string(node);
     }
 
     [[nodiscard]] std::expected<std::vector<unsigned>, std::error_code>
-    readNodeCpus(unsigned node) const
+    read_node_cpus(unsigned node) const
     {
-        return readSystemIds(nodePath(node) + "/cpulist",
+        return read_system_ids(node_path(node) + "/cpulist",
                              std::numeric_limits<int>::max(), true);
     }
 
@@ -150,20 +150,20 @@ public:
     static constexpr unsigned kMaxNodes = detail::kMaxNumaNodes;
 
     /** @brief 读取系统在线 NUMA 节点快照，不等同于当前 cpuset 允许节点。 */
-    [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code> onlineNodes()
+    [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code> online_nodes()
     {
 #if defined(__linux__)
-        return detail::NumaTopology{}.onlineNodes();
+        return detail::NumaTopology{}.online_nodes();
 #else
         return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
 #endif
     }
 
     /** @brief 返回 sysfs 拓扑中 CPU 所属的在线节点；未找到 CPU 返回 no_such_device。 */
-    [[nodiscard]] static std::expected<unsigned, std::error_code> nodeOfCpu(unsigned cpu)
+    [[nodiscard]] static std::expected<unsigned, std::error_code> node_of_cpu(unsigned cpu)
     {
 #if defined(__linux__)
-        return detail::NumaTopology{}.nodeOfCpu(cpu);
+        return detail::NumaTopology{}.node_of_cpu(cpu);
 #else
         (void)cpu;
         return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
@@ -172,10 +172,10 @@ public:
 
     /** @brief 读取在线节点的在线 CPU 列表；不按 affinity 过滤，无 CPU 的节点返回空集。 */
     [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code>
-    cpusOfNode(unsigned node)
+    cpus_of_node(unsigned node)
     {
 #if defined(__linux__)
-        return detail::NumaTopology{}.cpusOfNode(node);
+        return detail::NumaTopology{}.cpus_of_node(node);
 #else
         (void)node;
         return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
@@ -197,7 +197,7 @@ public:
 
     /** @brief 读取当前线程所属 cpuset 允许使用的内存节点。 */
     [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code>
-    allowedNumaNodes()
+    allowed_numa_nodes()
     {
 #if defined(__linux__)
         NodeMask mask{};
@@ -206,7 +206,7 @@ public:
                     static_cast<unsigned long>(MPOL_F_MEMS_ALLOWED)) != 0) {
             return std::unexpected(std::error_code(errno, std::generic_category()));
         }
-        return nodesFromMask(mask);
+        return nodes_from_mask(mask);
 #else
         return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
 #endif
@@ -216,7 +216,7 @@ private:
     static constexpr unsigned kWordBits = sizeof(unsigned long) * 8;
     using NodeMask = std::array<unsigned long, kMaxNodes / kWordBits>;
 
-    static std::vector<unsigned> nodesFromMask(const NodeMask& mask)
+    static std::vector<unsigned> nodes_from_mask(const NodeMask& mask)
     {
         std::vector<unsigned> nodes;
         for (unsigned node = 0; node < kMaxNodes; ++node) {

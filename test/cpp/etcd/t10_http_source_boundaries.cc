@@ -7,7 +7,7 @@
 namespace
 {
 
-std::string readFile(const std::filesystem::path& path)
+std::string read_file(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input) {
@@ -25,7 +25,7 @@ bool contains(const std::string& text, const std::string& needle)
     return text.find(needle) != std::string::npos;
 }
 
-std::filesystem::path repoRoot()
+std::filesystem::path repo_root()
 {
     std::filesystem::path file = __FILE__;
     return file.parent_path().parent_path().parent_path().parent_path();
@@ -35,15 +35,15 @@ std::filesystem::path repoRoot()
 
 int main()
 {
-    const auto root = repoRoot();
-    const auto sync_client = readFile(root / "src/cpp/galay-etcd/sync/etcd_client.cc");
-    const auto async_client = readFile(root / "src/cpp/galay-etcd/async/client.cc");
-    const auto async_header = readFile(root / "src/cpp/galay-etcd/async/client.h");
+    const auto root = repo_root();
+    const auto sync_client = read_file(root / "src/cpp/galay-etcd/sync/etcd_client.cc");
+    const auto async_client = read_file(root / "src/cpp/galay-etcd/async/client.cc");
+    const auto async_header = read_file(root / "src/cpp/galay-etcd/async/client.h");
     const auto awaitable_header =
-        readFile(root / "src/cpp/galay-etcd/details/awaitable.h");
+        read_file(root / "src/cpp/galay-etcd/details/awaitable.h");
     const auto awaitable_implementation =
-        readFile(root / "src/cpp/galay-etcd/details/awaitable.inl");
-    const auto internal_header = readFile(root / "src/cpp/galay-etcd/base/etcd_internal.h");
+        read_file(root / "src/cpp/galay-etcd/details/awaitable.inl");
+    const auto internal_header = read_file(root / "src/cpp/galay-etcd/base/etcd_internal.h");
 
     if (!contains(awaitable_header, "namespace galay::etcd::details")) {
         std::cerr << "etcd awaitable types must live in the details namespace\n";
@@ -90,17 +90,17 @@ int main()
         return 1;
     }
 
-    if (!contains(internal_header, "containsAsciiTokenIgnoreCase")) {
+    if (!contains(internal_header, "contains_ascii_token_ignore_case")) {
         std::cerr << "etcd HTTP parser token helper must live in shared internal header\n";
         return 1;
     }
-    if (contains(sync_client, "bool containsAsciiTokenIgnoreCase") ||
-        contains(async_client, "bool containsAsciiTokenIgnoreCase")) {
+    if (contains(sync_client, "bool contains_ascii_token_ignore_case") ||
+        contains(async_client, "bool contains_ascii_token_ignore_case")) {
         std::cerr << "etcd HTTP parser token helper must not be duplicated in clients\n";
         return 1;
     }
-    if (!contains(sync_client, "containsAsciiTokenIgnoreCase") ||
-        !contains(async_client, "containsAsciiTokenIgnoreCase")) {
+    if (!contains(sync_client, "contains_ascii_token_ignore_case") ||
+        !contains(async_client, "contains_ascii_token_ignore_case")) {
         std::cerr << "etcd HTTP parser must recognize comma-separated header tokens case-insensitively\n";
         return 1;
     }
@@ -110,7 +110,7 @@ int main()
         return 1;
     }
 
-    if (!contains(async_client, "joinWatchWorkers()")) {
+    if (!contains(async_client, "join_watch_workers()")) {
         std::cerr << "etcd watch close source boundary should keep join isolated for future refactor\n";
         return 1;
     }

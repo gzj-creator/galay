@@ -27,7 +27,7 @@ struct Args
     bool mixed = false;
 };
 
-Args parseArgs(int argc, char** argv)
+Args parse_args(int argc, char** argv)
 {
     Args args;
     if (argc > 1) args.endpoint = argv[1];
@@ -38,7 +38,7 @@ Args parseArgs(int argc, char** argv)
     return args;
 }
 
-std::string payloadOfSize(int size)
+std::string payload_of_size(int size)
 {
     return std::string(static_cast<size_t>(size), 'x');
 }
@@ -73,7 +73,7 @@ struct SharedState
     std::atomic<bool> benchmark_aborted{false};
 };
 
-void rememberFirstError(SharedState* state, const std::string& error)
+void remember_first_error(SharedState* state, const std::string& error)
 {
     if (error.empty()) {
         return;
@@ -84,21 +84,21 @@ void rememberFirstError(SharedState* state, const std::string& error)
     }
 }
 
-bool warmupClient(EtcdClient& session, const std::string& warmup_key, SharedState* state)
+bool warmup_client(EtcdClient& session, const std::string& warmup_key, SharedState* state)
 {
     auto warmup = session.get(warmup_key);
     if (!warmup.has_value()) {
-        rememberFirstError(state, "warmup get failed: " + warmup.error().message());
+        remember_first_error(state, "warmup get failed: " + warmup.error().message());
         return false;
     }
     if (!warmup.value().empty()) {
-        rememberFirstError(state, "warmup verification failed");
+        remember_first_error(state, "warmup verification failed");
         return false;
     }
     return true;
 }
 
-void cleanupPrefix(const Args& args, const std::string& key_prefix, SharedState* state)
+void cleanup_prefix(const Args& args, const std::string& key_prefix, SharedState* state)
 {
     EtcdConfig config;
     config.endpoint = args.endpoint;
@@ -106,19 +106,19 @@ void cleanupPrefix(const Args& args, const std::string& key_prefix, SharedState*
     auto session = galay::etcd::EtcdClientBuilder().config(config).build();
     auto conn = session.connect();
     if (!conn.has_value()) {
-        rememberFirstError(state, "cleanup connect failed: " + conn.error().message());
+        remember_first_error(state, "cleanup connect failed: " + conn.error().message());
         return;
     }
 
     auto del_result = session.del(key_prefix, true);
     if (!del_result.has_value()) {
-        rememberFirstError(state, "cleanup delete failed: " + del_result.error().message());
+        remember_first_error(state, "cleanup delete failed: " + del_result.error().message());
     }
 
     (void)session.close();
 }
 
-void runWorker(std::string endpoint,
+void run_worker(std::string endpoint,
                std::string key_prefix,
                std::string value,
                int worker_id,
@@ -132,12 +132,12 @@ void runWorker(std::string endpoint,
     auto session = galay::etcd::EtcdClientBuilder().config(config).build();
     auto conn = session.connect();
     if (!conn.has_value()) {
-        rememberFirstError(state, "connect failed: " + conn.error().message());
+        remember_first_error(state, "connect failed: " + conn.error().message());
         state->startup_failures.fetch_add(1, std::memory_order_release);
         return;
     }
 
-    if (!warmupClient(session, key_prefix + "warmup/" + std::to_string(worker_id), state)) {
+    if (!warmup_client(session, key_prefix + "warmup/" + std::to_string(worker_id), state)) {
         state->startup_failures.fetch_add(1, std::memory_order_release);
         (void)session.close();
         return;
@@ -167,18 +167,18 @@ void runWorker(std::string endpoint,
                     !get.value().empty() &&
                     get.value().front().value == value;
                 if (!ok && !get.has_value()) {
-                    rememberFirstError(state, get.error().message());
+                    remember_first_error(state, get.error().message());
                 } else if (!ok) {
-                    rememberFirstError(state, "mixed benchmark verification failed");
+                    remember_first_error(state, "mixed benchmark verification failed");
                 }
             } else {
-                rememberFirstError(state, put.error().message());
+                remember_first_error(state, put.error().message());
             }
         } else {
             auto put = session.put(key, value);
             ok = put.has_value();
             if (!ok) {
-                rememberFirstError(state, put.error().message());
+                remember_first_error(state, put.error().message());
             }
         }
 
@@ -201,12 +201,12 @@ void runWorker(std::string endpoint,
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    const Args args = parseArgs(argc, argv);
-    const std::string value = payloadOfSize(args.value_size);
+    const Args args = parse_args(argc, argv);
+    const std::string value = payload_of_size(args.value_size);
     const std::string key_prefix = "/galay-etcd/bench/" +
         std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch()).count()) + "/";
@@ -221,7 +221,7 @@ int main(int argc, char** argv)
 
     for (int worker = 0; worker < args.threads; ++worker) {
         workers.emplace_back(
-            runWorker,
+            run_worker,
             args.endpoint,
             key_prefix,
             value,
@@ -261,7 +261,7 @@ int main(int argc, char** argv)
         worker.join();
     }
 
-    cleanupPrefix(args, key_prefix, &state);
+    cleanup_prefix(args, key_prefix, &state);
 
     const double seconds =
         std::chrono::duration_cast<std::chrono::duration<double>>(benchmark_end - benchmark_begin).count();

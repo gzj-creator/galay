@@ -16,12 +16,12 @@ public:
     ManagedExampleService()
         : RpcService("ManagedExampleService")
     {
-        registerMethod("echo", &ManagedExampleService::echo);
+        register_method("echo", &ManagedExampleService::echo);
     }
 
     Task<void> echo(RpcContext& ctx)
     {
-        ctx.setPayload(ctx.request().payloadView());
+        ctx.set_payload(ctx.request().payload_view());
         co_return;
     }
 };
@@ -29,7 +29,7 @@ public:
 std::atomic<bool> g_done{false};
 std::atomic<bool> g_ok{false};
 
-Task<void> runClient(uint16_t port)
+Task<void> run_client(uint16_t port)
 {
     RpcStaticDiscovery discovery;
     discovery.set("ManagedExampleService", {RpcEndpoint{"127.0.0.1", port}});
@@ -55,11 +55,11 @@ int main()
     auto server = RpcServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     ManagedExampleService service;
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register managed example service: "
                   << registered.error().message() << "\n";
@@ -72,7 +72,7 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();
@@ -80,7 +80,7 @@ int main()
                   << runtime_started.error().message() << "\n";
         return 1;
     }
-    auto scheduled = runtime.spawnIO(runClient(port));
+    auto scheduled = runtime.spawn_io(run_client(port));
     if (!scheduled.has_value()) {
         runtime.stop();
         server.stop();

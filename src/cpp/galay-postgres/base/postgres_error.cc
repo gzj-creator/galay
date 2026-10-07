@@ -32,7 +32,7 @@ PostgresErrorType PostgresError::type() const noexcept
     return m_type;
 }
 
-const std::string& PostgresError::sqlState() const noexcept
+const std::string& PostgresError::sql_state() const noexcept
 {
     return m_sql_state;
 }

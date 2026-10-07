@@ -24,20 +24,20 @@ int main() {
     static_assert(requires(HttpWriterImpl<galay::ssl::SslSocket>& ssl_writer,
                            HttpResponseHeader& response_header,
                            HttpRequestHeader& request_header) {
-        ssl_writer.sendHeader(response_header);
-        ssl_writer.sendHeader(request_header);
+        ssl_writer.send_header(response_header);
+        ssl_writer.send_header(request_header);
     });
 
     auto response = Http1_1ResponseBuilder()
         .status(HttpStatusCode::OK_200)
         .header("Content-Type", "text/plain")
         .body("ssl-response-body")
-        .buildMove();
-    const auto expected_response = response.toString();
+        .build_move();
+    const auto expected_response = response.to_string();
 
     const auto ssl_hits_before_response = writer.m_fast_path_counters.ssl_coalesced_layout_hits;
-    (void) writer.sendResponse(response);
-    if (std::string(writer.bufferData(), writer.getRemainingBytes()) != expected_response) {
+    (void) writer.send_response(response);
+    if (std::string(writer.buffer_data(), writer.get_remaining_bytes()) != expected_response) {
         std::cerr << "[T64] ssl response send layout mismatch\n";
         return 1;
     }
@@ -51,12 +51,12 @@ int main() {
     assert(first.signal == galay::ssl::SslMachineSignal::kSend);
     assert(first.write_length == expected_response.size());
 
-    response_machine.onSend(std::expected<size_t, galay::ssl::SslError>(first.write_length - 3));
+    response_machine.on_send(std::expected<size_t, galay::ssl::SslError>(first.write_length - 3));
     auto resumed = response_machine.advance();
     assert(resumed.signal == galay::ssl::SslMachineSignal::kSend);
     assert(resumed.write_length == 3);
 
-    response_machine.onSend(std::expected<size_t, galay::ssl::SslError>(0));
+    response_machine.on_send(std::expected<size_t, galay::ssl::SslError>(0));
     auto failed = response_machine.advance();
     if (failed.signal != galay::ssl::SslMachineSignal::kComplete ||
         !failed.result.has_value() ||
@@ -65,7 +65,7 @@ int main() {
         return 1;
     }
 
-    if (writer.getRemainingBytes() != 0 || writer.sentBytes() != 0) {
+    if (writer.get_remaining_bytes() != 0 || writer.sent_bytes() != 0) {
         std::cerr << "[T64] failed ssl response send should clear pending state\n";
         return 1;
     }
@@ -74,13 +74,13 @@ int main() {
         .header("Host", "127.0.0.1:8443")
         .header("Content-Type", "text/plain")
         .body("ssl-request-body")
-        .buildMove();
-    const auto expected_request = request.toString();
+        .build_move();
+    const auto expected_request = request.to_string();
 
     const auto ssl_hits_before_request = writer.m_fast_path_counters.ssl_coalesced_layout_hits;
     // Only the prepared SSL layout is inspected; no socket send is started.
-    (void) writer.sendRequest(std::move(request));
-    if (std::string(writer.bufferData(), writer.getRemainingBytes()) != expected_request) {
+    (void) writer.send_request(std::move(request));
+    if (std::string(writer.buffer_data(), writer.get_remaining_bytes()) != expected_request) {
         std::cerr << "[T64] ssl request send layout mismatch\n";
         return 1;
     }

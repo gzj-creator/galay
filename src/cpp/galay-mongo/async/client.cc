@@ -27,7 +27,7 @@ namespace galay::mongo
 namespace
 {
 
-int32_t readInt32LE(const char* p)
+int32_t read_int32_le(const char* p)
 {
     return static_cast<int32_t>(
         (static_cast<uint32_t>(static_cast<uint8_t>(p[0]))      ) |
@@ -36,7 +36,7 @@ int32_t readInt32LE(const char* p)
         (static_cast<uint32_t>(static_cast<uint8_t>(p[3])) << 24));
 }
 
-void writeInt32LE(char* p, int32_t value)
+void write_int32_le(char* p, int32_t value)
 {
     const auto u = static_cast<uint32_t>(value);
     p[0] = static_cast<char>(u & 0xFF);
@@ -45,7 +45,7 @@ void writeInt32LE(char* p, int32_t value)
     p[3] = static_cast<char>((u >> 24) & 0xFF);
 }
 
-MongoError mapIoError(const IOError& io_error, MongoErrorType fallback)
+MongoError map_io_error(const IOError& io_error, MongoErrorType fallback)
 {
     if (IOError::contains(io_error.code(), galay::kernel::kTimeout)) {
         return MongoError(MONGO_ERROR_TIMEOUT, io_error.message());
@@ -56,41 +56,41 @@ MongoError mapIoError(const IOError& io_error, MongoErrorType fallback)
     return MongoError(fallback, io_error.message());
 }
 
-MongoError mapTaskResultError(const galay::kernel::detail::TaskResultError& task_error,
+MongoError map_task_result_error(const galay::kernel::detail::TaskResultError& task_error,
                               MongoErrorType fallback)
 {
     return MongoError(fallback, std::string(task_error.message()));
 }
 
 std::expected<size_t, MongoError>
-flattenIoTaskResult(std::expected<std::expected<size_t, IOError>,
+flatten_io_task_result(std::expected<std::expected<size_t, IOError>,
                                   galay::kernel::detail::TaskResultError>&& task_result,
                     MongoErrorType fallback)
 {
     if (!task_result) {
-        return std::unexpected(mapTaskResultError(task_result.error(), fallback));
+        return std::unexpected(map_task_result_error(task_result.error(), fallback));
     }
 
     auto io_result = std::move(task_result.value());
     if (!io_result) {
-        return std::unexpected(mapIoError(io_result.error(), fallback));
+        return std::unexpected(map_io_error(io_result.error(), fallback));
     }
     return io_result.value();
 }
 
 template <typename T>
 std::expected<T, MongoError>
-flattenMongoTaskResult(std::expected<std::expected<T, MongoError>,
+flatten_mongo_task_result(std::expected<std::expected<T, MongoError>,
                                      galay::kernel::detail::TaskResultError>&& task_result,
                        MongoErrorType fallback)
 {
     if (!task_result) {
-        return std::unexpected(mapTaskResultError(task_result.error(), fallback));
+        return std::unexpected(map_task_result_error(task_result.error(), fallback));
     }
     return std::move(task_result.value());
 }
 
-std::string escapeScramUsername(const std::string& username)
+std::string escape_scram_username(const std::string& username)
 {
     std::string escaped;
     escaped.reserve(username.size());
@@ -108,7 +108,7 @@ std::string escapeScramUsername(const std::string& username)
     return escaped;
 }
 
-std::unordered_map<std::string, std::string> parseScramPayload(const std::string& payload)
+std::unordered_map<std::string, std::string> parse_scram_payload(const std::string& payload)
 {
     std::unordered_map<std::string, std::string> kv;
 
@@ -131,43 +131,43 @@ std::unordered_map<std::string, std::string> parseScramPayload(const std::string
     return kv;
 }
 
-std::string base64Encode(const std::vector<uint8_t>& bytes)
+std::string base64_encode(const std::vector<uint8_t>& bytes)
 {
     if (bytes.empty()) {
         return "";
     }
-    return galay::utils::Base64Util::Base64Encode(bytes.data(), bytes.size());
+    return galay::utils::Base64Util::base64_encode(bytes.data(), bytes.size());
 }
 
-std::expected<std::vector<uint8_t>, MongoError> base64Decode(const std::string& text)
+std::expected<std::vector<uint8_t>, MongoError> base64_decode(const std::string& text)
 {
     if (text.empty()) {
         return std::vector<uint8_t>{};
     }
 
-    if (!galay::utils::Base64Util::Base64CanDecode(text)) {
+    if (!galay::utils::Base64Util::base64_can_decode(text)) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH, "base64 decode failed"));
     }
 
-    std::string decoded = galay::utils::Base64Util::Base64Decode(text);
+    std::string decoded = galay::utils::Base64Util::base64_decode(text);
     return std::vector<uint8_t>(decoded.begin(), decoded.end());
 }
 
 std::expected<std::vector<uint8_t>, MongoError>
-pbkdf2HmacSha256(const std::string& password,
+pbkdf2_hmac_sha256(const std::string& password,
                  const std::vector<uint8_t>& salt,
                  int iterations)
 {
     if (iterations <= 0) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH, "PKCS5_PBKDF2_HMAC failed"));
     }
-    return galay::utils::PBKDF2::hmacSha256(password, salt, static_cast<uint32_t>(iterations), 32);
+    return galay::utils::PBKDF2::hmac_sha256(password, salt, static_cast<uint32_t>(iterations), 32);
 }
 
 std::expected<std::vector<uint8_t>, MongoError>
-hmacSha256(const std::vector<uint8_t>& key, const std::string& data)
+hmac_sha256(const std::vector<uint8_t>& key, const std::string& data)
 {
-    const auto digest = galay::utils::HMAC::hmacSha256(
+    const auto digest = galay::utils::HMAC::hmac_sha256(
         key.data(),
         key.size(),
         reinterpret_cast<const uint8_t*>(data.data()),
@@ -181,7 +181,7 @@ std::expected<std::vector<uint8_t>, MongoError> sha256(const std::vector<uint8_t
     return std::vector<uint8_t>(digest.begin(), digest.end());
 }
 
-std::vector<uint8_t> xorBytes(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b)
+std::vector<uint8_t> xor_bytes(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b)
 {
     const size_t size = std::min(a.size(), b.size());
     std::vector<uint8_t> out(size, 0);
@@ -191,13 +191,13 @@ std::vector<uint8_t> xorBytes(const std::vector<uint8_t>& a, const std::vector<u
     return out;
 }
 
-std::expected<std::string, MongoError> generateClientNonce()
+std::expected<std::string, MongoError> generate_client_nonce()
 {
-    std::vector<uint8_t> random_bytes = galay::utils::SaltGenerator::generateSecureBytes(18);
-    return base64Encode(random_bytes);
+    std::vector<uint8_t> random_bytes = galay::utils::SaltGenerator::generate_secure_bytes(18);
+    return base64_encode(random_bytes);
 }
 
-std::expected<int32_t, MongoError> readConversationId(const MongoDocument& doc)
+std::expected<int32_t, MongoError> read_conversation_id(const MongoDocument& doc)
 {
     const auto* field = doc.find("conversationId");
     if (field == nullptr) {
@@ -206,12 +206,12 @@ std::expected<int32_t, MongoError> readConversationId(const MongoDocument& doc)
     }
 
     int64_t value = 0;
-    if (field->isInt32()) {
-        value = field->toInt32();
-    } else if (field->isInt64()) {
-        value = field->toInt64();
-    } else if (field->isDouble()) {
-        value = static_cast<int64_t>(field->toDouble());
+    if (field->is_int32()) {
+        value = field->to_int32();
+    } else if (field->is_int64()) {
+        value = field->to_int64();
+    } else if (field->is_double()) {
+        value = static_cast<int64_t>(field->to_double());
     } else {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                           "Invalid conversationId type in SCRAM response"));
@@ -224,19 +224,19 @@ std::expected<int32_t, MongoError> readConversationId(const MongoDocument& doc)
     return static_cast<int32_t>(value);
 }
 
-std::expected<std::string, MongoError> readBinaryPayloadAsString(const MongoDocument& doc)
+std::expected<std::string, MongoError> read_binary_payload_as_string(const MongoDocument& doc)
 {
     const auto* payload_field = doc.find("payload");
-    if (payload_field == nullptr || !payload_field->isBinary()) {
+    if (payload_field == nullptr || !payload_field->is_binary()) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                           "Missing payload in SCRAM response"));
     }
 
-    const auto& payload = payload_field->toBinary();
+    const auto& payload = payload_field->to_binary();
     return std::string(payload.begin(), payload.end());
 }
 
-MongoDocument buildClientMetadata(const std::string& app_name)
+MongoDocument build_client_metadata(const std::string& app_name)
 {
     MongoDocument driver;
     driver.append("name", "galay-mongo");
@@ -291,7 +291,7 @@ struct SendSegment
 constexpr size_t kAsyncMaxMessageSize = 128 * 1024 * 1024;
 
 std::expected<std::optional<DecodeView>, MongoError>
-prepareDecodeView(std::span<const struct iovec> read_iovecs, std::string& parse_buffer)
+prepare_decode_view(std::span<const struct iovec> read_iovecs, std::string& parse_buffer)
 {
     if (read_iovecs.empty()) {
         return std::optional<DecodeView>{};
@@ -308,7 +308,7 @@ prepareDecodeView(std::span<const struct iovec> read_iovecs, std::string& parse_
 
     int32_t msg_len = 0;
     if (first.iov_len >= 4) {
-        msg_len = readInt32LE(static_cast<const char*>(first.iov_base));
+        msg_len = read_int32_le(static_cast<const char*>(first.iov_base));
     } else {
         char header_bytes[4];
         size_t copied = 0;
@@ -320,7 +320,7 @@ prepareDecodeView(std::span<const struct iovec> read_iovecs, std::string& parse_
             std::memcpy(header_bytes + copied, iov.iov_base, chunk);
             copied += chunk;
         }
-        msg_len = readInt32LE(header_bytes);
+        msg_len = read_int32_le(header_bytes);
     }
 
     if (msg_len < 16) {
@@ -360,7 +360,7 @@ prepareDecodeView(std::span<const struct iovec> read_iovecs, std::string& parse_
     return std::optional<DecodeView>(DecodeView{parse_buffer.data(), msg_len});
 }
 
-void fillSendIovecsFromSegments(std::vector<struct iovec>& iovecs,
+void fill_send_iovecs_from_segments(std::vector<struct iovec>& iovecs,
                                 std::span<const SendSegment> segments,
                                 size_t sent)
 {
@@ -384,7 +384,7 @@ void fillSendIovecsFromSegments(std::vector<struct iovec>& iovecs,
     }
 }
 
-bool isSimplePingCommand(const MongoDocument& command, const std::string& database)
+bool is_simple_ping_command(const MongoDocument& command, const std::string& database)
 {
     if (command.empty() || command.size() > 2) {
         return false;
@@ -400,32 +400,32 @@ bool isSimplePingCommand(const MongoDocument& command, const std::string& databa
         if (command.size() != 2) {
             return false;
         }
-        if (!db->isString() || db->toString() != database) {
+        if (!db->is_string() || db->to_string() != database) {
             return false;
         }
     } else if (command.size() != 1) {
         return false;
     }
 
-    if (ping->isInt32()) {
-        return ping->toInt32() == 1;
+    if (ping->is_int32()) {
+        return ping->to_int32() == 1;
     }
-    if (ping->isInt64()) {
-        return ping->toInt64() == 1;
+    if (ping->is_int64()) {
+        return ping->to_int64() == 1;
     }
-    if (ping->isDouble()) {
-        return std::abs(ping->toDouble() - 1.0) < 1e-12;
+    if (ping->is_double()) {
+        return std::abs(ping->to_double() - 1.0) < 1e-12;
     }
     return false;
 }
 
-MongoError makeServerError(MongoReply&& reply, std::string_view default_message)
+MongoError make_server_error(MongoReply&& reply, std::string_view default_message)
 {
     return MongoError(MONGO_ERROR_SERVER,
-                      reply.errorCode(),
-                      reply.errorMessage().empty()
+                      reply.error_code(),
+                      reply.error_message().empty()
                           ? std::string(default_message)
-                          : reply.errorMessage());
+                          : reply.error_message());
 }
 
 } // namespace
@@ -476,12 +476,12 @@ struct AsyncMongoClientInternals
             hello.append("helloOk", true);
             hello.append("$db", config.hello_database.empty() ? std::string("admin")
                                                               : config.hello_database);
-            hello.append("client", buildClientMetadata(config.app_name));
+            hello.append("client", build_client_metadata(config.app_name));
 
             encoded_request.clear();
-            auto encoded = protocol::MongoProtocol::appendOpMsg(
+            auto encoded = protocol::MongoProtocol::append_op_msg(
                 encoded_request,
-                client.nextRequestId(),
+                client.next_request_id(),
                 hello);
             if (!encoded) {
                 return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
@@ -489,17 +489,17 @@ struct AsyncMongoClientInternals
             return {};
         }
 
-        std::expected<bool, MongoError> handleReply(MongoReply&& reply)
+        std::expected<bool, MongoError> handle_reply(MongoReply&& reply)
         {
             switch (auth_phase) {
             case AuthPhase::HelloReply:
-                return handleHelloReply(std::move(reply));
+                return handle_hello_reply(std::move(reply));
             case AuthPhase::SaslStartReply:
-                return handleSaslStartReply(std::move(reply));
+                return handle_sasl_start_reply(std::move(reply));
             case AuthPhase::SaslContinueReply:
-                return handleSaslContinueReply(std::move(reply));
+                return handle_sasl_continue_reply(std::move(reply));
             case AuthPhase::SaslFinalReply:
-                return handleSaslFinalReply(std::move(reply));
+                return handle_sasl_final_reply(std::move(reply));
             }
 
             return std::unexpected(MongoError(MONGO_ERROR_INTERNAL,
@@ -507,20 +507,20 @@ struct AsyncMongoClientInternals
         }
 
     private:
-        std::expected<bool, MongoError> handleHelloReply(MongoReply&&)
+        std::expected<bool, MongoError> handle_hello_reply(MongoReply&&)
         {
             if (!auth_enabled) {
                 return true;
             }
 
-            auto nonce_or_err = generateClientNonce();
+            auto nonce_or_err = generate_client_nonce();
             if (!nonce_or_err) {
                 return std::unexpected(nonce_or_err.error());
             }
 
             auth_client_nonce = std::move(nonce_or_err.value());
             auth_client_first_bare =
-                "n=" + escapeScramUsername(config.username) + ",r=" + auth_client_nonce;
+                "n=" + escape_scram_username(config.username) + ",r=" + auth_client_nonce;
             const std::string client_first_message = "n,," + auth_client_first_bare;
 
             MongoValue::Binary payload(client_first_message.begin(), client_first_message.end());
@@ -533,9 +533,9 @@ struct AsyncMongoClientInternals
             sasl_start.append("$db", auth_db);
 
             encoded_request.clear();
-            auto encoded = protocol::MongoProtocol::appendOpMsg(
+            auto encoded = protocol::MongoProtocol::append_op_msg(
                 encoded_request,
-                client.nextRequestId(),
+                client.next_request_id(),
                 sasl_start);
             if (!encoded) {
                 return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
@@ -544,23 +544,23 @@ struct AsyncMongoClientInternals
             return false;
         }
 
-        std::expected<bool, MongoError> handleSaslStartReply(MongoReply&& reply)
+        std::expected<bool, MongoError> handle_sasl_start_reply(MongoReply&& reply)
         {
             const auto& doc = reply.document();
 
-            auto conversation_id_or_err = readConversationId(doc);
+            auto conversation_id_or_err = read_conversation_id(doc);
             if (!conversation_id_or_err) {
                 return std::unexpected(conversation_id_or_err.error());
             }
             auth_conversation_id = conversation_id_or_err.value();
 
-            auto server_first_or_err = readBinaryPayloadAsString(doc);
+            auto server_first_or_err = read_binary_payload_as_string(doc);
             if (!server_first_or_err) {
                 return std::unexpected(server_first_or_err.error());
             }
             const std::string server_first_message = std::move(server_first_or_err.value());
 
-            const auto kv = parseScramPayload(server_first_message);
+            const auto kv = parse_scram_payload(server_first_message);
             const auto nonce_it = kv.find("r");
             const auto salt_it = kv.find("s");
             const auto iter_it = kv.find("i");
@@ -585,7 +585,7 @@ struct AsyncMongoClientInternals
                                                   "Invalid SCRAM iteration count"));
             }
 
-            auto salt_or_err = base64Decode(salt_it->second);
+            auto salt_or_err = base64_decode(salt_it->second);
             if (!salt_or_err) {
                 return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                                   "Invalid SCRAM salt: " +
@@ -598,12 +598,12 @@ struct AsyncMongoClientInternals
                                              client_final_without_proof;
 
             auto salted_password =
-                pbkdf2HmacSha256(config.password, salt_or_err.value(), iterations);
+                pbkdf2_hmac_sha256(config.password, salt_or_err.value(), iterations);
             if (!salted_password) {
                 return std::unexpected(salted_password.error());
             }
 
-            auto client_key = hmacSha256(salted_password.value(), "Client Key");
+            auto client_key = hmac_sha256(salted_password.value(), "Client Key");
             if (!client_key) {
                 return std::unexpected(client_key.error());
             }
@@ -613,30 +613,30 @@ struct AsyncMongoClientInternals
                 return std::unexpected(stored_key.error());
             }
 
-            auto client_signature = hmacSha256(stored_key.value(), auth_message);
+            auto client_signature = hmac_sha256(stored_key.value(), auth_message);
             if (!client_signature) {
                 return std::unexpected(client_signature.error());
             }
 
-            auto server_key = hmacSha256(salted_password.value(), "Server Key");
+            auto server_key = hmac_sha256(salted_password.value(), "Server Key");
             if (!server_key) {
                 return std::unexpected(server_key.error());
             }
 
-            auto server_signature = hmacSha256(server_key.value(), auth_message);
+            auto server_signature = hmac_sha256(server_key.value(), auth_message);
             if (!server_signature) {
                 return std::unexpected(server_signature.error());
             }
 
-            const auto client_proof = xorBytes(client_key.value(), client_signature.value());
-            auth_expected_server_signature = base64Encode(server_signature.value());
+            const auto client_proof = xor_bytes(client_key.value(), client_signature.value());
+            auth_expected_server_signature = base64_encode(server_signature.value());
             if (auth_expected_server_signature.empty()) {
                 return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                                   "Failed to encode SCRAM server signature"));
             }
 
             const std::string client_final_message =
-                client_final_without_proof + ",p=" + base64Encode(client_proof);
+                client_final_without_proof + ",p=" + base64_encode(client_proof);
 
             MongoValue::Binary continue_payload(client_final_message.begin(),
                                                 client_final_message.end());
@@ -647,9 +647,9 @@ struct AsyncMongoClientInternals
             sasl_continue.append("$db", auth_db);
 
             encoded_request.clear();
-            auto encoded = protocol::MongoProtocol::appendOpMsg(
+            auto encoded = protocol::MongoProtocol::append_op_msg(
                 encoded_request,
-                client.nextRequestId(),
+                client.next_request_id(),
                 sasl_continue);
             if (!encoded) {
                 return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
@@ -658,16 +658,16 @@ struct AsyncMongoClientInternals
             return false;
         }
 
-        std::expected<bool, MongoError> handleSaslContinueReply(MongoReply&& reply)
+        std::expected<bool, MongoError> handle_sasl_continue_reply(MongoReply&& reply)
         {
             const auto& doc = reply.document();
 
-            auto server_final_or_err = readBinaryPayloadAsString(doc);
+            auto server_final_or_err = read_binary_payload_as_string(doc);
             if (!server_final_or_err) {
                 return std::unexpected(server_final_or_err.error());
             }
 
-            const auto kv = parseScramPayload(server_final_or_err.value());
+            const auto kv = parse_scram_payload(server_final_or_err.value());
             const auto error_it = kv.find("e");
             if (error_it != kv.end()) {
                 return std::unexpected(MongoError(MONGO_ERROR_AUTH,
@@ -686,7 +686,7 @@ struct AsyncMongoClientInternals
                                                   "SCRAM server signature mismatch"));
             }
 
-            if (doc.getBool("done", false)) {
+            if (doc.get_bool("done", false)) {
                 return true;
             }
 
@@ -697,9 +697,9 @@ struct AsyncMongoClientInternals
             final_continue.append("$db", auth_db);
 
             encoded_request.clear();
-            auto encoded = protocol::MongoProtocol::appendOpMsg(
+            auto encoded = protocol::MongoProtocol::append_op_msg(
                 encoded_request,
-                client.nextRequestId(),
+                client.next_request_id(),
                 final_continue);
             if (!encoded) {
                 return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
@@ -708,9 +708,9 @@ struct AsyncMongoClientInternals
             return false;
         }
 
-        std::expected<bool, MongoError> handleSaslFinalReply(MongoReply&& reply)
+        std::expected<bool, MongoError> handle_sasl_final_reply(MongoReply&& reply)
         {
-            if (!reply.document().getBool("done", false)) {
+            if (!reply.document().get_bool("done", false)) {
                 return std::unexpected(MongoError(MONGO_ERROR_AUTH,
                                                   "SCRAM authentication not finished"));
             }
@@ -718,58 +718,58 @@ struct AsyncMongoClientInternals
         }
     };
 
-    static Task<std::expected<size_t, IOError>> writevOnce(AsyncMongoClient& client,
+    static Task<std::expected<size_t, IOError>> writev_once(AsyncMongoClient& client,
                                                            std::array<struct iovec, 3>& iovecs,
                                                            size_t count)
     {
         auto awaitable = client.m_socket.writev(iovecs, count);
-        if (client.m_config.isSendTimeoutEnabled()) {
+        if (client.m_config.is_send_timeout_enabled()) {
             co_return co_await awaitable.timeout(client.m_config.send_timeout);
         }
         co_return co_await awaitable;
     }
 
-    static Task<std::expected<size_t, IOError>> readvOnce(AsyncMongoClient& client,
+    static Task<std::expected<size_t, IOError>> readv_once(AsyncMongoClient& client,
                                                           std::array<struct iovec, 2>& iovecs,
                                                           size_t count)
     {
         auto awaitable = client.m_socket.readv(iovecs, count);
-        if (client.m_config.isRecvTimeoutEnabled()) {
+        if (client.m_config.is_recv_timeout_enabled()) {
             co_return co_await awaitable.timeout(client.m_config.recv_timeout);
         }
         co_return co_await awaitable;
     }
 
-    static Task<std::expected<void, MongoError>> connectSocket(AsyncMongoClient& client,
+    static Task<std::expected<void, MongoError>> connect_socket(AsyncMongoClient& client,
                                                                const MongoConfig& config)
     {
-        client.m_socket.option().handleNonBlock();
+        client.m_socket.option().handle_non_block();
 
         galay::kernel::Host host(galay::kernel::IPType::IPV4, config.host, config.port);
         auto connect_result = co_await client.m_socket.connect(host);
         if (!connect_result.has_value()) {
-            co_return std::unexpected(mapIoError(connect_result.error(), MONGO_ERROR_CONNECTION));
+            co_return std::unexpected(map_io_error(connect_result.error(), MONGO_ERROR_CONNECTION));
         }
 
         if (config.tcp_nodelay) {
-            auto nodelay_result = client.m_socket.option().handleTcpNoDelay();
+            auto nodelay_result = client.m_socket.option().handle_tcp_no_delay();
             if (!nodelay_result.has_value()) {
-                co_return std::unexpected(mapIoError(nodelay_result.error(), MONGO_ERROR_CONNECTION));
+                co_return std::unexpected(map_io_error(nodelay_result.error(), MONGO_ERROR_CONNECTION));
             }
         }
         co_return std::expected<void, MongoError>{};
     }
 
     static std::expected<std::optional<protocol::MongoMessage>, MongoError>
-    tryParseMessage(AsyncMongoClient& client)
+    try_parse_message(AsyncMongoClient& client)
     {
         struct iovec read_iovecs[2];
-        const size_t read_iovecs_count = client.m_ring_buffer.getReadIovecs(read_iovecs, 2);
+        const size_t read_iovecs_count = client.m_ring_buffer.get_read_iovecs(read_iovecs, 2);
         if (read_iovecs_count == 0) {
             return std::optional<protocol::MongoMessage>{};
         }
 
-        auto decode_view_or_err = prepareDecodeView(
+        auto decode_view_or_err = prepare_decode_view(
             std::span<const struct iovec>(read_iovecs, read_iovecs_count),
             client.m_decode_scratch);
         if (!decode_view_or_err) {
@@ -781,7 +781,7 @@ struct AsyncMongoClientInternals
 
         const DecodeView& view = decode_view_or_err->value();
         auto message =
-            protocol::MongoProtocol::decodeMessage(view.data, static_cast<size_t>(view.msg_len));
+            protocol::MongoProtocol::decode_message(view.data, static_cast<size_t>(view.msg_len));
         if (!message) {
             return std::unexpected(message.error());
         }
@@ -791,13 +791,13 @@ struct AsyncMongoClientInternals
     }
 
     static Task<std::expected<protocol::MongoMessage, MongoError>>
-    recvMessage(AsyncMongoClient& client,
+    recv_message(AsyncMongoClient& client,
                 MongoErrorType io_error_type,
                 std::string_view closed_message,
                 std::string_view no_space_message)
     {
         while (true) {
-            auto message_or_err = tryParseMessage(client);
+            auto message_or_err = try_parse_message(client);
             if (!message_or_err) {
                 co_return std::unexpected(std::move(message_or_err.error()));
             }
@@ -806,7 +806,7 @@ struct AsyncMongoClientInternals
             }
 
             struct iovec read_iovecs[2];
-            const size_t count = client.m_ring_buffer.getWriteIovecs(read_iovecs, 2);
+            const size_t count = client.m_ring_buffer.get_write_iovecs(read_iovecs, 2);
             if (count == 0) {
                 co_return std::unexpected(
                     MongoError(MONGO_ERROR_RECV, std::string(no_space_message)));
@@ -817,8 +817,8 @@ struct AsyncMongoClientInternals
                 borrowed_iovecs[i] = read_iovecs[i];
             }
 
-            auto read_result = flattenIoTaskResult(
-                co_await readvOnce(client, borrowed_iovecs, count),
+            auto read_result = flatten_io_task_result(
+                co_await readv_once(client, borrowed_iovecs, count),
                 io_error_type);
             if (!read_result.has_value()) {
                 co_return std::unexpected(std::move(read_result.error()));
@@ -831,7 +831,7 @@ struct AsyncMongoClientInternals
         }
     }
 
-    static Task<std::expected<bool, MongoError>> sendSegments(
+    static Task<std::expected<bool, MongoError>> send_segments(
         AsyncMongoClient& client,
         std::span<const SendSegment> segments,
         MongoErrorType io_error_type,
@@ -847,7 +847,7 @@ struct AsyncMongoClientInternals
         iovecs.reserve(segments.size());
 
         while (sent < total_len) {
-            fillSendIovecsFromSegments(iovecs, segments, sent);
+            fill_send_iovecs_from_segments(iovecs, segments, sent);
             if (iovecs.empty()) {
                 co_return std::unexpected(MongoError(MONGO_ERROR_INTERNAL,
                                                      "sendSegments produced empty iovecs"));
@@ -858,8 +858,8 @@ struct AsyncMongoClientInternals
                 borrowed_iovecs[i] = iovecs[i];
             }
 
-            auto write_result = flattenIoTaskResult(
-                co_await writevOnce(client, borrowed_iovecs, iovecs.size()),
+            auto write_result = flatten_io_task_result(
+                co_await writev_once(client, borrowed_iovecs, iovecs.size()),
                 io_error_type);
             if (!write_result.has_value()) {
                 co_return std::unexpected(std::move(write_result.error()));
@@ -898,8 +898,8 @@ struct AsyncMongoClientInternals
             co_return std::unexpected(std::move(init_result.error()));
         }
 
-        auto connect_result = flattenMongoTaskResult(
-            co_await connectSocket(client, state.config),
+        auto connect_result = flatten_mongo_task_result(
+            co_await connect_socket(client, state.config),
             MONGO_ERROR_CONNECTION);
         if (!connect_result.has_value()) {
             co_return std::unexpected(std::move(connect_result.error()));
@@ -909,8 +909,8 @@ struct AsyncMongoClientInternals
             const std::array<SendSegment, 1> segments{{
                 SendSegment{state.encoded_request.data(), state.encoded_request.size()}
             }};
-            auto send_result = flattenMongoTaskResult(
-                co_await sendSegments(
+            auto send_result = flatten_mongo_task_result(
+                co_await send_segments(
                     client,
                     std::span<const SendSegment>(segments),
                     MONGO_ERROR_SEND,
@@ -920,8 +920,8 @@ struct AsyncMongoClientInternals
                 co_return std::unexpected(std::move(send_result.error()));
             }
 
-            auto message_result = flattenMongoTaskResult(
-                co_await recvMessage(
+            auto message_result = flatten_mongo_task_result(
+                co_await recv_message(
                     client,
                     MONGO_ERROR_RECV,
                     "Connection closed while receiving connect/auth reply",
@@ -933,12 +933,12 @@ struct AsyncMongoClientInternals
 
             MongoReply reply(std::move(message_result->body));
             if (!reply.ok()) {
-                co_return std::unexpected(makeServerError(
+                co_return std::unexpected(make_server_error(
                     std::move(reply),
                     "Mongo connect/auth command failed"));
             }
 
-            auto next_result = state.handleReply(std::move(reply));
+            auto next_result = state.handle_reply(std::move(reply));
             if (!next_result.has_value()) {
                 co_return std::unexpected(std::move(next_result.error()));
             }
@@ -967,19 +967,19 @@ struct AsyncMongoClientInternals
                                                  "Mongo client is not connected"));
         }
 
-        const int32_t request_id = client.nextRequestId();
+        const int32_t request_id = client.next_request_id();
         std::array<char, 4> request_id_le{};
-        writeInt32LE(request_id_le.data(), request_id);
+        write_int32_le(request_id_le.data(), request_id);
 
         std::string encoded_request;
         std::array<SendSegment, 3> send_segments{};
         size_t send_segment_count = 0;
 
-        if (isSimplePingCommand(command, database)) {
+        if (is_simple_ping_command(command, database)) {
             if (client.m_ping_encoded_template.empty() || client.m_ping_template_db != database) {
                 client.m_ping_template_db = database;
                 client.m_ping_encoded_template.clear();
-                auto encoded = protocol::MongoProtocol::appendOpMsgWithDatabase(
+                auto encoded = protocol::MongoProtocol::append_op_msg_with_database(
                     client.m_ping_encoded_template,
                     0,
                     command,
@@ -1002,7 +1002,7 @@ struct AsyncMongoClientInternals
             };
             send_segment_count = 3;
         } else {
-            auto encoded = protocol::MongoProtocol::appendOpMsgWithDatabase(
+            auto encoded = protocol::MongoProtocol::append_op_msg_with_database(
                 encoded_request,
                 request_id,
                 command,
@@ -1014,8 +1014,8 @@ struct AsyncMongoClientInternals
             send_segment_count = 1;
         }
 
-        auto send_result = flattenMongoTaskResult(
-            co_await sendSegments(
+        auto send_result = flatten_mongo_task_result(
+            co_await AsyncMongoClientInternals::send_segments(
                 client,
                 std::span<const SendSegment>(send_segments.data(), send_segment_count),
                 MONGO_ERROR_SEND,
@@ -1025,8 +1025,8 @@ struct AsyncMongoClientInternals
             co_return std::unexpected(std::move(send_result.error()));
         }
 
-        auto message_result = flattenMongoTaskResult(
-            co_await recvMessage(
+        auto message_result = flatten_mongo_task_result(
+            co_await recv_message(
                 client,
                 MONGO_ERROR_RECV,
                 "Connection closed while receiving command reply",
@@ -1043,7 +1043,7 @@ struct AsyncMongoClientInternals
 
         MongoReply reply(std::move(message_result->body));
         if (!reply.ok()) {
-            co_return std::unexpected(makeServerError(std::move(reply), "Mongo command failed"));
+            co_return std::unexpected(make_server_error(std::move(reply), "Mongo command failed"));
         }
 
         co_return std::move(reply);
@@ -1067,13 +1067,13 @@ struct AsyncMongoClientInternals
         }
 
         std::vector<MongoPipelineResponse> responses(commands.size());
-        const int32_t first_request_id = client.reserveRequestIdBlock(commands.size());
+        const int32_t first_request_id = client.reserve_request_id_block(commands.size());
         for (size_t i = 0; i < commands.size(); ++i) {
             responses[i].request_id = static_cast<int32_t>(
                 static_cast<int64_t>(first_request_id) + static_cast<int64_t>(i));
         }
 
-        auto encoded_batch = protocol::MongoCommandBuilder::encodePipeline(
+        auto encoded_batch = protocol::MongoCommandBuilder::encode_pipeline(
             database,
             first_request_id,
             commands,
@@ -1085,8 +1085,8 @@ struct AsyncMongoClientInternals
         const std::array<SendSegment, 1> send_segments{{
             SendSegment{encoded_batch->data(), encoded_batch->size()}
         }};
-        auto send_result = flattenMongoTaskResult(
-            co_await sendSegments(
+        auto send_result = flatten_mongo_task_result(
+            co_await AsyncMongoClientInternals::send_segments(
                 client,
                 std::span<const SendSegment>(send_segments),
                 MONGO_ERROR_SEND,
@@ -1098,8 +1098,8 @@ struct AsyncMongoClientInternals
 
         size_t received = 0;
         while (received < responses.size()) {
-            auto message_result = flattenMongoTaskResult(
-                co_await recvMessage(
+            auto message_result = flatten_mongo_task_result(
+                co_await recv_message(
                     client,
                     MONGO_ERROR_RECV,
                     "Connection closed while receiving pipeline replies",
@@ -1139,7 +1139,7 @@ struct AsyncMongoClientInternals
             if (reply.ok()) {
                 slot.reply = std::move(reply);
             } else {
-                slot.error = makeServerError(std::move(reply), "Mongo pipeline command failed");
+                slot.error = make_server_error(std::move(reply), "Mongo pipeline command failed");
             }
 
             ++received;
@@ -1149,7 +1149,7 @@ struct AsyncMongoClientInternals
     }
 };
 
-int32_t AsyncMongoClient::reserveRequestIdBlock(size_t count)
+int32_t AsyncMongoClient::reserve_request_id_block(size_t count)
 {
     if (count == 0) {
         count = 1;
@@ -1176,9 +1176,9 @@ int32_t AsyncMongoClient::reserveRequestIdBlock(size_t count)
     return first;
 }
 
-int32_t AsyncMongoClient::nextRequestId()
+int32_t AsyncMongoClient::next_request_id()
 {
-    return reserveRequestIdBlock(1);
+    return reserve_request_id_block(1);
 }
 
 AsyncMongoClient::AsyncMongoClient(IOScheduler* scheduler,

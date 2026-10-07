@@ -8,7 +8,7 @@
  * - Linux (io_uring/epoll)：使用 inotify 监控文件和目录事件
  * - macOS (kqueue)：使用 EVFILT_VNODE 进行逐文件监控
  *
- * 监控器对协程友好：调用 addWatch 注册路径，然后 co_await watch() 异步接收变更事件。
+ * 监控器对协程友好：调用 add_watch 注册路径，然后 co_await watch() 异步接收变更事件。
  *
  * 在使用 USE_IOURING、USE_EPOLL 或 USE_KQUEUE 编译时可用。
  */
@@ -41,9 +41,9 @@ namespace galay::async
  * - macOS: 使用 kqueue EVFILT_VNODE
  *
  * @code
- * Task<void> watchFile() {
+ * Task<void> watch_file() {
  *     AsyncFileWatcher watcher;
- *     auto result = watcher.addWatch("/path/to/file", FileWatchEvent::Modify);
+ *     auto result = watcher.add_watch("/path/to/file", FileWatchEvent::Modify);
  *     if (!result) {
  *         // 处理错误
  *         co_return;
@@ -71,7 +71,7 @@ namespace galay::async
  *
  * 典型用法：
  * 1. 构造 AsyncFileWatcher
- * 2. 为每个要监控的路径调用 addWatch()
+ * 2. 为每个要监控的路径调用 add_watch()
  * 3. 在循环中 co_await watch() 接收事件
  *
  * @note 不可拷贝；可移动。
@@ -115,16 +115,16 @@ public:
      * @note 在 Linux 上使用目录监控时，FileWatchResult::name 包含变更的文件名。
      *       在 macOS 上，每个文件需要单独的监控。
      */
-    std::expected<int, galay::kernel::IOError> addWatch(
+    std::expected<int, galay::kernel::IOError> add_watch(
         const std::string& path,
         galay::kernel::FileWatchEvent events = galay::kernel::FileWatchEvent::All);
 
     /**
      * @brief 移除先前注册的监控
-     * @param wd 由 addWatch 返回的监控描述符
+     * @param wd 由 add_watch 返回的监控描述符
      * @return 成功返回 void，描述符无效时返回 IOError
      */
-    std::expected<void, galay::kernel::IOError> removeWatch(int wd);
+    std::expected<void, galay::kernel::IOError> remove_watch(int wd);
 
     /**
      * @brief 异步等待下一个文件系统事件
@@ -136,7 +136,7 @@ public:
      * @brief 检查监控器是否初始化成功
      * @return 如果底层文件描述符有效则返回 true
      */
-    bool isValid() const { return m_watch_fd >= 0; }
+    bool is_valid() const { return m_watch_fd >= 0; }
 
     /**
      * @brief 获取底层监控文件描述符
@@ -149,13 +149,13 @@ public:
      * @param wd 监控描述符
      * @return 注册的路径，未找到时返回空字符串
      */
-    std::string getPath(int wd) const;
+    std::string get_path(int wd) const;
 
     /**
      * @brief 获取内部 IO 控制器（用于高级操作）
      * @return IOController 指针
      */
-    galay::kernel::IOController* getController() { return m_controller.get(); }
+    galay::kernel::IOController* get_controller() { return m_controller.get(); }
 
 private:
     std::unique_ptr<galay::kernel::IOController> m_controller;      ///< IO控制器

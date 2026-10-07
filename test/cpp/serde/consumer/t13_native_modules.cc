@@ -12,11 +12,11 @@ static_assert(!std::is_move_constructible_v<galay::kernel::IOController>);
 
 int main()
 {
-    const auto config = galay::postgres::PostgresConfig::defaultConfig();
+    const auto config = galay::postgres::PostgresConfig::default_config();
     assert(!config.host.empty());
 
     galay::rpc::RpcRequest request;
-    request.requestId(42);
-    assert(request.requestId() == 42);
+    request.request_id(42);
+    assert(request.request_id() == 42);
     return 0;
 }

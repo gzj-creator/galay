@@ -30,7 +30,7 @@ public:
                                  uint32_t expected_request_id,
                                  RpcResponse& response);
 
-    bool parseFromRingBuffer();
+    bool parse_from_ring_buffer();
 
 private:
     const RpcReaderSetting* m_setting = nullptr; ///< 读取配置

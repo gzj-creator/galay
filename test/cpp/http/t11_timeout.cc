@@ -24,7 +24,7 @@ Task<void> test_http_client_awaitable_timeout(IOScheduler* scheduler)
     std::cout << "=== Test 1: HttpClientAwaitable Timeout ===" << std::endl;
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
     auto connect_result = co_await socket.connect(host);
@@ -37,9 +37,9 @@ Task<void> test_http_client_awaitable_timeout(IOScheduler* scheduler)
 
     std::cout << "✓ Connected to server" << std::endl;
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
-    auto session_result = client.getSession();
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -82,7 +82,7 @@ Task<void> test_reader_writer_awaitable_timeout(IOScheduler* scheduler)
     std::cout << "=== Test 2: SendResponseAwaitable & GetResponseAwaitable Timeout ===" << std::endl;
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
     auto connect_result = co_await socket.connect(host);
@@ -105,7 +105,7 @@ Task<void> test_reader_writer_awaitable_timeout(IOScheduler* scheduler)
     // 测试 SendResponseAwaitable.timeout()
     std::cout << "Testing SendResponseAwaitable.timeout()..." << std::endl;
     auto request = Http1_1RequestBuilder::get("/api/data")
-        .buildMove();
+        .build_move();
 
     auto start = std::chrono::steady_clock::now();
     int loop_count = 0;
@@ -113,7 +113,7 @@ Task<void> test_reader_writer_awaitable_timeout(IOScheduler* scheduler)
     while (true) {
         loop_count++;
         // 现在可以使用 .timeout() 了！
-        auto send_result = co_await writer.sendRequest(request).timeout(5000ms);
+        auto send_result = co_await writer.send_request(request).timeout(5000ms);
 
         if (!send_result || send_result.value() || loop_count > 100) {
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -138,7 +138,7 @@ Task<void> test_reader_writer_awaitable_timeout(IOScheduler* scheduler)
     while (true) {
         loop_count++;
         // 现在可以使用 .timeout() 了！
-        auto recv_result = co_await reader.getResponse(response).timeout(5000ms);
+        auto recv_result = co_await reader.get_response(response).timeout(5000ms);
 
         if (!recv_result || recv_result.value() || loop_count > 100) {
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -193,7 +193,7 @@ Task<void> test_tcp_socket_awaitable_timeout(IOScheduler* scheduler)
     // 测试 ConnectAwaitable.timeout()
     std::cout << "Testing ConnectAwaitable.timeout()..." << std::endl;
     AsyncTcpSocket socket1(IPType::IPV4);
-    socket1.option().handleNonBlock();
+    socket1.option().handle_non_block();
 
     auto start = std::chrono::steady_clock::now();
     Host host(IPType::IPV4, "192.0.2.1", 9999);
@@ -211,7 +211,7 @@ Task<void> test_tcp_socket_awaitable_timeout(IOScheduler* scheduler)
     // 测试 RecvAwaitable.timeout()
     std::cout << "Testing RecvAwaitable.timeout()..." << std::endl;
     AsyncTcpSocket socket2(IPType::IPV4);
-    socket2.option().handleNonBlock();
+    socket2.option().handle_non_block();
 
     Host host2(IPType::IPV4, "127.0.0.1", 8080);
     auto connect_result = co_await socket2.connect(host2);
@@ -250,26 +250,26 @@ int main()
         Runtime runtime;
         runtime.start();
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             std::cerr << "No IO scheduler available" << std::endl;
             return 1;
         }
 
         // 运行所有测试
-        scheduleTask(scheduler, test_tcp_socket_awaitable_timeout(scheduler));
+        schedule_task(scheduler, test_tcp_socket_awaitable_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(4));
 
-        scheduleTask(scheduler, test_http_client_awaitable_timeout(scheduler));
+        schedule_task(scheduler, test_http_client_awaitable_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        scheduleTask(scheduler, test_reader_writer_awaitable_timeout(scheduler));
+        schedule_task(scheduler, test_reader_writer_awaitable_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        scheduleTask(scheduler, test_get_request_awaitable_timeout(scheduler));
+        schedule_task(scheduler, test_get_request_awaitable_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, test_get_chunk_awaitable_timeout(scheduler));
+        schedule_task(scheduler, test_get_chunk_awaitable_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         runtime.stop();

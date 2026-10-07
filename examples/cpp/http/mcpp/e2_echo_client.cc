@@ -10,7 +10,7 @@ import galay.http;
 using namespace galay::http;
 using namespace galay::kernel;
 
-Task<bool> sendEchoRequest(const std::string& url, const std::string& message) {
+Task<bool> send_echo_request(const std::string& url, const std::string& message) {
     auto client = HttpClientBuilder().build();
     auto connect_result = co_await client.connect(url);
     if (!connect_result) {
@@ -44,8 +44,8 @@ Task<bool> sendEchoRequest(const std::string& url, const std::string& message) {
 
     auto& response = response_opt.value();
     std::cout << "Status: " << static_cast<int>(response.header().code())
-              << " " << httpStatusCodeToString(response.header().code()) << "\n";
-    std::cout << "Body: " << response.getBodyStr() << "\n";
+              << " " << http_status_code_to_string(response.header().code()) << "\n";
+    std::cout << "Body: " << response.get_body_str() << "\n";
     co_return true;
 }
 
@@ -60,9 +60,9 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
         runtime.start();
-        auto join = runtime.spawnIO(sendEchoRequest(url, message));
+        auto join = runtime.spawn_io(send_echo_request(url, message));
         bool ok = false;
         if (join) {
             auto result = join->join();

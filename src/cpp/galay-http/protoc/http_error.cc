@@ -122,7 +122,7 @@ namespace galay::http
         return std::string(g_http_error_messages[m_code]) + ": " + m_extra_msg;
     }
 
-    HttpStatusCode HttpError::toHttpStatusCode() const
+    HttpStatusCode HttpError::to_http_status_code() const
     {
         switch (m_code)
         {

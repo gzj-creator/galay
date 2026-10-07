@@ -30,7 +30,7 @@ Task<void> test_connection_pool(IOScheduler* scheduler, AsyncTestState* state, m
     MysqlConfig config = MysqlConfig::create(db_cfg.host, db_cfg.port, db_cfg.user, db_cfg.password, db_cfg.database);
     MysqlConnectionPoolConfig pool_config;
     pool_config.mysql_config = config;
-    pool_config.async_config = AsyncMysqlConfig::noTimeout();
+    pool_config.async_config = AsyncMysqlConfig::no_timeout();
     pool_config.min_connections = 2;
     pool_config.max_connections = 5;
     MysqlConnectionPool pool(scheduler, pool_config);
@@ -56,7 +56,7 @@ Task<void> test_connection_pool(IOScheduler* scheduler, AsyncTestState* state, m
     {
         auto qr = co_await client->query("SELECT 1 AS test_col");
         if (qr && qr->has_value()) {
-            std::cout << "  Query result: " << qr->value().row(0).getString(0) << std::endl;
+            std::cout << "  Query result: " << qr->value().row(0).get_string(0) << std::endl;
         } else if (!qr) {
             state->fail("Query failed: " + qr.error().message());
             co_return;
@@ -93,25 +93,25 @@ Task<void> test_connection_pool(IOScheduler* scheduler, AsyncTestState* state, m
 int main()
 {
     std::cout << "=== T5: Connection Pool Tests ===" << std::endl;
-    const auto db_cfg = mysql_test::loadDbTestConfig();
-    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T5-ConnectionPool");
+    const auto db_cfg = mysql_test::load_db_test_config();
+    if (const int skip_code = mysql_test::require_db_test_config_or_skip(db_cfg, "T5-ConnectionPool");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printDbTestConfig(db_cfg);
+    mysql_test::print_db_test_config(db_cfg);
 
     try {
         Runtime runtime;
         runtime.start();
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             std::cerr << "Failed to get IO scheduler" << std::endl;
             return 1;
         }
 
         AsyncTestState state;
-        if (!scheduleTask(scheduler, test_connection_pool(scheduler, &state, db_cfg))) {
+        if (!schedule_task(scheduler, test_connection_pool(scheduler, &state, db_cfg))) {
             std::cerr << "Failed to schedule connection pool test task on IO scheduler" << std::endl;
             runtime.stop();
             return 1;

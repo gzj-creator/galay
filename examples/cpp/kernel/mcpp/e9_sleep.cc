@@ -20,7 +20,7 @@ namespace {
 std::atomic<bool> g_done{false};
 std::atomic<long long> g_elapsedMs{0};
 
-Task<void> sleepTask() {
+Task<void> sleep_task() {
     const auto start = std::chrono::steady_clock::now();
 
     co_await sleep(120ms);
@@ -36,11 +36,11 @@ Task<void> sleepTask() {
 }  // namespace
 
 int main() {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
-    auto* io = runtime.getNextIOScheduler();
-    scheduleTask(io, sleepTask());
+    auto* io = runtime.get_next_io_scheduler();
+    schedule_task(io, sleep_task());
 
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
     while (!g_done.load(std::memory_order_acquire) &&

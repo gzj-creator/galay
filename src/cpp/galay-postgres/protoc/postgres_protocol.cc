@@ -13,29 +13,29 @@ namespace galay::postgres::protocol
 namespace
 {
 
-bool hasEmbeddedNull(std::string_view value)
+bool has_embedded_null(std::string_view value)
 {
     return value.find('\0') != std::string_view::npos;
 }
 
-bool validMessagePayloadSize(size_t size)
+bool valid_message_payload_size(size_t size)
 {
     constexpr size_t kMaxPayload =
         static_cast<size_t>(std::numeric_limits<int32_t>::max()) - kLengthFieldSize;
     return size <= kMaxPayload;
 }
 
-int16_t readSignedInt16(const char* data) noexcept
+int16_t read_signed_int16(const char* data) noexcept
 {
-    return std::bit_cast<int16_t>(readInt16(data));
+    return std::bit_cast<int16_t>(read_int16(data));
 }
 
-int32_t readSignedInt32(const char* data) noexcept
+int32_t read_signed_int32(const char* data) noexcept
 {
-    return std::bit_cast<int32_t>(readInt32(data));
+    return std::bit_cast<int32_t>(read_int32(data));
 }
 
-std::expected<void, ParseError> parseEmptyPayload(size_t length)
+std::expected<void, ParseError> parse_empty_payload(size_t length)
 {
     if (length != 0) {
         return std::unexpected(ParseError::InvalidLength);
@@ -44,45 +44,45 @@ std::expected<void, ParseError> parseEmptyPayload(size_t length)
 }
 
 template <typename ParameterSpan>
-std::expected<std::string, ParseError> buildBindPayload(std::string_view portal_name,
+std::expected<std::string, ParseError> build_bind_payload(std::string_view portal_name,
                                                         std::string_view statement_name,
                                                         ParameterSpan parameters)
 {
-    if (hasEmbeddedNull(portal_name) || hasEmbeddedNull(statement_name) ||
+    if (has_embedded_null(portal_name) || has_embedded_null(statement_name) ||
         parameters.size() > static_cast<size_t>(std::numeric_limits<int16_t>::max())) {
         return std::unexpected(ParseError::InvalidLength);
     }
 
     std::string payload;
-    writeCString(payload, portal_name);
-    writeCString(payload, statement_name);
-    writeInt16(payload, 0); // Zero format codes selects the default text format for all parameters.
-    writeInt16(payload, static_cast<uint16_t>(parameters.size()));
+    write_c_string(payload, portal_name);
+    write_c_string(payload, statement_name);
+    write_int16(payload, 0); // Zero format codes selects the default text format for all parameters.
+    write_int16(payload, static_cast<uint16_t>(parameters.size()));
     for (const auto& parameter : parameters) {
         if (!parameter.has_value()) {
-            writeInt32(payload, std::numeric_limits<uint32_t>::max());
+            write_int32(payload, std::numeric_limits<uint32_t>::max());
             continue;
         }
         const std::string_view value = *parameter;
         if (value.size() > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
             return std::unexpected(ParseError::InvalidLength);
         }
-        writeInt32(payload, static_cast<uint32_t>(value.size()));
+        write_int32(payload, static_cast<uint32_t>(value.size()));
         payload.append(value.data(), value.size());
     }
-    writeInt16(payload, 0); // Request text results for every column.
+    write_int16(payload, 0); // Request text results for every column.
     return payload;
 }
 
 } // namespace
 
-uint16_t readInt16(const char* data) noexcept
+uint16_t read_int16(const char* data) noexcept
 {
     return (static_cast<uint16_t>(static_cast<uint8_t>(data[0])) << 8) |
            static_cast<uint8_t>(data[1]);
 }
 
-uint32_t readInt32(const char* data) noexcept
+uint32_t read_int32(const char* data) noexcept
 {
     return (static_cast<uint32_t>(static_cast<uint8_t>(data[0])) << 24) |
            (static_cast<uint32_t>(static_cast<uint8_t>(data[1])) << 16) |
@@ -90,13 +90,13 @@ uint32_t readInt32(const char* data) noexcept
            static_cast<uint8_t>(data[3]);
 }
 
-void writeInt16(std::string& output, uint16_t value)
+void write_int16(std::string& output, uint16_t value)
 {
     output.push_back(static_cast<char>((value >> 8) & 0xff));
     output.push_back(static_cast<char>(value & 0xff));
 }
 
-void writeInt32(std::string& output, uint32_t value)
+void write_int32(std::string& output, uint32_t value)
 {
     output.push_back(static_cast<char>((value >> 24) & 0xff));
     output.push_back(static_cast<char>((value >> 16) & 0xff));
@@ -104,7 +104,7 @@ void writeInt32(std::string& output, uint32_t value)
     output.push_back(static_cast<char>(value & 0xff));
 }
 
-std::expected<std::string, ParseError> readCString(const char* data,
+std::expected<std::string, ParseError> read_c_string(const char* data,
                                                    size_t length,
                                                    size_t& consumed)
 {
@@ -121,19 +121,19 @@ std::expected<std::string, ParseError> readCString(const char* data,
     return std::string(data, string_length);
 }
 
-void writeCString(std::string& output, std::string_view value)
+void write_c_string(std::string& output, std::string_view value)
 {
     output.append(value.data(), value.size());
     output.push_back('\0');
 }
 
 std::expected<MessageHeader, ParseError>
-PostgresParser::parseHeader(const char* data, size_t length) const
+PostgresParser::parse_header(const char* data, size_t length) const
 {
     if (length < kMessageHeaderSize) {
         return std::unexpected(ParseError::Incomplete);
     }
-    const uint32_t message_length = readInt32(data + 1);
+    const uint32_t message_length = read_int32(data + 1);
     if (message_length < kLengthFieldSize ||
         message_length > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
         return std::unexpected(ParseError::InvalidLength);
@@ -142,9 +142,9 @@ PostgresParser::parseHeader(const char* data, size_t length) const
 }
 
 std::expected<MessageView, ParseError>
-PostgresParser::extractMessage(const char* data, size_t length) const
+PostgresParser::extract_message(const char* data, size_t length) const
 {
-    auto header = parseHeader(data, length);
+    auto header = parse_header(data, length);
     if (!header) {
         return std::unexpected(header.error());
     }
@@ -161,13 +161,13 @@ PostgresParser::extractMessage(const char* data, size_t length) const
 }
 
 std::expected<AuthenticationRequest, ParseError>
-PostgresParser::parseAuthenticationRequest(const char* data, size_t length) const
+PostgresParser::parse_authentication_request(const char* data, size_t length) const
 {
     if (length < 4) {
         return std::unexpected(ParseError::Incomplete);
     }
 
-    const uint32_t raw_kind = readInt32(data);
+    const uint32_t raw_kind = read_int32(data);
     AuthenticationRequest request;
     switch (raw_kind) {
     case 0: request.kind = AuthRequestKind::Ok; break;
@@ -187,7 +187,7 @@ PostgresParser::parseAuthenticationRequest(const char* data, size_t length) cons
         size_t position = 4;
         while (position < length) {
             size_t consumed = 0;
-            auto mechanism = readCString(data + position, length - position, consumed);
+            auto mechanism = read_c_string(data + position, length - position, consumed);
             if (!mechanism) {
                 return std::unexpected(mechanism.error());
             }
@@ -221,7 +221,7 @@ PostgresParser::parseAuthenticationRequest(const char* data, size_t length) cons
 }
 
 std::expected<ErrorFields, ParseError>
-PostgresParser::parseErrorResponse(const char* data, size_t length) const
+PostgresParser::parse_error_response(const char* data, size_t length) const
 {
     if (length == 0) {
         return std::unexpected(ParseError::Incomplete);
@@ -245,7 +245,7 @@ PostgresParser::parseErrorResponse(const char* data, size_t length) const
         seen[tag] = true;
 
         size_t consumed = 0;
-        auto value = readCString(data + position, length - position, consumed);
+        auto value = read_c_string(data + position, length - position, consumed);
         if (!value) {
             return std::unexpected(value.error());
         }
@@ -279,12 +279,12 @@ PostgresParser::parseErrorResponse(const char* data, size_t length) const
 }
 
 std::expected<std::vector<RowDescriptionField>, ParseError>
-PostgresParser::parseRowDescription(const char* data, size_t length) const
+PostgresParser::parse_row_description(const char* data, size_t length) const
 {
     if (length < 2) {
         return std::unexpected(ParseError::Incomplete);
     }
-    const int16_t signed_count = readSignedInt16(data);
+    const int16_t signed_count = read_signed_int16(data);
     if (signed_count < 0) {
         return std::unexpected(ParseError::InvalidLength);
     }
@@ -298,7 +298,7 @@ PostgresParser::parseRowDescription(const char* data, size_t length) const
     size_t position = 2;
     for (size_t index = 0; index < count; ++index) {
         size_t consumed = 0;
-        auto name = readCString(data + position, length - position, consumed);
+        auto name = read_c_string(data + position, length - position, consumed);
         if (!name) {
             return std::unexpected(name.error());
         }
@@ -309,12 +309,12 @@ PostgresParser::parseRowDescription(const char* data, size_t length) const
 
         RowDescriptionField field;
         field.name = std::move(*name);
-        field.table_oid = readInt32(data + position); position += 4;
-        field.column_index = readSignedInt16(data + position); position += 2;
-        field.type_oid = readInt32(data + position); position += 4;
-        field.type_size = readSignedInt16(data + position); position += 2;
-        field.type_modifier = readSignedInt32(data + position); position += 4;
-        field.format = readSignedInt16(data + position); position += 2;
+        field.table_oid = read_int32(data + position); position += 4;
+        field.column_index = read_signed_int16(data + position); position += 2;
+        field.type_oid = read_int32(data + position); position += 4;
+        field.type_size = read_signed_int16(data + position); position += 2;
+        field.type_modifier = read_signed_int32(data + position); position += 4;
+        field.format = read_signed_int16(data + position); position += 2;
         if (field.format != 0 && field.format != 1) {
             return std::unexpected(ParseError::InvalidFormat);
         }
@@ -327,12 +327,12 @@ PostgresParser::parseRowDescription(const char* data, size_t length) const
 }
 
 std::expected<std::vector<std::optional<std::string_view>>, ParseError>
-PostgresParser::parseDataRowView(const char* data, size_t length) const
+PostgresParser::parse_data_row_view(const char* data, size_t length) const
 {
     if (length < 2) {
         return std::unexpected(ParseError::Incomplete);
     }
-    const int16_t signed_count = readSignedInt16(data);
+    const int16_t signed_count = read_signed_int16(data);
     if (signed_count < 0) {
         return std::unexpected(ParseError::InvalidLength);
     }
@@ -348,7 +348,7 @@ PostgresParser::parseDataRowView(const char* data, size_t length) const
         if (length - position < 4) {
             return std::unexpected(ParseError::Incomplete);
         }
-        const int32_t value_length = readSignedInt32(data + position);
+        const int32_t value_length = read_signed_int32(data + position);
         position += 4;
         if (value_length == -1) {
             values.push_back(std::nullopt);
@@ -371,9 +371,9 @@ PostgresParser::parseDataRowView(const char* data, size_t length) const
 }
 
 std::expected<PostgresRow, ParseError>
-PostgresParser::parseDataRow(const char* data, size_t length) const
+PostgresParser::parse_data_row(const char* data, size_t length) const
 {
-    auto views = parseDataRowView(data, length);
+    auto views = parse_data_row_view(data, length);
     if (!views) {
         return std::unexpected(views.error());
     }
@@ -390,10 +390,10 @@ PostgresParser::parseDataRow(const char* data, size_t length) const
 }
 
 std::expected<CommandCompleteInfo, ParseError>
-PostgresParser::parseCommandComplete(const char* data, size_t length) const
+PostgresParser::parse_command_complete(const char* data, size_t length) const
 {
     size_t consumed = 0;
-    auto tag = readCString(data, length, consumed);
+    auto tag = read_c_string(data, length, consumed);
     if (!tag) {
         return std::unexpected(tag.error());
     }
@@ -418,7 +418,7 @@ PostgresParser::parseCommandComplete(const char* data, size_t length) const
 }
 
 std::expected<ReadyForQueryInfo, ParseError>
-PostgresParser::parseReadyForQuery(const char* data, size_t length) const
+PostgresParser::parse_ready_for_query(const char* data, size_t length) const
 {
     if (length < 1) {
         return std::unexpected(ParseError::Incomplete);
@@ -433,15 +433,15 @@ PostgresParser::parseReadyForQuery(const char* data, size_t length) const
 }
 
 std::expected<ParameterStatusInfo, ParseError>
-PostgresParser::parseParameterStatus(const char* data, size_t length) const
+PostgresParser::parse_parameter_status(const char* data, size_t length) const
 {
     size_t first_consumed = 0;
-    auto name = readCString(data, length, first_consumed);
+    auto name = read_c_string(data, length, first_consumed);
     if (!name) {
         return std::unexpected(name.error());
     }
     size_t second_consumed = 0;
-    auto value = readCString(data + first_consumed,
+    auto value = read_c_string(data + first_consumed,
                              length - first_consumed,
                              second_consumed);
     if (!value) {
@@ -454,7 +454,7 @@ PostgresParser::parseParameterStatus(const char* data, size_t length) const
 }
 
 std::expected<BackendKeyDataInfo, ParseError>
-PostgresParser::parseBackendKeyData(const char* data, size_t length) const
+PostgresParser::parse_backend_key_data(const char* data, size_t length) const
 {
     if (length < 8) {
         return std::unexpected(ParseError::Incomplete);
@@ -463,18 +463,18 @@ PostgresParser::parseBackendKeyData(const char* data, size_t length) const
         return std::unexpected(ParseError::InvalidLength);
     }
     return BackendKeyDataInfo{
-        .process_id = readInt32(data),
-        .secret_key = readInt32(data + 4),
+        .process_id = read_int32(data),
+        .secret_key = read_int32(data + 4),
     };
 }
 
 std::expected<std::vector<uint32_t>, ParseError>
-PostgresParser::parseParameterDescription(const char* data, size_t length) const
+PostgresParser::parse_parameter_description(const char* data, size_t length) const
 {
     if (length < 2) {
         return std::unexpected(ParseError::Incomplete);
     }
-    const int16_t signed_count = readSignedInt16(data);
+    const int16_t signed_count = read_signed_int16(data);
     if (signed_count < 0) {
         return std::unexpected(ParseError::InvalidLength);
     }
@@ -490,73 +490,73 @@ PostgresParser::parseParameterDescription(const char* data, size_t length) const
     oids.reserve(count);
     size_t position = 2;
     for (size_t index = 0; index < count; ++index) {
-        oids.push_back(readInt32(data + position));
+        oids.push_back(read_int32(data + position));
         position += 4;
     }
     return oids;
 }
 
 std::expected<void, ParseError>
-PostgresParser::parseParseComplete(const char*, size_t length) const
+PostgresParser::parse_parse_complete(const char*, size_t length) const
 {
-    return parseEmptyPayload(length);
+    return parse_empty_payload(length);
 }
 
 std::expected<void, ParseError>
-PostgresParser::parseBindComplete(const char*, size_t length) const
+PostgresParser::parse_bind_complete(const char*, size_t length) const
 {
-    return parseEmptyPayload(length);
+    return parse_empty_payload(length);
 }
 
 std::expected<void, ParseError>
-PostgresParser::parseCloseComplete(const char*, size_t length) const
+PostgresParser::parse_close_complete(const char*, size_t length) const
 {
-    return parseEmptyPayload(length);
+    return parse_empty_payload(length);
 }
 
 std::expected<void, ParseError>
-PostgresParser::parseNoData(const char*, size_t length) const
+PostgresParser::parse_no_data(const char*, size_t length) const
 {
-    return parseEmptyPayload(length);
+    return parse_empty_payload(length);
 }
 
 std::expected<void, ParseError>
-PostgresParser::parsePortalSuspended(const char*, size_t length) const
+PostgresParser::parse_portal_suspended(const char*, size_t length) const
 {
-    return parseEmptyPayload(length);
+    return parse_empty_payload(length);
 }
 
-std::string PostgresEncoder::wrapMessage(char type, std::string_view payload) const
+std::string PostgresEncoder::wrap_message(char type, std::string_view payload) const
 {
-    if (!validMessagePayloadSize(payload.size())) {
+    if (!valid_message_payload_size(payload.size())) {
         return {};
     }
     std::string message;
     message.reserve(1 + kLengthFieldSize + payload.size());
     message.push_back(type);
-    writeInt32(message, static_cast<uint32_t>(kLengthFieldSize + payload.size()));
+    write_int32(message, static_cast<uint32_t>(kLengthFieldSize + payload.size()));
     message.append(payload.data(), payload.size());
     return message;
 }
 
-std::string PostgresEncoder::encodeStartupMessage(const PostgresConfig& config) const
+std::string PostgresEncoder::encode_startup_message(const PostgresConfig& config) const
 {
-    if (config.username.empty() || hasEmbeddedNull(config.username) ||
-        hasEmbeddedNull(config.database) || hasEmbeddedNull(config.application_name)) {
+    if (config.username.empty() || has_embedded_null(config.username) ||
+        has_embedded_null(config.database) || has_embedded_null(config.application_name)) {
         return {};
     }
 
     std::string payload;
-    writeInt32(payload, kProtocolVersion3);
-    writeCString(payload, "user");
-    writeCString(payload, config.username);
+    write_int32(payload, kProtocolVersion3);
+    write_c_string(payload, "user");
+    write_c_string(payload, config.username);
     if (!config.database.empty()) {
-        writeCString(payload, "database");
-        writeCString(payload, config.database);
+        write_c_string(payload, "database");
+        write_c_string(payload, config.database);
     }
     if (!config.application_name.empty()) {
-        writeCString(payload, "application_name");
-        writeCString(payload, config.application_name);
+        write_c_string(payload, "application_name");
+        write_c_string(payload, config.application_name);
     }
     payload.push_back('\0');
 
@@ -567,148 +567,148 @@ std::string PostgresEncoder::encodeStartupMessage(const PostgresConfig& config) 
     }
     std::string message;
     message.reserve(total_length);
-    writeInt32(message, static_cast<uint32_t>(total_length));
+    write_int32(message, static_cast<uint32_t>(total_length));
     message.append(payload);
     return message;
 }
 
-std::string PostgresEncoder::encodeSASLInitialResponse(std::string_view mechanism,
+std::string PostgresEncoder::encode_sasl_initial_response(std::string_view mechanism,
                                                        std::string_view client_first) const
 {
-    if (mechanism.empty() || hasEmbeddedNull(mechanism) ||
+    if (mechanism.empty() || has_embedded_null(mechanism) ||
         client_first.size() > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
         return {};
     }
     std::string payload;
-    writeCString(payload, mechanism);
-    writeInt32(payload, static_cast<uint32_t>(client_first.size()));
+    write_c_string(payload, mechanism);
+    write_int32(payload, static_cast<uint32_t>(client_first.size()));
     payload.append(client_first.data(), client_first.size());
-    return wrapMessage(kMsgPassword, payload);
+    return wrap_message(kMsgPassword, payload);
 }
 
-std::string PostgresEncoder::encodeSASLResponse(std::string_view client_final) const
+std::string PostgresEncoder::encode_sasl_response(std::string_view client_final) const
 {
-    return wrapMessage(kMsgPassword, client_final);
+    return wrap_message(kMsgPassword, client_final);
 }
 
-std::string PostgresEncoder::encodePasswordMessage(std::string_view password) const
+std::string PostgresEncoder::encode_password_message(std::string_view password) const
 {
-    if (hasEmbeddedNull(password)) {
+    if (has_embedded_null(password)) {
         return {};
     }
     std::string payload(password);
     payload.push_back('\0');
-    return wrapMessage(kMsgPassword, payload);
+    return wrap_message(kMsgPassword, payload);
 }
 
-std::string PostgresEncoder::encodeQuery(std::string_view sql) const
+std::string PostgresEncoder::encode_query(std::string_view sql) const
 {
-    if (hasEmbeddedNull(sql)) {
+    if (has_embedded_null(sql)) {
         return {};
     }
     std::string payload(sql);
     payload.push_back('\0');
-    return wrapMessage(kMsgQuery, payload);
+    return wrap_message(kMsgQuery, payload);
 }
 
-std::string PostgresEncoder::encodeTerminate() const
+std::string PostgresEncoder::encode_terminate() const
 {
-    return wrapMessage(kMsgTerminate, {});
+    return wrap_message(kMsgTerminate, {});
 }
 
-std::string PostgresEncoder::encodeParse(std::string_view statement_name,
+std::string PostgresEncoder::encode_parse(std::string_view statement_name,
                                          std::string_view sql,
                                          std::span<const uint32_t> parameter_type_oids) const
 {
-    if (hasEmbeddedNull(statement_name) || hasEmbeddedNull(sql) ||
+    if (has_embedded_null(statement_name) || has_embedded_null(sql) ||
         parameter_type_oids.size() >
             static_cast<size_t>(std::numeric_limits<int16_t>::max())) {
         return {};
     }
     std::string payload;
-    writeCString(payload, statement_name);
-    writeCString(payload, sql);
-    writeInt16(payload, static_cast<uint16_t>(parameter_type_oids.size()));
+    write_c_string(payload, statement_name);
+    write_c_string(payload, sql);
+    write_int16(payload, static_cast<uint16_t>(parameter_type_oids.size()));
     for (uint32_t oid : parameter_type_oids) {
-        writeInt32(payload, oid);
+        write_int32(payload, oid);
     }
-    return wrapMessage(kMsgParse, payload);
+    return wrap_message(kMsgParse, payload);
 }
 
-std::string PostgresEncoder::encodeBind(
+std::string PostgresEncoder::encode_bind(
     std::string_view portal_name,
     std::string_view statement_name,
     std::span<const std::optional<std::string_view>> parameters) const
 {
-    auto payload = buildBindPayload(portal_name, statement_name, parameters);
-    return payload ? wrapMessage(kMsgBind, *payload) : std::string{};
+    auto payload = build_bind_payload(portal_name, statement_name, parameters);
+    return payload ? wrap_message(kMsgBind, *payload) : std::string{};
 }
 
-std::string PostgresEncoder::encodeBind(
+std::string PostgresEncoder::encode_bind(
     std::string_view portal_name,
     std::string_view statement_name,
     std::span<const std::optional<std::string>> parameters) const
 {
-    auto payload = buildBindPayload(portal_name, statement_name, parameters);
-    return payload ? wrapMessage(kMsgBind, *payload) : std::string{};
+    auto payload = build_bind_payload(portal_name, statement_name, parameters);
+    return payload ? wrap_message(kMsgBind, *payload) : std::string{};
 }
 
-std::string PostgresEncoder::encodeDescribeStatement(std::string_view statement_name) const
+std::string PostgresEncoder::encode_describe_statement(std::string_view statement_name) const
 {
-    if (hasEmbeddedNull(statement_name)) {
+    if (has_embedded_null(statement_name)) {
         return {};
     }
     std::string payload(1, 'S');
-    writeCString(payload, statement_name);
-    return wrapMessage(kMsgDescribe, payload);
+    write_c_string(payload, statement_name);
+    return wrap_message(kMsgDescribe, payload);
 }
 
-std::string PostgresEncoder::encodeDescribePortal(std::string_view portal_name) const
+std::string PostgresEncoder::encode_describe_portal(std::string_view portal_name) const
 {
-    if (hasEmbeddedNull(portal_name)) {
+    if (has_embedded_null(portal_name)) {
         return {};
     }
     std::string payload(1, 'P');
-    writeCString(payload, portal_name);
-    return wrapMessage(kMsgDescribe, payload);
+    write_c_string(payload, portal_name);
+    return wrap_message(kMsgDescribe, payload);
 }
 
-std::string PostgresEncoder::encodeExecute(std::string_view portal_name,
+std::string PostgresEncoder::encode_execute(std::string_view portal_name,
                                            uint32_t max_rows) const
 {
-    if (hasEmbeddedNull(portal_name) ||
+    if (has_embedded_null(portal_name) ||
         max_rows > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
         return {};
     }
     std::string payload;
-    writeCString(payload, portal_name);
-    writeInt32(payload, max_rows);
-    return wrapMessage(kMsgExecute, payload);
+    write_c_string(payload, portal_name);
+    write_int32(payload, max_rows);
+    return wrap_message(kMsgExecute, payload);
 }
 
-std::string PostgresEncoder::encodeSync() const
+std::string PostgresEncoder::encode_sync() const
 {
-    return wrapMessage(kMsgSync, {});
+    return wrap_message(kMsgSync, {});
 }
 
-std::string PostgresEncoder::encodeCloseStatement(std::string_view statement_name) const
+std::string PostgresEncoder::encode_close_statement(std::string_view statement_name) const
 {
-    if (hasEmbeddedNull(statement_name)) {
+    if (has_embedded_null(statement_name)) {
         return {};
     }
     std::string payload(1, 'S');
-    writeCString(payload, statement_name);
-    return wrapMessage(kMsgClose, payload);
+    write_c_string(payload, statement_name);
+    return wrap_message(kMsgClose, payload);
 }
 
-std::string PostgresEncoder::encodeClosePortal(std::string_view portal_name) const
+std::string PostgresEncoder::encode_close_portal(std::string_view portal_name) const
 {
-    if (hasEmbeddedNull(portal_name)) {
+    if (has_embedded_null(portal_name)) {
         return {};
     }
     std::string payload(1, 'P');
-    writeCString(payload, portal_name);
-    return wrapMessage(kMsgClose, payload);
+    write_c_string(payload, portal_name);
+    return wrap_message(kMsgClose, payload);
 }
 
 } // namespace galay::postgres::protocol

@@ -26,7 +26,7 @@ void fail(TestState* state, std::string message)
     state->error = std::move(message);
 }
 
-std::vector<RpcEndpoint> makeEndpoints(size_t count)
+std::vector<RpcEndpoint> make_endpoints(size_t count)
 {
     std::vector<RpcEndpoint> endpoints;
     endpoints.reserve(count);
@@ -36,10 +36,10 @@ std::vector<RpcEndpoint> makeEndpoints(size_t count)
     return endpoints;
 }
 
-Task<void> runMultiEndpointChecks(TestState* state)
+Task<void> run_multi_endpoint_checks(TestState* state)
 {
     constexpr size_t kEndpointCount = 96;
-    auto endpoints = makeEndpoints(kEndpointCount);
+    auto endpoints = make_endpoints(kEndpointCount);
 
     RpcConnectionPoolConfig config;
     config.min_connections_per_endpoint = 1;
@@ -48,7 +48,7 @@ Task<void> runMultiEndpointChecks(TestState* state)
 
     RpcConnectionPool pool(config);
     for (const auto& endpoint : endpoints) {
-        auto ensure_result = pool.ensureEndpoint(endpoint);
+        auto ensure_result = pool.ensure_endpoint(endpoint);
         if (!ensure_result.has_value()) {
             fail(state, "ensureEndpoint rejected a valid endpoint");
             state->done.store(true, std::memory_order_release);
@@ -70,7 +70,7 @@ Task<void> runMultiEndpointChecks(TestState* state)
         }
         leased_ids.push_back(acquired->value().id());
         leases.push_back(std::move(acquired->value()));
-        if (pool.availableCount(endpoint) != 0 || pool.inUseCount(endpoint) != 1) {
+        if (pool.available_count(endpoint) != 0 || pool.in_use_count(endpoint) != 1) {
             fail(state, "pool did not isolate per-endpoint in-use accounting");
             state->done.store(true, std::memory_order_release);
             co_return;
@@ -124,11 +124,11 @@ Task<void> runMultiEndpointChecks(TestState* state)
 
 int main()
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
     TestState state;
-    auto scheduled = runtime.spawnIO(runMultiEndpointChecks(&state));
+    auto scheduled = runtime.spawn_io(run_multi_endpoint_checks(&state));
     if (!scheduled.has_value()) {
         runtime.stop();
         std::cerr << "failed to schedule multi-endpoint pool checks\n";

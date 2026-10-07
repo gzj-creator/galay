@@ -66,7 +66,7 @@ public:
     }
 
     template <typename Rep, typename Period>
-    [[nodiscard]] bool waitFor(std::chrono::duration<Rep, Period> timeout) {
+    [[nodiscard]] bool wait_for(std::chrono::duration<Rep, Period> timeout) {
         std::unique_lock<std::mutex> lock(m_mutex);
         return m_cv.wait_for(lock, timeout, [this]() { return m_ready; });
     }
@@ -89,7 +89,7 @@ public:
         m_cv.notify_all();
     }
 
-    [[nodiscard]] bool isOpen() const {
+    [[nodiscard]] bool is_open() const {
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_open;
     }
@@ -100,7 +100,7 @@ public:
     }
 
     template <typename Rep, typename Period>
-    [[nodiscard]] bool waitFor(std::chrono::duration<Rep, Period> timeout) {
+    [[nodiscard]] bool wait_for(std::chrono::duration<Rep, Period> timeout) {
         std::unique_lock<std::mutex> lock(m_mutex);
         return m_cv.wait_for(lock, timeout, [this]() { return m_open; });
     }
@@ -112,7 +112,7 @@ private:
 };
 
 template <typename TimeoutDuration, typename PollDuration = std::chrono::milliseconds>
-bool waitForFlag(const std::atomic<bool>& flag,
+bool wait_for_flag(const std::atomic<bool>& flag,
                  TimeoutDuration timeout,
                  PollDuration poll_interval = std::chrono::milliseconds(1)) {
     if (flag.load(std::memory_order_acquire)) {
@@ -130,7 +130,7 @@ bool waitForFlag(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-constexpr int defaultBenchmarkSchedulerCount(unsigned hardware_threads,
+constexpr int default_benchmark_scheduler_count(unsigned hardware_threads,
                                              unsigned max_parallelism = 2) noexcept {
     const unsigned available_threads = hardware_threads == 0 ? 1u : hardware_threads;
     const unsigned capped_parallelism = max_parallelism == 0 ? 1u : max_parallelism;
@@ -138,7 +138,7 @@ constexpr int defaultBenchmarkSchedulerCount(unsigned hardware_threads,
 }
 
 template <typename T, typename Compare = std::less<T>>
-T medianElement(std::vector<T> samples, Compare compare = Compare{}) {
+T median_element(std::vector<T> samples, Compare compare = Compare{}) {
     if (samples.empty()) {
         throw std::invalid_argument("medianElement requires at least one sample");
     }

@@ -49,7 +49,7 @@ int main() {
     }
 
     std::vector<struct iovec> window;
-    state.exportWindow(window);
+    state.export_window(window);
     if (window.size() != 1 || window[0].iov_base != (second.data() + 1) || window[0].iov_len != 2) {
         std::cerr << "[T45] unexpected exported window after advance\n";
         return 1;

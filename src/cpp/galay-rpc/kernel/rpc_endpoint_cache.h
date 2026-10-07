@@ -139,9 +139,9 @@ public:
      */
     void apply(const RpcEndpointEvent& event) {
         if (event.type == RpcEndpointEventType::Remove) {
-            removeFrom(m_snapshot, event.service, event.instance_id);
+            remove_from(m_snapshot, event.service, event.instance_id);
         } else {
-            upsertInto(m_snapshot, event.endpoint);
+            upsert_into(m_snapshot, event.endpoint);
         }
     }
 
@@ -149,7 +149,7 @@ private:
     RpcEndpointCache(const RpcEndpointCache&) = delete;
     RpcEndpointCache& operator=(const RpcEndpointCache&) = delete;
 
-    static void upsertInto(RpcEndpointSnapshot& snapshot, const RpcEndpointInfo& endpoint) {
+    static void upsert_into(RpcEndpointSnapshot& snapshot, const RpcEndpointInfo& endpoint) {
         auto& endpoints = snapshot.by_service[endpoint.service];
         auto it = std::ranges::find_if(endpoints, [&](const RpcEndpointInfo& item) {
             return item.instance_id == endpoint.instance_id;
@@ -161,7 +161,7 @@ private:
         }
     }
 
-    static void removeFrom(RpcEndpointSnapshot& snapshot,
+    static void remove_from(RpcEndpointSnapshot& snapshot,
                            const std::string& service,
                            const std::string& instance_id) {
         auto it = snapshot.by_service.find(service);

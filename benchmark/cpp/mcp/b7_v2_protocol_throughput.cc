@@ -14,7 +14,7 @@
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -33,18 +33,18 @@ int main(int argc, char** argv)
     galay::mcp::v2::JsonRpcRequest request;
     request.id = int64_t{7};
     request.method = galay::mcp::v2::Methods::TOOLS_LIST;
-    request.params = galay::mcp::v2::makeRequestParams(meta);
+    request.params = galay::mcp::v2::make_request_params(meta);
 
     std::uint64_t checksum = 0;
     for (std::size_t i = 0; i < 1'000; ++i) {
-        auto parsed = galay::mcp::v2::parseRequest(request.toJson());
+        auto parsed = galay::mcp::v2::parse_request(request.to_json());
         if (!parsed) return 1;
         checksum += parsed->request.method.size();
     }
     const auto start = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < iterations; ++i) {
-        const auto wire = request.toJson();
-        auto parsed = galay::mcp::v2::parseRequest(wire);
+        const auto wire = request.to_json();
+        auto parsed = galay::mcp::v2::parse_request(wire);
         if (!parsed) return 1;
         checksum += parsed->request.method.size();
     }

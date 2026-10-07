@@ -92,7 +92,7 @@ private:
     uint16_t m_port = 0;
 };
 
-int readTcpNoDelay(int fd)
+int read_tcp_no_delay(int fd)
 {
     int value = 0;
     socklen_t value_len = sizeof(value);
@@ -103,30 +103,30 @@ int readTcpNoDelay(int fd)
     return value;
 }
 
-int observeSyncConnectSocketTcpNoDelay(bool tcp_no_delay)
+int observe_sync_connect_socket_tcp_no_delay(bool tcp_no_delay)
 {
     LoopbackListener listener;
     MysqlClient client;
-    auto connect_result = client.connectSocket("127.0.0.1", listener.port(), 5000, tcp_no_delay);
+    auto connect_result = client.connect_socket("127.0.0.1", listener.port(), 5000, tcp_no_delay);
     require(connect_result.has_value(), "MysqlClient connectSocket should connect to loopback listener");
-    const int observed = readTcpNoDelay(client.m_socket_fd);
+    const int observed = read_tcp_no_delay(client.m_socket_fd);
     client.close();
     return observed;
 }
 
-int observeAsyncConnectSetupTcpNoDelay(bool tcp_no_delay)
+int observe_async_connect_setup_tcp_no_delay(bool tcp_no_delay)
 {
     AsyncMysqlClient<> client(nullptr);
-    MysqlConfig config = MysqlConfig::defaultConfig();
+    MysqlConfig config = MysqlConfig::default_config();
     config.tcp_no_delay = tcp_no_delay;
     MysqlConnectAwaitable<>::SharedState state(client, config);
     require(!state.result.has_value(), "MysqlConnectAwaitable<> setup should remain ready to connect");
-    return readTcpNoDelay(client.socket().handle().fd);
+    return read_tcp_no_delay(client.socket().handle().fd);
 }
 
 void test_config_surface()
 {
-    MysqlConfig config = MysqlConfig::defaultConfig();
+    MysqlConfig config = MysqlConfig::default_config();
     require(config.tcp_no_delay, "MysqlConfig should enable TCP_NODELAY by default");
 
     config.tcp_no_delay = false;
@@ -138,25 +138,25 @@ void test_config_surface()
     AsyncMysqlConfig async_config;
     require(async_config.tcp_no_delay, "AsyncMysqlConfig should enable TCP_NODELAY by default");
 
-    auto disabled_async = AsyncMysqlClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_async = AsyncMysqlClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_async.tcp_no_delay, "AsyncMysqlClientBuilder should support disabling TCP_NODELAY");
 }
 
 void test_sync_client_applies_config()
 {
-    const int default_nodelay = observeSyncConnectSocketTcpNoDelay(true);
+    const int default_nodelay = observe_sync_connect_socket_tcp_no_delay(true);
     require(default_nodelay != 0, "default MysqlClient socket should enable TCP_NODELAY");
 
-    const int disabled_nodelay = observeSyncConnectSocketTcpNoDelay(false);
+    const int disabled_nodelay = observe_sync_connect_socket_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled MysqlClient socket should leave TCP_NODELAY off");
 }
 
 void test_async_client_applies_config()
 {
-    const int default_nodelay = observeAsyncConnectSetupTcpNoDelay(true);
+    const int default_nodelay = observe_async_connect_setup_tcp_no_delay(true);
     require(default_nodelay != 0, "default AsyncMysqlClient<> connect setup should enable TCP_NODELAY");
 
-    const int disabled_nodelay = observeAsyncConnectSetupTcpNoDelay(false);
+    const int disabled_nodelay = observe_async_connect_setup_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled AsyncMysqlClient<> connect setup should leave TCP_NODELAY off");
 }
 

@@ -34,20 +34,20 @@ public:
     BorrowedIovecs() = default;
 
     template<typename RingBuffer>
-    void captureRead(const RingBuffer& ring_buffer) {
-        m_count = ring_buffer.getReadIovecs(m_iovecs.data(), m_iovecs.size());
+    void capture_read(const RingBuffer& ring_buffer) {
+        m_count = ring_buffer.get_read_iovecs(m_iovecs.data(), m_iovecs.size());
     }
 
     template<typename RingBuffer>
-    void captureWrite(const RingBuffer& ring_buffer) {
-        m_count = ring_buffer.getWriteIovecs(m_iovecs.data(), m_iovecs.size());
+    void capture_write(const RingBuffer& ring_buffer) {
+        m_count = ring_buffer.get_write_iovecs(m_iovecs.data(), m_iovecs.size());
     }
 
     void assign(const struct iovec* source, size_t source_count) noexcept {
-        m_count = copyBoundedIovecs(source, source_count, m_iovecs);
+        m_count = copy_bounded_iovecs(source, source_count, m_iovecs);
     }
 
-    void setCount(size_t count) noexcept {
+    void set_count(size_t count) noexcept {
         m_count = std::min(count, m_iovecs.size());
     }
 
@@ -116,7 +116,7 @@ private:
  * @return 紧凑化后的 iovec 数量
  */
 template<size_t N>
-size_t compactIovecs(std::array<struct iovec, N>& iovecs, size_t count) noexcept {
+size_t compact_iovecs(std::array<struct iovec, N>& iovecs, size_t count) noexcept {
     const size_t bounded = std::min(count, N);
     size_t write_index = 0;
     for (size_t read_index = 0; read_index < bounded; ++read_index) {
@@ -140,7 +140,7 @@ size_t compactIovecs(std::array<struct iovec, N>& iovecs, size_t count) noexcept
  * @return 实际复制的 iovec 数量
  */
 template<size_t N>
-size_t copyBoundedIovecs(const struct iovec* source,
+size_t copy_bounded_iovecs(const struct iovec* source,
                          size_t source_count,
                          std::array<struct iovec, N>& out) noexcept {
     if (source == nullptr || source_count == 0) {
@@ -162,9 +162,9 @@ size_t copyBoundedIovecs(const struct iovec* source,
  * @return 借用的 iovec 数组
  */
 template<size_t N = 2, typename RingBuffer>
-BorrowedIovecs<N> borrowReadIovecs(const RingBuffer& ring_buffer) {
+BorrowedIovecs<N> borrow_read_iovecs(const RingBuffer& ring_buffer) {
     BorrowedIovecs<N> out;
-    out.captureRead(ring_buffer);
+    out.capture_read(ring_buffer);
     return out;
 }
 
@@ -176,9 +176,9 @@ BorrowedIovecs<N> borrowReadIovecs(const RingBuffer& ring_buffer) {
  * @return 借用的 iovec 数组
  */
 template<size_t N = 2, typename RingBuffer>
-BorrowedIovecs<N> borrowWriteIovecs(const RingBuffer& ring_buffer) {
+BorrowedIovecs<N> borrow_write_iovecs(const RingBuffer& ring_buffer) {
     BorrowedIovecs<N> out;
-    out.captureWrite(ring_buffer);
+    out.capture_write(ring_buffer);
     return out;
 }
 
@@ -189,7 +189,7 @@ BorrowedIovecs<N> borrowWriteIovecs(const RingBuffer& ring_buffer) {
  */
 class IoVecWindow {
 public:
-    static size_t buildWindow(const struct iovec* source,
+    static size_t build_window(const struct iovec* source,
                               size_t source_count,
                               std::vector<struct iovec>& out) {
         out.clear();
@@ -207,25 +207,25 @@ public:
         return out.size();
     }
 
-    static size_t buildWindow(const std::vector<struct iovec>& source,
+    static size_t build_window(const std::vector<struct iovec>& source,
                               std::vector<struct iovec>& out) {
-        return buildWindow(source.data(), source.size(), out);
+        return build_window(source.data(), source.size(), out);
     }
 
     template<size_t N>
-    static size_t buildWindow(const std::array<struct iovec, N>& source,
+    static size_t build_window(const std::array<struct iovec, N>& source,
                               size_t source_count,
                               std::vector<struct iovec>& out) {
-        return buildWindow(source.data(), std::min(source_count, N), out);
+        return build_window(source.data(), std::min(source_count, N), out);
     }
 
     template<size_t N>
-    static size_t buildWindow(const BorrowedIovecs<N>& source,
+    static size_t build_window(const BorrowedIovecs<N>& source,
                               std::vector<struct iovec>& out) {
-        return buildWindow(source.data(), source.size(), out);
+        return build_window(source.data(), source.size(), out);
     }
 
-    static const struct iovec* firstNonEmpty(const struct iovec* source,
+    static const struct iovec* first_non_empty(const struct iovec* source,
                                              size_t source_count) noexcept {
         if (source == nullptr || source_count == 0) {
             return nullptr;
@@ -238,26 +238,26 @@ public:
         return nullptr;
     }
 
-    static const struct iovec* firstNonEmpty(const std::vector<struct iovec>& source) noexcept {
-        return firstNonEmpty(source.data(), source.size());
+    static const struct iovec* first_non_empty(const std::vector<struct iovec>& source) noexcept {
+        return first_non_empty(source.data(), source.size());
     }
 
     template<size_t N>
-    static const struct iovec* firstNonEmpty(const std::array<struct iovec, N>& source,
+    static const struct iovec* first_non_empty(const std::array<struct iovec, N>& source,
                                              size_t source_count) noexcept {
-        return firstNonEmpty(source.data(), std::min(source_count, N));
+        return first_non_empty(source.data(), std::min(source_count, N));
     }
 
     template<size_t N>
-    static const struct iovec* firstNonEmpty(const BorrowedIovecs<N>& source) noexcept {
-        return firstNonEmpty(source.data(), source.size());
+    static const struct iovec* first_non_empty(const BorrowedIovecs<N>& source) noexcept {
+        return first_non_empty(source.data(), source.size());
     }
 
-    static bool bindFirstNonEmpty(const struct iovec* source,
+    static bool bind_first_non_empty(const struct iovec* source,
                                   size_t source_count,
                                   char*& buffer,
                                   size_t& length) noexcept {
-        const struct iovec* first = firstNonEmpty(source, source_count);
+        const struct iovec* first = first_non_empty(source, source_count);
         if (first == nullptr) {
             buffer = nullptr;
             length = 0;
@@ -269,25 +269,25 @@ public:
         return length > 0;
     }
 
-    static bool bindFirstNonEmpty(const std::vector<struct iovec>& source,
+    static bool bind_first_non_empty(const std::vector<struct iovec>& source,
                                   char*& buffer,
                                   size_t& length) noexcept {
-        return bindFirstNonEmpty(source.data(), source.size(), buffer, length);
+        return bind_first_non_empty(source.data(), source.size(), buffer, length);
     }
 
     template<size_t N>
-    static bool bindFirstNonEmpty(const std::array<struct iovec, N>& source,
+    static bool bind_first_non_empty(const std::array<struct iovec, N>& source,
                                   size_t source_count,
                                   char*& buffer,
                                   size_t& length) noexcept {
-        return bindFirstNonEmpty(source.data(), std::min(source_count, N), buffer, length);
+        return bind_first_non_empty(source.data(), std::min(source_count, N), buffer, length);
     }
 
     template<size_t N>
-    static bool bindFirstNonEmpty(const BorrowedIovecs<N>& source,
+    static bool bind_first_non_empty(const BorrowedIovecs<N>& source,
                                   char*& buffer,
                                   size_t& length) noexcept {
-        return bindFirstNonEmpty(source.data(), source.size(), buffer, length);
+        return bind_first_non_empty(source.data(), source.size(), buffer, length);
     }
 };
 
@@ -318,7 +318,7 @@ public:
         return sum(source.data(), source.size());
     }
 
-    static size_t copyPrefix(const struct iovec* source,
+    static size_t copy_prefix(const struct iovec* source,
                              size_t source_count,
                              uint8_t* destination,
                              size_t requested) noexcept {
@@ -341,17 +341,17 @@ public:
     }
 
     template<size_t N>
-    static size_t copyPrefix(const std::array<struct iovec, N>& source,
+    static size_t copy_prefix(const std::array<struct iovec, N>& source,
                              size_t source_count,
                              uint8_t* destination,
                              size_t requested) noexcept {
-        return copyPrefix(source.data(), std::min(source_count, N), destination, requested);
+        return copy_prefix(source.data(), std::min(source_count, N), destination, requested);
     }
 
-    static size_t copyPrefix(const std::vector<struct iovec>& source,
+    static size_t copy_prefix(const std::vector<struct iovec>& source,
                              uint8_t* destination,
                              size_t requested) noexcept {
-        return copyPrefix(source.data(), source.size(), destination, requested);
+        return copy_prefix(source.data(), source.size(), destination, requested);
     }
 };
 
@@ -416,7 +416,7 @@ public:
         return count() == 0;
     }
 
-    [[nodiscard]] size_t remainingBytes() const noexcept {
+    [[nodiscard]] size_t remaining_bytes() const noexcept {
         return m_remaining_bytes;
     }
 
@@ -466,7 +466,7 @@ public:
 
         const size_t advanced = to_advance - remaining;
         m_remaining_bytes -= advanced;
-        skipLeadingEmpty();
+        skip_leading_empty();
 
         if (m_index >= m_iovecs.size()) {
             m_iovecs.clear();
@@ -476,7 +476,7 @@ public:
         return advanced;
     }
 
-    void exportWindow(std::vector<struct iovec>& out) const {
+    void export_window(std::vector<struct iovec>& out) const {
         out.clear();
         if (empty()) {
             return;
@@ -505,7 +505,7 @@ private:
         m_index = 0;
     }
 
-    void skipLeadingEmpty() {
+    void skip_leading_empty() {
         while (m_index < m_iovecs.size() && m_iovecs[m_index].iov_len == 0) {
             ++m_index;
         }

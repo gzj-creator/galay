@@ -32,7 +32,7 @@
 
 工厂方法：
 
-- `MongoConfig::defaultConfig()`
+- `MongoConfig::default_config()`
 - `MongoConfig::create(host, port, database="admin")`
 
 ### 2.2 MongoError / MongoErrorType
@@ -54,7 +54,7 @@
 方法：
 
 - `type()`
-- `serverCode()`
+- `server_code()`
 - `message()`
 
 ### 2.3 MongoValue / MongoDocument / MongoArray / MongoReply
@@ -64,7 +64,7 @@
 - `MongoValue`：统一值类型容器。
 - `MongoDocument`：键值文档，支持 `append/set/find/at/getXxx`。
 - `MongoArray`：数组值，支持 `append/at/values`。
-- `MongoReply`：命令响应包装，支持 `ok()/hasCommandError()/errorCode()/errorMessage()`。
+- `MongoReply`：命令响应包装，支持 `ok()/has_command_error()/error_code()/error_message()`。
 
 ## 3. 同步 API（MongoClient）
 
@@ -80,7 +80,7 @@
 - `MongoVoidResult connect(const MongoConfig& config)`
 - `MongoVoidResult connect(const std::string& host, uint16_t port, const std::string& database="admin")`
 - `void close()`
-- `bool isConnected() const`
+- `bool is_connected() const`
 
 ### 3.2 通用命令与快捷命令
 
@@ -89,10 +89,10 @@
 
 ### 3.3 CRUD 快捷接口
 
-- `findOne(database, collection, filter={}, projection={})`
-- `insertOne(database, collection, document)`
-- `updateOne(database, collection, filter, update, upsert=false)`
-- `deleteOne(database, collection, filter)`
+- `find_one(database, collection, filter={}, projection={})`
+- `insert_one(database, collection, document)`
+- `update_one(database, collection, filter, update, upsert=false)`
+- `delete_one(database, collection, filter)`
 
 ### 3.4 认证
 
@@ -107,7 +107,7 @@
 
 ### 4.1 构造
 
-- `AsyncMongoClient(IOScheduler* scheduler, AsyncMongoConfig config = AsyncMongoConfig::noTimeout())`
+- `AsyncMongoClient(IOScheduler* scheduler, AsyncMongoConfig config = AsyncMongoConfig::no_timeout())`
 
 ### 4.2 连接
 
@@ -136,14 +136,14 @@
 
 其中 `MongoPipelineResponse`：
 
-- `request_id`：请求 id（即发送时的 `requestId`，用于与响应 `responseTo` 对应）
+- `request_id`：请求 id（即发送时的 `request_id`，用于与响应 `responseTo` 对应）
 - `reply`：命令成功时有值
 - `error`：该条命令失败时有值（例如服务端返回 `ok:0`）
 
 ### 4.4 连接与日志控制
 
 - `auto close()`
-- `bool isClosed() const`
+- `bool is_closed() const`
 - 日志入口：`galay::mongo::log::set/get`
 
 说明：日志入口使用 `galay::kernel::BaseLogger`，只影响 `galay-mongo` 自身日志。
@@ -161,10 +161,10 @@
 
 方法：
 
-- `isSendTimeoutEnabled()`
-- `isRecvTimeoutEnabled()`
-- `withTimeout(send, recv)`
-- `noTimeout()`
+- `is_send_timeout_enabled()`
+- `is_recv_timeout_enabled()`
+- `with_timeout(send, recv)`
+- `no_timeout()`
 
 ## 5. 典型调用片段
 

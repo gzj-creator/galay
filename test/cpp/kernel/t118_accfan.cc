@@ -61,11 +61,11 @@ void expect(bool condition, const char* message)
     }
 }
 
-Task<void> runServer(TestState* state)
+Task<void> run_server(TestState* state)
 {
     AsyncTcpSocket listener(IPType::IPV4);
-    listener.option().handleReuseAddr();
-    listener.option().handleNonBlock();
+    listener.option().handle_reuse_addr();
+    listener.option().handle_non_block();
 
     if (!listener.bind(Host(IPType::IPV4, "127.0.0.1", kPort))) {
         fail(state, "bind failed");
@@ -94,10 +94,10 @@ Task<void> runServer(TestState* state)
     (void)co_await listener.close();
 }
 
-Task<void> runClient(TestState* state)
+Task<void> run_client(TestState* state)
 {
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     auto connected = co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", kPort));
     if (!connected) {
@@ -110,7 +110,7 @@ Task<void> runClient(TestState* state)
     state->client_done.fetch_add(1, std::memory_order_relaxed);
 }
 
-void waitFor(std::atomic<bool>& flag, const char* message)
+void wait_for(std::atomic<bool>& flag, const char* message)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
     while (!flag.load(std::memory_order_acquire)) {
@@ -121,7 +121,7 @@ void waitFor(std::atomic<bool>& flag, const char* message)
     }
 }
 
-void waitForClients(TestState& state)
+void wait_for_clients(TestState& state)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (state.client_done.load(std::memory_order_relaxed) < kConnections) {
@@ -149,16 +149,16 @@ int main()
     scheduler.start();
 
     TestState state;
-    expect(scheduleTask(scheduler, runServer(&state)), "schedule server failed");
-    waitFor(state.server_ready, "server did not become ready");
+    expect(schedule_task(scheduler, run_server(&state)), "schedule server failed");
+    wait_for(state.server_ready, "server did not become ready");
 
     for (int i = 0; i < kConnections; ++i) {
-        expect(scheduleTask(scheduler, runClient(&state)), "schedule client failed");
+        expect(schedule_task(scheduler, run_client(&state)), "schedule client failed");
     }
 
     int rc = 0;
     try {
-        waitForClients(state);
+        wait_for_clients(state);
     } catch (const std::exception& ex) {
         std::cerr << "[T117] " << ex.what() << "\n";
         rc = 1;

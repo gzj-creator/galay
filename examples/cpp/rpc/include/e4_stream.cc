@@ -29,14 +29,14 @@ constexpr uint16_t kDefaultPort = 9100;
 constexpr size_t kDefaultFrameCount = 1000;
 constexpr size_t kDefaultPayloadSize = 128;
 
-Task<void> runStreamClient(const std::string& host,
+Task<void> run_stream_client(const std::string& host,
                           uint16_t port,
                           size_t frame_count,
                           size_t payload_size) {
     const size_t ring_buffer_size = std::max<size_t>(kDefaultRpcRingBufferSize,
                                                      payload_size * 4 + RPC_HEADER_SIZE * 8);
     auto client = RpcClientBuilder()
-        .ringBufferSize(ring_buffer_size)
+        .ring_buffer_size(ring_buffer_size)
         .build();
 
     auto connect_result = co_await client.connect(host, port);
@@ -46,7 +46,7 @@ Task<void> runStreamClient(const std::string& host,
     }
 
     const uint32_t stream_id = 1;
-    auto stream_result = client.createStream(stream_id, "StreamExampleService", "echo");
+    auto stream_result = client.create_stream(stream_id, "StreamExampleService", "echo");
     if (!stream_result.has_value()) {
         std::cerr << "create stream failed: " << stream_result.error().message() << "\n";
         co_await client.close();
@@ -54,7 +54,7 @@ Task<void> runStreamClient(const std::string& host,
     }
     auto stream = std::move(stream_result.value());
 
-    auto send_result = co_await stream.sendInit();
+    auto send_result = co_await stream.send_init();
     if (!send_result.has_value()) {
         std::cerr << "send init failed: " << send_result.error().message() << "\n";
         co_await client.close();
@@ -69,8 +69,8 @@ Task<void> runStreamClient(const std::string& host,
         co_return;
     }
 
-    if (init_ack.messageType() != RpcMessageType::STREAM_INIT_ACK) {
-        std::cerr << "unexpected init response type: " << static_cast<int>(init_ack.messageType()) << "\n";
+    if (init_ack.message_type() != RpcMessageType::STREAM_INIT_ACK) {
+        std::cerr << "unexpected init response type: " << static_cast<int>(init_ack.message_type()) << "\n";
         co_await client.close();
         co_return;
     }
@@ -86,7 +86,7 @@ Task<void> runStreamClient(const std::string& host,
             std::memcpy(payload.data(), &frame_id, sizeof(frame_id));
         }
 
-        send_result = co_await stream.sendData(payload.data(), payload.size());
+        send_result = co_await stream.send_data(payload.data(), payload.size());
         if (!send_result.has_value()) {
             std::cerr << "send frame failed: " << send_result.error().message() << "\n";
             co_await client.close();
@@ -101,9 +101,9 @@ Task<void> runStreamClient(const std::string& host,
             co_return;
         }
 
-        if (echo_frame.messageType() != RpcMessageType::STREAM_DATA) {
+        if (echo_frame.message_type() != RpcMessageType::STREAM_DATA) {
             std::cerr << "unexpected frame type while streaming: "
-                      << static_cast<int>(echo_frame.messageType()) << "\n";
+                      << static_cast<int>(echo_frame.message_type()) << "\n";
             co_await client.close();
             co_return;
         }
@@ -111,7 +111,7 @@ Task<void> runStreamClient(const std::string& host,
         total_echo_bytes += echo_frame.payload().size();
     }
 
-    send_result = co_await stream.sendEnd();
+    send_result = co_await stream.send_end();
     if (!send_result.has_value()) {
         std::cerr << "send end failed: " << send_result.error().message() << "\n";
         co_await client.close();
@@ -129,9 +129,9 @@ Task<void> runStreamClient(const std::string& host,
             co_return;
         }
 
-        if (msg.messageType() == RpcMessageType::STREAM_DATA) {
-            summary = msg.payloadStr();
-        } else if (msg.messageType() == RpcMessageType::STREAM_END) {
+        if (msg.message_type() == RpcMessageType::STREAM_DATA) {
+            summary = msg.payload_str();
+        } else if (msg.message_type() == RpcMessageType::STREAM_END) {
             got_end = true;
         }
     }
@@ -178,10 +178,10 @@ int main(int argc, char* argv[]) {
               << ", frames=" << frame_count
               << ", payload=" << payload_size << " bytes\n";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
-    (void)scheduleTask(runtime.getNextIOScheduler(),
-                       runStreamClient(host, port, frame_count, payload_size));
+    (void)schedule_task(runtime.get_next_io_scheduler(),
+                       run_stream_client(host, port, frame_count, payload_size));
 
     // 示例程序给一个宽松等待窗口
     std::this_thread::sleep_for(std::chrono::seconds(5));

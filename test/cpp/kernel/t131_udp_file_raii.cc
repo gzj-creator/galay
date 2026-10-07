@@ -40,7 +40,7 @@ namespace {
 std::atomic<bool> g_udp_close_done{false};
 std::atomic<bool> g_udp_close_is_closed{false};
 
-galay::kernel::Task<void> closeInvalidUdpSocket(galay::async::AsyncUdpSocket* socket)
+galay::kernel::Task<void> close_invalid_udp_socket(galay::async::AsyncUdpSocket* socket)
 {
     auto result = co_await socket->close();
     g_udp_close_is_closed.store(!result && result.error().code() == galay::kernel::kClosed,
@@ -56,20 +56,20 @@ bool check(bool condition, const char* message)
     return condition;
 }
 
-bool isClosed(int fd)
+bool is_closed(int fd)
 {
     errno = 0;
     return ::fcntl(fd, F_GETFD) < 0 && errno == EBADF;
 }
 
-int makeUdpFd()
+int make_udp_fd()
 {
     return ::socket(AF_INET, SOCK_DGRAM, 0);
 }
 
-bool udpDestructorClosesOwnedSocket()
+bool udp_destructor_closes_owned_socket()
 {
-    const int fd = makeUdpFd();
+    const int fd = make_udp_fd();
     if (!check(fd >= 0, "socket() should create a UDP fd")) {
         return false;
     }
@@ -78,13 +78,13 @@ bool udpDestructorClosesOwnedSocket()
         galay::async::AsyncUdpSocket socket(GHandle{.fd = fd});
     }
 
-    return check(isClosed(fd), "AsyncUdpSocket destructor should close the owned fd");
+    return check(is_closed(fd), "AsyncUdpSocket destructor should close the owned fd");
 }
 
-bool udpMoveAssignmentClosesPreviousSocketAndTransfersNewOne()
+bool udp_move_assignment_closes_previous_socket_and_transfers_new_one()
 {
-    const int oldFd = makeUdpFd();
-    const int newFd = makeUdpFd();
+    const int oldFd = make_udp_fd();
+    const int newFd = make_udp_fd();
     if (!check(oldFd >= 0 && newFd >= 0, "socket() should create both UDP fds")) {
         if (oldFd >= 0) {
             ::close(oldFd);
@@ -100,20 +100,20 @@ bool udpMoveAssignmentClosesPreviousSocketAndTransfersNewOne()
         galay::async::AsyncUdpSocket source(GHandle{.fd = newFd});
         target = std::move(source);
 
-        if (!check(isClosed(oldFd), "AsyncUdpSocket move assignment should close the replaced fd")) {
+        if (!check(is_closed(oldFd), "AsyncUdpSocket move assignment should close the replaced fd")) {
             return false;
         }
-        if (!check(!isClosed(newFd), "moved UDP fd should stay owned by destination")) {
+        if (!check(!is_closed(newFd), "moved UDP fd should stay owned by destination")) {
             return false;
         }
     }
 
-    return check(isClosed(newFd), "AsyncUdpSocket destination destructor should close the moved fd");
+    return check(is_closed(newFd), "AsyncUdpSocket destination destructor should close the moved fd");
 }
 
-bool udpMovedFromBindReportsClosed()
+bool udp_moved_from_bind_reports_closed()
 {
-    const int fd = makeUdpFd();
+    const int fd = make_udp_fd();
     if (!check(fd >= 0, "socket() should create a moved-from UDP bind fd")) {
         return false;
     }
@@ -126,9 +126,9 @@ bool udpMovedFromBindReportsClosed()
                  "moved-from UDP bind should return kClosed");
 }
 
-bool udpCloneKeepsSocketAliveUntilLastOwner()
+bool udp_clone_keeps_socket_alive_until_last_owner()
 {
-    const int fd = makeUdpFd();
+    const int fd = make_udp_fd();
     if (!check(fd >= 0, "socket() should create a UDP clone test fd")) {
         return false;
     }
@@ -137,22 +137,22 @@ bool udpCloneKeepsSocketAliveUntilLastOwner()
         galay::async::AsyncUdpSocket original(GHandle{.fd = fd});
         const auto& const_original = original;
         auto clone = const_original.clone();
-        if (!check(original.getSharedCount() == 2 && clone.getSharedCount() == 2,
+        if (!check(original.get_shared_count() == 2 && clone.get_shared_count() == 2,
                    "UDP clone should share the controller ownership")) {
             return false;
         }
         original = galay::async::AsyncUdpSocket(GHandle::invalid());
-        if (!check(!isClosed(fd), "destroying one UDP clone owner must keep the fd open")) {
+        if (!check(!is_closed(fd), "destroying one UDP clone owner must keep the fd open")) {
             return false;
         }
     }
 
-    return check(isClosed(fd), "last UDP clone owner should close the fd");
+    return check(is_closed(fd), "last UDP clone owner should close the fd");
 }
 
-bool udpUnawaitedCloseClosesOwnedSocket()
+bool udp_unawaited_close_closes_owned_socket()
 {
-    const int fd = makeUdpFd();
+    const int fd = make_udp_fd();
     if (!check(fd >= 0, "socket() should create a UDP unawaited close test fd")) {
         return false;
     }
@@ -163,10 +163,10 @@ bool udpUnawaitedCloseClosesOwnedSocket()
         (void)close_request;
     }
 
-    return check(isClosed(fd), "destroying an unawaited UDP close request should close the fd");
+    return check(is_closed(fd), "destroying an unawaited UDP close request should close the fd");
 }
 
-bool udpCloseReportsClosedSocket()
+bool udp_close_reports_closed_socket()
 {
 #if defined(USE_EPOLL) || defined(USE_IOURING) || defined(USE_KQUEUE)
     galay::async::AsyncUdpSocket socket(GHandle::invalid());
@@ -177,7 +177,7 @@ bool udpCloseReportsClosedSocket()
     }
     g_udp_close_done.store(false, std::memory_order_release);
     g_udp_close_is_closed.store(false, std::memory_order_release);
-    if (!galay::kernel::scheduleTask(scheduler, closeInvalidUdpSocket(&socket))) {
+    if (!galay::kernel::schedule_task(scheduler, close_invalid_udp_socket(&socket))) {
         scheduler.stop();
         return false;
     }
@@ -195,7 +195,7 @@ bool udpCloseReportsClosedSocket()
 
 #ifdef USE_EPOLL
 
-bool asyncAioOpenRejectsWhenAlreadyOpen()
+bool async_aio_open_rejects_when_already_open()
 {
     const auto firstPath = std::filesystem::temp_directory_path() /
                            "galay_async_aio_raii_first.tmp";
@@ -243,17 +243,17 @@ bool asyncAioOpenRejectsWhenAlreadyOpen()
         ok = check(galay::kernel::IOError::contains(reopened.error().code(),
                                                     galay::kernel::kAlreadyOpen),
                    "AsyncAio reopen while already open should report kAlreadyOpen") && ok;
-        ok = check(!isClosed(oldFd),
+        ok = check(!is_closed(oldFd),
                    "rejected AsyncAio reopen should keep the existing fd") && ok;
     }
 
-    ok = check(isClosed(oldFd), "AsyncAio destructor should close the held fd") && ok;
+    ok = check(is_closed(oldFd), "AsyncAio destructor should close the held fd") && ok;
     std::filesystem::remove(firstPath);
     std::filesystem::remove(secondPath);
     return ok;
 }
 
-bool asyncAioClosedMetadataReportsClosed()
+bool async_aio_closed_metadata_reports_closed()
 {
     galay::async::AsyncAio file;
     const auto invalidSize = file.size();
@@ -269,22 +269,22 @@ bool asyncAioClosedMetadataReportsClosed()
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
 
-std::filesystem::path tempFilePath(const char* name)
+std::filesystem::path temp_file_path(const char* name)
 {
     return std::filesystem::temp_directory_path() / name;
 }
 
-bool createTempFile(const std::filesystem::path& path)
+bool create_temp_file(const std::filesystem::path& path)
 {
     std::ofstream out(path);
     out << "galay";
     return out.good();
 }
 
-bool asyncFileDestructorClosesOwnedFd()
+bool async_file_destructor_closes_owned_fd()
 {
-    const auto path = tempFilePath("galay_async_file_raii_destructor.tmp");
-    if (!check(createTempFile(path), "should create temp file")) {
+    const auto path = temp_file_path("galay_async_file_raii_destructor.tmp");
+    if (!check(create_temp_file(path), "should create temp file")) {
         return false;
     }
 
@@ -303,16 +303,16 @@ bool asyncFileDestructorClosesOwnedFd()
         }
     }
 
-    const bool closed = check(isClosed(fd), "AsyncFile destructor should close the owned fd");
+    const bool closed = check(is_closed(fd), "AsyncFile destructor should close the owned fd");
     std::filesystem::remove(path);
     return closed;
 }
 
-bool asyncFileMoveAssignmentClosesPreviousFdAndTransfersNewOne()
+bool async_file_move_assignment_closes_previous_fd_and_transfers_new_one()
 {
-    const auto oldPath = tempFilePath("galay_async_file_raii_old.tmp");
-    const auto newPath = tempFilePath("galay_async_file_raii_new.tmp");
-    if (!check(createTempFile(oldPath) && createTempFile(newPath), "should create temp files")) {
+    const auto oldPath = temp_file_path("galay_async_file_raii_old.tmp");
+    const auto newPath = temp_file_path("galay_async_file_raii_new.tmp");
+    if (!check(create_temp_file(oldPath) && create_temp_file(newPath), "should create temp files")) {
         return false;
     }
 
@@ -332,26 +332,26 @@ bool asyncFileMoveAssignmentClosesPreviousFdAndTransfersNewOne()
         newFd = source.handle().fd;
         target = std::move(source);
 
-        if (!check(isClosed(oldFd), "AsyncFile move assignment should close the replaced fd")) {
+        if (!check(is_closed(oldFd), "AsyncFile move assignment should close the replaced fd")) {
             return false;
         }
-        if (!check(!isClosed(newFd), "moved file fd should stay owned by destination")) {
+        if (!check(!is_closed(newFd), "moved file fd should stay owned by destination")) {
             return false;
         }
     }
 
-    const bool closed = check(isClosed(newFd), "AsyncFile destination destructor should close the moved fd");
+    const bool closed = check(is_closed(newFd), "AsyncFile destination destructor should close the moved fd");
     std::filesystem::remove(oldPath);
     std::filesystem::remove(newPath);
     return closed;
 }
 
-bool asyncFileOpenRejectsWhenAlreadyOpen()
+bool async_file_open_rejects_when_already_open()
 {
-    const auto path = tempFilePath("galay_async_file_raii_reopen.tmp");
-    const auto missing_path = tempFilePath("galay_async_file_raii_missing.tmp");
+    const auto path = temp_file_path("galay_async_file_raii_reopen.tmp");
+    const auto missing_path = temp_file_path("galay_async_file_raii_missing.tmp");
     std::filesystem::remove(missing_path);
-    if (!check(createTempFile(path), "should create reopen temp file")) {
+    if (!check(create_temp_file(path), "should create reopen temp file")) {
         return false;
     }
 
@@ -381,15 +381,15 @@ bool asyncFileOpenRejectsWhenAlreadyOpen()
         ok = check(galay::kernel::IOError::contains(reopened.error().code(),
                                                     galay::kernel::kAlreadyOpen),
                    "AsyncFile open while already open should report kAlreadyOpen") && ok;
-        ok = check(!isClosed(fd), "rejected AsyncFile open should keep the existing fd") && ok;
+        ok = check(!is_closed(fd), "rejected AsyncFile open should keep the existing fd") && ok;
     }
 
-    ok = check(isClosed(fd), "AsyncFile destructor should close the held fd") && ok;
+    ok = check(is_closed(fd), "AsyncFile destructor should close the held fd") && ok;
     std::filesystem::remove(path);
     return ok;
 }
 
-bool asyncFileClosedMetadataReportsClosed()
+bool async_file_closed_metadata_reports_closed()
 {
     galay::async::AsyncFile file;
     const auto invalidSize = file.size();
@@ -408,23 +408,23 @@ bool asyncFileClosedMetadataReportsClosed()
 int main()
 {
     bool ok = true;
-    ok = udpDestructorClosesOwnedSocket() && ok;
-    ok = udpMoveAssignmentClosesPreviousSocketAndTransfersNewOne() && ok;
-    ok = udpMovedFromBindReportsClosed() && ok;
-    ok = udpCloneKeepsSocketAliveUntilLastOwner() && ok;
-    ok = udpUnawaitedCloseClosesOwnedSocket() && ok;
-    ok = udpCloseReportsClosedSocket() && ok;
+    ok = udp_destructor_closes_owned_socket() && ok;
+    ok = udp_move_assignment_closes_previous_socket_and_transfers_new_one() && ok;
+    ok = udp_moved_from_bind_reports_closed() && ok;
+    ok = udp_clone_keeps_socket_alive_until_last_owner() && ok;
+    ok = udp_unawaited_close_closes_owned_socket() && ok;
+    ok = udp_close_reports_closed_socket() && ok;
 
 #ifdef USE_EPOLL
-    ok = asyncAioOpenRejectsWhenAlreadyOpen() && ok;
-    ok = asyncAioClosedMetadataReportsClosed() && ok;
+    ok = async_aio_open_rejects_when_already_open() && ok;
+    ok = async_aio_closed_metadata_reports_closed() && ok;
 #endif
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
-    ok = asyncFileDestructorClosesOwnedFd() && ok;
-    ok = asyncFileMoveAssignmentClosesPreviousFdAndTransfersNewOne() && ok;
-    ok = asyncFileOpenRejectsWhenAlreadyOpen() && ok;
-    ok = asyncFileClosedMetadataReportsClosed() && ok;
+    ok = async_file_destructor_closes_owned_fd() && ok;
+    ok = async_file_move_assignment_closes_previous_fd_and_transfers_new_one() && ok;
+    ok = async_file_open_rejects_when_already_open() && ok;
+    ok = async_file_closed_metadata_reports_closed() && ok;
 #endif
 
     return ok ? 0 : 1;

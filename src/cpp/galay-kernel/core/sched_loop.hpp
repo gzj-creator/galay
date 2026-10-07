@@ -28,21 +28,21 @@ namespace detail {
  * @param resume_fn 须由具体调度器传入，以便在派生类上下文中调用受保护的 `Scheduler::resume`
  */
 template <typename ResumeFn>
-inline void ioSchedulerProcessPendingTasks(SchedulerCore& core,
+inline void io_scheduler_process_pending_tasks(SchedulerCore& core,
                                            WakeCoordinator& wake_coordinator,
                                            ResumeFn&& resume_fn) {
-    (void)core.runReadyPass(
+    (void)core.run_ready_pass(
         std::forward<ResumeFn>(resume_fn),
-        [&](size_t drained) { wake_coordinator.onRemoteCollected(drained); });
+        [&](size_t drained) { wake_coordinator.on_remote_collected(drained); });
 }
 
 /**
  * @brief IO 调度器主循环骨架：本地 follow-up、时间轮 tick、无待办时调用 poll_fn
- * @param post_passes_fn 在每次 runLocalFollowupPasses 之后调用（例如 kqueue 提交 m_pending_changes；
- *        当 hasPendingWork 为真时不会进入 poll，此处仍能保证延迟注册落地）
+ * @param post_passes_fn 在每次 run_local_followup_passes 之后调用（例如 kqueue 提交 m_pending_changes；
+ *        当 has_pending_work 为真时不会进入 poll，此处仍能保证延迟注册落地）
  */
 template <typename ResumeFn, typename PollFn, typename PostPassesFn>
-void runIOSchedulerEventLoop(std::atomic<bool>& running,
+void run_io_scheduler_event_loop(std::atomic<bool>& running,
                              SchedulerCore& core,
                              TimingWheelTimerManager& timer_manager,
                              WakeCoordinator& wake_coordinator,
@@ -60,32 +60,32 @@ void runIOSchedulerEventLoop(std::atomic<bool>& running,
     }
 
     while (running.load(std::memory_order_acquire)) {
-        (void)core.runLocalFollowupPasses(
+        (void)core.run_local_followup_passes(
             local_followup_pass_limit,
             std::forward<ResumeFn>(resume_fn),
-            [&](size_t drained) { wake_coordinator.onRemoteCollected(drained); });
+            [&](size_t drained) { wake_coordinator.on_remote_collected(drained); });
         post_passes_fn();
         timer_manager.tick();
-        wake_coordinator.markSleeping();
-        if (core.hasPendingWork()) {
-            wake_coordinator.markAwake();
+        wake_coordinator.mark_sleeping();
+        if (core.has_pending_work()) {
+            wake_coordinator.mark_awake();
             continue;
         }
-        if (core.trySteal()) {
-            wake_coordinator.markAwake();
+        if (core.try_steal()) {
+            wake_coordinator.mark_awake();
             continue;
         }
         poll_fn();
-        wake_coordinator.markAwake();
+        wake_coordinator.mark_awake();
     }
 
     // stop() 会先关闭 resume admission，再清除 running。此处必须在 owner
-    // 线程排空关闭前已接纳的恢复请求，保证 scheduleResume(true) 不会丢任务。
-    while (core.hasPendingWork()) {
-        (void)core.runLocalFollowupPasses(
+    // 线程排空关闭前已接纳的恢复请求，保证 schedule_resume(true) 不会丢任务。
+    while (core.has_pending_work()) {
+        (void)core.run_local_followup_passes(
             local_followup_pass_limit,
             std::forward<ResumeFn>(resume_fn),
-            [&](size_t drained) { wake_coordinator.onRemoteCollected(drained); });
+            [&](size_t drained) { wake_coordinator.on_remote_collected(drained); });
         post_passes_fn();
     }
 }

@@ -31,7 +31,7 @@ bool require(bool condition, std::string_view message)
     return true;
 }
 
-uint16_t pickFreePort()
+uint16_t pick_free_port()
 {
     int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -59,7 +59,7 @@ uint16_t pickFreePort()
     return port;
 }
 
-int connectWithRetry(uint16_t port)
+int connect_with_retry(uint16_t port)
 {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -86,9 +86,9 @@ int connectWithRetry(uint16_t port)
     return -1;
 }
 
-bool canConnect(uint16_t port)
+bool can_connect(uint16_t port)
 {
-    const int fd = connectWithRetry(port);
+    const int fd = connect_with_retry(port);
     if (fd >= 0) {
         ::close(fd);
         return true;
@@ -96,7 +96,7 @@ bool canConnect(uint16_t port)
     return false;
 }
 
-void sendAll(int fd, const std::string& data)
+void send_all(int fd, const std::string& data)
 {
     std::size_t sent = 0;
     while (sent < data.size()) {
@@ -108,7 +108,7 @@ void sendAll(int fd, const std::string& data)
     }
 }
 
-std::optional<std::size_t> contentLength(std::string_view header)
+std::optional<std::size_t> content_length(std::string_view header)
 {
     constexpr std::string_view kName = "Content-Length: ";
     const auto pos = header.find(kName);
@@ -120,7 +120,7 @@ std::optional<std::size_t> contentLength(std::string_view header)
     return static_cast<std::size_t>(std::stoull(std::string(header.substr(begin, end - begin))));
 }
 
-std::string readHttpResponse(int fd)
+std::string read_http_response(int fd)
 {
     std::string response;
     char buffer[4096];
@@ -133,7 +133,7 @@ std::string readHttpResponse(int fd)
         response.append(buffer, static_cast<std::size_t>(n));
         const auto headerEnd = response.find("\r\n\r\n");
         if (headerEnd != std::string::npos && !expectedSize.has_value()) {
-            expectedSize = headerEnd + 4 + contentLength(std::string_view(response).substr(0, headerEnd + 2)).value();
+            expectedSize = headerEnd + 4 + content_length(std::string_view(response).substr(0, headerEnd + 2)).value();
         }
         if (expectedSize.has_value() && response.size() >= *expectedSize) {
             return response;
@@ -141,7 +141,7 @@ std::string readHttpResponse(int fd)
     }
 }
 
-std::string makePost(std::string_view body, std::string_view connection = "keep-alive")
+std::string make_post(std::string_view body, std::string_view connection = "keep-alive")
 {
     std::string request;
     request.reserve(body.size() + 160);
@@ -154,7 +154,7 @@ std::string makePost(std::string_view body, std::string_view connection = "keep-
     return request;
 }
 
-std::string bodyOf(std::string_view response)
+std::string body_of(std::string_view response)
 {
     const auto pos = response.find("\r\n\r\n");
     if (pos == std::string_view::npos) {
@@ -163,28 +163,28 @@ std::string bodyOf(std::string_view response)
     return std::string(response.substr(pos + 4));
 }
 
-std::string initializeBody(int id)
+std::string initialize_body(int id)
 {
     return std::string(R"({"jsonrpc":"2.0","id":)") + std::to_string(id) +
            R"(,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1"}}})";
 }
 
-std::string postOnce(uint16_t port, std::string_view body)
+std::string post_once(uint16_t port, std::string_view body)
 {
-    const int fd = connectWithRetry(port);
+    const int fd = connect_with_retry(port);
     if (fd < 0) {
         throw std::runtime_error("connect failed");
     }
-    sendAll(fd, makePost(body, "close"));
-    const auto response = readHttpResponse(fd);
+    send_all(fd, make_post(body, "close"));
+    const auto response = read_http_response(fd);
     ::close(fd);
-    return bodyOf(response);
+    return body_of(response);
 }
 
-bool waitUntilListening(uint16_t port)
+bool wait_until_listening(uint16_t port)
 {
     for (int i = 0; i < 100; ++i) {
-        if (canConnect(port)) {
+        if (can_connect(port)) {
             return true;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -196,15 +196,15 @@ bool waitUntilListening(uint16_t port)
 
 int main()
 {
-    const uint16_t port = pickFreePort();
+    const uint16_t port = pick_free_port();
     galay::mcp::McpHttpServer server("127.0.0.1", port, 1, 1);
     galay::mcp::McpProductionPolicy policy;
     policy.transport.max_http_body_bytes = 512;
     policy.transport.max_response_bytes = 512;
     policy.transport.max_keep_alive_requests = 2;
-    server.setProductionPolicy(policy);
+    server.set_production_policy(policy);
 
-    server.addTool("large", "large result", "{}", [](const json::Json&,
+    server.add_tool("large", "large result", "{}", [](const json::Json&,
                                                       std::expected<std::string, galay::mcp::McpError>& result)
         -> galay::kernel::Task<void> {
         result = std::string(1024, 'x');
@@ -215,13 +215,13 @@ int main()
         server.start();
     });
 
-    if (!require(waitUntilListening(port), "HTTP MCP server did not start listening")) {
+    if (!require(wait_until_listening(port), "HTTP MCP server did not start listening")) {
         server.stop();
         serverThread.join();
         return 1;
     }
 
-    const auto initResponse = postOnce(port, initializeBody(1));
+    const auto initResponse = post_once(port, initialize_body(1));
     if (!require(initResponse.find("\"result\"") != std::string::npos,
                  "initialize request did not succeed")) {
         server.stop();
@@ -230,7 +230,7 @@ int main()
     }
 
     const auto secondConnectionList =
-        postOnce(port, R"({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}})");
+        post_once(port, R"({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}})");
     if (!require(secondConnectionList.find("Not initialized") != std::string::npos,
                  "tools/list on a different HTTP connection reused global initialization")) {
         server.stop();
@@ -238,7 +238,7 @@ int main()
         return 1;
     }
 
-    const auto oversizedBody = postOnce(port, std::string(513, 'x'));
+    const auto oversizedBody = post_once(port, std::string(513, 'x'));
     if (!require(oversizedBody.find("Payload too large") != std::string::npos,
                  "oversized HTTP body was not rejected at MCP boundary")) {
         server.stop();
@@ -246,16 +246,16 @@ int main()
         return 1;
     }
 
-    const int largeFd = connectWithRetry(port);
+    const int largeFd = connect_with_retry(port);
     if (!require(largeFd >= 0, "large-response connect failed")) {
         server.stop();
         serverThread.join();
         return 1;
     }
-    sendAll(largeFd, makePost(initializeBody(5)));
-    (void)readHttpResponse(largeFd);
-    sendAll(largeFd, makePost(R"({"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"large","arguments":{}}})"));
-    const auto largeResponseBody = bodyOf(readHttpResponse(largeFd));
+    send_all(largeFd, make_post(initialize_body(5)));
+    (void)read_http_response(largeFd);
+    send_all(largeFd, make_post(R"({"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"large","arguments":{}}})"));
+    const auto largeResponseBody = body_of(read_http_response(largeFd));
     ::close(largeFd);
     if (!require(largeResponseBody.find("Payload too large") != std::string::npos,
                  "oversized MCP response was not rejected before HTTP send")) {
@@ -264,18 +264,18 @@ int main()
         return 1;
     }
 
-    const int fd = connectWithRetry(port);
+    const int fd = connect_with_retry(port);
     if (!require(fd >= 0, "keep-alive connect failed")) {
         server.stop();
         serverThread.join();
         return 1;
     }
-    sendAll(fd, makePost(initializeBody(3)));
-    (void)readHttpResponse(fd);
-    sendAll(fd, makePost(R"({"jsonrpc":"2.0","id":4,"method":"tools/list","params":{}})"));
-    (void)readHttpResponse(fd);
-    sendAll(fd, makePost(R"({"jsonrpc":"2.0","id":7,"method":"tools/list","params":{}})"));
-    const auto keepAliveBody = bodyOf(readHttpResponse(fd));
+    send_all(fd, make_post(initialize_body(3)));
+    (void)read_http_response(fd);
+    send_all(fd, make_post(R"({"jsonrpc":"2.0","id":4,"method":"tools/list","params":{}})"));
+    (void)read_http_response(fd);
+    send_all(fd, make_post(R"({"jsonrpc":"2.0","id":7,"method":"tools/list","params":{}})"));
+    const auto keepAliveBody = body_of(read_http_response(fd));
     ::close(fd);
     if (!require(keepAliveBody.find("Keep-alive request limit exceeded") != std::string::npos,
                  "keep-alive request cap was not enforced")) {
@@ -287,7 +287,7 @@ int main()
     server.stop();
     serverThread.join();
 
-    if (!require(!canConnect(port), "McpHttpServer::stop left the underlying HTTP server accepting connections")) {
+    if (!require(!can_connect(port), "McpHttpServer::stop left the underlying HTTP server accepting connections")) {
         return 1;
     }
 

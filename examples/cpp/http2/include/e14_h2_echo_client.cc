@@ -18,9 +18,9 @@
 using namespace galay::http2;
 using namespace galay::kernel;
 
-Task<void> runClient(const std::string& host, uint16_t port) {
+Task<void> run_client(const std::string& host, uint16_t port) {
     H2Client<> client(H2ClientBuilder()
-        .verifyPeer(false)
+        .verify_peer(false)
         .build());
 
     auto connect_task_result = co_await client.connect(host, port);
@@ -39,7 +39,7 @@ Task<void> runClient(const std::string& host, uint16_t port) {
         co_return;
     }
 
-    std::string alpn = client.getALPNProtocol();
+    std::string alpn = client.get_alpn_protocol();
     std::cout << "ALPN: " << (alpn.empty() ? "(empty)" : alpn) << "\n";
     if (alpn != "h2") {
         std::cerr << "ALPN is not h2\n";
@@ -57,7 +57,7 @@ Task<void> runClient(const std::string& host, uint16_t port) {
 
     bool finished = false;
     while (!finished) {
-        auto batch_result = co_await stream->getFrames(16);
+        auto batch_result = co_await stream->get_frames(16);
         if (!batch_result) {
             break;
         }
@@ -68,7 +68,7 @@ Task<void> runClient(const std::string& host, uint16_t port) {
                 stream_closed = true;
                 break;
             }
-            if ((frame->isHeaders() || frame->isData()) && frame->isEndStream()) {
+            if ((frame->is_headers() || frame->is_data()) && frame->is_end_stream()) {
                 finished = true;
                 break;
             }
@@ -104,16 +104,16 @@ int main(int argc, char* argv[]) {
     std::cout << "Target: " << host << ":" << port << "\n";
     std::cout << "========================================\n";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "No IO scheduler available\n";
         return 1;
     }
 
-    auto join = runtime.spawnIO(runClient(host, port));
+    auto join = runtime.spawn_io(run_client(host, port));
     if (!join) {
         runtime.stop();
         return 1;

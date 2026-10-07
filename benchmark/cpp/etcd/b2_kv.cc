@@ -10,7 +10,7 @@
 namespace
 {
 
-int parsePositiveInt(const char* value, int fallback)
+int parse_positive_int(const char* value, int fallback)
 {
     if (value == nullptr) {
         return fallback;
@@ -24,33 +24,33 @@ int parsePositiveInt(const char* value, int fallback)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     galay::etcd::benchmark::AsyncBenchmarkArgs args;
     if (argc > 1) args.endpoint = argv[1];
-    if (argc > 2) args.workers = parsePositiveInt(argv[2], args.workers);
-    if (argc > 3) args.ops_per_worker = parsePositiveInt(argv[3], args.ops_per_worker);
-    if (argc > 4) args.value_size = parsePositiveInt(argv[4], args.value_size);
+    if (argc > 2) args.workers = parse_positive_int(argv[2], args.workers);
+    if (argc > 3) args.ops_per_worker = parse_positive_int(argv[3], args.ops_per_worker);
+    if (argc > 4) args.value_size = parse_positive_int(argv[4], args.value_size);
     if (argc > 5) {
-        auto mode = galay::etcd::benchmark::parseAsyncBenchmarkMode(argv[5]);
+        auto mode = galay::etcd::benchmark::parse_async_benchmark_mode(argv[5]);
         if (!mode.has_value()) {
             std::cerr << mode.error() << '\n';
             return 1;
         }
         args.mode = *mode;
     }
-    if (argc > 6) args.io_schedulers = parsePositiveInt(argv[6], args.io_schedulers);
+    if (argc > 6) args.io_schedulers = parse_positive_int(argv[6], args.io_schedulers);
 
-    auto result = galay::etcd::benchmark::runAsyncBenchmark(args);
+    auto result = galay::etcd::benchmark::run_async_benchmark(args);
     if (!result.has_value()) {
         std::cerr << "async benchmark failed: " << result.error() << '\n';
         return 1;
     }
 
     std::cout << "Endpoint      : " << result->endpoint << '\n';
-    std::cout << "Mode          : " << galay::etcd::benchmark::toString(result->mode) << '\n';
+    std::cout << "Mode          : " << galay::etcd::benchmark::to_string(result->mode) << '\n';
     std::cout << "Workers       : " << result->workers << '\n';
     std::cout << "Ops/worker    : " << result->ops_per_worker << '\n';
     std::cout << "Value size    : " << result->value_size << " bytes\n";

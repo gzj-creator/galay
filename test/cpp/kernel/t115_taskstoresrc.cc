@@ -13,11 +13,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -26,61 +26,61 @@ std::string readAll(const std::filesystem::path& path) {
                        std::istreambuf_iterator<char>());
 }
 
-bool containsText(const std::string& haystack, const std::string& needle) {
+bool contains_text(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto task_h = root / "galay-kernel" / "core" / "task.h";
     const auto task_cc = root / "galay-kernel" / "core" / "task.cc";
 
-    const std::string task_h_text = readAll(task_h);
-    const std::string task_cc_text = readAll(task_cc);
+    const std::string task_h_text = read_all(task_h);
+    const std::string task_cc_text = read_all(task_cc);
     if (task_h_text.empty() || task_cc_text.empty()) {
         std::cerr << "[T115] failed to read Task sources\n";
         return 1;
     }
 
-    if (containsText(task_h_text, "Task(TaskRef task, std::shared_ptr<TaskCompletionState<T>> completion)")) {
+    if (contains_text(task_h_text, "Task(TaskRef task, std::shared_ptr<TaskCompletionState<T>> completion)")) {
         std::cerr << "[T115] expected Task<T> coroutine path to stop storing shared_ptr completion state\n";
         return 1;
     }
-    if (containsText(task_h_text, "Task(TaskRef task, std::shared_ptr<TaskCompletionState<void>> completion)")) {
+    if (contains_text(task_h_text, "Task(TaskRef task, std::shared_ptr<TaskCompletionState<void>> completion)")) {
         std::cerr << "[T115] expected Task<void> coroutine path to stop storing shared_ptr completion state\n";
         return 1;
     }
-    if (containsText(task_h_text, "std::shared_ptr<TaskCompletionState<T>> m_completion")) {
+    if (contains_text(task_h_text, "std::shared_ptr<TaskCompletionState<T>> m_completion")) {
         std::cerr << "[T115] expected Task<T> storage to stop embedding shared_ptr completion state\n";
         return 1;
     }
-    if (containsText(task_h_text, "std::shared_ptr<TaskCompletionState<void>> m_completion")) {
+    if (contains_text(task_h_text, "std::shared_ptr<TaskCompletionState<void>> m_completion")) {
         std::cerr << "[T115] expected Task<void> storage to stop embedding shared_ptr completion state\n";
         return 1;
     }
-    if (containsText(task_h_text, "std::make_shared<TaskCompletionState<T>>()")) {
+    if (contains_text(task_h_text, "std::make_shared<TaskCompletionState<T>>()")) {
         std::cerr << "[T115] expected TaskPromise<T> to stop allocating shared_ptr completion state\n";
         return 1;
     }
-    if (containsText(task_h_text, "std::make_shared<TaskCompletionState<void>>()")) {
+    if (contains_text(task_h_text, "std::make_shared<TaskCompletionState<void>>()")) {
         std::cerr << "[T115] expected TaskPromise<void> to stop allocating shared_ptr completion state\n";
         return 1;
     }
-    if (!containsText(task_h_text, "static void* operator new(std::size_t size);")) {
+    if (!contains_text(task_h_text, "static void* operator new(std::size_t size);")) {
         std::cerr << "[T115] expected TaskState to declare class-specific operator new\n";
         return 1;
     }
-    if (!containsText(task_h_text, "static void operator delete(void* ptr, std::size_t size) noexcept;")) {
+    if (!contains_text(task_h_text, "static void operator delete(void* ptr, std::size_t size) noexcept;")) {
         std::cerr << "[T115] expected TaskState to declare sized operator delete\n";
         return 1;
     }
-    if (!containsText(task_h_text, "std::atomic<TaskWaiter*> m_waiter{nullptr};")) {
+    if (!contains_text(task_h_text, "std::atomic<TaskWaiter*> m_waiter{nullptr};")) {
         std::cerr << "[T115] expected TaskState to lazily own a waiter pointer\n";
         return 1;
     }
-    if (!containsText(task_cc_text, "thread_local TaskStateFreeNode* g_taskStateFreeList = nullptr;")) {
+    if (!contains_text(task_cc_text, "thread_local TaskStateFreeNode* g_taskStateFreeList = nullptr;")) {
         std::cerr << "[T115] expected task.cc to keep a thread-local TaskState freelist\n";
         return 1;
     }

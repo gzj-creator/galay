@@ -134,10 +134,10 @@ struct HttpClientConfig
  */
 class HttpClientBuilder {
 public:
-    HttpClientBuilder& tcpNoDelay(bool v) { m_config.tcp_no_delay = v; return *this; }
-    HttpClientBuilder& headerMode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
+    HttpClientBuilder& tcp_no_delay(bool v) { m_config.tcp_no_delay = v; return *this; }
+    HttpClientBuilder& header_mode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
     HttpClientImpl<AsyncTcpSocket> build() const;
-    HttpClientConfig buildConfig() const                       { return m_config; }
+    HttpClientConfig build_config() const                       { return m_config; }
 private:
     HttpClientConfig m_config;
 };
@@ -147,14 +147,14 @@ private:
  * @details
  * 典型调用顺序：
  * 1. `connect(url)`
- * 2. `getSession()` 或直接访问 `socket()`
+ * 2. `get_session()` 或直接访问 `socket()`
  * 3. 通过 `HttpSessionImpl` 发起请求/读取响应
  * 4. `close()`，或让底层 socket 在析构路径上释放
  *
  * 所有权说明：
  * - 客户端独占持有一个 `SocketType`
- * - `getSession()` 返回的 Session 只借用 socket，不转移所有权
- * - `releaseSocket()` 会把 socket 所有权转移给调用方，适合协议升级场景
+ * - `get_session()` 返回的 Session 只借用 socket，不转移所有权
+ * - `release_socket()` 会把 socket 所有权转移给调用方，适合协议升级场景
  *
      * 失败语义：
      * - URL 非法、协议与客户端类型不匹配、socket 初始化失败、网络连接失败都通过返回值传播
@@ -210,13 +210,13 @@ public:
             co_return std::unexpected(IOError(kOpenFailed, errno));
         }
 
-        auto nonblock_result = m_socket->option().handleNonBlock();
+        auto nonblock_result = m_socket->option().handle_non_block();
         if (!nonblock_result) {
             m_socket.reset();
             co_return std::unexpected(nonblock_result.error());
         }
         if (m_config.tcp_no_delay) {
-            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            auto nodelay_result = m_socket->option().handle_tcp_no_delay();
             if (!nodelay_result) {
                 m_socket.reset();
                 co_return std::unexpected(nodelay_result.error());
@@ -241,7 +241,7 @@ public:
      * @note 只要 Session 仍在使用，就必须保证客户端对象和内部 socket 继续存活
      */
     std::expected<std::unique_ptr<HttpSessionImpl<SocketType>>, HttpError>
-    getSession(size_t ring_buffer_size = 8192,
+    get_session(size_t ring_buffer_size = 8192,
                const HttpReaderSetting& reader_setting = HttpReaderSetting(),
                const HttpWriterSetting& writer_setting = HttpWriterSetting()) {
         if (!m_socket) {
@@ -254,7 +254,7 @@ public:
     /**
      * @brief 主动关闭底层 socket
      * @return 底层 socket 的 close awaitable
-     * @note 如果已经通过 `releaseSocket()` 转移所有权，则不应再调用该函数
+     * @note 如果已经通过 `release_socket()` 转移所有权，则不应再调用该函数
      */
     Task<std::expected<void, IOError>> close() {
         if (!m_socket) {
@@ -276,7 +276,7 @@ public:
      * @return 一个 `unique_ptr<SocketType>`；调用后客户端不再拥有 socket
      * @details 用于 HTTP -> WebSocket 等协议升级，调用方需负责后续关闭与生命周期管理
      */
-    std::unique_ptr<SocketType> releaseSocket() { return std::move(m_socket); }
+    std::unique_ptr<SocketType> release_socket() { return std::move(m_socket); }
 
 protected:
     std::unique_ptr<SocketType> m_socket;
@@ -322,13 +322,13 @@ class HttpsClient;
  */
 class HttpsClientBuilder {
 public:
-    HttpsClientBuilder& caPath(std::string v)              { m_config.ca_path = std::move(v); return *this; }
-    HttpsClientBuilder& verifyPeer(bool v)                 { m_config.verify_peer = v; return *this; }
-    HttpsClientBuilder& verifyDepth(int v)                 { m_config.verify_depth = v; return *this; }
-    HttpsClientBuilder& tcpNoDelay(bool v)                 { m_config.tcp_no_delay = v; return *this; }
-    HttpsClientBuilder& headerMode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
+    HttpsClientBuilder& ca_path(std::string v)              { m_config.ca_path = std::move(v); return *this; }
+    HttpsClientBuilder& verify_peer(bool v)                 { m_config.verify_peer = v; return *this; }
+    HttpsClientBuilder& verify_depth(int v)                 { m_config.verify_depth = v; return *this; }
+    HttpsClientBuilder& tcp_no_delay(bool v)                 { m_config.tcp_no_delay = v; return *this; }
+    HttpsClientBuilder& header_mode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
     HttpsClient build() const;
-    HttpsClientConfig buildConfig() const                  { return m_config; }
+    HttpsClientConfig build_config() const                  { return m_config; }
 private:
     HttpsClientConfig m_config;
 };
@@ -339,7 +339,7 @@ private:
  * 典型调用顺序：
  * 1. `connect(https_url)`
  * 2. `handshake()`
- * 3. `getSession()` 发起 HTTP 请求
+ * 3. `get_session()` 发起 HTTP 请求
  * 4. `close()` 或由上层协议关闭
  *
  * `connect()` 只负责 TCP 连接和 TLS socket 初始化，不会隐式完成 SSL 握手。
@@ -349,11 +349,11 @@ class HttpsClient : public HttpClientImpl<galay::ssl::SslSocket>
 {
 public:
     HttpsClient(const HttpsClientConfig& config = HttpsClientConfig())
-        : HttpClientImpl<galay::ssl::SslSocket>(convertConfig(config))
+        : HttpClientImpl<galay::ssl::SslSocket>(convert_config(config))
         , m_https_config(config)
         , m_ssl_ctx(galay::ssl::SslMethod::TLS_Client)
     {
-        initSslContext();
+        init_ssl_context();
     }
 
     ~HttpsClient() = default;
@@ -396,13 +396,13 @@ public:
             co_return std::unexpected(IOError(kOpenFailed, errno));
         }
 
-        auto nonblock_result = m_socket->option().handleNonBlock();
+        auto nonblock_result = m_socket->option().handle_non_block();
         if (!nonblock_result) {
             m_socket.reset();
             co_return std::unexpected(nonblock_result.error());
         }
         if (m_https_config.tcp_no_delay) {
-            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            auto nodelay_result = m_socket->option().handle_tcp_no_delay();
             if (!nodelay_result) {
                 m_socket.reset();
                 co_return std::unexpected(nodelay_result.error());
@@ -410,7 +410,7 @@ public:
         }
 
         // 设置 SNI (Server Name Indication)
-        auto sni_result = m_socket->setHostname(m_url.host);
+        auto sni_result = m_socket->set_hostname(m_url.host);
         if (!sni_result) {
             HTTP_LOG_WARN("[connect] [sni] [fail]", "host={}", m_url.host);
         }
@@ -439,13 +439,13 @@ public:
      * @brief 检查握手是否完成
      * @return 已完成握手则返回 true；未连接或握手未完成则返回 false
      */
-    bool isHandshakeCompleted() const {
-        return m_socket && m_socket->isHandshakeCompleted();
+    bool is_handshake_completed() const {
+        return m_socket && m_socket->is_handshake_completed();
     }
 
 private:
-    void initSslContext() {
-        if (!m_ssl_ctx.isValid()) {
+    void init_ssl_context() {
+        if (!m_ssl_ctx.is_valid()) {
             m_ssl_context_ready = false;
             return;
         }
@@ -453,7 +453,7 @@ private:
 
         // 加载 CA 证书
         if (!m_https_config.ca_path.empty()) {
-            auto result = m_ssl_ctx.loadCACertificate(m_https_config.ca_path);
+            auto result = m_ssl_ctx.load_ca_certificate(m_https_config.ca_path);
             if (!result) {
                 HTTP_LOG_ERROR("[ssl] [ca] [fail]", "path={}", m_https_config.ca_path);
             }
@@ -461,14 +461,14 @@ private:
 
         // 设置验证模式
         if (m_https_config.verify_peer) {
-            m_ssl_ctx.setVerifyMode(galay::ssl::SslVerifyMode::Peer);
-            m_ssl_ctx.setVerifyDepth(m_https_config.verify_depth);
+            m_ssl_ctx.set_verify_mode(galay::ssl::SslVerifyMode::Peer);
+            m_ssl_ctx.set_verify_depth(m_https_config.verify_depth);
         } else {
-            m_ssl_ctx.setVerifyMode(galay::ssl::SslVerifyMode::None);
+            m_ssl_ctx.set_verify_mode(galay::ssl::SslVerifyMode::None);
         }
     }
 
-    static HttpClientConfig convertConfig(const HttpsClientConfig& config) {
+    static HttpClientConfig convert_config(const HttpsClientConfig& config) {
         HttpClientConfig base_config;
         base_config.tcp_no_delay = config.tcp_no_delay;
         base_config.header_mode = config.header_mode;

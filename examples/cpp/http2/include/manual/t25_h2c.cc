@@ -41,7 +41,7 @@ Task<void> test_client(const std::string& host, uint16_t port, int num_requests)
     std::cout << "Upgrading to HTTP/2..." << std::endl;
     auto upgrade_result = co_await client.upgrade("/");
     if (!upgrade_result) {
-        std::cerr << "Upgrade failed: " << upgrade_result.error().toString() << std::endl;
+        std::cerr << "Upgrade failed: " << upgrade_result.error().to_string() << std::endl;
         fail_count++;
         g_done = true;
         co_return;
@@ -60,13 +60,13 @@ Task<void> test_client(const std::string& host, uint16_t port, int num_requests)
         }
         bool finished = false;
         while (!finished) {
-            auto frame_result = co_await stream->getFrame();
+            auto frame_result = co_await stream->get_frame();
             if (!frame_result || !frame_result.value()) {
                 fail_count++;
                 break;
             }
             auto frame = std::move(frame_result.value());
-            if ((frame->isHeaders() || frame->isData()) && frame->isEndStream()) {
+            if ((frame->is_headers() || frame->is_data()) && frame->is_end_stream()) {
                 finished = true;
             }
         }
@@ -102,10 +102,10 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================\n\n";
 
     try {
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
         runtime.start();
 
-        auto join = runtime.spawnIO(test_client(host, port, num_requests));
+        auto join = runtime.spawn_io(test_client(host, port, num_requests));
         if (!join) {
             std::cerr << "Failed to spawn client coroutine: " << join.error().message() << "\n";
             runtime.stop();

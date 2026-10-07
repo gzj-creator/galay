@@ -15,7 +15,7 @@ Http1_1RequestBuilder::Http1_1RequestBuilder(HeaderPair::Mode mode)
 {
     m_request.header().version() = HttpVersion::HttpVersion_1_1;
     m_request.header().method() = HttpMethod::GET;
-    m_request.header().headerPairs() = HeaderPair(mode);
+    m_request.header().header_pairs() = HeaderPair(mode);
 }
 
 Http1_1RequestBuilder Http1_1RequestBuilder::clone() const
@@ -40,14 +40,14 @@ Http1_1RequestBuilder& Http1_1RequestBuilder::uri(const std::string& uri)
 
 Http1_1RequestBuilder& Http1_1RequestBuilder::header(const std::string& key, const std::string& value)
 {
-    m_request.header().headerPairs().addHeaderPair(key, value);
+    m_request.header().header_pairs().add_header_pair(key, value);
     return *this;
 }
 
 Http1_1RequestBuilder& Http1_1RequestBuilder::headers(const std::map<std::string, std::string>& headers)
 {
     for (const auto& [key, value] : headers) {
-        m_request.header().headerPairs().addHeaderPair(key, value);
+        m_request.header().header_pairs().add_header_pair(key, value);
     }
     return *this;
 }
@@ -57,14 +57,14 @@ Http1_1RequestBuilder& Http1_1RequestBuilder::host(const std::string& host)
     return header("Host", host);
 }
 
-Http1_1RequestBuilder& Http1_1RequestBuilder::contentType(const std::string& contentType)
+Http1_1RequestBuilder& Http1_1RequestBuilder::content_type(const std::string& content_type)
 {
-    return header("Content-Type", contentType);
+    return header("Content-Type", content_type);
 }
 
-Http1_1RequestBuilder& Http1_1RequestBuilder::userAgent(const std::string& userAgent)
+Http1_1RequestBuilder& Http1_1RequestBuilder::user_agent(const std::string& user_agent)
 {
-    return header("User-Agent", userAgent);
+    return header("User-Agent", user_agent);
 }
 
 Http1_1RequestBuilder& Http1_1RequestBuilder::connection(const std::string& connection)
@@ -86,14 +86,14 @@ Http1_1RequestBuilder& Http1_1RequestBuilder::body(std::string&& body)
 
 Http1_1RequestBuilder& Http1_1RequestBuilder::json(const std::string& json)
 {
-    contentType("application/json; charset=utf-8");
+    content_type("application/json; charset=utf-8");
     m_body = json;
     return *this;
 }
 
 Http1_1RequestBuilder& Http1_1RequestBuilder::form(const std::map<std::string, std::string>& form)
 {
-    contentType("application/x-www-form-urlencoded");
+    content_type("application/x-www-form-urlencoded");
 
     std::ostringstream oss;
     bool first = true;
@@ -115,15 +115,15 @@ HttpRequest Http1_1RequestBuilder::build()
 
     if (!m_body.empty()) {
         std::string body_copy = m_body;
-        request_copy.setBodyStr(std::move(body_copy));
+        request_copy.set_body_str(std::move(body_copy));
     }
     return request_copy;
 }
 
-HttpRequest Http1_1RequestBuilder::buildMove()
+HttpRequest Http1_1RequestBuilder::build_move()
 {
     if (!m_body.empty()) {
-        m_request.setBodyStr(std::move(m_body));
+        m_request.set_body_str(std::move(m_body));
     }
     return std::move(m_request);
 }
@@ -205,21 +205,21 @@ Http1_1ResponseBuilder& Http1_1ResponseBuilder::status(HttpStatusCode code)
 
 Http1_1ResponseBuilder& Http1_1ResponseBuilder::header(const std::string& key, const std::string& value)
 {
-    m_response.header().headerPairs().addHeaderPair(key, value);
+    m_response.header().header_pairs().add_header_pair(key, value);
     return *this;
 }
 
 Http1_1ResponseBuilder& Http1_1ResponseBuilder::headers(const std::map<std::string, std::string>& headers)
 {
     for (const auto& [key, value] : headers) {
-        m_response.header().headerPairs().addHeaderPair(key, value);
+        m_response.header().header_pairs().add_header_pair(key, value);
     }
     return *this;
 }
 
-Http1_1ResponseBuilder& Http1_1ResponseBuilder::contentType(const std::string& contentType)
+Http1_1ResponseBuilder& Http1_1ResponseBuilder::content_type(const std::string& content_type)
 {
-    return header("Content-Type", contentType);
+    return header("Content-Type", content_type);
 }
 
 Http1_1ResponseBuilder& Http1_1ResponseBuilder::body(const std::string& body)
@@ -236,21 +236,21 @@ Http1_1ResponseBuilder& Http1_1ResponseBuilder::body(std::string&& body)
 
 Http1_1ResponseBuilder& Http1_1ResponseBuilder::json(const std::string& json)
 {
-    contentType("application/json; charset=utf-8");
+    content_type("application/json; charset=utf-8");
     m_body = json;
     return *this;
 }
 
 Http1_1ResponseBuilder& Http1_1ResponseBuilder::html(const std::string& html)
 {
-    contentType("text/html; charset=utf-8");
+    content_type("text/html; charset=utf-8");
     m_body = html;
     return *this;
 }
 
 Http1_1ResponseBuilder& Http1_1ResponseBuilder::text(const std::string& text)
 {
-    contentType("text/plain; charset=utf-8");
+    content_type("text/plain; charset=utf-8");
     m_body = text;
     return *this;
 }
@@ -261,15 +261,15 @@ HttpResponse Http1_1ResponseBuilder::build()
 
     if (!m_body.empty()) {
         std::string body_copy = m_body;
-        response_copy.setBodyStr(std::move(body_copy));
+        response_copy.set_body_str(std::move(body_copy));
     }
     return response_copy;
 }
 
-HttpResponse Http1_1ResponseBuilder::buildMove()
+HttpResponse Http1_1ResponseBuilder::build_move()
 {
     if (!m_body.empty()) {
-        m_response.setBodyStr(std::move(m_body));
+        m_response.set_body_str(std::move(m_body));
     }
     return std::move(m_response);
 }
@@ -288,14 +288,14 @@ Http1_1ResponseBuilder Http1_1ResponseBuilder::created()
     return builder;
 }
 
-Http1_1ResponseBuilder Http1_1ResponseBuilder::noContent()
+Http1_1ResponseBuilder Http1_1ResponseBuilder::no_content()
 {
     Http1_1ResponseBuilder builder;
     builder.status(HttpStatusCode::NoContent_204);
     return builder;
 }
 
-Http1_1ResponseBuilder Http1_1ResponseBuilder::badRequest()
+Http1_1ResponseBuilder Http1_1ResponseBuilder::bad_request()
 {
     Http1_1ResponseBuilder builder;
     builder.status(HttpStatusCode::BadRequest_400);
@@ -316,14 +316,14 @@ Http1_1ResponseBuilder Http1_1ResponseBuilder::forbidden()
     return builder;
 }
 
-Http1_1ResponseBuilder Http1_1ResponseBuilder::notFound()
+Http1_1ResponseBuilder Http1_1ResponseBuilder::not_found()
 {
     Http1_1ResponseBuilder builder;
     builder.status(HttpStatusCode::NotFound_404);
     return builder;
 }
 
-Http1_1ResponseBuilder Http1_1ResponseBuilder::internalServerError()
+Http1_1ResponseBuilder Http1_1ResponseBuilder::internal_server_error()
 {
     Http1_1ResponseBuilder builder;
     builder.status(HttpStatusCode::InternalServerError_500);

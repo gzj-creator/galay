@@ -25,44 +25,44 @@ using namespace galay::kernel;
 
 namespace {
 
-Task<void> upstreamEcho(HttpConn& conn, HttpRequest req)
+Task<void> upstream_echo(HttpConn& conn, HttpRequest req)
 {
     auto response = Http1_1ResponseBuilder::ok()
         .header("Server", "E2E-Upstream/1.0")
-        .text("Echo: " + req.getBodyStr())
-        .buildMove();
+        .text("Echo: " + req.get_body_str())
+        .build_move();
 
-    auto writer = conn.getWriter();
-    auto result = co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    auto result = co_await writer.send_response(response);
     if (!result) {
         std::cerr << "[upstreamEcho] [send-fail] " << result.error().message() << "\n";
     }
     co_return;
 }
 
-Task<void> upstreamCatchAll(HttpConn& conn, HttpRequest req)
+Task<void> upstream_catch_all(HttpConn& conn, HttpRequest req)
 {
     auto response = Http1_1ResponseBuilder::ok()
         .header("Server", "E2E-Upstream/1.0")
         .text("UPSTREAM:" + req.header().uri())
-        .buildMove();
+        .build_move();
 
-    auto writer = conn.getWriter();
-    auto result = co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    auto result = co_await writer.send_response(response);
     if (!result) {
         std::cerr << "[upstreamCatchAll] [send-fail] " << result.error().message() << "\n";
     }
     co_return;
 }
 
-Task<void> upstreamHeaders(HttpConn& conn, HttpRequest req)
+Task<void> upstream_headers(HttpConn& conn, HttpRequest req)
 {
-    auto& headers = req.header().headerPairs();
-    const std::string host = headers.getValue("Host");
-    const std::string xff = headers.getValue("X-Forwarded-For");
-    const std::string xreal = headers.getValue("X-Real-IP");
-    const std::string xfproto = headers.getValue("X-Forwarded-Proto");
-    const std::string xfhost = headers.getValue("X-Forwarded-Host");
+    auto& headers = req.header().header_pairs();
+    const std::string host = headers.get_value("Host");
+    const std::string xff = headers.get_value("X-Forwarded-For");
+    const std::string xreal = headers.get_value("X-Real-IP");
+    const std::string xfproto = headers.get_value("X-Forwarded-Proto");
+    const std::string xfhost = headers.get_value("X-Forwarded-Host");
 
     std::string body;
     body.reserve(256);
@@ -75,24 +75,24 @@ Task<void> upstreamHeaders(HttpConn& conn, HttpRequest req)
     auto response = Http1_1ResponseBuilder::ok()
         .header("Server", "E2E-Upstream/1.0")
         .text(body)
-        .buildMove();
+        .build_move();
 
-    auto writer = conn.getWriter();
-    auto result = co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    auto result = co_await writer.send_response(response);
     if (!result) {
         std::cerr << "[upstreamHeaders] [send-fail] " << result.error().message() << "\n";
     }
     co_return;
 }
 
-Task<void> upstreamConnPort(HttpConn& conn, HttpRequest req)
+Task<void> upstream_conn_port(HttpConn& conn, HttpRequest req)
 {
     (void)req;
     uint16_t remote_port = 0;
 
     sockaddr_storage addr{};
     socklen_t len = sizeof(addr);
-    int rc = ::getpeername(conn.getSocket().handle().fd, reinterpret_cast<sockaddr*>(&addr), &len);
+    int rc = ::getpeername(conn.get_socket().handle().fd, reinterpret_cast<sockaddr*>(&addr), &len);
     if (rc == 0 && addr.ss_family == AF_INET) {
         auto* in = reinterpret_cast<sockaddr_in*>(&addr);
         remote_port = ntohs(in->sin_port);
@@ -101,20 +101,20 @@ Task<void> upstreamConnPort(HttpConn& conn, HttpRequest req)
     auto response = Http1_1ResponseBuilder::ok()
         .header("Server", "E2E-Upstream/1.0")
         .text("UPSTREAM_CONN_PORT:" + std::to_string(remote_port))
-        .buildMove();
+        .build_move();
 
-    auto writer = conn.getWriter();
-    auto result = co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    auto result = co_await writer.send_response(response);
     if (!result) {
         std::cerr << "[upstreamConnPort] [send-fail] " << result.error().message() << "\n";
     }
     co_return;
 }
 
-Task<void> upstreamStream(HttpConn& conn, HttpRequest req)
+Task<void> upstream_stream(HttpConn& conn, HttpRequest req)
 {
     (void)req;
-    auto writer = conn.getWriter();
+    auto writer = conn.get_writer();
 
     auto send_blob = [&writer](std::string blob) -> Task<void> {
         auto result = co_await writer.send(std::move(blob));
@@ -137,7 +137,7 @@ Task<void> upstreamStream(HttpConn& conn, HttpRequest req)
     co_return;
 }
 
-std::string resolveStaticDir()
+std::string resolve_static_dir()
 {
     const std::string candidates[] = {
         GALAY_SOURCE_DIR "/test/cpp/http/static_files",
@@ -159,7 +159,7 @@ std::string resolveStaticDir()
     return "./test/cpp/http/static_files";
 }
 
-std::string sendRawHttp(const std::string& request, uint16_t port)
+std::string send_raw_http(const std::string& request, uint16_t port)
 {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -215,7 +215,7 @@ std::string sendRawHttp(const std::string& request, uint16_t port)
     return response;
 }
 
-void assertContains(const std::string& text, const std::string& expected)
+void assert_contains(const std::string& text, const std::string& expected)
 {
     if (text.find(expected) == std::string::npos) {
         std::cerr << "Expected substring not found: " << expected << "\n";
@@ -225,7 +225,7 @@ void assertContains(const std::string& text, const std::string& expected)
     }
 }
 
-void assertNotContains(const std::string& text, const std::string& unexpected)
+void assert_not_contains(const std::string& text, const std::string& unexpected)
 {
     if (text.find(unexpected) != std::string::npos) {
         std::cerr << "Unexpected substring found: " << unexpected << "\n";
@@ -235,7 +235,7 @@ void assertNotContains(const std::string& text, const std::string& unexpected)
     }
 }
 
-std::string extractBody(const std::string& response)
+std::string extract_body(const std::string& response)
 {
     const std::string delimiter = "\r\n\r\n";
     size_t pos = response.find(delimiter);
@@ -245,10 +245,10 @@ std::string extractBody(const std::string& response)
     return response.substr(pos + delimiter.size());
 }
 
-uint16_t parseConnPortFromResponse(const std::string& response)
+uint16_t parse_conn_port_from_response(const std::string& response)
 {
     const std::string marker = "UPSTREAM_CONN_PORT:";
-    std::string body = extractBody(response);
+    std::string body = extract_body(response);
     size_t pos = body.find(marker);
     if (pos == std::string::npos) {
         std::cerr << "No connection marker in body: " << body << "\n";
@@ -264,7 +264,7 @@ uint16_t parseConnPortFromResponse(const std::string& response)
     return static_cast<uint16_t>(port);
 }
 
-uint16_t pickFreePort()
+uint16_t pick_free_port()
 {
     int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     assert(fd >= 0);
@@ -291,25 +291,25 @@ uint16_t pickFreePort()
 
 int main()
 {
-    uint16_t upstream_port = pickFreePort();
-    uint16_t proxy_port = pickFreePort();
+    uint16_t upstream_port = pick_free_port();
+    uint16_t proxy_port = pick_free_port();
     while (proxy_port == upstream_port) {
-        proxy_port = pickFreePort();
+        proxy_port = pick_free_port();
     }
-    const std::string static_dir = resolveStaticDir();
+    const std::string static_dir = resolve_static_dir();
 
     HttpRouter upstream_router;
-    upstream_router.addHandler<HttpMethod::POST>("/echo", upstreamEcho);
-    upstream_router.addHandler<HttpMethod::GET>("/headers", upstreamHeaders);
-    upstream_router.addHandler<HttpMethod::GET>("/conn-port", upstreamConnPort);
-    upstream_router.addHandler<HttpMethod::GET>("/stream", upstreamStream);
-    upstream_router.addHandler<HttpMethod::GET>("/**", upstreamCatchAll);
+    upstream_router.add_handler<HttpMethod::POST>("/echo", upstream_echo);
+    upstream_router.add_handler<HttpMethod::GET>("/headers", upstream_headers);
+    upstream_router.add_handler<HttpMethod::GET>("/conn-port", upstream_conn_port);
+    upstream_router.add_handler<HttpMethod::GET>("/stream", upstream_stream);
+    upstream_router.add_handler<HttpMethod::GET>("/**", upstream_catch_all);
 
     HttpServer upstream_server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(upstream_port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build());
     upstream_server.start(std::move(upstream_router));
 
@@ -321,8 +321,8 @@ int main()
     HttpServer proxy_server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(proxy_port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build());
     proxy_server.start(std::move(proxy_router));
 
@@ -331,62 +331,62 @@ int main()
     std::string req1 = Http1_1RequestBuilder::post("/echo")
         .host("127.0.0.1")
         .connection("close")
-        .contentType("text/plain")
+        .content_type("text/plain")
         .body("via proxy")
-        .buildMove()
-        .toString();
-    std::string resp1 = sendRawHttp(req1, proxy_port);
-    assertContains(resp1, "HTTP/1.1 200 OK");
-    assertContains(resp1, "Echo: via proxy");
+        .build_move()
+        .to_string();
+    std::string resp1 = send_raw_http(req1, proxy_port);
+    assert_contains(resp1, "HTTP/1.1 200 OK");
+    assert_contains(resp1, "Echo: via proxy");
 
     std::string req2 = Http1_1RequestBuilder::get("/static/index.html")
         .host("127.0.0.1")
         .connection("close")
-        .buildMove()
-        .toString();
-    std::string resp2 = sendRawHttp(req2, proxy_port);
-    assertContains(resp2, "HTTP/1.1 200 OK");
-    assertContains(resp2, "<!DOCTYPE html>");
+        .build_move()
+        .to_string();
+    std::string resp2 = send_raw_http(req2, proxy_port);
+    assert_contains(resp2, "HTTP/1.1 200 OK");
+    assert_contains(resp2, "<!DOCTYPE html>");
 
     std::string req3 = Http1_1RequestBuilder::get("/static/not-found-xyz")
         .host("127.0.0.1")
         .connection("close")
-        .buildMove()
-        .toString();
-    std::string resp3 = sendRawHttp(req3, proxy_port);
-    assertContains(resp3, "HTTP/1.1 200 OK");
-    assertContains(resp3, "UPSTREAM:/static/not-found-xyz");
+        .build_move()
+        .to_string();
+    std::string resp3 = send_raw_http(req3, proxy_port);
+    assert_contains(resp3, "HTTP/1.1 200 OK");
+    assert_contains(resp3, "UPSTREAM:/static/not-found-xyz");
 
     std::string req4 = Http1_1RequestBuilder::get("/headers")
         .host("proxy.demo.local")
         .header("X-Forwarded-For", "1.2.3.4")
         .connection("close")
-        .buildMove()
-        .toString();
-    std::string resp4 = sendRawHttp(req4, proxy_port);
-    assertContains(resp4, "HTTP/1.1 200 OK");
-    assertContains(resp4, "Host=127.0.0.1:");
-    assertContains(resp4, "X-Forwarded-For=1.2.3.4, 127.0.0.1");
-    assertContains(resp4, "X-Real-IP=127.0.0.1");
-    assertContains(resp4, "X-Forwarded-Proto=http");
-    assertContains(resp4, "X-Forwarded-Host=proxy.demo.local");
+        .build_move()
+        .to_string();
+    std::string resp4 = send_raw_http(req4, proxy_port);
+    assert_contains(resp4, "HTTP/1.1 200 OK");
+    assert_contains(resp4, "Host=127.0.0.1:");
+    assert_contains(resp4, "X-Forwarded-For=1.2.3.4, 127.0.0.1");
+    assert_contains(resp4, "X-Real-IP=127.0.0.1");
+    assert_contains(resp4, "X-Forwarded-Proto=http");
+    assert_contains(resp4, "X-Forwarded-Host=proxy.demo.local");
 
     std::string req5 = Http1_1RequestBuilder::get("/conn-port")
         .host("127.0.0.1")
         .connection("close")
-        .buildMove()
-        .toString();
+        .build_move()
+        .to_string();
     std::string req6 = Http1_1RequestBuilder::get("/conn-port")
         .host("127.0.0.1")
         .connection("close")
-        .buildMove()
-        .toString();
-    std::string resp5 = sendRawHttp(req5, proxy_port);
-    std::string resp6 = sendRawHttp(req6, proxy_port);
-    assertContains(resp5, "HTTP/1.1 200 OK");
-    assertContains(resp6, "HTTP/1.1 200 OK");
-    uint16_t conn_port_1 = parseConnPortFromResponse(resp5);
-    uint16_t conn_port_2 = parseConnPortFromResponse(resp6);
+        .build_move()
+        .to_string();
+    std::string resp5 = send_raw_http(req5, proxy_port);
+    std::string resp6 = send_raw_http(req6, proxy_port);
+    assert_contains(resp5, "HTTP/1.1 200 OK");
+    assert_contains(resp6, "HTTP/1.1 200 OK");
+    uint16_t conn_port_1 = parse_conn_port_from_response(resp5);
+    uint16_t conn_port_2 = parse_conn_port_from_response(resp6);
     if (conn_port_1 != conn_port_2) {
         std::cerr << "Expected reused upstream connection port, got "
                   << conn_port_1 << " and " << conn_port_2 << "\n";
@@ -396,39 +396,39 @@ int main()
     std::string req7 = Http1_1RequestBuilder::get("/stream")
         .host("127.0.0.1")
         .connection("close")
-        .buildMove()
-        .toString();
-    std::string resp7 = sendRawHttp(req7, proxy_port);
-    assertContains(resp7, "HTTP/1.1 200 OK");
-    assertContains(resp7, "Transfer-Encoding: chunked");
-    assertContains(resp7, "5\r\nhello\r\n");
-    assertContains(resp7, "5\r\nworld\r\n");
-    assertContains(resp7, "0\r\n\r\n");
-    assertNotContains(resp7, "Content-Length:");
+        .build_move()
+        .to_string();
+    std::string resp7 = send_raw_http(req7, proxy_port);
+    assert_contains(resp7, "HTTP/1.1 200 OK");
+    assert_contains(resp7, "Transfer-Encoding: chunked");
+    assert_contains(resp7, "5\r\nhello\r\n");
+    assert_contains(resp7, "5\r\nworld\r\n");
+    assert_contains(resp7, "0\r\n\r\n");
+    assert_not_contains(resp7, "Content-Length:");
 
     std::string req8 = Http1_1RequestBuilder::get("/raw/stream")
         .host("127.0.0.1")
         .connection("close")
-        .buildMove()
-        .toString();
-    std::string resp8 = sendRawHttp(req8, proxy_port);
-    assertContains(resp8, "HTTP/1.1 200 OK");
-    assertContains(resp8, "Transfer-Encoding: chunked");
-    assertContains(resp8, "5\r\nhello\r\n");
-    assertContains(resp8, "5\r\nworld\r\n");
-    assertContains(resp8, "0\r\n\r\n");
-    assertNotContains(resp8, "Content-Length:");
+        .build_move()
+        .to_string();
+    std::string resp8 = send_raw_http(req8, proxy_port);
+    assert_contains(resp8, "HTTP/1.1 200 OK");
+    assert_contains(resp8, "Transfer-Encoding: chunked");
+    assert_contains(resp8, "5\r\nhello\r\n");
+    assert_contains(resp8, "5\r\nworld\r\n");
+    assert_contains(resp8, "0\r\n\r\n");
+    assert_not_contains(resp8, "Content-Length:");
 
     std::string req9 = Http1_1RequestBuilder::post("/raw/echo")
         .host("127.0.0.1")
         .connection("close")
-        .contentType("application/json")
+        .content_type("application/json")
         .body("{\"q\":\"stream\"}")
-        .buildMove()
-        .toString();
-    std::string resp9 = sendRawHttp(req9, proxy_port);
-    assertContains(resp9, "HTTP/1.1 200 OK");
-    assertContains(resp9, "Echo: {\"q\":\"stream\"}");
+        .build_move()
+        .to_string();
+    std::string resp9 = send_raw_http(req9, proxy_port);
+    assert_contains(resp9, "HTTP/1.1 200 OK");
+    assert_contains(resp9, "Echo: {\"q\":\"stream\"}");
 
     proxy_server.stop();
     upstream_server.stop();

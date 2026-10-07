@@ -15,12 +15,12 @@ struct SslIoStats {
     uint64_t recv_chunks = 0;
 };
 
-void sslStatsSetEnabled(bool enabled);
-bool sslStatsEnabled();
-SslIoStats sslStatsSnapshot();
+void ssl_stats_set_enabled(bool enabled);
+bool ssl_stats_enabled();
+SslIoStats ssl_stats_snapshot();
 
-void sslStatsAddSend(size_t bytes);
-void sslStatsAddRecv(size_t bytes);
+void ssl_stats_add_send(size_t bytes);
+void ssl_stats_add_recv(size_t bytes);
 
 } // namespace galay::ssl::bench
 

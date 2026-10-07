@@ -41,7 +41,7 @@ static_assert(std::is_same_v<decltype(IOReadyQueue{}.ready_inject_buffer),
 
 namespace {
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 500ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -76,39 +76,39 @@ struct ManualSuspendAwaitable {
     void await_resume() const noexcept {}
 };
 
-Task<void> sameThreadWaiter(ManualWakeState* state) {
+Task<void> same_thread_waiter(ManualWakeState* state) {
     co_await ManualSuspendAwaitable{state};
     state->resumed.fetch_add(1, std::memory_order_relaxed);
     co_return;
 }
 
-Task<void> sameThreadProducer(ManualWakeState* state) {
+Task<void> same_thread_producer(ManualWakeState* state) {
     while (!state->armed.load(std::memory_order_acquire)) {
         co_yield true;
     }
 
-    state->waker.wakeUp();
-    state->waker.wakeUp();
+    state->waker.wake_up();
+    state->waker.wake_up();
     state->producer_done.store(true, std::memory_order_release);
     co_return;
 }
 
-bool runSameThreadDoubleWake() {
+bool run_same_thread_double_wake() {
     ManualWakeState state;
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "[T31] missing IO scheduler for same-thread wake test\n";
         runtime.stop();
         return false;
     }
 
-    scheduler->schedule(detail::TaskAccess::detachTask(sameThreadWaiter(&state)));
-    scheduler->schedule(detail::TaskAccess::detachTask(sameThreadProducer(&state)));
+    scheduler->schedule(detail::TaskAccess::detach_task(same_thread_waiter(&state)));
+    scheduler->schedule(detail::TaskAccess::detach_task(same_thread_producer(&state)));
 
-    const bool producer_done = waitUntil(state.producer_done);
+    const bool producer_done = wait_until(state.producer_done);
 
     const bool waiter_done = [&state]() {
         const auto deadline = std::chrono::steady_clock::now() + 500ms;
@@ -144,35 +144,35 @@ struct WaitChainState {
     std::atomic<bool> done{false};
 };
 
-Task<void> waitChild(WaitChainState* state) {
+Task<void> wait_child(WaitChainState* state) {
     state->child_steps.fetch_add(1, std::memory_order_relaxed);
     co_yield true;
     state->child_steps.fetch_add(1, std::memory_order_relaxed);
     co_return;
 }
 
-Task<void> waitParent(WaitChainState* state) {
-    auto child_result = co_await waitChild(state);
+Task<void> wait_parent(WaitChainState* state) {
+    auto child_result = co_await wait_child(state);
     assert(child_result.has_value());
     state->waiter_resumes.fetch_add(1, std::memory_order_relaxed);
     state->done.store(true, std::memory_order_release);
     co_return;
 }
 
-bool runWaitChainResumeOnce() {
+bool run_wait_chain_resume_once() {
     WaitChainState state;
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "[T31] missing IO scheduler for wait-chain test\n";
         runtime.stop();
         return false;
     }
 
-    scheduler->schedule(detail::TaskAccess::detachTask(waitParent(&state)));
-    const bool done = waitUntil(state.done);
+    scheduler->schedule(detail::TaskAccess::detach_task(wait_parent(&state)));
+    const bool done = wait_until(state.done);
     runtime.stop();
 
     if (!done) {
@@ -195,10 +195,10 @@ bool runWaitChainResumeOnce() {
 }  // namespace
 
 int main() {
-    if (!runSameThreadDoubleWake()) {
+    if (!run_same_thread_double_wake()) {
         return 1;
     }
-    if (!runWaitChainResumeOnce()) {
+    if (!run_wait_chain_resume_once()) {
         return 1;
     }
 

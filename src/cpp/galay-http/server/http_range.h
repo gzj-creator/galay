@@ -56,7 +56,7 @@ struct HttpRange
      * @brief 检查范围是否有效
      * @return 是否有效
      */
-    bool isValid() const
+    bool is_valid() const
     {
         return start <= end && length > 0;
     }
@@ -129,7 +129,7 @@ struct RangeParseResult
      * @brief 检查是否有效
      * @return 是否有效
      */
-    bool isValid() const
+    bool is_valid() const
     {
         return type != RangeType::INVALID && !ranges.empty();
     }
@@ -138,7 +138,7 @@ struct RangeParseResult
      * @brief 生成随机边界（用于 multipart 响应）
      * @return 边界字符串
      */
-    static std::string generateBoundary()
+    static std::string generate_boundary()
     {
         static uint64_t counter = 0;
         return "multipart_boundary_" + std::to_string(counter++) + "_" +
@@ -165,7 +165,7 @@ public:
     /**
      * @brief 解析 Range 请求头
      * @param rangeHeader Range 请求头的值（不包含 "Range: " 前缀）
-     * @param fileSize 文件总大小（用于验证范围）
+     * @param file_size 文件总大小（用于验证范围）
      * @return Range 解析结果
      */
     static RangeParseResult parse(const std::string& rangeHeader, uint64_t fileSize)
@@ -185,7 +185,7 @@ public:
         }
 
         // 解析范围
-        auto ranges = splitRanges(rangesStr);
+        auto ranges = split_ranges(rangesStr);
         if (ranges.empty() || ranges.size() > kMaxMultipartRanges) {
             return result;  // 无效的 Range
         }
@@ -193,8 +193,8 @@ public:
         // 判断 Range 类型
         if (ranges.size() == 1) {
             // 单个范围
-            auto range = parseSingleRange(ranges[0], fileSize);
-            if (range.isValid()) {
+            auto range = parse_single_range(ranges[0], fileSize);
+            if (range.is_valid()) {
                 result.type = RangeType::SINGLE_RANGE;
                 result.ranges.push_back(range);
             }
@@ -203,8 +203,8 @@ public:
             std::vector<HttpRange> parsed_ranges;
             parsed_ranges.reserve(ranges.size());
             for (const auto& r : ranges) {
-                auto range = parseSingleRange(r, fileSize);
-                if (range.isValid()) {
+                auto range = parse_single_range(r, fileSize);
+                if (range.is_valid()) {
                     parsed_ranges.push_back(range);
                 }
             }
@@ -214,8 +214,8 @@ public:
                 return result;
             }
 
-            result.ranges = mergeRanges(std::move(parsed_ranges));
-            if (result.ranges.empty() || !isAggregateRangeSizeAllowed(result.ranges)) {
+            result.ranges = merge_ranges(std::move(parsed_ranges));
+            if (result.ranges.empty() || !is_aggregate_range_size_allowed(result.ranges)) {
                 result.type = RangeType::INVALID;
                 result.ranges.clear();
                 return result;
@@ -225,7 +225,7 @@ public:
                 ? RangeType::SINGLE_RANGE
                 : RangeType::MULTIPLE_RANGES;
             if (result.type == RangeType::MULTIPLE_RANGES) {
-                result.boundary = RangeParseResult::generateBoundary();
+                result.boundary = RangeParseResult::generate_boundary();
             }
         }
 
@@ -236,10 +236,10 @@ public:
      * @brief 生成 Content-Range 响应头值
      * @param start 起始位置
      * @param end 结束位置
-     * @param fileSize 文件总大小
+     * @param file_size 文件总大小
      * @return Content-Range 头的值
      */
-    static std::string makeContentRange(uint64_t start, uint64_t end, uint64_t fileSize)
+    static std::string make_content_range(uint64_t start, uint64_t end, uint64_t fileSize)
     {
         return "bytes " + std::to_string(start) + "-" + std::to_string(end) + "/" +
                std::to_string(fileSize);
@@ -248,12 +248,12 @@ public:
     /**
      * @brief 生成 Content-Range 响应头值（使用 HttpRange）
      * @param range Range 对象
-     * @param fileSize 文件总大小
+     * @param file_size 文件总大小
      * @return Content-Range 头的值
      */
-    static std::string makeContentRange(const HttpRange& range, uint64_t fileSize)
+    static std::string make_content_range(const HttpRange& range, uint64_t fileSize)
     {
-        return makeContentRange(range.start, range.end, fileSize);
+        return make_content_range(range.start, range.end, fileSize);
     }
 
     /**
@@ -263,15 +263,15 @@ public:
      * @param lastModified 文件的最后修改时间
      * @return 是否满足条件
      */
-    static bool checkIfRange(const std::string& ifRangeHeader,
+    static bool check_if_range(const std::string& ifRangeHeader,
                            const std::string& etag,
                            std::time_t lastModified)
     {
-        return ETagGenerator::matchIfRange(etag, ifRangeHeader, lastModified);
+        return ETagGenerator::match_if_range(etag, ifRangeHeader, lastModified);
     }
 
 private:
-    static bool parseUnsigned(std::string_view text, uint64_t& value)
+    static bool parse_unsigned(std::string_view text, uint64_t& value)
     {
         if (text.empty()) {
             return false;
@@ -283,7 +283,7 @@ private:
         return ec == std::errc{} && ptr == end;
     }
 
-    static std::vector<HttpRange> mergeRanges(std::vector<HttpRange> ranges)
+    static std::vector<HttpRange> merge_ranges(std::vector<HttpRange> ranges)
     {
         std::sort(ranges.begin(), ranges.end(), [](const HttpRange& lhs, const HttpRange& rhs) {
             if (lhs.start != rhs.start) {
@@ -312,7 +312,7 @@ private:
         return merged;
     }
 
-    static bool isAggregateRangeSizeAllowed(const std::vector<HttpRange>& ranges)
+    static bool is_aggregate_range_size_allowed(const std::vector<HttpRange>& ranges)
     {
         uint64_t total = 0;
         for (const auto& range : ranges) {
@@ -330,7 +330,7 @@ private:
      * @param rangesStr Range 字符串
      * @return Range 列表
      */
-    static std::vector<std::string> splitRanges(const std::string& rangesStr)
+    static std::vector<std::string> split_ranges(const std::string& rangesStr)
     {
         std::vector<std::string> ranges;
         std::string current;
@@ -359,10 +359,10 @@ private:
     /**
      * @brief 解析单个 Range
      * @param rangeStr Range 字符串
-     * @param fileSize 文件总大小
+     * @param file_size 文件总大小
      * @return HttpRange 对象
      */
-    static HttpRange parseSingleRange(const std::string& rangeStr, uint64_t fileSize)
+    static HttpRange parse_single_range(const std::string& rangeStr, uint64_t fileSize)
     {
         if (fileSize == 0) {
             return HttpRange();
@@ -380,7 +380,7 @@ private:
         if (!startStr.empty() && !endStr.empty()) {
             uint64_t start = 0;
             uint64_t end = 0;
-            if (!parseUnsigned(startStr, start) || !parseUnsigned(endStr, end)) {
+            if (!parse_unsigned(startStr, start) || !parse_unsigned(endStr, end)) {
                 return HttpRange();
             }
 
@@ -400,7 +400,7 @@ private:
         // 情况2: bytes=start- (后缀范围)
         if (!startStr.empty() && endStr.empty()) {
             uint64_t start = 0;
-            if (!parseUnsigned(startStr, start)) {
+            if (!parse_unsigned(startStr, start)) {
                 return HttpRange();
             }
 
@@ -414,7 +414,7 @@ private:
         // 情况3: bytes=-suffix (前缀范围，最后 N 个字节)
         if (startStr.empty() && !endStr.empty()) {
             uint64_t suffix = 0;
-            if (!parseUnsigned(endStr, suffix)) {
+            if (!parse_unsigned(endStr, suffix)) {
                 return HttpRange();
             }
 

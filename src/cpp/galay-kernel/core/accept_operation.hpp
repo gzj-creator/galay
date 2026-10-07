@@ -44,7 +44,7 @@ using AcceptOperation = OperationCompletion<std::expected<AcceptedConnection, IO
 /**
  * @brief 只在 IO owner 上通知 accept；裁决和恢复权完全属于 AcceptOperation。
  * @note 时间轮可保留本对象至晚到 tick；detach 后不再借用 frame。绑定、触发、
- *       detach 均在同一 owner 上执行，不允许从其他线程直接 handleTimeout。
+ *       detach 均在同一 owner 上执行，不允许从其他线程直接 handle_timeout。
  */
 class AcceptTimeoutTimer final : public Timer {
 public:
@@ -60,10 +60,10 @@ public:
         m_notify = nullptr;
         cancel();
     }
-    void handleTimeout() override {
+    void handle_timeout() override {
         auto* operation = std::exchange(m_operation, nullptr);
         auto notify = std::exchange(m_notify, nullptr);
-        Timer::handleTimeout();
+        Timer::handle_timeout();
         if (notify) {
             notify(operation); // 可能销毁 frame；之后不访问 operation。
         }

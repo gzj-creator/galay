@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 提供 WsUrl 结构体用于解析 ws:// 和 wss:// 格式的 URL，
- *          以及 generateWebSocketKey 函数用于生成 Sec-WebSocket-Key。
+ *          以及 generate_web_socket_key 函数用于生成 Sec-WebSocket-Key。
  */
 
 #ifndef GALAY_WS_URL_H
@@ -101,7 +101,7 @@ struct WsUrl {
  * @brief 生成 WebSocket 握手所需的 Sec-WebSocket-Key
  * @return Base64 编码的 16 字节随机密钥
  */
-inline std::string generateWebSocketKey() {
+inline std::string generate_web_socket_key() {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(0, 255);
@@ -111,7 +111,7 @@ inline std::string generateWebSocketKey() {
         random_bytes[i] = static_cast<unsigned char>(dis(gen));
     }
 
-    return galay::utils::Base64Util::Base64Encode(random_bytes, 16);
+    return galay::utils::Base64Util::base64_encode(random_bytes, 16);
 }
 
 } // namespace galay::websocket

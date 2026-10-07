@@ -38,7 +38,7 @@ Task<void> test_client(const std::string& host, uint16_t port, int num_messages)
         co_return;
     }
     std::cout << "Connected!" << std::endl;
-    auto session_result = client.getSession(WsWriterSetting::byClient());
+    auto session_result = client.get_session(WsWriterSetting::by_client());
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -60,8 +60,8 @@ Task<void> test_client(const std::string& host, uint16_t port, int num_messages)
     }
     std::cout << "Upgrade successful!" << std::endl;
 
-    auto& reader = session.getReader();
-    auto& writer = session.getWriter();
+    auto& reader = session.get_reader();
+    auto& writer = session.get_writer();
 
     // 接收欢迎消息
     std::cout << "Waiting for welcome message..." << std::endl;
@@ -69,7 +69,7 @@ Task<void> test_client(const std::string& host, uint16_t port, int num_messages)
     WsOpcode welcome_opcode;
     bool welcome_received = false;
     while (!welcome_received) {
-        auto welcome_result = co_await reader.getMessage(welcome_msg, welcome_opcode);
+        auto welcome_result = co_await reader.get_message(welcome_msg, welcome_opcode);
         if (!welcome_result.has_value()) {
             std::cerr << "Failed to receive welcome: " << welcome_result.error().message() << std::endl;
             fail_count++;
@@ -88,7 +88,7 @@ Task<void> test_client(const std::string& host, uint16_t port, int num_messages)
 
         // 发送消息
         std::cout << "Sending: " << message << std::endl;
-        auto send_result = co_await writer.sendText(message);
+        auto send_result = co_await writer.send_text(message);
         if (!send_result) {
             std::cerr << "Failed to send message: " << send_result.error().message() << std::endl;
             fail_count++;
@@ -100,7 +100,7 @@ Task<void> test_client(const std::string& host, uint16_t port, int num_messages)
         WsOpcode opcode;
         bool response_received = false;
         while (!response_received) {
-            auto recv_result = co_await reader.getMessage(response, opcode);
+            auto recv_result = co_await reader.get_message(response, opcode);
             if (!recv_result.has_value()) {
                 std::cerr << "Failed to read response: " << recv_result.error().message() << std::endl;
                 fail_count++;
@@ -126,7 +126,7 @@ Task<void> test_client(const std::string& host, uint16_t port, int num_messages)
 
     // 发送 Ping
     std::cout << "Sending Ping..." << std::endl;
-    auto ping_result = co_await writer.sendPing("ping");
+    auto ping_result = co_await writer.send_ping("ping");
     if (!ping_result) {
         std::cerr << "Failed to send ping: " << ping_result.error().message() << std::endl;
     } else {
@@ -137,7 +137,7 @@ Task<void> test_client(const std::string& host, uint16_t port, int num_messages)
         WsOpcode pong_opcode;
         bool pong_received = false;
         while (!pong_received) {
-            auto pong_result = co_await reader.getMessage(pong_data, pong_opcode);
+            auto pong_result = co_await reader.get_message(pong_data, pong_opcode);
             if (!pong_result.has_value()) {
                 break;
             }
@@ -152,7 +152,7 @@ Task<void> test_client(const std::string& host, uint16_t port, int num_messages)
 
     // 关闭连接
     std::cout << "Closing connection..." << std::endl;
-    co_await writer.sendClose();
+    co_await writer.send_close();
     std::cout << "Connection closed." << std::endl;
 
     co_return;
@@ -175,11 +175,11 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================\n\n";
 
     try {
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
         runtime.start();
 
-        auto* scheduler = runtime.getNextIOScheduler();
-        scheduleTask(scheduler, test_client(host, port, num_messages));
+        auto* scheduler = runtime.get_next_io_scheduler();
+        schedule_task(scheduler, test_client(host, port, num_messages));
 
         // Wait for completion (max 30 seconds)
         for (int i = 0; i < 300; i++) {

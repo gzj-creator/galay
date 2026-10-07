@@ -11,7 +11,7 @@
 
 namespace {
 
-std::string readAll(const std::filesystem::path& path)
+std::string read_all(const std::filesystem::path& path)
 {
     std::ifstream in(path);
     std::ostringstream out;
@@ -25,7 +25,7 @@ int main()
 {
     const std::filesystem::path source_root = GALAY_SOURCE_ROOT;
     const auto reactor_path = source_root / "galay-kernel" / "core" / "epoll_reactor.cc";
-    const std::string content = readAll(reactor_path);
+    const std::string content = read_all(reactor_path);
     if (content.empty()) {
         std::cerr << "failed to read " << reactor_path << "\n";
         return 1;

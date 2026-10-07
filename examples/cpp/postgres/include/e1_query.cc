@@ -6,8 +6,8 @@
 
 int main()
 {
-    const auto config = postgres_example::loadConfig();
-    postgres_example::printConfig(config);
+    const auto config = postgres_example::load_config();
+    postgres_example::print_config(config);
 
     galay::postgres::PostgresClient client;
     auto connected = client.connect(config.host,
@@ -25,9 +25,9 @@ int main()
         std::cerr << "query failed: " << result.error().message() << '\n';
         return 1;
     }
-    if (result->rowCount() != 0) {
-        std::cout << result->row(0).getString(0) << " / "
-                  << result->row(0).getString(1) << '\n';
+    if (result->row_count() != 0) {
+        std::cout << result->row(0).get_string(0) << " / "
+                  << result->row(0).get_string(1) << '\n';
     }
     return 0;
 }

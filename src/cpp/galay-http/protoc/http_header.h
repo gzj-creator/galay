@@ -132,28 +132,28 @@ namespace galay::http {
          * @param key 头部键名
          * @return 存在返回 true
          */
-        bool hasKey(const std::string& key) const;
+        bool has_key(const std::string& key) const;
 
         /**
          * @brief 获取指定键名的值
          * @param key 头部键名
          * @return 对应的值字符串，不存在时返回空串
          */
-        std::string getValue(const std::string& key) const;
+        std::string get_value(const std::string& key) const;
 
         /**
          * @brief 获取指定键名的值指针
          * @param key 头部键名
          * @return 值的指针，不存在时返回 nullptr
          */
-        const std::string* getValuePtr(const std::string& key) const;
+        const std::string* get_value_ptr(const std::string& key) const;
 
         /**
          * @brief 移除指定键名的头部字段
          * @param key 头部键名
          * @return 成功返回 kNoError，不存在返回 kHeaderPairNotExist
          */
-        HttpErrorCode removeHeaderPair(const std::string& key);
+        HttpErrorCode remove_header_pair(const std::string& key);
 
         /**
          * @brief 仅在键名不存在时添加头部字段
@@ -161,7 +161,7 @@ namespace galay::http {
          * @param value 头部值
          * @return 成功返回 kNoError，已存在返回 kHeaderPairExist
          */
-        HttpErrorCode addHeaderPairIfNotExist(const std::string& key, const std::string& value);
+        HttpErrorCode add_header_pair_if_not_exist(const std::string& key, const std::string& value);
 
         /**
          * @brief 添加头部字段（若键名已存在则覆盖）
@@ -169,7 +169,7 @@ namespace galay::http {
          * @param value 头部值
          * @return 成功返回 kNoError
          */
-        HttpErrorCode addHeaderPair(const std::string& key, const std::string& value);
+        HttpErrorCode add_header_pair(const std::string& key, const std::string& value);
 
         /**
          * @brief 添加已规范化的头部字段（fast-path 专用）
@@ -178,25 +178,25 @@ namespace galay::http {
          * @return 成功返回 kNoError
          * @note 仅在解析器内部使用，调用方需确保键名已按当前模式规范化
          */
-        HttpErrorCode addNormalizedHeaderPair(std::string key, std::string value);
+        HttpErrorCode add_normalized_header_pair(std::string key, std::string value);
 
         /**
          * @brief 估算序列化后的字节大小
          * @return 预估字节数
          */
-        size_t estimatedSerializedSize() const;
+        size_t estimated_serialized_size() const;
 
         /**
          * @brief 将头部字段追加到输出字符串
          * @param out 输出字符串，以 "Key: Value\r\n" 格式追加
          */
-        void appendTo(std::string& out) const;
+        void append_to(std::string& out) const;
 
         /**
          * @brief 将头部字段序列化为字符串
          * @return 包含所有键值对的字符串
          */
-        std::string toString() const;
+        std::string to_string() const;
 
         void clear(); ///< 清空所有头部字段
 
@@ -211,34 +211,34 @@ namespace galay::http {
          * @param idx 常见头部索引
          * @param value 头部值
          */
-        void setCommonHeader(CommonHeaderIndex idx, std::string value);
+        void set_common_header(CommonHeaderIndex idx, std::string value);
 
         /**
          * @brief 获取常见头部字段值（fast-path）
          * @param idx 常见头部索引
          * @return 头部值的 string_view
          */
-        std::string_view getCommonHeader(CommonHeaderIndex idx) const;
+        std::string_view get_common_header(CommonHeaderIndex idx) const;
 
         /**
          * @brief 检查常见头部字段是否存在（fast-path）
          * @param idx 常见头部索引
          * @return 存在返回 true
          */
-        bool hasCommonHeader(CommonHeaderIndex idx) const;
+        bool has_common_header(CommonHeaderIndex idx) const;
 
         /**
          * @brief 遍历所有头部字段
          * @param callback 回调函数，参数为 (key, value)
          */
-        void forEachHeader(std::function<void(std::string_view, std::string_view)> callback) const;
+        void for_each_header(std::function<void(std::string_view, std::string_view)> callback) const;
 
     private:
         HeaderPair(const HeaderPair& other) = delete;
         HeaderPair& operator=(const HeaderPair& other) = delete;
 
-        void setNormalizedUncommonHeaderPair(std::string key, std::string value);
-        void mergeNormalizedUncommonHeaderPair(std::string key, std::string value);
+        void set_normalized_uncommon_header_pair(std::string key, std::string value);
+        void merge_normalized_uncommon_header_pair(std::string key, std::string value);
 
         std::array<std::string, 15> m_commonHeaders;   ///< Fast-path 存储（仅 ServerSide 使用）
         std::map<std::string, std::string> m_headerPairs; ///< Slow-path 存储
@@ -293,37 +293,37 @@ namespace galay::http {
          * @brief 获取头部键值对的可变引用
          * @return HeaderPair 引用
          */
-        HeaderPair& headerPairs();
+        HeaderPair& header_pairs();
 
         /**
          * @brief 将请求头序列化为字符串
          * @return 格式如 "GET /path HTTP/1.1\r\nHost: example.com\r\n\r\n"
          */
-        std::string toString() const;
+        std::string to_string() const;
 
         /**
          * @brief 判断是否为 Keep-Alive 连接
          * @return Keep-Alive 返回 true
          */
-        bool isKeepAlive() const;
+        bool is_keep_alive() const;
 
         /**
          * @brief 判断是否使用 Chunked 传输编码
          * @return 使用 Chunked 返回 true
          */
-        bool isChunked() const;
+        bool is_chunked() const;
 
         /**
          * @brief 判断是否为 Connection: close
          * @return 连接即将关闭返回 true
          */
-        bool isConnectionClose() const;
+        bool is_connection_close() const;
 
         /**
          * @brief 判断请求头是否解析完成
          * @return 解析完成返回 true
          */
-        bool isHeaderComplete() const { return m_parseState == RequestParseState::Done; }
+        bool is_header_complete() const { return m_parseState == RequestParseState::Done; }
 
         /**
          * @brief 从字符串增量解析请求头
@@ -331,14 +331,14 @@ namespace galay::http {
          * @return pair.first 为错误码（kNoError/kBadRequest/kVersionNotSupport），
          *         pair.second 为消耗的字节数（>0 完成，0 不完整，-1 错误）
          */
-        std::pair<HttpErrorCode, ssize_t> fromString(std::string_view str);
+        std::pair<HttpErrorCode, ssize_t> from_string(std::string_view str);
 
         /**
          * @brief 从 iovec 数组增量解析请求头
          * @param iovecs 离散缓冲区数组
-         * @return 同 fromString
+         * @return 同 from_string
          */
-        std::pair<HttpErrorCode, ssize_t> fromIOVec(const std::vector<iovec>& iovecs);
+        std::pair<HttpErrorCode, ssize_t> from_io_vec(const std::vector<iovec>& iovecs);
 
         /**
          * @brief 设置请求解析限制
@@ -346,7 +346,7 @@ namespace galay::http {
          * @param max_header_line_size 单个头字段行长度上限，0 表示不限制
          * @param max_uri_size URI 长度上限，0 表示不限制
          */
-        void setParseLimits(size_t max_header_count,
+        void set_parse_limits(size_t max_header_count,
                             size_t max_header_line_size,
                             size_t max_uri_size);
 
@@ -354,7 +354,7 @@ namespace galay::http {
          * @brief 从另一个请求头拷贝内容
          * @param header 源请求头
          */
-        void copyFrom(const HttpRequestHeader& header);
+        void copy_from(const HttpRequestHeader& header);
 
         void reset(); ///< 重置所有解析状态与数据
 
@@ -367,14 +367,14 @@ namespace galay::http {
          * @param c 输入字符
          * @return kNoError 继续解析，其他值表示错误或完成
          */
-        HttpErrorCode parseChar(char c);
-        HttpErrorCode commitParsedHeaderPair(); ///< 提交当前解析中的头部键值对并校验限制
-        void parseArgs(std::string uri); ///< 解析 URI 中的查询参数
-        std::string convertFromUri(std::string_view url, bool convert_plus_to_space); ///< URL 解码
-        std::string convertToUri(std::string&& url) const; ///< URL 编码
-        bool isHex(char c, int &v); ///< 判断是否为十六进制字符
-        size_t toUtf8(int code, char *buff); ///< 将 Unicode 码点转为 UTF-8
-        bool fromHexToI(const std::string_view &s, size_t i, size_t cnt, int &val); ///< 从十六进制字符串解析整数
+        HttpErrorCode parse_char(char c);
+        HttpErrorCode commit_parsed_header_pair(); ///< 提交当前解析中的头部键值对并校验限制
+        void parse_args(std::string uri); ///< 解析 URI 中的查询参数
+        std::string convert_from_uri(std::string_view url, bool convert_plus_to_space); ///< URL 解码
+        std::string convert_to_uri(std::string&& url) const; ///< URL 编码
+        bool is_hex(char c, int &v); ///< 判断是否为十六进制字符
+        size_t to_utf8(int code, char *buff); ///< 将 Unicode 码点转为 UTF-8
+        bool from_hex_to_i(const std::string_view &s, size_t i, size_t cnt, int &val); ///< 从十六进制字符串解析整数
     private:
         std::string m_uri;                                    ///< 请求 URI
         std::map<std::string, std::string> m_argList;         ///< URI 查询参数
@@ -435,37 +435,37 @@ namespace galay::http {
          * @brief 获取头部键值对的可变引用
          * @return HeaderPair 引用
          */
-        HeaderPair& headerPairs();
+        HeaderPair& header_pairs();
 
         /**
          * @brief 判断是否为 Keep-Alive 连接
          * @return Keep-Alive 返回 true
          */
-        bool isKeepAlive() const;
+        bool is_keep_alive() const;
 
         /**
          * @brief 判断是否使用 Chunked 传输编码
          * @return 使用 Chunked 返回 true
          */
-        bool isChunked() const;
+        bool is_chunked() const;
 
         /**
          * @brief 判断是否为 Connection: close
          * @return 连接即将关闭返回 true
          */
-        bool isConnectionClose() const;
+        bool is_connection_close() const;
 
         /**
          * @brief 判断响应头是否解析完成
          * @return 解析完成返回 true
          */
-        bool isHeaderComplete() const { return m_parseState == ResponseParseState::Done; }
+        bool is_header_complete() const { return m_parseState == ResponseParseState::Done; }
 
         /**
          * @brief 将响应头序列化为字符串
          * @return 格式如 "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
          */
-        std::string toString() const;
+        std::string to_string() const;
 
         /**
          * @brief 从字符串增量解析响应头
@@ -473,20 +473,20 @@ namespace galay::http {
          * @return pair.first 为错误码（kNoError/kBadRequest/kVersionNotSupport/kHttpCodeInvalid），
          *         pair.second 为消耗的字节数（>0 完成，0 不完整，-1 错误）
          */
-        std::pair<HttpErrorCode, ssize_t> fromString(std::string_view str);
+        std::pair<HttpErrorCode, ssize_t> from_string(std::string_view str);
 
         /**
          * @brief 从 iovec 数组增量解析响应头
          * @param iovecs 离散缓冲区数组
-         * @return 同 fromString
+         * @return 同 from_string
          */
-        std::pair<HttpErrorCode, ssize_t> fromIOVec(const std::vector<iovec>& iovecs);
+        std::pair<HttpErrorCode, ssize_t> from_io_vec(const std::vector<iovec>& iovecs);
 
         /**
          * @brief 从另一个响应头拷贝内容
          * @param header 源响应头
          */
-        void copyFrom(const HttpResponseHeader& header);
+        void copy_from(const HttpResponseHeader& header);
 
         void reset(); ///< 重置所有解析状态与数据
 
@@ -499,8 +499,8 @@ namespace galay::http {
          * @param c 输入字符
          * @return kNoError 继续解析，其他值表示错误或完成
          */
-        HttpErrorCode parseChar(char c);
-        void commitParsedHeaderPair(); ///< 提交当前解析中的头部键值对
+        HttpErrorCode parse_char(char c);
+        void commit_parsed_header_pair(); ///< 提交当前解析中的头部键值对
     private:
         HeaderPair m_headerPairs;                             ///< 头部键值对
         std::string m_parseVersionStr;                        ///< 解析中的版本字符串

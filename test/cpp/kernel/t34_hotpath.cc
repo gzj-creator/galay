@@ -15,13 +15,13 @@ using namespace galay::kernel;
 
 namespace {
 
-Task<void> noopTask() {
+Task<void> noop_task() {
     co_return;
 }
 
-bool verifyPromiseDirectAccessors() {
-    Task<void> task_wrapper = noopTask();
-    auto task = detail::TaskAccess::taskRef(task_wrapper);
+bool verify_promise_direct_accessors() {
+    Task<void> task_wrapper = noop_task();
+    auto task = detail::TaskAccess::task_ref(task_wrapper);
     auto erased_handle = task.state()->m_handle;
     if (!erased_handle) {
         std::cerr << "[T34] task handle is invalid\n";
@@ -30,8 +30,8 @@ bool verifyPromiseDirectAccessors() {
     auto handle = std::coroutine_handle<TaskPromise<void>>::from_address(
         erased_handle.address());
 
-    const TaskRef& promise_task = handle.promise().taskRefView();
-    if (!promise_task.isValid() || promise_task.state() != task.state()) {
+    const TaskRef& promise_task = handle.promise().task_ref_view();
+    if (!promise_task.is_valid() || promise_task.state() != task.state()) {
         std::cerr << "[T34] promise taskRefView does not match task state\n";
         return false;
     }
@@ -41,14 +41,14 @@ bool verifyPromiseDirectAccessors() {
 }
 
 template <typename ResultT>
-uint32_t systemCode(const std::expected<ResultT, IOError>& result) {
+uint32_t system_code(const std::expected<ResultT, IOError>& result) {
     return static_cast<uint32_t>(result.error().code() >> 32);
 }
 
-bool verifyAwaitableAddResultHelper() {
+bool verify_awaitable_add_result_helper() {
     {
         std::expected<size_t, IOError> result = static_cast<size_t>(7);
-        if (detail::finalizeAwaitableAddResult(1, kSendFailed, result)) {
+        if (detail::finalize_awaitable_add_result(1, kSendFailed, result)) {
             std::cerr << "[T34] OK path should not suspend\n";
             return false;
         }
@@ -60,7 +60,7 @@ bool verifyAwaitableAddResultHelper() {
 
     {
         std::expected<size_t, IOError> result = static_cast<size_t>(11);
-        if (!detail::finalizeAwaitableAddResult(0, kSendFailed, result)) {
+        if (!detail::finalize_awaitable_add_result(0, kSendFailed, result)) {
             std::cerr << "[T34] pending path should suspend\n";
             return false;
         }
@@ -72,12 +72,12 @@ bool verifyAwaitableAddResultHelper() {
 
     {
         std::expected<size_t, IOError> result = static_cast<size_t>(0);
-        if (detail::finalizeAwaitableAddResult(-ECONNRESET, kRecvFailed, result)) {
+        if (detail::finalize_awaitable_add_result(-ECONNRESET, kRecvFailed, result)) {
             std::cerr << "[T34] negative errno path should not suspend\n";
             return false;
         }
         if (result || !IOError::contains(result.error().code(), kRecvFailed) ||
-            systemCode(result) != static_cast<uint32_t>(ECONNRESET)) {
+            system_code(result) != static_cast<uint32_t>(ECONNRESET)) {
             std::cerr << "[T34] negative errno path should map ret to system code\n";
             return false;
         }
@@ -86,12 +86,12 @@ bool verifyAwaitableAddResultHelper() {
     {
         errno = EPIPE;
         std::expected<void, IOError> result{};
-        if (detail::finalizeAwaitableAddResult(-1, kSendFailed, result)) {
+        if (detail::finalize_awaitable_add_result(-1, kSendFailed, result)) {
             std::cerr << "[T34] errno fallback path should not suspend\n";
             return false;
         }
         if (result || !IOError::contains(result.error().code(), kSendFailed) ||
-            systemCode(result) != static_cast<uint32_t>(EPIPE)) {
+            system_code(result) != static_cast<uint32_t>(EPIPE)) {
             std::cerr << "[T34] errno fallback path should use errno\n";
             return false;
         }
@@ -103,11 +103,11 @@ bool verifyAwaitableAddResultHelper() {
 }  // namespace
 
 int main() {
-    if (!verifyPromiseDirectAccessors()) {
+    if (!verify_promise_direct_accessors()) {
         return 1;
     }
 
-    if (!verifyAwaitableAddResultHelper()) {
+    if (!verify_awaitable_add_result_helper()) {
         return 1;
     }
 

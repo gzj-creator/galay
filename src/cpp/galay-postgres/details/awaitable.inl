@@ -13,11 +13,11 @@ namespace detail
 {
 
 template<RingBufferBackendStrategy Strategy>
-std::string_view linearizeRingBuffer(const RingBuffer<Strategy, std::dynamic_extent>& ring,
+std::string_view linearize_ring_buffer(const RingBuffer<Strategy, std::dynamic_extent>& ring,
                                      std::string& scratch)
 {
     std::array<struct iovec, 2> iovecs{};
-    const size_t count = ring.getReadIovecs(iovecs);
+    const size_t count = ring.get_read_iovecs(iovecs);
     if (count == 0) {
         return {};
     }
@@ -34,12 +34,12 @@ std::string_view linearizeRingBuffer(const RingBuffer<Strategy, std::dynamic_ext
     return scratch;
 }
 
-inline PostgresError protocolError(std::string_view message)
+inline PostgresError protocol_error(std::string_view message)
 {
     return PostgresError(POSTGRES_ERROR_PROTOCOL, std::string(message));
 }
 
-inline PostgresError serverError(protocol::ErrorFields fields,
+inline PostgresError server_error(protocol::ErrorFields fields,
                                  PostgresErrorType type = POSTGRES_ERROR_SERVER)
 {
     std::string message = std::move(fields.message);
@@ -55,7 +55,7 @@ inline PostgresError serverError(protocol::ErrorFields fields,
                          std::move(message));
 }
 
-inline PostgresError mapIoError(const galay::kernel::IOError& error,
+inline PostgresError map_io_error(const galay::kernel::IOError& error,
                                 PostgresErrorType fallback)
 {
     if (galay::kernel::IOError::contains(error.code(), galay::kernel::kTimeout)) {
@@ -73,14 +73,14 @@ inline PostgresError mapIoError(const galay::kernel::IOError& error,
     return PostgresError(fallback, error.message());
 }
 
-inline bool invalidatesConnection(const galay::kernel::IOError& error)
+inline bool invalidates_connection(const galay::kernel::IOError& error)
 {
     return !galay::kernel::IOError::contains(error.code(), galay::kernel::kNotReady) &&
            !galay::kernel::IOError::contains(error.code(),
                                              galay::kernel::kNotRunningOnIOScheduler);
 }
 
-inline bool invalidatesConnection(const PostgresError& error) noexcept
+inline bool invalidates_connection(const PostgresError& error) noexcept
 {
     switch (error.type()) {
     case POSTGRES_ERROR_CONNECTION:
@@ -97,12 +97,12 @@ inline bool invalidatesConnection(const PostgresError& error) noexcept
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool prepareReadWindow(AsyncPostgresClient<Strategy>& client,
+bool prepare_read_window(AsyncPostgresClient<Strategy>& client,
                        std::array<struct iovec, 2>& iovecs,
                        size_t& count,
                        PostgresError& error)
 {
-    count = client.ringBuffer().getWriteIovecs(iovecs);
+    count = client.ring_buffer().get_write_iovecs(iovecs);
     if (count != 0) {
         return true;
     }
@@ -111,12 +111,12 @@ bool prepareReadWindow(AsyncPostgresClient<Strategy>& client,
     return false;
 }
 
-inline void appendFields(PostgresResultSet& result,
+inline void append_fields(PostgresResultSet& result,
                          std::vector<protocol::RowDescriptionField> fields)
 {
-    result.reserveFields(fields.size());
+    result.reserve_fields(fields.size());
     for (auto& field : fields) {
-        result.addField(PostgresField(std::move(field.name),
+        result.add_field(PostgresField(std::move(field.name),
                                       field.table_oid,
                                       field.column_index,
                                       field.type_oid,
@@ -126,7 +126,7 @@ inline void appendFields(PostgresResultSet& result,
     }
 }
 
-inline void appendFields(std::vector<PostgresField>& output,
+inline void append_fields(std::vector<PostgresField>& output,
                          std::vector<protocol::RowDescriptionField> fields)
 {
     output.reserve(fields.size());
@@ -143,44 +143,44 @@ inline void appendFields(std::vector<PostgresField>& output,
 
 template<RingBufferBackendStrategy Strategy>
 std::expected<std::optional<protocol::MessageView>, PostgresError>
-peekMessage(AsyncPostgresClient<Strategy>& client, std::string& scratch)
+peek_message(AsyncPostgresClient<Strategy>& client, std::string& scratch)
 {
-    const std::string_view bytes = linearizeRingBuffer(client.ringBuffer(), scratch);
+    const std::string_view bytes = linearize_ring_buffer(client.ring_buffer(), scratch);
     if (bytes.empty()) {
         return std::optional<protocol::MessageView>{};
     }
-    auto message = client.parser().extractMessage(bytes.data(), bytes.size());
+    auto message = client.parser().extract_message(bytes.data(), bytes.size());
     if (!message) {
         if (message.error() == protocol::ParseError::Incomplete) {
             return std::optional<protocol::MessageView>{};
         }
-        return std::unexpected(protocolError("Malformed PostgreSQL message frame"));
+        return std::unexpected(protocol_error("Malformed PostgreSQL message frame"));
     }
     return std::optional<protocol::MessageView>(*message);
 }
 
 template<RingBufferBackendStrategy Strategy>
 std::expected<void, PostgresError>
-consumeCommonMessage(AsyncPostgresClient<Strategy>& client,
+consume_common_message(AsyncPostgresClient<Strategy>& client,
                      const protocol::MessageView& message)
 {
     if (message.type == protocol::kMsgParameterStatus) {
-        auto status = client.parser().parseParameterStatus(message.payload, message.payload_len);
+        auto status = client.parser().parse_parameter_status(message.payload, message.payload_len);
         if (!status) {
-            return std::unexpected(protocolError("Malformed ParameterStatus"));
+            return std::unexpected(protocol_error("Malformed ParameterStatus"));
         }
-        client.setServerParameter(std::move(status->name), std::move(status->value));
+        client.set_server_parameter(std::move(status->name), std::move(status->value));
         return {};
     }
     if (message.type == protocol::kMsgBackendKeyData) {
-        auto key = client.parser().parseBackendKeyData(message.payload, message.payload_len);
+        auto key = client.parser().parse_backend_key_data(message.payload, message.payload_len);
         if (!key) {
-            return std::unexpected(protocolError("Malformed BackendKeyData"));
+            return std::unexpected(protocol_error("Malformed BackendKeyData"));
         }
-        client.setBackendKeyData(*key);
+        client.set_backend_key_data(*key);
         return {};
     }
-    return std::unexpected(protocolError("Unexpected PostgreSQL asynchronous message"));
+    return std::unexpected(protocol_error("Unexpected PostgreSQL asynchronous message"));
 }
 
 } // namespace detail
@@ -190,7 +190,7 @@ PostgresConnectAwaitable<Strategy>::PostgresConnectAwaitable(
     AsyncPostgresClient<Strategy>& client,
     PostgresConfig config)
     : m_state(std::make_shared<SharedState>(client, std::move(config)))
-    , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
+    , m_inner(galay::kernel::AwaitableBuilder<Result>::from_state_machine(
                   client.socket().controller(),
                   Machine(m_state))
                   .build())
@@ -198,7 +198,7 @@ PostgresConnectAwaitable<Strategy>::PostgresConnectAwaitable(
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool PostgresConnectAwaitable<Strategy>::isInvalid() const
+bool PostgresConnectAwaitable<Strategy>::is_invalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
@@ -219,7 +219,7 @@ PostgresConnectAwaitable<Strategy>::SharedState::SharedState(
         return;
     }
 
-    outgoing = client->encoder().encodeStartupMessage(config);
+    outgoing = client->encoder().encode_startup_message(config);
     if (outgoing.empty()) {
         result = std::unexpected(PostgresError(POSTGRES_ERROR_INVALID_PARAM,
                                                "Invalid PostgreSQL startup parameters"));
@@ -235,21 +235,21 @@ PostgresConnectAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresConnectAwaitable<Strategy>::Machine::setError(PostgresError error) noexcept
+void PostgresConnectAwaitable<Strategy>::Machine::set_error(PostgresError error) noexcept
 {
-    m_state->client->setClosed(true);
+    m_state->client->set_closed(true);
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresConnectAwaitable<Strategy>::Machine::setIoError(
+void PostgresConnectAwaitable<Strategy>::Machine::set_io_error(
     const galay::kernel::IOError& error,
     PostgresErrorType fallback) noexcept
 {
-    PostgresError mapped = detail::mapIoError(error, fallback);
-    if (detail::invalidatesConnection(error)) {
-        setError(std::move(mapped));
+    PostgresError mapped = detail::map_io_error(error, fallback);
+    if (detail::invalidates_connection(error)) {
+        set_error(std::move(mapped));
         return;
     }
     m_state->result = std::unexpected(std::move(mapped));
@@ -257,22 +257,22 @@ void PostgresConnectAwaitable<Strategy>::Machine::setIoError(
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresConnectAwaitable<Strategy>::Machine::completeSuccess() noexcept
+void PostgresConnectAwaitable<Strategy>::Machine::complete_success() noexcept
 {
-    m_state->client->setClosed(false);
+    m_state->client->set_closed(false);
     m_state->phase = Phase::Done;
     m_state->result = std::optional<bool>(true);
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool PostgresConnectAwaitable<Strategy>::Machine::prepareReadWindow()
+bool PostgresConnectAwaitable<Strategy>::Machine::prepare_read_window()
 {
     PostgresError error(POSTGRES_ERROR_INTERNAL);
-    if (!detail::prepareReadWindow(*m_state->client,
+    if (!detail::prepare_read_window(*m_state->client,
                                    m_state->read_iovecs,
                                    m_state->read_iov_count,
                                    error)) {
-        setError(std::move(error));
+        set_error(std::move(error));
         return false;
     }
     return true;
@@ -280,10 +280,10 @@ bool PostgresConnectAwaitable<Strategy>::Machine::prepareReadWindow()
 
 template<RingBufferBackendStrategy Strategy>
 std::expected<bool, PostgresError>
-PostgresConnectAwaitable<Strategy>::Machine::parseFromRingBuffer()
+PostgresConnectAwaitable<Strategy>::Machine::parse_from_ring_buffer()
 {
     while (true) {
-        auto message_result = detail::peekMessage(*m_state->client, m_state->parse_scratch);
+        auto message_result = detail::peek_message(*m_state->client, m_state->parse_scratch);
         if (!message_result) {
             return std::unexpected(message_result.error());
         }
@@ -293,13 +293,13 @@ PostgresConnectAwaitable<Strategy>::Machine::parseFromRingBuffer()
 
         const protocol::MessageView message = **message_result;
         if (message.type == protocol::kMsgAuthentication) {
-            auto authentication = m_state->client->parser().parseAuthenticationRequest(
+            auto authentication = m_state->client->parser().parse_authentication_request(
                 message.payload, message.payload_len);
             if (!authentication) {
-                return std::unexpected(detail::protocolError(
+                return std::unexpected(detail::protocol_error(
                     "Malformed PostgreSQL AuthenticationRequest"));
             }
-            m_state->client->ringBuffer().consume(message.consumed);
+            m_state->client->ring_buffer().consume(message.consumed);
 
             switch (authentication->kind) {
             case protocol::AuthRequestKind::Ok:
@@ -315,16 +315,16 @@ PostgresConnectAwaitable<Strategy>::Machine::parseFromRingBuffer()
                         POSTGRES_ERROR_AUTH,
                         "Server did not offer SCRAM-SHA-256 at the expected stage"));
                 }
-                auto nonce = protocol::ScramSha256::generateNonce();
+                auto nonce = protocol::ScramSha256::generate_nonce();
                 if (!nonce) {
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH, nonce.error()));
                 }
                 m_state->client_nonce = std::move(*nonce);
-                auto first = m_state->scram.clientFirstMessage({}, m_state->client_nonce);
+                auto first = m_state->scram.client_first_message({}, m_state->client_nonce);
                 if (!first) {
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH, first.error()));
                 }
-                m_state->outgoing = m_state->client->encoder().encodeSASLInitialResponse(
+                m_state->outgoing = m_state->client->encoder().encode_sasl_initial_response(
                     "SCRAM-SHA-256", *first);
                 if (m_state->outgoing.empty()) {
                     return std::unexpected(PostgresError(
@@ -341,17 +341,17 @@ PostgresConnectAwaitable<Strategy>::Machine::parseFromRingBuffer()
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH,
                                                          "Unexpected SCRAM continuation"));
                 }
-                auto parsed = m_state->scram.parseServerFirst(authentication->data);
+                auto parsed = m_state->scram.parse_server_first(authentication->data);
                 if (!parsed) {
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH, parsed.error()));
                 }
-                auto final_message = m_state->scram.clientFinalMessage(m_state->config.password);
+                auto final_message = m_state->scram.client_final_message(m_state->config.password);
                 if (!final_message) {
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH,
                                                          final_message.error()));
                 }
                 m_state->outgoing =
-                    m_state->client->encoder().encodeSASLResponse(*final_message);
+                    m_state->client->encoder().encode_sasl_response(*final_message);
                 if (m_state->outgoing.empty()) {
                     return std::unexpected(PostgresError(
                         POSTGRES_ERROR_AUTH,
@@ -367,7 +367,7 @@ PostgresConnectAwaitable<Strategy>::Machine::parseFromRingBuffer()
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH,
                                                          "Unexpected SCRAM final response"));
                 }
-                auto verified = m_state->scram.verifyServerFinal(authentication->data);
+                auto verified = m_state->scram.verify_server_final(authentication->data);
                 if (!verified) {
                     return std::unexpected(PostgresError(POSTGRES_ERROR_AUTH,
                                                          verified.error()));
@@ -378,13 +378,13 @@ PostgresConnectAwaitable<Strategy>::Machine::parseFromRingBuffer()
             }
             case protocol::AuthRequestKind::Md5Password: {
                 if (authentication->data.size() != 4) {
-                    return std::unexpected(detail::protocolError(
+                    return std::unexpected(detail::protocol_error(
                         "Malformed PostgreSQL MD5 authentication salt"));
                 }
                 std::array<uint8_t, 4> salt{};
                 std::memcpy(salt.data(), authentication->data.data(), salt.size());
-                m_state->outgoing = m_state->client->encoder().encodePasswordMessage(
-                    protocol::md5Password(m_state->config.username,
+                m_state->outgoing = m_state->client->encoder().encode_password_message(
+                    protocol::md5_password(m_state->config.username,
                                           m_state->config.password,
                                           salt));
                 m_state->sent = 0;
@@ -393,7 +393,7 @@ PostgresConnectAwaitable<Strategy>::Machine::parseFromRingBuffer()
                 return true;
             }
             case protocol::AuthRequestKind::CleartextPassword:
-                m_state->outgoing = m_state->client->encoder().encodePasswordMessage(
+                m_state->outgoing = m_state->client->encoder().encode_password_message(
                     m_state->config.password);
                 m_state->sent = 0;
                 m_state->phase = Phase::AuthWrite;
@@ -408,33 +408,33 @@ PostgresConnectAwaitable<Strategy>::Machine::parseFromRingBuffer()
 
         if (message.type == protocol::kMsgParameterStatus ||
             message.type == protocol::kMsgBackendKeyData) {
-            auto common = detail::consumeCommonMessage(*m_state->client, message);
+            auto common = detail::consume_common_message(*m_state->client, message);
             if (!common) {
                 return std::unexpected(common.error());
             }
-            m_state->client->ringBuffer().consume(message.consumed);
+            m_state->client->ring_buffer().consume(message.consumed);
             continue;
         }
         if (message.type == protocol::kMsgNoticeResponse) {
-            m_state->client->ringBuffer().consume(message.consumed);
+            m_state->client->ring_buffer().consume(message.consumed);
             continue;
         }
         if (message.type == protocol::kMsgErrorResponse) {
-            auto fields = m_state->client->parser().parseErrorResponse(message.payload,
+            auto fields = m_state->client->parser().parse_error_response(message.payload,
                                                                       message.payload_len);
-            m_state->client->ringBuffer().consume(message.consumed);
+            m_state->client->ring_buffer().consume(message.consumed);
             if (!fields) {
-                return std::unexpected(detail::protocolError("Malformed ErrorResponse"));
+                return std::unexpected(detail::protocol_error("Malformed ErrorResponse"));
             }
-            return std::unexpected(detail::serverError(std::move(*fields),
+            return std::unexpected(detail::server_error(std::move(*fields),
                                                        POSTGRES_ERROR_AUTH));
         }
         if (message.type == protocol::kMsgReadyForQuery) {
-            auto ready = m_state->client->parser().parseReadyForQuery(message.payload,
+            auto ready = m_state->client->parser().parse_ready_for_query(message.payload,
                                                                      message.payload_len);
-            m_state->client->ringBuffer().consume(message.consumed);
+            m_state->client->ring_buffer().consume(message.consumed);
             if (!ready) {
-                return std::unexpected(detail::protocolError("Malformed ReadyForQuery"));
+                return std::unexpected(detail::protocol_error("Malformed ReadyForQuery"));
             }
             if (!m_state->authentication_ok ||
                 (!m_state->client_nonce.empty() && !m_state->server_signature_verified)) {
@@ -442,11 +442,11 @@ PostgresConnectAwaitable<Strategy>::Machine::parseFromRingBuffer()
                     POSTGRES_ERROR_AUTH,
                     "Authentication did not complete before ReadyForQuery"));
             }
-            m_state->client->setTransactionStatus(ready->transaction_status);
+            m_state->client->set_transaction_status(ready->transaction_status);
             m_state->phase = Phase::StartupComplete;
             return true;
         }
-        return std::unexpected(detail::protocolError(
+        return std::unexpected(detail::protocol_error(
             "Unexpected PostgreSQL message during startup"));
     }
 }
@@ -462,31 +462,31 @@ PostgresConnectAwaitable<Strategy>::Machine::advance()
 
     switch (m_state->phase) {
     case Phase::Invalid:
-        setError(PostgresError(POSTGRES_ERROR_INTERNAL,
+        set_error(PostgresError(POSTGRES_ERROR_INTERNAL,
                                "PostgreSQL connect machine entered invalid state"));
         return Action::complete(std::move(*m_state->result));
     case Phase::Connect: {
-        m_state->client->ringBuffer().clear();
+        m_state->client->ring_buffer().clear();
         m_state->client->m_server_parameters.clear();
         m_state->client->m_backend_key_data.reset();
-        m_state->client->setTransactionStatus('I');
-        m_state->client->setClosed(true);
+        m_state->client->set_transaction_status('I');
+        m_state->client->set_closed(true);
 
-        auto nonblocking = m_state->client->socket().option().handleNonBlock();
+        auto nonblocking = m_state->client->socket().option().handle_non_block();
         if (!nonblocking) {
-            setError(PostgresError(POSTGRES_ERROR_CONNECTION,
+            set_error(PostgresError(POSTGRES_ERROR_CONNECTION,
                                    nonblocking.error().message()));
             return Action::complete(std::move(*m_state->result));
         }
         if (m_state->config.tcp_no_delay) {
-            auto no_delay = m_state->client->socket().option().handleTcpNoDelay();
+            auto no_delay = m_state->client->socket().option().handle_tcp_no_delay();
             if (!no_delay) {
-                setError(PostgresError(POSTGRES_ERROR_CONNECTION,
+                set_error(PostgresError(POSTGRES_ERROR_CONNECTION,
                                        no_delay.error().message()));
                 return Action::complete(std::move(*m_state->result));
             }
         }
-        return Action::waitConnect(m_state->host);
+        return Action::wait_connect(m_state->host);
     }
     case Phase::StartupWrite:
     case Phase::AuthWrite:
@@ -502,87 +502,87 @@ PostgresConnectAwaitable<Strategy>::Machine::advance()
             m_state->phase = Phase::AuthRead;
             return Action::continue_();
         }
-        return Action::waitWrite(m_state->outgoing.data() + m_state->sent,
+        return Action::wait_write(m_state->outgoing.data() + m_state->sent,
                                  m_state->outgoing.size() - m_state->sent);
     case Phase::AuthRead: {
-        auto parsed = parseFromRingBuffer();
+        auto parsed = parse_from_ring_buffer();
         if (!parsed) {
-            setError(std::move(parsed.error()));
+            set_error(std::move(parsed.error()));
             return Action::complete(std::move(*m_state->result));
         }
         if (*parsed) {
             return Action::continue_();
         }
-        if (!prepareReadWindow()) {
+        if (!prepare_read_window()) {
             return Action::complete(std::move(*m_state->result));
         }
-        return Action::waitReadv(m_state->read_iovecs.data(), m_state->read_iov_count);
+        return Action::wait_readv(m_state->read_iovecs.data(), m_state->read_iov_count);
     }
     case Phase::StartupComplete:
-        completeSuccess();
+        complete_success();
         return Action::continue_();
     case Phase::Done:
         if (!m_state->result.has_value()) {
-            completeSuccess();
+            complete_success();
         }
         return Action::complete(std::move(*m_state->result));
     }
 
-    setError(PostgresError(POSTGRES_ERROR_INTERNAL,
+    set_error(PostgresError(POSTGRES_ERROR_INTERNAL,
                            "Unknown PostgreSQL connect machine state"));
     return Action::complete(std::move(*m_state->result));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresConnectAwaitable<Strategy>::Machine::onConnect(
+void PostgresConnectAwaitable<Strategy>::Machine::on_connect(
     std::expected<void, galay::kernel::IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result) {
-        setIoError(result.error(), POSTGRES_ERROR_CONNECTION);
+        set_io_error(result.error(), POSTGRES_ERROR_CONNECTION);
         return;
     }
     m_state->phase = Phase::StartupWrite;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresConnectAwaitable<Strategy>::Machine::onRead(
+void PostgresConnectAwaitable<Strategy>::Machine::on_read(
     std::expected<size_t, galay::kernel::IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result) {
-        setIoError(result.error(), POSTGRES_ERROR_RECV);
+        set_io_error(result.error(), POSTGRES_ERROR_RECV);
         return;
     }
     if (*result == 0) {
-        setError(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
+        set_error(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
                                "Connection closed during PostgreSQL startup"));
         return;
     }
-    m_state->client->ringBuffer().produce(*result);
-    auto parsed = parseFromRingBuffer();
+    m_state->client->ring_buffer().produce(*result);
+    auto parsed = parse_from_ring_buffer();
     if (!parsed) {
-        setError(std::move(parsed.error()));
+        set_error(std::move(parsed.error()));
     }
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresConnectAwaitable<Strategy>::Machine::onWrite(
+void PostgresConnectAwaitable<Strategy>::Machine::on_write(
     std::expected<size_t, galay::kernel::IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result) {
-        setIoError(result.error(), POSTGRES_ERROR_SEND);
+        set_io_error(result.error(), POSTGRES_ERROR_SEND);
         return;
     }
     if (*result == 0) {
-        setError(PostgresError(POSTGRES_ERROR_SEND,
+        set_error(PostgresError(POSTGRES_ERROR_SEND,
                                "PostgreSQL startup send returned zero bytes"));
         return;
     }
@@ -594,7 +594,7 @@ PostgresQueryAwaitable<Strategy>::PostgresQueryAwaitable(
     AsyncPostgresClient<Strategy>& client,
     std::string_view sql)
     : m_state(std::make_shared<SharedState>(client, sql))
-    , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
+    , m_inner(galay::kernel::AwaitableBuilder<Result>::from_state_machine(
                   client.socket().controller(),
                   Machine(m_state))
                   .build())
@@ -602,7 +602,7 @@ PostgresQueryAwaitable<Strategy>::PostgresQueryAwaitable(
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool PostgresQueryAwaitable<Strategy>::isInvalid() const
+bool PostgresQueryAwaitable<Strategy>::is_invalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
@@ -612,9 +612,9 @@ PostgresQueryAwaitable<Strategy>::SharedState::SharedState(
     AsyncPostgresClient<Strategy>& client_in,
     std::string_view sql)
     : client(&client_in)
-    , encoded_cmd(client_in.encoder().encodeQuery(sql))
+    , encoded_cmd(client_in.encoder().encode_query(sql))
 {
-    if (client_in.isClosed()) {
+    if (client_in.is_closed()) {
         result = std::unexpected(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
                                                "PostgreSQL connection is closed"));
         phase = Phase::Invalid;
@@ -622,8 +622,8 @@ PostgresQueryAwaitable<Strategy>::SharedState::SharedState(
         result = std::unexpected(PostgresError(POSTGRES_ERROR_INVALID_PARAM,
                                                "Invalid PostgreSQL query"));
         phase = Phase::Invalid;
-    } else if (client_in.asyncConfig().result_row_reserve_hint != 0) {
-        result_set.reserveRows(client_in.asyncConfig().result_row_reserve_hint);
+    } else if (client_in.async_config().result_row_reserve_hint != 0) {
+        result_set.reserve_rows(client_in.async_config().result_row_reserve_hint);
     }
 }
 
@@ -634,35 +634,35 @@ PostgresQueryAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState> 
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresQueryAwaitable<Strategy>::Machine::setError(PostgresError error) noexcept
+void PostgresQueryAwaitable<Strategy>::Machine::set_error(PostgresError error) noexcept
 {
-    if (detail::invalidatesConnection(error)) {
-        m_state->client->setClosed(true);
+    if (detail::invalidates_connection(error)) {
+        m_state->client->set_closed(true);
     }
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresQueryAwaitable<Strategy>::Machine::setIoError(
+void PostgresQueryAwaitable<Strategy>::Machine::set_io_error(
     const galay::kernel::IOError& error,
     PostgresErrorType fallback) noexcept
 {
-    if (detail::invalidatesConnection(error)) {
-        m_state->client->setClosed(true);
+    if (detail::invalidates_connection(error)) {
+        m_state->client->set_closed(true);
     }
-    setError(detail::mapIoError(error, fallback));
+    set_error(detail::map_io_error(error, fallback));
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool PostgresQueryAwaitable<Strategy>::Machine::prepareReadWindow()
+bool PostgresQueryAwaitable<Strategy>::Machine::prepare_read_window()
 {
     PostgresError error(POSTGRES_ERROR_INTERNAL);
-    if (!detail::prepareReadWindow(*m_state->client,
+    if (!detail::prepare_read_window(*m_state->client,
                                    m_state->read_iovecs,
                                    m_state->read_iov_count,
                                    error)) {
-        setError(std::move(error));
+        set_error(std::move(error));
         return false;
     }
     return true;
@@ -670,10 +670,10 @@ bool PostgresQueryAwaitable<Strategy>::Machine::prepareReadWindow()
 
 template<RingBufferBackendStrategy Strategy>
 std::expected<bool, PostgresError>
-PostgresQueryAwaitable<Strategy>::Machine::parseFromRingBuffer()
+PostgresQueryAwaitable<Strategy>::Machine::parse_from_ring_buffer()
 {
     while (true) {
-        auto message_result = detail::peekMessage(*m_state->client, m_state->parse_scratch);
+        auto message_result = detail::peek_message(*m_state->client, m_state->parse_scratch);
         if (!message_result) {
             return std::unexpected(message_result.error());
         }
@@ -684,63 +684,63 @@ PostgresQueryAwaitable<Strategy>::Machine::parseFromRingBuffer()
 
         switch (message.type) {
         case protocol::kMsgRowDescription: {
-            auto fields = m_state->client->parser().parseRowDescription(message.payload,
+            auto fields = m_state->client->parser().parse_row_description(message.payload,
                                                                        message.payload_len);
             if (!fields) {
-                return std::unexpected(detail::protocolError("Malformed RowDescription"));
+                return std::unexpected(detail::protocol_error("Malformed RowDescription"));
             }
-            detail::appendFields(m_state->result_set, std::move(*fields));
+            detail::append_fields(m_state->result_set, std::move(*fields));
             break;
         }
         case protocol::kMsgDataRow: {
-            auto row = m_state->client->parser().parseDataRow(message.payload,
+            auto row = m_state->client->parser().parse_data_row(message.payload,
                                                              message.payload_len);
-            if (!row || (m_state->result_set.fieldCount() != 0 &&
-                         row->size() != m_state->result_set.fieldCount())) {
-                return std::unexpected(detail::protocolError("Malformed DataRow"));
+            if (!row || (m_state->result_set.field_count() != 0 &&
+                         row->size() != m_state->result_set.field_count())) {
+                return std::unexpected(detail::protocol_error("Malformed DataRow"));
             }
-            m_state->result_set.addRow(std::move(*row));
+            m_state->result_set.add_row(std::move(*row));
             break;
         }
         case protocol::kMsgCommandComplete: {
-            auto complete = m_state->client->parser().parseCommandComplete(message.payload,
+            auto complete = m_state->client->parser().parse_command_complete(message.payload,
                                                                           message.payload_len);
             if (!complete) {
-                return std::unexpected(detail::protocolError("Malformed CommandComplete"));
+                return std::unexpected(detail::protocol_error("Malformed CommandComplete"));
             }
-            m_state->result_set.setCommandTag(std::move(complete->tag));
-            m_state->result_set.setAffectedRows(complete->affected_rows);
+            m_state->result_set.set_command_tag(std::move(complete->tag));
+            m_state->result_set.set_affected_rows(complete->affected_rows);
             break;
         }
         case protocol::kMsgEmptyQueryResponse:
         case protocol::kMsgNoticeResponse:
             break;
         case protocol::kMsgParameterStatus: {
-            auto common = detail::consumeCommonMessage(*m_state->client, message);
+            auto common = detail::consume_common_message(*m_state->client, message);
             if (!common) {
                 return std::unexpected(common.error());
             }
             break;
         }
         case protocol::kMsgErrorResponse: {
-            auto fields = m_state->client->parser().parseErrorResponse(message.payload,
+            auto fields = m_state->client->parser().parse_error_response(message.payload,
                                                                       message.payload_len);
             if (!fields) {
-                return std::unexpected(detail::protocolError("Malformed ErrorResponse"));
+                return std::unexpected(detail::protocol_error("Malformed ErrorResponse"));
             }
             if (!m_state->pending_error.has_value()) {
-                m_state->pending_error = detail::serverError(std::move(*fields));
+                m_state->pending_error = detail::server_error(std::move(*fields));
             }
             break;
         }
         case protocol::kMsgReadyForQuery: {
-            auto ready = m_state->client->parser().parseReadyForQuery(message.payload,
+            auto ready = m_state->client->parser().parse_ready_for_query(message.payload,
                                                                      message.payload_len);
             if (!ready) {
-                return std::unexpected(detail::protocolError("Malformed ReadyForQuery"));
+                return std::unexpected(detail::protocol_error("Malformed ReadyForQuery"));
             }
-            m_state->client->ringBuffer().consume(message.consumed);
-            m_state->client->setTransactionStatus(ready->transaction_status);
+            m_state->client->ring_buffer().consume(message.consumed);
+            m_state->client->set_transaction_status(ready->transaction_status);
             m_state->phase = Phase::Done;
             if (m_state->pending_error.has_value()) {
                 m_state->result = std::unexpected(std::move(*m_state->pending_error));
@@ -751,10 +751,10 @@ PostgresQueryAwaitable<Strategy>::Machine::parseFromRingBuffer()
             return true;
         }
         default:
-            return std::unexpected(detail::protocolError(
+            return std::unexpected(detail::protocol_error(
                 "Unexpected PostgreSQL simple-query response message"));
         }
-        m_state->client->ringBuffer().consume(message.consumed);
+        m_state->client->ring_buffer().consume(message.consumed);
     }
 }
 
@@ -768,7 +768,7 @@ PostgresQueryAwaitable<Strategy>::Machine::advance()
     }
     switch (m_state->phase) {
     case Phase::Invalid:
-        setError(PostgresError(POSTGRES_ERROR_INTERNAL,
+        set_error(PostgresError(POSTGRES_ERROR_INTERNAL,
                                "PostgreSQL query machine entered invalid state"));
         return Action::complete(std::move(*m_state->result));
     case Phase::SendCommand:
@@ -776,21 +776,21 @@ PostgresQueryAwaitable<Strategy>::Machine::advance()
             m_state->phase = Phase::Receiving;
             return Action::continue_();
         }
-        return Action::waitWrite(m_state->encoded_cmd.data() + m_state->sent,
+        return Action::wait_write(m_state->encoded_cmd.data() + m_state->sent,
                                  m_state->encoded_cmd.size() - m_state->sent);
     case Phase::Receiving: {
-        auto parsed = parseFromRingBuffer();
+        auto parsed = parse_from_ring_buffer();
         if (!parsed) {
-            setError(std::move(parsed.error()));
+            set_error(std::move(parsed.error()));
             return Action::complete(std::move(*m_state->result));
         }
         if (*parsed) {
             return Action::continue_();
         }
-        if (!prepareReadWindow()) {
+        if (!prepare_read_window()) {
             return Action::complete(std::move(*m_state->result));
         }
-        return Action::waitReadv(m_state->read_iovecs.data(), m_state->read_iov_count);
+        return Action::wait_readv(m_state->read_iovecs.data(), m_state->read_iov_count);
     }
     case Phase::Done:
         if (!m_state->result.has_value()) {
@@ -798,48 +798,48 @@ PostgresQueryAwaitable<Strategy>::Machine::advance()
         }
         return Action::complete(std::move(*m_state->result));
     }
-    setError(PostgresError(POSTGRES_ERROR_INTERNAL,
+    set_error(PostgresError(POSTGRES_ERROR_INTERNAL,
                            "Unknown PostgreSQL query machine state"));
     return Action::complete(std::move(*m_state->result));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresQueryAwaitable<Strategy>::Machine::onRead(
+void PostgresQueryAwaitable<Strategy>::Machine::on_read(
     std::expected<size_t, galay::kernel::IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result) {
-        setIoError(result.error(), POSTGRES_ERROR_RECV);
+        set_io_error(result.error(), POSTGRES_ERROR_RECV);
         return;
     }
     if (*result == 0) {
-        m_state->client->setClosed(true);
-        setError(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
+        m_state->client->set_closed(true);
+        set_error(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
                                "Connection closed during PostgreSQL query"));
         return;
     }
-    m_state->client->ringBuffer().produce(*result);
-    auto parsed = parseFromRingBuffer();
+    m_state->client->ring_buffer().produce(*result);
+    auto parsed = parse_from_ring_buffer();
     if (!parsed) {
-        setError(std::move(parsed.error()));
+        set_error(std::move(parsed.error()));
     }
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresQueryAwaitable<Strategy>::Machine::onWrite(
+void PostgresQueryAwaitable<Strategy>::Machine::on_write(
     std::expected<size_t, galay::kernel::IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
     }
     if (!result) {
-        setIoError(result.error(), POSTGRES_ERROR_SEND);
+        set_io_error(result.error(), POSTGRES_ERROR_SEND);
         return;
     }
     if (*result == 0) {
-        setError(PostgresError(POSTGRES_ERROR_SEND,
+        set_error(PostgresError(POSTGRES_ERROR_SEND,
                                "PostgreSQL query send returned zero bytes"));
         return;
     }
@@ -867,7 +867,7 @@ PostgresPrepareAwaitable<Strategy>::PostgresPrepareAwaitable(
     std::string_view sql,
     std::span<const uint32_t> parameter_types)
     : m_state(std::make_shared<SharedState>(client, name, sql, parameter_types))
-    , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
+    , m_inner(galay::kernel::AwaitableBuilder<Result>::from_state_machine(
                   client.socket().controller(),
                   Machine(m_state))
                   .build())
@@ -875,7 +875,7 @@ PostgresPrepareAwaitable<Strategy>::PostgresPrepareAwaitable(
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool PostgresPrepareAwaitable<Strategy>::isInvalid() const
+bool PostgresPrepareAwaitable<Strategy>::is_invalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
@@ -889,16 +889,16 @@ PostgresPrepareAwaitable<Strategy>::SharedState::SharedState(
     : client(&client_in)
 {
     prepare_result.statement_name.assign(name);
-    if (client->isClosed()) {
+    if (client->is_closed()) {
         result = std::unexpected(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
                                                "PostgreSQL connection is closed"));
         phase = Phase::Invalid;
         return;
     }
 
-    std::string parse = client->encoder().encodeParse(name, sql, parameter_types);
-    std::string describe = client->encoder().encodeDescribeStatement(name);
-    std::string sync = client->encoder().encodeSync();
+    std::string parse = client->encoder().encode_parse(name, sql, parameter_types);
+    std::string describe = client->encoder().encode_describe_statement(name);
+    std::string sync = client->encoder().encode_sync();
     if (parse.empty() || describe.empty() || sync.empty()) {
         result = std::unexpected(PostgresError(POSTGRES_ERROR_INVALID_PARAM,
                                                "Invalid PostgreSQL prepared statement"));
@@ -917,35 +917,35 @@ PostgresPrepareAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresPrepareAwaitable<Strategy>::Machine::setError(PostgresError error) noexcept
+void PostgresPrepareAwaitable<Strategy>::Machine::set_error(PostgresError error) noexcept
 {
-    if (detail::invalidatesConnection(error)) {
-        m_state->client->setClosed(true);
+    if (detail::invalidates_connection(error)) {
+        m_state->client->set_closed(true);
     }
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresPrepareAwaitable<Strategy>::Machine::setIoError(
+void PostgresPrepareAwaitable<Strategy>::Machine::set_io_error(
     const galay::kernel::IOError& error,
     PostgresErrorType fallback) noexcept
 {
-    if (detail::invalidatesConnection(error)) {
-        m_state->client->setClosed(true);
+    if (detail::invalidates_connection(error)) {
+        m_state->client->set_closed(true);
     }
-    setError(detail::mapIoError(error, fallback));
+    set_error(detail::map_io_error(error, fallback));
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool PostgresPrepareAwaitable<Strategy>::Machine::prepareReadWindow()
+bool PostgresPrepareAwaitable<Strategy>::Machine::prepare_read_window()
 {
     PostgresError error(POSTGRES_ERROR_INTERNAL);
-    if (!detail::prepareReadWindow(*m_state->client,
+    if (!detail::prepare_read_window(*m_state->client,
                                    m_state->read_iovecs,
                                    m_state->read_iov_count,
                                    error)) {
-        setError(std::move(error));
+        set_error(std::move(error));
         return false;
     }
     return true;
@@ -953,10 +953,10 @@ bool PostgresPrepareAwaitable<Strategy>::Machine::prepareReadWindow()
 
 template<RingBufferBackendStrategy Strategy>
 std::expected<bool, PostgresError>
-PostgresPrepareAwaitable<Strategy>::Machine::parseFromRingBuffer()
+PostgresPrepareAwaitable<Strategy>::Machine::parse_from_ring_buffer()
 {
     while (true) {
-        auto message_result = detail::peekMessage(*m_state->client, m_state->parse_scratch);
+        auto message_result = detail::peek_message(*m_state->client, m_state->parse_scratch);
         if (!message_result) {
             return std::unexpected(message_result.error());
         }
@@ -966,61 +966,61 @@ PostgresPrepareAwaitable<Strategy>::Machine::parseFromRingBuffer()
         const protocol::MessageView message = **message_result;
         switch (message.type) {
         case protocol::kMsgParseComplete:
-            if (!m_state->client->parser().parseParseComplete(message.payload,
+            if (!m_state->client->parser().parse_parse_complete(message.payload,
                                                               message.payload_len)) {
-                return std::unexpected(detail::protocolError("Malformed ParseComplete"));
+                return std::unexpected(detail::protocol_error("Malformed ParseComplete"));
             }
             break;
         case protocol::kMsgParameterDescription: {
-            auto parameters = m_state->client->parser().parseParameterDescription(
+            auto parameters = m_state->client->parser().parse_parameter_description(
                 message.payload, message.payload_len);
             if (!parameters) {
-                return std::unexpected(detail::protocolError(
+                return std::unexpected(detail::protocol_error(
                     "Malformed ParameterDescription"));
             }
             m_state->prepare_result.parameter_types = std::move(*parameters);
             break;
         }
         case protocol::kMsgRowDescription: {
-            auto fields = m_state->client->parser().parseRowDescription(message.payload,
+            auto fields = m_state->client->parser().parse_row_description(message.payload,
                                                                        message.payload_len);
             if (!fields) {
-                return std::unexpected(detail::protocolError(
+                return std::unexpected(detail::protocol_error(
                     "Malformed prepared RowDescription"));
             }
-            detail::appendFields(m_state->prepare_result.fields, std::move(*fields));
+            detail::append_fields(m_state->prepare_result.fields, std::move(*fields));
             break;
         }
         case protocol::kMsgNoData:
         case protocol::kMsgNoticeResponse:
             break;
         case protocol::kMsgParameterStatus: {
-            auto common = detail::consumeCommonMessage(*m_state->client, message);
+            auto common = detail::consume_common_message(*m_state->client, message);
             if (!common) {
                 return std::unexpected(common.error());
             }
             break;
         }
         case protocol::kMsgErrorResponse: {
-            auto fields = m_state->client->parser().parseErrorResponse(message.payload,
+            auto fields = m_state->client->parser().parse_error_response(message.payload,
                                                                       message.payload_len);
             if (!fields) {
-                return std::unexpected(detail::protocolError("Malformed ErrorResponse"));
+                return std::unexpected(detail::protocol_error("Malformed ErrorResponse"));
             }
             if (!m_state->pending_error.has_value()) {
-                m_state->pending_error = detail::serverError(
+                m_state->pending_error = detail::server_error(
                     std::move(*fields), POSTGRES_ERROR_PREPARED_STMT);
             }
             break;
         }
         case protocol::kMsgReadyForQuery: {
-            auto ready = m_state->client->parser().parseReadyForQuery(message.payload,
+            auto ready = m_state->client->parser().parse_ready_for_query(message.payload,
                                                                      message.payload_len);
             if (!ready) {
-                return std::unexpected(detail::protocolError("Malformed ReadyForQuery"));
+                return std::unexpected(detail::protocol_error("Malformed ReadyForQuery"));
             }
-            m_state->client->ringBuffer().consume(message.consumed);
-            m_state->client->setTransactionStatus(ready->transaction_status);
+            m_state->client->ring_buffer().consume(message.consumed);
+            m_state->client->set_transaction_status(ready->transaction_status);
             m_state->phase = Phase::Done;
             if (m_state->pending_error.has_value()) {
                 m_state->result = std::unexpected(std::move(*m_state->pending_error));
@@ -1031,10 +1031,10 @@ PostgresPrepareAwaitable<Strategy>::Machine::parseFromRingBuffer()
             return true;
         }
         default:
-            return std::unexpected(detail::protocolError(
+            return std::unexpected(detail::protocol_error(
                 "Unexpected PostgreSQL prepare response message"));
         }
-        m_state->client->ringBuffer().consume(message.consumed);
+        m_state->client->ring_buffer().consume(message.consumed);
     }
 }
 
@@ -1048,7 +1048,7 @@ PostgresPrepareAwaitable<Strategy>::Machine::advance()
     }
     switch (m_state->phase) {
     case Phase::Invalid:
-        setError(PostgresError(POSTGRES_ERROR_INTERNAL,
+        set_error(PostgresError(POSTGRES_ERROR_INTERNAL,
                                "PostgreSQL prepare machine entered invalid state"));
         return Action::complete(std::move(*m_state->result));
     case Phase::SendCommand:
@@ -1056,57 +1056,57 @@ PostgresPrepareAwaitable<Strategy>::Machine::advance()
             m_state->phase = Phase::Receiving;
             return Action::continue_();
         }
-        return Action::waitWrite(m_state->encoded_cmd.data() + m_state->sent,
+        return Action::wait_write(m_state->encoded_cmd.data() + m_state->sent,
                                  m_state->encoded_cmd.size() - m_state->sent);
     case Phase::Receiving: {
-        auto parsed = parseFromRingBuffer();
+        auto parsed = parse_from_ring_buffer();
         if (!parsed) {
-            setError(std::move(parsed.error()));
+            set_error(std::move(parsed.error()));
             return Action::complete(std::move(*m_state->result));
         }
         if (*parsed) {
             return Action::continue_();
         }
-        if (!prepareReadWindow()) {
+        if (!prepare_read_window()) {
             return Action::complete(std::move(*m_state->result));
         }
-        return Action::waitReadv(m_state->read_iovecs.data(), m_state->read_iov_count);
+        return Action::wait_readv(m_state->read_iovecs.data(), m_state->read_iov_count);
     }
     case Phase::Done:
         return Action::complete(std::move(*m_state->result));
     }
-    setError(PostgresError(POSTGRES_ERROR_INTERNAL,
+    set_error(PostgresError(POSTGRES_ERROR_INTERNAL,
                            "Unknown PostgreSQL prepare machine state"));
     return Action::complete(std::move(*m_state->result));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresPrepareAwaitable<Strategy>::Machine::onRead(
+void PostgresPrepareAwaitable<Strategy>::Machine::on_read(
     std::expected<size_t, galay::kernel::IOError> result)
 {
     if (m_state->result.has_value()) return;
     if (!result) {
-        setIoError(result.error(), POSTGRES_ERROR_RECV);
+        set_io_error(result.error(), POSTGRES_ERROR_RECV);
     } else if (*result == 0) {
-        m_state->client->setClosed(true);
-        setError(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
+        m_state->client->set_closed(true);
+        set_error(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
                                "Connection closed during PostgreSQL prepare"));
     } else {
-        m_state->client->ringBuffer().produce(*result);
-        auto parsed = parseFromRingBuffer();
-        if (!parsed) setError(std::move(parsed.error()));
+        m_state->client->ring_buffer().produce(*result);
+        auto parsed = parse_from_ring_buffer();
+        if (!parsed) set_error(std::move(parsed.error()));
     }
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresPrepareAwaitable<Strategy>::Machine::onWrite(
+void PostgresPrepareAwaitable<Strategy>::Machine::on_write(
     std::expected<size_t, galay::kernel::IOError> result)
 {
     if (m_state->result.has_value()) return;
     if (!result) {
-        setIoError(result.error(), POSTGRES_ERROR_SEND);
+        set_io_error(result.error(), POSTGRES_ERROR_SEND);
     } else if (*result == 0) {
-        setError(PostgresError(POSTGRES_ERROR_SEND,
+        set_error(PostgresError(POSTGRES_ERROR_SEND,
                                "PostgreSQL prepare send returned zero bytes"));
     } else {
         m_state->sent += *result;
@@ -1119,7 +1119,7 @@ PostgresExecuteAwaitable<Strategy>::PostgresExecuteAwaitable(
     std::string_view name,
     std::span<const std::optional<std::string_view>> params)
     : m_state(std::make_shared<SharedState>(client, name, params))
-    , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
+    , m_inner(galay::kernel::AwaitableBuilder<Result>::from_state_machine(
                   client.socket().controller(),
                   Machine(m_state))
                   .build())
@@ -1127,7 +1127,7 @@ PostgresExecuteAwaitable<Strategy>::PostgresExecuteAwaitable(
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool PostgresExecuteAwaitable<Strategy>::isInvalid() const
+bool PostgresExecuteAwaitable<Strategy>::is_invalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
@@ -1139,17 +1139,17 @@ PostgresExecuteAwaitable<Strategy>::SharedState::SharedState(
     std::span<const std::optional<std::string_view>> params)
     : client(&client_in)
 {
-    if (client->isClosed()) {
+    if (client->is_closed()) {
         result = std::unexpected(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
                                                "PostgreSQL connection is closed"));
         phase = Phase::Invalid;
         return;
     }
 
-    std::string bind = client->encoder().encodeBind({}, name, params);
-    std::string describe = client->encoder().encodeDescribePortal({});
-    std::string execute = client->encoder().encodeExecute({});
-    std::string sync = client->encoder().encodeSync();
+    std::string bind = client->encoder().encode_bind({}, name, params);
+    std::string describe = client->encoder().encode_describe_portal({});
+    std::string execute = client->encoder().encode_execute({});
+    std::string sync = client->encoder().encode_sync();
     if (bind.empty() || describe.empty() || execute.empty() || sync.empty()) {
         result = std::unexpected(PostgresError(POSTGRES_ERROR_INVALID_PARAM,
                                                "Invalid PostgreSQL prepared execution"));
@@ -1160,8 +1160,8 @@ PostgresExecuteAwaitable<Strategy>::SharedState::SharedState(
     bind += execute;
     bind += sync;
     encoded_cmd = std::move(bind);
-    if (client->asyncConfig().result_row_reserve_hint != 0) {
-        result_set.reserveRows(client->asyncConfig().result_row_reserve_hint);
+    if (client->async_config().result_row_reserve_hint != 0) {
+        result_set.reserve_rows(client->async_config().result_row_reserve_hint);
     }
 }
 
@@ -1172,35 +1172,35 @@ PostgresExecuteAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresExecuteAwaitable<Strategy>::Machine::setError(PostgresError error) noexcept
+void PostgresExecuteAwaitable<Strategy>::Machine::set_error(PostgresError error) noexcept
 {
-    if (detail::invalidatesConnection(error)) {
-        m_state->client->setClosed(true);
+    if (detail::invalidates_connection(error)) {
+        m_state->client->set_closed(true);
     }
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresExecuteAwaitable<Strategy>::Machine::setIoError(
+void PostgresExecuteAwaitable<Strategy>::Machine::set_io_error(
     const galay::kernel::IOError& error,
     PostgresErrorType fallback) noexcept
 {
-    if (detail::invalidatesConnection(error)) {
-        m_state->client->setClosed(true);
+    if (detail::invalidates_connection(error)) {
+        m_state->client->set_closed(true);
     }
-    setError(detail::mapIoError(error, fallback));
+    set_error(detail::map_io_error(error, fallback));
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool PostgresExecuteAwaitable<Strategy>::Machine::prepareReadWindow()
+bool PostgresExecuteAwaitable<Strategy>::Machine::prepare_read_window()
 {
     PostgresError error(POSTGRES_ERROR_INTERNAL);
-    if (!detail::prepareReadWindow(*m_state->client,
+    if (!detail::prepare_read_window(*m_state->client,
                                    m_state->read_iovecs,
                                    m_state->read_iov_count,
                                    error)) {
-        setError(std::move(error));
+        set_error(std::move(error));
         return false;
     }
     return true;
@@ -1208,44 +1208,44 @@ bool PostgresExecuteAwaitable<Strategy>::Machine::prepareReadWindow()
 
 template<RingBufferBackendStrategy Strategy>
 std::expected<bool, PostgresError>
-PostgresExecuteAwaitable<Strategy>::Machine::parseFromRingBuffer()
+PostgresExecuteAwaitable<Strategy>::Machine::parse_from_ring_buffer()
 {
     while (true) {
-        auto message_result = detail::peekMessage(*m_state->client, m_state->parse_scratch);
+        auto message_result = detail::peek_message(*m_state->client, m_state->parse_scratch);
         if (!message_result) return std::unexpected(message_result.error());
         if (!message_result->has_value()) return false;
         const protocol::MessageView message = **message_result;
 
         switch (message.type) {
         case protocol::kMsgBindComplete:
-            if (!m_state->client->parser().parseBindComplete(message.payload,
+            if (!m_state->client->parser().parse_bind_complete(message.payload,
                                                              message.payload_len)) {
-                return std::unexpected(detail::protocolError("Malformed BindComplete"));
+                return std::unexpected(detail::protocol_error("Malformed BindComplete"));
             }
             break;
         case protocol::kMsgRowDescription: {
-            auto fields = m_state->client->parser().parseRowDescription(message.payload,
+            auto fields = m_state->client->parser().parse_row_description(message.payload,
                                                                        message.payload_len);
-            if (!fields) return std::unexpected(detail::protocolError("Malformed RowDescription"));
-            detail::appendFields(m_state->result_set, std::move(*fields));
+            if (!fields) return std::unexpected(detail::protocol_error("Malformed RowDescription"));
+            detail::append_fields(m_state->result_set, std::move(*fields));
             break;
         }
         case protocol::kMsgDataRow: {
-            auto row = m_state->client->parser().parseDataRow(message.payload,
+            auto row = m_state->client->parser().parse_data_row(message.payload,
                                                              message.payload_len);
-            if (!row || (m_state->result_set.fieldCount() != 0 &&
-                         row->size() != m_state->result_set.fieldCount())) {
-                return std::unexpected(detail::protocolError("Malformed DataRow"));
+            if (!row || (m_state->result_set.field_count() != 0 &&
+                         row->size() != m_state->result_set.field_count())) {
+                return std::unexpected(detail::protocol_error("Malformed DataRow"));
             }
-            m_state->result_set.addRow(std::move(*row));
+            m_state->result_set.add_row(std::move(*row));
             break;
         }
         case protocol::kMsgCommandComplete: {
-            auto complete = m_state->client->parser().parseCommandComplete(message.payload,
+            auto complete = m_state->client->parser().parse_command_complete(message.payload,
                                                                           message.payload_len);
-            if (!complete) return std::unexpected(detail::protocolError("Malformed CommandComplete"));
-            m_state->result_set.setCommandTag(std::move(complete->tag));
-            m_state->result_set.setAffectedRows(complete->affected_rows);
+            if (!complete) return std::unexpected(detail::protocol_error("Malformed CommandComplete"));
+            m_state->result_set.set_command_tag(std::move(complete->tag));
+            m_state->result_set.set_affected_rows(complete->affected_rows);
             break;
         }
         case protocol::kMsgNoData:
@@ -1253,26 +1253,26 @@ PostgresExecuteAwaitable<Strategy>::Machine::parseFromRingBuffer()
         case protocol::kMsgNoticeResponse:
             break;
         case protocol::kMsgParameterStatus: {
-            auto common = detail::consumeCommonMessage(*m_state->client, message);
+            auto common = detail::consume_common_message(*m_state->client, message);
             if (!common) return std::unexpected(common.error());
             break;
         }
         case protocol::kMsgErrorResponse: {
-            auto fields = m_state->client->parser().parseErrorResponse(message.payload,
+            auto fields = m_state->client->parser().parse_error_response(message.payload,
                                                                       message.payload_len);
-            if (!fields) return std::unexpected(detail::protocolError("Malformed ErrorResponse"));
+            if (!fields) return std::unexpected(detail::protocol_error("Malformed ErrorResponse"));
             if (!m_state->pending_error.has_value()) {
-                m_state->pending_error = detail::serverError(
+                m_state->pending_error = detail::server_error(
                     std::move(*fields), POSTGRES_ERROR_PREPARED_STMT);
             }
             break;
         }
         case protocol::kMsgReadyForQuery: {
-            auto ready = m_state->client->parser().parseReadyForQuery(message.payload,
+            auto ready = m_state->client->parser().parse_ready_for_query(message.payload,
                                                                      message.payload_len);
-            if (!ready) return std::unexpected(detail::protocolError("Malformed ReadyForQuery"));
-            m_state->client->ringBuffer().consume(message.consumed);
-            m_state->client->setTransactionStatus(ready->transaction_status);
+            if (!ready) return std::unexpected(detail::protocol_error("Malformed ReadyForQuery"));
+            m_state->client->ring_buffer().consume(message.consumed);
+            m_state->client->set_transaction_status(ready->transaction_status);
             m_state->phase = Phase::Done;
             if (m_state->pending_error.has_value()) {
                 m_state->result = std::unexpected(std::move(*m_state->pending_error));
@@ -1283,10 +1283,10 @@ PostgresExecuteAwaitable<Strategy>::Machine::parseFromRingBuffer()
             return true;
         }
         default:
-            return std::unexpected(detail::protocolError(
+            return std::unexpected(detail::protocol_error(
                 "Unexpected PostgreSQL execute response message"));
         }
-        m_state->client->ringBuffer().consume(message.consumed);
+        m_state->client->ring_buffer().consume(message.consumed);
     }
 }
 
@@ -1298,7 +1298,7 @@ PostgresExecuteAwaitable<Strategy>::Machine::advance()
     if (m_state->result.has_value()) return Action::complete(std::move(*m_state->result));
     switch (m_state->phase) {
     case Phase::Invalid:
-        setError(PostgresError(POSTGRES_ERROR_INTERNAL,
+        set_error(PostgresError(POSTGRES_ERROR_INTERNAL,
                                "PostgreSQL execute machine entered invalid state"));
         return Action::complete(std::move(*m_state->result));
     case Phase::SendCommand:
@@ -1306,51 +1306,51 @@ PostgresExecuteAwaitable<Strategy>::Machine::advance()
             m_state->phase = Phase::Receiving;
             return Action::continue_();
         }
-        return Action::waitWrite(m_state->encoded_cmd.data() + m_state->sent,
+        return Action::wait_write(m_state->encoded_cmd.data() + m_state->sent,
                                  m_state->encoded_cmd.size() - m_state->sent);
     case Phase::Receiving: {
-        auto parsed = parseFromRingBuffer();
+        auto parsed = parse_from_ring_buffer();
         if (!parsed) {
-            setError(std::move(parsed.error()));
+            set_error(std::move(parsed.error()));
             return Action::complete(std::move(*m_state->result));
         }
         if (*parsed) return Action::continue_();
-        if (!prepareReadWindow()) return Action::complete(std::move(*m_state->result));
-        return Action::waitReadv(m_state->read_iovecs.data(), m_state->read_iov_count);
+        if (!prepare_read_window()) return Action::complete(std::move(*m_state->result));
+        return Action::wait_readv(m_state->read_iovecs.data(), m_state->read_iov_count);
     }
     case Phase::Done:
         return Action::complete(std::move(*m_state->result));
     }
-    setError(PostgresError(POSTGRES_ERROR_INTERNAL,
+    set_error(PostgresError(POSTGRES_ERROR_INTERNAL,
                            "Unknown PostgreSQL execute machine state"));
     return Action::complete(std::move(*m_state->result));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresExecuteAwaitable<Strategy>::Machine::onRead(
+void PostgresExecuteAwaitable<Strategy>::Machine::on_read(
     std::expected<size_t, galay::kernel::IOError> result)
 {
     if (m_state->result.has_value()) return;
-    if (!result) setIoError(result.error(), POSTGRES_ERROR_RECV);
+    if (!result) set_io_error(result.error(), POSTGRES_ERROR_RECV);
     else if (*result == 0) {
-        m_state->client->setClosed(true);
-        setError(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
+        m_state->client->set_closed(true);
+        set_error(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
                                "Connection closed during PostgreSQL execute"));
     } else {
-        m_state->client->ringBuffer().produce(*result);
-        auto parsed = parseFromRingBuffer();
-        if (!parsed) setError(std::move(parsed.error()));
+        m_state->client->ring_buffer().produce(*result);
+        auto parsed = parse_from_ring_buffer();
+        if (!parsed) set_error(std::move(parsed.error()));
     }
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresExecuteAwaitable<Strategy>::Machine::onWrite(
+void PostgresExecuteAwaitable<Strategy>::Machine::on_write(
     std::expected<size_t, galay::kernel::IOError> result)
 {
     if (m_state->result.has_value()) return;
-    if (!result) setIoError(result.error(), POSTGRES_ERROR_SEND);
+    if (!result) set_io_error(result.error(), POSTGRES_ERROR_SEND);
     else if (*result == 0) {
-        setError(PostgresError(POSTGRES_ERROR_SEND,
+        set_error(PostgresError(POSTGRES_ERROR_SEND,
                                "PostgreSQL execute send returned zero bytes"));
     } else m_state->sent += *result;
 }
@@ -1360,7 +1360,7 @@ PostgresPipelineAwaitable<Strategy>::PostgresPipelineAwaitable(
     AsyncPostgresClient<Strategy>& client,
     std::span<const protocol::PostgresCommandView> commands)
     : m_state(std::make_shared<SharedState>(client, commands))
-    , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
+    , m_inner(galay::kernel::AwaitableBuilder<Result>::from_state_machine(
                   client.socket().controller(),
                   Machine(m_state))
                   .build())
@@ -1368,7 +1368,7 @@ PostgresPipelineAwaitable<Strategy>::PostgresPipelineAwaitable(
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool PostgresPipelineAwaitable<Strategy>::isInvalid() const
+bool PostgresPipelineAwaitable<Strategy>::is_invalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
@@ -1385,7 +1385,7 @@ PostgresPipelineAwaitable<Strategy>::SharedState::SharedState(
             std::vector<PostgresResultSet>{});
         return;
     }
-    if (client->isClosed()) {
+    if (client->is_closed()) {
         phase = Phase::Invalid;
         result = std::unexpected(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
                                                "PostgreSQL connection is closed"));
@@ -1417,8 +1417,8 @@ PostgresPipelineAwaitable<Strategy>::SharedState::SharedState(
         encoded_commands.append(command.encoded);
     }
     results.reserve(expected_ready);
-    if (client->asyncConfig().result_row_reserve_hint != 0) {
-        current_result.reserveRows(client->asyncConfig().result_row_reserve_hint);
+    if (client->async_config().result_row_reserve_hint != 0) {
+        current_result.reserve_rows(client->async_config().result_row_reserve_hint);
     }
 }
 
@@ -1429,35 +1429,35 @@ PostgresPipelineAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedStat
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresPipelineAwaitable<Strategy>::Machine::setError(PostgresError error) noexcept
+void PostgresPipelineAwaitable<Strategy>::Machine::set_error(PostgresError error) noexcept
 {
-    if (detail::invalidatesConnection(error)) {
-        m_state->client->setClosed(true);
+    if (detail::invalidates_connection(error)) {
+        m_state->client->set_closed(true);
     }
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresPipelineAwaitable<Strategy>::Machine::setIoError(
+void PostgresPipelineAwaitable<Strategy>::Machine::set_io_error(
     const galay::kernel::IOError& error,
     PostgresErrorType fallback) noexcept
 {
-    if (detail::invalidatesConnection(error)) {
-        m_state->client->setClosed(true);
+    if (detail::invalidates_connection(error)) {
+        m_state->client->set_closed(true);
     }
-    setError(detail::mapIoError(error, fallback));
+    set_error(detail::map_io_error(error, fallback));
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool PostgresPipelineAwaitable<Strategy>::Machine::prepareReadWindow()
+bool PostgresPipelineAwaitable<Strategy>::Machine::prepare_read_window()
 {
     PostgresError error(POSTGRES_ERROR_INTERNAL);
-    if (!detail::prepareReadWindow(*m_state->client,
+    if (!detail::prepare_read_window(*m_state->client,
                                    m_state->read_iovecs,
                                    m_state->read_iov_count,
                                    error)) {
-        setError(std::move(error));
+        set_error(std::move(error));
         return false;
     }
     return true;
@@ -1465,38 +1465,38 @@ bool PostgresPipelineAwaitable<Strategy>::Machine::prepareReadWindow()
 
 template<RingBufferBackendStrategy Strategy>
 std::expected<bool, PostgresError>
-PostgresPipelineAwaitable<Strategy>::Machine::parseFromRingBuffer()
+PostgresPipelineAwaitable<Strategy>::Machine::parse_from_ring_buffer()
 {
     while (m_state->completed_ready < m_state->expected_ready) {
-        auto message_result = detail::peekMessage(*m_state->client, m_state->parse_scratch);
+        auto message_result = detail::peek_message(*m_state->client, m_state->parse_scratch);
         if (!message_result) return std::unexpected(message_result.error());
         if (!message_result->has_value()) return false;
         const protocol::MessageView message = **message_result;
 
         switch (message.type) {
         case protocol::kMsgRowDescription: {
-            auto fields = m_state->client->parser().parseRowDescription(message.payload,
+            auto fields = m_state->client->parser().parse_row_description(message.payload,
                                                                        message.payload_len);
-            if (!fields) return std::unexpected(detail::protocolError("Malformed RowDescription"));
-            detail::appendFields(m_state->current_result, std::move(*fields));
+            if (!fields) return std::unexpected(detail::protocol_error("Malformed RowDescription"));
+            detail::append_fields(m_state->current_result, std::move(*fields));
             break;
         }
         case protocol::kMsgDataRow: {
-            auto row = m_state->client->parser().parseDataRow(message.payload,
+            auto row = m_state->client->parser().parse_data_row(message.payload,
                                                              message.payload_len);
-            if (!row || (m_state->current_result.fieldCount() != 0 &&
-                         row->size() != m_state->current_result.fieldCount())) {
-                return std::unexpected(detail::protocolError("Malformed DataRow"));
+            if (!row || (m_state->current_result.field_count() != 0 &&
+                         row->size() != m_state->current_result.field_count())) {
+                return std::unexpected(detail::protocol_error("Malformed DataRow"));
             }
-            m_state->current_result.addRow(std::move(*row));
+            m_state->current_result.add_row(std::move(*row));
             break;
         }
         case protocol::kMsgCommandComplete: {
-            auto complete = m_state->client->parser().parseCommandComplete(message.payload,
+            auto complete = m_state->client->parser().parse_command_complete(message.payload,
                                                                           message.payload_len);
-            if (!complete) return std::unexpected(detail::protocolError("Malformed CommandComplete"));
-            m_state->current_result.setCommandTag(std::move(complete->tag));
-            m_state->current_result.setAffectedRows(complete->affected_rows);
+            if (!complete) return std::unexpected(detail::protocol_error("Malformed CommandComplete"));
+            m_state->current_result.set_command_tag(std::move(complete->tag));
+            m_state->current_result.set_affected_rows(complete->affected_rows);
             break;
         }
         case protocol::kMsgParseComplete:
@@ -1508,25 +1508,25 @@ PostgresPipelineAwaitable<Strategy>::Machine::parseFromRingBuffer()
         case protocol::kMsgNoticeResponse:
             break;
         case protocol::kMsgParameterStatus: {
-            auto common = detail::consumeCommonMessage(*m_state->client, message);
+            auto common = detail::consume_common_message(*m_state->client, message);
             if (!common) return std::unexpected(common.error());
             break;
         }
         case protocol::kMsgErrorResponse: {
-            auto fields = m_state->client->parser().parseErrorResponse(message.payload,
+            auto fields = m_state->client->parser().parse_error_response(message.payload,
                                                                       message.payload_len);
-            if (!fields) return std::unexpected(detail::protocolError("Malformed ErrorResponse"));
+            if (!fields) return std::unexpected(detail::protocol_error("Malformed ErrorResponse"));
             if (!m_state->first_error.has_value()) {
-                m_state->first_error = detail::serverError(std::move(*fields));
+                m_state->first_error = detail::server_error(std::move(*fields));
             }
             break;
         }
         case protocol::kMsgReadyForQuery: {
-            auto ready = m_state->client->parser().parseReadyForQuery(message.payload,
+            auto ready = m_state->client->parser().parse_ready_for_query(message.payload,
                                                                      message.payload_len);
-            if (!ready) return std::unexpected(detail::protocolError("Malformed ReadyForQuery"));
-            m_state->client->setTransactionStatus(ready->transaction_status);
-            m_state->client->ringBuffer().consume(message.consumed);
+            if (!ready) return std::unexpected(detail::protocol_error("Malformed ReadyForQuery"));
+            m_state->client->set_transaction_status(ready->transaction_status);
+            m_state->client->ring_buffer().consume(message.consumed);
             m_state->results.push_back(std::move(m_state->current_result));
             ++m_state->completed_ready;
             if (m_state->completed_ready >= m_state->expected_ready) {
@@ -1540,17 +1540,17 @@ PostgresPipelineAwaitable<Strategy>::Machine::parseFromRingBuffer()
                 return true;
             }
             m_state->current_result = PostgresResultSet{};
-            if (m_state->client->asyncConfig().result_row_reserve_hint != 0) {
-                m_state->current_result.reserveRows(
-                    m_state->client->asyncConfig().result_row_reserve_hint);
+            if (m_state->client->async_config().result_row_reserve_hint != 0) {
+                m_state->current_result.reserve_rows(
+                    m_state->client->async_config().result_row_reserve_hint);
             }
             continue;
         }
         default:
-            return std::unexpected(detail::protocolError(
+            return std::unexpected(detail::protocol_error(
                 "Unexpected PostgreSQL pipeline response message"));
         }
-        m_state->client->ringBuffer().consume(message.consumed);
+        m_state->client->ring_buffer().consume(message.consumed);
     }
     return true;
 }
@@ -1563,7 +1563,7 @@ PostgresPipelineAwaitable<Strategy>::Machine::advance()
     if (m_state->result.has_value()) return Action::complete(std::move(*m_state->result));
     switch (m_state->phase) {
     case Phase::Invalid:
-        setError(PostgresError(POSTGRES_ERROR_INTERNAL,
+        set_error(PostgresError(POSTGRES_ERROR_INTERNAL,
                                "PostgreSQL pipeline machine entered invalid state"));
         return Action::complete(std::move(*m_state->result));
     case Phase::SendCommands:
@@ -1571,51 +1571,51 @@ PostgresPipelineAwaitable<Strategy>::Machine::advance()
             m_state->phase = Phase::Receiving;
             return Action::continue_();
         }
-        return Action::waitWrite(m_state->encoded_commands.data() + m_state->sent,
+        return Action::wait_write(m_state->encoded_commands.data() + m_state->sent,
                                  m_state->encoded_commands.size() - m_state->sent);
     case Phase::Receiving: {
-        auto parsed = parseFromRingBuffer();
+        auto parsed = parse_from_ring_buffer();
         if (!parsed) {
-            setError(std::move(parsed.error()));
+            set_error(std::move(parsed.error()));
             return Action::complete(std::move(*m_state->result));
         }
         if (*parsed) return Action::continue_();
-        if (!prepareReadWindow()) return Action::complete(std::move(*m_state->result));
-        return Action::waitReadv(m_state->read_iovecs.data(), m_state->read_iov_count);
+        if (!prepare_read_window()) return Action::complete(std::move(*m_state->result));
+        return Action::wait_readv(m_state->read_iovecs.data(), m_state->read_iov_count);
     }
     case Phase::Done:
         return Action::complete(std::move(*m_state->result));
     }
-    setError(PostgresError(POSTGRES_ERROR_INTERNAL,
+    set_error(PostgresError(POSTGRES_ERROR_INTERNAL,
                            "Unknown PostgreSQL pipeline machine state"));
     return Action::complete(std::move(*m_state->result));
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresPipelineAwaitable<Strategy>::Machine::onRead(
+void PostgresPipelineAwaitable<Strategy>::Machine::on_read(
     std::expected<size_t, galay::kernel::IOError> result)
 {
     if (m_state->result.has_value()) return;
-    if (!result) setIoError(result.error(), POSTGRES_ERROR_RECV);
+    if (!result) set_io_error(result.error(), POSTGRES_ERROR_RECV);
     else if (*result == 0) {
-        m_state->client->setClosed(true);
-        setError(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
+        m_state->client->set_closed(true);
+        set_error(PostgresError(POSTGRES_ERROR_CONNECTION_CLOSED,
                                "Connection closed during PostgreSQL pipeline"));
     } else {
-        m_state->client->ringBuffer().produce(*result);
-        auto parsed = parseFromRingBuffer();
-        if (!parsed) setError(std::move(parsed.error()));
+        m_state->client->ring_buffer().produce(*result);
+        auto parsed = parse_from_ring_buffer();
+        if (!parsed) set_error(std::move(parsed.error()));
     }
 }
 
 template<RingBufferBackendStrategy Strategy>
-void PostgresPipelineAwaitable<Strategy>::Machine::onWrite(
+void PostgresPipelineAwaitable<Strategy>::Machine::on_write(
     std::expected<size_t, galay::kernel::IOError> result)
 {
     if (m_state->result.has_value()) return;
-    if (!result) setIoError(result.error(), POSTGRES_ERROR_SEND);
+    if (!result) set_io_error(result.error(), POSTGRES_ERROR_SEND);
     else if (*result == 0) {
-        setError(PostgresError(POSTGRES_ERROR_SEND,
+        set_error(PostgresError(POSTGRES_ERROR_SEND,
                                "PostgreSQL pipeline send returned zero bytes"));
     } else m_state->sent += *result;
 }

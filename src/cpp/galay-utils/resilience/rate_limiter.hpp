@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 提供四种限流器实现：计数信号量、令牌桶、滑动窗口和漏桶。
- *          所有限流器均为无锁非阻塞 API，失败时 tryAcquire() 返回 false。
+ *          所有限流器均为无锁非阻塞 API，失败时 try_acquire() 返回 false。
  */
 
 #ifndef GALAY_UTILS_RATE_LIMITER_HPP
@@ -29,7 +29,7 @@ static_assert(std::atomic<size_t>::is_always_lock_free,
 static_assert(std::atomic<int64_t>::is_always_lock_free,
     "Rate limiter requires lock-free int64_t atomics.");
 
-inline int64_t toRateLimiterUnits(size_t value) noexcept {
+inline int64_t to_rate_limiter_units(size_t value) noexcept {
     constexpr size_t maxWholeUnits =
         static_cast<size_t>(std::numeric_limits<int64_t>::max() / kRateLimiterPrecision);
     if (value > maxWholeUnits) {
@@ -38,7 +38,7 @@ inline int64_t toRateLimiterUnits(size_t value) noexcept {
     return static_cast<int64_t>(value) * kRateLimiterPrecision;
 }
 
-inline int64_t toRateLimiterUnits(double value) noexcept {
+inline int64_t to_rate_limiter_units(double value) noexcept {
     if (!(value > 0.0)) {
         return 0;
     }
@@ -50,21 +50,21 @@ inline int64_t toRateLimiterUnits(double value) noexcept {
     return static_cast<int64_t>(scaled);
 }
 
-inline size_t fromRateLimiterUnits(int64_t units) noexcept {
+inline size_t from_rate_limiter_units(int64_t units) noexcept {
     if (units <= 0) {
         return 0;
     }
     return static_cast<size_t>(units / kRateLimiterPrecision);
 }
 
-inline int64_t saturatingAddUnits(int64_t lhs, int64_t rhs) noexcept {
+inline int64_t saturating_add_units(int64_t lhs, int64_t rhs) noexcept {
     if (rhs > 0 && lhs > std::numeric_limits<int64_t>::max() - rhs) {
         return std::numeric_limits<int64_t>::max();
     }
     return lhs + rhs;
 }
 
-inline int64_t nonNegativeSteadyTicks(std::chrono::milliseconds duration) noexcept {
+inline int64_t non_negative_steady_ticks(std::chrono::milliseconds duration) noexcept {
     if (duration <= std::chrono::milliseconds::zero()) {
         return 0;
     }
@@ -74,7 +74,7 @@ inline int64_t nonNegativeSteadyTicks(std::chrono::milliseconds duration) noexce
 } // namespace detail
 
 /**
- * @note 本模块不提供协程 awaitable。限流器仅暴露同步非阻塞的 tryAcquire() API，
+ * @note 本模块不提供协程 awaitable。限流器仅暴露同步非阻塞的 try_acquire() API，
  *       可在协程调度线程上快速判定；需要挂起、唤醒、重试或超时时由上层运行时适配。
  */
 
@@ -92,7 +92,7 @@ public:
      * @param count 请求的许可数量
      * @return 成功获取返回 true，否则返回 false
      */
-    bool tryAcquire(size_t count = 1) {
+    bool try_acquire(size_t count = 1) {
         size_t current = m_count.load(std::memory_order_acquire);
         while (current >= count) {
             if (m_count.compare_exchange_weak(current, current - count,
@@ -130,20 +130,20 @@ private:
 class TokenBucketLimiter {
 public:
     TokenBucketLimiter(double rate, size_t capacity)
-        : m_rate_units(detail::toRateLimiterUnits(rate))
-        , m_capacity_units(detail::toRateLimiterUnits(capacity))
-        , m_tokens(detail::toRateLimiterUnits(capacity))
-        , m_last_refill_time(nowTicks()) {}
+        : m_rate_units(detail::to_rate_limiter_units(rate))
+        , m_capacity_units(detail::to_rate_limiter_units(capacity))
+        , m_tokens(detail::to_rate_limiter_units(capacity))
+        , m_last_refill_time(now_ticks()) {}
 
     /**
      * @brief 非阻塞尝试消费令牌
      * @param tokens 请求的令牌数量
      * @return 令牌充足返回 true，否则返回 false
      */
-    bool tryAcquire(size_t tokens = 1) {
+    bool try_acquire(size_t tokens = 1) {
         refill();
 
-        int64_t needed = detail::toRateLimiterUnits(tokens);
+        int64_t needed = detail::to_rate_limiter_units(tokens);
         if (needed == 0) {
             return true;
         }
@@ -163,7 +163,7 @@ public:
      * @brief 获取当前可用令牌数
      * @return 令牌数量（浮点值）
      */
-    double availableTokens() const {
+    double available_tokens() const {
         return static_cast<double>(m_tokens.load(std::memory_order_acquire)) /
             detail::kRateLimiterPrecision;
     }
@@ -172,18 +172,18 @@ public:
      * @brief 设置令牌填充速率
      * @param rate 每秒填充的令牌数
      */
-    void setRate(double rate) {
+    void set_rate(double rate) {
         refill();
-        m_rate_units.store(detail::toRateLimiterUnits(rate), std::memory_order_release);
-        m_last_refill_time.store(nowTicks(), std::memory_order_release);
+        m_rate_units.store(detail::to_rate_limiter_units(rate), std::memory_order_release);
+        m_last_refill_time.store(now_ticks(), std::memory_order_release);
     }
 
     /**
      * @brief 设置桶容量并裁剪当前令牌数
      * @param capacity 最大令牌数量
      */
-    void setCapacity(size_t capacity) {
-        int64_t max_tokens = detail::toRateLimiterUnits(capacity);
+    void set_capacity(size_t capacity) {
+        int64_t max_tokens = detail::to_rate_limiter_units(capacity);
         m_capacity_units.store(max_tokens, std::memory_order_release);
         int64_t current = m_tokens.load(std::memory_order_acquire);
         while (current > max_tokens) {
@@ -208,16 +208,16 @@ public:
      * @return 最大令牌数量
      */
     size_t capacity() const {
-        return detail::fromRateLimiterUnits(m_capacity_units.load(std::memory_order_acquire));
+        return detail::from_rate_limiter_units(m_capacity_units.load(std::memory_order_acquire));
     }
 
 private:
-    static int64_t nowTicks() {
+    static int64_t now_ticks() {
         return static_cast<int64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
     }
 
     void refill() {
-        int64_t now = nowTicks();
+        int64_t now = now_ticks();
         int64_t last_time = m_last_refill_time.load(std::memory_order_acquire);
 
         while (now > last_time) {
@@ -248,7 +248,7 @@ private:
                 int64_t desired;
                 do {
                     desired = std::min(max_tokens,
-                        detail::saturatingAddUnits(current, tokens_to_add));
+                        detail::saturating_add_units(current, tokens_to_add));
                 } while (!m_tokens.compare_exchange_weak(current, desired,
                     std::memory_order_acq_rel, std::memory_order_acquire));
                 return;
@@ -272,7 +272,7 @@ public:
     SlidingWindowLimiter(size_t maxRequests, std::chrono::milliseconds windowSize)
         : m_max_requests(maxRequests)
         , m_window_size(windowSize)
-        , m_window_ticks(detail::nonNegativeSteadyTicks(windowSize))
+        , m_window_ticks(detail::non_negative_steady_ticks(windowSize))
         , m_requests(maxRequests) {
         for (auto& request : m_requests) {
             request.store(std::numeric_limits<int64_t>::min(), std::memory_order_relaxed);
@@ -283,12 +283,12 @@ public:
      * @brief 非阻塞尝试记录一次请求
      * @return 允许请求返回 true，被限流返回 false
      */
-    bool tryAcquire() {
+    bool try_acquire() {
         if (m_max_requests == 0) {
             return false;
         }
 
-        const int64_t now = nowTicks();
+        const int64_t now = now_ticks();
         const int64_t cutoff = now - m_window_ticks;
         const size_t start = m_probe_cursor.fetch_add(1, std::memory_order_relaxed);
 
@@ -309,16 +309,16 @@ public:
      * @brief 获取配置的请求限制
      * @return 窗口内最大请求数
      */
-    size_t maxRequests() const { return m_max_requests; }
+    size_t max_requests() const { return m_max_requests; }
 
     /**
      * @brief 获取配置的窗口大小
      * @return 滑动窗口时长
      */
-    std::chrono::milliseconds windowSize() const { return m_window_size; }
+    std::chrono::milliseconds window_size() const { return m_window_size; }
 
 private:
-    static int64_t nowTicks() {
+    static int64_t now_ticks() {
         return static_cast<int64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
     }
 
@@ -336,20 +336,20 @@ private:
 class LeakyBucketLimiter {
 public:
     LeakyBucketLimiter(double rate, size_t capacity)
-        : m_rate_units(detail::toRateLimiterUnits(rate))
-        , m_capacity_units(detail::toRateLimiterUnits(capacity))
+        : m_rate_units(detail::to_rate_limiter_units(rate))
+        , m_capacity_units(detail::to_rate_limiter_units(capacity))
         , m_water(0)
-        , m_last_leak_time(nowTicks()) {}
+        , m_last_leak_time(now_ticks()) {}
 
     /**
      * @brief 非阻塞尝试添加水量
      * @param amount 请求的水量
      * @return 容量允许返回 true，否则返回 false
      */
-    bool tryAcquire(size_t amount = 1) {
+    bool try_acquire(size_t amount = 1) {
         leak();
 
-        int64_t requested = detail::toRateLimiterUnits(amount);
+        int64_t requested = detail::to_rate_limiter_units(amount);
         if (requested == 0) {
             return true;
         }
@@ -370,7 +370,7 @@ public:
      * @brief 获取当前桶内水量
      * @return 水量（浮点值）
      */
-    double currentWater() const {
+    double current_water() const {
         return static_cast<double>(m_water.load(std::memory_order_acquire)) /
             detail::kRateLimiterPrecision;
     }
@@ -389,16 +389,16 @@ public:
      * @return 最大水量
      */
     size_t capacity() const {
-        return detail::fromRateLimiterUnits(m_capacity_units.load(std::memory_order_acquire));
+        return detail::from_rate_limiter_units(m_capacity_units.load(std::memory_order_acquire));
     }
 
 private:
-    static int64_t nowTicks() {
+    static int64_t now_ticks() {
         return static_cast<int64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
     }
 
     void leak() {
-        int64_t now = nowTicks();
+        int64_t now = now_ticks();
         int64_t last_time = m_last_leak_time.load(std::memory_order_acquire);
 
         while (now > last_time) {

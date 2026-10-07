@@ -20,5 +20,5 @@ int main()
     endpoint.host = "127.0.0.1";
     endpoint.port = 50051;
 
-    return fake.registerEndpoint(endpoint).has_value() ? 0 : 1;
+    return fake.register_endpoint(endpoint).has_value() ? 0 : 1;
 }

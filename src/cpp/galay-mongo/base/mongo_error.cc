@@ -26,7 +26,7 @@ MongoErrorType MongoError::type() const
     return m_type;
 }
 
-int32_t MongoError::serverCode() const
+int32_t MongoError::server_code() const
 {
     return m_server_code;
 }

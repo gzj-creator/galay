@@ -31,7 +31,7 @@ void finish(AsyncState& state, bool ok, std::string message)
     state.done.store(true, std::memory_order_release);
 }
 
-std::string getenvOrDefault(const char* name, const std::string& fallback)
+std::string getenv_or_default(const char* name, const std::string& fallback)
 {
     const char* value = std::getenv(name);
     if (value == nullptr || value[0] == '\0') {
@@ -40,7 +40,7 @@ std::string getenvOrDefault(const char* name, const std::string& fallback)
     return value;
 }
 
-bool integrationEnabled()
+bool integration_enabled()
 {
     const char* value = std::getenv("GALAY_IT_ENABLE");
     if (value == nullptr) {
@@ -51,7 +51,7 @@ bool integrationEnabled()
            enabled == "YES" || enabled == "on" || enabled == "ON";
 }
 
-bool expectStatus(const std::expected<RedisValue, RedisError>& result,
+bool expect_status(const std::expected<RedisValue, RedisError>& result,
                   const std::string& expected,
                   const std::string& label)
 {
@@ -59,14 +59,14 @@ bool expectStatus(const std::expected<RedisValue, RedisError>& result,
         std::cerr << label << " failed: " << result.error().message() << std::endl;
         return false;
     }
-    if (!result->isStatus() || result->toStatus() != expected) {
+    if (!result->is_status() || result->to_status() != expected) {
         std::cerr << label << " returned unexpected reply" << std::endl;
         return false;
     }
     return true;
 }
 
-bool expectString(const std::expected<RedisValue, RedisError>& result,
+bool expect_string(const std::expected<RedisValue, RedisError>& result,
                   const std::string& expected,
                   const std::string& label)
 {
@@ -74,14 +74,14 @@ bool expectString(const std::expected<RedisValue, RedisError>& result,
         std::cerr << label << " failed: " << result.error().message() << std::endl;
         return false;
     }
-    if (!result->isString() || result->toString() != expected) {
+    if (!result->is_string() || result->to_string() != expected) {
         std::cerr << label << " returned unexpected reply" << std::endl;
         return false;
     }
     return true;
 }
 
-bool runSyncCase(const std::string& url,
+bool run_sync_case(const std::string& url,
                  const std::string& wrong_url,
                  const std::string& key,
                  const std::string& value)
@@ -93,11 +93,11 @@ bool runSyncCase(const std::string& url,
         return false;
     }
 
-    if (!expectStatus(session.set(key, value), "OK", "sync SET")) {
+    if (!expect_status(session.set(key, value), "OK", "sync SET")) {
         session.disconnect();
         return false;
     }
-    if (!expectString(session.get(key), value, "sync GET")) {
+    if (!expect_string(session.get(key), value, "sync GET")) {
         session.disconnect();
         return false;
     }
@@ -124,7 +124,7 @@ bool runSyncCase(const std::string& url,
     return true;
 }
 
-bool firstStatus(const std::expected<std::optional<std::vector<RedisValue>>, RedisError>& result,
+bool first_status(const std::expected<std::optional<std::vector<RedisValue>>, RedisError>& result,
                  const std::string& expected,
                  std::string* error)
 {
@@ -137,14 +137,14 @@ bool firstStatus(const std::expected<std::optional<std::vector<RedisValue>>, Red
         return false;
     }
     const auto& first = result->value().front();
-    if (!first.isStatus() || first.toStatus() != expected) {
+    if (!first.is_status() || first.to_status() != expected) {
         *error = "unexpected status reply";
         return false;
     }
     return true;
 }
 
-bool firstString(const std::expected<std::optional<std::vector<RedisValue>>, RedisError>& result,
+bool first_string(const std::expected<std::optional<std::vector<RedisValue>>, RedisError>& result,
                  const std::string& expected,
                  std::string* error)
 {
@@ -157,14 +157,14 @@ bool firstString(const std::expected<std::optional<std::vector<RedisValue>>, Red
         return false;
     }
     const auto& first = result->value().front();
-    if (!first.isString() || first.toString() != expected) {
+    if (!first.is_string() || first.to_string() != expected) {
         *error = "unexpected string reply";
         return false;
     }
     return true;
 }
 
-Task<void> runAsyncCase(IOScheduler* scheduler,
+Task<void> run_async_case(IOScheduler* scheduler,
                         AsyncState* state,
                         std::string url,
                         std::string wrong_url,
@@ -181,11 +181,11 @@ Task<void> runAsyncCase(IOScheduler* scheduler,
     }
 
     std::string error;
-    if (!firstStatus(co_await client.command(builder.set(key, value)).timeout(5s), "OK", &error)) {
+    if (!first_status(co_await client.command(builder.set(key, value)).timeout(5s), "OK", &error)) {
         finish(*state, false, "async SET failed: " + error);
         co_return;
     }
-    if (!firstString(co_await client.command(builder.get(key)).timeout(5s), value, &error)) {
+    if (!first_string(co_await client.command(builder.get(key)).timeout(5s), value, &error)) {
         finish(*state, false, "async GET failed: " + error);
         co_return;
     }
@@ -217,32 +217,32 @@ Task<void> runAsyncCase(IOScheduler* scheduler,
 
 int main()
 {
-    if (!integrationEnabled()) {
+    if (!integration_enabled()) {
         std::cout << "[SKIP] set GALAY_IT_ENABLE=1 to run Redis auth integration test" << std::endl;
         return redis_test::kRedisTestSkippedExitCode;
     }
 
-    const std::string url = getenvOrDefault("GALAY_REDIS_AUTH_URL", "");
-    const std::string wrong_url = getenvOrDefault("GALAY_REDIS_AUTH_WRONG_URL", "");
+    const std::string url = getenv_or_default("GALAY_REDIS_AUTH_URL", "");
+    const std::string wrong_url = getenv_or_default("GALAY_REDIS_AUTH_WRONG_URL", "");
     if (url.empty() || wrong_url.empty()) {
         std::cout << "SKIP: set GALAY_REDIS_AUTH_URL and GALAY_REDIS_AUTH_WRONG_URL" << std::endl;
         return redis_test::kRedisTestSkippedExitCode;
     }
 
-    const std::string key = getenvOrDefault("GALAY_REDIS_AUTH_KEY", "galay:redis:auth:test");
-    const std::string value = getenvOrDefault("GALAY_REDIS_AUTH_VALUE", "auth-ok");
+    const std::string key = getenv_or_default("GALAY_REDIS_AUTH_KEY", "galay:redis:auth:test");
+    const std::string value = getenv_or_default("GALAY_REDIS_AUTH_VALUE", "auth-ok");
 
-    if (!runSyncCase(url, wrong_url, key + ":sync", value)) {
+    if (!run_sync_case(url, wrong_url, key + ":sync", value)) {
         return 1;
     }
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         std::cerr << "failed to get IO scheduler" << std::endl;
         runtime.stop();
@@ -250,7 +250,7 @@ int main()
     }
 
     AsyncState state;
-    scheduleTask(scheduler, runAsyncCase(scheduler,
+    schedule_task(scheduler, run_async_case(scheduler,
                                          &state,
                                          url,
                                          wrong_url,

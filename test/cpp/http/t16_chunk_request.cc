@@ -16,49 +16,49 @@ using namespace galay::http2;
 
 int main() {
     Http2Request request;
-    assert(request.bodySize() == 0);
-    assert(request.bodyChunkCount() == 0);
-    assert(request.takeBodyChunks().empty());
+    assert(request.body_size() == 0);
+    assert(request.body_chunk_count() == 0);
+    assert(request.take_body_chunks().empty());
 
-    request.setBody(std::string("hello"));
-    assert(request.bodySize() == 5);
-    assert(request.bodyChunkCount() == 1);
-    const auto& single_chunks = request.bodyChunks();
+    request.set_body(std::string("hello"));
+    assert(request.body_size() == 5);
+    assert(request.body_chunk_count() == 1);
+    const auto& single_chunks = request.body_chunks();
     assert(single_chunks.size() == 1);
     assert(single_chunks[0] == "hello");
-    assert(request.coalescedBody() == "hello");
-    assert(request.takeSingleBodyChunk() == "hello");
-    assert(request.bodySize() == 0);
-    assert(request.bodyChunkCount() == 0);
+    assert(request.coalesced_body() == "hello");
+    assert(request.take_single_body_chunk() == "hello");
+    assert(request.body_size() == 0);
+    assert(request.body_chunk_count() == 0);
 
-    request.setBody(std::string("world"));
-    const auto& recycled_single_chunks = request.bodyChunks();
+    request.set_body(std::string("world"));
+    const auto& recycled_single_chunks = request.body_chunks();
     assert(recycled_single_chunks.size() == 1);
     assert(recycled_single_chunks[0] == "world");
-    assert(request.takeSingleBodyChunk() == "world");
+    assert(request.take_single_body_chunk() == "world");
 
-    request.setBody(std::string("hello"));
-    auto taken = request.takeBodyChunks();
+    request.set_body(std::string("hello"));
+    auto taken = request.take_body_chunks();
     assert(taken.size() == 1);
     assert(taken[0] == "hello");
-    assert(request.bodySize() == 0);
-    assert(request.bodyChunkCount() == 0);
+    assert(request.body_size() == 0);
+    assert(request.body_chunk_count() == 0);
 
     auto stream = Http2Stream::create(1);
-    stream->appendRequestData(std::string("ab"));
-    stream->appendRequestData(std::string("cd"));
-    assert(stream->request().bodySize() == 4);
-    assert(stream->request().bodyChunkCount() == 2);
-    const auto& multi_chunks = stream->request().bodyChunks();
+    stream->append_request_data(std::string("ab"));
+    stream->append_request_data(std::string("cd"));
+    assert(stream->request().body_size() == 4);
+    assert(stream->request().body_chunk_count() == 2);
+    const auto& multi_chunks = stream->request().body_chunks();
     assert(multi_chunks.size() == 2);
     assert(multi_chunks[0] == "ab");
     assert(multi_chunks[1] == "cd");
-    assert(stream->request().coalescedBody() == "abcd");
+    assert(stream->request().coalesced_body() == "abcd");
 
-    auto joined = stream->request().takeCoalescedBody();
+    auto joined = stream->request().take_coalesced_body();
     assert(joined == "abcd");
-    assert(stream->request().bodySize() == 0);
-    assert(stream->request().bodyChunkCount() == 0);
+    assert(stream->request().body_size() == 0);
+    assert(stream->request().body_chunk_count() == 0);
 
     std::cout << "T49-H2ChunkedRequestBody PASS\n";
     return 0;

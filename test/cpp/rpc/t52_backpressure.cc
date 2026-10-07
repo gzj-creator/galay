@@ -27,18 +27,18 @@ int main()
     options.max_outbound_bytes = 8;
 
     RpcChannelState state(options);
-    auto pending_a = state.registerPending(1);
+    auto pending_a = state.register_pending(1);
     if (auto rc = expect(pending_a.has_value(), "first pending registration failed")) {
         return rc;
     }
-    auto pending_b = state.registerPending(2);
+    auto pending_b = state.register_pending(2);
     if (auto rc = expect(!pending_b.has_value() &&
                              pending_b.error().code() == RpcErrorCode::RESOURCE_EXHAUSTED,
                          "in-flight limit did not return RESOURCE_EXHAUSTED")) {
         return rc;
     }
-    state.failPending(1, RpcError(RpcErrorCode::CANCELLED, "cleanup"));
-    auto pending_c = state.registerPending(3);
+    state.fail_pending(1, RpcError(RpcErrorCode::CANCELLED, "cleanup"));
+    auto pending_c = state.register_pending(3);
     if (auto rc = expect(pending_c.has_value(), "in-flight exhaustion poisoned later registration")) {
         return rc;
     }

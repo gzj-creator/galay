@@ -48,14 +48,14 @@ enum class BoundaryDomainError : int {
 using BoundaryDomainResult = std::expected<int, BoundaryDomainError>;
 
 struct BoundaryFlow {
-    void onLocal(SequenceOps<BoundaryResult, 1>&) {}
+    void on_local(SequenceOps<BoundaryResult, 1>&) {}
 };
 
 using BoundaryStep = LocalSequenceStep<
     BoundaryResult,
     1,
     BoundaryFlow,
-    &BoundaryFlow::onLocal>;
+    &BoundaryFlow::on_local>;
 
 struct DomainClaimFailureMachine {
     using result_type = BoundaryDomainResult;
@@ -65,10 +65,10 @@ struct DomainClaimFailureMachine {
         if (m_result.has_value()) {
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
-        return MachineAction<result_type>::waitRead(&m_byte, 1);
+        return MachineAction<result_type>::wait_read(&m_byte, 1);
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
             m_result = std::unexpected(BoundaryDomainError::kReadClaimRejected);
             return;
@@ -76,7 +76,7 @@ struct DomainClaimFailureMachine {
         m_result = static_cast<int>(result.value());
     }
 
-    void onWrite(std::expected<size_t, IOError>) {}
+    void on_write(std::expected<size_t, IOError>) {}
 
     char m_byte = 0;
     std::optional<result_type> m_result;
@@ -87,7 +87,7 @@ struct DomainClaimState {
     std::atomic<int> error{0};
 };
 
-Task<void> domainClaimFailureTask(DomainClaimState* state)
+Task<void> domain_claim_failure_task(DomainClaimState* state)
 {
     IOController controller(GHandle::invalid());
     controller.m_sequence_owner[IOController::READ] =
@@ -99,7 +99,7 @@ Task<void> domainClaimFailureTask(DomainClaimState* state)
     state->done.store(true, std::memory_order_release);
 }
 
-bool waitUntilDone(const std::atomic<bool>& flag,
+bool wait_until_done(const std::atomic<bool>& flag,
                    std::chrono::milliseconds timeout = 1000ms,
                    std::chrono::milliseconds step = 2ms)
 {
@@ -113,7 +113,7 @@ bool waitUntilDone(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-std::string readAll(const std::filesystem::path& path)
+std::string read_all(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -122,11 +122,11 @@ std::string readAll(const std::filesystem::path& path)
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
-bool awaitableSourceHasNoAbort()
+bool awaitable_source_has_no_abort()
 {
     const auto path = std::filesystem::path(GALAY_SOURCE_ROOT) /
         "galay-kernel" / "core" / "awaitable.h";
-    const auto source = readAll(path);
+    const auto source = read_all(path);
     if (source.empty()) {
         std::cerr << "[T133] failed to read " << path << '\n';
         return false;
@@ -138,7 +138,7 @@ bool awaitableSourceHasNoAbort()
     return true;
 }
 
-int runOverflowCase()
+int run_overflow_case()
 {
     IOController controller(GHandle::invalid());
     BoundaryFlow flow;
@@ -166,7 +166,7 @@ int runOverflowCase()
     return 0;
 }
 
-bool childCasePasses(const char* self)
+bool child_case_passes(const char* self)
 {
     const pid_t child = fork();
     if (child < 0) {
@@ -197,19 +197,19 @@ bool childCasePasses(const char* self)
     return true;
 }
 
-bool domainClaimFailurePasses()
+bool domain_claim_failure_passes()
 {
     TestScheduler scheduler;
     scheduler.start();
 
     DomainClaimState state;
-    if (!scheduleTask(scheduler, domainClaimFailureTask(&state))) {
+    if (!schedule_task(scheduler, domain_claim_failure_task(&state))) {
         std::cerr << "[T133] failed to schedule domain claim failure task\n";
         scheduler.stop();
         return false;
     }
 
-    const bool completed = waitUntilDone(state.done);
+    const bool completed = wait_until_done(state.done);
     scheduler.stop();
     if (!completed) {
         std::cerr << "[T133] domain claim failure task did not complete\n";
@@ -228,12 +228,12 @@ bool domainClaimFailurePasses()
 int main(int argc, char* argv[])
 {
     if (argc == 2 && std::strcmp(argv[1], "--overflow") == 0) {
-        return runOverflowCase();
+        return run_overflow_case();
     }
 
     bool ok = true;
-    ok = childCasePasses(argv[0]) && ok;
-    ok = domainClaimFailurePasses() && ok;
-    ok = awaitableSourceHasNoAbort() && ok;
+    ok = child_case_passes(argv[0]) && ok;
+    ok = domain_claim_failure_passes() && ok;
+    ok = awaitable_source_has_no_abort() && ok;
     return ok ? 0 : 1;
 }

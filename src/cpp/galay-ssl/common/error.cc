@@ -78,13 +78,13 @@ std::string SslError::message() const
     }
 
     if (m_ssl_error != 0) {
-        oss << ": " << sslErrorString();
+        oss << ": " << ssl_error_string();
     }
 
     return oss.str();
 }
 
-std::string SslError::sslErrorString() const
+std::string SslError::ssl_error_string() const
 {
     if (m_ssl_error == 0) {
         return "";

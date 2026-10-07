@@ -19,13 +19,13 @@ using namespace galay::kernel;
 /**
  * @brief WSS 客户端协程
  */
-Task<bool> wssClientTask(const std::string& url, int message_count) {
+Task<bool> wss_client_task(const std::string& url, int message_count) {
     try {
         constexpr auto kOpTimeout = std::chrono::milliseconds(3000);
 
         // 1. 创建 WssClient
         WssClient client(WssClientBuilder()
-            .verifyPeer(false)  // 跳过证书验证（用于自签名证书）
+            .verify_peer(false)  // 跳过证书验证（用于自签名证书）
             .build());
 
         // 2. TCP 连接
@@ -42,7 +42,7 @@ Task<bool> wssClientTask(const std::string& url, int message_count) {
         }
 
         // 4. 获取 Session 并升级 WebSocket
-        auto session_result = client.getSession(WsWriterSetting::byClient());
+        auto session_result = client.get_session(WsWriterSetting::by_client());
         if (!session_result) {
             co_await client.close();
             co_return false;
@@ -63,7 +63,7 @@ Task<bool> wssClientTask(const std::string& url, int message_count) {
         std::string welcome_msg;
         WsOpcode welcome_opcode;
         while (true) {
-            auto recv_result = co_await session.getMessage(welcome_msg, welcome_opcode).timeout(kOpTimeout);
+            auto recv_result = co_await session.get_message(welcome_msg, welcome_opcode).timeout(kOpTimeout);
             if (!recv_result) {
                 co_await client.close();
                 co_return false;
@@ -80,7 +80,7 @@ Task<bool> wssClientTask(const std::string& url, int message_count) {
 
             // 发送文本消息
             while (true) {
-                auto send_result = co_await session.sendText(msg);
+                auto send_result = co_await session.send_text(msg);
                 if (!send_result) {
                     co_await client.close();
                     co_return false;
@@ -94,7 +94,7 @@ Task<bool> wssClientTask(const std::string& url, int message_count) {
             std::string echo_msg;
             WsOpcode echo_opcode;
             while (true) {
-                auto recv_result = co_await session.getMessage(echo_msg, echo_opcode).timeout(kOpTimeout);
+                auto recv_result = co_await session.get_message(echo_msg, echo_opcode).timeout(kOpTimeout);
                 if (!recv_result) {
                     co_await client.close();
                     co_return false;
@@ -108,7 +108,7 @@ Task<bool> wssClientTask(const std::string& url, int message_count) {
 
         // 7. 发送关闭帧
         while (true) {
-            auto close_result = co_await session.sendClose(WsCloseCode::Normal);
+            auto close_result = co_await session.send_close(WsCloseCode::Normal);
             if (!close_result) {
                 break;
             }
@@ -141,10 +141,10 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================\n";
 
     try {
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
         runtime.start();
 
-        auto join = runtime.spawnIO(wssClientTask(url, message_count));
+        auto join = runtime.spawn_io(wss_client_task(url, message_count));
         bool ok = false;
         if (join) {
             auto result = join->join();

@@ -89,7 +89,7 @@ private:
     uint16_t m_port = 0;
 };
 
-int readTcpNoDelay(int fd)
+int read_tcp_no_delay(int fd)
 {
     int value = 0;
     socklen_t value_len = sizeof(value);
@@ -100,7 +100,7 @@ int readTcpNoDelay(int fd)
     return value;
 }
 
-Task<RedisVoidResult> connectRedisClient(RedisClient<>* client, uint16_t port)
+Task<RedisVoidResult> connect_redis_client(RedisClient<>* client, uint16_t port)
 {
     if (client == nullptr) {
         co_return std::unexpected(RedisError(
@@ -110,7 +110,7 @@ Task<RedisVoidResult> connectRedisClient(RedisClient<>* client, uint16_t port)
     co_return co_await client->connect("127.0.0.1", port);
 }
 
-Task<std::expected<void, IOError>> closeRedisClient(RedisClient<>* client)
+Task<std::expected<void, IOError>> close_redis_client(RedisClient<>* client)
 {
     if (client == nullptr) {
         co_return std::unexpected(IOError(kNotReady, 0));
@@ -118,18 +118,18 @@ Task<std::expected<void, IOError>> closeRedisClient(RedisClient<>* client)
     co_return co_await client->close();
 }
 
-int observeProtocolConnectionTcpNoDelay(bool tcp_no_delay)
+int observe_protocol_connection_tcp_no_delay(bool tcp_no_delay)
 {
     LoopbackListener listener;
     protocol::Connection connection;
     auto connect_result = connection.connect("127.0.0.1", listener.port(), 5000, tcp_no_delay);
     require(connect_result.has_value(), "protocol Connection should connect to loopback listener");
-    const int observed = readTcpNoDelay(connection.m_socket_fd);
+    const int observed = read_tcp_no_delay(connection.m_socket_fd);
     connection.disconnect();
     return observed;
 }
 
-int observeRedisSessionTcpNoDelay(bool tcp_no_delay)
+int observe_redis_session_tcp_no_delay(bool tcp_no_delay)
 {
     LoopbackListener listener;
     RedisSessionConfig config;
@@ -141,33 +141,33 @@ int observeRedisSessionTcpNoDelay(bool tcp_no_delay)
     auto connect_result = session.connect();
     require(connect_result.has_value(), "RedisSession should connect to loopback listener");
     require(session.m_connection != nullptr, "RedisSession should own a protocol connection");
-    const int observed = readTcpNoDelay(session.m_connection->m_socket_fd);
+    const int observed = read_tcp_no_delay(session.m_connection->m_socket_fd);
     auto disconnect_result = session.disconnect();
     require(disconnect_result.has_value(), "RedisSession disconnect should succeed");
     return observed;
 }
 
-int observeAsyncRedisClientTcpNoDelay(bool tcp_no_delay)
+int observe_async_redis_client_tcp_no_delay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto start_result = runtime.start();
     require(start_result.has_value(), "runtime should start for RedisClient connect probe");
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     require(scheduler != nullptr, "runtime should provide an IO scheduler");
 
     LoopbackListener listener;
     auto config = RedisClientBuilder()
         .scheduler(scheduler)
-        .tcpNoDelay(tcp_no_delay)
-        .buildConfig();
+        .tcp_no_delay(tcp_no_delay)
+        .build_config();
     RedisClient<> client(scheduler, config);
 
-    auto connect_result = runtime.blockOnIO(connectRedisClient(&client, listener.port()));
+    auto connect_result = runtime.block_on_io(connect_redis_client(&client, listener.port()));
     require(connect_result.has_value(), "runtime should run RedisClient connect task");
     require(connect_result.value().has_value(), "RedisClient connect should succeed against loopback listener");
-    const int observed = readTcpNoDelay(client.socket().handle().fd);
+    const int observed = read_tcp_no_delay(client.socket().handle().fd);
 
-    auto close_result = runtime.blockOnIO(closeRedisClient(&client));
+    auto close_result = runtime.block_on_io(close_redis_client(&client));
     require(close_result.has_value(), "runtime should run RedisClient close task");
     require(close_result.value().has_value(), "RedisClient close should succeed");
     runtime.stop();
@@ -182,39 +182,39 @@ void test_config_surface()
     AsyncRedisConfig async_config;
     require(async_config.tcp_no_delay, "AsyncRedisConfig should enable TCP_NODELAY by default");
 
-    auto disabled_async = RedisClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_async = RedisClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_async.tcp_no_delay, "RedisClientBuilder should support disabling TCP_NODELAY");
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    auto disabled_rediss = RedissClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_rediss = RedissClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_rediss.tcp_no_delay, "RedissClientBuilder should support disabling TCP_NODELAY");
 #endif
 }
 
 void test_protocol_connection_applies_config()
 {
-    const int default_nodelay = observeProtocolConnectionTcpNoDelay(true);
+    const int default_nodelay = observe_protocol_connection_tcp_no_delay(true);
     require(default_nodelay != 0, "default Redis protocol Connection should enable TCP_NODELAY");
 
-    const int disabled_nodelay = observeProtocolConnectionTcpNoDelay(false);
+    const int disabled_nodelay = observe_protocol_connection_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled Redis protocol Connection should leave TCP_NODELAY off");
 }
 
 void test_sync_session_applies_config()
 {
-    const int default_nodelay = observeRedisSessionTcpNoDelay(true);
+    const int default_nodelay = observe_redis_session_tcp_no_delay(true);
     require(default_nodelay != 0, "default RedisSession should enable TCP_NODELAY");
 
-    const int disabled_nodelay = observeRedisSessionTcpNoDelay(false);
+    const int disabled_nodelay = observe_redis_session_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled RedisSession should leave TCP_NODELAY off");
 }
 
 void test_async_client_applies_config()
 {
-    const int default_nodelay = observeAsyncRedisClientTcpNoDelay(true);
+    const int default_nodelay = observe_async_redis_client_tcp_no_delay(true);
     require(default_nodelay != 0, "default RedisClient should enable TCP_NODELAY");
 
-    const int disabled_nodelay = observeAsyncRedisClientTcpNoDelay(false);
+    const int disabled_nodelay = observe_async_redis_client_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled RedisClient should leave TCP_NODELAY off");
 }
 

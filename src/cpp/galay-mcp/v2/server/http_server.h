@@ -39,17 +39,17 @@ public:
     McpHttpServer& operator=(const McpHttpServer&) = delete;
 
     /** @brief Configuration API; call from one thread before start(). */
-    void setServerInfo(std::string name, std::string version);
+    void set_server_info(std::string name, std::string version);
     /** @brief Configuration API; call from one thread before start(). */
-    void setProductionPolicy(McpProductionPolicy policy);
+    void set_production_policy(McpProductionPolicy policy);
     /** @brief 注册阶段接口；必须在 start() 前由单线程调用。 */
-    void addTool(std::string name, std::string description, std::string inputSchema,
+    void add_tool(std::string name, std::string description, std::string inputSchema,
                  ToolHandler handler);
     /** @brief 注册阶段接口；必须在 start() 前由单线程调用。 */
-    void addResource(std::string uri, std::string name, std::string description,
+    void add_resource(std::string uri, std::string name, std::string description,
                      std::string mimeType, ResourceReader reader);
     /** @brief 注册阶段接口；必须在 start() 前由单线程调用。 */
-    void addPrompt(std::string name, std::string description,
+    void add_prompt(std::string name, std::string description,
                    std::vector<PromptArgument> arguments, PromptGetter getter);
     /**
      * @brief Submit a notification without blocking or creating a coroutine.
@@ -58,18 +58,18 @@ public:
      *          returns ConnectionClosed; queue allocation failure returns Overload.
      *          Slow subscribers retain the existing bounded event-queue policy.
      */
-    std::expected<void, McpError> notifyToolsListChanged();
+    std::expected<void, McpError> notify_tools_list_changed();
     /** @brief Submit a resource-list notification; same admission contract. */
-    std::expected<void, McpError> notifyResourcesListChanged();
+    std::expected<void, McpError> notify_resources_list_changed();
     /** @brief Submit a prompt-list notification; same admission contract. */
-    std::expected<void, McpError> notifyPromptsListChanged();
+    std::expected<void, McpError> notify_prompts_list_changed();
     /** @brief Submit a resource notification, owning uri until the owner consumes it. */
-    std::expected<void, McpError> notifyResourceUpdated(std::string uri);
+    std::expected<void, McpError> notify_resource_updated(std::string uri);
     /** @brief Blocking lifecycle owner; call on an external thread and join before destruction. */
     void start();
     /** @brief Request shutdown and wait for start() to drain; external threads only. */
     void stop();
-    bool isRunning() const noexcept;
+    bool is_running() const noexcept;
 
 private:
     friend struct McpHttpServerTestAccess;
@@ -131,25 +131,25 @@ private:
     galay::kernel::Task<void> process(http::HttpConn& conn, http::HttpRequest& request);
     galay::kernel::Task<void> listen(http::HttpConn& conn,
                                      const ParsedRequest& request);
-    galay::kernel::Task<void> sendResponse(http::HttpConn& conn, const HttpResult& result);
+    galay::kernel::Task<void> send_response(http::HttpConn& conn, const HttpResult& result);
     galay::kernel::Task<HttpResult> dispatch(const ParsedRequest& request);
     HttpResult error(const std::optional<RequestId>& id, int code, std::string_view message,
                      std::optional<std::string_view> data = std::nullopt,
                      int status = 400) const;
     HttpResult error(const std::optional<RequestId>& id, const McpError& value,
                      int status = 400) const;
-    std::expected<void, McpError> validateHeaders(http::HttpRequest& request,
+    std::expected<void, McpError> validate_headers(http::HttpRequest& request,
                                                   const ParsedRequest& parsed) const;
-    bool validOrigin(http::HttpRequest& request) const;
-    std::expected<std::string, McpError> headerName(http::HttpRequest& request,
+    bool valid_origin(http::HttpRequest& request) const;
+    std::expected<std::string, McpError> header_name(http::HttpRequest& request,
                                                     const ParsedRequest& parsed) const;
-    SubscriptionFilter acceptedFilter(const SubscriptionFilter& requested) const;
+    SubscriptionFilter accepted_filter(const SubscriptionFilter& requested) const;
     std::expected<void, McpError> submit(Command command);
-    void wakeOwner() noexcept;
-    bool processCommands();
+    void wake_owner() noexcept;
+    bool process_commands();
     void publish(CommandKind notification, const std::string& uri);
-    void reapSubscriptions();
-    void closeSubscriptions();
+    void reap_subscriptions();
+    void close_subscriptions();
 
     mpsc::UnboundedChannel<Command> m_commands;
     http::HttpServer m_httpServer; // Constructed once; start() alone starts/stops it.

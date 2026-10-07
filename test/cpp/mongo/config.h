@@ -26,13 +26,13 @@ struct MongoTestConfig
     size_t recv_buffer_size = 16384;
 };
 
-inline std::string envOrDefault(const char* key, std::string fallback)
+inline std::string env_or_default(const char* key, std::string fallback)
 {
     const char* value = std::getenv(key);
     return value != nullptr ? std::string(value) : std::move(fallback);
 }
 
-inline uint16_t envPortOrDefault(const char* key, uint16_t fallback)
+inline uint16_t env_port_or_default(const char* key, uint16_t fallback)
 {
     const char* value = std::getenv(key);
     if (value == nullptr) {
@@ -50,7 +50,7 @@ inline uint16_t envPortOrDefault(const char* key, uint16_t fallback)
     }
 }
 
-inline uint32_t envUint32OrDefault(const char* key, uint32_t fallback)
+inline uint32_t env_uint32_or_default(const char* key, uint32_t fallback)
 {
     const char* value = std::getenv(key);
     if (value == nullptr) {
@@ -68,18 +68,18 @@ inline uint32_t envUint32OrDefault(const char* key, uint32_t fallback)
     }
 }
 
-inline MongoTestConfig loadMongoTestConfig()
+inline MongoTestConfig load_mongo_test_config()
 {
     MongoTestConfig cfg;
-    cfg.host = envOrDefault("GALAY_MONGO_HOST", cfg.host);
-    cfg.port = envPortOrDefault("GALAY_MONGO_PORT", cfg.port);
-    cfg.database = envOrDefault("GALAY_MONGO_DB", cfg.database);
-    cfg.username = envOrDefault("GALAY_MONGO_USER", "");
-    cfg.password = envOrDefault("GALAY_MONGO_PASSWORD", "");
-    cfg.auth_database = envOrDefault("GALAY_MONGO_AUTH_DB", cfg.auth_database);
-    cfg.hello_database = envOrDefault("GALAY_MONGO_HELLO_DB", cfg.hello_database);
-    cfg.tcp_nodelay = envOrDefault("GALAY_MONGO_TCP_NODELAY", "1") != "0";
-    cfg.connect_timeout_ms = envUint32OrDefault("GALAY_MONGO_CONNECT_TIMEOUT_MS",
+    cfg.host = env_or_default("GALAY_MONGO_HOST", cfg.host);
+    cfg.port = env_port_or_default("GALAY_MONGO_PORT", cfg.port);
+    cfg.database = env_or_default("GALAY_MONGO_DB", cfg.database);
+    cfg.username = env_or_default("GALAY_MONGO_USER", "");
+    cfg.password = env_or_default("GALAY_MONGO_PASSWORD", "");
+    cfg.auth_database = env_or_default("GALAY_MONGO_AUTH_DB", cfg.auth_database);
+    cfg.hello_database = env_or_default("GALAY_MONGO_HELLO_DB", cfg.hello_database);
+    cfg.tcp_nodelay = env_or_default("GALAY_MONGO_TCP_NODELAY", "1") != "0";
+    cfg.connect_timeout_ms = env_uint32_or_default("GALAY_MONGO_CONNECT_TIMEOUT_MS",
                                                 cfg.connect_timeout_ms);
 
     const char* recv_buffer_env = std::getenv("GALAY_MONGO_RECV_BUFFER_SIZE");
@@ -96,7 +96,7 @@ inline MongoTestConfig loadMongoTestConfig()
     return cfg;
 }
 
-inline galay::mongo::MongoConfig toMongoConfig(const MongoTestConfig& test_cfg)
+inline galay::mongo::MongoConfig to_mongo_config(const MongoTestConfig& test_cfg)
 {
     galay::mongo::MongoConfig cfg;
     cfg.host = test_cfg.host;
@@ -112,9 +112,9 @@ inline galay::mongo::MongoConfig toMongoConfig(const MongoTestConfig& test_cfg)
     return cfg;
 }
 
-inline galay::mongo::AsyncMongoConfig loadAsyncMongoTestConfig()
+inline galay::mongo::AsyncMongoConfig load_async_mongo_test_config()
 {
-    galay::mongo::AsyncMongoConfig cfg = galay::mongo::AsyncMongoConfig::noTimeout();
+    galay::mongo::AsyncMongoConfig cfg = galay::mongo::AsyncMongoConfig::no_timeout();
 
     const char* send_timeout_env = std::getenv("GALAY_MONGO_ASYNC_SEND_TIMEOUT_MS");
     if (send_timeout_env != nullptr) {
@@ -161,7 +161,7 @@ inline galay::mongo::AsyncMongoConfig loadAsyncMongoTestConfig()
     return cfg;
 }
 
-inline void printMongoTestConfig(const MongoTestConfig& cfg)
+inline void print_mongo_test_config(const MongoTestConfig& cfg)
 {
     std::cout << "Mongo test config: "
               << cfg.host << ":" << cfg.port

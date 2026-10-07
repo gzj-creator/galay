@@ -12,7 +12,7 @@ using galay::etcd::EtcdClient;
 namespace
 {
 
-std::string nowSuffix()
+std::string now_suffix()
 {
     const auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
     return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(now).count());
@@ -28,7 +28,7 @@ int fail(const std::string& message)
 
 int main(int argc, char** argv)
 {
-    if (const int skip_code = etcd_test::requireIntegrationEnabledOrSkip("etcd.smoke");
+    if (const int skip_code = etcd_test::require_integration_enabled_or_skip("etcd.smoke");
         skip_code != 0) {
         return skip_code;
     }
@@ -47,8 +47,8 @@ int main(int argc, char** argv)
     }
     std::cout << "[OK] connect" << std::endl;
 
-    const std::string key = "/galay-etcd/smoke/" + nowSuffix();
-    const std::string value = "v-" + nowSuffix();
+    const std::string key = "/galay-etcd/smoke/" + now_suffix();
+    const std::string value = "v-" + now_suffix();
 
     auto put = session.put(key, value);
     if (!put.has_value()) {
@@ -78,7 +78,7 @@ int main(int argc, char** argv)
     }
     std::cout << "[OK] delete" << std::endl;
 
-    auto lease = session.grantLease(3);
+    auto lease = session.grant_lease(3);
     if (!lease.has_value()) {
         return fail("grant lease failed: " + lease.error().message());
     }

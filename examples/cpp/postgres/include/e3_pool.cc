@@ -45,8 +45,8 @@ galay::kernel::Task<void> run(galay::kernel::IOScheduler* scheduler,
     if (!result || !result->has_value()) {
         state->ok = false;
         state->error = !result ? result.error().message() : "pool query produced no result";
-    } else if (result->value().rowCount() != 0) {
-        std::cout << "backend pid: " << result->value().row(0).getString(0) << '\n';
+    } else if (result->value().row_count() != 0) {
+        std::cout << "backend pid: " << result->value().row(0).get_string(0) << '\n';
     }
     state->done.store(true, std::memory_order_release);
 }
@@ -61,12 +61,12 @@ int main()
         std::cerr << started.error().message() << '\n';
         return 1;
     }
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     State state;
     if (scheduler == nullptr ||
-        !galay::kernel::scheduleTask(
+        !galay::kernel::schedule_task(
             scheduler,
-            run(scheduler, &state, postgres_example::loadConfig()))) {
+            run(scheduler, &state, postgres_example::load_config()))) {
         runtime.stop();
         return 1;
     }

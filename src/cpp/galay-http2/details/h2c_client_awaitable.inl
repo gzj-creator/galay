@@ -18,7 +18,7 @@ H2cUpgradeAwaitable<Strategy>::H2cUpgradeAwaitable(
     }
 
     m_inner_operation = std::make_unique<InnerOperation>(
-        AwaitableBuilder<ResultType>::fromStateMachine(
+        AwaitableBuilder<ResultType>::from_state_machine(
             client.m_socket->controller(),
             H2cUpgradeMachine<Strategy>(client, path))
             .build());
@@ -27,7 +27,7 @@ H2cUpgradeAwaitable<Strategy>::H2cUpgradeAwaitable(
 template<RingBufferBackendStrategy Strategy>
 H2cUpgradeAwaitable<Strategy>::~H2cUpgradeAwaitable()
 {
-    cleanupInnerIfArmed();
+    cleanup_inner_if_armed();
 }
 
 template<RingBufferBackendStrategy Strategy>
@@ -42,27 +42,27 @@ decltype(auto) H2cUpgradeAwaitable<Strategy>::await_suspend(
     std::coroutine_handle<Promise> handle)
 {
     if (m_inner_operation == nullptr) {
-        cancelBoundTimeoutTimer();
+        cancel_bound_timeout_timer();
         return false;
     }
-    forwardBoundTimeoutTimer(*m_inner_operation);
-    m_scheduler = handle.promise().taskRefView().belongScheduler();
+    forward_bound_timeout_timer(*m_inner_operation);
+    m_scheduler = handle.promise().task_ref_view().belong_scheduler();
     m_inner_armed = true;
     return m_inner_operation->await_suspend(handle);
 }
 
 template<RingBufferBackendStrategy Strategy>
-void H2cUpgradeAwaitable<Strategy>::bindTimeoutTimer(TimeoutTimer* timer) noexcept
+void H2cUpgradeAwaitable<Strategy>::bind_timeout_timer(TimeoutTimer* timer) noexcept
 {
-    SequenceAwaitableBase::bindTimeoutTimer(timer);
+    SequenceAwaitableBase::bind_timeout_timer(timer);
 }
 
 template<RingBufferBackendStrategy Strategy>
-void H2cUpgradeAwaitable<Strategy>::markTimeout()
+void H2cUpgradeAwaitable<Strategy>::mark_timeout()
 {
     m_result = std::unexpected(IOError(kTimeout, 0));
     if (m_inner_operation != nullptr) {
-        m_inner_operation->markTimeout();
+        m_inner_operation->mark_timeout();
     }
 }
 
@@ -81,10 +81,10 @@ H2cUpgradeAwaitable<Strategy>::front() const
 }
 
 template<RingBufferBackendStrategy Strategy>
-void H2cUpgradeAwaitable<Strategy>::popFront()
+void H2cUpgradeAwaitable<Strategy>::pop_front()
 {
     if (m_inner_operation) {
-        m_inner_operation->popFront();
+        m_inner_operation->pop_front();
     }
 }
 
@@ -96,55 +96,55 @@ bool H2cUpgradeAwaitable<Strategy>::empty() const
 
 #ifdef USE_IOURING
 template<RingBufferBackendStrategy Strategy>
-SequenceProgress H2cUpgradeAwaitable<Strategy>::prepareForSubmit()
+SequenceProgress H2cUpgradeAwaitable<Strategy>::prepare_for_submit()
 {
-    return m_inner_operation ? m_inner_operation->prepareForSubmit()
+    return m_inner_operation ? m_inner_operation->prepare_for_submit()
                              : SequenceProgress::kCompleted;
 }
 
 template<RingBufferBackendStrategy Strategy>
-SequenceProgress H2cUpgradeAwaitable<Strategy>::onActiveEvent(
+SequenceProgress H2cUpgradeAwaitable<Strategy>::on_active_event(
     struct io_uring_cqe* cqe,
     GHandle handle)
 {
-    return m_inner_operation ? m_inner_operation->onActiveEvent(cqe, handle)
+    return m_inner_operation ? m_inner_operation->on_active_event(cqe, handle)
                              : SequenceProgress::kCompleted;
 }
 #else
 template<RingBufferBackendStrategy Strategy>
-SequenceProgress H2cUpgradeAwaitable<Strategy>::prepareForSubmit(GHandle handle)
+SequenceProgress H2cUpgradeAwaitable<Strategy>::prepare_for_submit(GHandle handle)
 {
-    return m_inner_operation ? m_inner_operation->prepareForSubmit(handle)
+    return m_inner_operation ? m_inner_operation->prepare_for_submit(handle)
                              : SequenceProgress::kCompleted;
 }
 
 template<RingBufferBackendStrategy Strategy>
-SequenceProgress H2cUpgradeAwaitable<Strategy>::onActiveEvent(GHandle handle)
+SequenceProgress H2cUpgradeAwaitable<Strategy>::on_active_event(GHandle handle)
 {
-    return m_inner_operation ? m_inner_operation->onActiveEvent(handle)
+    return m_inner_operation ? m_inner_operation->on_active_event(handle)
                              : SequenceProgress::kCompleted;
 }
 #endif
 
 template<RingBufferBackendStrategy Strategy>
 typename H2cUpgradeAwaitable<Strategy>::ResultType
-H2cUpgradeAwaitable<Strategy>::resumeInner()
+H2cUpgradeAwaitable<Strategy>::resume_inner()
 {
     m_inner_completed = true;
     return m_inner_operation->await_resume();
 }
 
 template<RingBufferBackendStrategy Strategy>
-void H2cUpgradeAwaitable<Strategy>::cleanupInnerIfArmed()
+void H2cUpgradeAwaitable<Strategy>::cleanup_inner_if_armed()
 {
     if (m_inner_operation != nullptr && m_inner_armed && !m_inner_completed) {
-        m_inner_operation->onCompleted();
+        m_inner_operation->on_completed();
         m_inner_completed = true;
     }
 }
 
 template<RingBufferBackendStrategy Strategy>
-void H2cUpgradeAwaitable<Strategy>::discardTransport(H2cClient<Strategy>& client)
+void H2cUpgradeAwaitable<Strategy>::discard_transport(H2cClient<Strategy>& client)
 {
     if (client.m_conn != nullptr) {
         if (client.m_conn->socket().handle().fd >= 0) {
@@ -171,7 +171,7 @@ void H2cUpgradeAwaitable<Strategy>::discardTransport(H2cClient<Strategy>& client
 }
 
 template<RingBufferBackendStrategy Strategy>
-bool H2cUpgradeAwaitable<Strategy>::finalizeTransport(
+bool H2cUpgradeAwaitable<Strategy>::finalize_transport(
     H2cClient<Strategy>& client,
     Scheduler* scheduler)
 {
@@ -181,24 +181,24 @@ bool H2cUpgradeAwaitable<Strategy>::finalizeTransport(
 
     client.m_conn = std::make_unique<Http2ConnImpl<AsyncTcpSocket, Strategy>>(
         std::move(*client.m_socket), std::move(*client.m_ring_buffer));
-    auto local_settings = Http2Conn::makeSettingsFrameFromConfig(client.m_config, 0);
-    if (client.m_conn->applyLocalSettings(local_settings) != Http2ErrorCode::NoError) {
+    auto local_settings = Http2Conn::make_settings_frame_from_config(client.m_config, 0);
+    if (client.m_conn->apply_local_settings(local_settings) != Http2ErrorCode::NoError) {
         return false;
     }
     if (client.m_pending_peer_settings.has_value() &&
-        client.m_conn->applyPeerSettings(*client.m_pending_peer_settings) != Http2ErrorCode::NoError) {
+        client.m_conn->apply_peer_settings(*client.m_pending_peer_settings) != Http2ErrorCode::NoError) {
         return false;
     }
-    client.m_conn->runtimeConfig().from(client.m_config);
-    client.m_conn->markSettingsSent();
-    client.m_conn->setIsClient(true);
-    client.m_conn->initStreamManager();
+    client.m_conn->runtime_config().from(client.m_config);
+    client.m_conn->mark_settings_sent();
+    client.m_conn->set_is_client(true);
+    client.m_conn->init_stream_manager();
 
-    auto* manager = client.m_conn->streamManager();
+    auto* manager = client.m_conn->stream_manager();
     if (manager == nullptr) {
         return false;
     }
-    if (!manager->startWithScheduler(
+    if (!manager->start_with_scheduler(
             scheduler,
             [](Http2Stream::ptr) -> Task<void> { co_return; })) {
         client.m_upgrade_result = false;
@@ -214,7 +214,7 @@ bool H2cUpgradeAwaitable<Strategy>::finalizeTransport(
 }
 
 template<RingBufferBackendStrategy Strategy>
-Http2Error H2cUpgradeAwaitable<Strategy>::translateIoError(const IOError& error)
+Http2Error H2cUpgradeAwaitable<Strategy>::translate_io_error(const IOError& error)
 {
     if (IOError::contains(error.code(), kTimeout)) {
         return Http2Error(Http2ErrorCode::ConnectError, "upgrade timeout");
@@ -229,32 +229,32 @@ template<RingBufferBackendStrategy Strategy>
 std::expected<bool, Http2Error> H2cUpgradeAwaitable<Strategy>::await_resume()
 {
     const auto fail = [this](Http2Error error) -> ResultType {
-        discardTransport(*m_client);
+        discard_transport(*m_client);
         m_client->m_upgrade_result = std::unexpected(error);
         return std::unexpected(std::move(error));
     };
 
     if (!m_result.has_value()) {
-        cleanupInnerIfArmed();
-        return fail(translateIoError(m_result.error()));
+        cleanup_inner_if_armed();
+        return fail(translate_io_error(m_result.error()));
     }
     if (m_error.has_value()) {
-        cleanupInnerIfArmed();
+        cleanup_inner_if_armed();
         return fail(*m_error);
     }
     if (m_ready) {
         return fail(Http2Error(Http2ErrorCode::ConnectError, "not connected"));
     }
     if (m_inner_operation != nullptr && m_inner_operation->m_error.has_value()) {
-        cleanupInnerIfArmed();
-        return fail(translateIoError(*m_inner_operation->m_error));
+        cleanup_inner_if_armed();
+        return fail(translate_io_error(*m_inner_operation->m_error));
     }
 
-    auto result = resumeInner();
+    auto result = resume_inner();
     if (!result) {
         return fail(result.error());
     }
-    if (!finalizeTransport(*m_client, m_scheduler)) {
+    if (!finalize_transport(*m_client, m_scheduler)) {
         return fail(Http2Error(Http2ErrorCode::InternalError,
                                "failed to finalize h2c transport"));
     }

@@ -47,7 +47,7 @@ enum class ReadError {
     kPath,
 };
 
-std::expected<std::string, ReadError> repoRoot()
+std::expected<std::string, ReadError> repo_root()
 {
     std::string path(__FILE__);
     const std::string marker = "/test/cpp/utils/";
@@ -59,7 +59,7 @@ std::expected<std::string, ReadError> repoRoot()
     return path;
 }
 
-std::expected<std::string, ReadError> readFile(const std::string& path)
+std::expected<std::string, ReadError> read_file(const std::string& path)
 {
     const int fd = ::open(path.c_str(), O_RDONLY);
     if (fd < 0) {
@@ -97,9 +97,9 @@ std::expected<std::string, ReadError> readFile(const std::string& path)
     return content;
 }
 
-std::expected<std::string, ReadError> repoFile(std::string_view relative_path)
+std::expected<std::string, ReadError> repo_file(std::string_view relative_path)
 {
-    auto root = repoRoot();
+    auto root = repo_root();
     if (!root.has_value()) {
         return std::unexpected(root.error());
     }
@@ -112,10 +112,10 @@ std::expected<std::string, ReadError> repoFile(std::string_view relative_path)
     if (&file_appended != &path) {
         return std::unexpected(ReadError::kPath);
     }
-    return readFile(path);
+    return read_file(path);
 }
 
-int testLruHotKeyExpirationHeap()
+int test_lru_hot_key_expiration_heap()
 {
     using Cache = galay::utils::LruCache<std::string,
                                          int,
@@ -150,9 +150,9 @@ int testLruHotKeyExpirationHeap()
     return 0;
 }
 
-int testConsistentHashMemoryOrderSource()
+int test_consistent_hash_memory_order_source()
 {
-    auto source = repoFile("src/cpp/galay-utils/algorithm/consistent_hash.hpp");
+    auto source = repo_file("src/cpp/galay-utils/algorithm/consistent_hash.hpp");
     if (!source.has_value()) {
         std::cerr << "failed to read consistent_hash.hpp\n";
         return 1;
@@ -177,10 +177,10 @@ int testConsistentHashMemoryOrderSource()
 
 int main()
 {
-    if (const int rc = testLruHotKeyExpirationHeap()) {
+    if (const int rc = test_lru_hot_key_expiration_heap()) {
         return rc;
     }
-    if (const int rc = testConsistentHashMemoryOrderSource()) {
+    if (const int rc = test_consistent_hash_memory_order_source()) {
         return rc;
     }
     std::cout << "T18-CacheHashPerfBoundaries PASS\n";

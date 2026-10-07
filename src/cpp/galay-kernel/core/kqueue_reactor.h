@@ -43,49 +43,49 @@ public:
     KqueueReactor& operator=(const KqueueReactor&) = delete;
 
     void notify();  ///< 从其他线程唤醒阻塞中的 kevent
-    GHandle getHandle() const;  ///< 返回测试可见的 kqueue 句柄，用于观察唤醒事件
+    GHandle get_handle() const;  ///< 返回测试可见的 kqueue 句柄，用于观察唤醒事件
     std::expected<void, IOError> start();  ///< 显式初始化 kqueue 和唤醒事件，失败时返回 IOError
 
-    int addAccept(IOController* controller);  ///< 注册 accept 等待；1=立即完成，0=已登记，<0=错误
-    int addConnect(IOController* controller);  ///< 注册 connect 等待；1=立即完成，0=已登记，<0=错误
-    int addRecv(IOController* controller);  ///< 注册 recv 等待；1=立即完成，0=已登记，<0=错误
-    int addSend(IOController* controller);  ///< 注册 send 等待；1=立即完成，0=已登记，<0=错误
-    int addReadv(IOController* controller);  ///< 注册 readv 等待；1=立即完成，0=已登记，<0=错误
-    int addWritev(IOController* controller);  ///< 注册 writev 等待；1=立即完成，0=已登记，<0=错误
-    int addClose(IOController* controller);  ///< 注册关闭操作；0=成功，<0=错误
-    int addFileRead(IOController* controller);  ///< 注册文件读取等待；1=立即完成，0=已登记，<0=错误
-    int addFileWrite(IOController* controller);  ///< 注册文件写入等待；1=立即完成，0=已登记，<0=错误
-    int addRecvFrom(IOController* controller);  ///< 注册 recvfrom 等待；1=立即完成，0=已登记，<0=错误
-    int addSendTo(IOController* controller);  ///< 注册 sendto 等待；1=立即完成，0=已登记，<0=错误
-    int addFileWatch(IOController* controller);  ///< 注册文件监控等待；1=立即完成，0=已登记，<0=错误
-    int addSendFile(IOController* controller);  ///< 注册 sendfile 等待；1=立即完成，0=已登记，<0=错误
-    int addSequence(IOController* controller);  ///< 注册组合式序列等待；1=立即完成，0=已登记，<0=错误
+    int add_accept(IOController* controller);  ///< 注册 accept 等待；1=立即完成，0=已登记，<0=错误
+    int add_connect(IOController* controller);  ///< 注册 connect 等待；1=立即完成，0=已登记，<0=错误
+    int add_recv(IOController* controller);  ///< 注册 recv 等待；1=立即完成，0=已登记，<0=错误
+    int add_send(IOController* controller);  ///< 注册 send 等待；1=立即完成，0=已登记，<0=错误
+    int add_readv(IOController* controller);  ///< 注册 readv 等待；1=立即完成，0=已登记，<0=错误
+    int add_writev(IOController* controller);  ///< 注册 writev 等待；1=立即完成，0=已登记，<0=错误
+    int add_close(IOController* controller);  ///< 注册关闭操作；0=成功，<0=错误
+    int add_file_read(IOController* controller);  ///< 注册文件读取等待；1=立即完成，0=已登记，<0=错误
+    int add_file_write(IOController* controller);  ///< 注册文件写入等待；1=立即完成，0=已登记，<0=错误
+    int add_recv_from(IOController* controller);  ///< 注册 recvfrom 等待；1=立即完成，0=已登记，<0=错误
+    int add_send_to(IOController* controller);  ///< 注册 sendto 等待；1=立即完成，0=已登记，<0=错误
+    int add_file_watch(IOController* controller);  ///< 注册文件监控等待；1=立即完成，0=已登记，<0=错误
+    int add_send_file(IOController* controller);  ///< 注册 sendfile 等待；1=立即完成，0=已登记，<0=错误
+    int add_sequence(IOController* controller);  ///< 注册组合式序列等待；1=立即完成，0=已登记，<0=错误
     int remove(IOController* controller);  ///< 删除控制器相关的所有 kqueue 注册事件
 
     void poll(const struct timespec& timeout, WakeCoordinator& wake_coordinator);  ///< 轮询事件并通过 wake coordinator 分发唤醒
 
     /**
      * @brief 将 m_pending_changes 中的 kevent 提交到内核
-     * @return 0 成功；-1 失败（已记录 lastError，失败的 batch 会保留待下次重试）
+     * @return 0 成功；-1 失败（已记录 last_error，失败的 batch 会保留待下次重试）
      * @note 简单 awaitable 的注册变更先进入 batch；sequence 仍同步提交以保持时序
      */
-    int flushPendingChanges();
+    int flush_pending_changes();
 
 private:
     struct RegistrationEntry {
         IOController* controller = nullptr;
     };
 
-    void processEvent(struct kevent& ev);  ///< 消费单个 kevent 事件并唤醒对应 awaitable
-    int updateSimpleInterest(IOController* controller,
+    void process_event(struct kevent& ev);  ///< 消费单个 kevent 事件并唤醒对应 awaitable
+    int update_simple_interest(IOController* controller,
                              IOController::Index slot,
                              bool desired);  ///< 更新普通 awaitable 的逻辑兴趣位，并按需缓存物理 kevent 变更
-    void deleteOneShotRegistration(int fd, int16_t filter);  ///< 删除一次性注册并把非 ENOENT 错误写入 lastError
-    void discardPendingChanges(IOController* controller);  ///< 丢弃指定 controller 尚未提交的注册变更
-    int syncSequenceRegistration(IOController* controller);  ///< 同步 sequence awaitable 的注册状态
-    int applySequenceInterest(IOController* controller, uint8_t desired_mask);  ///< 把 sequence 感兴趣的读写位应用到 kqueue
-    RegistrationEntry* registrationEntryForController(IOController* controller);  ///< 获取 fd 对应的稳定注册入口
-    void retireRegistrationEntry(IOController* controller);  ///< 退役 fd 对应注册入口，保留地址以过滤晚到事件
+    void delete_one_shot_registration(int fd, int16_t filter);  ///< 删除一次性注册并把非 ENOENT 错误写入 last_error
+    void discard_pending_changes(IOController* controller);  ///< 丢弃指定 controller 尚未提交的注册变更
+    int sync_sequence_registration(IOController* controller);  ///< 同步 sequence awaitable 的注册状态
+    int apply_sequence_interest(IOController* controller, uint8_t desired_mask);  ///< 把 sequence 感兴趣的读写位应用到 kqueue
+    RegistrationEntry* registration_entry_for_controller(IOController* controller);  ///< 获取 fd 对应的稳定注册入口
+    void retire_registration_entry(IOController* controller);  ///< 退役 fd 对应注册入口，保留地址以过滤晚到事件
 
     static constexpr size_t BATCH_THRESHOLD = 32;  ///< 达到该数量时提前提交，避免注册延迟无界增长
     static constexpr uintptr_t WAKE_IDENT = 1;  ///< 固定 EVFILT_USER 唤醒标识

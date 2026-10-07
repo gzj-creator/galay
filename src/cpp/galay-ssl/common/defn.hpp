@@ -68,7 +68,7 @@ enum class SslIOResult : int {
 /**
  * @brief 将 SSL_get_error 结果转换为 SslIOResult
  */
-inline SslIOResult sslErrorToResult(int ssl_error) {
+inline SslIOResult ssl_error_to_result(int ssl_error) {
     switch (ssl_error) {
         case SSL_ERROR_NONE:
             return SslIOResult::Success;

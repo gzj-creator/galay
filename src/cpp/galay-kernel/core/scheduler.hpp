@@ -4,9 +4,9 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 定义内部 Scheduler 借用接口（start、stop、schedule、scheduleDeferred、
- * scheduleImmediately），包含处理 Runtime 作用域的共享 resume() 实现。
- * 同时提供用于便捷 Task 提交的 scheduleTask 重载函数。
+ * @details 定义内部 Scheduler 借用接口（start、stop、schedule、schedule_deferred、
+ * schedule_immediately），包含处理 Runtime 作用域的共享 resume() 实现。
+ * 同时提供用于便捷 Task 提交的 schedule_task 重载函数。
  *
  * @note 具体实现：KqueueScheduler (macOS)、EpollScheduler (Linux)、
  *       IOUringScheduler (Linux)、ParallelScheduler
@@ -118,33 +118,33 @@ public:
      *          回退为跨线程内联恢复。
      * @note 调用方必须在停止或销毁 scheduler 前关闭异步源并等待所有 waiter 退出。
      */
-    bool scheduleResume(TaskRef task) noexcept;
+    bool schedule_resume(TaskRef task) noexcept;
 
     /**
      * @brief 延后提交已绑定调度器的任务引用
      * @param task 任务引用；若未绑定 owner scheduler，会绑定到当前调度器
      */
-    bool scheduleDeferred(TaskRef task) noexcept;
+    bool schedule_deferred(TaskRef task) noexcept;
 
     /**
      * @brief 立即在当前线程恢复任务
      * @param task 任务引用；若未绑定 owner scheduler，会绑定到当前调度器
      */
-    bool scheduleImmediately(TaskRef task) noexcept;
+    bool schedule_immediately(TaskRef task) noexcept;
 
     /**
      * @brief 将语言中立 ready entry 投递到该调度器。
      * @details C stackful coroutine 使用该入口，避免热路径通过 RTTI 识别具体
      *          IOScheduler 后端；非 IO 调度器默认拒绝该入口。
      */
-    bool scheduleReadyEntry(detail::ReadyEntry& entry) noexcept;
+    bool schedule_ready_entry(detail::ReadyEntry& entry) noexcept;
 
     /**
      * @brief 添加定时器到内部时间轮
      * @param timer 待注册的定时器对象
      * @return true 定时器已被调度器接管；false 注册失败
      */
-    bool addTimer(Timer::ptr timer);
+    bool add_timer(Timer::ptr timer);
 
     /**
      * @brief 配置或取消调度器线程绑核
@@ -153,13 +153,13 @@ public:
      * @note 默认不绑核，仅在主动调用本接口后生效
      * @note 在 start() 之前调用可保证立即生效
      */
-    bool setAffinity(std::optional<uint32_t> cpu_id);
+    bool set_affinity(std::optional<uint32_t> cpu_id);
 
     /**
      * @brief 获取调度器所属线程ID
      * @return 线程ID
      */
-    std::thread::id threadId() const { return m_threadId; }
+    std::thread::id thread_id() const { return m_threadId; }
 
     /**
      * @brief 返回Scheduler类型
@@ -175,7 +175,7 @@ protected:
      * @return true 任务原本未绑定或已绑定到当前调度器；false 任务无状态或属于其他调度器
      * @note 该辅助函数只修改任务所属调度器，不负责入队或恢复执行
      */
-    bool bindTask(TaskRef& task) noexcept;
+    bool bind_task(TaskRef& task) noexcept;
 
     /**
      * @brief 在当前线程恢复任务
@@ -195,9 +195,9 @@ protected:
     /**
      * @brief 将已配置的线程绑核设置应用到当前线程
      * @return true 绑核设置已成功应用或无需应用；false 平台调用失败
-     * @note 只有在 setAffinity() 设定了具体 CPU 后该函数才会实际执行绑核
+     * @note 只有在 set_affinity() 设定了具体 CPU 后该函数才会实际执行绑核
      */
-    bool applyConfiguredAffinity();
+    bool apply_configured_affinity();
     std::thread::id m_threadId;  ///< 调度器所属线程ID，在 start() 时设置
 
 private:
@@ -225,40 +225,40 @@ public:
     std::expected<void, IOError> start() { return start(&derived()); }
     void stop() { stop(&derived()); }
     bool schedule(TaskRef task) noexcept { return schedule(&derived(), std::move(task)); }
-    bool scheduleResume(TaskRef task) noexcept { return scheduleResume(&derived(), std::move(task)); }
-    bool scheduleDeferred(TaskRef task) noexcept { return scheduleDeferred(&derived(), std::move(task)); }
-    bool scheduleImmediately(TaskRef task) noexcept { return scheduleImmediately(&derived(), std::move(task)); }
-    bool scheduleReadyEntry(detail::ReadyEntry& entry) noexcept {
-        return scheduleReadyEntry(&derived(), entry);
+    bool schedule_resume(TaskRef task) noexcept { return schedule_resume(&derived(), std::move(task)); }
+    bool schedule_deferred(TaskRef task) noexcept { return schedule_deferred(&derived(), std::move(task)); }
+    bool schedule_immediately(TaskRef task) noexcept { return schedule_immediately(&derived(), std::move(task)); }
+    bool schedule_ready_entry(detail::ReadyEntry& entry) noexcept {
+        return schedule_ready_entry(&derived(), entry);
     }
-    bool addTimer(Timer::ptr timer) { return addTimer(&derived(), std::move(timer)); }
+    bool add_timer(Timer::ptr timer) { return add_timer(&derived(), std::move(timer)); }
 
     static std::expected<void, IOError> start(Derived* scheduler) {
-        return scheduler->startImpl();
+        return scheduler->start_impl();
     }
-    static void stop(Derived* scheduler) { scheduler->stopImpl(); }
+    static void stop(Derived* scheduler) { scheduler->stop_impl(); }
     static bool schedule(Derived* scheduler, TaskRef task) noexcept {
-        return scheduler->scheduleImpl(std::move(task));
+        return scheduler->schedule_impl(std::move(task));
     }
-    static bool scheduleResume(Derived* scheduler, TaskRef task) noexcept {
-        return scheduler->scheduleResumeImpl(std::move(task));
+    static bool schedule_resume(Derived* scheduler, TaskRef task) noexcept {
+        return scheduler->schedule_resume_impl(std::move(task));
     }
-    static bool scheduleDeferred(Derived* scheduler, TaskRef task) noexcept {
-        return scheduler->scheduleDeferredImpl(std::move(task));
+    static bool schedule_deferred(Derived* scheduler, TaskRef task) noexcept {
+        return scheduler->schedule_deferred_impl(std::move(task));
     }
-    static bool scheduleImmediately(Derived* scheduler, TaskRef task) noexcept {
-        return scheduler->scheduleImmediatelyImpl(std::move(task));
+    static bool schedule_immediately(Derived* scheduler, TaskRef task) noexcept {
+        return scheduler->schedule_immediately_impl(std::move(task));
     }
-    static bool scheduleReadyEntry(Derived* scheduler,
+    static bool schedule_ready_entry(Derived* scheduler,
                                    detail::ReadyEntry& entry) noexcept {
         if constexpr (Type == kIOScheduler) {
-            return scheduler->scheduleReadyEntryImpl(entry);
+            return scheduler->schedule_ready_entry_impl(entry);
         } else {
             return false; // compute 调度器不接纳 C stackful ready entry。
         }
     }
-    static bool addTimer(Derived* scheduler, Timer::ptr timer) {
-        return scheduler->addTimerImpl(std::move(timer));
+    static bool add_timer(Derived* scheduler, Timer::ptr timer) {
+        return scheduler->add_timer_impl(std::move(timer));
     }
     static constexpr SchedulerType type() noexcept { return Type; }
 
@@ -279,17 +279,17 @@ struct SchedulerTestHooks {
     std::expected<void, IOError> (*start)(Scheduler*);
     void (*stop)(Scheduler*);
     bool (*schedule)(Scheduler*, TaskRef) noexcept;
-    bool (*scheduleResume)(Scheduler*, TaskRef) noexcept;
-    bool (*scheduleDeferred)(Scheduler*, TaskRef) noexcept;
-    bool (*scheduleImmediately)(Scheduler*, TaskRef) noexcept;
-    bool (*addTimer)(Scheduler*, Timer::ptr);
+    bool (*schedule_resume)(Scheduler*, TaskRef) noexcept;
+    bool (*schedule_deferred)(Scheduler*, TaskRef) noexcept;
+    bool (*schedule_immediately)(Scheduler*, TaskRef) noexcept;
+    bool (*add_timer)(Scheduler*, Timer::ptr);
 };
 }
 #endif
 
 namespace detail {
 
-bool isSchedulerThread() noexcept;
+bool is_scheduler_thread() noexcept;
 
 class SchedulerThreadScope
 {
@@ -304,19 +304,19 @@ private:
     bool m_previous;
 };
 
-bool scheduleReadyEntryOnScheduler(Scheduler* scheduler, ReadyEntry& entry) noexcept;
+bool schedule_ready_entry_on_scheduler(Scheduler* scheduler, ReadyEntry& entry) noexcept;
 
-bool scheduleReadyEntry(ReadyEntry& entry) noexcept;
+bool schedule_ready_entry(ReadyEntry& entry) noexcept;
 
 }  // namespace detail
 
-inline bool Scheduler::bindTask(TaskRef& task) noexcept {
+inline bool Scheduler::bind_task(TaskRef& task) noexcept {
     auto* state = task.state();
     if (!state) {
         return false;
     }
     if (state->m_scheduler == nullptr) {
-        detail::setTaskScheduler(task, this);
+        detail::set_task_scheduler(task, this);
         return true;
     }
     return state->m_scheduler == this;
@@ -325,11 +325,11 @@ inline bool Scheduler::bindTask(TaskRef& task) noexcept {
 
 inline void Scheduler::resume(TaskRef& task) {
     auto* state = task.state();
-    (void)detail::resumeTaskState(state);
+    (void)detail::resume_task_state(state);
 }
 
 inline void Scheduler::resume(detail::ReadyEntry& entry) {
-    (void)detail::resumeReadyEntry(entry);
+    (void)detail::resume_ready_entry(entry);
 }
 
 /**
@@ -341,9 +341,9 @@ inline void Scheduler::resume(detail::ReadyEntry& entry) {
  */
 template <typename T, typename SchedulerT>
     requires std::is_base_of_v<Scheduler, SchedulerT>
-inline bool scheduleTask(SchedulerT& scheduler, Task<T>&& task)
+inline bool schedule_task(SchedulerT& scheduler, Task<T>&& task)
 {
-    return scheduler.schedule(detail::TaskAccess::detachTask(std::move(task)));
+    return scheduler.schedule(detail::TaskAccess::detach_task(std::move(task)));
 }
 
 /**
@@ -355,9 +355,9 @@ inline bool scheduleTask(SchedulerT& scheduler, Task<T>&& task)
  */
 template <typename T, typename SchedulerT>
     requires std::is_base_of_v<Scheduler, SchedulerT>
-inline bool scheduleTask(SchedulerT* scheduler, Task<T>&& task)
+inline bool schedule_task(SchedulerT* scheduler, Task<T>&& task)
 {
-    return scheduler != nullptr && scheduleTask(*scheduler, std::move(task));
+    return scheduler != nullptr && schedule_task(*scheduler, std::move(task));
 }
 
 /**
@@ -369,9 +369,9 @@ inline bool scheduleTask(SchedulerT* scheduler, Task<T>&& task)
  */
 template <typename T, typename SchedulerT>
     requires std::is_base_of_v<Scheduler, SchedulerT>
-inline bool scheduleTaskDeferred(SchedulerT& scheduler, Task<T>&& task)
+inline bool schedule_task_deferred(SchedulerT& scheduler, Task<T>&& task)
 {
-    return scheduler.scheduleDeferred(detail::TaskAccess::detachTask(std::move(task)));
+    return scheduler.schedule_deferred(detail::TaskAccess::detach_task(std::move(task)));
 }
 
 /**
@@ -383,9 +383,9 @@ inline bool scheduleTaskDeferred(SchedulerT& scheduler, Task<T>&& task)
  */
 template <typename T, typename SchedulerT>
     requires std::is_base_of_v<Scheduler, SchedulerT>
-inline bool scheduleTaskDeferred(SchedulerT* scheduler, Task<T>&& task)
+inline bool schedule_task_deferred(SchedulerT* scheduler, Task<T>&& task)
 {
-    return scheduler != nullptr && scheduleTaskDeferred(*scheduler, std::move(task));
+    return scheduler != nullptr && schedule_task_deferred(*scheduler, std::move(task));
 }
 
 /**
@@ -398,9 +398,9 @@ inline bool scheduleTaskDeferred(SchedulerT* scheduler, Task<T>&& task)
  */
 template <typename T, typename SchedulerT>
     requires std::is_base_of_v<Scheduler, SchedulerT>
-inline bool scheduleTaskImmediately(SchedulerT& scheduler, Task<T>&& task)
+inline bool schedule_task_immediately(SchedulerT& scheduler, Task<T>&& task)
 {
-    return scheduler.scheduleImmediately(detail::TaskAccess::detachTask(std::move(task)));
+    return scheduler.schedule_immediately(detail::TaskAccess::detach_task(std::move(task)));
 }
 
 /**
@@ -412,9 +412,9 @@ inline bool scheduleTaskImmediately(SchedulerT& scheduler, Task<T>&& task)
  */
 template <typename T, typename SchedulerT>
     requires std::is_base_of_v<Scheduler, SchedulerT>
-inline bool scheduleTaskImmediately(SchedulerT* scheduler, Task<T>&& task)
+inline bool schedule_task_immediately(SchedulerT* scheduler, Task<T>&& task)
 {
-    return scheduler != nullptr && scheduleTaskImmediately(*scheduler, std::move(task));
+    return scheduler != nullptr && schedule_task_immediately(*scheduler, std::move(task));
 }
 
 } // namespace galay::kernel

@@ -93,15 +93,15 @@ int main() {
     require(limit && *limit == std::numeric_limits<std::uint64_t>::max(), "installed schema keeps exact uint64 limit");
     const auto none = NoSwagger{}.install(*prepared);
     require(none && prepared->document == document && *prepared->document == bytes &&
-            !prepared->router.findHandler(galay::http::HttpMethod::GET, "/docs").handler &&
-            !prepared->router.findHandler(galay::http::HttpMethod::GET, "/openapi.json").handler,
+            !prepared->router.find_handler(galay::http::HttpMethod::GET, "/docs").handler &&
+            !prepared->router.find_handler(galay::http::HttpMethod::GET, "/openapi.json").handler,
             "installed default policy preserves offline document without docs routes");
-    prepared->router.addHandler<galay::http::HttpMethod::GET>("/healthz", consumer::raw);
+    prepared->router.add_handler<galay::http::HttpMethod::GET>("/healthz", consumer::raw);
     const DocsConfig docs_config{};
     const auto docs = HttpSwagger{docs_config}.install(*prepared);
     require(docs && prepared->document == document && *prepared->document == bytes &&
-            prepared->router.findHandler(galay::http::HttpMethod::GET, "/docs").handler &&
-            prepared->router.findHandler(galay::http::HttpMethod::GET, "/openapi.json").handler,
+            prepared->router.find_handler(galay::http::HttpMethod::GET, "/docs").handler &&
+            prepared->router.find_handler(galay::http::HttpMethod::GET, "/openapi.json").handler,
             "installed HttpSwagger uses embedded assets without changing the document");
     const auto installed = json::parse(*prepared->document);
     require(installed && (*installed)["paths"].size() == 1 && !(*installed)["paths"].contains("/healthz") &&
@@ -128,7 +128,7 @@ int main() {
             rejected.error().status == expected.status && !rejected_server.is_running() && !rejected_server.document(),
             "installed move-only policy failure propagates through ApiServer");
     require(prepared->document == document && *prepared->document == bytes &&
-            prepared->router.findHandler(galay::http::HttpMethod::GET, "/items/1").handler,
+            prepared->router.find_handler(galay::http::HttpMethod::GET, "/items/1").handler,
             "installed rejected policy does not consume typed routes or document");
     rejected_server.stop();
     require(std::puts("Installed API policy consumer passed without Runtime or listeners") >= 0, "write success output");

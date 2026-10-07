@@ -18,21 +18,21 @@ using namespace galay::kernel;
 static std::atomic<bool> g_running{true};
 static std::atomic<uint64_t> g_request_count{0};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
 // HTTPS 请求处理器 - 支持 keep-alive
-Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
-    auto reader = conn.getReader();
-    auto writer = conn.getWriter();
+Task<void> https_handler(HttpConnImpl<galay::ssl::SslSocket> conn) {
+    auto reader = conn.get_reader();
+    auto writer = conn.get_writer();
 
     while (true) {
         HttpRequest request;
 
         // 读取请求
         while (true) {
-            auto read_result = co_await reader.getRequest(request);
+            auto read_result = co_await reader.get_request(request);
             if (!read_result) {
                 // 连接关闭或错误，退出循环
                 co_await conn.close();
@@ -45,7 +45,7 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
 
         // 检查是否是 keep-alive
         bool keep_alive = true;
-        auto connection_header = request.header().headerPairs().getValue("Connection");
+        auto connection_header = request.header().header_pairs().get_value("Connection");
         if (connection_header == "close") {
             keep_alive = false;
         }
@@ -59,7 +59,7 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
             .build();
 
         // 发送响应
-        auto send_result = co_await writer.sendResponse(response);
+        auto send_result = co_await writer.send_response(response);
         if (!send_result) {
             co_await conn.close();
             co_return;
@@ -89,21 +89,21 @@ int main() {
     std::cout << "HTTPS Server Test (Keep-Alive)" << std::endl;
     std::cout << "========================================" << std::endl;
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
         HttpsServer server(HttpsServerBuilder()
             .host("0.0.0.0")
             .port(8443)
-            .certPath("test/test.crt")
-            .keyPath("test/test.key")
-            .ioSchedulerCount(8)
-            .parallelSchedulerCount(0)
+            .cert_path("test/test.crt")
+            .key_path("test/test.key")
+            .io_scheduler_count(8)
+            .parallel_scheduler_count(0)
             .build());
 
         std::cout << "Starting HTTPS server on port 8443..." << std::endl;
-        server.start(httpsHandler);
+        server.start(https_handler);
 
         std::cout << "HTTPS server started successfully!" << std::endl;
         std::cout << "Test with: curl -k https://localhost:8443/" << std::endl;

@@ -87,7 +87,7 @@ enum class RingBufferError {
  * @param error 错误枚举
  * @return 覆盖所有公开枚举值的非空字符串
  */
-[[nodiscard]] inline const char* ringBufferErrorString(RingBufferError error) noexcept {
+[[nodiscard]] inline const char* ring_buffer_error_string(RingBufferError error) noexcept {
     switch (error) {
     case RingBufferError::kOk:
         return "ok";
@@ -110,7 +110,7 @@ namespace detail {
 #if GALAY_UTILS_RING_BUFFER_HAS_MMAP
 
 [[nodiscard]] inline std::expected<size_t, RingBufferError>
-alignRingBufferCapacity(size_t capacity) noexcept {
+align_ring_buffer_capacity(size_t capacity) noexcept {
     if (capacity == 0) {
         return std::unexpected(RingBufferError::kInvalidCapacity);
     }
@@ -132,7 +132,7 @@ alignRingBufferCapacity(size_t capacity) noexcept {
     return aligned;
 }
 
-inline void closeDescriptorNoexcept(int fd) noexcept {
+inline void close_descriptor_noexcept(int fd) noexcept {
     if (fd < 0) {
         return;
     }
@@ -142,7 +142,7 @@ inline void closeDescriptorNoexcept(int fd) noexcept {
     }
 }
 
-inline void unmapNoexcept(void* address, size_t length) noexcept {
+inline void unmap_noexcept(void* address, size_t length) noexcept {
     if (address == nullptr || length == 0) {
         return;
     }
@@ -152,7 +152,7 @@ inline void unmapNoexcept(void* address, size_t length) noexcept {
     }
 }
 
-[[nodiscard]] inline int createRingBufferBackingFile() noexcept {
+[[nodiscard]] inline int create_ring_buffer_backing_file() noexcept {
 #if defined(__linux__)
 #if defined(SYS_memfd_create)
     const long memfd = ::syscall(SYS_memfd_create, "galay_ring_buffer", MFD_CLOEXEC);
@@ -182,7 +182,7 @@ inline void unmapNoexcept(void* address, size_t length) noexcept {
         if (fd >= 0) {
             const int unlink_result = ::shm_unlink(name);
             if (unlink_result != 0) {
-                closeDescriptorNoexcept(fd);
+                close_descriptor_noexcept(fd);
                 return -1;
             }
             return fd;
@@ -271,10 +271,10 @@ public:
      * @param out 输出数组，最多填充两个 span
      * @return 有效 span 数量
      */
-    size_t writeSpans(std::array<std::span<std::byte>, 2>& out) noexcept {
+    size_t write_spans(std::array<std::span<std::byte>, 2>& out) noexcept {
         out = {};
         std::array<Segment, 2> segments{};
-        const size_t count = writeSegments(segments);
+        const size_t count = write_segments(segments);
         for (size_t i = 0; i < count; ++i) {
             out[i] = std::span<std::byte>(m_buffer.data() + segments[i].first, segments[i].second);
         }
@@ -286,10 +286,10 @@ public:
      * @param out 输出数组，最多填充两个只读 span
      * @return 有效 span 数量
      */
-    size_t readSpans(std::array<std::span<const std::byte>, 2>& out) const noexcept {
+    size_t read_spans(std::array<std::span<const std::byte>, 2>& out) const noexcept {
         out = {};
         std::array<Segment, 2> segments{};
-        const size_t count = readSegments(segments);
+        const size_t count = read_segments(segments);
         for (size_t i = 0; i < count; ++i) {
             out[i] = std::span<const std::byte>(m_buffer.data() + segments[i].first, segments[i].second);
         }
@@ -306,13 +306,13 @@ public:
      * @note 该接口用于兼容 readv/writev 类 I/O。方法是逻辑 const，
      *       但返回的 iov_base 指向可写内存，调用方应在实际写入后调用 produce()。
      */
-    size_t getWriteIovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
+    size_t get_write_iovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
         if (out == nullptr || maxIovecs == 0) {
             return 0;
         }
 
         std::array<Segment, 2> segments{};
-        const size_t count = std::min(writeSegments(segments), maxIovecs);
+        const size_t count = std::min(write_segments(segments), maxIovecs);
         auto* base = const_cast<std::byte*>(m_buffer.data());
         for (size_t i = 0; i < count; ++i) {
             out[i] = iovec{base + segments[i].first, segments[i].second};
@@ -327,8 +327,8 @@ public:
      * @return 有效 iovec 数量
      */
     template<size_t N>
-    size_t getWriteIovecs(std::array<struct iovec, N>& out) const noexcept {
-        return getWriteIovecs(out.data(), N);
+    size_t get_write_iovecs(std::array<struct iovec, N>& out) const noexcept {
+        return get_write_iovecs(out.data(), N);
     }
 
     /**
@@ -340,13 +340,13 @@ public:
      * @note POSIX iovec 的 iov_base 类型为 void*，因此只读区域也以非 const
      *       指针形式返回；调用方用于 writev 时不应修改这段内存。
      */
-    size_t getReadIovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
+    size_t get_read_iovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
         if (out == nullptr || maxIovecs == 0) {
             return 0;
         }
 
         std::array<Segment, 2> segments{};
-        const size_t count = std::min(readSegments(segments), maxIovecs);
+        const size_t count = std::min(read_segments(segments), maxIovecs);
         auto* base = const_cast<std::byte*>(m_buffer.data());
         for (size_t i = 0; i < count; ++i) {
             out[i] = iovec{base + segments[i].first, segments[i].second};
@@ -361,8 +361,8 @@ public:
      * @return 有效 iovec 数量
      */
     template<size_t N>
-    size_t getReadIovecs(std::array<struct iovec, N>& out) const noexcept {
-        return getReadIovecs(out.data(), N);
+    size_t get_read_iovecs(std::array<struct iovec, N>& out) const noexcept {
+        return get_read_iovecs(out.data(), N);
     }
 #endif
 
@@ -411,13 +411,13 @@ public:
      * @param length 请求写入字节数
      * @return 实际写入字节数
      */
-    [[nodiscard]] size_t tryWriteBatch(const void* data, size_t length) {
+    [[nodiscard]] size_t try_write_batch(const void* data, size_t length) {
         if (data == nullptr || length == 0 || full()) {
             return 0;
         }
 
         std::array<std::span<std::byte>, 2> spans{};
-        const size_t count = writeSpans(spans);
+        const size_t count = write_spans(spans);
         const auto* source = static_cast<const std::byte*>(data);
         size_t written = 0;
         const size_t toWrite = std::min(length, writable());
@@ -437,8 +437,8 @@ public:
      * @param bytes 字节视图
      * @return 实际写入字节数
      */
-    [[nodiscard]] size_t tryWriteBatch(std::string_view bytes) {
-        return tryWriteBatch(bytes.data(), bytes.size());
+    [[nodiscard]] size_t try_write_batch(std::string_view bytes) {
+        return try_write_batch(bytes.data(), bytes.size());
     }
 
     /**
@@ -447,13 +447,13 @@ public:
      * @param length 请求读取字节数
      * @return 实际读取字节数
      */
-    [[nodiscard]] size_t tryReadBatch(void* data, size_t length) {
+    [[nodiscard]] size_t try_read_batch(void* data, size_t length) {
         if (data == nullptr || length == 0 || empty()) {
             return 0;
         }
 
         std::array<std::span<const std::byte>, 2> spans{};
-        const size_t count = readSpans(spans);
+        const size_t count = read_spans(spans);
         auto* target = static_cast<std::byte*>(data);
         size_t readBytes = 0;
         const size_t toRead = std::min(length, readable());
@@ -477,7 +477,7 @@ private:
      * @param seg 输出区段数组，最多填充两段
      * @return 有效区段数量；已满时返回 0
      */
-    size_t writeSegments(std::array<Segment, 2>& seg) const noexcept {
+    size_t write_segments(std::array<Segment, 2>& seg) const noexcept {
         if (full()) {
             return 0;
         }
@@ -497,7 +497,7 @@ private:
      * @param seg 输出区段数组，最多填充两段
      * @return 有效区段数量；为空时返回 0
      */
-    size_t readSegments(std::array<Segment, 2>& seg) const noexcept {
+    size_t read_segments(std::array<Segment, 2>& seg) const noexcept {
         if (empty()) {
             return 0;
         }
@@ -534,25 +534,25 @@ public:
      */
     [[nodiscard]] static std::expected<MmapRingBufferImpl, RingBufferError>
     create(size_t capacity) noexcept {
-        auto aligned_capacity = alignRingBufferCapacity(capacity);
+        auto aligned_capacity = align_ring_buffer_capacity(capacity);
         if (!aligned_capacity) {
             return std::unexpected(aligned_capacity.error());
         }
 
-        const int fd = createRingBufferBackingFile();
+        const int fd = create_ring_buffer_backing_file();
         if (fd < 0) {
             return std::unexpected(RingBufferError::kSharedMemoryCreateFail);
         }
 
         const auto off_max = static_cast<size_t>(std::numeric_limits<off_t>::max());
         if (*aligned_capacity > off_max) {
-            closeDescriptorNoexcept(fd);
+            close_descriptor_noexcept(fd);
             return std::unexpected(RingBufferError::kResizeFail);
         }
 
         const int resize_result = ::ftruncate(fd, static_cast<off_t>(*aligned_capacity));
         if (resize_result != 0) {
-            closeDescriptorNoexcept(fd);
+            close_descriptor_noexcept(fd);
             return std::unexpected(RingBufferError::kResizeFail);
         }
 
@@ -560,7 +560,7 @@ public:
         void* reserved = ::mmap(nullptr, virtual_size, PROT_NONE,
                                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (reserved == MAP_FAILED) {
-            closeDescriptorNoexcept(fd);
+            close_descriptor_noexcept(fd);
             return std::unexpected(RingBufferError::kAddressReserveFail);
         }
 
@@ -570,8 +570,8 @@ public:
                               *aligned_capacity, PROT_READ | PROT_WRITE,
                               MAP_SHARED | MAP_FIXED, fd, 0);
         if (first == MAP_FAILED || second == MAP_FAILED) {
-            unmapNoexcept(reserved, virtual_size);
-            closeDescriptorNoexcept(fd);
+            unmap_noexcept(reserved, virtual_size);
+            close_descriptor_noexcept(fd);
             return std::unexpected(RingBufferError::kMappingFail);
         }
 
@@ -626,7 +626,7 @@ public:
         return m_size == capacity();
     }
 
-    size_t writeSpans(std::array<std::span<std::byte>, 2>& out) noexcept {
+    size_t write_spans(std::array<std::span<std::byte>, 2>& out) noexcept {
         out = {};
         if (full()) {
             return 0;
@@ -635,7 +635,7 @@ public:
         return 1;
     }
 
-    size_t readSpans(std::array<std::span<const std::byte>, 2>& out) const noexcept {
+    size_t read_spans(std::array<std::span<const std::byte>, 2>& out) const noexcept {
         out = {};
         if (empty()) {
             return 0;
@@ -645,7 +645,7 @@ public:
     }
 
 #if GALAY_UTILS_RING_BUFFER_HAS_IOVEC
-    size_t getWriteIovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
+    size_t get_write_iovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
         if (out == nullptr || maxIovecs == 0 || full()) {
             return 0;
         }
@@ -654,11 +654,11 @@ public:
     }
 
     template<size_t N>
-    size_t getWriteIovecs(std::array<struct iovec, N>& out) const noexcept {
-        return getWriteIovecs(out.data(), N);
+    size_t get_write_iovecs(std::array<struct iovec, N>& out) const noexcept {
+        return get_write_iovecs(out.data(), N);
     }
 
-    size_t getReadIovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
+    size_t get_read_iovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
         if (out == nullptr || maxIovecs == 0 || empty()) {
             return 0;
         }
@@ -667,8 +667,8 @@ public:
     }
 
     template<size_t N>
-    size_t getReadIovecs(std::array<struct iovec, N>& out) const noexcept {
-        return getReadIovecs(out.data(), N);
+    size_t get_read_iovecs(std::array<struct iovec, N>& out) const noexcept {
+        return get_read_iovecs(out.data(), N);
     }
 #endif
 
@@ -706,7 +706,7 @@ public:
         m_size = 0;
     }
 
-    [[nodiscard]] size_t tryWriteBatch(const void* data, size_t length) {
+    [[nodiscard]] size_t try_write_batch(const void* data, size_t length) {
         if (data == nullptr || length == 0 || full()) {
             return 0;
         }
@@ -717,11 +717,11 @@ public:
         return written;
     }
 
-    [[nodiscard]] size_t tryWriteBatch(std::string_view bytes) {
-        return tryWriteBatch(bytes.data(), bytes.size());
+    [[nodiscard]] size_t try_write_batch(std::string_view bytes) {
+        return try_write_batch(bytes.data(), bytes.size());
     }
 
-    [[nodiscard]] size_t tryReadBatch(void* data, size_t length) {
+    [[nodiscard]] size_t try_read_batch(void* data, size_t length) {
         if (data == nullptr || length == 0 || empty()) {
             return 0;
         }
@@ -740,9 +740,9 @@ private:
 
     void reset() noexcept {
         if (m_base != nullptr && m_capacity > 0) {
-            unmapNoexcept(m_base, m_capacity * 2);
+            unmap_noexcept(m_base, m_capacity * 2);
         }
-        closeDescriptorNoexcept(m_fd);
+        close_descriptor_noexcept(m_fd);
         m_base = nullptr;
         m_capacity = 0;
         m_readIndex = 0;
@@ -768,7 +768,7 @@ template<typename... Types>
 struct IsRingBufferVariant<std::variant<Types...>> : std::true_type {};
 
 template<typename Impl, typename Visitor>
-decltype(auto) visitRingBufferImpl(Impl&& impl, Visitor&& visitor) {
+decltype(auto) visit_ring_buffer_impl(Impl&& impl, Visitor&& visitor) {
     if constexpr (IsRingBufferVariant<std::remove_cvref_t<Impl>>::value) {
         return std::visit(std::forward<Visitor>(visitor), std::forward<Impl>(impl));
     } else {
@@ -800,7 +800,7 @@ public:
      * @note mmap 资源创建失败时自动降级到 vector 后端，不影响功能可用性。
      */
     RingBuffer()
-        : m_impl(makeImpl(Capacity == std::dynamic_extent
+        : m_impl(make_impl(Capacity == std::dynamic_extent
                               ? kDefaultCapacity
                               : Capacity)) {}
 
@@ -811,7 +811,7 @@ public:
      */
     explicit RingBuffer(size_t capacity)
         requires (Capacity == std::dynamic_extent)
-        : m_impl(makeImpl(capacity)) {}
+        : m_impl(make_impl(capacity)) {}
 
     RingBuffer(const RingBuffer&) = delete;
     RingBuffer& operator=(const RingBuffer&) = delete;
@@ -830,13 +830,13 @@ public:
         if (capacity == 0) {
             return std::unexpected(RingBufferError::kInvalidCapacity);
         }
-        return RingBuffer(makeImpl(capacity));
+        return RingBuffer(make_impl(capacity));
     }
 
     /**
      * @brief 显式复制当前可读内容到新的独立环形缓冲区
      * @return 容量一致、可读字节序列一致的缓冲区副本
-     * @note 复制不保留内部读写索引形状，只保证后续 tryReadBatch() 的字节序列一致。
+     * @note 复制不保留内部读写索引形状，只保证后续 try_read_batch() 的字节序列一致。
      */
     [[nodiscard]] RingBuffer clone() const {
         RingBuffer copy = [&]() {
@@ -847,10 +847,10 @@ public:
             }
         }();
         std::array<std::span<const std::byte>, 2> spans{};
-        const size_t span_count = readSpans(spans);
+        const size_t span_count = read_spans(spans);
         for (size_t index = 0; index < span_count; ++index) {
             const size_t written =
-                copy.tryWriteBatch(spans[index].data(), spans[index].size());
+                copy.try_write_batch(spans[index].data(), spans[index].size());
             if (written != spans[index].size()) {
                 copy.clear();
                 return copy;
@@ -864,7 +864,7 @@ public:
      * @return 可读字节数
      */
     size_t readable() const noexcept {
-        return detail::visitRingBufferImpl(m_impl, [](const auto& impl) { return impl.readable(); });
+        return detail::visit_ring_buffer_impl(m_impl, [](const auto& impl) { return impl.readable(); });
     }
 
     /**
@@ -872,7 +872,7 @@ public:
      * @return 可写字节数
      */
     size_t writable() const noexcept {
-        return detail::visitRingBufferImpl(m_impl, [](const auto& impl) { return impl.writable(); });
+        return detail::visit_ring_buffer_impl(m_impl, [](const auto& impl) { return impl.writable(); });
     }
 
     /**
@@ -880,7 +880,7 @@ public:
      * @return vector 后端返回请求容量；mmap 后端返回页对齐后的实际容量
      */
     size_t capacity() const noexcept {
-        return detail::visitRingBufferImpl(m_impl, [](const auto& impl) { return impl.capacity(); });
+        return detail::visit_ring_buffer_impl(m_impl, [](const auto& impl) { return impl.capacity(); });
     }
 
     /**
@@ -888,7 +888,7 @@ public:
      * @return 为空返回 true
      */
     bool empty() const noexcept {
-        return detail::visitRingBufferImpl(m_impl, [](const auto& impl) { return impl.empty(); });
+        return detail::visit_ring_buffer_impl(m_impl, [](const auto& impl) { return impl.empty(); });
     }
 
     /**
@@ -896,7 +896,7 @@ public:
      * @return 已满返回 true
      */
     bool full() const noexcept {
-        return detail::visitRingBufferImpl(m_impl, [](const auto& impl) { return impl.full(); });
+        return detail::visit_ring_buffer_impl(m_impl, [](const auto& impl) { return impl.full(); });
     }
 
     /**
@@ -904,8 +904,8 @@ public:
      * @param out 输出数组，vector 后端最多两个 span，mmap 后端最多一个 span
      * @return 有效 span 数量
      */
-    size_t writeSpans(std::array<std::span<std::byte>, 2>& out) noexcept {
-        return detail::visitRingBufferImpl(m_impl, [&out](auto& impl) { return impl.writeSpans(out); });
+    size_t write_spans(std::array<std::span<std::byte>, 2>& out) noexcept {
+        return detail::visit_ring_buffer_impl(m_impl, [&out](auto& impl) { return impl.write_spans(out); });
     }
 
     /**
@@ -913,8 +913,8 @@ public:
      * @param out 输出数组，vector 后端最多两个 span，mmap 后端最多一个 span
      * @return 有效 span 数量
      */
-    size_t readSpans(std::array<std::span<const std::byte>, 2>& out) const noexcept {
-        return detail::visitRingBufferImpl(m_impl, [&out](const auto& impl) { return impl.readSpans(out); });
+    size_t read_spans(std::array<std::span<const std::byte>, 2>& out) const noexcept {
+        return detail::visit_ring_buffer_impl(m_impl, [&out](const auto& impl) { return impl.read_spans(out); });
     }
 
 #if GALAY_UTILS_RING_BUFFER_HAS_IOVEC
@@ -926,9 +926,9 @@ public:
      *
      * @note 方法是逻辑 const，但返回的 iov_base 指向可写内存；调用方应在实际写入后调用 produce()。
      */
-    size_t getWriteIovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
-        return detail::visitRingBufferImpl(m_impl, [out, maxIovecs](const auto& impl) {
-            return impl.getWriteIovecs(out, maxIovecs);
+    size_t get_write_iovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
+        return detail::visit_ring_buffer_impl(m_impl, [out, maxIovecs](const auto& impl) {
+            return impl.get_write_iovecs(out, maxIovecs);
         });
     }
 
@@ -939,8 +939,8 @@ public:
      * @return 有效 iovec 数量
      */
     template<size_t N>
-    size_t getWriteIovecs(std::array<struct iovec, N>& out) const noexcept {
-        return getWriteIovecs(out.data(), N);
+    size_t get_write_iovecs(std::array<struct iovec, N>& out) const noexcept {
+        return get_write_iovecs(out.data(), N);
     }
 
     /**
@@ -951,9 +951,9 @@ public:
      *
      * @note POSIX iovec 的 iov_base 类型为 void*，调用方用于 writev 时不应修改这段内存。
      */
-    size_t getReadIovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
-        return detail::visitRingBufferImpl(m_impl, [out, maxIovecs](const auto& impl) {
-            return impl.getReadIovecs(out, maxIovecs);
+    size_t get_read_iovecs(struct iovec* out, size_t maxIovecs = 2) const noexcept {
+        return detail::visit_ring_buffer_impl(m_impl, [out, maxIovecs](const auto& impl) {
+            return impl.get_read_iovecs(out, maxIovecs);
         });
     }
 
@@ -964,8 +964,8 @@ public:
      * @return 有效 iovec 数量
      */
     template<size_t N>
-    size_t getReadIovecs(std::array<struct iovec, N>& out) const noexcept {
-        return getReadIovecs(out.data(), N);
+    size_t get_read_iovecs(std::array<struct iovec, N>& out) const noexcept {
+        return get_read_iovecs(out.data(), N);
     }
 #endif
 
@@ -974,7 +974,7 @@ public:
      * @param length 已写入字节数；超过 writable() 时自动截断
      */
     void produce(size_t length) noexcept {
-        detail::visitRingBufferImpl(m_impl, [length](auto& impl) { impl.produce(length); });
+        detail::visit_ring_buffer_impl(m_impl, [length](auto& impl) { impl.produce(length); });
     }
 
     /**
@@ -982,14 +982,14 @@ public:
      * @param length 要消费的字节数；超过 readable() 时自动截断
      */
     void consume(size_t length) noexcept {
-        detail::visitRingBufferImpl(m_impl, [length](auto& impl) { impl.consume(length); });
+        detail::visit_ring_buffer_impl(m_impl, [length](auto& impl) { impl.consume(length); });
     }
 
     /**
      * @brief 清空缓冲区但保留容量和当前后端
      */
     void clear() noexcept {
-        detail::visitRingBufferImpl(m_impl, [](auto& impl) { impl.clear(); });
+        detail::visit_ring_buffer_impl(m_impl, [](auto& impl) { impl.clear(); });
     }
 
     /**
@@ -998,9 +998,9 @@ public:
      * @param length 请求写入字节数
      * @return 实际写入字节数
      */
-    [[nodiscard]] size_t tryWriteBatch(const void* data, size_t length) {
-        return detail::visitRingBufferImpl(m_impl, [data, length](auto& impl) {
-            return impl.tryWriteBatch(data, length);
+    [[nodiscard]] size_t try_write_batch(const void* data, size_t length) {
+        return detail::visit_ring_buffer_impl(m_impl, [data, length](auto& impl) {
+            return impl.try_write_batch(data, length);
         });
     }
 
@@ -1009,8 +1009,8 @@ public:
      * @param bytes 调用方拥有且在调用期间有效的只读字节区间。
      * @return 实际写入字节数，范围为 [0, bytes.size()]。
      */
-    [[nodiscard]] size_t tryWriteBatch(std::span<const std::byte> bytes) {
-        return tryWriteBatch(bytes.data(), bytes.size());
+    [[nodiscard]] size_t try_write_batch(std::span<const std::byte> bytes) {
+        return try_write_batch(bytes.data(), bytes.size());
     }
 
     /**
@@ -1018,8 +1018,8 @@ public:
      * @param bytes 字节视图
      * @return 实际写入字节数
      */
-    [[nodiscard]] size_t tryWriteBatch(std::string_view bytes) {
-        return tryWriteBatch(bytes.data(), bytes.size());
+    [[nodiscard]] size_t try_write_batch(std::string_view bytes) {
+        return try_write_batch(bytes.data(), bytes.size());
     }
 
     /**
@@ -1028,9 +1028,9 @@ public:
      * @param length 请求读取字节数
      * @return 实际读取字节数
      */
-    [[nodiscard]] size_t tryReadBatch(void* data, size_t length) {
-        return detail::visitRingBufferImpl(m_impl, [data, length](auto& impl) {
-            return impl.tryReadBatch(data, length);
+    [[nodiscard]] size_t try_read_batch(void* data, size_t length) {
+        return detail::visit_ring_buffer_impl(m_impl, [data, length](auto& impl) {
+            return impl.try_read_batch(data, length);
         });
     }
 
@@ -1039,8 +1039,8 @@ public:
      * @param output 调用方拥有且在调用期间有效的可写字节区间。
      * @return 实际读取字节数，范围为 [0, output.size()]。
      */
-    [[nodiscard]] size_t tryReadBatch(std::span<std::byte> output) {
-        return tryReadBatch(output.data(), output.size());
+    [[nodiscard]] size_t try_read_batch(std::span<std::byte> output) {
+        return try_read_batch(output.data(), output.size());
     }
 
 private:
@@ -1056,7 +1056,7 @@ private:
     explicit RingBuffer(Impl impl) noexcept
         : m_impl(std::move(impl)) {}
 
-    static Impl makeImpl(size_t capacity) {
+    static Impl make_impl(size_t capacity) {
         if (capacity == 0) {
             capacity = kDefaultCapacity;
         }

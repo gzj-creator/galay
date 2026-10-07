@@ -40,13 +40,13 @@ namespace {
 using IovecResult = std::expected<size_t, IOError>;
 
 struct WriteFlow {
-    void onWritev(SequenceOps<IovecResult, 4>& ops, WritevIOContext& ctx) {
+    void on_writev(SequenceOps<IovecResult, 4>& ops, WritevIOContext& ctx) {
         ops.complete(std::move(ctx.m_result));
     }
 };
 
 struct ReadFlow {
-    void onReadv(SequenceOps<IovecResult, 4>& ops, ReadvIOContext& ctx) {
+    void on_readv(SequenceOps<IovecResult, 4>& ops, ReadvIOContext& ctx) {
         ops.complete(std::move(ctx.m_result));
     }
 };
@@ -59,23 +59,23 @@ struct TestState {
 };
 
 template <typename BuilderT>
-auto makeWriteAwaitable(BuilderT& builder, std::array<struct iovec, 2>& iovecs) {
-    auto with_writev = builder.template writev<&WriteFlow::onWritev>(iovecs, iovecs.size());
+auto make_write_awaitable(BuilderT& builder, std::array<struct iovec, 2>& iovecs) {
+    auto with_writev = builder.template writev<&WriteFlow::on_writev>(iovecs, iovecs.size());
     return with_writev.build();
 }
 
 template <typename BuilderT>
-auto makeReadAwaitable(BuilderT& builder, std::array<struct iovec, 2>& iovecs) {
-    auto with_readv = builder.template readv<&ReadFlow::onReadv>(iovecs, iovecs.size());
+auto make_read_awaitable(BuilderT& builder, std::array<struct iovec, 2>& iovecs) {
+    auto with_readv = builder.template readv<&ReadFlow::on_readv>(iovecs, iovecs.size());
     return with_readv.build();
 }
 
-bool setNonBlocking(int fd) {
+bool set_non_blocking(int fd) {
     const int flags = fcntl(fd, F_GETFL, 0);
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool waitUntilBoth(const std::atomic<bool>& first,
+bool wait_until_both(const std::atomic<bool>& first,
                    const std::atomic<bool>& second,
                    std::chrono::milliseconds timeout = 1000ms,
                    std::chrono::milliseconds step = 2ms) {
@@ -89,7 +89,7 @@ bool waitUntilBoth(const std::atomic<bool>& first,
     return first.load(std::memory_order_acquire) && second.load(std::memory_order_acquire);
 }
 
-Task<void> writerTask(TestState* state, int fd) {
+Task<void> writer_task(TestState* state, int fd) {
     IOController controller(GHandle{.fd = fd});
     WriteFlow flow;
 
@@ -102,7 +102,7 @@ Task<void> writerTask(TestState* state, int fd) {
     iovecs[1].iov_len = sizeof(kBody) - 1;
 
     auto builder = AwaitableBuilder<IovecResult, 4, WriteFlow>(&controller, flow);
-    auto awaitable = makeWriteAwaitable(builder, iovecs);
+    auto awaitable = make_write_awaitable(builder, iovecs);
 
     auto result = co_await awaitable;
     state->writer_ok.store(
@@ -112,7 +112,7 @@ Task<void> writerTask(TestState* state, int fd) {
     state->writer_done.store(true, std::memory_order_release);
 }
 
-Task<void> readerTask(TestState* state, int fd) {
+Task<void> reader_task(TestState* state, int fd) {
     IOController controller(GHandle{.fd = fd});
     ReadFlow flow;
 
@@ -125,7 +125,7 @@ Task<void> readerTask(TestState* state, int fd) {
     iovecs[1].iov_len = body.size();
 
     auto builder = AwaitableBuilder<IovecResult, 4, ReadFlow>(&controller, flow);
-    auto awaitable = makeReadAwaitable(builder, iovecs);
+    auto awaitable = make_read_awaitable(builder, iovecs);
 
     auto result = co_await awaitable;
     state->reader_ok.store(
@@ -146,7 +146,7 @@ int main() {
         std::cerr << "[T77] socketpair failed: " << std::strerror(errno) << "\n";
         return 1;
     }
-    if (!setNonBlocking(fds[0]) || !setNonBlocking(fds[1])) {
+    if (!set_non_blocking(fds[0]) || !set_non_blocking(fds[1])) {
         std::cerr << "[T77] failed to set socketpair non-blocking\n";
         close(fds[0]);
         close(fds[1]);
@@ -157,10 +157,10 @@ int main() {
     scheduler.start();
 
     TestState state;
-    scheduleTask(scheduler, readerTask(&state, fds[1]));
-    scheduleTask(scheduler, writerTask(&state, fds[0]));
+    schedule_task(scheduler, reader_task(&state, fds[1]));
+    schedule_task(scheduler, writer_task(&state, fds[0]));
 
-    const bool completed = waitUntilBoth(state.writer_done, state.reader_done);
+    const bool completed = wait_until_both(state.writer_done, state.reader_done);
     scheduler.stop();
     close(fds[0]);
     close(fds[1]);

@@ -33,7 +33,7 @@ void finish(TestState& state, bool success, std::string message)
     state.cv.notify_one();
 }
 
-std::optional<bool> parseBoolEnv(const char* value)
+std::optional<bool> parse_bool_env(const char* value)
 {
     if (value == nullptr) return std::nullopt;
     std::string text(value);
@@ -42,7 +42,7 @@ std::optional<bool> parseBoolEnv(const char* value)
     return std::nullopt;
 }
 
-bool integrationEnabled()
+bool integration_enabled()
 {
     const char* value = std::getenv("GALAY_IT_ENABLE");
     if (value == nullptr) return false;
@@ -51,13 +51,13 @@ bool integrationEnabled()
            text == "YES" || text == "on" || text == "ON";
 }
 
-Task<void> runLocalhostRedissSmoke(IOScheduler* scheduler, TestState* state)
+Task<void> run_localhost_rediss_smoke(IOScheduler* scheduler, TestState* state)
 {
     RedissClientConfig tls_config;
     if (const char* ca_path = std::getenv("GALAY_REDIS_TLS_CA")) {
         tls_config.ca_path = ca_path;
     }
-    if (const auto verify_peer = parseBoolEnv(std::getenv("GALAY_REDIS_TLS_VERIFY_PEER"))) {
+    if (const auto verify_peer = parse_bool_env(std::getenv("GALAY_REDIS_TLS_VERIFY_PEER"))) {
         tls_config.verify_peer = *verify_peer;
     }
     if (const char* server_name = std::getenv("GALAY_REDIS_TLS_SERVER_NAME")) {
@@ -66,7 +66,7 @@ Task<void> runLocalhostRedissSmoke(IOScheduler* scheduler, TestState* state)
 
     auto client = RedissClientBuilder()
                       .scheduler(scheduler)
-                      .tlsConfig(tls_config)
+                      .tls_config(tls_config)
                       .build();
 
     const char* url = std::getenv("GALAY_REDIS_TLS_LOCALHOST_URL");
@@ -106,18 +106,18 @@ Task<void> runLocalhostRedissSmoke(IOScheduler* scheduler, TestState* state)
 
 int main()
 {
-    if (!integrationEnabled()) {
+    if (!integration_enabled()) {
         std::cout << "[SKIP] set GALAY_IT_ENABLE=1 to run TLS Redis URL integration test\n";
         return 0;
     }
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "Failed to get IO scheduler\n";
         runtime.stop();
@@ -125,7 +125,7 @@ int main()
     }
 
     TestState state;
-    scheduleTask(scheduler, runLocalhostRedissSmoke(scheduler, &state));
+    schedule_task(scheduler, run_localhost_rediss_smoke(scheduler, &state));
 
     std::unique_lock<std::mutex> lock(state.mutex);
     const bool done = state.cv.wait_for(lock, 10s, [&state]() { return state.done; });

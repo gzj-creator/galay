@@ -42,12 +42,12 @@ std::atomic<int> g_failed{0};
 std::atomic<int> g_total{0};
 
 /**
- * @brief 继承 RecvAwaitable，重写 handleComplete
+ * @brief 继承 RecvAwaitable，重写 handle_complete
  *
  * 前 m_reject_count 次调用返回 false（模拟"还没准备好"），
- * 之后调用基类 handleComplete 正常处理。
+ * 之后调用基类 handle_complete 正常处理。
  *
- * RecvAwaitable 继承自 RecvIOContext，handleComplete 定义在 RecvIOContext 上。
+ * RecvAwaitable 继承自 RecvIOContext，handle_complete 定义在 RecvIOContext 上。
  */
 struct CountingRecvAwaitable : public RecvAwaitable {
     int m_reject_count;          ///< 需要拒绝的次数
@@ -59,24 +59,24 @@ struct CountingRecvAwaitable : public RecvAwaitable {
     {}
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override {
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override {
         int n = m_call_count.fetch_add(1, std::memory_order_relaxed);
         if (n < m_reject_count) {
             LogInfo("[CountingRecv] handleComplete called #{}, returning false (reject)", n + 1);
             return false;  // 拒绝，让调度器重新注册
         }
         LogInfo("[CountingRecv] handleComplete called #{}, accepting", n + 1);
-        return RecvIOContext::handleComplete(cqe, handle);
+        return RecvIOContext::handle_complete(cqe, handle);
     }
 #else
-    bool handleComplete(GHandle handle) override {
+    bool handle_complete(GHandle handle) override {
         int n = m_call_count.fetch_add(1, std::memory_order_relaxed);
         if (n < m_reject_count) {
             LogInfo("[CountingRecv] handleComplete called #{}, returning false (reject)", n + 1);
             return false;  // 拒绝，让调度器重新注册
         }
         LogInfo("[CountingRecv] handleComplete called #{}, accepting", n + 1);
-        return RecvIOContext::handleComplete(handle);
+        return RecvIOContext::handle_complete(handle);
     }
 #endif
 };
@@ -194,7 +194,7 @@ int main()
     LogInfo("Backend: kqueue");
 #endif
 
-    const int REJECT_COUNT = 3;  // handleComplete 前3次返回 false
+    const int REJECT_COUNT = 3;  // handle_complete 前3次返回 false
 
     int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd < 0) {
@@ -237,16 +237,16 @@ int main()
     const int port = ntohs(bound_addr.sin_port);
     LogInfo("Server listening on loopback port {}", port);
 
-    auto* timer_scheduler = TimerScheduler::getInstance();
+    auto* timer_scheduler = TimerScheduler::get_instance();
     timer_scheduler->start();
     TestScheduler scheduler;
     scheduler.start();
 
-    // 启动服务端（reject_count=3，前3次 handleComplete 返回 false）
-    scheduleTask(scheduler, test_server(&scheduler, listen_fd, REJECT_COUNT));
+    // 启动服务端（reject_count=3，前3次 handle_complete 返回 false）
+    schedule_task(scheduler, test_server(&scheduler, listen_fd, REJECT_COUNT));
 
     // 启动客户端（发送 reject_count+1 次数据，确保触发足够多的事件）
-    scheduleTask(scheduler, test_client(&scheduler, "127.0.0.1", port, REJECT_COUNT + 1));
+    schedule_task(scheduler, test_client(&scheduler, "127.0.0.1", port, REJECT_COUNT + 1));
 
     // Both coroutines report exactly one result.  Wait for completion instead
     // of sleeping for a fixed duration, while retaining a hard upper bound if
@@ -273,10 +273,10 @@ int main()
 
     // 写入测试结果
     galay::test::TestResultWriter writer("test_virtual_handle_complete");
-    for (int i = 0; i < g_total.load(); ++i) writer.addTest();
-    for (int i = 0; i < g_passed.load(); ++i) writer.addPassed();
-    for (int i = 0; i < g_failed.load(); ++i) writer.addFailed();
-    writer.writeResult();
+    for (int i = 0; i < g_total.load(); ++i) writer.add_test();
+    for (int i = 0; i < g_passed.load(); ++i) writer.add_passed();
+    for (int i = 0; i < g_failed.load(); ++i) writer.add_failed();
+    writer.write_result();
 
     LogInfo("========================================");
     LogInfo("Test Results: Total={}, Passed={}, Failed={}",

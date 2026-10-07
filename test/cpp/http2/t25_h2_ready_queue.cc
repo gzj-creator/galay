@@ -29,10 +29,10 @@ std::atomic<bool> g_ok{false};
 std::atomic<int> g_deliveries{0};
 std::atomic<int> g_empty_batches{0};
 
-Task<void> activeHandler(Http2ConnContext& ctx)
+Task<void> active_handler(Http2ConnContext& ctx)
 {
     while (true) {
-        auto streams = co_await ctx.getActiveStreams(4);
+        auto streams = co_await ctx.get_active_streams(4);
         if (!streams) {
             break;
         }
@@ -41,13 +41,13 @@ Task<void> activeHandler(Http2ConnContext& ctx)
             continue;
         }
         for (auto& stream : *streams) {
-            auto events = stream->takeEvents();
-            if (!hasHttp2StreamEvent(events, Http2StreamEvent::RequestComplete)) {
+            auto events = stream->take_events();
+            if (!has_http2_stream_event(events, Http2StreamEvent::RequestComplete)) {
                 continue;
             }
             g_deliveries.fetch_add(1, std::memory_order_relaxed);
-            stream->sendHeaders(
-                Http2Headers().status(200).contentType("text/plain").contentLength(0),
+            stream->send_headers(
+                Http2Headers().status(200).content_type("text/plain").content_length(0),
                 true,
                 true);
         }
@@ -55,7 +55,7 @@ Task<void> activeHandler(Http2ConnContext& ctx)
     co_return;
 }
 
-Task<void> runClient(uint16_t port)
+Task<void> run_client(uint16_t port)
 {
     H2cClient<> client(H2cClientBuilder().build());
     auto connect_result = co_await client.connect("127.0.0.1", port);
@@ -66,7 +66,7 @@ Task<void> runClient(uint16_t port)
     }
     auto upgrade_result = co_await client.upgrade("/ready");
     if (!upgrade_result) {
-        std::cerr << "[T90] upgrade failed: " << upgrade_result.error().toString() << "\n";
+        std::cerr << "[T90] upgrade failed: " << upgrade_result.error().to_string() << "\n";
         g_done = true;
         co_return;
     }
@@ -77,7 +77,7 @@ Task<void> runClient(uint16_t port)
         streams.push_back(client.get("/ready"));
     }
     for (auto& stream : streams) {
-        auto done = co_await stream->waitResponseComplete();
+        auto done = co_await stream->wait_response_complete();
         if (!done || stream->response().status != 200) {
             std::cerr << "[T90] stream did not complete with 200\n";
             g_done = true;
@@ -104,45 +104,45 @@ int main()
     batch.mark(second, Http2StreamEvent::RequestComplete);
     batch.mark(first, Http2StreamEvent::DataArrived);
 
-    auto ready = batch.takeReady();
+    auto ready = batch.take_ready();
     assert(ready.size() == 2);
     assert(ready[0] == first);
     assert(ready[1] == second);
 
-    auto first_events = first->takeEvents();
-    assert(hasHttp2StreamEvent(first_events, Http2StreamEvent::HeadersReady));
-    assert(hasHttp2StreamEvent(first_events, Http2StreamEvent::DataArrived));
-    assert(!hasHttp2StreamEvent(first_events, Http2StreamEvent::RequestComplete));
+    auto first_events = first->take_events();
+    assert(has_http2_stream_event(first_events, Http2StreamEvent::HeadersReady));
+    assert(has_http2_stream_event(first_events, Http2StreamEvent::DataArrived));
+    assert(!has_http2_stream_event(first_events, Http2StreamEvent::RequestComplete));
 
-    auto second_events = second->takeEvents();
-    assert(hasHttp2StreamEvent(second_events, Http2StreamEvent::RequestComplete));
+    auto second_events = second->take_events();
+    assert(has_http2_stream_event(second_events, Http2StreamEvent::RequestComplete));
 
-    auto duplicate = batch.takeReady();
+    auto duplicate = batch.take_ready();
     assert(duplicate.empty());
 
     batch.mark(first, Http2StreamEvent::RequestComplete);
-    auto ready_again = batch.takeReady();
+    auto ready_again = batch.take_ready();
     assert(ready_again.size() == 1);
     assert(ready_again[0] == first);
-    auto first_again_events = first->takeEvents();
-    assert(hasHttp2StreamEvent(first_again_events, Http2StreamEvent::RequestComplete));
+    auto first_again_events = first->take_events();
+    assert(has_http2_stream_event(first_again_events, Http2StreamEvent::RequestComplete));
 
     const uint16_t port = static_cast<uint16_t>(24000 + (::getpid() % 10000));
     H2cServer server(H2cServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
-        .activeConnHandler(activeHandler)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
+        .active_conn_handler(active_handler)
         .build());
     server.start();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     assert(scheduler != nullptr);
-    scheduleTask(scheduler, runClient(port));
+    schedule_task(scheduler, run_client(port));
 
     for (int i = 0; i < 100; ++i) {
         if (g_done.load(std::memory_order_acquire)) {

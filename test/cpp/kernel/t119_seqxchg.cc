@@ -55,11 +55,11 @@ struct TestState {
 };
 
 struct SendThenRecvFlow {
-    void onSend(SequenceOps<BuilderResult, 4>&, SendIOContext& ctx) {
+    void on_send(SequenceOps<BuilderResult, 4>&, SendIOContext& ctx) {
         send_ok = ctx.m_result.has_value();
     }
 
-    void onRecv(SequenceOps<BuilderResult, 4>& ops, RecvIOContext& ctx) {
+    void on_recv(SequenceOps<BuilderResult, 4>& ops, RecvIOContext& ctx) {
         recv_ok = ctx.m_result.has_value();
         ops.complete(std::move(ctx.m_result));
     }
@@ -72,11 +72,11 @@ struct RecvThenSendFlow {
     explicit RecvThenSendFlow(const char* reply)
         : reply(reply) {}
 
-    void onRecv(SequenceOps<BuilderResult, 4>&, RecvIOContext& ctx) {
+    void on_recv(SequenceOps<BuilderResult, 4>&, RecvIOContext& ctx) {
         recv_ok = ctx.m_result.has_value();
     }
 
-    void onSend(SequenceOps<BuilderResult, 4>& ops, SendIOContext& ctx) {
+    void on_send(SequenceOps<BuilderResult, 4>& ops, SendIOContext& ctx) {
         send_ok = ctx.m_result.has_value();
         ops.complete(send_ok ? static_cast<size_t>(1) : static_cast<size_t>(0));
     }
@@ -102,7 +102,7 @@ void expect(bool condition, const char* message)
     }
 }
 
-Task<void> handleAcceptedClient(GHandle handle, TestState* state, int id)
+Task<void> handle_accepted_client(GHandle handle, TestState* state, int id)
 {
     int client_fd = handle.fd;
     int flags = fcntl(client_fd, F_GETFL, 0);
@@ -113,8 +113,8 @@ Task<void> handleAcceptedClient(GHandle handle, TestState* state, int id)
     std::string reply(1, static_cast<char>('a' + (id % 23)));
     RecvThenSendFlow flow(reply.c_str());
     auto exchange = AwaitableBuilder<BuilderResult, 4, RecvThenSendFlow>(&controller, flow)
-        .recv<&RecvThenSendFlow::onRecv>(recv_buffer, sizeof(recv_buffer))
-        .send<&RecvThenSendFlow::onSend>(reply.c_str(), reply.size())
+        .recv<&RecvThenSendFlow::on_recv>(recv_buffer, sizeof(recv_buffer))
+        .send<&RecvThenSendFlow::on_send>(reply.c_str(), reply.size())
         .build();
 
     auto result = co_await exchange;
@@ -126,7 +126,7 @@ Task<void> handleAcceptedClient(GHandle handle, TestState* state, int id)
     state->server_done.fetch_add(1, std::memory_order_relaxed);
 }
 
-Task<void> runServer(IOScheduler* scheduler, int listen_fd, TestState* state)
+Task<void> run_server(IOScheduler* scheduler, int listen_fd, TestState* state)
 {
     IOController listen_ctrl(GHandle{.fd = listen_fd});
     state->server_ready.store(true, std::memory_order_release);
@@ -140,14 +140,14 @@ Task<void> runServer(IOScheduler* scheduler, int listen_fd, TestState* state)
             break;
         }
         state->accepted.fetch_add(1, std::memory_order_relaxed);
-        if (!scheduleTask(scheduler, handleAcceptedClient(*accepted, state, i))) {
+        if (!schedule_task(scheduler, handle_accepted_client(*accepted, state, i))) {
             fail(state, "schedule accepted client failed");
             break;
         }
     }
 }
 
-Task<void> runClient(TestState* state, int id)
+Task<void> run_client(TestState* state, int id)
 {
     int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -173,8 +173,8 @@ Task<void> runClient(TestState* state, int id)
     char recv_buffer[32]{};
     SendThenRecvFlow flow;
     auto exchange = AwaitableBuilder<BuilderResult, 4, SendThenRecvFlow>(&controller, flow)
-        .send<&SendThenRecvFlow::onSend>(greeting.c_str(), greeting.size())
-        .recv<&SendThenRecvFlow::onRecv>(recv_buffer, sizeof(recv_buffer))
+        .send<&SendThenRecvFlow::on_send>(greeting.c_str(), greeting.size())
+        .recv<&SendThenRecvFlow::on_recv>(recv_buffer, sizeof(recv_buffer))
         .build();
 
     auto result = co_await exchange;
@@ -186,7 +186,7 @@ Task<void> runClient(TestState* state, int id)
     state->client_done.fetch_add(1, std::memory_order_relaxed);
 }
 
-void waitFor(std::atomic<bool>& flag, const char* message)
+void wait_for(std::atomic<bool>& flag, const char* message)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
     while (!flag.load(std::memory_order_acquire)) {
@@ -197,7 +197,7 @@ void waitFor(std::atomic<bool>& flag, const char* message)
     }
 }
 
-void waitForCompletion(TestState& state)
+void wait_for_completion(TestState& state)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     while (state.client_done.load(std::memory_order_relaxed) < kConnections ||
@@ -253,15 +253,15 @@ int main()
     scheduler.start();
 
     TestState state;
-    expect(scheduleTask(scheduler, runServer(&scheduler, listen_fd, &state)), "schedule server failed");
-    waitFor(state.server_ready, "server did not become ready");
+    expect(schedule_task(scheduler, run_server(&scheduler, listen_fd, &state)), "schedule server failed");
+    wait_for(state.server_ready, "server did not become ready");
     for (int i = 0; i < kConnections; ++i) {
-        expect(scheduleTask(scheduler, runClient(&state, i)), "schedule client failed");
+        expect(schedule_task(scheduler, run_client(&state, i)), "schedule client failed");
     }
 
     int rc = 0;
     try {
-        waitForCompletion(state);
+        wait_for_completion(state);
     } catch (const std::exception& ex) {
         std::cerr << "[T118] " << ex.what() << "\n";
         rc = 1;

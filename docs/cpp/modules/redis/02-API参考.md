@@ -123,7 +123,7 @@
 - `set()` 只影响 `REDIS_LOG_*` 宏产生的 galay-redis 日志，不会启用 kernel、ssl、http 或其他 galay 库日志
 - 传入 `nullptr` 等价于禁用 galay-redis 日志
 - logger 的所有权通过 `std::unique_ptr<BaseLogger>` 转移给库级槽位，`get()` 返回的裸指针不得由调用方释放
-- 未设置 logger 或日志级别被 `minLevel()` 过滤时，日志宏不会执行 `std::format`，也不会求值格式化参数
+- 未设置 logger 或日志级别被 `min_level()` 过滤时，日志宏不会执行 `std::format`，也不会求值格式化参数
 - 推荐在创建 `RedisClient`、`RedissClient`、`RedisConnectionPool` 或 `RedissConnectionPool` 之前的单线程初始化阶段调用 `set()`
 
 ## `AsyncRedisConfig`
@@ -138,10 +138,10 @@
 
 静态辅助函数：
 
-- `withTimeout(send, recv)`
-- `withRecvTimeout(recv)`
-- `withSendTimeout(send)`
-- `noTimeout()`
+- `with_timeout(send, recv)`
+- `with_recv_timeout(recv)`
+- `with_send_timeout(send)`
+- `no_timeout()`
 
 语义要点：
 
@@ -149,7 +149,7 @@
 - 小于 `0ms` 表示禁用对应超时
 - `buffer_size` 默认值是 `65536`
 - `buffer_size` 用于创建客户端内部 ring buffer；当前没有公开的自定义 buffer provider API
-- examples/tests 常用的是 `noTimeout()`，或者在 awaitable 上叠加 `.timeout(...)`
+- examples/tests 常用的是 `no_timeout()`，或者在 awaitable 上叠加 `.timeout(...)`
 
 ## `RedisCommandBuilder`
 
@@ -178,9 +178,9 @@
 
 - 连接命令：`auth`、`select`、`ping`、`echo`
 - Pub/Sub：`publish`、`subscribe`、`unsubscribe`、`psubscribe`、`punsubscribe`
-- 拓扑命令：`role`、`replicaof`、`readonly`、`readwrite`、`clusterInfo`、`clusterNodes`、`clusterSlots`
+- 拓扑命令：`role`、`replicaof`、`readonly`、`readwrite`、`cluster_info`、`cluster_nodes`、`cluster_slots`
 - String：`get`、`set`、`setex`、`del`、`exists`、`incr`、`decr`
-- Hash：`hget`、`hset`、`hdel`、`hgetAll`
+- Hash：`hget`、`hset`、`hdel`、`hget_all`
 - List：`lpush`、`rpush`、`lpop`、`rpop`、`llen`、`lrange`
 - Set：`sadd`、`srem`、`smembers`、`scard`
 - Sorted Set：`zadd`、`zrem`、`zrange`、`zscore`
@@ -213,9 +213,9 @@
 ### `RedisBorrowedCommand`
 
 - 构造：`RedisBorrowedCommand(const std::string& encoded, size_t expected_replies = 1)`
-- 访问器：`encoded()`、`expectedReplies()`
+- 访问器：`encoded()`、`expected_replies()`
 - 编译期约束：`std::string&&` 与 `std::string_view` 构造被显式禁用
-- 生命周期约束：`RedisBorrowedCommand` 只借用底层 `std::string`；源字符串必须覆盖整个 `co_await client.commandBorrowed(...)`。`batchBorrowed(const std::string&, ...)` 也遵循同样的借用规则
+- 生命周期约束：`RedisBorrowedCommand` 只借用底层 `std::string`；源字符串必须覆盖整个 `co_await client.command_borrowed(...)`。`batch_borrowed(const std::string&, ...)` 也遵循同样的借用规则
 - 角色定位：plain TCP 路径的内部 borrowed fast path 包装，不是替代常规 `RedisCommandBuilder` owning API 的通用表面
 
 ### `RedisClientBuilder`
@@ -224,14 +224,14 @@
 
 - `scheduler(IOScheduler*)`
 - `config(AsyncRedisConfig)`
-- `sendTimeout(std::chrono::milliseconds)`
-- `recvTimeout(std::chrono::milliseconds)`
-- `bufferSize(size_t)`
-- `buildConfig() const`
+- `send_timeout(std::chrono::milliseconds)`
+- `recv_timeout(std::chrono::milliseconds)`
+- `buffer_size(size_t)`
+- `build_config() const`
 - `build()`
 
-`buildConfig()` 会返回 builder 当前累积出的 `AsyncRedisConfig` 快照，不会隐式创建 `RedisClient`。
-`bufferSize(size_t)` 会写入 `AsyncRedisConfig::buffer_size`，用于构造客户端内部 ring buffer。
+`build_config()` 会返回 builder 当前累积出的 `AsyncRedisConfig` 快照，不会隐式创建 `RedisClient`。
+`buffer_size(size_t)` 会写入 `AsyncRedisConfig::buffer_size`，用于构造客户端内部 ring buffer。
 
 ### `RedisClient`
 
@@ -240,12 +240,12 @@
 | `connect(url)` | `std::expected<void, RedisError>` | 支持 `redis://user:password@host:port/db_index` |
 | `connect(ip, port, options)` | `std::expected<void, RedisError>` | async 主连接入口 |
 | `command(RedisEncodedCommand)` | `std::expected<std::optional<std::vector<RedisValue>>, RedisError>` | 单命令发送 |
-| `commandBorrowed(const RedisBorrowedCommand&)` | `std::expected<std::optional<std::vector<RedisValue>>, RedisError>` | plain 内部零拷贝快路径；调用方持有的编码字节必须覆盖整个 `co_await` |
+| `command_borrowed(const RedisBorrowedCommand&)` | `std::expected<std::optional<std::vector<RedisValue>>, RedisError>` | plain 内部零拷贝快路径；调用方持有的编码字节必须覆盖整个 `co_await` |
 | `receive(expected_replies = 1)` | `std::expected<std::optional<std::vector<RedisValue>>, RedisError>` | Pub/Sub 或手动收包 |
 | `batch(std::span<const RedisCommandView>)` | `std::expected<std::optional<std::vector<RedisValue>>, RedisError>` | 批量发送 |
-| `batchBorrowed(const std::string&, size_t expected_replies)` | `std::expected<std::optional<std::vector<RedisValue>>, RedisError>` | plain 内部预编码 pipeline 快路径；`std::string&&` / `std::string_view` 重载已删除 |
+| `batch_borrowed(const std::string&, size_t expected_replies)` | `std::expected<std::optional<std::vector<RedisValue>>, RedisError>` | plain 内部预编码 pipeline 快路径；`std::string&&` / `std::string_view` 重载已删除 |
 | `close()` | `galay::kernel::CloseAwaitable` | 关闭连接 |
-| `isClosed()` | `bool` | 查询连接状态 |
+| `is_closed()` | `bool` | 查询连接状态 |
 
 覆盖来源：
 
@@ -263,7 +263,7 @@
 
 - 来源：`RedisClient::connect(url)`、`RedisClient::connect(ip, port, options)`
 - 公开别名：`galay::kernel::StateMachineAwaitable<detail::RedisConnectMachine>`
-- 构建方式：`AwaitableBuilder<RedisVoidResult>::fromStateMachine(...).build()`
+- 构建方式：`AwaitableBuilder<RedisVoidResult>::from_state_machine(...).build()`
 - `await_resume()` 返回 `RedisVoidResult`，即 `std::expected<void, RedisError>`
 - 内部状态机会在 `Connect`、`Send`、`Parse`、`Done` 之间推进；若对象已失效，则落到 `Invalid`
 - `RedisConnectOptions::version` 当前只有 `6` 会被解释成 IPv6，其余值都按 IPv4 处理；它不是 RESP 版本开关
@@ -274,14 +274,14 @@
 
 #### `RedisExchangeOperation`
 
-- 来源：`RedisClient::command(...)`、`RedisClient::commandBorrowed(...)`、`RedisClient::receive(...)`、`RedisClient::batch(...)`、`RedisClient::batchBorrowed(...)`
+- 来源：`RedisClient::command(...)`、`RedisClient::command_borrowed(...)`、`RedisClient::receive(...)`、`RedisClient::batch(...)`、`RedisClient::batch_borrowed(...)`
 - 公开别名：`galay::kernel::StateMachineAwaitable<detail::RedisExchangeMachine>`
-- 构建方式：`AwaitableBuilder<detail::RedisExchangeResult>::fromStateMachine(...).build()`
+- 构建方式：`AwaitableBuilder<detail::RedisExchangeResult>::from_state_machine(...).build()`
 - `await_resume()` 返回 `std::expected<std::optional<std::vector<RedisValue>>, RedisError>`
 - 当前成功完成路径会返回已就绪的 reply `vector<RedisValue>`；当 `expected_replies == 0` 时返回空 `vector`
-- `commandBorrowed(...)` / `batchBorrowed(...)` 与 owning 路径共用同一状态机，只是发送阶段直接借用调用方持有的 RESP 编码字节
+- `command_borrowed(...)` / `batch_borrowed(...)` 与 owning 路径共用同一状态机，只是发送阶段直接借用调用方持有的 RESP 编码字节
 - borrowed 路径不会接管底层字节所有权，因此传入的 `std::string` 必须在整个 `co_await` 完成前保持存活
-- I/O 超时与底层 I/O 错误会先经过 `IOError`，再按 `mapIoErrorToRedisType(...)` 转换成 Redis 侧错误类型
+- I/O 超时与底层 I/O 错误会先经过 `IOError`，再按 `map_io_error_to_redis_error(...)` 转换成 Redis 侧错误类型
 - 连接关闭、RESP 解析失败、缓冲区窗口不足会分别落到 `CONNECTION_CLOSED`、`PARSE_ERROR`、`BUFFER_OVERFLOW_ERROR`
 - 若状态机落入 `Invalid`，恢复结果会得到 `INTERNAL_ERROR`
 
@@ -315,7 +315,7 @@
 辅助函数：
 
 - `validate() const`
-- `defaultConfig()`
+- `default_config()`
 - `create(host, port, min_conn, max_conn)`
 
 ### 主类型
@@ -326,11 +326,11 @@
 | `initialize()` | 初始化连接 | `test/t4_pool.cc` |
 | `acquire()` | 获取 `shared_ptr<PooledConnection>` | `test/t4_pool.cc` |
 | `release(conn)` | 归还连接 | `test/t4_pool.cc` |
-| `triggerHealthCheck()` / `triggerIdleCleanup()` | 主动维护 | `conn_pool.h` |
-| `warmup()` / `expandPool()` / `shrinkPool()` | 连接池容量控制 | `conn_pool.h` |
-| `cleanupUnhealthyConnections()` | 移除不健康连接 | `conn_pool.h` |
-| `getStats()` | 统计信息 | `test/t4_pool.cc`、`benchmark/b2_pool.cc` |
-| `getConfig()` | 读取当前配置 | `conn_pool.h` |
+| `trigger_health_check()` / `trigger_idle_cleanup()` | 主动维护 | `conn_pool.h` |
+| `warmup()` / `expand_pool()` / `shrink_pool()` | 连接池容量控制 | `conn_pool.h` |
+| `cleanup_unhealthy_connections()` | 移除不健康连接 | `conn_pool.h` |
+| `get_stats()` | 统计信息 | `test/t4_pool.cc`、`benchmark/b2_pool.cc` |
+| `get_config()` | 读取当前配置 | `conn_pool.h` |
 | `shutdown()` | 同步关闭连接池 | `test/t4_pool.cc` |
 | `ScopedConnection` | RAII 封装 | `conn_pool.h` |
 
@@ -340,7 +340,7 @@
 
 - 来源：`RedisConnectionPool::initialize()`
 - `await_resume()` 返回 `RedisVoidResult`
-- 当前实现会通过同步路径 `getConnectionSync()` 尝试创建最多 `initial_connections` 个连接条目
+- 当前实现会通过同步路径 `get_connection_sync()` 尝试创建最多 `initial_connections` 个连接条目
 - 如果最终创建数量仍小于 `min_connections`，会返回 `CONNECTION_ERROR`
 - 成功路径下会把连接池标记为 initialized，后续 `acquire()` 才能进入正常获取流程
 - 这里要避免过度承诺：源码注释与实现都表明它走的是同步创建路径，文档不把它表述成“已完成全部 async 握手并建立可用 Redis 会话”
@@ -375,40 +375,40 @@
 - `RedisMasterSlaveClientBuilder`
   - `scheduler(IOScheduler*)`
   - `config(AsyncRedisConfig)`
-  - `sendTimeout(std::chrono::milliseconds)`
-  - `recvTimeout(std::chrono::milliseconds)`
-  - `bufferSize(size_t)`
-  - `buildConfig() const`
+  - `send_timeout(std::chrono::milliseconds)`
+  - `recv_timeout(std::chrono::milliseconds)`
+  - `buffer_size(size_t)`
+  - `build_config() const`
   - `build()`
 - `RedisClusterClientBuilder`
   - `scheduler(IOScheduler*)`
   - `config(AsyncRedisConfig)`
-  - `sendTimeout(std::chrono::milliseconds)`
-  - `recvTimeout(std::chrono::milliseconds)`
-  - `bufferSize(size_t)`
-  - `buildConfig() const`
+  - `send_timeout(std::chrono::milliseconds)`
+  - `recv_timeout(std::chrono::milliseconds)`
+  - `buffer_size(size_t)`
+  - `build_config() const`
   - `build()`
 - `RedissMasterSlaveClientBuilder`
-  - 在上面基础上增加 `tlsConfig(RedissClientConfig)`
-  - `buildTlsConfig() const`
+  - 在上面基础上增加 `tls_config(RedissClientConfig)`
+  - `build_tls_config() const`
   - `build()`
 - `RedissClusterClientBuilder`
-  - 在上面基础上增加 `tlsConfig(RedissClientConfig)`
-  - `buildTlsConfig() const`
+  - 在上面基础上增加 `tls_config(RedissClientConfig)`
+  - `build_tls_config() const`
   - `build()`
 
 ### `RedisMasterSlaveClient`
 
 | 方法 | `co_await` 结果 | 说明 |
 |---|---|---|
-| `connectMaster(address)` | `std::expected<void, RedisError>` | 连接主节点 |
-| `addReplica(address)` | `std::expected<void, RedisError>` | 增加副本 |
-| `addSentinel(address)` | `std::expected<void, RedisError>` | 增加 Sentinel |
-| `setSentinelMasterName(name)` | `void` | 指定 master 名称 |
-| `setAutoRetryAttempts(attempts)` | `void` | 设置自动重试次数 |
+| `connect_master(address)` | `std::expected<void, RedisError>` | 连接主节点 |
+| `add_replica(address)` | `std::expected<void, RedisError>` | 增加副本 |
+| `add_sentinel(address)` | `std::expected<void, RedisError>` | 增加 Sentinel |
+| `set_sentinel_master_name(name)` | `void` | 指定 master 名称 |
+| `set_auto_retry_attempts(attempts)` | `void` | 设置自动重试次数 |
 | `execute(cmd, args, prefer_read, auto_retry)` | `std::expected<std::vector<RedisValue>, RedisError>` | 读写命令 |
 | `batch(commands, prefer_read)` | batch awaitable | 批量命令 |
-| `refreshFromSentinel()` | `std::expected<std::vector<RedisValue>, RedisError>` | 触发刷新 |
+| `refresh_from_sentinel()` | `std::expected<std::vector<RedisValue>, RedisError>` | 触发刷新 |
 | `master()` / `replica(index)` | 返回底层 `RedisClient` | 用于直接 close 或观测 |
 
 覆盖来源：
@@ -421,23 +421,23 @@
 
 | 方法 | `co_await` 结果 | 说明 |
 |---|---|---|
-| `addNode(node)` | `std::expected<void, RedisError>` | 增加 seed 节点 |
-| `setSlotRange(index, start, end)` | `void` | 手动设置槽区间 |
-| `setAutoRefreshInterval(interval)` | `void` | 自动刷新节流 |
+| `add_node(node)` | `std::expected<void, RedisError>` | 增加 seed 节点 |
+| `set_slot_range(index, start, end)` | `void` | 手动设置槽区间 |
+| `set_auto_refresh_interval(interval)` | `void` | 自动刷新节流 |
 | `execute(cmd, args, routing_key, auto_retry)` | `std::expected<std::vector<RedisValue>, RedisError>` | 路由执行 |
 | `batch(commands, routing_key)` | batch awaitable | 同路由批量发送 |
-| `refreshSlots()` | `std::expected<std::vector<RedisValue>, RedisError>` | 拉取 `CLUSTER SLOTS` |
-| `keySlot(key)` | `uint16_t` | 计算 key slot |
-| `nodeCount()` / `node(index)` | 节点探查 | 用于 close 与调试 |
+| `refresh_slots()` | `std::expected<std::vector<RedisValue>, RedisError>` | 拉取 `CLUSTER SLOTS` |
+| `key_slot(key)` | `uint16_t` | 计算 key slot |
+| `node_count()` / `node(index)` | 节点探查 | 用于 close 与调试 |
 
 ### Awaitable 与内部边界
 
 #### 拓扑方法现在返回 `Task<RedisCommandResult>`
 
-- 来源：`RedisMasterSlaveClient::execute(...)`、`RedisMasterSlaveClient::refreshFromSentinel()`、`RedisClusterClient::execute(...)`、`RedisClusterClient::refreshSlots()`
+- 来源：`RedisMasterSlaveClient::execute(...)`、`RedisMasterSlaveClient::refresh_from_sentinel()`、`RedisClusterClient::execute(...)`、`RedisClusterClient::refresh_slots()`
 - 返回类型：`galay::kernel::Task<RedisCommandResult>`
 - `RedisCommandResult` 仍然是 `std::expected<std::vector<RedisValue>, RedisError>`
-- 调用方式直接写成 `auto result = co_await cluster.refreshSlots();`
+- 调用方式直接写成 `auto result = co_await cluster.refresh_slots();`
 - 公开头文件里已经不再暴露 `RedisCommandResultAwaitable`
 
 ### TLS 对应类型
@@ -455,9 +455,9 @@
 最常用的 TLS 入口：
 
 - `RedissClient::connect("rediss://host:6380/0")`
-- `RedissClientBuilder::tlsConfig(...)`
-- `RedissMasterSlaveClientBuilder::tlsConfig(...)`
-- `RedissClusterClientBuilder::tlsConfig(...)`
+- `RedissClientBuilder::tls_config(...)`
+- `RedissMasterSlaveClientBuilder::tls_config(...)`
+- `RedissClusterClientBuilder::tls_config(...)`
 
 TLS 单连接路径当前返回的 operation 类型是：
 
@@ -498,33 +498,33 @@ TLS 单连接路径当前返回的 operation 类型是：
 `RedisReply` 当前公开接口：
 
 - 构造与拷贝/移动：默认构造、`RedisReply(RespType, RespData)`、拷贝/移动构造与赋值
-- 类型判断：`isSimpleString()`、`isError()`、`isInteger()`、`isBulkString()`、`isArray()`、`isNull()`、`isDouble()`、`isBoolean()`、`isMap()`、`isSet()`、`isPush()`
-- 取值：`asString()`、`asInteger()`、`asDouble()`、`asBoolean()`、`asArray()`、`asMap()`
-- 元信息：`getType()`、`getData()`
+- 类型判断：`is_simple_string()`、`is_error()`、`is_integer()`、`is_bulk_string()`、`is_array()`、`is_null()`、`is_double()`、`is_boolean()`、`is_map()`、`is_set()`、`is_push()`
+- 取值：`as_string()`、`as_integer()`、`as_double()`、`as_boolean()`、`as_array()`、`as_map()`
+- 元信息：`get_type()`、`get_data()`
 
 补充说明：
 
 - `RespType` 枚举当前还包含 `BlobError`、`VerbatimString`、`BigNumber`、`Attribute`
 - 这些更细的 RESP3 marker 没有各自独立的 `RedisReply::isXxx()` 便捷方法，但 `RespParser` 会保留真实 `RespType`
-- 读取 payload 时仍分别使用 `asString()`、`asMap()` 或 `asArray()`；判断细分 marker 时看 `getType()`
+- 读取 payload 时仍分别使用 `as_string()`、`as_map()` 或 `as_array()`；判断细分 marker 时看 `get_type()`
 
 `RespParser` 当前公开方法：
 
 - `parse(const char* data, size_t length)`
-- `parseFast(const char* data, size_t length, RedisReply* out)`
+- `parse_fast(const char* data, size_t length, RedisReply* out)`
 - `reset()`
 
 `RespEncoder` 当前公开方法：
 
-- `encodeSimpleString(...)`
-- `encodeError(...)`
-- `encodeInteger(...)`
-- `encodeBulkString(...)`
-- `encodeNull()`
-- `encodeArray(...)`
-- `encodeCommand(...)` 的多种重载
+- `encode_simple_string(...)`
+- `encode_error(...)`
+- `encode_integer(...)`
+- `encode_bulk_string(...)`
+- `encode_null()`
+- `encode_array(...)`
+- `encode_command(...)` 的多种重载
 - `append(...)` 的多种重载
-- `appendCommandFast(...)` 的多种重载
+- `append_command_fast(...)` 的多种重载
 
 覆盖来源：
 
@@ -543,15 +543,15 @@ TLS 单连接路径当前返回的 operation 类型是：
 - `~Connection()`
 - `connect(const std::string& host, int port, uint32_t timeout_ms = 5000)`
 - `disconnect()`
-- `isConnected() const`
+- `is_connected() const`
 - `send(const std::string& data)`
-- `receiveReply()`
+- `receive_reply()`
 - `execute(const std::string& encoded_command)`
 
 返回类型：
 
 - `connect()` / `send()`：`std::expected<void, RedisError>`
-- `receiveReply()` / `execute()`：`std::expected<RedisReply, RedisError>`
+- `receive_reply()` / `execute()`：`std::expected<RedisReply, RedisError>`
 
 这是同步 `RedisSession` 使用的底层 TCP + RESP 封装。
 
@@ -566,15 +566,15 @@ TLS 单连接路径当前返回的 operation 类型是：
 
 常用判定与取值方法：
 
-- RESP2：`isNull`、`isStatus`、`toStatus`、`isError`、`toError`、`isInteger`、`toInteger`、`isString`、`toString`、`isArray`、`toArray`
-- RESP3：`isDouble`、`toDouble`、`isBool`、`toBool`、`isMap`、`toMap`、`isSet`、`toSet`、`isAttr`（attribute `|`，取值仍用 `toMap()`）、`isPush`、`toPush`、`isBigNumber`、`toBigNumber`、`isVerb`、`toVerb`
-- RESP3 blob error：底层 `RedisReply::getType()` 会保留 `RespType::BlobError`，`RedisValue` 层继续通过 `isError()` / `toError()` 暴露错误文本
-- 底层回复访问：`getReply() const`、`getReply()`
-- 错误工厂：`RedisValue::fromError(...)`
+- RESP2：`is_null`、`is_status`、`to_status`、`is_error`、`to_error`、`is_integer`、`to_integer`、`is_string`、`to_string`、`is_array`、`to_array`
+- RESP3：`is_double`、`to_double`、`is_bool`、`to_bool`、`is_map`、`to_map`、`is_set`、`to_set`、`is_attr`（attribute `|`，取值仍用 `to_map()`）、`is_push`、`to_push`、`is_big_number`、`to_big_number`、`is_verb`、`to_verb`
+- RESP3 blob error：底层 `RedisReply::get_type()` 会保留 `RespType::BlobError`，`RedisValue` 层继续通过 `is_error()` / `to_error()` 暴露错误文本
+- 底层回复访问：`get_reply() const`、`get_reply()`
+- 错误工厂：`RedisValue::from_error(...)`
 
 生命周期要点：
 
-- `toArray()`、`toMap()`、`toSet()`、`toPush()` 都返回独立副本，不借用原始 `RedisValue` 的内部存储
+- `to_array()`、`to_map()`、`to_set()`、`to_push()` 都返回独立副本，不借用原始 `RedisValue` 的内部存储
 - `RedisValue` 禁止拷贝、允许移动
 
 覆盖来源：
@@ -591,13 +591,13 @@ TLS 单连接路径当前返回的 operation 类型是：
 这是仓库源码树里仍保留的同步阻塞接口，当前主要用于维护遗留实现和 `test/t2_sync.cc` 这类源码树回归。公开方法包括：
 
 - `connect(...)` / `disconnect()`
-- `selectDB()` / `flushDB()` / `switchVersion()`
-- `get()` / `set()` / `del()` / `exist()` / `setEx()`
-- `hget()` / `hset()` / `hgetAll()`
+- `select_db()` / `flush_db()` / `switch_version()`
+- `get()` / `set()` / `del()` / `exist()` / `set_ex()`
+- `hget()` / `hset()` / `hget_all()`
 - `lpush()` / `rpush()` / `lrange()`
 - `sadd()` / `smembers()` / `srem()`
 - `zadd()` / `zrange()` / `zscore()` / `zrem()`
-- `redisCommand(...)`
+- `redis_command(...)`
 
 但要注意：
 

@@ -39,8 +39,8 @@ using namespace std::chrono_literals;
 
 namespace {
 
-uint16_t tcpTestPort() {
-    return galay::test::resolvePortFromEnv("GALAY_TEST_TCP_PORT", 28080);
+uint16_t tcp_test_port() {
+    return galay::test::resolve_port_from_env("GALAY_TEST_TCP_PORT", 28080);
 }
 
 constexpr std::array<std::string_view, 3> kMessages{
@@ -49,7 +49,7 @@ constexpr std::array<std::string_view, 3> kMessages{
     "Final message",
 };
 
-bool waitForFlag(const std::atomic<bool>& flag, std::chrono::milliseconds timeout)
+bool wait_for_flag(const std::atomic<bool>& flag, std::chrono::milliseconds timeout)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
@@ -70,13 +70,13 @@ std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_test_done{false};
 
 // Echo服务器协程
-Task<void> echoServer() {
+Task<void> echo_server() {
     g_total++;
     LogInfo("TCP Server starting...");
     AsyncTcpSocket listener;
 
     // 设置选项
-    auto optResult = listener.option().handleReuseAddr();
+    auto optResult = listener.option().handle_reuse_addr();
     if (!optResult) {
         LogError("Failed to set reuse addr: {}", optResult.error().message());
         g_failed++;
@@ -84,7 +84,7 @@ Task<void> echoServer() {
         co_return;
     }
 
-    optResult = listener.option().handleNonBlock();
+    optResult = listener.option().handle_non_block();
     if (!optResult) {
         LogError("Failed to set non-block: {}", optResult.error().message());
         g_failed++;
@@ -93,7 +93,7 @@ Task<void> echoServer() {
     }
 
     // 绑定地址
-    Host bindHost(IPType::IPV4, "127.0.0.1", tcpTestPort());
+    Host bindHost(IPType::IPV4, "127.0.0.1", tcp_test_port());
     auto bindResult = listener.bind(bindHost);
     if (!bindResult) {
         LogError("Failed to bind: {}", bindResult.error().message());
@@ -112,7 +112,7 @@ Task<void> echoServer() {
         co_return;
     }
 
-    LogInfo("TCP Server listening on 127.0.0.1:{}", tcpTestPort());
+    LogInfo("TCP Server listening on 127.0.0.1:{}", tcp_test_port());
     g_server_ready = true;
 
     // 接受连接
@@ -130,7 +130,7 @@ Task<void> echoServer() {
 
     // 创建客户端socket
     AsyncTcpSocket client(acceptResult.value());
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     // Echo循环 - 接收3条消息
     char buffer[1024];
@@ -177,11 +177,11 @@ Task<void> echoServer() {
     co_return;
 }
 
-Task<void> peerEchoClient() {
+Task<void> peer_echo_client() {
     AsyncTcpSocket client;
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
-    Host serverHost(IPType::IPV4, "127.0.0.1", tcpTestPort());
+    Host serverHost(IPType::IPV4, "127.0.0.1", tcp_test_port());
     auto connectResult = co_await client.connect(serverHost);
     if (!connectResult) {
         LogError("Peer client failed to connect: {}", connectResult.error().message());
@@ -226,10 +226,10 @@ int main() {
     LogDebug("Scheduler started");
 
     // 启动服务器
-    scheduleTask(scheduler, echoServer());
+    schedule_task(scheduler, echo_server());
     LogDebug("Server task submitted");
 
-    if (!waitForFlag(g_server_ready, 5s) && !g_test_done.load()) {
+    if (!wait_for_flag(g_server_ready, 5s) && !g_test_done.load()) {
         LogError("Server did not become ready in time");
         g_failed++;
         g_test_done = true;
@@ -237,14 +237,14 @@ int main() {
 
     if (!g_test_done.load()) {
         LogInfo("Server is ready, scheduling async peer client...");
-        if (!scheduleTask(scheduler, peerEchoClient())) {
+        if (!schedule_task(scheduler, peer_echo_client())) {
             LogError("Failed to schedule async peer client");
             g_failed++;
             g_test_done = true;
         }
     }
 
-    if (!waitForFlag(g_test_done, 5s)) {
+    if (!wait_for_flag(g_test_done, 5s)) {
         LogError("TCP server test timed out waiting for completion");
         g_failed++;
     }
@@ -257,14 +257,14 @@ int main() {
 #endif
 
     // 写入测试结果
-    writer.addTest();
+    writer.add_test();
     if (g_passed > 0) {
-        writer.addPassed();
+        writer.add_passed();
     }
     if (g_failed > 0) {
-        writer.addFailed();
+        writer.add_failed();
     }
-    writer.writeResult();
+    writer.write_result();
 
     LogInfo("========================================");
     LogInfo("Test Results: Total={}, Passed={}, Failed={}", g_total.load(), g_passed.load(), g_failed.load());

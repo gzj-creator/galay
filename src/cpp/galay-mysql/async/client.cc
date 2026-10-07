@@ -90,7 +90,7 @@ MysqlPipelineAwaitable<Strategy> AsyncMysqlClient<Strategy>::pipeline(std::span<
     protocol::MysqlCommandBuilder builder;
     builder.reserve(sqls.size(), reserve_bytes);
     for (const auto sql : sqls) {
-        builder.appendQuery(sql);
+        builder.append_query(sql);
     }
 
     return batch(builder.commands());
@@ -103,23 +103,23 @@ MysqlPrepareAwaitable<Strategy> AsyncMysqlClient<Strategy>::prepare(std::string_
 }
 
 template<RingBufferBackendStrategy Strategy>
-MysqlStmtExecuteAwaitable<Strategy> AsyncMysqlClient<Strategy>::stmtExecute(uint32_t stmt_id,
+MysqlStmtExecuteAwaitable<Strategy> AsyncMysqlClient<Strategy>::stmt_execute(uint32_t stmt_id,
                                                         std::span<const std::optional<std::string>> params,
                                                         std::span<const uint8_t> param_types)
 {
-    return MysqlStmtExecuteAwaitable<Strategy>(*this, m_encoder.encodeStmtExecute(stmt_id, params, param_types, 0));
+    return MysqlStmtExecuteAwaitable<Strategy>(*this, m_encoder.encode_stmt_execute(stmt_id, params, param_types, 0));
 }
 
 template<RingBufferBackendStrategy Strategy>
-MysqlStmtExecuteAwaitable<Strategy> AsyncMysqlClient<Strategy>::stmtExecute(uint32_t stmt_id,
+MysqlStmtExecuteAwaitable<Strategy> AsyncMysqlClient<Strategy>::stmt_execute(uint32_t stmt_id,
                                                         std::span<const std::optional<std::string_view>> params,
                                                         std::span<const uint8_t> param_types)
 {
-    return MysqlStmtExecuteAwaitable<Strategy>(*this, m_encoder.encodeStmtExecute(stmt_id, params, param_types, 0));
+    return MysqlStmtExecuteAwaitable<Strategy>(*this, m_encoder.encode_stmt_execute(stmt_id, params, param_types, 0));
 }
 
 template<RingBufferBackendStrategy Strategy>
-MysqlQueryAwaitable<Strategy> AsyncMysqlClient<Strategy>::beginTransaction()
+MysqlQueryAwaitable<Strategy> AsyncMysqlClient<Strategy>::begin_transaction()
 {
     return query("BEGIN");
 }
@@ -143,7 +143,7 @@ MysqlQueryAwaitable<Strategy> AsyncMysqlClient<Strategy>::ping()
 }
 
 template<RingBufferBackendStrategy Strategy>
-MysqlQueryAwaitable<Strategy> AsyncMysqlClient<Strategy>::useDatabase(std::string_view database)
+MysqlQueryAwaitable<Strategy> AsyncMysqlClient<Strategy>::use_database(std::string_view database)
 {
     std::string sql;
     sql.reserve(4 + database.size());

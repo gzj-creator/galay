@@ -244,9 +244,9 @@ namespace galay::redis
         [[nodiscard]] RedisEncodedCommand replicaof(const std::string& host, int32_t port) const; ///< REPLICAOF 命令
         [[nodiscard]] RedisEncodedCommand readonly() const; ///< READONLY 命令
         [[nodiscard]] RedisEncodedCommand readwrite() const; ///< READWRITE 命令
-        [[nodiscard]] RedisEncodedCommand clusterInfo() const; ///< CLUSTER INFO 命令
-        [[nodiscard]] RedisEncodedCommand clusterNodes() const; ///< CLUSTER NODES 命令
-        [[nodiscard]] RedisEncodedCommand clusterSlots() const; ///< CLUSTER SLOTS 命令
+        [[nodiscard]] RedisEncodedCommand cluster_info() const; ///< CLUSTER INFO 命令
+        [[nodiscard]] RedisEncodedCommand cluster_nodes() const; ///< CLUSTER NODES 命令
+        [[nodiscard]] RedisEncodedCommand cluster_slots() const; ///< CLUSTER SLOTS 命令
 
         // ======================== String操作 ========================
         [[nodiscard]] RedisEncodedCommand get(const std::string& key) const; ///< GET 命令
@@ -268,7 +268,7 @@ namespace galay::redis
                                                const std::string& value) const; ///< HSET 命令
         [[nodiscard]] RedisEncodedCommand hdel(const std::string& key,
                                                const std::string& field) const; ///< HDEL 命令
-        [[nodiscard]] RedisEncodedCommand hgetAll(const std::string& key) const; ///< HGETALL 命令
+        [[nodiscard]] RedisEncodedCommand hget_all(const std::string& key) const; ///< HGETALL 命令
 
         // ======================== List操作 ========================
         [[nodiscard]] RedisEncodedCommand lpush(const std::string& key,
@@ -323,12 +323,12 @@ namespace galay::redis
             Slice encoded;       ///< 预编码数据切片
         };
 
-        static size_t normalizeExpectedReplies(size_t expected_replies) noexcept; ///< 规范化期望回复数
+        static size_t normalize_expected_replies(size_t expected_replies) noexcept; ///< 规范化期望回复数
 
-        Slice appendToStorage(std::string_view value); ///< 追加字符串到存储池
-        [[nodiscard]] std::string_view toView(Slice slice) const; ///< 将切片转换为 string_view
-        [[nodiscard]] std::string_view toEncodedView(Slice slice) const; ///< 将编码切片转换为 string_view
-        void rebuildViewsIfNeeded() const; ///< 按需重建命令视图
+        Slice append_to_storage(std::string_view value); ///< 追加字符串到存储池
+        [[nodiscard]] std::string_view to_view(Slice slice) const; ///< 将切片转换为 string_view
+        [[nodiscard]] std::string_view to_encoded_view(Slice slice) const; ///< 将编码切片转换为 string_view
+        void rebuild_views_if_needed() const; ///< 按需重建命令视图
 
         std::string m_encoded;                        ///< 累积的编码数据
 

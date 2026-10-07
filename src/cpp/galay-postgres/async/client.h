@@ -64,18 +64,18 @@ class AsyncPostgresClientBuilder
 public:
     AsyncPostgresClientBuilder& scheduler(galay::kernel::IOScheduler* scheduler) noexcept;
     AsyncPostgresClientBuilder& config(AsyncPostgresConfig config) noexcept;
-    AsyncPostgresClientBuilder& sendTimeout(std::chrono::milliseconds timeout) noexcept;
-    AsyncPostgresClientBuilder& recvTimeout(std::chrono::milliseconds timeout) noexcept;
-    AsyncPostgresClientBuilder& bufferSize(size_t size) noexcept;
-    AsyncPostgresClientBuilder& resultRowReserveHint(size_t hint) noexcept;
-    AsyncPostgresClientBuilder& tcpNoDelay(bool enabled) noexcept;
+    AsyncPostgresClientBuilder& send_timeout(std::chrono::milliseconds timeout) noexcept;
+    AsyncPostgresClientBuilder& recv_timeout(std::chrono::milliseconds timeout) noexcept;
+    AsyncPostgresClientBuilder& buffer_size(size_t size) noexcept;
+    AsyncPostgresClientBuilder& result_row_reserve_hint(size_t hint) noexcept;
+    AsyncPostgresClientBuilder& tcp_no_delay(bool enabled) noexcept;
 
     [[nodiscard]] AsyncPostgresClient<> build() const;
-    [[nodiscard]] AsyncPostgresConfig buildConfig() const { return m_config; }
+    [[nodiscard]] AsyncPostgresConfig build_config() const { return m_config; }
 
 private:
     galay::kernel::IOScheduler* m_scheduler = nullptr;
-    AsyncPostgresConfig m_config = AsyncPostgresConfig::noTimeout();
+    AsyncPostgresConfig m_config = AsyncPostgresConfig::no_timeout();
 };
 
 /**
@@ -95,7 +95,7 @@ public:
 
     explicit AsyncPostgresClient(
         galay::kernel::IOScheduler* scheduler,
-        AsyncPostgresConfig config = AsyncPostgresConfig::noTimeout());
+        AsyncPostgresConfig config = AsyncPostgresConfig::no_timeout());
     AsyncPostgresClient(AsyncPostgresClient&& other) noexcept;
     AsyncPostgresClient& operator=(AsyncPostgresClient&& other) noexcept;
     AsyncPostgresClient(const AsyncPostgresClient&) = delete;
@@ -121,34 +121,34 @@ public:
     ExecuteAwaitable execute(std::string_view name,
                              std::span<const std::optional<std::string_view>> params);
 
-    QueryAwaitable beginTransaction();
+    QueryAwaitable begin_transaction();
     QueryAwaitable commit();
     QueryAwaitable rollback();
     QueryAwaitable ping();
 
     galay::kernel::Task<PostgresVoidResult> close();
-    [[nodiscard]] bool isClosed() const noexcept { return m_is_closed; }
-    [[nodiscard]] char transactionStatus() const noexcept { return m_transaction_status; }
-    [[nodiscard]] const std::unordered_map<std::string, std::string>& serverParameters() const noexcept
+    [[nodiscard]] bool is_closed() const noexcept { return m_is_closed; }
+    [[nodiscard]] char transaction_status() const noexcept { return m_transaction_status; }
+    [[nodiscard]] const std::unordered_map<std::string, std::string>& server_parameters() const noexcept
     {
         return m_server_parameters;
     }
-    [[nodiscard]] const std::optional<protocol::BackendKeyDataInfo>& backendKeyData() const noexcept
+    [[nodiscard]] const std::optional<protocol::BackendKeyDataInfo>& backend_key_data() const noexcept
     {
         return m_backend_key_data;
     }
 
     galay::async::AsyncTcpSocket& socket() noexcept { return m_socket; }
-    RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() noexcept { return m_ring_buffer; }
-    const RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() const noexcept { return m_ring_buffer; }
+    RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() noexcept { return m_ring_buffer; }
+    const RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() const noexcept { return m_ring_buffer; }
     protocol::PostgresParser& parser() noexcept { return m_parser; }
     protocol::PostgresEncoder& encoder() noexcept { return m_encoder; }
-    const AsyncPostgresConfig& asyncConfig() const noexcept { return m_config; }
+    const AsyncPostgresConfig& async_config() const noexcept { return m_config; }
 
-    void setTransactionStatus(char status) noexcept { m_transaction_status = status; }
-    void setServerParameter(std::string name, std::string value);
-    void setBackendKeyData(protocol::BackendKeyDataInfo data) noexcept;
-    void setClosed(bool closed) noexcept { m_is_closed = closed; }
+    void set_transaction_status(char status) noexcept { m_transaction_status = status; }
+    void set_server_parameter(std::string name, std::string value);
+    void set_backend_key_data(protocol::BackendKeyDataInfo data) noexcept;
+    void set_closed(bool closed) noexcept { m_is_closed = closed; }
 
 private:
     friend class details::PostgresConnectAwaitable<Strategy>;

@@ -27,22 +27,22 @@ struct SurfaceMachine {
         return SslMachineAction<result_type>::complete(result_type{0});
     }
 
-    void onHandshake(std::expected<void, SslError>) {}
-    void onRecv(std::expected<Bytes, SslError>) {}
-    void onSend(std::expected<size_t, SslError>) {}
-    void onShutdown(std::expected<void, SslError>) {}
+    void on_handshake(std::expected<void, SslError>) {}
+    void on_recv(std::expected<Bytes, SslError>) {}
+    void on_send(std::expected<size_t, SslError>) {}
+    void on_shutdown(std::expected<void, SslError>) {}
 };
 
 struct SurfaceFlow {
     std::array<char, 8> scratch{};
     std::array<char, 4> reply{'p', 'o', 'n', 'g'};
 
-    void onHandshake(SslBuilderOps<SurfaceResult, 8>&, SslHandshakeContext&) {}
-    void onRecv(SslBuilderOps<SurfaceResult, 8>&, SslRecvContext&) {}
-    ParseStatus onParse(SslBuilderOps<SurfaceResult, 8>&) { return ParseStatus::kCompleted; }
-    void onSend(SslBuilderOps<SurfaceResult, 8>&, SslSendContext&) {}
-    void onShutdown(SslBuilderOps<SurfaceResult, 8>&, SslShutdownContext&) {}
-    void onFinish(SslBuilderOps<SurfaceResult, 8>& ops) { ops.complete(SurfaceResult{0}); }
+    void on_handshake(SslBuilderOps<SurfaceResult, 8>&, SslHandshakeContext&) {}
+    void on_recv(SslBuilderOps<SurfaceResult, 8>&, SslRecvContext&) {}
+    ParseStatus on_parse(SslBuilderOps<SurfaceResult, 8>&) { return ParseStatus::kCompleted; }
+    void on_send(SslBuilderOps<SurfaceResult, 8>&, SslSendContext&) {}
+    void on_shutdown(SslBuilderOps<SurfaceResult, 8>&, SslShutdownContext&) {}
+    void on_finish(SslBuilderOps<SurfaceResult, 8>& ops) { ops.complete(SurfaceResult{0}); }
 };
 
 using AwaitableT = SslStateMachineAwaitable<SurfaceMachine>;

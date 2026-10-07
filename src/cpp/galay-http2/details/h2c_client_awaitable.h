@@ -39,22 +39,22 @@ public:
     decltype(auto) await_suspend(std::coroutine_handle<Promise> handle);
 
     /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
-    void bindTimeoutTimer(TimeoutTimer* timer) noexcept;
+    void bind_timeout_timer(TimeoutTimer* timer) noexcept;
 
     ResultType await_resume();
-    void markTimeout();
+    void mark_timeout();
 
     IOTask* front() override;
     const IOTask* front() const override;
-    void popFront() override;
+    void pop_front() override;
     bool empty() const override;
 
 #ifdef USE_IOURING
-    SequenceProgress prepareForSubmit() override;
-    SequenceProgress onActiveEvent(struct io_uring_cqe* cqe, GHandle handle) override;
+    SequenceProgress prepare_for_submit() override;
+    SequenceProgress on_active_event(struct io_uring_cqe* cqe, GHandle handle) override;
 #else
-    SequenceProgress prepareForSubmit(GHandle handle) override;
-    SequenceProgress onActiveEvent(GHandle handle) override;
+    SequenceProgress prepare_for_submit(GHandle handle) override;
+    SequenceProgress on_active_event(GHandle handle) override;
 #endif
 
     std::expected<bool, IOError> m_result{true};
@@ -62,12 +62,12 @@ public:
 private:
     using InnerOperation = galay::kernel::StateMachineAwaitable<H2cUpgradeMachine<Strategy>>;
 
-    static void discardTransport(H2cClient<Strategy>& client);
-    static bool finalizeTransport(H2cClient<Strategy>& client, Scheduler* scheduler);
-    static Http2Error translateIoError(const IOError& error);
+    static void discard_transport(H2cClient<Strategy>& client);
+    static bool finalize_transport(H2cClient<Strategy>& client, Scheduler* scheduler);
+    static Http2Error translate_io_error(const IOError& error);
 
-    ResultType resumeInner();
-    void cleanupInnerIfArmed();
+    ResultType resume_inner();
+    void cleanup_inner_if_armed();
 
     H2cClient<Strategy>* m_client = nullptr;
     std::unique_ptr<InnerOperation> m_inner_operation;

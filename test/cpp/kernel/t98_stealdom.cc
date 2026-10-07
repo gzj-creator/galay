@@ -3,7 +3,7 @@
  * @brief Surface-level assertions guarding Runtime-managed IO steal domain wiring
  *
  * Validates:
- * - `Runtime::start()` declares `configureIOSchedulerStealDomains()` and calls it before launching IO scheduler threads
+ * - `Runtime::start()` declares `configure_io_scheduler_steal_domains()` and calls it before launching IO scheduler threads
  * - The helper walks `m_io_schedulers`, configures steal domains, and leaves parallel schedulers untouched
  * - `IOReadyQueue` declares the steal-domain fields and helper
  */
@@ -18,11 +18,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -34,7 +34,7 @@ bool contains(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
-std::string extractSection(const std::string& content,
+std::string extract_section(const std::string& content,
                            const std::string& begin,
                            const std::string& end) {
     const auto begin_pos = content.find(begin);
@@ -48,7 +48,7 @@ std::string extractSection(const std::string& content,
     return content.substr(begin_pos, end_pos - begin_pos);
 }
 
-std::string extractBracedSection(const std::string& content,
+std::string extract_braced_section(const std::string& content,
                                  const std::string& begin_marker) {
     const auto begin_pos = content.find(begin_marker);
     if (begin_pos == std::string::npos) {
@@ -93,52 +93,52 @@ std::string extractBracedSection(const std::string& content,
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto runtime = root / "galay-kernel" / "core" / "runtime.cc";
     const auto ioscheduler = root / "galay-kernel" / "core" / "io_ready_queue.hpp";
 
     std::vector<std::string> failures;
 
-    const auto runtime_src = readAll(runtime);
+    const auto runtime_src = read_all(runtime);
     if (runtime_src.empty()) {
         failures.push_back(runtime.string() + ": failed to read runtime.cc");
     } else {
-        const auto start_body = extractSection(
+        const auto start_body = extract_section(
             runtime_src,
             "std::expected<void, RuntimeError> Runtime::start()",
             "void Runtime::stop()");
         if (start_body.empty()) {
             failures.push_back(runtime.string() + ": failed to isolate Runtime::start()");
         } else {
-            if (!contains(start_body, "configureIOSchedulerStealDomains()")) {
-                failures.push_back(runtime.string() + ": start() missing configureIOSchedulerStealDomains() call");
+            if (!contains(start_body, "configure_io_scheduler_steal_domains()")) {
+                failures.push_back(runtime.string() + ": start() missing configure_io_scheduler_steal_domains() call");
             }
             if (!contains(start_body, "for (auto& scheduler : m_io_schedulers)")) {
                 failures.push_back(runtime.string() + ": start() missing IO scheduler start loop");
             }
-            const auto helper_call = start_body.find("configureIOSchedulerStealDomains()");
+            const auto helper_call = start_body.find("configure_io_scheduler_steal_domains()");
             const auto io_loop = start_body.find("for (auto& scheduler : m_io_schedulers)");
             if (helper_call != std::string::npos &&
                 io_loop != std::string::npos &&
                 helper_call > io_loop) {
                 failures.push_back(runtime.string() +
-                                   ": configureIOSchedulerStealDomains() must run before IO scheduler start loop");
+                                   ": configure_io_scheduler_steal_domains() must run before IO scheduler start loop");
             }
         }
 
         const auto helper_section =
-            extractSection(
+            extract_section(
                 runtime_src,
-                "void Runtime::configureIOSchedulerStealDomains()",
+                "void Runtime::configure_io_scheduler_steal_domains()",
                 "std::expected<void, RuntimeError> Runtime::start()");
         if (helper_section.empty()) {
-            failures.push_back(runtime.string() + ": missing configureIOSchedulerStealDomains() definition");
+            failures.push_back(runtime.string() + ": missing configure_io_scheduler_steal_domains() definition");
         } else {
             if (!contains(helper_section, "m_io_schedulers")) {
                 failures.push_back(runtime.string() + ": helper must iterate m_io_schedulers");
             }
-            if (!contains(helper_section, "configureStealDomain")) {
-                failures.push_back(runtime.string() + ": helper must call configureStealDomain()");
+            if (!contains(helper_section, "configure_steal_domain")) {
+                failures.push_back(runtime.string() + ": helper must call configure_steal_domain()");
             }
             if (contains(helper_section, "m_parallel_schedulers")) {
                 failures.push_back(runtime.string() + ": helper must avoid parallel schedulers");
@@ -146,12 +146,12 @@ int main() {
         }
     }
 
-    const auto ioscheduler_src = readAll(ioscheduler);
+    const auto ioscheduler_src = read_all(ioscheduler);
     if (ioscheduler_src.empty()) {
         failures.push_back(ioscheduler.string() + ": failed to read io_scheduler.hpp");
     } else {
         const auto worker_section =
-            extractBracedSection(ioscheduler_src, "struct IOReadyQueue");
+            extract_braced_section(ioscheduler_src, "struct IOReadyQueue");
         if (worker_section.empty()) {
             failures.push_back(ioscheduler.string() + ": failed to isolate IOReadyQueue");
         } else {
@@ -164,8 +164,8 @@ int main() {
             if (!contains(worker_section, "random_seed")) {
                 failures.push_back(ioscheduler.string() + ": worker state missing random_seed");
             }
-            if (!contains(worker_section, "configureStealDomain(")) {
-                failures.push_back(ioscheduler.string() + ": worker state missing configureStealDomain helper");
+            if (!contains(worker_section, "configure_steal_domain(")) {
+                failures.push_back(ioscheduler.string() + ": worker state missing configure_steal_domain helper");
             }
         }
     }
@@ -175,14 +175,14 @@ int main() {
     };
 
     for (const auto& scheduler_path : scheduler_headers) {
-        const auto scheduler_src = readAll(scheduler_path);
+        const auto scheduler_src = read_all(scheduler_path);
         if (scheduler_src.empty()) {
             failures.push_back(scheduler_path.string() + ": failed to read scheduler header");
             continue;
         }
-        if (!contains(scheduler_src, "m_worker.configureStealDomain")) {
+        if (!contains(scheduler_src, "m_worker.configure_steal_domain")) {
             failures.push_back(scheduler_path.string() +
-                               ": scheduler must propagate configureStealDomain() to m_worker");
+                               ": scheduler must propagate configure_steal_domain() to m_worker");
         }
     }
 

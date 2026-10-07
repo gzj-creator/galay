@@ -21,13 +21,13 @@ using namespace galay::kernel;
 
 namespace {
 
-Task<void> pendingTask() {
+Task<void> pending_task() {
     co_return;
 }
 
 template <typename SchedulerT>
-bool startWakeReactor(SchedulerT& scheduler) {
-    auto started = SchedulerTestAccess::startReactor(scheduler);
+bool start_wake_reactor(SchedulerT& scheduler) {
+    auto started = SchedulerTestAccess::start_reactor(scheduler);
     if (!started) {
         std::cerr << "[T39] failed to start reactor: " << started.error().message() << "\n";
         return false;
@@ -35,11 +35,11 @@ bool startWakeReactor(SchedulerT& scheduler) {
     return true;
 }
 
-bool scheduleInjectedTasks(IOScheduler& scheduler, int count) {
+bool schedule_injected_tasks(IOScheduler& scheduler, int count) {
     for (int i = 0; i < count; ++i) {
-        Task<void> task = pendingTask();
-        detail::setTaskScheduler(detail::TaskAccess::taskRef(task), &scheduler);
-        if (!scheduler.schedule(detail::TaskAccess::taskRef(task))) {
+        Task<void> task = pending_task();
+        detail::set_task_scheduler(detail::TaskAccess::task_ref(task), &scheduler);
+        if (!scheduler.schedule(detail::TaskAccess::task_ref(task))) {
             std::cerr << "[T39] failed to inject task " << i << "\n";
             return false;
         }
@@ -48,7 +48,7 @@ bool scheduleInjectedTasks(IOScheduler& scheduler, int count) {
 }
 
 #if defined(USE_KQUEUE)
-bool readKqueueWakeEvents(int kqueue_fd, int& total) {
+bool read_kqueue_wake_events(int kqueue_fd, int& total) {
     total = 0;
     while (true) {
         struct kevent ev{};
@@ -73,19 +73,19 @@ bool readKqueueWakeEvents(int kqueue_fd, int& total) {
     }
 }
 
-bool verifyWakeupCoalescing() {
+bool verify_wakeup_coalescing() {
     KqueueScheduler scheduler;
 
-    if (!startWakeReactor(scheduler)) {
+    if (!start_wake_reactor(scheduler)) {
         return false;
     }
 
-    if (!scheduleInjectedTasks(scheduler, 3)) {
+    if (!schedule_injected_tasks(scheduler, 3)) {
         return false;
     }
 
     int total = 0;
-    if (!readKqueueWakeEvents(SchedulerTestAccess::wakeReadFd(scheduler), total)) {
+    if (!read_kqueue_wake_events(SchedulerTestAccess::wake_read_fd(scheduler), total)) {
         return false;
     }
 
@@ -97,19 +97,19 @@ bool verifyWakeupCoalescing() {
     return true;
 }
 #elif defined(USE_EPOLL)
-bool verifyWakeupCoalescing() {
+bool verify_wakeup_coalescing() {
     EpollScheduler scheduler;
 
-    if (!startWakeReactor(scheduler)) {
+    if (!start_wake_reactor(scheduler)) {
         return false;
     }
 
-    if (!scheduleInjectedTasks(scheduler, 3)) {
+    if (!schedule_injected_tasks(scheduler, 3)) {
         return false;
     }
 
     uint64_t wake_count = 0;
-    const ssize_t n = read(SchedulerTestAccess::wakeReadFd(scheduler), &wake_count, sizeof(wake_count));
+    const ssize_t n = read(SchedulerTestAccess::wake_read_fd(scheduler), &wake_count, sizeof(wake_count));
     if (n != static_cast<ssize_t>(sizeof(wake_count))) {
         std::cerr << "[T39] failed to read eventfd wake count\n";
         return false;
@@ -123,19 +123,19 @@ bool verifyWakeupCoalescing() {
     return true;
 }
 #elif defined(USE_IOURING)
-bool verifyWakeupCoalescing() {
+bool verify_wakeup_coalescing() {
     IOUringScheduler scheduler;
 
-    if (!startWakeReactor(scheduler)) {
+    if (!start_wake_reactor(scheduler)) {
         return false;
     }
 
-    if (!scheduleInjectedTasks(scheduler, 3)) {
+    if (!schedule_injected_tasks(scheduler, 3)) {
         return false;
     }
 
     uint64_t wake_count = 0;
-    const ssize_t n = read(SchedulerTestAccess::wakeReadFd(scheduler), &wake_count, sizeof(wake_count));
+    const ssize_t n = read(SchedulerTestAccess::wake_read_fd(scheduler), &wake_count, sizeof(wake_count));
     if (n != static_cast<ssize_t>(sizeof(wake_count))) {
         std::cerr << "[T39] failed to read eventfd wake count\n";
         return false;
@@ -149,7 +149,7 @@ bool verifyWakeupCoalescing() {
     return true;
 }
 #else
-bool verifyWakeupCoalescing() {
+bool verify_wakeup_coalescing() {
     std::cout << "T39-SchedulerWakeupCoalescing SKIP\n";
     return true;
 }
@@ -158,7 +158,7 @@ bool verifyWakeupCoalescing() {
 }  // namespace
 
 int main() {
-    if (!verifyWakeupCoalescing()) {
+    if (!verify_wakeup_coalescing()) {
         return 1;
     }
 

@@ -20,13 +20,13 @@ using namespace galay::kernel;
 class EchoService : public RpcService {
 public:
     EchoService() : RpcService("EchoService") {
-        registerMethod("echo", &EchoService::echo);
-        registerMethod("uppercase", &EchoService::uppercase);
+        register_method("echo", &EchoService::echo);
+        register_method("uppercase", &EchoService::uppercase);
     }
 
     Task<void> echo(RpcContext& ctx) {
         auto& req = ctx.request();
-        ctx.setPayload(req.payloadView());
+        ctx.set_payload(req.payload_view());
         co_return;
     }
 
@@ -36,7 +36,7 @@ public:
         for (auto& c : data) {
             c = std::toupper(c);
         }
-        ctx.setPayload(data);
+        ctx.set_payload(data);
         co_return;
     }
 };
@@ -47,7 +47,7 @@ public:
 class CalcService : public RpcService {
 public:
     CalcService() : RpcService("CalcService") {
-        registerMethod("add", &CalcService::add);
+        register_method("add", &CalcService::add);
     }
 
     Task<void> add(RpcContext& ctx) {
@@ -57,9 +57,9 @@ public:
             std::memcpy(&a, payload.data(), 4);
             std::memcpy(&b, payload.data() + 4, 4);
             int32_t result = a + b;
-            ctx.setPayload(reinterpret_cast<char*>(&result), sizeof(result));
+            ctx.set_payload(reinterpret_cast<char*>(&result), sizeof(result));
         } else {
-            ctx.setError(RpcErrorCode::INVALID_REQUEST);
+            ctx.set_error(RpcErrorCode::INVALID_REQUEST);
         }
         co_return;
     }
@@ -67,13 +67,13 @@ public:
 
 std::atomic<bool> g_running{true};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running.store(false);
 }
 
 int main(int argc, char* argv[]) {
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 #if defined(SIGPIPE)
     std::signal(SIGPIPE, SIG_IGN);
 #endif
@@ -93,15 +93,15 @@ int main(int argc, char* argv[]) {
     auto server = RpcServerBuilder()
         .host("0.0.0.0")
         .port(port)
-        .ioSchedulerCount(2)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(2)
+        .parallel_scheduler_count(1)
         .build();
-    auto echo_registered = server.registerService(echoService);
+    auto echo_registered = server.register_service(echoService);
     if (!echo_registered.has_value()) {
         std::cerr << "Failed to register EchoService: " << echo_registered.error().message() << "\n";
         return 1;
     }
-    auto calc_registered = server.registerService(calcService);
+    auto calc_registered = server.register_service(calcService);
     if (!calc_registered.has_value()) {
         std::cerr << "Failed to register CalcService: " << calc_registered.error().message() << "\n";
         return 1;
@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
     std::cout << "  - CalcService: add\n";
 
     // 等待停止信号
-    while (g_running.load() && server.isRunning()) {
+    while (g_running.load() && server.is_running()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 

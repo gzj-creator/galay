@@ -36,32 +36,32 @@ public:
 
     [[nodiscard]] const std::string& name() const noexcept { return m_name; }
     [[nodiscard]] const std::string& description() const noexcept { return m_description; }
-    [[nodiscard]] char shortName() const noexcept { return m_shortName; }
-    [[nodiscard]] bool isRequired() const noexcept { return m_required; }
-    [[nodiscard]] bool isSet() const noexcept { return m_set; }
+    [[nodiscard]] char short_name() const noexcept { return m_shortName; }
+    [[nodiscard]] bool is_required() const noexcept { return m_required; }
+    [[nodiscard]] bool is_set() const noexcept { return m_set; }
 
     /// 是否为标志位（无需取值）
-    [[nodiscard]] virtual bool isFlag() const noexcept = 0;
+    [[nodiscard]] virtual bool is_flag() const noexcept = 0;
     /// 是否可重复出现并累积多个取值
-    [[nodiscard]] virtual bool isMulti() const noexcept = 0;
+    [[nodiscard]] virtual bool is_multi() const noexcept = 0;
     /// 帮助输出中的类型名
-    [[nodiscard]] virtual std::string_view typeName() const noexcept = 0;
+    [[nodiscard]] virtual std::string_view type_name() const noexcept = 0;
     /// 帮助输出中的默认值文本，空表示无默认值
-    [[nodiscard]] virtual std::string defaultText() const = 0;
+    [[nodiscard]] virtual std::string default_text() const = 0;
     /// 候选取值集合，空表示不限制
     [[nodiscard]] virtual const std::vector<std::string>& choices() const noexcept = 0;
     /// 从文本解析并写入，失败返回原因
     virtual std::expected<void, std::string> assign(std::string_view text) = 0;
     /// 标志位赋值，`negated` 为 `--no-xxx` 形式
-    virtual std::expected<void, std::string> assignFlag(bool negated) = 0;
+    virtual std::expected<void, std::string> assign_flag(bool negated) = 0;
     /// 解析开始前重置为初始状态
     virtual void reset() = 0;
     /// 解析结束后把最终值同步到绑定变量
     virtual void flush() const = 0;
 
 protected:
-    void markSet() noexcept { m_set = true; }
-    void clearSet() noexcept { m_set = false; }
+    void mark_set() noexcept { m_set = true; }
+    void clear_set() noexcept { m_set = false; }
 
     std::string m_name;
     std::string m_description;
@@ -116,7 +116,7 @@ public:
     }
 
     /// 绑定外部 vector，`multi()` 模式下写回全部取值
-    Opt& bindAll(std::vector<T>* target) {
+    Opt& bind_all(std::vector<T>* target) {
         m_boundAll = target;
         return *this;
     }
@@ -126,16 +126,16 @@ public:
     /// 取全部取值，仅 `multi()` 模式下有多个元素
     [[nodiscard]] const std::vector<T>& values() const noexcept { return m_values; }
 
-    [[nodiscard]] bool isFlag() const noexcept override { return std::is_same_v<T, bool>; }
-    [[nodiscard]] bool isMulti() const noexcept override { return m_multi; }
-    [[nodiscard]] std::string_view typeName() const noexcept override { return CliValue<T>::typeName(); }
+    [[nodiscard]] bool is_flag() const noexcept override { return std::is_same_v<T, bool>; }
+    [[nodiscard]] bool is_multi() const noexcept override { return m_multi; }
+    [[nodiscard]] std::string_view type_name() const noexcept override { return CliValue<T>::type_name(); }
     [[nodiscard]] const std::vector<std::string>& choices() const noexcept override { return m_choices; }
 
-    [[nodiscard]] std::string defaultText() const override {
+    [[nodiscard]] std::string default_text() const override {
         if (!m_default.has_value()) {
             return {};
         }
-        return CliValue<T>::toString(*m_default);
+        return CliValue<T>::to_string(*m_default);
     }
 
     std::expected<void, std::string> assign(std::string_view text) override {
@@ -144,7 +144,7 @@ public:
             return std::unexpected(std::move(parsed.error()));
         }
         if (!m_choices.empty()) {
-            const std::string normalized = CliValue<T>::toString(*parsed);
+            const std::string normalized = CliValue<T>::to_string(*parsed);
             bool allowed = false;
             for (const auto& choice : m_choices) {
                 if (choice == normalized || choice == text) {
@@ -160,7 +160,7 @@ public:
         return {};
     }
 
-    std::expected<void, std::string> assignFlag(bool negated) override {
+    std::expected<void, std::string> assign_flag(bool negated) override {
         if constexpr (std::is_same_v<T, bool>) {
             store(!negated);
             return {};
@@ -170,7 +170,7 @@ public:
     }
 
     void reset() override {
-        clearSet();
+        clear_set();
         m_values.clear();
         m_value = m_default.value_or(T{});
     }
@@ -188,7 +188,7 @@ private:
     void store(T parsed) {
         m_value = parsed;
         m_values.push_back(std::move(parsed));
-        markSet();
+        mark_set();
     }
 
     T m_value{};

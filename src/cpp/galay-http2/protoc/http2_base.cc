@@ -3,7 +3,7 @@
 namespace galay::http2
 {
 
-std::string http2FrameTypeToString(Http2FrameType type)
+std::string http2_frame_type_to_string(Http2FrameType type)
 {
     switch (type) {
         case Http2FrameType::Data: return "DATA";
@@ -20,7 +20,7 @@ std::string http2FrameTypeToString(Http2FrameType type)
     }
 }
 
-std::string http2ErrorCodeToString(Http2ErrorCode code)
+std::string http2_error_code_to_string(Http2ErrorCode code)
 {
     switch (code) {
         case Http2ErrorCode::NoError: return "NO_ERROR";
@@ -41,7 +41,7 @@ std::string http2ErrorCodeToString(Http2ErrorCode code)
     }
 }
 
-std::string http2StreamStateToString(Http2StreamState state)
+std::string http2_stream_state_to_string(Http2StreamState state)
 {
     switch (state) {
         case Http2StreamState::Idle: return "idle";

@@ -78,7 +78,7 @@ enum class TypeRingBufferError : uint8_t {
  * @return 覆盖所有公开枚举值的非空字符串。
  */
 [[nodiscard]] inline const char*
-typeRingBufferErrorString(TypeRingBufferError error) noexcept
+type_ring_buffer_error_string(TypeRingBufferError error) noexcept
 {
     switch (error) {
     case TypeRingBufferError::kNone:
@@ -99,7 +99,7 @@ typeRingBufferErrorString(TypeRingBufferError error) noexcept
  * @tparam Cursor 单调无符号游标类型；默认 size_t，窄类型可用于回绕测试。
  *
  * @details
- * - 只能有一个逻辑生产者调用 tryWrite() 或 tryWriteBatch()。
+ * - 只能有一个逻辑生产者调用 try_write() 或 try_write_batch()。
  * - 只能有一个逻辑消费者调用读取接口，多个读取接口不得并发。
  * - producer 构造槽位后 release 发布 tail，consumer acquire 后读取。
  * - consumer 搬出并销毁槽位后 release 发布 head，producer acquire 后复用。
@@ -129,7 +129,7 @@ public:
     explicit TypeRingBuffer(size_t capacity) noexcept
         requires (!kUsesStaticCapacity)
     {
-        const size_t normalized = normalizeCapacity(capacity);
+        const size_t normalized = normalize_capacity(capacity);
         if (normalized == 0) {
             m_error = TypeRingBufferError::kCapacityTooLarge;
             return;
@@ -141,7 +141,7 @@ public:
             return;
         }
         m_slots.reset(slots);
-        initializeLocalStorage(slots, normalized);
+        initialize_local_storage(slots, normalized);
     }
 
     /**
@@ -152,7 +152,7 @@ public:
     TypeRingBuffer() noexcept
         requires kUsesStaticCapacity
     {
-        initializeLocalStorage(m_slots.data(), Capacity);
+        initialize_local_storage(m_slots.data(), Capacity);
     }
 
     /**
@@ -169,7 +169,7 @@ public:
         const Cursor head = m_head.value.load(std::memory_order_relaxed);
         const Cursor tail = m_tail.value.load(std::memory_order_relaxed);
         const LocalCursor& consumer = m_consumerLocal;
-        const size_t pending = cursorDistance(tail, head);
+        const size_t pending = cursor_distance(tail, head);
         for (size_t offset = 0; offset < pending; ++offset) {
             const size_t index =
                 (static_cast<size_t>(head) + offset) & consumer.mask;
@@ -216,9 +216,9 @@ public:
      * @pre error() == kNone，且只能由唯一逻辑生产者调用。
      * @note 该函数不阻塞；常规成功路径仅执行一次 tail release store。
      */
-    [[nodiscard]] bool tryWrite(T&& value) noexcept
+    [[nodiscard]] bool try_write(T&& value) noexcept
     {
-        return tryWriteOne(m_producerLocal, m_head, m_tail, std::move(value));
+        return try_write_one(m_producerLocal, m_head, m_tail, std::move(value));
     }
 
     /**
@@ -228,9 +228,9 @@ public:
      * @pre error() == kNone，且只能由唯一逻辑生产者调用。
      * @note 整批构造完成后只执行一次 tail release store。
      */
-    [[nodiscard]] size_t tryWriteBatch(std::span<T> values) noexcept
+    [[nodiscard]] size_t try_write_batch(std::span<T> values) noexcept
     {
-        return tryWriteBatchImpl(
+        return try_write_batch_impl(
             m_producerLocal, m_head, m_tail, values);
     }
 
@@ -240,9 +240,9 @@ public:
      * @pre error() == kNone，且只能由唯一逻辑消费者调用。
      * @note 该函数不阻塞；常规成功路径仅执行一次 head release store。
      */
-    [[nodiscard]] std::optional<T> tryRead() noexcept
+    [[nodiscard]] std::optional<T> try_read() noexcept
     {
-        return tryReadOne(m_consumerLocal, m_head, m_tail);
+        return try_read_one(m_consumerLocal, m_head, m_tail);
     }
 
     /**
@@ -251,10 +251,10 @@ public:
      * @return 成功读取返回 true；当前为空返回 false。
      * @pre error() == kNone，且只能由唯一逻辑消费者调用。
      */
-    [[nodiscard]] bool tryRead(T& output) noexcept
+    [[nodiscard]] bool try_read(T& output) noexcept
         requires std::is_nothrow_move_assignable_v<T>
     {
-        return tryReadOne(m_consumerLocal, m_head, m_tail, output);
+        return try_read_one(m_consumerLocal, m_head, m_tail, output);
     }
 
     /**
@@ -264,10 +264,10 @@ public:
      * @pre error() == kNone，且只能由唯一逻辑消费者调用。
      * @note 批次保持 FIFO，并在整批搬运和销毁后只执行一次 head release store。
      */
-    [[nodiscard]] size_t tryReadBatch(std::span<T> output) noexcept
+    [[nodiscard]] size_t try_read_batch(std::span<T> output) noexcept
         requires std::is_nothrow_move_assignable_v<T>
     {
-        return tryReadBatchImpl(
+        return try_read_batch_impl(
             m_consumerLocal, m_head, m_tail, output);
     }
 
@@ -282,7 +282,7 @@ private:
     {
         alignas(T) std::byte storage[sizeof(T)];
 
-        T* storageAddress() noexcept
+        T* storage_address() noexcept
         {
             return reinterpret_cast<T*>(storage);
         }
@@ -327,15 +327,15 @@ private:
     using EndpointCursor = CursorState<kPublishedCursorAlignment>;
 
     template <typename State>
-    [[nodiscard]] static bool tryWriteOne(State& producer,
+    [[nodiscard]] static bool try_write_one(State& producer,
                                          PublishedCursor& head,
                                          PublishedCursor& tail,
                                          T&& value) noexcept
     {
         const Cursor position = producer.position;
-        if (cursorDistance(position, producer.cachedPeer) >= producer.capacity) {
+        if (cursor_distance(position, producer.cachedPeer) >= producer.capacity) {
             producer.cachedPeer = head.value.load(std::memory_order_acquire);
-            if (cursorDistance(position, producer.cachedPeer) >= producer.capacity) {
+            if (cursor_distance(position, producer.cachedPeer) >= producer.capacity) {
                 return false;
             }
         }
@@ -343,7 +343,7 @@ private:
         Slot& slot =
             producer.slots[static_cast<size_t>(position) & producer.mask];
         [[maybe_unused]] T* const stored =
-            std::construct_at(slot.storageAddress(), std::move(value));
+            std::construct_at(slot.storage_address(), std::move(value));
         const Cursor next = static_cast<Cursor>(position + 1);
         producer.position = next;
         tail.value.store(next, std::memory_order_release);
@@ -351,7 +351,7 @@ private:
     }
 
     template <typename State>
-    [[nodiscard]] static std::optional<T> tryReadOne(
+    [[nodiscard]] static std::optional<T> try_read_one(
         State& consumer,
         PublishedCursor& head,
         PublishedCursor& tail) noexcept
@@ -375,7 +375,7 @@ private:
     }
 
     template <typename State>
-    [[nodiscard]] static bool tryReadOne(State& consumer,
+    [[nodiscard]] static bool try_read_one(State& consumer,
                                          PublishedCursor& head,
                                          PublishedCursor& tail,
                                          T& output) noexcept
@@ -400,7 +400,7 @@ private:
     }
 
     template <typename State>
-    [[nodiscard]] static size_t tryWriteBatchImpl(
+    [[nodiscard]] static size_t try_write_batch_impl(
         State& producer,
         PublishedCursor& head,
         PublishedCursor& tail,
@@ -411,11 +411,11 @@ private:
         }
 
         const Cursor position = producer.position;
-        size_t used = cursorDistance(position, producer.cachedPeer);
+        size_t used = cursor_distance(position, producer.cachedPeer);
         if (used >= producer.capacity ||
             values.size() > producer.capacity - used) {
             producer.cachedPeer = head.value.load(std::memory_order_acquire);
-            used = cursorDistance(position, producer.cachedPeer);
+            used = cursor_distance(position, producer.cachedPeer);
             if (used >= producer.capacity) {
                 return 0;
             }
@@ -427,12 +427,12 @@ private:
                 static_cast<size_t>(position) & producer.mask;
             const size_t firstCount =
                 std::min(count, producer.capacity - firstIndex);
-            std::memcpy(producer.slots[firstIndex].storageAddress(),
+            std::memcpy(producer.slots[firstIndex].storage_address(),
                         values.data(),
                         firstCount * sizeof(T));
             const size_t secondCount = count - firstCount;
             if (secondCount != 0) {
-                std::memcpy(producer.slots[0].storageAddress(),
+                std::memcpy(producer.slots[0].storage_address(),
                             values.data() + firstCount,
                             secondCount * sizeof(T));
             }
@@ -441,7 +441,7 @@ private:
                 const size_t index =
                     (static_cast<size_t>(position) + offset) & producer.mask;
                 [[maybe_unused]] T* const stored = std::construct_at(
-                    producer.slots[index].storageAddress(),
+                    producer.slots[index].storage_address(),
                     std::move(values[offset]));
             }
         }
@@ -454,7 +454,7 @@ private:
     }
 
     template <typename State>
-    [[nodiscard]] static size_t tryReadBatchImpl(
+    [[nodiscard]] static size_t try_read_batch_impl(
         State& consumer,
         PublishedCursor& head,
         PublishedCursor& tail,
@@ -467,11 +467,11 @@ private:
 
         const Cursor position = consumer.position;
         Cursor published = consumer.cachedPeer;
-        size_t available = cursorDistance(published, position);
+        size_t available = cursor_distance(published, position);
         if (available < output.size()) {
             published = tail.value.load(std::memory_order_acquire);
             consumer.cachedPeer = published;
-            available = cursorDistance(published, position);
+            available = cursor_distance(published, position);
         }
         const size_t count = std::min(output.size(), available);
         if (count == 0) {
@@ -536,16 +536,16 @@ public:
         }
 
         /** @brief 尝试发布一条消息；满时返回 false 且 value 保持未移动。 */
-        [[nodiscard]] bool tryWrite(T&& value) noexcept
+        [[nodiscard]] bool try_write(T&& value) noexcept
         {
-            return tryWriteOne(
+            return try_write_one(
                 m_local, m_ring->m_head, m_ring->m_tail, std::move(value));
         }
 
         /** @brief 尽量批量发布输入前缀；整批仅执行一次 tail release store。 */
-        [[nodiscard]] size_t tryWriteBatch(std::span<T> values) noexcept
+        [[nodiscard]] size_t try_write_batch(std::span<T> values) noexcept
         {
-            return tryWriteBatchImpl(
+            return try_write_batch_impl(
                 m_local, m_ring->m_head, m_ring->m_tail, values);
         }
 
@@ -592,24 +592,24 @@ public:
         }
 
         /** @brief 尝试读取一条消息；空时返回 std::nullopt。 */
-        [[nodiscard]] std::optional<T> tryRead() noexcept
+        [[nodiscard]] std::optional<T> try_read() noexcept
         {
-            return tryReadOne(m_local, m_ring->m_head, m_ring->m_tail);
+            return try_read_one(m_local, m_ring->m_head, m_ring->m_tail);
         }
 
         /** @brief 尝试把一条消息移动到调用方对象；空时返回 false。 */
-        [[nodiscard]] bool tryRead(T& output) noexcept
+        [[nodiscard]] bool try_read(T& output) noexcept
             requires std::is_nothrow_move_assignable_v<T>
         {
-            return tryReadOne(
+            return try_read_one(
                 m_local, m_ring->m_head, m_ring->m_tail, output);
         }
 
         /** @brief 尽量批量搬运到调用方存储；整批仅执行一次 head release store。 */
-        [[nodiscard]] size_t tryReadBatch(std::span<T> output) noexcept
+        [[nodiscard]] size_t try_read_batch(std::span<T> output) noexcept
             requires std::is_nothrow_move_assignable_v<T>
         {
-            return tryReadBatchImpl(
+            return try_read_batch_impl(
                 m_local, m_ring->m_head, m_ring->m_tail, output);
         }
 
@@ -657,7 +657,7 @@ private:
         std::array<Slot, kStoredStaticCapacity>,
         std::unique_ptr<Slot[]>>;
 
-    [[nodiscard]] static size_t normalizeCapacity(size_t capacity) noexcept
+    [[nodiscard]] static size_t normalize_capacity(size_t capacity) noexcept
     {
         if (kMaximumCapacity < 2) {
             return 0;
@@ -671,13 +671,13 @@ private:
         return std::bit_ceil(capacity);
     }
 
-    void initializeLocalStorage(Slot* slots, size_t capacity) noexcept
+    void initialize_local_storage(Slot* slots, size_t capacity) noexcept
     {
         m_producerLocal = {slots, capacity, capacity - 1};
         m_consumerLocal = {slots, capacity, capacity - 1};
     }
 
-    [[nodiscard]] static size_t cursorDistance(Cursor newer, Cursor older) noexcept
+    [[nodiscard]] static size_t cursor_distance(Cursor newer, Cursor older) noexcept
     {
         return static_cast<size_t>(static_cast<Cursor>(newer - older));
     }

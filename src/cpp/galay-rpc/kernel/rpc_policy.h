@@ -78,20 +78,20 @@ struct RpcGovernancePolicy {
 /**
  * @brief RPC重试控制器
  *
- * @details runAsync()不会阻塞OS线程；每次退避通过galay sleep awaitable挂起。
+ * @details run_async()不会阻塞OS线程；每次退避通过galay sleep awaitable挂起。
  *          Operation需返回Task<std::expected<T, RpcError>>或兼容的Task结果。
  */
 class RpcRetryController {
 public:
     /// @brief 判断错误码是否在策略白名单内
-    static bool isRetryable(const RpcRetryPolicy& policy, RpcErrorCode code) {
+    static bool is_retryable(const RpcRetryPolicy& policy, RpcErrorCode code) {
         return std::ranges::find(policy.retryable_errors, code) != policy.retryable_errors.end();
     }
 
     /// @brief 计算最终总尝试次数
-    static uint32_t maxAttempts(const RpcRetryPolicy& policy, const RpcCallOptions& options) {
-        if (options.maxAttempts().has_value()) {
-            return std::max<uint32_t>(1, *options.maxAttempts());
+    static uint32_t max_attempts(const RpcRetryPolicy& policy, const RpcCallOptions& options) {
+        if (options.max_attempts().has_value()) {
+            return std::max<uint32_t>(1, *options.max_attempts());
         }
         return std::max<uint32_t>(1, policy.max_attempts);
     }
@@ -105,16 +105,16 @@ public:
      * @return 成功结果、最终失败错误或deadline错误
      */
     template<typename Result, typename Operation>
-    static Result runSync(const RpcRetryPolicy& policy,
+    static Result run_sync(const RpcRetryPolicy& policy,
                           const RpcCallOptions& options,
                           Operation&& operation) {
-        auto deadline = options.effectiveDeadline(RpcClock::now());
+        auto deadline = options.effective_deadline(RpcClock::now());
         if (deadline.has_value() && *deadline <= RpcClock::now()) {
             return std::unexpected(RpcError(RpcErrorCode::DEADLINE_EXCEEDED,
                                             "RPC retry deadline exceeded"));
         }
 
-        const uint32_t attempts = maxAttempts(policy, options);
+        const uint32_t attempts = max_attempts(policy, options);
         const bool retry_allowed = !policy.require_idempotent || options.idempotent();
         Result last = std::unexpected(RpcError(RpcErrorCode::UNAVAILABLE, "RPC retry not attempted"));
 
@@ -123,7 +123,7 @@ public:
             if (last.has_value()) {
                 return last;
             }
-            if (attempt == attempts || !retry_allowed || !isRetryable(policy, last.error().code())) {
+            if (attempt == attempts || !retry_allowed || !is_retryable(policy, last.error().code())) {
                 return last;
             }
             if (deadline.has_value() && *deadline <= RpcClock::now()) {
@@ -139,30 +139,30 @@ public:
      * @note 退避通过sleep挂起协程，不使用阻塞锁、条件变量或线程sleep。
      */
     template<typename Result, typename Operation>
-    static kernel::Task<Result> runAsync(const RpcRetryPolicy& policy,
+    static kernel::Task<Result> run_async(const RpcRetryPolicy& policy,
                                          const RpcCallOptions& options,
                                          Operation&& operation) {
-        auto deadline = options.effectiveDeadline(RpcClock::now());
+        auto deadline = options.effective_deadline(RpcClock::now());
         if (deadline.has_value() && *deadline <= RpcClock::now()) {
             co_return Result(std::unexpected(RpcError(RpcErrorCode::DEADLINE_EXCEEDED,
                                                       "RPC retry deadline exceeded")));
         }
 
-        const uint32_t attempts = maxAttempts(policy, options);
+        const uint32_t attempts = max_attempts(policy, options);
         const bool retry_allowed = !policy.require_idempotent || options.idempotent();
         Result last = std::unexpected(RpcError(RpcErrorCode::UNAVAILABLE, "RPC retry not attempted"));
 
         for (uint32_t attempt = 1; attempt <= attempts; ++attempt) {
             auto task_result = co_await std::invoke(operation);
-            last = unwrapTaskResult<Result>(std::move(task_result));
+            last = unwrap_task_result<Result>(std::move(task_result));
             if (last.has_value()) {
                 co_return last;
             }
-            if (attempt == attempts || !retry_allowed || !isRetryable(policy, last.error().code())) {
+            if (attempt == attempts || !retry_allowed || !is_retryable(policy, last.error().code())) {
                 co_return last;
             }
 
-            const auto delay = nextBackoff(policy, attempt);
+            const auto delay = next_backoff(policy, attempt);
             if (deadline.has_value()) {
                 const auto now = RpcClock::now();
                 if (*deadline <= now) {
@@ -182,7 +182,7 @@ public:
     }
 
 private:
-    static std::chrono::milliseconds nextBackoff(const RpcRetryPolicy& policy, uint32_t attempt) {
+    static std::chrono::milliseconds next_backoff(const RpcRetryPolicy& policy, uint32_t attempt) {
         auto base = policy.initial_backoff;
         if (base <= std::chrono::milliseconds::zero()) {
             return std::chrono::milliseconds::zero();
@@ -211,7 +211,7 @@ private:
     }
 
     template<typename Result, typename AwaitResult>
-    static Result unwrapTaskResult(AwaitResult&& await_result) {
+    static Result unwrap_task_result(AwaitResult&& await_result) {
         if constexpr (requires { await_result.has_value(); await_result.error().message(); }) {
             if (!await_result.has_value()) {
                 return std::unexpected(RpcError(RpcErrorCode::INTERNAL_ERROR,
@@ -227,8 +227,8 @@ private:
 /**
  * @brief 非阻塞治理控制器
  *
- * @details 组合同仓库galay-utils中的无锁限流器和熔断器。tryAcquire()只做快速
- *          原子判定；调用完成后由onSuccess/onFailure/release记录结果和归还许可。
+ * @details 组合同仓库galay-utils中的无锁限流器和熔断器。try_acquire()只做快速
+ *          原子判定；调用完成后由onSuccess/on_failure/release记录结果和归还许可。
  */
 class RpcGovernanceController {
 public:
@@ -236,7 +236,7 @@ public:
         : m_policy(policy)
         , m_semaphore(policy.rate_limit.capacity)
         , m_bucket(policy.rate_limit.refill_per_second, policy.rate_limit.capacity)
-        , m_breaker(makeBreakerConfig(policy.circuit_breaker))
+        , m_breaker(make_breaker_config(policy.circuit_breaker))
     {
     }
 
@@ -244,13 +244,13 @@ public:
      * @brief 尝试通过限流和熔断前置检查
      * @return 成功或RATE_LIMITED/CIRCUIT_OPEN
      */
-    std::expected<void, RpcError> tryAcquire() {
+    std::expected<void, RpcError> try_acquire() {
         if (m_policy.circuit_breaker.enabled &&
             m_breaker.state() == utils::CircuitState::Open &&
             !m_open_observed.exchange(true, std::memory_order_acq_rel)) {
             return std::unexpected(RpcError(RpcErrorCode::CIRCUIT_OPEN, "RPC circuit breaker is open"));
         }
-        if (m_policy.circuit_breaker.enabled && !m_breaker.allowRequest()) {
+        if (m_policy.circuit_breaker.enabled && !m_breaker.allow_request()) {
             return std::unexpected(RpcError(RpcErrorCode::CIRCUIT_OPEN, "RPC circuit breaker is open"));
         }
 
@@ -260,8 +260,8 @@ public:
         }
 
         const bool acquired = m_policy.rate_limit.refill_per_second > 0.0
-            ? m_bucket.tryAcquire()
-            : m_semaphore.tryAcquire();
+            ? m_bucket.try_acquire()
+            : m_semaphore.try_acquire();
         if (!acquired) {
             return std::unexpected(RpcError(RpcErrorCode::RATE_LIMITED, "RPC rate limited"));
         }
@@ -270,9 +270,9 @@ public:
     }
 
     /// @brief 记录成功调用
-    void onSuccess() {
+    void on_success() {
         if (m_policy.circuit_breaker.enabled) {
-            m_breaker.onSuccess();
+            m_breaker.on_success();
             if (m_breaker.state() == utils::CircuitState::Closed) {
                 m_open_observed.store(false, std::memory_order_release);
             }
@@ -280,9 +280,9 @@ public:
     }
 
     /// @brief 记录失败调用
-    void onFailure() {
+    void on_failure() {
         if (m_policy.circuit_breaker.enabled) {
-            m_breaker.onFailure();
+            m_breaker.on_failure();
             if (m_breaker.state() == utils::CircuitState::Open) {
                 m_open_observed.store(false, std::memory_order_release);
             }
@@ -306,10 +306,10 @@ public:
     }
 
     /// @brief 当前熔断状态
-    utils::CircuitState circuitState() const { return m_breaker.state(); }
+    utils::CircuitState circuit_state() const { return m_breaker.state(); }
 
 private:
-    static utils::CircuitBreakerConfig makeBreakerConfig(const RpcCircuitBreakerPolicy& policy) {
+    static utils::CircuitBreakerConfig make_breaker_config(const RpcCircuitBreakerPolicy& policy) {
         utils::CircuitBreakerConfig config;
         config.failureThreshold = policy.failure_threshold;
         config.successThreshold = policy.success_threshold;

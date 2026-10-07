@@ -98,48 +98,48 @@ void test_byte_queue_view_clone_and_move() {
 }
 
 void test_bloom_filter_clone_is_independent() {
-    auto filter = BloomFilter<std::string>::fromExpectedItems(64, 0.01);
+    auto filter = BloomFilter<std::string>::from_expected_items(64, 0.01);
     filter.add("alpha");
     filter.add("beta");
 
     auto copy = filter.clone();
     filter.clear();
 
-    assert(copy.insertionCount() == 2);
-    assert(copy.possiblyContains("alpha"));
-    assert(copy.possiblyContains("beta"));
-    assert(!filter.possiblyContains("alpha"));
+    assert(copy.insertion_count() == 2);
+    assert(copy.possibly_contains("alpha"));
+    assert(copy.possibly_contains("beta"));
+    assert(!filter.possibly_contains("alpha"));
 }
 
 void test_huffman_table_clone_is_independent() {
     HuffmanTable<char> table;
-    table.addCode('a', 0b0, 1);
-    table.addCode('b', 0b10, 2);
+    table.add_code('a', 0b0, 1);
+    table.add_code('b', 0b10, 2);
 
     auto copy = table.clone();
     table.clear();
 
     assert(copy.size() == 2);
-    assert(copy.hasSymbol('a'));
-    assert(copy.getSymbol(0b10, 2) == 'b');
+    assert(copy.has_symbol('a'));
+    assert(copy.get_symbol(0b10, 2) == 'b');
 }
 
 void test_config_parser_clone_is_independent() {
     ConfigParser config;
-    assert(config.parseString("[server]\nport = 8080\n"));
+    assert(config.parse_string("[server]\nport = 8080\n"));
 
     auto copy = config.clone();
-    assert(config.parseString("[server]\nport = 9090\n"));
+    assert(config.parse_string("[server]\nport = 9090\n"));
 
-    assert(copy.getValue("server.port").value() == "8080");
-    assert(config.getValue("server.port").value() == "9090");
+    assert(copy.get_value("server.port").value() == "8080");
+    assert(config.get_value("server.port").value() == "9090");
 
     TomlParser toml;
-    assert(toml.parseString("title = \"galay\"\nports = [8000, 8001]\n"));
+    assert(toml.parse_string("title = \"galay\"\nports = [8000, 8001]\n"));
     auto tomlCopy = toml.clone();
-    assert(toml.parseString("title = \"other\"\nports = [9000]\n"));
-    assert(tomlCopy.getValue("title").value() == "galay");
-    assert(toml.getValue("title").value() == "other");
+    assert(toml.parse_string("title = \"other\"\nports = [9000]\n"));
+    assert(tomlCopy.get_value("title").value() == "galay");
+    assert(toml.get_value("title").value() == "other");
 }
 
 void test_load_balancer_clone_is_independent() {
@@ -185,33 +185,33 @@ void test_trie_bytes_and_ring_buffer_clone() {
     assert(trieCopy.contains("help"));
 
     std::string source = "view";
-    Bytes view = Bytes::fromString(source);
+    Bytes view = Bytes::from_string(source);
     Bytes bytesCopy = view.clone();
     source[0] = 'V';
-    assert(view.toStringView() == "View");
-    assert(bytesCopy.toStringView() == "view");
+    assert(view.to_string_view() == "View");
+    assert(bytesCopy.to_string_view() == "view");
 
     RingBuffer<RingBufferBackendStrategy::Vector, std::dynamic_extent> buffer(5);
-    assert(buffer.tryWriteBatch("abcde", 5) == 5);
+    assert(buffer.try_write_batch("abcde", 5) == 5);
     char skipped[3]{};
-    assert(buffer.tryReadBatch(skipped, sizeof(skipped)) == 3);
+    assert(buffer.try_read_batch(skipped, sizeof(skipped)) == 3);
     assert(std::string_view(skipped, sizeof(skipped)) == "abc");
-    assert(buffer.tryWriteBatch("fg", 2) == 2);
+    assert(buffer.try_write_batch("fg", 2) == 2);
 
     auto bufferCopy = buffer.clone();
     buffer.consume(2);
-    assert(buffer.tryWriteBatch("hi", 2) == 2);
+    assert(buffer.try_write_batch("hi", 2) == 2);
 
     char copied[4]{};
-    assert(bufferCopy.tryReadBatch(copied, sizeof(copied)) == 4);
+    assert(bufferCopy.try_read_batch(copied, sizeof(copied)) == 4);
     assert(std::string_view(copied, sizeof(copied)) == "defg");
 
     RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> defaultBuffer(8);
-    assert(defaultBuffer.tryWriteBatch("abcd", 4) == 4);
+    assert(defaultBuffer.try_write_batch("abcd", 4) == 4);
     auto defaultCopy = defaultBuffer.clone();
     defaultBuffer.clear();
     char defaultCopied[4]{};
-    assert(defaultCopy.tryReadBatch(defaultCopied, sizeof(defaultCopied)) == 4);
+    assert(defaultCopy.try_read_batch(defaultCopied, sizeof(defaultCopied)) == 4);
     assert(std::string_view(defaultCopied, sizeof(defaultCopied)) == "abcd");
 }
 

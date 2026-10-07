@@ -8,7 +8,7 @@
 
 int main()
 {
-    const auto config = postgres_example::loadConfig();
+    const auto config = postgres_example::load_config();
     galay::postgres::PostgresClient client;
     auto connected = client.connect(config.host, config.port, config.user,
                                     config.password, config.database);
@@ -24,7 +24,7 @@ int main()
         return 1;
     }
     for (const auto& result : *results) {
-        std::cout << result.row(0).getString(0) << '\n';
+        std::cout << result.row(0).get_string(0) << '\n';
     }
     return 0;
 }

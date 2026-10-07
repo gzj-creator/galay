@@ -7,7 +7,7 @@
 namespace
 {
 
-std::string readFile(const std::filesystem::path& path)
+std::string read_file(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input) {
@@ -25,7 +25,7 @@ bool contains(const std::string& text, const std::string& needle)
     return text.find(needle) != std::string::npos;
 }
 
-std::filesystem::path repoRoot()
+std::filesystem::path repo_root()
 {
     std::filesystem::path file = __FILE__;
     return file.parent_path().parent_path().parent_path().parent_path();
@@ -35,9 +35,9 @@ std::filesystem::path repoRoot()
 
 int main()
 {
-    const auto root = repoRoot();
-    const auto sync_client = readFile(root / "src/cpp/galay-mysql/sync/mysql_client.cc");
-    const auto async_awaitable = readFile(root / "src/cpp/galay-mysql/details/awaitable.inl");
+    const auto root = repo_root();
+    const auto sync_client = read_file(root / "src/cpp/galay-mysql/sync/mysql_client.cc");
+    const auto async_awaitable = read_file(root / "src/cpp/galay-mysql/details/awaitable.inl");
 
     for (const auto* capability : {
              "CLIENT_MULTI_STATEMENTS",
@@ -50,7 +50,7 @@ int main()
         }
     }
 
-    if (!contains(async_awaitable, "MysqlPipelineAwaitable<Strategy>::Machine::finalizeCurrentResult") ||
+    if (!contains(async_awaitable, "MysqlPipelineAwaitable<Strategy>::Machine::finalize_current_result") ||
         !contains(async_awaitable, "m_state->results.push_back")) {
         std::cerr << "async pipeline must preserve per-response result boundaries\n";
         return 1;

@@ -28,7 +28,7 @@ namespace {
 
 using ExampleResult = std::expected<std::string, IOError>;
 
-uint32_t readBigEndian32(const ByteQueueView& queue) {
+uint32_t read_big_endian32(const ByteQueueView& queue) {
     auto header = queue.view(0, sizeof(uint32_t));
     return (static_cast<uint32_t>(static_cast<unsigned char>(header[0])) << 24) |
            (static_cast<uint32_t>(static_cast<unsigned char>(header[1])) << 16) |
@@ -36,7 +36,7 @@ uint32_t readBigEndian32(const ByteQueueView& queue) {
            static_cast<uint32_t>(static_cast<unsigned char>(header[3]));
 }
 
-std::array<char, 8> makeFrame() {
+std::array<char, 8> make_frame() {
     std::array<char, 8> frame{};
     constexpr uint32_t kLength = 4;
     frame[0] = static_cast<char>((kLength >> 24) & 0xFF);
@@ -48,7 +48,7 @@ std::array<char, 8> makeFrame() {
 }
 
 struct BuilderFlow {
-    void onRecv(SequenceOps<ExampleResult, 4>& ops, RecvIOContext& recv_ctx) {
+    void on_recv(SequenceOps<ExampleResult, 4>& ops, RecvIOContext& recv_ctx) {
         if (!recv_ctx.m_result) {
             ops.complete(std::unexpected(recv_ctx.m_result.error()));
             return;
@@ -56,12 +56,12 @@ struct BuilderFlow {
         inbox.append(scratch, recv_ctx.m_result.value());
     }
 
-    ParseStatus onParse(SequenceOps<ExampleResult, 4>& ops) {
+    ParseStatus on_parse(SequenceOps<ExampleResult, 4>& ops) {
         if (!inbox.has(sizeof(uint32_t))) {
             return ParseStatus::kNeedMore;
         }
 
-        const size_t payload_size = readBigEndian32(inbox);
+        const size_t payload_size = read_big_endian32(inbox);
         if (!inbox.has(sizeof(uint32_t) + payload_size)) {
             return ParseStatus::kNeedMore;
         }
@@ -78,7 +78,7 @@ struct BuilderFlow {
         return ParseStatus::kCompleted;
     }
 
-    void onSend(SequenceOps<ExampleResult, 4>& ops, SendIOContext& send_ctx) {
+    void on_send(SequenceOps<ExampleResult, 4>& ops, SendIOContext& send_ctx) {
         if (!send_ctx.m_result) {
             ops.complete(std::unexpected(send_ctx.m_result.error()));
             return;
@@ -102,7 +102,7 @@ struct ExampleState {
     std::atomic<bool> peer_ok{false};
 };
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -115,7 +115,7 @@ bool waitUntil(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-bool sendAll(int fd, const char* buffer, size_t length) {
+bool send_all(int fd, const char* buffer, size_t length) {
     size_t sent = 0;
     while (sent < length) {
         const ssize_t n = ::send(fd, buffer + sent, length - sent, 0);
@@ -127,7 +127,7 @@ bool sendAll(int fd, const char* buffer, size_t length) {
     return true;
 }
 
-bool recvExact(int fd, char* buffer, size_t length) {
+bool recv_exact(int fd, char* buffer, size_t length) {
     size_t received = 0;
     while (received < length) {
         const ssize_t n = ::recv(fd, buffer + received, length - received, 0);
@@ -139,20 +139,20 @@ bool recvExact(int fd, char* buffer, size_t length) {
     return true;
 }
 
-void setRecvTimeout(int fd, int milliseconds) {
+void set_recv_timeout(int fd, int milliseconds) {
     timeval tv{};
     tv.tv_sec = milliseconds / 1000;
     tv.tv_usec = (milliseconds % 1000) * 1000;
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 }
 
-Task<void> builderProtocolTask(ExampleState* state, int fd) {
+Task<void> builder_protocol_task(ExampleState* state, int fd) {
     IOController controller(GHandle{.fd = fd});
     BuilderFlow flow;
     auto awaitable = AwaitableBuilder<ExampleResult, 4, BuilderFlow>(&controller, flow)
-        .recv<&BuilderFlow::onRecv>(flow.scratch, sizeof(flow.scratch))
-        .parse<&BuilderFlow::onParse>()
-        .send<&BuilderFlow::onSend>(flow.reply.data(), flow.reply.size())
+        .recv<&BuilderFlow::on_recv>(flow.scratch, sizeof(flow.scratch))
+        .parse<&BuilderFlow::on_parse>()
+        .send<&BuilderFlow::on_send>(flow.reply.data(), flow.reply.size())
         .build();
 
     auto result = co_await awaitable;
@@ -172,38 +172,38 @@ int main() {
         return 1;
     }
 
-    setRecvTimeout(fds[1], 1000);
+    set_recv_timeout(fds[1], 1000);
 
     ExampleState state;
     std::thread peer([&]() {
-        const auto frame = makeFrame();
+        const auto frame = make_frame();
         char pong[4]{};
 
-        if (!sendAll(fds[1], frame.data(), 6)) {
+        if (!send_all(fds[1], frame.data(), 6)) {
             return;
         }
         std::this_thread::sleep_for(50ms);
         if (state.done.load(std::memory_order_acquire)) {
             return;
         }
-        if (!sendAll(fds[1], frame.data() + 6, frame.size() - 6)) {
+        if (!send_all(fds[1], frame.data() + 6, frame.size() - 6)) {
             return;
         }
-        if (recvExact(fds[1], pong, sizeof(pong)) &&
+        if (recv_exact(fds[1], pong, sizeof(pong)) &&
             std::string(pong, sizeof(pong)) == "pong") {
             state.peer_ok.store(true, std::memory_order_release);
         }
     });
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
     runtime.start();
 
-    scheduleTask(runtime.getNextIOScheduler(), builderProtocolTask(&state, fds[0]));
+    schedule_task(runtime.get_next_io_scheduler(), builder_protocol_task(&state, fds[0]));
 
-    const bool completed = waitUntil(state.done, 2000ms);
+    const bool completed = wait_until(state.done, 2000ms);
 
     runtime.stop();
     close(fds[0]);

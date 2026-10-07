@@ -18,7 +18,7 @@ using namespace galay::async;
 
 using BatchParseResult = std::expected<std::vector<Http2Frame::uptr>, Http2ErrorCode>;
 
-std::string flattenHeaderAndPayload(const std::array<char, kHttp2FrameHeaderLength>& header,
+std::string flatten_header_and_payload(const std::array<char, kHttp2FrameHeaderLength>& header,
                                     std::string_view payload) {
     std::string bytes;
     bytes.reserve(header.size() + payload.size());
@@ -28,7 +28,7 @@ std::string flattenHeaderAndPayload(const std::array<char, kHttp2FrameHeaderLeng
 }
 
 // Helper: serialize a PING frame (8 bytes payload)
-std::vector<uint8_t> buildPingFrame(uint64_t opaque_data) {
+std::vector<uint8_t> build_ping_frame(uint64_t opaque_data) {
     std::vector<uint8_t> frame(9 + 8);
     // Header: length=8, type=PING(6), flags=0, stream_id=0
     frame[0] = 0; frame[1] = 0; frame[2] = 8;  // length
@@ -43,7 +43,7 @@ std::vector<uint8_t> buildPingFrame(uint64_t opaque_data) {
 }
 
 // Helper: serialize a SETTINGS frame (empty)
-std::vector<uint8_t> buildSettingsFrame() {
+std::vector<uint8_t> build_settings_frame() {
     std::vector<uint8_t> frame(9);
     // Header: length=0, type=SETTINGS(4), flags=0, stream_id=0
     frame[0] = frame[1] = frame[2] = 0;  // length=0
@@ -54,7 +54,7 @@ std::vector<uint8_t> buildSettingsFrame() {
 }
 
 // Helper: serialize a frame with given length (for oversize test)
-std::vector<uint8_t> buildOversizeFrame(uint32_t payload_len) {
+std::vector<uint8_t> build_oversize_frame(uint32_t payload_len) {
     std::vector<uint8_t> frame(9 + payload_len);
     // Header: length=payload_len, type=DATA(0), flags=0, stream_id=1
     frame[0] = static_cast<uint8_t>((payload_len >> 16) & 0xFF);
@@ -76,15 +76,15 @@ int main() {
 
     // ========== Static contract checks ==========
     static_assert(requires(Http2Conn* conn, const char* data, size_t len) {
-        conn->feedData(data, len);
+        conn->feed_data(data, len);
     }, "Http2Conn must keep feedData(data, len) for byte-oriented tests");
 
     static_assert(requires(Http2Conn* conn) {
-        conn->peerSettings();
+        conn->peer_settings();
     }, "Http2Conn must expose peerSettings() for max-frame-size validation");
 
     static_assert(requires(Http2Conn* conn) {
-        { conn->parseBufferedFrames(16) } -> std::same_as<BatchParseResult>;
+        { conn->parse_buffered_frames(16) } -> std::same_as<BatchParseResult>;
     }, "Http2Conn must expose parseBufferedFrames(max_count) -> expected<vector<frame>, error>");
 
     std::cout << "[T37] Static contract checks PASS\n";
@@ -97,17 +97,17 @@ int main() {
         Http2Conn conn(std::move(socket));
 
         // Build 3 PING frames
-        auto ping1 = buildPingFrame(0x1111111111111111ULL);
-        auto ping2 = buildPingFrame(0x2222222222222222ULL);
-        auto ping3 = buildPingFrame(0x3333333333333333ULL);
+        auto ping1 = build_ping_frame(0x1111111111111111ULL);
+        auto ping2 = build_ping_frame(0x2222222222222222ULL);
+        auto ping3 = build_ping_frame(0x3333333333333333ULL);
 
         // Feed all 3 frames into buffer
-        conn.feedData(reinterpret_cast<const char*>(ping1.data()), ping1.size());
-        conn.feedData(reinterpret_cast<const char*>(ping2.data()), ping2.size());
-        conn.feedData(reinterpret_cast<const char*>(ping3.data()), ping3.size());
+        conn.feed_data(reinterpret_cast<const char*>(ping1.data()), ping1.size());
+        conn.feed_data(reinterpret_cast<const char*>(ping2.data()), ping2.size());
+        conn.feed_data(reinterpret_cast<const char*>(ping3.data()), ping3.size());
 
         // Parse with max_count=10 (should get all 3)
-        auto result = conn.parseBufferedFrames(10);
+        auto result = conn.parse_buffered_frames(10);
         assert(result.has_value() && "Should parse successfully");
         assert(result->size() == 3 && "Should return 3 frames");
 
@@ -127,21 +127,21 @@ int main() {
         Http2Conn conn(std::move(socket));
 
         // Build 2 frames
-        auto settings = buildSettingsFrame();
-        auto ping = buildPingFrame(0x4444444444444444ULL);
+        auto settings = build_settings_frame();
+        auto ping = build_ping_frame(0x4444444444444444ULL);
 
         // Feed complete SETTINGS + partial PING (only 5 bytes of header)
-        conn.feedData(reinterpret_cast<const char*>(settings.data()), settings.size());
-        conn.feedData(reinterpret_cast<const char*>(ping.data()), 5);
+        conn.feed_data(reinterpret_cast<const char*>(settings.data()), settings.size());
+        conn.feed_data(reinterpret_cast<const char*>(ping.data()), 5);
 
         // Parse should return only the complete SETTINGS frame
-        auto result = conn.parseBufferedFrames(10);
+        auto result = conn.parse_buffered_frames(10);
         assert(result.has_value() && "Should parse successfully");
         assert(result->size() == 1 && "Should return only 1 complete frame");
         assert(result->at(0)->header().type == Http2FrameType::Settings);
 
         // Verify partial frame is still buffered (5 bytes remain)
-        assert(conn.ringBuffer().readable() == 5 && "Partial frame should remain buffered");
+        assert(conn.ring_buffer().readable() == 5 && "Partial frame should remain buffered");
 
         std::cout << "[T37] Scenario 2 PASS: returned 1 complete, left partial buffered\n";
     }
@@ -154,17 +154,17 @@ int main() {
         Http2Conn conn(std::move(socket));
 
         // Inbound frame parsing must obey local advertised max_frame_size.
-        uint32_t max_size = conn.localSettings().max_frame_size;
+        uint32_t max_size = conn.local_settings().max_frame_size;
         assert(max_size == kDefaultMaxFrameSize && "Default max_frame_size should be 16384");
 
         // Build a frame with length = max_size + 1 (oversize)
-        auto oversize = buildOversizeFrame(max_size + 1);
+        auto oversize = build_oversize_frame(max_size + 1);
 
         // Feed only the header (9 bytes) - enough to detect oversize
-        conn.feedData(reinterpret_cast<const char*>(oversize.data()), 9);
+        conn.feed_data(reinterpret_cast<const char*>(oversize.data()), 9);
 
         // Parse should return FrameSizeError
-        auto result = conn.parseBufferedFrames(10);
+        auto result = conn.parse_buffered_frames(10);
         assert(!result.has_value() && "Should fail on oversize frame");
         assert(result.error() == Http2ErrorCode::FrameSizeError && "Should return FrameSizeError");
 
@@ -180,17 +180,17 @@ int main() {
 
         // Build 5 SETTINGS frames
         for (int i = 0; i < 5; ++i) {
-            auto settings = buildSettingsFrame();
-            conn.feedData(reinterpret_cast<const char*>(settings.data()), settings.size());
+            auto settings = build_settings_frame();
+            conn.feed_data(reinterpret_cast<const char*>(settings.data()), settings.size());
         }
 
         // Parse with max_count=3 (should get only 3)
-        auto result = conn.parseBufferedFrames(3);
+        auto result = conn.parse_buffered_frames(3);
         assert(result.has_value() && "Should parse successfully");
         assert(result->size() == 3 && "Should return exactly 3 frames");
 
         // Verify 2 frames remain buffered (2 * 9 = 18 bytes)
-        assert(conn.ringBuffer().readable() == 18 && "2 frames should remain buffered");
+        assert(conn.ring_buffer().readable() == 18 && "2 frames should remain buffered");
 
         std::cout << "[T37] Scenario 4 PASS: respected max_count limit\n";
     }
@@ -203,7 +203,7 @@ int main() {
         Http2Conn conn(std::move(socket));
 
         // Parse empty buffer
-        auto result = conn.parseBufferedFrames(10);
+        auto result = conn.parse_buffered_frames(10);
         assert(result.has_value() && "Should succeed on empty buffer");
         assert(result->empty() && "Should return empty vector");
 
@@ -217,27 +217,27 @@ int main() {
         std::cout << "[T37] Scenario 5.5: segmented builder bytes equivalence\n";
 
         static_assert(requires {
-            { Http2FrameBuilder::dataHeaderBytes(7, 5, true) }
+            { Http2FrameBuilder::data_header_bytes(7, 5, true) }
                 -> std::same_as<std::array<char, kHttp2FrameHeaderLength>>;
         }, "Http2FrameBuilder must expose dataHeaderBytes(stream_id, payload_len, end_stream)");
 
         static_assert(requires {
-            { Http2FrameBuilder::headersHeaderBytes(3, 11, false, true) }
+            { Http2FrameBuilder::headers_header_bytes(3, 11, false, true) }
                 -> std::same_as<std::array<char, kHttp2FrameHeaderLength>>;
         }, "Http2FrameBuilder must expose headersHeaderBytes(stream_id, header_block_len, end_stream, end_headers)");
 
         const std::string payload = "hello";
-        const auto data_header = Http2FrameBuilder::dataHeaderBytes(7, payload.size(), true);
-        const auto data_bytes = Http2FrameBuilder::dataBytes(7, payload, true);
-        assert(flattenHeaderAndPayload(data_header, payload) == data_bytes &&
+        const auto data_header = Http2FrameBuilder::data_header_bytes(7, payload.size(), true);
+        const auto data_bytes = Http2FrameBuilder::data_bytes(7, payload, true);
+        assert(flatten_header_and_payload(data_header, payload) == data_bytes &&
                "Segmented DATA header bytes must match legacy full-frame bytes");
 
         const std::string header_block = "header-block";
         const auto headers_header =
-            Http2FrameBuilder::headersHeaderBytes(3, header_block.size(), false, true);
+            Http2FrameBuilder::headers_header_bytes(3, header_block.size(), false, true);
         const auto headers_bytes =
-            Http2FrameBuilder::headersBytes(3, header_block, false, true);
-        assert(flattenHeaderAndPayload(headers_header, header_block) == headers_bytes &&
+            Http2FrameBuilder::headers_bytes(3, header_block, false, true);
+        assert(flatten_header_and_payload(headers_header, header_block) == headers_bytes &&
                "Segmented HEADERS header bytes must match legacy full-frame bytes");
 
         std::cout << "[T37] Scenario 5.5 PASS: segmented header bytes match legacy builders\n";
@@ -246,16 +246,16 @@ int main() {
     // ========== NEW: Batch awaitable contract tests ==========
     std::cout << "\n[T37] Starting batch awaitable contract tests\n";
 
-    // ========== Scenario 6: readFramesBatch() static contract ==========
+    // ========== Scenario 6: read_frames_batch() static contract ==========
     {
         std::cout << "[T37] Scenario 6: readFramesBatch() static contract\n";
 
         static_assert(requires(Http2Conn* conn) {
-            { conn->readFramesBatch() };
+            { conn->read_frames_batch() };
         }, "Http2Conn must expose readFramesBatch() method");
 
         static_assert(requires(Http2Conn* conn) {
-            { conn->readFramesBatch(10) };
+            { conn->read_frames_batch(10) };
         }, "Http2Conn must accept max_frames parameter");
 
         std::cout << "[T37] Scenario 6 PASS: readFramesBatch() contract exists\n";
@@ -269,16 +269,16 @@ int main() {
         Http2Conn conn(std::move(socket));
 
         // Build and feed 3 PING frames
-        auto ping1 = buildPingFrame(0x1111111111111111ULL);
-        auto ping2 = buildPingFrame(0x2222222222222222ULL);
-        auto ping3 = buildPingFrame(0x3333333333333333ULL);
+        auto ping1 = build_ping_frame(0x1111111111111111ULL);
+        auto ping2 = build_ping_frame(0x2222222222222222ULL);
+        auto ping3 = build_ping_frame(0x3333333333333333ULL);
 
-        conn.feedData(reinterpret_cast<const char*>(ping1.data()), ping1.size());
-        conn.feedData(reinterpret_cast<const char*>(ping2.data()), ping2.size());
-        conn.feedData(reinterpret_cast<const char*>(ping3.data()), ping3.size());
+        conn.feed_data(reinterpret_cast<const char*>(ping1.data()), ping1.size());
+        conn.feed_data(reinterpret_cast<const char*>(ping2.data()), ping2.size());
+        conn.feed_data(reinterpret_cast<const char*>(ping3.data()), ping3.size());
 
         // Create awaitable - should be ready immediately
-        auto awaitable = conn.readFramesBatch(10);
+        auto awaitable = conn.read_frames_batch(10);
         assert(awaitable.await_ready() && "Should be ready when frames buffered");
 
         // Note: We can't test await_resume() without coroutine context,
@@ -295,7 +295,7 @@ int main() {
         Http2Conn conn(std::move(socket));
 
         // Empty buffer - awaitable should NOT be ready (will suspend)
-        auto awaitable = conn.readFramesBatch(10);
+        auto awaitable = conn.read_frames_batch(10);
         assert(!awaitable.await_ready() && "Should NOT be ready when buffer empty");
 
         std::cout << "[T37] Scenario 8 PASS: await_ready() returns false with empty buffer\n";
@@ -310,12 +310,12 @@ int main() {
 
         // Build 5 frames
         for (int i = 0; i < 5; ++i) {
-            auto settings = buildSettingsFrame();
-            conn.feedData(reinterpret_cast<const char*>(settings.data()), settings.size());
+            auto settings = build_settings_frame();
+            conn.feed_data(reinterpret_cast<const char*>(settings.data()), settings.size());
         }
 
         // Create awaitable with max_frames=3
-        auto awaitable = conn.readFramesBatch(3);
+        auto awaitable = conn.read_frames_batch(3);
         assert(awaitable.await_ready() && "Should be ready when frames available");
 
         std::cout << "[T37] Scenario 9 PASS: await_ready() works with max_frames limit\n";

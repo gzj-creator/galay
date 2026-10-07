@@ -11,7 +11,7 @@ namespace {
 
 std::once_flag g_ssl_init_once;
 
-void initializeOpenSSL() {
+void initialize_open_ssl() {
     std::call_once(g_ssl_init_once, [] {
         SSL_library_init();
         SSL_load_error_strings();
@@ -19,7 +19,7 @@ void initializeOpenSSL() {
     });
 }
 
-const SSL_METHOD* getMethod(SslMethod method) {
+const SSL_METHOD* get_method(SslMethod method) {
     switch (method) {
         case SslMethod::TLS_Client:
             return TLS_client_method();
@@ -40,7 +40,7 @@ const SSL_METHOD* getMethod(SslMethod method) {
     }
 }
 
-bool isServerMethod(SslMethod method) {
+bool is_server_method(SslMethod method) {
     switch (method) {
         case SslMethod::TLS_Server:
         case SslMethod::TLS_1_2_Server:
@@ -57,12 +57,12 @@ bool isServerMethod(SslMethod method) {
 SslContext::SslContext(SslMethod method)
     : m_ctx(nullptr)
 {
-    initializeOpenSSL();
+    initialize_open_ssl();
 
-    m_ctx = SSL_CTX_new(getMethod(method));
+    m_ctx = SSL_CTX_new(get_method(method));
     if (!m_ctx) {
         SSL_LOG_ERROR("[context] [create]", "SSL_CTX_new failed");
-        m_error = SslError::fromOpenSSL(SslErrorCode::kContextCreateFailed);
+        m_error = SslError::from_open_ssl(SslErrorCode::kContextCreateFailed);
         return;
     }
 
@@ -75,7 +75,7 @@ SslContext::SslContext(SslMethod method)
 
     // Default server contexts prioritize steady-state throughput and avoid
     // post-handshake TLS 1.3 session ticket traffic on long-lived connections.
-    if (isServerMethod(method)) {
+    if (is_server_method(method)) {
         SSL_CTX_set_options(m_ctx, SSL_OP_NO_TICKET);
         SSL_CTX_set_num_tickets(m_ctx, 0);
     }
@@ -109,11 +109,11 @@ SslContext::~SslContext()
 SslContext::SslContext(SslContext&& other) noexcept
     : m_ctx(other.m_ctx)
     , m_error(std::move(other.m_error))
-    , m_verifyCallback(std::move(other.m_verifyCallback))
+    , m_verify_callback(std::move(other.m_verify_callback))
     , m_alpnSelectProtocols(std::move(other.m_alpnSelectProtocols))
 {
     other.m_ctx = nullptr;
-    refreshCallbackContext();
+    refresh_callback_context();
 }
 
 SslContext& SslContext::operator=(SslContext&& other) noexcept
@@ -124,15 +124,15 @@ SslContext& SslContext::operator=(SslContext&& other) noexcept
         }
         m_ctx = other.m_ctx;
         m_error = std::move(other.m_error);
-        m_verifyCallback = std::move(other.m_verifyCallback);
+        m_verify_callback = std::move(other.m_verify_callback);
         m_alpnSelectProtocols = std::move(other.m_alpnSelectProtocols);
         other.m_ctx = nullptr;
-        refreshCallbackContext();
+        refresh_callback_context();
     }
     return *this;
 }
 
-std::expected<void, SslError> SslContext::loadCertificate(
+std::expected<void, SslError> SslContext::load_certificate(
     const std::string& certFile,
     SslFileType type)
 {
@@ -149,20 +149,20 @@ std::expected<void, SslError> SslContext::loadCertificate(
     return {};
 }
 
-std::expected<void, SslError> SslContext::loadCertificateChain(const std::string& certChainFile)
+std::expected<void, SslError> SslContext::load_certificate_chain(const std::string& certChainFile)
 {
     if (!m_ctx) {
         return std::unexpected(SslError(SslErrorCode::kContextCreateFailed));
     }
 
     if (SSL_CTX_use_certificate_chain_file(m_ctx, certChainFile.c_str()) != 1) {
-        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kCertificateLoadFailed));
+        return std::unexpected(SslError::from_open_ssl(SslErrorCode::kCertificateLoadFailed));
     }
 
     return {};
 }
 
-std::expected<void, SslError> SslContext::loadPrivateKey(
+std::expected<void, SslError> SslContext::load_private_key(
     const std::string& keyFile,
     SslFileType type)
 {
@@ -186,7 +186,7 @@ std::expected<void, SslError> SslContext::loadPrivateKey(
     return {};
 }
 
-std::expected<void, SslError> SslContext::loadCACertificate(const std::string& caFile)
+std::expected<void, SslError> SslContext::load_ca_certificate(const std::string& caFile)
 {
     if (!m_ctx) {
         return std::unexpected(SslError(SslErrorCode::kContextCreateFailed));
@@ -194,46 +194,46 @@ std::expected<void, SslError> SslContext::loadCACertificate(const std::string& c
 
     if (SSL_CTX_load_verify_locations(m_ctx, caFile.c_str(), nullptr) != 1) {
         SSL_LOG_ERROR("[context] [ca]", "path={}", caFile);
-        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kCACertificateLoadFailed));
+        return std::unexpected(SslError::from_open_ssl(SslErrorCode::kCACertificateLoadFailed));
     }
 
     return {};
 }
 
-std::expected<void, SslError> SslContext::loadCAPath(const std::string& caPath)
+std::expected<void, SslError> SslContext::load_ca_path(const std::string& ca_path)
 {
     if (!m_ctx) {
         return std::unexpected(SslError(SslErrorCode::kContextCreateFailed));
     }
 
-    if (SSL_CTX_load_verify_locations(m_ctx, nullptr, caPath.c_str()) != 1) {
-        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kCACertificateLoadFailed));
+    if (SSL_CTX_load_verify_locations(m_ctx, nullptr, ca_path.c_str()) != 1) {
+        return std::unexpected(SslError::from_open_ssl(SslErrorCode::kCACertificateLoadFailed));
     }
 
     return {};
 }
 
-std::expected<void, SslError> SslContext::useDefaultCA()
+std::expected<void, SslError> SslContext::use_default_ca()
 {
     if (!m_ctx) {
         return std::unexpected(SslError(SslErrorCode::kContextCreateFailed));
     }
 
     if (SSL_CTX_set_default_verify_paths(m_ctx) != 1) {
-        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kCACertificateLoadFailed));
+        return std::unexpected(SslError::from_open_ssl(SslErrorCode::kCACertificateLoadFailed));
     }
 
     return {};
 }
 
-void SslContext::setVerifyMode(SslVerifyMode mode,
+void SslContext::set_verify_mode(SslVerifyMode mode,
                                 std::function<bool(bool, X509_STORE_CTX*)> callback)
 {
     if (!m_ctx) return;
 
-    m_verifyCallback = std::move(callback);
+    m_verify_callback = std::move(callback);
 
-    if (m_verifyCallback) {
+    if (m_verify_callback) {
         // 设置带回调的验证
         SSL_CTX_set_verify(m_ctx, static_cast<int>(mode),
             [](int preverify_ok, X509_STORE_CTX* ctx) -> int {
@@ -248,7 +248,7 @@ void SslContext::setVerifyMode(SslVerifyMode mode,
 
                 // 获取 SslContext 指针
                 SslContext* self = static_cast<SslContext*>(SSL_CTX_get_ex_data(ssl_ctx, 0));
-                if (!self || !self->m_verifyCallback) return preverify_ok;
+                if (!self || !self->m_verify_callback) return preverify_ok;
 
                 if (preverify_ok == 0) {
                     int depth = X509_STORE_CTX_get_error_depth(ctx);
@@ -261,7 +261,7 @@ void SslContext::setVerifyMode(SslVerifyMode mode,
                     SSL_LOG_WARN("[verify]", "depth={} err={} subject={}", depth, err, subject);
                 }
 
-                return self->m_verifyCallback(preverify_ok != 0, ctx) ? 1 : 0;
+                return self->m_verify_callback(preverify_ok != 0, ctx) ? 1 : 0;
             });
 
         // 存储 this 指针
@@ -271,40 +271,40 @@ void SslContext::setVerifyMode(SslVerifyMode mode,
     }
 }
 
-void SslContext::setVerifyDepth(int depth)
+void SslContext::set_verify_depth(int depth)
 {
     if (m_ctx) {
         SSL_CTX_set_verify_depth(m_ctx, depth);
     }
 }
 
-std::expected<void, SslError> SslContext::setCiphers(const std::string& ciphers)
+std::expected<void, SslError> SslContext::set_ciphers(const std::string& ciphers)
 {
     if (!m_ctx) {
         return std::unexpected(SslError(SslErrorCode::kContextCreateFailed));
     }
 
     if (SSL_CTX_set_cipher_list(m_ctx, ciphers.c_str()) != 1) {
-        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kUnknown));
+        return std::unexpected(SslError::from_open_ssl(SslErrorCode::kUnknown));
     }
 
     return {};
 }
 
-std::expected<void, SslError> SslContext::setCiphersuites(const std::string& ciphersuites)
+std::expected<void, SslError> SslContext::set_ciphersuites(const std::string& ciphersuites)
 {
     if (!m_ctx) {
         return std::unexpected(SslError(SslErrorCode::kContextCreateFailed));
     }
 
     if (SSL_CTX_set_ciphersuites(m_ctx, ciphersuites.c_str()) != 1) {
-        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kUnknown));
+        return std::unexpected(SslError::from_open_ssl(SslErrorCode::kUnknown));
     }
 
     return {};
 }
 
-std::expected<void, SslError> SslContext::setALPNProtocols(const std::vector<std::string>& protocols)
+std::expected<void, SslError> SslContext::set_alpn_protocols(const std::vector<std::string>& protocols)
 {
     if (!m_ctx) {
         return std::unexpected(SslError(SslErrorCode::kContextCreateFailed));
@@ -325,7 +325,7 @@ std::expected<void, SslError> SslContext::setALPNProtocols(const std::vector<std
     return {};
 }
 
-std::expected<void, SslError> SslContext::setALPNSelectProtocols(const std::vector<std::string>& protocols)
+std::expected<void, SslError> SslContext::set_alpn_select_protocols(const std::vector<std::string>& protocols)
 {
     if (!m_ctx) {
         return std::unexpected(SslError(SslErrorCode::kContextCreateFailed));
@@ -341,11 +341,11 @@ std::expected<void, SslError> SslContext::setALPNSelectProtocols(const std::vect
         return std::unexpected(SslError(SslErrorCode::kALPNSetFailed));
     }
 
-    SSL_CTX_set_alpn_select_cb(m_ctx, &SslContext::selectALPNCallback, this);
+    SSL_CTX_set_alpn_select_cb(m_ctx, &SslContext::select_alpn_callback, this);
     return {};
 }
 
-int SslContext::selectALPNCallback(SSL*,
+int SslContext::select_alpn_callback(SSL*,
                                    const unsigned char** out,
                                    unsigned char* outlen,
                                    const unsigned char* in,
@@ -377,55 +377,55 @@ int SslContext::selectALPNCallback(SSL*,
     return SSL_TLSEXT_ERR_NOACK;
 }
 
-void SslContext::refreshCallbackContext() noexcept
+void SslContext::refresh_callback_context() noexcept
 {
     if (!m_ctx) {
         return;
     }
-    if (m_verifyCallback) {
+    if (m_verify_callback) {
         SSL_CTX_set_ex_data(m_ctx, 0, this);
     }
     if (!m_alpnSelectProtocols.empty()) {
-        SSL_CTX_set_alpn_select_cb(m_ctx, &SslContext::selectALPNCallback, this);
+        SSL_CTX_set_alpn_select_cb(m_ctx, &SslContext::select_alpn_callback, this);
     }
 }
 
-void SslContext::setMinProtocolVersion(int version)
+void SslContext::set_min_protocol_version(int version)
 {
     if (m_ctx) {
         SSL_CTX_set_min_proto_version(m_ctx, version);
     }
 }
 
-void SslContext::setMaxProtocolVersion(int version)
+void SslContext::set_max_protocol_version(int version)
 {
     if (m_ctx) {
         SSL_CTX_set_max_proto_version(m_ctx, version);
     }
 }
 
-void SslContext::setSessionCacheMode(long mode)
+void SslContext::set_session_cache_mode(long mode)
 {
     if (m_ctx) {
         SSL_CTX_set_session_cache_mode(m_ctx, mode);
     }
 }
 
-void SslContext::setSessionTimeout(long timeout)
+void SslContext::set_session_timeout(long timeout)
 {
     if (m_ctx) {
         SSL_CTX_set_timeout(m_ctx, timeout);
     }
 }
 
-void SslContext::disableSessionCache()
+void SslContext::disable_session_cache()
 {
     if (m_ctx) {
         SSL_CTX_set_session_cache_mode(m_ctx, SSL_SESS_CACHE_OFF);
     }
 }
 
-void SslContext::disableSessionTickets()
+void SslContext::disable_session_tickets()
 {
     if (m_ctx) {
         SSL_CTX_set_options(m_ctx, SSL_OP_NO_TICKET);

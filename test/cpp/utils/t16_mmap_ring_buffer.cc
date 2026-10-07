@@ -35,7 +35,7 @@ void test_mmap_error_surface() {
         RingBufferError::kMappingFail,
     };
     for (RingBufferError error : errors) {
-        require(galay::utils::ringBufferErrorString(error)[0] != '\0',
+        require(galay::utils::ring_buffer_error_string(error)[0] != '\0',
                 "RingBufferError string must be non-empty");
     }
 
@@ -59,7 +59,7 @@ void test_public_constructor_zero_capacity_falls_back() {
     require(buffer.capacity() >= galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>::kDefaultCapacity,
             "zero-capacity constructor must fall back to a usable default capacity");
     constexpr std::string_view data = "x";
-    require(buffer.tryWriteBatch(data) == data.size(),
+    require(buffer.try_write_batch(data) == data.size(),
             "zero-capacity constructor fallback buffer must accept writes");
 }
 
@@ -70,23 +70,23 @@ void test_threshold_buffer_uses_single_iovec_across_wrap() {
             "mmap ring capacity must cover requested capacity");
 
     std::vector<char> prefix(capacity - 64, 'A');
-    require(buffer.tryWriteBatch(prefix.data(), prefix.size()) == prefix.size(),
+    require(buffer.try_write_batch(prefix.data(), prefix.size()) == prefix.size(),
             "initial write must fill prefix");
     buffer.consume(capacity - 128);
     require(buffer.readable() == 64, "setup must leave tail bytes readable");
 
     std::array<struct iovec, 2> write_iovecs{};
-    const std::size_t write_count = buffer.getWriteIovecs(write_iovecs);
+    const std::size_t write_count = buffer.get_write_iovecs(write_iovecs);
     require(write_count == 1, "mmap wrapped writable area must be a single iovec");
     require(write_iovecs[0].iov_len == buffer.writable(),
             "single write iovec must cover all writable bytes");
 
     std::vector<char> wrapped(256, 'B');
-    require(buffer.tryWriteBatch(wrapped.data(), wrapped.size()) == wrapped.size(),
+    require(buffer.try_write_batch(wrapped.data(), wrapped.size()) == wrapped.size(),
             "wrapped write must complete");
 
     std::array<struct iovec, 2> read_iovecs{};
-    const std::size_t read_count = buffer.getReadIovecs(read_iovecs);
+    const std::size_t read_count = buffer.get_read_iovecs(read_iovecs);
     require(read_count == 1, "mmap wrapped readable area must be a single iovec");
     require(read_iovecs[0].iov_len == 320,
             "single read iovec must cover tail and head bytes");

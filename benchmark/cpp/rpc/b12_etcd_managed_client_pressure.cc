@@ -27,12 +27,12 @@ public:
     BenchEtcdEchoService()
         : RpcService("BenchEtcdEcho")
     {
-        registerMethod("echo", &BenchEtcdEchoService::echo);
+        register_method("echo", &BenchEtcdEchoService::echo);
     }
 
     Task<void> echo(RpcContext& ctx)
     {
-        ctx.setPayload(ctx.request().payloadView());
+        ctx.set_payload(ctx.request().payload_view());
         co_return;
     }
 };
@@ -46,7 +46,7 @@ struct BenchState {
     double max_latency_us = 0.0;
 };
 
-bool integrationEnabled()
+bool integration_enabled()
 {
     const char* value = std::getenv("GALAY_IT_ENABLE");
     if (value == nullptr || value[0] == '\0') {
@@ -58,7 +58,7 @@ bool integrationEnabled()
            enabled == "ON";
 }
 
-std::string etcdEndpoint()
+std::string etcd_endpoint()
 {
     const char* value = std::getenv("GALAY_ETCD_ENDPOINT");
     if (value == nullptr || value[0] == '\0') {
@@ -74,7 +74,7 @@ std::string suffix()
            std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(now).count());
 }
 
-uint16_t loopbackPort()
+uint16_t loopback_port()
 {
     return static_cast<uint16_t>(45000 + (::getpid() % 8000));
 }
@@ -85,16 +85,16 @@ int fail(const std::string& message)
     return 1;
 }
 
-bool payloadEquals(const auto& result, const std::string& expected)
+bool payload_equals(const auto& result, const std::string& expected)
 {
     if (!result.has_value() || !result->has_value() || !result->value().has_value()) {
         return false;
     }
     const auto& payload = result->value()->payload();
-    return result->value()->isOk() && std::string(payload.begin(), payload.end()) == expected;
+    return result->value()->is_ok() && std::string(payload.begin(), payload.end()) == expected;
 }
 
-std::vector<RpcEndpoint> toManagedEndpoints(const std::vector<RpcEndpointInfo>& infos)
+std::vector<RpcEndpoint> to_managed_endpoints(const std::vector<RpcEndpointInfo>& infos)
 {
     std::vector<RpcEndpoint> endpoints;
     for (const auto& info : infos) {
@@ -105,7 +105,7 @@ std::vector<RpcEndpoint> toManagedEndpoints(const std::vector<RpcEndpointInfo>& 
     return endpoints;
 }
 
-size_t parseSizeArg(int argc, char** argv, int index, size_t fallback)
+size_t parse_size_arg(int argc, char** argv, int index, size_t fallback)
 {
     if (argc <= index) {
         return fallback;
@@ -113,7 +113,7 @@ size_t parseSizeArg(int argc, char** argv, int index, size_t fallback)
     return static_cast<size_t>(std::strtoull(argv[index], nullptr, 10));
 }
 
-Task<void> runPressure(RpcStaticDiscovery* discovery,
+Task<void> run_pressure(RpcStaticDiscovery* discovery,
                        size_t requests,
                        BenchState* state,
                        std::atomic<size_t>* done_count)
@@ -133,7 +133,7 @@ Task<void> runPressure(RpcStaticDiscovery* discovery,
             state->max_latency_us = elapsed;
         }
         ++state->completed;
-        if (!payloadEquals(result, "bench-etcd")) {
+        if (!payload_equals(result, "bench-etcd")) {
             ++state->errors;
         }
     }
@@ -151,19 +151,19 @@ Task<void> runPressure(RpcStaticDiscovery* discovery,
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    if (!integrationEnabled()) {
+    if (!integration_enabled()) {
         std::cout << "[SKIP] set GALAY_IT_ENABLE=1 to run RPC etcd managed client pressure benchmark\n";
         return kSkip;
     }
 
-    const size_t requests = parseSizeArg(argc, argv, 1, 1000);
-    const size_t client_io_schedulers = parseSizeArg(argc, argv, 2, 1);
-    const size_t server_io_schedulers = parseSizeArg(argc, argv, 3, 1);
-    size_t concurrency = parseSizeArg(argc, argv, 4, 1);
+    const size_t requests = parse_size_arg(argc, argv, 1, 1000);
+    const size_t client_io_schedulers = parse_size_arg(argc, argv, 2, 1);
+    const size_t server_io_schedulers = parse_size_arg(argc, argv, 3, 1);
+    size_t concurrency = parse_size_arg(argc, argv, 4, 1);
     if (requests == 0) {
         return fail("requests must be > 0");
     }
@@ -177,11 +177,11 @@ int main(int argc, char** argv)
         concurrency = requests;
     }
 
-    const std::string endpoint = etcdEndpoint();
+    const std::string endpoint = etcd_endpoint();
     const std::string run_id = suffix();
     const std::string prefix = "/galay/rpc/bench/" + run_id;
     const std::string instance_id = "instance-" + run_id;
-    const uint16_t port = loopbackPort();
+    const uint16_t port = loopback_port();
 
     RpcEtcdRegistryConfig registry_config;
     registry_config.endpoint = endpoint;
@@ -192,11 +192,11 @@ int main(int argc, char** argv)
     auto server = RpcServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(server_io_schedulers)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(server_io_schedulers)
+        .parallel_scheduler_count(0)
         .build();
     BenchEtcdEchoService service;
-    auto service_registered = server.registerService(service);
+    auto service_registered = server.register_service(service);
     if (!service_registered.has_value()) {
         std::cerr << "failed to register etcd pressure service: "
                   << service_registered.error().message() << "\n";
@@ -220,11 +220,11 @@ int main(int argc, char** argv)
     info.zone = "local";
 
     auto cleanup = [&] {
-        (void)registry.deregisterEndpoint("BenchEtcdEcho", instance_id);
+        (void)registry.deregister_endpoint("BenchEtcdEcho", instance_id);
         server.stop();
     };
 
-    auto endpoint_registered = registry.registerEndpoint(info);
+    auto endpoint_registered = registry.register_endpoint(info);
     if (!endpoint_registered.has_value()) {
         cleanup();
         return fail("register endpoint failed: " + endpoint_registered.error().message());
@@ -237,7 +237,7 @@ int main(int argc, char** argv)
     }
 
     RpcStaticDiscovery discovery;
-    auto managed_endpoints = toManagedEndpoints(*discovered);
+    auto managed_endpoints = to_managed_endpoints(*discovered);
     if (managed_endpoints.empty()) {
         cleanup();
         return fail("discover returned no selectable endpoints");
@@ -245,8 +245,8 @@ int main(int argc, char** argv)
     discovery.set("BenchEtcdEcho", std::move(managed_endpoints));
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(client_io_schedulers)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(client_io_schedulers)
+        .parallel_scheduler_count(0)
         .build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
@@ -264,7 +264,7 @@ int main(int argc, char** argv)
     const size_t extra_requests = requests % concurrency;
     for (size_t i = 0; i < concurrency; ++i) {
         const size_t task_requests = base_requests + (i < extra_requests ? 1 : 0);
-        auto scheduled = runtime.spawnIO(runPressure(&discovery, task_requests, &states[i], &done_count));
+        auto scheduled = runtime.spawn_io(run_pressure(&discovery, task_requests, &states[i], &done_count));
         if (!scheduled.has_value()) {
             runtime.stop();
             cleanup();
@@ -310,7 +310,7 @@ int main(int argc, char** argv)
         }
     }
 
-    auto deregistered = registry.deregisterEndpoint("BenchEtcdEcho", instance_id);
+    auto deregistered = registry.deregister_endpoint("BenchEtcdEcho", instance_id);
     if (!deregistered.has_value()) {
         cleanup();
         return fail("deregister endpoint failed: " + deregistered.error().message());

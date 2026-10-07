@@ -10,7 +10,7 @@
 using namespace galay::http;
 using namespace galay::kernel;
 
-Task<void> indexHandler(HttpConn& conn, HttpRequest req) {
+Task<void> index_handler(HttpConn& conn, HttpRequest req) {
     (void)req;
     auto response = Http1_1ResponseBuilder::ok()
         .header("Server", "Galay-Static-Example/1.0")
@@ -23,9 +23,9 @@ Task<void> indexHandler(HttpConn& conn, HttpRequest req) {
             "</body></html>")
         .build();
 
-    auto writer = conn.getWriter();
+    auto writer = conn.get_writer();
     while (true) {
-        auto result = co_await writer.sendResponse(response);
+        auto result = co_await writer.send_response(response);
         if (!result || result.value()) break;
     }
 
@@ -40,20 +40,20 @@ int main(int argc, char* argv[]) {
     if (argc > 2) static_dir = argv[2];
 
     HttpRouter router;
-    router.addHandler<HttpMethod::GET>("/", indexHandler);
+    router.add_handler<HttpMethod::GET>("/", index_handler);
     router.mount("/static", static_dir);
 
     HttpServer server(HttpServerBuilder()
         .host("0.0.0.0")
         .port(port)
-        .ioSchedulerCount(2)
+        .io_scheduler_count(2)
         .build());
     std::cout << "Static server: http://127.0.0.1:" << port << "/\n";
     std::cout << "Static route:  http://127.0.0.1:" << port << "/static/*\n";
     std::cout << "Directory: " << static_dir << "\n";
     server.start(std::move(router));
 
-    while (server.isRunning()) {
+    while (server.is_running()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 

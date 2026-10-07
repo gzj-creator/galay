@@ -20,7 +20,7 @@ using namespace galay::mysql::protocol;
 namespace
 {
 
-size_t parseSizeArg(int argc, char** argv, int index, size_t fallback)
+size_t parse_size_arg(int argc, char** argv, int index, size_t fallback)
 {
     if (argc <= index) {
         return fallback;
@@ -35,7 +35,7 @@ size_t parseSizeArg(int argc, char** argv, int index, size_t fallback)
     return static_cast<size_t>(parsed);
 }
 
-std::string makeValue(size_t value_size, char seed)
+std::string make_value(size_t value_size, char seed)
 {
     std::string value;
     value.reserve(value_size);
@@ -45,54 +45,54 @@ std::string makeValue(size_t value_size, char seed)
     return value;
 }
 
-MysqlField makeField(size_t index, size_t value_size)
+MysqlField make_field(size_t index, size_t value_size)
 {
-    MysqlField field("field_" + std::to_string(index) + "_" + makeValue(value_size, 'a'),
+    MysqlField field("field_" + std::to_string(index) + "_" + make_value(value_size, 'a'),
                      MysqlFieldType::VAR_STRING,
                      NOT_NULL_FLAG,
                      static_cast<uint32_t>(value_size),
                      0);
-    field.setCatalog(makeValue(value_size, 'c'));
-    field.setSchema(makeValue(value_size, 's'));
-    field.setTable(makeValue(value_size, 't'));
-    field.setOrgTable(makeValue(value_size, 'o'));
-    field.setOrgName(makeValue(value_size, 'n'));
-    field.setCharacterSet(45);
+    field.set_catalog(make_value(value_size, 'c'));
+    field.set_schema(make_value(value_size, 's'));
+    field.set_table(make_value(value_size, 't'));
+    field.set_org_table(make_value(value_size, 'o'));
+    field.set_org_name(make_value(value_size, 'n'));
+    field.set_character_set(45);
     return field;
 }
 
-MysqlCommandBuilder makeBuilder(size_t command_count, size_t value_size)
+MysqlCommandBuilder make_builder(size_t command_count, size_t value_size)
 {
     MysqlCommandBuilder builder;
     builder.reserve(command_count, command_count * (value_size + 16));
     for (size_t i = 0; i < command_count; ++i) {
-        const std::string sql = "SELECT '" + makeValue(value_size, 'a') + "'";
-        builder.appendQuery(sql, static_cast<uint8_t>(i % 255));
+        const std::string sql = "SELECT '" + make_value(value_size, 'a') + "'";
+        builder.append_query(sql, static_cast<uint8_t>(i % 255));
     }
     return builder;
 }
 
-MysqlResultSet makeResultSet(size_t field_count, size_t row_count, size_t value_size)
+MysqlResultSet make_result_set(size_t field_count, size_t row_count, size_t value_size)
 {
     MysqlResultSet result;
-    result.reserveFields(field_count);
-    result.reserveRows(row_count);
+    result.reserve_fields(field_count);
+    result.reserve_rows(row_count);
     for (size_t i = 0; i < field_count; ++i) {
-        result.addField(makeField(i, value_size));
+        result.add_field(make_field(i, value_size));
     }
     for (size_t row_index = 0; row_index < row_count; ++row_index) {
         std::vector<std::optional<std::string>> values;
         values.reserve(field_count);
         for (size_t field_index = 0; field_index < field_count; ++field_index) {
-            values.emplace_back(makeValue(value_size, static_cast<char>('a' + field_index % 8)));
+            values.emplace_back(make_value(value_size, static_cast<char>('a' + field_index % 8)));
         }
-        result.addRow(MysqlRow(std::move(values)));
+        result.add_row(MysqlRow(std::move(values)));
     }
-    result.setAffectedRows(row_count);
-    result.setLastInsertId(1000 + row_count);
-    result.setWarnings(1);
-    result.setStatusFlags(2);
-    result.setInfo(makeValue(value_size, 'i'));
+    result.set_affected_rows(row_count);
+    result.set_last_insert_id(1000 + row_count);
+    result.set_warnings(1);
+    result.set_status_flags(2);
+    result.set_info(make_value(value_size, 'i'));
     return result;
 }
 
@@ -102,7 +102,7 @@ struct BenchResult
     long long elapsed_us = 0;
 };
 
-BenchResult runBuilderCloneMove(const MysqlCommandBuilder& source, size_t iterations)
+BenchResult run_builder_clone_move(const MysqlCommandBuilder& source, size_t iterations)
 {
     BenchResult result;
     const auto started = std::chrono::steady_clock::now();
@@ -122,7 +122,7 @@ BenchResult runBuilderCloneMove(const MysqlCommandBuilder& source, size_t iterat
     return result;
 }
 
-BenchResult runEncodedBatchCloneMove(const MysqlEncodedBatch& source, size_t iterations)
+BenchResult run_encoded_batch_clone_move(const MysqlEncodedBatch& source, size_t iterations)
 {
     BenchResult result;
     const auto started = std::chrono::steady_clock::now();
@@ -138,20 +138,20 @@ BenchResult runEncodedBatchCloneMove(const MysqlEncodedBatch& source, size_t ite
     return result;
 }
 
-BenchResult runResultSetCloneMove(const MysqlResultSet& source, size_t iterations)
+BenchResult run_result_set_clone_move(const MysqlResultSet& source, size_t iterations)
 {
     BenchResult result;
     const auto started = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
         MysqlResultSet cloned = source.clone();
         MysqlResultSet moved = std::move(cloned);
-        result.checksum += moved.fieldCount();
-        result.checksum += moved.rowCount();
-        if (moved.fieldCount() > 0) {
+        result.checksum += moved.field_count();
+        result.checksum += moved.row_count();
+        if (moved.field_count() > 0) {
             result.checksum += moved.field(0).name().size();
         }
-        if (moved.rowCount() > 0 && !moved.row(0).empty()) {
-            result.checksum += moved.row(0).getString(0).size();
+        if (moved.row_count() > 0 && !moved.row(0).empty()) {
+            result.checksum += moved.row(0).get_string(0).size();
         }
     }
     const auto finished = std::chrono::steady_clock::now();
@@ -160,7 +160,7 @@ BenchResult runResultSetCloneMove(const MysqlResultSet& source, size_t iteration
     return result;
 }
 
-void printRate(std::string_view label, const BenchResult& result, size_t iterations)
+void print_rate(std::string_view label, const BenchResult& result, size_t iterations)
 {
     const double seconds = static_cast<double>(result.elapsed_us) / 1'000'000.0;
     const double ops_per_sec = seconds > 0.0 ? static_cast<double>(iterations) / seconds : 0.0;
@@ -173,23 +173,23 @@ void printRate(std::string_view label, const BenchResult& result, size_t iterati
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    const size_t iterations = parseSizeArg(argc, argv, 1, 10000);
-    const size_t command_count = parseSizeArg(argc, argv, 2, 8);
-    const size_t field_count = parseSizeArg(argc, argv, 3, 8);
-    const size_t row_count = parseSizeArg(argc, argv, 4, 32);
-    const size_t value_size = parseSizeArg(argc, argv, 5, 64);
+    const size_t iterations = parse_size_arg(argc, argv, 1, 10000);
+    const size_t command_count = parse_size_arg(argc, argv, 2, 8);
+    const size_t field_count = parse_size_arg(argc, argv, 3, 8);
+    const size_t row_count = parse_size_arg(argc, argv, 4, 32);
+    const size_t value_size = parse_size_arg(argc, argv, 5, 64);
 
-    const MysqlCommandBuilder builder = makeBuilder(command_count, value_size);
+    const MysqlCommandBuilder builder = make_builder(command_count, value_size);
     const MysqlEncodedBatch batch = builder.build();
-    const MysqlResultSet result_set = makeResultSet(field_count, row_count, value_size);
+    const MysqlResultSet result_set = make_result_set(field_count, row_count, value_size);
 
-    const auto builder_result = runBuilderCloneMove(builder, iterations);
-    const auto batch_result = runEncodedBatchCloneMove(batch, iterations);
-    const auto result_set_result = runResultSetCloneMove(result_set, iterations);
+    const auto builder_result = run_builder_clone_move(builder, iterations);
+    const auto batch_result = run_encoded_batch_clone_move(batch, iterations);
+    const auto result_set_result = run_result_set_clone_move(result_set, iterations);
 
     std::cout << "MySQL clone/move pressure benchmark\n";
     std::cout << "Iterations: " << iterations << '\n';
@@ -197,9 +197,9 @@ int main(int argc, char** argv)
     std::cout << "Fields: " << field_count << '\n';
     std::cout << "Rows: " << row_count << '\n';
     std::cout << "Value bytes: " << value_size << '\n';
-    printRate("Builder clone+move", builder_result, iterations);
-    printRate("Encoded batch clone+move", batch_result, iterations);
-    printRate("Result set clone+move", result_set_result, iterations);
+    print_rate("Builder clone+move", builder_result, iterations);
+    print_rate("Encoded batch clone+move", batch_result, iterations);
+    print_rate("Result set clone+move", result_set_result, iterations);
 
     return builder_result.checksum != 0 &&
            batch_result.checksum != 0 &&

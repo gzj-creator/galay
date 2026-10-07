@@ -50,7 +50,7 @@ public:
      * @brief 声明一个带取值的选项
      * @tparam T 取值类型
      * @param name 长选项名，不含 `--`
-     * @param shortName 短选项名，`'\0'` 表示不提供
+     * @param short_name 短选项名，`'\0'` 表示不提供
      * @param description 帮助描述
      * @return 选项引用，可继续链式配置
      */
@@ -127,12 +127,12 @@ public:
 
     /// 判断某个选项是否在命令行中出现过
     [[nodiscard]] bool has(std::string_view name) const noexcept {
-        const ArgBase* found = findLong(name);
-        return found != nullptr && found->isSet();
+        const ArgBase* found = find_long(name);
+        return found != nullptr && found->is_set();
     }
 
     /// 输出帮助信息，顺序与声明顺序一致
-    void printHelp(std::ostream& out) const;
+    void print_help(std::ostream& out) const;
 
 protected:
     /// 解析参数数组，成功返回空，失败或请求帮助返回 `CliError`
@@ -159,7 +159,7 @@ protected:
 
 private:
     /// 按长名查找选项
-    [[nodiscard]] ArgBase* findLong(std::string_view name) const noexcept {
+    [[nodiscard]] ArgBase* find_long(std::string_view name) const noexcept {
         for (const auto& option : m_options) {
             if (option->name() == name) {
                 return option.get();
@@ -169,12 +169,12 @@ private:
     }
 
     /// 按短名查找选项
-    [[nodiscard]] ArgBase* findShort(char shortName) const noexcept {
+    [[nodiscard]] ArgBase* find_short(char shortName) const noexcept {
         if (shortName == '\0') {
             return nullptr;
         }
         for (const auto& option : m_options) {
-            if (option->shortName() == shortName) {
+            if (option->short_name() == shortName) {
                 return option.get();
             }
         }
@@ -182,7 +182,7 @@ private:
     }
 
     /// 按名查找子命令
-    [[nodiscard]] Cmd* findSub(std::string_view name) const noexcept {
+    [[nodiscard]] Cmd* find_sub(std::string_view name) const noexcept {
         for (const auto& sub : m_subcommands) {
             if (sub->name() == name) {
                 return sub.get();
@@ -192,7 +192,7 @@ private:
     }
 
     /// 解析前重置所有状态，保证可重复解析
-    void resetState() {
+    void reset_state() {
         m_rest.clear();
         m_activeSub = nullptr;
         for (const auto& option : m_options) {
@@ -204,7 +204,7 @@ private:
     }
 
     /// 解析结束后回写绑定变量
-    void flushBindings() const {
+    void flush_bindings() const {
         for (const auto& option : m_options) {
             option->flush();
         }
@@ -213,16 +213,16 @@ private:
         }
     }
 
-    std::expected<void, CliError> handleLong(std::string_view token, int argc, const char* const* argv, int& index);
-    std::expected<void, CliError> handleShort(std::string_view token, int argc, const char* const* argv, int& index);
-    std::expected<void, CliError> acceptPositional(std::string_view token);
-    [[nodiscard]] std::expected<void, CliError> checkRequired() const;
+    std::expected<void, CliError> handle_long(std::string_view token, int argc, const char* const* argv, int& index);
+    std::expected<void, CliError> handle_short(std::string_view token, int argc, const char* const* argv, int& index);
+    std::expected<void, CliError> accept_positional(std::string_view token);
+    [[nodiscard]] std::expected<void, CliError> check_required() const;
 
     std::size_t m_positionalCursor{0};
 };
 
 inline std::expected<void, CliError>
-Cmd::handleLong(std::string_view token, int argc, const char* const* argv, int& index) {
+Cmd::handle_long(std::string_view token, int argc, const char* const* argv, int& index) {
     std::string_view body = token.substr(2);
     std::string_view inlineValue;
     bool hasInlineValue = false;
@@ -235,41 +235,41 @@ Cmd::handleLong(std::string_view token, int argc, const char* const* argv, int& 
     }
 
     if (body == "help") {
-        return std::unexpected(makeCliError(CliErrorCode::HelpRequested, m_name));
+        return std::unexpected(make_cli_error(CliErrorCode::HelpRequested, m_name));
     }
-    ArgBase* option = findLong(body);
+    ArgBase* option = find_long(body);
     bool negated = false;
     if (option == nullptr && body.starts_with("no-")) {
-        ArgBase* candidate = findLong(body.substr(3));
-        if (candidate != nullptr && candidate->isFlag()) {
+        ArgBase* candidate = find_long(body.substr(3));
+        if (candidate != nullptr && candidate->is_flag()) {
             option = candidate;
             negated = true;
         }
     }
     if (option == nullptr) {
-        return std::unexpected(makeCliError(CliErrorCode::UnknownOption, std::string("--").append(body)));
+        return std::unexpected(make_cli_error(CliErrorCode::UnknownOption, std::string("--").append(body)));
     }
 
     if (option == m_versionOption) {
         if (negated) {
-            return std::unexpected(makeCliError(CliErrorCode::UnknownOption, std::string("--no-").append(body)));
+            return std::unexpected(make_cli_error(CliErrorCode::UnknownOption, std::string("--no-").append(body)));
         }
-        return std::unexpected(makeCliError(CliErrorCode::VersionRequested, m_versionText));
+        return std::unexpected(make_cli_error(CliErrorCode::VersionRequested, m_versionText));
     }
 
     const std::string reported = std::string("--").append(option->name());
 
-    if (option->isFlag() && !hasInlineValue) {
-        auto assigned = option->assignFlag(negated);
+    if (option->is_flag() && !hasInlineValue) {
+        auto assigned = option->assign_flag(negated);
         if (!assigned) {
-            return std::unexpected(makeCliError(CliErrorCode::InvalidValue, reported, std::move(assigned.error())));
+            return std::unexpected(make_cli_error(CliErrorCode::InvalidValue, reported, std::move(assigned.error())));
         }
         return {};
     }
 
     if (!hasInlineValue) {
         if (index + 1 >= argc) {
-            return std::unexpected(makeCliError(CliErrorCode::MissingValue, reported));
+            return std::unexpected(make_cli_error(CliErrorCode::MissingValue, reported));
         }
         inlineValue = argv[++index];
     }
@@ -277,36 +277,36 @@ Cmd::handleLong(std::string_view token, int argc, const char* const* argv, int& 
     auto assigned = option->assign(inlineValue);
     if (!assigned) {
         const auto code = assigned.error() == "not in choices" ? CliErrorCode::NotInChoices : CliErrorCode::InvalidValue;
-        return std::unexpected(makeCliError(code, reported, std::string(inlineValue)));
+        return std::unexpected(make_cli_error(code, reported, std::string(inlineValue)));
     }
     return {};
 }
 
 inline std::expected<void, CliError>
-Cmd::handleShort(std::string_view token, int argc, const char* const* argv, int& index) {
+Cmd::handle_short(std::string_view token, int argc, const char* const* argv, int& index) {
     for (std::size_t i = 1; i < token.size(); ++i) {
         const char letter = token[i];
         if (letter == 'h') {
-            if (findShort('h') == nullptr) {
-                return std::unexpected(makeCliError(CliErrorCode::HelpRequested, m_name));
+            if (find_short('h') == nullptr) {
+                return std::unexpected(make_cli_error(CliErrorCode::HelpRequested, m_name));
             }
         }
 
-        ArgBase* option = findShort(letter);
+        ArgBase* option = find_short(letter);
         if (option == nullptr) {
-            return std::unexpected(makeCliError(CliErrorCode::UnknownOption, std::string("-").append(1, letter)));
+            return std::unexpected(make_cli_error(CliErrorCode::UnknownOption, std::string("-").append(1, letter)));
         }
 
         if (option == m_versionOption) {
-            return std::unexpected(makeCliError(CliErrorCode::VersionRequested, m_versionText));
+            return std::unexpected(make_cli_error(CliErrorCode::VersionRequested, m_versionText));
         }
 
         const std::string reported = std::string("-").append(1, letter);
 
-        if (option->isFlag()) {
-            auto assigned = option->assignFlag(false);
+        if (option->is_flag()) {
+            auto assigned = option->assign_flag(false);
             if (!assigned) {
-                return std::unexpected(makeCliError(CliErrorCode::InvalidValue, reported, std::move(assigned.error())));
+                return std::unexpected(make_cli_error(CliErrorCode::InvalidValue, reported, std::move(assigned.error())));
             }
             continue;
         }
@@ -318,31 +318,31 @@ Cmd::handleShort(std::string_view token, int argc, const char* const* argv, int&
         } else if (index + 1 < argc) {
             value = argv[++index];
         } else {
-            return std::unexpected(makeCliError(CliErrorCode::MissingValue, reported));
+            return std::unexpected(make_cli_error(CliErrorCode::MissingValue, reported));
         }
 
         auto assigned = option->assign(value);
         if (!assigned) {
             const auto code = assigned.error() == "not in choices" ? CliErrorCode::NotInChoices : CliErrorCode::InvalidValue;
-            return std::unexpected(makeCliError(code, reported, std::string(value)));
+            return std::unexpected(make_cli_error(code, reported, std::string(value)));
         }
     }
     return {};
 }
 
-inline std::expected<void, CliError> Cmd::acceptPositional(std::string_view token) {
+inline std::expected<void, CliError> Cmd::accept_positional(std::string_view token) {
     while (m_positionalCursor < m_positionals.size()) {
         ArgBase* target = m_positionals[m_positionalCursor].get();
-        if (!target->isMulti() && target->isSet()) {
+        if (!target->is_multi() && target->is_set()) {
             ++m_positionalCursor;
             continue;
         }
         auto assigned = target->assign(token);
         if (!assigned) {
             const auto code = assigned.error() == "not in choices" ? CliErrorCode::NotInChoices : CliErrorCode::InvalidValue;
-            return std::unexpected(makeCliError(code, target->name(), std::string(token)));
+            return std::unexpected(make_cli_error(code, target->name(), std::string(token)));
         }
-        if (!target->isMulti()) {
+        if (!target->is_multi()) {
             ++m_positionalCursor;
         }
         return {};
@@ -358,7 +358,7 @@ namespace detail {
  * @details 帮助优先于必选校验：`app sub --help` 不应先报父命令缺少必选参数。
  *          `--` 之后的内容按普通取值处理，不参与扫描。
  */
-inline bool containsHelpToken(int argc, const char* const* argv, int from) noexcept {
+inline bool contains_help_token(int argc, const char* const* argv, int from) noexcept {
     for (int i = from; i < argc; ++i) {
         const std::string_view token = argv[i];
         if (token == "--") {
@@ -373,28 +373,28 @@ inline bool containsHelpToken(int argc, const char* const* argv, int from) noexc
 
 } // namespace detail
 
-inline std::expected<void, CliError> Cmd::checkRequired() const {
+inline std::expected<void, CliError> Cmd::check_required() const {
     for (const auto& option : m_options) {
-        if (option->isRequired() && !option->isSet()) {
+        if (option->is_required() && !option->is_set()) {
             return std::unexpected(
-                makeCliError(CliErrorCode::MissingRequired, std::string("--").append(option->name())));
+                make_cli_error(CliErrorCode::MissingRequired, std::string("--").append(option->name())));
         }
     }
     for (const auto& positional : m_positionals) {
-        if (positional->isRequired() && !positional->isSet()) {
-            return std::unexpected(makeCliError(CliErrorCode::MissingRequired, positional->name()));
+        if (positional->is_required() && !positional->is_set()) {
+            return std::unexpected(make_cli_error(CliErrorCode::MissingRequired, positional->name()));
         }
     }
     return {};
 }
 
 inline std::expected<void, CliError> Cmd::parse(int argc, const char* const* argv, int startIndex) {
-    resetState();
+    reset_state();
     m_positionalCursor = 0;
     bool endOfOptions = false;
 
     // 帮助优先：即使缺少必选参数，--help 也应正常输出帮助
-    const bool helpRequested = detail::containsHelpToken(argc, argv, startIndex);
+    const bool helpRequested = detail::contains_help_token(argc, argv, startIndex);
 
     for (int i = startIndex; i < argc; ++i) {
         const std::string_view token = argv[i];
@@ -405,7 +405,7 @@ inline std::expected<void, CliError> Cmd::parse(int argc, const char* const* arg
         }
 
         if (!endOfOptions && token.size() > 2 && token.starts_with("--")) {
-            auto handled = handleLong(token, argc, argv, i);
+            auto handled = handle_long(token, argc, argv, i);
             if (!handled) {
                 return handled;
             }
@@ -413,7 +413,7 @@ inline std::expected<void, CliError> Cmd::parse(int argc, const char* const* arg
         }
 
         if (!endOfOptions && token.size() >= 2 && token[0] == '-' && token != "-") {
-            auto handled = handleShort(token, argc, argv, i);
+            auto handled = handle_short(token, argc, argv, i);
             if (!handled) {
                 return handled;
             }
@@ -422,64 +422,64 @@ inline std::expected<void, CliError> Cmd::parse(int argc, const char* const* arg
 
         // 子命令名优先于位置参数匹配，否则带 many() 位置参数的命令会吞掉子命令
         if (!endOfOptions && !m_subcommands.empty()) {
-            Cmd* sub = findSub(token);
+            Cmd* sub = find_sub(token);
             if (sub != nullptr) {
                 m_activeSub = sub;
                 // 子命令后跟 --help 时跳过父命令必选校验，直接交由子命令输出帮助
-                if (!detail::containsHelpToken(argc, argv, i + 1)) {
-                    auto required = checkRequired();
+                if (!detail::contains_help_token(argc, argv, i + 1)) {
+                    auto required = check_required();
                     if (!required) {
                         return required;
                     }
-                    flushBindings();
+                    flush_bindings();
                 }
                 return sub->parse(argc, argv, i + 1);
             }
             if (m_positionalCursor >= m_positionals.size()) {
-                return std::unexpected(makeCliError(CliErrorCode::UnknownSubcommand, std::string(token)));
+                return std::unexpected(make_cli_error(CliErrorCode::UnknownSubcommand, std::string(token)));
             }
         }
 
-        auto accepted = acceptPositional(token);
+        auto accepted = accept_positional(token);
         if (!accepted) {
             return accepted;
         }
     }
 
     if (!helpRequested) {
-        auto required = checkRequired();
+        auto required = check_required();
         if (!required) {
             return required;
         }
     }
-    flushBindings();
+    flush_bindings();
     return {};
 }
 
 namespace detail {
 
 /// 拼装选项在帮助中的左列文本，例如 `-p, --port <int>`
-inline std::string optionLabel(const ArgBase& option) {
+inline std::string option_label(const ArgBase& option) {
     std::string label;
-    if (option.shortName() != '\0') {
-        label.append("-").append(1, option.shortName()).append(", ");
+    if (option.short_name() != '\0') {
+        label.append("-").append(1, option.short_name()).append(", ");
     } else {
         label.append("    ");
     }
     label.append("--").append(option.name());
-    if (!option.isFlag()) {
-        label.append(" <").append(option.typeName()).append(">");
+    if (!option.is_flag()) {
+        label.append(" <").append(option.type_name()).append(">");
     }
     return label;
 }
 
 /// 拼装选项在帮助中的右列补充说明
-inline std::string optionSuffix(const ArgBase& option) {
+inline std::string option_suffix(const ArgBase& option) {
     std::string suffix;
-    if (option.isRequired()) {
+    if (option.is_required()) {
         suffix.append(" [required]");
     }
-    if (option.isMulti()) {
+    if (option.is_multi()) {
         suffix.append(" [repeatable]");
     }
     const auto& choices = option.choices();
@@ -493,10 +493,10 @@ inline std::string optionSuffix(const ArgBase& option) {
         }
         suffix.append("}");
     }
-    if (!option.isRequired()) {
-        const std::string defaultText = option.defaultText();
+    if (!option.is_required()) {
+        const std::string defaultText = option.default_text();
         // 标志位默认为假是常态，不必在帮助里重复
-        const bool noisyFlagDefault = option.isFlag() && defaultText == "false";
+        const bool noisyFlagDefault = option.is_flag() && defaultText == "false";
         if (!defaultText.empty() && !noisyFlagDefault) {
             suffix.append(" (default: ").append(defaultText).append(")");
         }
@@ -505,7 +505,7 @@ inline std::string optionSuffix(const ArgBase& option) {
 }
 
 /// 按最长左列文本补齐空格
-inline void writeRow(std::ostream& out, const std::string& label, std::size_t width,
+inline void write_row(std::ostream& out, const std::string& label, std::size_t width,
                      const std::string& description, const std::string& suffix) {
     out << "  " << label;
     if (label.size() < width) {
@@ -516,16 +516,16 @@ inline void writeRow(std::ostream& out, const std::string& label, std::size_t wi
 
 } // namespace detail
 
-inline void Cmd::printHelp(std::ostream& out) const {
+inline void Cmd::print_help(std::ostream& out) const {
     out << "Usage: " << m_name;
     if (!m_subcommands.empty()) {
         out << " <command>";
     }
     out << " [options]";
     for (const auto& positional : m_positionals) {
-        const bool optional = !positional->isRequired();
+        const bool optional = !positional->is_required();
         out << ' ' << (optional ? "[" : "<") << positional->name()
-            << (positional->isMulti() ? "..." : "") << (optional ? "]" : ">");
+            << (positional->is_multi() ? "..." : "") << (optional ? "]" : ">");
     }
     out << '\n';
 
@@ -535,7 +535,7 @@ inline void Cmd::printHelp(std::ostream& out) const {
 
     std::size_t width = 0;
     for (const auto& option : m_options) {
-        width = std::max(width, detail::optionLabel(*option).size());
+        width = std::max(width, detail::option_label(*option).size());
     }
     for (const auto& positional : m_positionals) {
         width = std::max(width, positional->name().size());
@@ -544,31 +544,31 @@ inline void Cmd::printHelp(std::ostream& out) const {
         width = std::max(width, sub->name().size());
     }
 
-    const bool hasHelpShort = findShort('h') != nullptr;
+    const bool hasHelpShort = find_short('h') != nullptr;
     const std::string helpLabel = hasHelpShort ? "    --help" : "-h, --help";
     width = std::max(width, helpLabel.size());
 
     if (!m_subcommands.empty()) {
         out << "\nCommands:\n";
         for (const auto& sub : m_subcommands) {
-            detail::writeRow(out, sub->name(), width, sub->description(), {});
+            detail::write_row(out, sub->name(), width, sub->description(), {});
         }
     }
 
     if (!m_positionals.empty()) {
         out << "\nArguments:\n";
         for (const auto& positional : m_positionals) {
-            detail::writeRow(out, positional->name(), width, positional->description(),
-                             detail::optionSuffix(*positional));
+            detail::write_row(out, positional->name(), width, positional->description(),
+                             detail::option_suffix(*positional));
         }
     }
 
     out << "\nOptions:\n";
     for (const auto& option : m_options) {
-        detail::writeRow(out, detail::optionLabel(*option), width, option->description(),
-                         detail::optionSuffix(*option));
+        detail::write_row(out, detail::option_label(*option), width, option->description(),
+                         detail::option_suffix(*option));
     }
-    detail::writeRow(out, helpLabel, width, "show this help", {});
+    detail::write_row(out, helpLabel, width, "show this help", {});
     out.flush();
 }
 

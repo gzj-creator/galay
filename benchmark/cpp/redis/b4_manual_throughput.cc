@@ -22,7 +22,7 @@ std::atomic<int> completed_clients{0};
 std::mutex completed_mutex;
 std::condition_variable completed_cv;
 
-void markClientCompleted()
+void mark_client_completed()
 {
     completed_clients.fetch_add(1, std::memory_order_relaxed);
     completed_cv.notify_one();
@@ -31,7 +31,7 @@ void markClientCompleted()
 /**
  * @brief 单个客户端的性能测试
  */
-Task<void> benchmarkClient(IOScheduler* scheduler, int client_id, int operations_per_client, bool verbose)
+Task<void> benchmark_client(IOScheduler* scheduler, int client_id, int operations_per_client, bool verbose)
 {
     auto client = RedisClientBuilder().scheduler(scheduler).build();
     RedisCommandBuilder command_builder;
@@ -42,7 +42,7 @@ Task<void> benchmarkClient(IOScheduler* scheduler, int client_id, int operations
         std::cerr << "Client " << client_id << " failed to connect: "
                   << connect_result.error().message() << std::endl;
         error_count.fetch_add(operations_per_client * 2, std::memory_order_relaxed);
-        markClientCompleted();
+        mark_client_completed();
         co_return;
     }
 
@@ -100,13 +100,13 @@ Task<void> benchmarkClient(IOScheduler* scheduler, int client_id, int operations
     }
 
     co_await client.close();
-    markClientCompleted();
+    mark_client_completed();
 }
 
 /**
  * @brief Pipeline性能测试
  */
-Task<void> benchmarkPipeline(IOScheduler* scheduler, int client_id, int batch_size, int batches, bool verbose)
+Task<void> benchmark_pipeline(IOScheduler* scheduler, int client_id, int batch_size, int batches, bool verbose)
 {
     auto client = RedisClientBuilder().scheduler(scheduler).build();
 
@@ -114,7 +114,7 @@ Task<void> benchmarkPipeline(IOScheduler* scheduler, int client_id, int batch_si
     if (!connect_result) {
         std::cerr << "Pipeline client " << client_id << " failed to connect" << std::endl;
         error_count.fetch_add(batch_size * batches, std::memory_order_relaxed);
-        markClientCompleted();
+        mark_client_completed();
         co_return;
     }
 
@@ -164,12 +164,12 @@ Task<void> benchmarkPipeline(IOScheduler* scheduler, int client_id, int batch_si
     }
 
     co_await client.close();
-    markClientCompleted();
+    mark_client_completed();
 }
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -222,18 +222,18 @@ int main(int argc, char* argv[])
 
         // 启动所有客户端
         for (int i = 0; i < num_clients; ++i) {
-            auto* scheduler = runtime.getNextIOScheduler();
+            auto* scheduler = runtime.get_next_io_scheduler();
             if (!scheduler) {
                 std::cerr << "Failed to get IO scheduler for client " << i << std::endl;
                 runtime.stop();
                 return 1;
             }
             if (use_pipeline) {
-                scheduleTask(scheduler,
-                             benchmarkPipeline(scheduler, i, batch_size, pipeline_batches, verbose));
+                schedule_task(scheduler,
+                             benchmark_pipeline(scheduler, i, batch_size, pipeline_batches, verbose));
             } else {
-                scheduleTask(scheduler,
-                             benchmarkClient(scheduler, i, operations_per_client, verbose));
+                schedule_task(scheduler,
+                             benchmark_client(scheduler, i, operations_per_client, verbose));
             }
         }
 

@@ -14,7 +14,7 @@ int main()
 
     const std::array<uint8_t, 20> digest =
         galay::utils::SHA1::hash(reinterpret_cast<const uint8_t*>(input.data()), input.size());
-    const std::string accept = galay::utils::Base64Util::Base64Encode(digest.data(), digest.size());
+    const std::string accept = galay::utils::Base64Util::base64_encode(digest.data(), digest.size());
 
     if (accept != "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") {
         std::cerr << "unexpected accept key: " << accept << '\n';

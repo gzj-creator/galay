@@ -27,7 +27,7 @@ struct Result {
     std::size_t checksum;
 };
 
-std::size_t parseArg(int argc, char** argv, int index, std::size_t fallback) {
+std::size_t parse_arg(int argc, char** argv, int index, std::size_t fallback) {
     if (argc <= index) {
         return fallback;
     }
@@ -40,7 +40,7 @@ std::size_t parseArg(int argc, char** argv, int index, std::size_t fallback) {
     return static_cast<std::size_t>(value);
 }
 
-uint64_t stableHash(uint64_t value) {
+uint64_t stable_hash(uint64_t value) {
     value += 0x9e3779b97f4a7c15ULL;
     value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
     value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
@@ -63,22 +63,22 @@ Result measure(std::string name, std::size_t iterations, Fn&& fn) {
     return Result{std::move(name), nsPerOp, checksum};
 }
 
-void printResult(const Result& result) {
+void print_result(const Result& result) {
     std::cout << std::left << std::setw(32) << result.name
               << std::right << std::setw(14) << std::fixed << std::setprecision(2)
               << result.nsPerOp
               << "  checksum=" << result.checksum << '\n';
 }
 
-galay::utils::BloomFilter<uint64_t> makeBloom(std::size_t items) {
-    auto filter = galay::utils::BloomFilter<uint64_t>::fromExpectedItems(items, 0.01);
+galay::utils::BloomFilter<uint64_t> make_bloom(std::size_t items) {
+    auto filter = galay::utils::BloomFilter<uint64_t>::from_expected_items(items, 0.01);
     for (std::size_t i = 0; i < items; ++i) {
-        filter.addHash(stableHash(i));
+        filter.add_hash(stable_hash(i));
     }
     return filter;
 }
 
-std::vector<char> makeHuffmanData(std::size_t items) {
+std::vector<char> make_huffman_data(std::size_t items) {
     std::vector<char> data;
     data.reserve(items);
     for (std::size_t i = 0; i < items; ++i) {
@@ -87,30 +87,30 @@ std::vector<char> makeHuffmanData(std::size_t items) {
     return data;
 }
 
-bool prepareRing(galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent>& buffer,
+bool prepare_ring(galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent>& buffer,
                  std::string_view prefix,
                  std::string_view suffix) {
     const std::size_t prefix_written =
-        buffer.tryWriteBatch(prefix.data(), prefix.size());
+        buffer.try_write_batch(prefix.data(), prefix.size());
     if (prefix_written != prefix.size()) {
         return false;
     }
     buffer.consume(prefix.size() / 2);
     const std::size_t suffix_written =
-        buffer.tryWriteBatch(suffix.data(), suffix.size());
+        buffer.try_write_batch(suffix.data(), suffix.size());
     return suffix_written == suffix.size();
 }
 
 } // namespace
 
 int main(int argc, char** argv) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    const std::size_t iterations = parseArg(argc, argv, 1, 1000);
-    const std::size_t items = parseArg(argc, argv, 2, 4096);
-    const std::size_t ringCapacity = std::max<std::size_t>(parseArg(argc, argv, 3, 8192), 128);
+    const std::size_t iterations = parse_arg(argc, argv, 1, 1000);
+    const std::size_t items = parse_arg(argc, argv, 2, 4096);
+    const std::size_t ringCapacity = std::max<std::size_t>(parse_arg(argc, argv, 3, 8192), 128);
 
     std::cout << "Move/clone contract benchmark\n";
     std::cout << "Build with -O3 -DNDEBUG. iterations=" << iterations
@@ -119,10 +119,10 @@ int main(int argc, char** argv) {
     std::cout << std::left << std::setw(32) << "Scenario"
               << std::right << std::setw(14) << "ns/op" << '\n';
 
-    const auto bloom = makeBloom(items);
-    printResult(measure("Bloom clone", iterations, [&](std::size_t i) {
+    const auto bloom = make_bloom(items);
+    print_result(measure("Bloom clone", iterations, [&](std::size_t i) {
         auto copy = bloom.clone();
-        return copy.insertionCount() + (copy.possiblyContainsHash(stableHash(i % items)) ? 1u : 0u);
+        return copy.insertion_count() + (copy.possibly_contains_hash(stable_hash(i % items)) ? 1u : 0u);
     }));
 
     {
@@ -131,23 +131,23 @@ int main(int argc, char** argv) {
         for (std::size_t i = 0; i < iterations; ++i) {
             copies.emplace_back(bloom.clone());
         }
-        printResult(measure("Bloom move", iterations, [&](std::size_t i) {
+        print_result(measure("Bloom move", iterations, [&](std::size_t i) {
             galay::utils::BloomFilter<uint64_t> moved(std::move(copies[i]));
-            return moved.bitCount() + moved.insertionCount();
+            return moved.bit_count() + moved.insertion_count();
         }));
     }
 
-    printResult(measure("Bloom construct", iterations, [&](std::size_t i) {
-        auto filter = galay::utils::BloomFilter<uint64_t>::fromExpectedItems(items, 0.01);
-        filter.addHash(stableHash(i));
-        return filter.bitCount() + filter.insertionCount();
+    print_result(measure("Bloom construct", iterations, [&](std::size_t i) {
+        auto filter = galay::utils::BloomFilter<uint64_t>::from_expected_items(items, 0.01);
+        filter.add_hash(stable_hash(i));
+        return filter.bit_count() + filter.insertion_count();
     }));
 
-    const auto huffmanData = makeHuffmanData(items);
-    const auto huffman = galay::utils::HuffmanBuilder<char>::buildFromData(huffmanData);
-    printResult(measure("Huffman clone", iterations, [&](std::size_t i) {
+    const auto huffmanData = make_huffman_data(items);
+    const auto huffman = galay::utils::HuffmanBuilder<char>::build_from_data(huffmanData);
+    print_result(measure("Huffman clone", iterations, [&](std::size_t i) {
         auto copy = huffman.clone();
-        return copy.size() + (copy.hasSymbol(static_cast<char>('a' + (i % 8))) ? 1u : 0u);
+        return copy.size() + (copy.has_symbol(static_cast<char>('a' + (i % 8))) ? 1u : 0u);
     }));
 
     {
@@ -156,20 +156,20 @@ int main(int argc, char** argv) {
         for (std::size_t i = 0; i < iterations; ++i) {
             copies.emplace_back(huffman.clone());
         }
-        printResult(measure("Huffman move", iterations, [&](std::size_t i) {
+        print_result(measure("Huffman move", iterations, [&](std::size_t i) {
             galay::utils::HuffmanTable<char> moved(std::move(copies[i]));
             return moved.size();
         }));
     }
 
-    printResult(measure("Huffman build", iterations, [&](std::size_t) {
-        auto table = galay::utils::HuffmanBuilder<char>::buildFromData(huffmanData);
+    print_result(measure("Huffman build", iterations, [&](std::size_t) {
+        auto table = galay::utils::HuffmanBuilder<char>::build_from_data(huffmanData);
         return table.size();
     }));
 
     const std::string payload(items, 'x');
     const galay::utils::Bytes bytes(payload.data(), payload.size());
-    printResult(measure("Bytes clone", iterations, [&](std::size_t) {
+    print_result(measure("Bytes clone", iterations, [&](std::size_t) {
         auto copy = bytes.clone();
         return copy.size() + copy.capacity();
     }));
@@ -180,13 +180,13 @@ int main(int argc, char** argv) {
         for (std::size_t i = 0; i < iterations; ++i) {
             copies.emplace_back(bytes.clone());
         }
-        printResult(measure("Bytes move", iterations, [&](std::size_t i) {
+        print_result(measure("Bytes move", iterations, [&](std::size_t i) {
             galay::utils::Bytes moved(std::move(copies[i]));
             return moved.size();
         }));
     }
 
-    printResult(measure("Bytes construct", iterations, [&](std::size_t) {
+    print_result(measure("Bytes construct", iterations, [&](std::size_t) {
         galay::utils::Bytes constructed(payload.data(), payload.size());
         return constructed.size() + constructed.capacity();
     }));
@@ -194,12 +194,12 @@ int main(int argc, char** argv) {
     const std::string prefix(ringCapacity / 2, 'a');
     const std::string suffix(ringCapacity / 4, 'b');
     galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent> ring(ringCapacity);
-    if (!prepareRing(ring, prefix, suffix)) {
+    if (!prepare_ring(ring, prefix, suffix)) {
         std::cerr << "failed to prepare ring buffer workload\n";
         return 1;
     }
 
-    printResult(measure("RingBuffer clone", iterations, [&](std::size_t) {
+    print_result(measure("RingBuffer clone", iterations, [&](std::size_t) {
         auto copy = ring.clone();
         return copy.readable() + copy.capacity();
     }));
@@ -210,17 +210,17 @@ int main(int argc, char** argv) {
         for (std::size_t i = 0; i < iterations; ++i) {
             copies.emplace_back(ring.clone());
         }
-        printResult(measure("RingBuffer move", iterations, [&](std::size_t i) {
+        print_result(measure("RingBuffer move", iterations, [&](std::size_t i) {
             galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent> moved(
                 std::move(copies[i]));
             return moved.readable() + moved.capacity();
         }));
     }
 
-    printResult(measure("RingBuffer construct+write", iterations, [&](std::size_t) {
+    print_result(measure("RingBuffer construct+write", iterations, [&](std::size_t) {
         galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent> constructed(ringCapacity);
         const std::size_t written =
-            constructed.tryWriteBatch(prefix.data(), prefix.size());
+            constructed.try_write_batch(prefix.data(), prefix.size());
         return written + constructed.capacity();
     }));
 

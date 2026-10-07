@@ -26,7 +26,7 @@ void require(bool condition, const char* message)
     }
 }
 
-std::string makeMaskedRaw(WsOpcode opcode,
+std::string make_masked_raw(WsOpcode opcode,
                           uint8_t length_code,
                           std::vector<uint8_t> extended_length,
                           std::string payload)
@@ -48,26 +48,26 @@ std::string makeMaskedRaw(WsOpcode opcode,
     return out;
 }
 
-std::string encodeMaskedFrame(WsOpcode opcode, std::string payload, bool fin = true)
+std::string encode_masked_frame(WsOpcode opcode, std::string payload, bool fin = true)
 {
     WsFrame frame(opcode, std::move(payload), fin);
     std::string encoded;
-    WsFrameParser::encodeInto(encoded, frame, true);
+    WsFrameParser::encode_into(encoded, frame, true);
     return encoded;
 }
 
-WsErrorCode parseFrameCode(std::string& raw)
+WsErrorCode parse_frame_code(std::string& raw)
 {
     iovec iov{
         .iov_base = raw.data(),
         .iov_len = raw.size(),
     };
     WsFrame frame;
-    auto parsed = WsFrameParser::fromIOVec(&iov, 1, frame, true);
+    auto parsed = WsFrameParser::from_io_vec(&iov, 1, frame, true);
     return parsed.has_value() ? kWsNoError : parsed.error().code();
 }
 
-HttpRequest parseUpgradeRequest(const std::string& key)
+HttpRequest parse_upgrade_request(const std::string& key)
 {
     std::string raw =
         "GET /chat HTTP/1.1\r\n"
@@ -82,14 +82,14 @@ HttpRequest parseUpgradeRequest(const std::string& key)
         .iov_len = raw.size(),
     };
     HttpRequest request;
-    auto [err, consumed] = request.fromIOVec({iov});
+    auto [err, consumed] = request.from_io_vec({iov});
     require(err == kNoError && consumed == static_cast<ssize_t>(raw.size()),
             "upgrade fixture should parse");
     return request;
 }
 
 template <typename Func>
-void runBench(const char* name, size_t iterations, Func&& func)
+void run_bench(const char* name, size_t iterations, Func&& func)
 {
     const auto start = std::chrono::steady_clock::now();
     size_t accepted = 0;
@@ -107,28 +107,28 @@ void runBench(const char* name, size_t iterations, Func&& func)
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     constexpr size_t kIterations = 50000;
     std::string non_minimal =
-        makeMaskedRaw(WsOpcode::Binary, 126, {0x00, 0x7D}, std::string(125, 'a'));
+        make_masked_raw(WsOpcode::Binary, 126, {0x00, 0x7D}, std::string(125, 'a'));
     std::string invalid_close =
-        makeMaskedRaw(WsOpcode::Close, 2, {}, std::string("\x03\xE7", 2));
+        make_masked_raw(WsOpcode::Close, 2, {}, std::string("\x03\xE7", 2));
 
-    require(parseFrameCode(non_minimal) == kWsInvalidPayloadLength,
+    require(parse_frame_code(non_minimal) == kWsInvalidPayloadLength,
             "non-minimal length fixture should fail");
-    require(parseFrameCode(invalid_close) == kWsInvalidCloseCode,
+    require(parse_frame_code(invalid_close) == kWsInvalidCloseCode,
             "invalid close fixture should fail");
 
-    runBench("BM_RejectNonMinimalLength", kIterations, [&]() {
-        return parseFrameCode(non_minimal) == kWsInvalidPayloadLength;
+    run_bench("BM_RejectNonMinimalLength", kIterations, [&]() {
+        return parse_frame_code(non_minimal) == kWsInvalidPayloadLength;
     });
-    runBench("BM_RejectInvalidCloseCode", kIterations, [&]() {
-        return parseFrameCode(invalid_close) == kWsInvalidCloseCode;
+    run_bench("BM_RejectInvalidCloseCode", kIterations, [&]() {
+        return parse_frame_code(invalid_close) == kWsInvalidCloseCode;
     });
-    runBench("BM_UnalignedMaskRoundTrip", kIterations, [&]() {
+    run_bench("BM_UnalignedMaskRoundTrip", kIterations, [&]() {
         std::array<char, 33> storage{};
         char* unaligned = storage.data() + 1;
         const uint8_t key[4] = {0xA5, 0x5A, 0x11, 0x22};
@@ -136,21 +136,21 @@ int main()
             unaligned[i] = static_cast<char>(i + 1);
         }
         const std::string original(unaligned, 19);
-        WsFrameParser::applyMaskBytes(unaligned, 19, key);
-        WsFrameParser::applyMaskBytes(unaligned, 19, key);
+        WsFrameParser::apply_mask_bytes(unaligned, 19, key);
+        WsFrameParser::apply_mask_bytes(unaligned, 19, key);
         return std::string(unaligned, 19) == original;
     });
-    runBench("BM_RejectShortUpgradeKey", kIterations, [&]() {
-        auto request = parseUpgradeRequest("YWJj");
-        return !WsUpgrade::handleUpgrade(request).success;
+    run_bench("BM_RejectShortUpgradeKey", kIterations, [&]() {
+        auto request = parse_upgrade_request("YWJj");
+        return !WsUpgrade::handle_upgrade(request).success;
     });
 
     const std::string expected_fragmented =
         std::string(128, 'a') + std::string(128, 'b') + std::string(128, 'c');
     const std::string fragmented_frame =
-        encodeMaskedFrame(WsOpcode::Text, std::string(128, 'a'), false) +
-        encodeMaskedFrame(WsOpcode::Continuation, std::string(128, 'b'), false) +
-        encodeMaskedFrame(WsOpcode::Continuation, std::string(128, 'c'), true);
+        encode_masked_frame(WsOpcode::Text, std::string(128, 'a'), false) +
+        encode_masked_frame(WsOpcode::Continuation, std::string(128, 'b'), false) +
+        encode_masked_frame(WsOpcode::Continuation, std::string(128, 'c'), true);
     WsReaderSetting reader_setting;
     reader_setting.max_frame_size = 1024;
     reader_setting.max_message_size = 2048;
@@ -166,19 +166,19 @@ int main()
         false,
         nullptr);
 
-    runBench("BM_FragmentedTextAssemblyFastPath", kIterations, [&]() {
-        fragmented_state.resetForNextMessage();
+    run_bench("BM_FragmentedTextAssemblyFastPath", kIterations, [&]() {
+        fragmented_state.reset_for_next_message();
         fragmented_opcode = WsOpcode::Close;
         const size_t written =
-            fragmented_ring.tryWriteBatch(
+            fragmented_ring.try_write_batch(
                 fragmented_frame.data(), fragmented_frame.size());
         if (written != fragmented_frame.size()) {
             return false;
         }
-        if (!fragmented_state.parseFromBuffer()) {
+        if (!fragmented_state.parse_from_buffer()) {
             return false;
         }
-        auto result = fragmented_state.takeResult();
+        auto result = fragmented_state.take_result();
         return result.has_value() &&
                result.value() &&
                fragmented_opcode == WsOpcode::Text &&

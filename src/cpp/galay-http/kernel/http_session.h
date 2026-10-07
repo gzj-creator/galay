@@ -59,7 +59,7 @@ struct HttpSessionState {
     HttpSessionState(HttpSessionImpl<SocketType>& session, HttpRequest&& request)
         : m_session(&session)
         , m_request(std::move(request))
-        , m_send_buffer(m_request.toString()) {}
+        , m_send_buffer(m_request.to_string()) {}
 
     /**
      * @brief 从已序列化的请求字符串构造
@@ -70,19 +70,19 @@ struct HttpSessionState {
         : m_session(&session)
         , m_send_buffer(std::move(serialized_request)) {}
 
-    bool sendCompleted() const { ///< 判断请求是否已完全发送
+    bool send_completed() const { ///< 判断请求是否已完全发送
         return m_send_offset >= m_send_buffer.size();
     }
 
-    const char* sendBuffer() const { ///< 获取当前发送缓冲区指针
+    const char* send_buffer() const { ///< 获取当前发送缓冲区指针
         return m_send_buffer.data() + m_send_offset;
     }
 
-    size_t sendRemaining() const { ///< 获取剩余待发送字节数
+    size_t send_remaining() const { ///< 获取剩余待发送字节数
         return m_send_buffer.size() - m_send_offset;
     }
 
-    void onBytesSent(size_t sent) { ///< 处理已发送字节数
+    void on_bytes_sent(size_t sent) { ///< 处理已发送字节数
         m_send_offset += sent;
     }
 
@@ -90,37 +90,37 @@ struct HttpSessionState {
      * @brief 从 RingBuffer 中尝试解析 HTTP 响应
      * @return 解析完成返回 true
      */
-    bool parseFromRingBuffer() {
-        auto read_iovecs = borrowReadIovecs(m_session->getRingBuffer());
+    bool parse_from_ring_buffer() {
+        auto read_iovecs = borrow_read_iovecs(m_session->get_ring_buffer());
         if (read_iovecs.empty()) {
             return false;
         }
 
-        if (IoVecWindow::buildWindow(read_iovecs, m_parse_iovecs) == 0) {
+        if (IoVecWindow::build_window(read_iovecs, m_parse_iovecs) == 0) {
             return false;
         }
 
         auto [error_code, consumed] =
-            m_response.fromIOVec(m_parse_iovecs, m_session->getReaderSetting().getMaxBodySize());
+            m_response.from_io_vec(m_parse_iovecs, m_session->get_reader_setting().get_max_body_size());
         if (consumed > 0) {
-            m_session->getRingBuffer().consume(static_cast<size_t>(consumed));
+            m_session->get_ring_buffer().consume(static_cast<size_t>(consumed));
         }
 
         if (error_code == kHeaderInComplete || error_code == kIncomplete) {
-            if (m_total_received >= m_session->getReaderSetting().getMaxHeaderSize() &&
-                !m_response.isComplete()) {
-                setParseError(HttpError(kHeaderTooLarge));
+            if (m_total_received >= m_session->get_reader_setting().get_max_header_size() &&
+                !m_response.is_complete()) {
+                set_parse_error(HttpError(kHeaderTooLarge));
                 return true;
             }
             return false;
         }
 
         if (error_code != kNoError) {
-            setParseError(HttpError(error_code));
+            set_parse_error(HttpError(error_code));
             return true;
         }
 
-        if (!m_response.isComplete()) {
+        if (!m_response.is_complete()) {
             return false;
         }
 
@@ -128,32 +128,32 @@ struct HttpSessionState {
         return true;
     }
 
-    bool prepareRecvWindow() { ///< 准备 TCP 接收窗口
-        m_write_iovecs = borrowWriteIovecs(m_session->getRingBuffer());
+    bool prepare_recv_window() { ///< 准备 TCP 接收窗口
+        m_write_iovecs = borrow_write_iovecs(m_session->get_ring_buffer());
         if (m_write_iovecs.empty()) {
-            setParseError(HttpError(kHeaderTooLarge));
+            set_parse_error(HttpError(kHeaderTooLarge));
             return false;
         }
         return true;
     }
 
-    bool prepareRecvWindow(char*& buffer, size_t& length) { ///< 准备 SSL 接收窗口
-        if (!prepareRecvWindow()) {
+    bool prepare_recv_window(char*& buffer, size_t& length) { ///< 准备 SSL 接收窗口
+        if (!prepare_recv_window()) {
             buffer = nullptr;
             length = 0;
             return false;
         }
-        if (!IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
-            setParseError(HttpError(kHeaderTooLarge));
+        if (!IoVecWindow::bind_first_non_empty(m_write_iovecs, buffer, length)) {
+            set_parse_error(HttpError(kHeaderTooLarge));
             return false;
         }
         return true;
     }
 
-    const struct iovec* recvIovecsData() const { return m_write_iovecs.data(); }
-    size_t recvIovecsCount() const { return m_write_iovecs.size(); }
+    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); }
+    size_t recv_iovecs_count() const { return m_write_iovecs.size(); }
 
-    void setSendError(const IOError& io_error) {
+    void set_send_error(const IOError& io_error) {
         if (IOError::contains(io_error.code(), kTimeout)) {
             m_error = HttpError(kRequestTimeOut, io_error.message());
             return;
@@ -161,7 +161,7 @@ struct HttpSessionState {
         m_error = HttpError(kSendError, io_error.message());
     }
 
-    void setRecvError(const IOError& io_error) {
+    void set_recv_error(const IOError& io_error) {
         if (IOError::contains(io_error.code(), kTimeout)) {
             m_error = HttpError(kRequestTimeOut, io_error.message());
             return;
@@ -174,29 +174,29 @@ struct HttpSessionState {
     }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    void setSslSendError(const galay::ssl::SslError& error) {
+    void set_ssl_send_error(const galay::ssl::SslError& error) {
         m_error = HttpError(error);
     }
 
-    void setSslRecvError(const galay::ssl::SslError& error) {
+    void set_ssl_recv_error(const galay::ssl::SslError& error) {
         m_error = HttpError(error);
     }
 #endif
 
-    void onPeerClosed() {
+    void on_peer_closed() {
         m_error = HttpError(kConnectionClose);
     }
 
-    void onBytesReceived(size_t recv_bytes) {
-        m_session->getRingBuffer().produce(recv_bytes);
+    void on_bytes_received(size_t recv_bytes) {
+        m_session->get_ring_buffer().produce(recv_bytes);
         m_total_received += recv_bytes;
     }
 
-    void setParseError(HttpError&& error) {
+    void set_parse_error(HttpError&& error) {
         m_error = std::move(error);
     }
 
-    ResultType takeResult() {
+    ResultType take_result() {
         if (m_error.has_value()) {
             return std::unexpected(std::move(*m_error));
         }
@@ -234,51 +234,51 @@ struct HttpSessionTcpMachine {
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (!m_state->sendCompleted()) {
-            return MachineAction<result_type>::waitWrite(
-                m_state->sendBuffer(),
-                m_state->sendRemaining());
+        if (!m_state->send_completed()) {
+            return MachineAction<result_type>::wait_write(
+                m_state->send_buffer(),
+                m_state->send_remaining());
         }
 
-        if (m_state->parseFromRingBuffer()) {
-            m_result = m_state->takeResult();
+        if (m_state->parse_from_ring_buffer()) {
+            m_result = m_state->take_result();
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (!m_state->prepareRecvWindow()) {
-            m_result = m_state->takeResult();
+        if (!m_state->prepare_recv_window()) {
+            m_result = m_state->take_result();
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        return MachineAction<result_type>::waitReadv(
-            m_state->recvIovecsData(),
-            m_state->recvIovecsCount());
+        return MachineAction<result_type>::wait_readv(
+            m_state->recv_iovecs_data(),
+            m_state->recv_iovecs_count());
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
-            m_state->setRecvError(result.error());
-            m_result = m_state->takeResult();
+            m_state->set_recv_error(result.error());
+            m_result = m_state->take_result();
             return;
         }
 
         if (result.value() == 0) {
-            m_state->onPeerClosed();
-            m_result = m_state->takeResult();
+            m_state->on_peer_closed();
+            m_result = m_state->take_result();
             return;
         }
 
-        m_state->onBytesReceived(result.value());
+        m_state->on_bytes_received(result.value());
     }
 
-    void onWrite(std::expected<size_t, IOError> result) {
+    void on_write(std::expected<size_t, IOError> result) {
         if (!result) {
-            m_state->setSendError(result.error());
-            m_result = m_state->takeResult();
+            m_state->set_send_error(result.error());
+            m_result = m_state->take_result();
             return;
         }
 
-        m_state->onBytesSent(result.value());
+        m_state->on_bytes_sent(result.value());
     }
 
     std::shared_ptr<HttpSessionState<SocketType>> m_state;
@@ -302,57 +302,57 @@ struct HttpSessionSslMachine {
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (!m_state->sendCompleted()) {
+        if (!m_state->send_completed()) {
             return galay::ssl::SslMachineAction<result_type>::send(
-                m_state->sendBuffer(),
-                m_state->sendRemaining());
+                m_state->send_buffer(),
+                m_state->send_remaining());
         }
 
-        if (m_state->parseFromRingBuffer()) {
-            m_result = m_state->takeResult();
+        if (m_state->parse_from_ring_buffer()) {
+            m_result = m_state->take_result();
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
 
         char* recv_buffer = nullptr;
         size_t recv_length = 0;
-        if (!m_state->prepareRecvWindow(recv_buffer, recv_length)) {
-            m_result = m_state->takeResult();
+        if (!m_state->prepare_recv_window(recv_buffer, recv_length)) {
+            m_result = m_state->take_result();
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
 
         return galay::ssl::SslMachineAction<result_type>::recv(recv_buffer, recv_length);
     }
 
-    void onHandshake(std::expected<void, galay::ssl::SslError>) {}
+    void on_handshake(std::expected<void, galay::ssl::SslError>) {}
 
-    void onRecv(std::expected<Bytes, galay::ssl::SslError> result) {
+    void on_recv(std::expected<Bytes, galay::ssl::SslError> result) {
         if (!result) {
-            m_state->setSslRecvError(result.error());
-            m_result = m_state->takeResult();
+            m_state->set_ssl_recv_error(result.error());
+            m_result = m_state->take_result();
             return;
         }
 
         const size_t recv_bytes = result.value().size();
         if (recv_bytes == 0) {
-            m_state->onPeerClosed();
-            m_result = m_state->takeResult();
+            m_state->on_peer_closed();
+            m_result = m_state->take_result();
             return;
         }
 
-        m_state->onBytesReceived(recv_bytes);
+        m_state->on_bytes_received(recv_bytes);
     }
 
-    void onSend(std::expected<size_t, galay::ssl::SslError> result) {
+    void on_send(std::expected<size_t, galay::ssl::SslError> result) {
         if (!result) {
-            m_state->setSslSendError(result.error());
-            m_result = m_state->takeResult();
+            m_state->set_ssl_send_error(result.error());
+            m_result = m_state->take_result();
             return;
         }
 
-        m_state->onBytesSent(result.value());
+        m_state->on_bytes_sent(result.value());
     }
 
-    void onShutdown(std::expected<void, galay::ssl::SslError>) {}
+    void on_shutdown(std::expected<void, galay::ssl::SslError>) {}
 
     std::shared_ptr<HttpSessionState<SocketType>> m_state;
     std::optional<result_type> m_result;
@@ -367,21 +367,21 @@ struct HttpSessionSslMachine {
  * @return 可 co_await 的异步操作对象
  */
 template<typename SocketType>
-auto buildSessionOperation(HttpSessionImpl<SocketType>& session, HttpRequest&& request) {
+auto build_session_operation(HttpSessionImpl<SocketType>& session, HttpRequest&& request) {
     using State = HttpSessionState<SocketType>;
     using ResultType = typename State::ResultType;
     auto state = std::make_shared<State>(session, std::move(request));
 
     if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
-        return AwaitableBuilder<ResultType>::fromStateMachine(
-                   session.getSocket().controller(),
+        return AwaitableBuilder<ResultType>::from_state_machine(
+                   session.get_socket().controller(),
                    HttpSessionTcpMachine<SocketType>(std::move(state)))
             .build();
     } else {
 #ifdef GALAY_SSL_FEATURE_ENABLED
-        return galay::ssl::SslAwaitableBuilder<ResultType>::fromStateMachine(
-                   session.getSocket().controller(),
-                   &session.getSocket(),
+        return galay::ssl::SslAwaitableBuilder<ResultType>::from_state_machine(
+                   session.get_socket().controller(),
+                   &session.get_socket(),
                    HttpSessionSslMachine<SocketType>(std::move(state)))
             .build();
 #else
@@ -398,21 +398,21 @@ auto buildSessionOperation(HttpSessionImpl<SocketType>& session, HttpRequest&& r
  * @return 可 co_await 的异步操作对象
  */
 template<typename SocketType>
-auto buildSessionOperation(HttpSessionImpl<SocketType>& session, std::string&& serialized_request) {
+auto build_session_operation(HttpSessionImpl<SocketType>& session, std::string&& serialized_request) {
     using State = HttpSessionState<SocketType>;
     using ResultType = typename State::ResultType;
     auto state = std::make_shared<State>(session, std::move(serialized_request));
 
     if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
-        return AwaitableBuilder<ResultType>::fromStateMachine(
-                   session.getSocket().controller(),
+        return AwaitableBuilder<ResultType>::from_state_machine(
+                   session.get_socket().controller(),
                    HttpSessionTcpMachine<SocketType>(std::move(state)))
             .build();
     } else {
 #ifdef GALAY_SSL_FEATURE_ENABLED
-        return galay::ssl::SslAwaitableBuilder<ResultType>::fromStateMachine(
-                   session.getSocket().controller(),
-                   &session.getSocket(),
+        return galay::ssl::SslAwaitableBuilder<ResultType>::from_state_machine(
+                   session.get_socket().controller(),
+                   &session.get_socket(),
                    HttpSessionSslMachine<SocketType>(std::move(state)))
             .build();
 #else
@@ -450,11 +450,11 @@ public:
         , m_reader(m_ring_buffer, m_reader_setting, socket)
         , m_writer(m_writer_setting, socket) {}
 
-    HttpReaderImpl<SocketType>& getReader() { return m_reader; } ///< 获取读取器引用
-    HttpWriterImpl<SocketType>& getWriter() { return m_writer; } ///< 获取写入器引用
-    SocketType& getSocket() { return m_socket; } ///< 获取底层 Socket 引用
-    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& getRingBuffer() { return m_ring_buffer; } ///< 获取 RingBuffer 引用
-    const HttpReaderSetting& getReaderSetting() const { return m_reader_setting; } ///< 获取读取器配置
+    HttpReaderImpl<SocketType>& get_reader() { return m_reader; } ///< 获取读取器引用
+    HttpWriterImpl<SocketType>& get_writer() { return m_writer; } ///< 获取写入器引用
+    SocketType& get_socket() { return m_socket; } ///< 获取底层 Socket 引用
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& get_ring_buffer() { return m_ring_buffer; } ///< 获取 RingBuffer 引用
+    const HttpReaderSetting& get_reader_setting() const { return m_reader_setting; } ///< 获取读取器配置
 
     /**
      * @brief 发送 GET 请求
@@ -464,7 +464,7 @@ public:
      */
     auto get(const std::string& uri,
              const std::map<std::string, std::string>& headers = {}) {
-        return createRequest(HttpMethod::GET, uri, "", "", headers);
+        return create_request(HttpMethod::GET, uri, "", "", headers);
     }
 
     /**
@@ -479,7 +479,7 @@ public:
               const std::string& body,
               const std::string& content_type = "application/x-www-form-urlencoded",
               const std::map<std::string, std::string>& headers = {}) {
-        return createRequest(HttpMethod::POST, uri, body, content_type, headers);
+        return create_request(HttpMethod::POST, uri, body, content_type, headers);
     }
 
     /**
@@ -495,7 +495,7 @@ public:
               std::string&& body,
               const std::string& content_type = "application/x-www-form-urlencoded",
               const std::map<std::string, std::string>& headers = {}) {
-        return createRequest(HttpMethod::POST, uri, std::move(body), content_type, headers);
+        return create_request(HttpMethod::POST, uri, std::move(body), content_type, headers);
     }
 
     /**
@@ -510,7 +510,7 @@ public:
              const std::string& body,
              const std::string& content_type = "application/json",
              const std::map<std::string, std::string>& headers = {}) {
-        return createRequest(HttpMethod::PUT, uri, body, content_type, headers);
+        return create_request(HttpMethod::PUT, uri, body, content_type, headers);
     }
 
     /**
@@ -521,7 +521,7 @@ public:
      */
     auto del(const std::string& uri,
              const std::map<std::string, std::string>& headers = {}) {
-        return createRequest(HttpMethod::DELETE, uri, "", "", headers);
+        return create_request(HttpMethod::DELETE, uri, "", "", headers);
     }
 
     /**
@@ -532,7 +532,7 @@ public:
      */
     auto head(const std::string& uri,
               const std::map<std::string, std::string>& headers = {}) {
-        return createRequest(HttpMethod::HEAD, uri, "", "", headers);
+        return create_request(HttpMethod::HEAD, uri, "", "", headers);
     }
 
     /**
@@ -543,7 +543,7 @@ public:
      */
     auto options(const std::string& uri,
                  const std::map<std::string, std::string>& headers = {}) {
-        return createRequest(HttpMethod::OPTIONS, uri, "", "", headers);
+        return create_request(HttpMethod::OPTIONS, uri, "", "", headers);
     }
 
     /**
@@ -558,7 +558,7 @@ public:
                const std::string& body,
                const std::string& content_type = "application/json",
                const std::map<std::string, std::string>& headers = {}) {
-        return createRequest(HttpMethod::PATCH, uri, body, content_type, headers);
+        return create_request(HttpMethod::PATCH, uri, body, content_type, headers);
     }
 
     /**
@@ -569,7 +569,7 @@ public:
      */
     auto trace(const std::string& uri,
                const std::map<std::string, std::string>& headers = {}) {
-        return createRequest(HttpMethod::TRACE, uri, "", "", headers);
+        return create_request(HttpMethod::TRACE, uri, "", "", headers);
     }
 
     /**
@@ -580,7 +580,7 @@ public:
      */
     auto tunnel(const std::string& target_host,
                 const std::map<std::string, std::string>& headers = {}) {
-        return createRequest(HttpMethod::CONNECT, target_host, "", "", headers);
+        return create_request(HttpMethod::CONNECT, target_host, "", "", headers);
     }
 
     /**
@@ -588,8 +588,8 @@ public:
      * @param request HTTP 请求对象
      * @return 写入 awaitable
      */
-    auto sendRequest(HttpRequest& request) {
-        return m_writer.sendRequest(request);
+    auto send_request(HttpRequest& request) {
+        return m_writer.send_request(request);
     }
 
     /**
@@ -600,8 +600,8 @@ public:
      * @note request 的所有权会转移到 awaitable 内部；await 完成前无需额外保持外部缓冲存活
      * @note 调用方必须自行保证报文格式合法，尤其是 Content-Length、Connection 与请求行
      */
-    auto sendSerializedRequest(std::string request) {
-        return detail::buildSessionOperation(*this, std::move(request));
+    auto send_serialized_request(std::string request) {
+        return detail::build_session_operation(*this, std::move(request));
     }
 
     /**
@@ -609,13 +609,13 @@ public:
      * @param response 待填充的响应对象
      * @return 读取 awaitable
      */
-    auto getResponse(HttpResponse& response) {
-        return m_reader.getResponse(response);
+    auto get_response(HttpResponse& response) {
+        return m_reader.get_response(response);
     }
 
     /** @brief 只读取响应头，将同批到达的 body 字节留给后续增量读取。 */
-    auto getResponseHeader(HttpResponseHeader& header) {
-        return m_reader.getResponseHeader(header);
+    auto get_response_header(HttpResponseHeader& header) {
+        return m_reader.get_response_header(header);
     }
 
     /**
@@ -624,13 +624,13 @@ public:
      * @param is_last 是否为最后一个 chunk
      * @return 写入 awaitable
      */
-    auto sendChunk(const std::string& data, bool is_last = false) {
-        return m_writer.sendChunk(data, is_last);
+    auto send_chunk(const std::string& data, bool is_last = false) {
+        return m_writer.send_chunk(data, is_last);
     }
 
     /** @brief 增量读取下一个已完整 HTTP chunk。 */
-    auto getNextChunk(std::string& chunk_data, ChunkParser& parser) {
-        return m_reader.getNextChunk(chunk_data, parser);
+    auto get_next_chunk(std::string& chunk_data, ChunkParser& parser) {
+        return m_reader.get_next_chunk(chunk_data, parser);
     }
 
 private:
@@ -643,7 +643,7 @@ private:
      * @param headers 额外请求头
      * @return 请求-响应一体化 awaitable
      */
-    auto createRequest(HttpMethod method,
+    auto create_request(HttpMethod method,
                        const std::string& uri,
                        std::string body,
                        const std::string& content_type,
@@ -656,20 +656,20 @@ private:
         header.version() = HttpVersion::HttpVersion_1_1;
 
         if (!body.empty() && !content_type.empty()) {
-            header.headerPairs().addHeaderPair("Content-Type", content_type);
-            header.headerPairs().addHeaderPair("Content-Length", std::to_string(body.size()));
+            header.header_pairs().add_header_pair("Content-Type", content_type);
+            header.header_pairs().add_header_pair("Content-Length", std::to_string(body.size()));
         }
 
         for (const auto& [key, value] : headers) {
-            header.headerPairs().addHeaderPair(key, value);
+            header.header_pairs().add_header_pair(key, value);
         }
 
-        request.setHeader(std::move(header));
+        request.set_header(std::move(header));
         if (!body.empty()) {
-            request.setBodyStr(std::move(body));
+            request.set_body_str(std::move(body));
         }
 
-        return detail::buildSessionOperation(*this, std::move(request));
+        return detail::build_session_operation(*this, std::move(request));
     }
 
     SocketType& m_socket;                                    ///< Socket 引用

@@ -61,7 +61,7 @@ int main()
     BlockingMoveValue input(&gate, 73);
     std::atomic<bool> sent{false};
     std::thread producer([&]() {
-        sent.store(channel.trySend(std::move(input)), std::memory_order_release);
+        sent.store(channel.try_send(std::move(input)), std::memory_order_release);
     });
 
     const auto deadline = std::chrono::steady_clock::now() + 5s;
@@ -82,10 +82,10 @@ int main()
     gate.release.notify_one();
     producer.join();
 
-    auto value = channel.tryRecv();
+    auto value = channel.try_recv();
     const bool passed = sent.load(std::memory_order_acquire) &&
-        channel.isClosed() && value.has_value() && value->value == 73 &&
-        !channel.tryRecv().has_value();
+        channel.is_closed() && value.has_value() && value->value == 73 &&
+        !channel.try_recv().has_value();
     if (!passed) {
         std::cerr << "T175 close-during-publish lost the tail message\n";
         return 1;

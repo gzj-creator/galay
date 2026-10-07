@@ -34,7 +34,7 @@ namespace galay::kernel
  * @brief 计算任务
  *
  * @details 封装计算协程，用于跨线程传递。
- * 协程的原调度器通过 coro.belongScheduler() 获取。
+ * 协程的原调度器通过 coro.belong_scheduler() 获取。
  */
 struct ParallelTask {
     TaskRef task;  ///< 轻量任务引用
@@ -151,13 +151,13 @@ public:
      *         返回 false。
      * @note stop() 与入队并发时，已进入接纳协议的工作项仍会在 worker 退出前排空。
      */
-    bool scheduleWork(ParallelWorkItem work) noexcept;
+    bool schedule_work(ParallelWorkItem work) noexcept;
 
     /**
      * @brief 检查调度器是否正在运行
      * @return true 如果正在运行
      */
-    bool isRunning() const { return m_running.load(std::memory_order_acquire); }
+    bool is_running() const { return m_running.load(std::memory_order_acquire); }
 
 private:
     friend class SchedulerBase<ParallelScheduler, kParallelScheduler>;
@@ -167,13 +167,13 @@ private:
      * @return 成功返回 void；前一运行周期未完整排空恢复队列时返回 kNotReady
      * @note 创建工作线程并开始处理任务
      */
-    std::expected<void, IOError> startImpl();
+    std::expected<void, IOError> start_impl();
 
     /**
      * @brief 停止调度器
      * @note 先拒绝新的恢复请求，再由工作线程排空已接纳任务并结束
      */
-    void stopImpl();
+    void stop_impl();
 
     /**
      * @brief 将计算任务排入工作线程
@@ -181,9 +181,9 @@ private:
      * @return true 任务已成功入队；false 任务无效或已绑定到其他调度器
      * @note 任务会在线程池中的计算线程恢复执行
      */
-    bool scheduleImpl(TaskRef task) noexcept
+    bool schedule_impl(TaskRef task) noexcept
     {
-        if (!bindTask(task)) {
+        if (!bind_task(task)) {
             return false;
         }
         m_submission_count.fetch_add(1, std::memory_order_acq_rel);
@@ -204,9 +204,9 @@ private:
      * @return live scheduler 接管成功返回 true；未启动、已停止、任务无效或 owner
      *         不匹配返回 false。
      */
-    bool scheduleResumeImpl(TaskRef task) noexcept
+    bool schedule_resume_impl(TaskRef task) noexcept
     {
-        if (!bindTask(task)) {
+        if (!bind_task(task)) {
             return false;
         }
         return m_resumeQueue.push(std::move(task));
@@ -218,9 +218,9 @@ private:
      * @return true 任务已成功入队；false 任务无效或已绑定到其他调度器
      * @note 当前实现与 schedule() 共享同一工作队列，但保留独立语义入口
      */
-    bool scheduleDeferredImpl(TaskRef task) noexcept
+    bool schedule_deferred_impl(TaskRef task) noexcept
     {
-        return scheduleImpl(std::move(task));
+        return schedule_impl(std::move(task));
     }
 
     /**
@@ -228,9 +228,9 @@ private:
      * @param task 要执行的任务
      * @return true 如果成功执行，false 如果任务已绑定到其他调度器
      */
-    bool scheduleImmediatelyImpl(TaskRef task) noexcept
+    bool schedule_immediately_impl(TaskRef task) noexcept
     {
-        if (!bindTask(task)) {
+        if (!bind_task(task)) {
             return false;
         }
         resume(task);
@@ -243,8 +243,8 @@ private:
      * @param timer 定时器共享指针
      * @return true 定时器已成功交给全局 TimerScheduler；false 添加失败
      */
-    bool addTimerImpl(Timer::ptr timer) {
-        return TimerScheduler::getInstance()->addTimer(timer);    
+    bool add_timer_impl(Timer::ptr timer) {
+        return TimerScheduler::get_instance()->add_timer(timer);
     }
 private:
     /**
@@ -252,10 +252,10 @@ private:
      * @details 恢复期间新产生的请求留到下一轮；下一轮先尝试一个普通任务，
      *          普通队列为空时则立即继续恢复，兼顾公平性和连续 resume 吞吐。
      */
-    void drainResumeQueue();
+    void drain_resume_queue();
 
     /** @brief 工作线程函数 */
-    void workerLoop();
+    void worker_loop();
 
 private:
     std::thread m_thread;                                       ///< 工作线程

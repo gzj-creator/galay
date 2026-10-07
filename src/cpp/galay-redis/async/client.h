@@ -81,7 +81,7 @@ namespace galay::redis
         RedisBorrowedCommand(std::string_view, size_t = 1) = delete;    ///< 禁止 string_view 构造
 
         [[nodiscard]] std::string_view encoded() const noexcept { return m_encoded; }          ///< 获取编码后的命令视图
-        [[nodiscard]] size_t expectedReplies() const noexcept { return m_expected_replies; }  ///< 获取期望回复数量
+        [[nodiscard]] size_t expected_replies() const noexcept { return m_expected_replies; }  ///< 获取期望回复数量
 
     private:
         std::string_view m_encoded;          ///< 编码后的命令视图
@@ -160,7 +160,7 @@ namespace galay::redis
          * @param timeout 发送超时时间
          * @return 构建器引用
          */
-        RedisClientBuilder& sendTimeout(std::chrono::milliseconds timeout)
+        RedisClientBuilder& send_timeout(std::chrono::milliseconds timeout)
         {
             m_config.send_timeout = timeout;
             return *this;
@@ -171,7 +171,7 @@ namespace galay::redis
          * @param timeout 接收超时时间
          * @return 构建器引用
          */
-        RedisClientBuilder& recvTimeout(std::chrono::milliseconds timeout)
+        RedisClientBuilder& recv_timeout(std::chrono::milliseconds timeout)
         {
             m_config.recv_timeout = timeout;
             return *this;
@@ -182,7 +182,7 @@ namespace galay::redis
          * @param size 缓冲区大小（字节）
          * @return 构建器引用
          */
-        RedisClientBuilder& bufferSize(size_t size)
+        RedisClientBuilder& buffer_size(size_t size)
         {
             m_config.buffer_size = size;
             return *this;
@@ -193,7 +193,7 @@ namespace galay::redis
          * @param enabled 是否启用
          * @return 构建器引用
          */
-        RedisClientBuilder& tcpNoDelay(bool enabled)
+        RedisClientBuilder& tcp_no_delay(bool enabled)
         {
             m_config.tcp_no_delay = enabled;
             return *this;
@@ -209,14 +209,14 @@ namespace galay::redis
          * @brief 获取当前构建的配置
          * @return 异步 Redis 配置
          */
-        AsyncRedisConfig buildConfig() const
+        AsyncRedisConfig build_config() const
         {
             return m_config;
         }
 
     private:
         IOScheduler* m_scheduler = nullptr;                                     ///< IO 调度器
-        AsyncRedisConfig m_config = AsyncRedisConfig::noTimeout();              ///< 异步配置
+        AsyncRedisConfig m_config = AsyncRedisConfig::no_timeout();              ///< 异步配置
     };
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
@@ -255,7 +255,7 @@ namespace galay::redis
          * @param config Rediss TLS 配置
          * @return 构建器引用
          */
-        RedissClientBuilder& tlsConfig(RedissClientConfig config)
+        RedissClientBuilder& tls_config(RedissClientConfig config)
         {
             m_tls_config = std::move(config);
             return *this;
@@ -266,7 +266,7 @@ namespace galay::redis
          * @param timeout 发送超时时间
          * @return 构建器引用
          */
-        RedissClientBuilder& sendTimeout(std::chrono::milliseconds timeout)
+        RedissClientBuilder& send_timeout(std::chrono::milliseconds timeout)
         {
             m_config.send_timeout = timeout;
             return *this;
@@ -277,7 +277,7 @@ namespace galay::redis
          * @param timeout 接收超时时间
          * @return 构建器引用
          */
-        RedissClientBuilder& recvTimeout(std::chrono::milliseconds timeout)
+        RedissClientBuilder& recv_timeout(std::chrono::milliseconds timeout)
         {
             m_config.recv_timeout = timeout;
             return *this;
@@ -288,7 +288,7 @@ namespace galay::redis
          * @param size 缓冲区大小（字节）
          * @return 构建器引用
          */
-        RedissClientBuilder& bufferSize(size_t size)
+        RedissClientBuilder& buffer_size(size_t size)
         {
             m_config.buffer_size = size;
             return *this;
@@ -299,7 +299,7 @@ namespace galay::redis
          * @param enabled 是否启用
          * @return 构建器引用
          */
-        RedissClientBuilder& tcpNoDelay(bool enabled)
+        RedissClientBuilder& tcp_no_delay(bool enabled)
         {
             m_config.tcp_no_delay = enabled;
             return *this;
@@ -310,7 +310,7 @@ namespace galay::redis
          * @param path CA 证书文件路径
          * @return 构建器引用
          */
-        RedissClientBuilder& caPath(std::string path)
+        RedissClientBuilder& ca_path(std::string path)
         {
             m_tls_config.ca_path = std::move(path);
             return *this;
@@ -321,7 +321,7 @@ namespace galay::redis
          * @param verify_peer 是否验证
          * @return 构建器引用
          */
-        RedissClientBuilder& verifyPeer(bool verify_peer)
+        RedissClientBuilder& verify_peer(bool verify_peer)
         {
             m_tls_config.verify_peer = verify_peer;
             return *this;
@@ -332,7 +332,7 @@ namespace galay::redis
          * @param verify_depth 验证深度
          * @return 构建器引用
          */
-        RedissClientBuilder& verifyDepth(int verify_depth)
+        RedissClientBuilder& verify_depth(int verify_depth)
         {
             m_tls_config.verify_depth = verify_depth;
             return *this;
@@ -343,7 +343,7 @@ namespace galay::redis
          * @param server_name 服务器名称
          * @return 构建器引用
          */
-        RedissClientBuilder& serverName(std::string server_name)
+        RedissClientBuilder& server_name(std::string server_name)
         {
             m_tls_config.server_name = std::move(server_name);
             return *this;
@@ -359,7 +359,7 @@ namespace galay::redis
          * @brief 获取当前构建的配置
          * @return 异步 Redis 配置
          */
-        AsyncRedisConfig buildConfig() const
+        AsyncRedisConfig build_config() const
         {
             return m_config;
         }
@@ -368,14 +368,14 @@ namespace galay::redis
          * @brief 获取当前构建的 TLS 配置
          * @return Rediss TLS 配置
          */
-        RedissClientConfig buildTlsConfig() const
+        RedissClientConfig build_tls_config() const
         {
             return m_tls_config;
         }
 
     private:
         IOScheduler* m_scheduler = nullptr;                                     ///< IO 调度器
-        AsyncRedisConfig m_config = AsyncRedisConfig::noTimeout();              ///< 异步配置
+        AsyncRedisConfig m_config = AsyncRedisConfig::no_timeout();              ///< 异步配置
         RedissClientConfig m_tls_config;                                        ///< TLS 配置
     };
 #endif
@@ -391,7 +391,7 @@ namespace galay::redis
     {
     public:
         RedisClient(IOScheduler* scheduler,
-                    AsyncRedisConfig config = AsyncRedisConfig::noTimeout());
+                    AsyncRedisConfig config = AsyncRedisConfig::no_timeout());
 
         /**
          * @brief 移动构造函数
@@ -445,8 +445,8 @@ namespace galay::redis
          * @param packet 借用命令包，必须在整个 co_await 期间保持有效
          * @return 命令交换操作等待体
          */
-        RedisExchangeOperationFor<Strategy> commandBorrowed(const RedisBorrowedCommand& packet);
-        RedisExchangeOperationFor<Strategy> commandBorrowed(RedisBorrowedCommand&& packet) = delete; ///< 禁止右值
+        RedisExchangeOperationFor<Strategy> command_borrowed(const RedisBorrowedCommand& packet);
+        RedisExchangeOperationFor<Strategy> command_borrowed(RedisBorrowedCommand&& packet) = delete; ///< 禁止右值
 
         /**
          * @brief 仅接收指定数量的回复（不发送命令）
@@ -470,17 +470,17 @@ namespace galay::redis
          * @param expected_replies 期望的回复数量
          * @return 命令交换操作等待体
          */
-        RedisExchangeOperationFor<Strategy> batchBorrowed(const std::string& encoded, size_t expected_replies);
-        RedisExchangeOperationFor<Strategy> batchBorrowed(std::string&& encoded, size_t expected_replies) = delete; ///< 禁止右值
+        RedisExchangeOperationFor<Strategy> batch_borrowed(const std::string& encoded, size_t expected_replies);
+        RedisExchangeOperationFor<Strategy> batch_borrowed(std::string&& encoded, size_t expected_replies) = delete; ///< 禁止右值
 
         // ======================== 连接管理 ========================
 
         AsyncTcpSocket& socket() { return m_socket; }                               ///< 获取底层 TCP 套接字
         protocol::RespParser& parser() { return m_parser; }                    ///< 获取 RESP 解析器
-        galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return *m_ring_buffer; } ///< 获取接收环形缓冲区
-        const galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() const { return *m_ring_buffer; } ///< 获取接收环形缓冲区
-        const AsyncRedisConfig& asyncConfig() const { return m_config; }       ///< 获取异步配置
-        void setClosed(bool closed) { m_is_closed = closed; }                  ///< 设置关闭状态
+        galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return *m_ring_buffer; } ///< 获取接收环形缓冲区
+        const galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() const { return *m_ring_buffer; } ///< 获取接收环形缓冲区
+        const AsyncRedisConfig& async_config() const { return m_config; }       ///< 获取异步配置
+        void set_closed(bool closed) { m_is_closed = closed; }                  ///< 设置关闭状态
 
         /**
          * @brief 关闭连接
@@ -490,7 +490,7 @@ namespace galay::redis
             return m_socket.close();
         }
 
-        bool isClosed() const { return m_is_closed; } ///< 检查连接是否已关闭
+        bool is_closed() const { return m_is_closed; } ///< 检查连接是否已关闭
 
         ~RedisClient() = default;
 
@@ -519,7 +519,7 @@ namespace galay::redis
          * @param tls_config TLS 配置
          */
         RedissClient(IOScheduler* scheduler,
-                     AsyncRedisConfig config = AsyncRedisConfig::noTimeout(),
+                     AsyncRedisConfig config = AsyncRedisConfig::no_timeout(),
                      RedissClientConfig tls_config = {});
         RedissClient(RedissClient&& other) noexcept;                          ///< 移动构造
         RedissClient& operator=(RedissClient&& other) noexcept;               ///< 移动赋值
@@ -566,10 +566,10 @@ namespace galay::redis
          */
         detail::RedissExchangeOperation batch(std::span<const RedisCommandView> commands);
 
-        const AsyncRedisConfig& asyncConfig() const;                          ///< 获取异步配置
-        const RedissClientConfig& tlsConfig() const;                          ///< 获取 TLS 配置
-        bool isClosed() const;                                                ///< 检查连接是否已关闭
-        void setClosed(bool closed);                                          ///< 设置关闭状态
+        const AsyncRedisConfig& async_config() const;                          ///< 获取异步配置
+        const RedissClientConfig& tls_config() const;                          ///< 获取 TLS 配置
+        bool is_closed() const;                                                ///< 检查连接是否已关闭
+        void set_closed(bool closed);                                          ///< 设置关闭状态
         galay::kernel::CloseAwaitable close();                                ///< 关闭连接
 
     private:

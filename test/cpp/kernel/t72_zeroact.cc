@@ -44,16 +44,16 @@ struct ZeroLengthMachine {
 
         switch (m_phase) {
         case Phase::ZeroRead:
-            return MachineAction<result_type>::waitRead(m_read_buffer.data(), 0);
+            return MachineAction<result_type>::wait_read(m_read_buffer.data(), 0);
         case Phase::ZeroWrite:
-            return MachineAction<result_type>::waitWrite(m_write_buffer.data(), 0);
+            return MachineAction<result_type>::wait_write(m_write_buffer.data(), 0);
         case Phase::Done:
             return MachineAction<result_type>::fail(IOError(kParamInvalid, 0));
         }
         return MachineAction<result_type>::fail(IOError(kParamInvalid, 0));
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result || result.value() != 0) {
             m_result = std::unexpected(result ? IOError(kReadFailed, 0) : result.error());
             m_phase = Phase::Done;
@@ -62,7 +62,7 @@ struct ZeroLengthMachine {
         m_phase = Phase::ZeroWrite;
     }
 
-    void onWrite(std::expected<size_t, IOError> result) {
+    void on_write(std::expected<size_t, IOError> result) {
         if (!result || result.value() != 0) {
             m_result = std::unexpected(result ? IOError(kSendFailed, 0) : result.error());
             m_phase = Phase::Done;
@@ -90,7 +90,7 @@ struct TestState {
     std::atomic<bool> success{false};
 };
 
-Task<void> zeroLengthTask(TestState* state, int fd) {
+Task<void> zero_length_task(TestState* state, int fd) {
     IOController controller(GHandle{.fd = fd});
     StateMachineAwaitable<ZeroLengthMachine> awaitable(&controller, ZeroLengthMachine{});
 
@@ -99,7 +99,7 @@ Task<void> zeroLengthTask(TestState* state, int fd) {
     state->done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -125,9 +125,9 @@ int main() {
     scheduler.start();
 
     TestState state;
-    scheduleTask(scheduler, zeroLengthTask(&state, fds[0]));
+    schedule_task(scheduler, zero_length_task(&state, fds[0]));
 
-    const bool completed = waitUntil(state.done);
+    const bool completed = wait_until(state.done);
     scheduler.stop();
     close(fds[0]);
     close(fds[1]);

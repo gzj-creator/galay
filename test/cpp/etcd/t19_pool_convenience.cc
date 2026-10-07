@@ -99,38 +99,38 @@ private:
     uint16_t m_port = 0;
 };
 
-std::string endpointFor(uint16_t port)
+std::string endpoint_for(uint16_t port)
 {
     return "http://127.0.0.1:" + std::to_string(port);
 }
 
-galay::etcd::EtcdProductionConfig makeProduction(uint16_t port)
+galay::etcd::EtcdProductionConfig make_production(uint16_t port)
 {
     galay::etcd::EtcdProductionConfig production;
-    production.endpoints = {endpointFor(port)};
+    production.endpoints = {endpoint_for(port)};
     production.connections_per_endpoint = 1;
     return production;
 }
 
-int runSyncCases(uint16_t port)
+int run_sync_cases(uint16_t port)
 {
     using galay::etcd::EtcdError;
     using galay::etcd::EtcdErrorType;
 
     auto pool = galay::etcd::EtcdClusterClientBuilder()
-        .productionConfig(makeProduction(port))
+        .production_config(make_production(port))
         .build();
 
-    auto connected = pool.acquireConnected();
+    auto connected = pool.acquire_connected();
     if (!connected.has_value() || !connected->get()->connected()) {
         return fail("sync acquireConnected should return a connected lease");
     }
-    if (pool.idleCount() != 0) {
+    if (pool.idle_count() != 0) {
         return fail("sync acquireConnected should borrow one client");
     }
     connected->release();
 
-    auto happy = pool.withClient([](galay::etcd::EtcdClient& client)
+    auto happy = pool.with_client([](galay::etcd::EtcdClient& client)
         -> std::expected<int, EtcdError> {
         if (!client.connected()) {
             return std::unexpected(
@@ -141,11 +141,11 @@ int runSyncCases(uint16_t port)
     if (!happy.has_value() || *happy != 42) {
         return fail("sync withClient should return the callback result");
     }
-    if (pool.idleCount() != pool.size()) {
+    if (pool.idle_count() != pool.size()) {
         return fail("sync withClient should return the lease after success");
     }
 
-    auto callback_error = pool.withClient([](galay::etcd::EtcdClient&)
+    auto callback_error = pool.with_client([](galay::etcd::EtcdClient&)
         -> std::expected<int, EtcdError> {
         return std::unexpected(
             EtcdError(EtcdErrorType::Server, "sync callback failed"));
@@ -154,15 +154,15 @@ int runSyncCases(uint16_t port)
         callback_error.error().type() != EtcdErrorType::Server) {
         return fail("sync withClient should preserve callback errors");
     }
-    if (pool.idleCount() != pool.size()) {
+    if (pool.idle_count() != pool.size()) {
         return fail("sync withClient should return the lease after callback error");
     }
 
-    auto held = pool.tryAcquire();
+    auto held = pool.try_acquire();
     if (!held.has_value()) {
         return fail("sync pool setup should acquire its only client");
     }
-    auto exhausted = pool.withClient([](galay::etcd::EtcdClient&)
+    auto exhausted = pool.with_client([](galay::etcd::EtcdClient&)
         -> std::expected<int, EtcdError> {
         return 7;
     });
@@ -171,14 +171,14 @@ int runSyncCases(uint16_t port)
         return fail("sync withClient should report PoolExhausted");
     }
     held->release();
-    if (pool.idleCount() != pool.size()) {
+    if (pool.idle_count() != pool.size()) {
         return fail("sync pool should recover after exhaustion case");
     }
 
     return 0;
 }
 
-galay::kernel::Task<void> runAsyncCases(
+galay::kernel::Task<void> run_async_cases(
     galay::kernel::IOScheduler* scheduler,
     uint16_t port,
     std::atomic<bool>* done,
@@ -196,10 +196,10 @@ galay::kernel::Task<void> runAsyncCases(
 
     auto pool = galay::etcd::AsyncEtcdClusterClientBuilder()
         .scheduler(scheduler)
-        .productionConfig(makeProduction(port))
+        .production_config(make_production(port))
         .build();
 
-    auto connected_task = co_await pool.acquireConnected();
+    auto connected_task = co_await pool.acquire_connected();
     if (!connected_task.has_value()) {
         finish(fail("async acquireConnected task failed: " +
                     std::string(connected_task.error().message())));
@@ -210,13 +210,13 @@ galay::kernel::Task<void> runAsyncCases(
         finish(fail("async acquireConnected should return a connected lease"));
         co_return;
     }
-    if (pool.idleCount() != 0) {
+    if (pool.idle_count() != 0) {
         finish(fail("async acquireConnected should borrow one client"));
         co_return;
     }
     connected->release();
 
-    auto happy_task = co_await pool.withClient([](AsyncEtcdClient& client)
+    auto happy_task = co_await pool.with_client([](AsyncEtcdClient& client)
         -> galay::kernel::Task<std::expected<int, EtcdError>> {
         if (!client.connected()) {
             co_return std::unexpected(
@@ -234,12 +234,12 @@ galay::kernel::Task<void> runAsyncCases(
         finish(fail("async withClient should return the callback result"));
         co_return;
     }
-    if (pool.idleCount() != pool.size()) {
+    if (pool.idle_count() != pool.size()) {
         finish(fail("async withClient should return the lease after success"));
         co_return;
     }
 
-    auto callback_error_task = co_await pool.withClient([](AsyncEtcdClient&)
+    auto callback_error_task = co_await pool.with_client([](AsyncEtcdClient&)
         -> galay::kernel::Task<std::expected<int, EtcdError>> {
         co_return std::unexpected(
             EtcdError(EtcdErrorType::Server, "async callback failed"));
@@ -255,12 +255,12 @@ galay::kernel::Task<void> runAsyncCases(
         finish(fail("async withClient should preserve callback errors"));
         co_return;
     }
-    if (pool.idleCount() != pool.size()) {
+    if (pool.idle_count() != pool.size()) {
         finish(fail("async withClient should return the lease after callback error"));
         co_return;
     }
 
-    auto task_error = co_await pool.withClient([](AsyncEtcdClient&)
+    auto task_error = co_await pool.with_client([](AsyncEtcdClient&)
         -> galay::kernel::Task<EtcdBoolResult> {
         return {};
     });
@@ -274,17 +274,17 @@ galay::kernel::Task<void> runAsyncCases(
         finish(fail("async withClient should map TaskResultError to Internal with its message"));
         co_return;
     }
-    if (pool.idleCount() != pool.size()) {
+    if (pool.idle_count() != pool.size()) {
         finish(fail("async withClient should return the lease after task failure"));
         co_return;
     }
 
-    auto held = pool.tryAcquire();
+    auto held = pool.try_acquire();
     if (!held.has_value()) {
         finish(fail("async pool setup should acquire its only client"));
         co_return;
     }
-    auto exhausted_task = co_await pool.withClient([](AsyncEtcdClient&)
+    auto exhausted_task = co_await pool.with_client([](AsyncEtcdClient&)
         -> galay::kernel::Task<std::expected<int, EtcdError>> {
         co_return 9;
     });
@@ -300,7 +300,7 @@ galay::kernel::Task<void> runAsyncCases(
         co_return;
     }
     held->release();
-    if (pool.idleCount() != pool.size()) {
+    if (pool.idle_count() != pool.size()) {
         finish(fail("async pool should recover after exhaustion case"));
         co_return;
     }
@@ -313,20 +313,20 @@ galay::kernel::Task<void> runAsyncCases(
 int main()
 {
     LoopbackListener sync_listener;
-    if (const int sync_result = runSyncCases(sync_listener.port()); sync_result != 0) {
+    if (const int sync_result = run_sync_cases(sync_listener.port()); sync_result != 0) {
         return sync_result;
     }
 
     LoopbackListener async_listener;
     galay::kernel::Runtime runtime = galay::kernel::RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     auto start_result = runtime.start();
     if (!start_result.has_value()) {
         return fail("runtime start failed");
     }
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         return fail("runtime did not provide an IO scheduler");
@@ -334,9 +334,9 @@ int main()
 
     std::atomic<bool> done{false};
     int exit_code = 1;
-    const bool scheduled = galay::kernel::scheduleTask(
+    const bool scheduled = galay::kernel::schedule_task(
         scheduler,
-        runAsyncCases(scheduler, async_listener.port(), &done, &exit_code));
+        run_async_cases(scheduler, async_listener.port(), &done, &exit_code));
     if (!scheduled) {
         runtime.stop();
         return fail("failed to schedule async pool convenience task");

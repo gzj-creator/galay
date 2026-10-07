@@ -23,15 +23,15 @@ Task<void> test_echo_call(RpcClient& client) {
         auto result = co_await client.call("EchoService", "echo", payload);
         if (!result) {
             if (g_writer) {
-                g_writer->writeTestCase("Echo call", false, std::string(result.error().message()));
+                g_writer->write_test_case("Echo call", false, std::string(result.error().message()));
             }
             co_return;
         }
         if (result.value()) {
             const auto& response = result.value().value().value();
             if (g_writer) {
-                g_writer->writeTestCase("Echo call",
-                    response.isOk() &&
+                g_writer->write_test_case("Echo call",
+                    response.is_ok() &&
                     std::string(response.payload().data(), response.payload().size()) == payload);
             }
             break;
@@ -47,15 +47,15 @@ Task<void> test_uppercase_call(RpcClient& client) {
         auto result = co_await client.call("EchoService", "uppercase", payload);
         if (!result) {
             if (g_writer) {
-                g_writer->writeTestCase("Uppercase call", false, std::string(result.error().message()));
+                g_writer->write_test_case("Uppercase call", false, std::string(result.error().message()));
             }
             co_return;
         }
         if (result.value()) {
             const auto& response = result.value().value().value();
             if (g_writer) {
-                g_writer->writeTestCase("Uppercase call",
-                    response.isOk() &&
+                g_writer->write_test_case("Uppercase call",
+                    response.is_ok() &&
                     std::string(response.payload().data(), response.payload().size()) == "HELLO WORLD");
             }
             break;
@@ -74,20 +74,20 @@ Task<void> test_add_call(RpcClient& client) {
         auto result = co_await client.call("CalcService", "add", payload, 8);
         if (!result) {
             if (g_writer) {
-                g_writer->writeTestCase("Add call", false, std::string(result.error().message()));
+                g_writer->write_test_case("Add call", false, std::string(result.error().message()));
             }
             co_return;
         }
         if (result.value()) {
             const auto& response = result.value().value().value();
             bool success = false;
-            if (response.isOk() && response.payload().size() >= 4) {
+            if (response.is_ok() && response.payload().size() >= 4) {
                 int32_t sum;
                 std::memcpy(&sum, response.payload().data(), 4);
                 success = (sum == 300);
             }
             if (g_writer) {
-                g_writer->writeTestCase("Add call (100 + 200 = 300)", success);
+                g_writer->write_test_case("Add call (100 + 200 = 300)", success);
             }
             break;
         }
@@ -100,15 +100,15 @@ Task<void> test_service_not_found(RpcClient& client) {
         auto result = co_await client.call("NonExistentService", "method");
         if (!result) {
             if (g_writer) {
-                g_writer->writeTestCase("Service not found", false, std::string(result.error().message()));
+                g_writer->write_test_case("Service not found", false, std::string(result.error().message()));
             }
             co_return;
         }
         if (result.value()) {
             const auto& response = result.value().value().value();
             if (g_writer) {
-                g_writer->writeTestCase("Service not found",
-                    response.errorCode() == RpcErrorCode::SERVICE_NOT_FOUND);
+                g_writer->write_test_case("Service not found",
+                    response.error_code() == RpcErrorCode::SERVICE_NOT_FOUND);
             }
             break;
         }
@@ -121,15 +121,15 @@ Task<void> test_method_not_found(RpcClient& client) {
         auto result = co_await client.call("EchoService", "nonExistentMethod");
         if (!result) {
             if (g_writer) {
-                g_writer->writeTestCase("Method not found", false, std::string(result.error().message()));
+                g_writer->write_test_case("Method not found", false, std::string(result.error().message()));
             }
             co_return;
         }
         if (result.value()) {
             const auto& response = result.value().value().value();
             if (g_writer) {
-                g_writer->writeTestCase("Method not found",
-                    response.errorCode() == RpcErrorCode::METHOD_NOT_FOUND);
+                g_writer->write_test_case("Method not found",
+                    response.error_code() == RpcErrorCode::METHOD_NOT_FOUND);
             }
             break;
         }
@@ -137,7 +137,7 @@ Task<void> test_method_not_found(RpcClient& client) {
     co_return;
 }
 
-Task<void> runAllTests(const std::string& host, uint16_t port, std::atomic<bool>* done) {
+Task<void> run_all_tests(const std::string& host, uint16_t port, std::atomic<bool>* done) {
     RpcClient client;
 
     auto connect_result = co_await client.connect(host, port);
@@ -146,14 +146,14 @@ Task<void> runAllTests(const std::string& host, uint16_t port, std::atomic<bool>
         std::cerr << "Failed to connect to server: "
                   << connect_result.error().message() << "\n";
         if (g_writer) {
-            g_writer->writeTestCase("Connect to server", false, std::string(connect_result.error().message()));
+            g_writer->write_test_case("Connect to server", false, std::string(connect_result.error().message()));
         }
         done->store(true, std::memory_order_release);
         co_return;
     }
 
     if (g_writer) {
-        g_writer->writeTestCase("Connect to server", true);
+        g_writer->write_test_case("Connect to server", true);
     }
 
     std::cout << "Connected to server, running tests...\n";
@@ -186,25 +186,25 @@ int main(int argc, char* argv[]) {
 
     std::cout << "RPC Client Test - Connecting to " << host << ":" << port << "\n";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
     std::atomic<bool> done{false};
-    auto* scheduler = runtime.getNextIOScheduler();
-    if (!scheduleTask(scheduler, runAllTests(host, port, &done))) {
-        writer.writeTestCase("Schedule test task", false, "Failed to schedule task on IO scheduler");
+    auto* scheduler = runtime.get_next_io_scheduler();
+    if (!schedule_task(scheduler, run_all_tests(host, port, &done))) {
+        writer.write_test_case("Schedule test task", false, "Failed to schedule task on IO scheduler");
     } else {
         for (int i = 0; i < 50 && !done.load(std::memory_order_acquire); ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         if (!done.load(std::memory_order_acquire)) {
-            writer.writeTestCase("Test completion", false, "Timed out waiting for test task");
+            writer.write_test_case("Test completion", false, "Timed out waiting for test task");
         }
     }
 
     runtime.stop();
 
-    writer.writeSummary();
+    writer.write_summary();
 
     std::cout << "Results: Passed=" << writer.passed()
               << ", Failed=" << writer.failed() << "\n";

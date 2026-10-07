@@ -246,7 +246,7 @@ int main(int argc, char** argv)
     }
     ApiServer<HttpSwagger> server(galay::http::HttpServerBuilder()
         .host("127.0.0.1").port(options->port)
-        .ioSchedulerCount(1).parallelSchedulerCount(1).buildConfig());
+        .io_scheduler_count(1).parallel_scheduler_count(1).build_config());
     auto started = server.start(std::move(*api));
     if (!started) return report_error(started.error());
     std::cout << "Swagger UI: http://127.0.0.1:" << options->port << "/docs\n"

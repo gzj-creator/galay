@@ -71,7 +71,7 @@ namespace galay::kernel
         /**
          * @brief 以可配置的 tick 间隔构造时间轮管理器
          *
-         * @param tickDuration 每 tick 的纳秒数；控制定时器精度和最大范围
+         * @param tick_duration 每 tick 的纳秒数；控制定时器精度和最大范围
          *
          * @details 常见配置：
          * - 1 ms  (1e6)：覆盖 0 -- 48 天
@@ -101,7 +101,7 @@ namespace galay::kernel
          * @param timer Timer 的共享指针
          * @return 若已添加（或已过期并执行）则返回 true，若超出范围或为空则返回 false
          *
-         * @details 若定时器已过期，立即调用 handleTimeout() 并返回 true。
+         * @details 若定时器已过期，立即调用 handle_timeout() 并返回 true。
          * 若时间轮为空，重置起始时间以避免过期的 tick 推进。
          */
         bool push(Timer::ptr timer)
@@ -111,7 +111,7 @@ namespace galay::kernel
             }
 
             // 获取定时器的绝对过期时间（纳秒）
-            uint64_t expireTimeNs = timer->getExpireTime();
+            uint64_t expireTimeNs = timer->get_expire_time();
 
             // 获取当前时间（纳秒）
             auto now = std::chrono::steady_clock::now();
@@ -127,7 +127,7 @@ namespace galay::kernel
             // 计算剩余时间（纳秒）
             if (expireTimeNs <= nowNs) {
                 // 已经过期，立即执行
-                timer->handleTimeout();
+                timer->handle_timeout();
                 return true;
             }
 
@@ -200,7 +200,7 @@ namespace galay::kernel
          *       poll 超时，可把定时器触发延迟限制在一个 tick 以内。时间轮
          *       的公共接口要求由同一 owner 线程调用，此查询也不提供跨线程同步。
          */
-        uint64_t nsToNextTickBoundary() const noexcept
+        uint64_t ns_to_next_tick_boundary() const noexcept
         {
             auto now = std::chrono::steady_clock::now();
             const uint64_t elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -252,26 +252,26 @@ namespace galay::kernel
                 // 级联必须在处理当前槽之前执行
                 // 级联：每 256 tick，从第2层降级到第1层
                 if ((m_currentTick & (WHEEL1_SIZE - 1)) == 0 && m_currentTick > 0) {
-                    cascadeWheel2(nowNs);
+                    cascade_wheel2(nowNs);
                 }
 
                 // 级联：每 16384 tick，从第3层降级到第2层
                 if ((m_currentTick & (WHEEL2_SPAN - 1)) == 0 && m_currentTick > 0) {
-                    cascadeWheel3(nowNs);
+                    cascade_wheel3(nowNs);
                 }
 
                 // 级联：每 1048576 tick，从第4层降级到第3层
                 if ((m_currentTick & (WHEEL3_SPAN - 1)) == 0 && m_currentTick > 0) {
-                    cascadeWheel4(nowNs);
+                    cascade_wheel4(nowNs);
                 }
 
                 // 级联：每 67108864 tick，从第5层降级到第4层
                 if ((m_currentTick & (WHEEL4_SPAN - 1)) == 0 && m_currentTick > 0) {
-                    cascadeWheel5(nowNs);
+                    cascade_wheel5(nowNs);
                 }
 
                 // 处理第1层当前槽
-                processWheel1();
+                process_wheel1();
 
                 ++m_currentTick;
             }
@@ -291,7 +291,7 @@ namespace galay::kernel
         /**
          * @brief 触发第1层当前槽中的所有定时器
          */
-        void processWheel1()
+        void process_wheel1()
         {
             size_t idx = m_currentTick & (WHEEL1_SIZE - 1);
             auto& slot = m_wheel1[idx];
@@ -303,7 +303,7 @@ namespace galay::kernel
                 // 取消/已完成的 timer 仍可能由跨线程 cancel 留在槽中；
                 // 直接丢弃，避免再次进入虚调用和超时裁决热路径。
                 if (!timer->done() && !timer->cancelled()) {
-                    timer->handleTimeout();
+                    timer->handle_timeout();
                 }
 
                 it = slot.erase(it);
@@ -314,37 +314,37 @@ namespace galay::kernel
         /**
          * @brief 将第2层定时器级联下降到第1层
          */
-        void cascadeWheel2(uint64_t nowNs)
+        void cascade_wheel2(uint64_t nowNs)
         {
             size_t idx = (m_currentTick >> 8) & (WHEEL2_SIZE - 1);
-            cascadeSlot(m_wheel2[idx], nowNs);
+            cascade_slot(m_wheel2[idx], nowNs);
         }
 
         /**
          * @brief 将第3层定时器级联下降到低层
          */
-        void cascadeWheel3(uint64_t nowNs)
+        void cascade_wheel3(uint64_t nowNs)
         {
             size_t idx = (m_currentTick >> 14) & (WHEEL3_SIZE - 1);
-            cascadeSlot(m_wheel3[idx], nowNs);
+            cascade_slot(m_wheel3[idx], nowNs);
         }
 
         /**
          * @brief 将第4层定时器级联下降到低层
          */
-        void cascadeWheel4(uint64_t nowNs)
+        void cascade_wheel4(uint64_t nowNs)
         {
             size_t idx = (m_currentTick >> 20) & (WHEEL4_SIZE - 1);
-            cascadeSlot(m_wheel4[idx], nowNs);
+            cascade_slot(m_wheel4[idx], nowNs);
         }
 
         /**
          * @brief 将第5层定时器级联下降到低层
          */
-        void cascadeWheel5(uint64_t nowNs)
+        void cascade_wheel5(uint64_t nowNs)
         {
             size_t idx = (m_currentTick >> 26) & (WHEEL5_SIZE - 1);
-            cascadeSlot(m_wheel5[idx], nowNs);
+            cascade_slot(m_wheel5[idx], nowNs);
         }
 
         /**
@@ -354,7 +354,7 @@ namespace galay::kernel
          * @details 每个定时器被重新评估：若已过期则立即触发；
          * 否则插入到合适的时间轮层。
          */
-        void cascadeSlot(TimerList& slot, uint64_t nowNs)
+        void cascade_slot(TimerList& slot, uint64_t nowNs)
         {
             TimerList temp = std::move(slot);
             slot.clear();
@@ -366,12 +366,12 @@ namespace galay::kernel
                 }
 
                 // 获取定时器的绝对过期时间（纳秒）
-                uint64_t expireTimeNs = timer->getExpireTime();
+                uint64_t expireTimeNs = timer->get_expire_time();
 
                 // 计算剩余时间（纳秒）
                 if (expireTimeNs <= nowNs) {
                     // 已经过期，立即执行
-                    timer->handleTimeout();
+                    timer->handle_timeout();
                     --m_size;
                     continue;
                 }
@@ -383,7 +383,7 @@ namespace galay::kernel
 
                 if (remainingTicks == 0) {
                     // 不足一个 tick，立即执行
-                    timer->handleTimeout();
+                    timer->handle_timeout();
                     --m_size;
                     continue;
                 }

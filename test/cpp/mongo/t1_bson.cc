@@ -23,7 +23,7 @@ uint32_t crc32c(std::string_view bytes)
     return ~crc;
 }
 
-void writeInt32LEAt(std::string& out, size_t pos, int32_t value)
+void write_int32_le_at(std::string& out, size_t pos, int32_t value)
 {
     const auto u = static_cast<uint32_t>(value);
     out[pos + 0] = static_cast<char>(u & 0xFF);
@@ -32,7 +32,7 @@ void writeInt32LEAt(std::string& out, size_t pos, int32_t value)
     out[pos + 3] = static_cast<char>((u >> 24) & 0xFF);
 }
 
-void appendUint32LE(std::string& out, uint32_t value)
+void append_uint32_le(std::string& out, uint32_t value)
 {
     out.push_back(static_cast<char>(value & 0xFF));
     out.push_back(static_cast<char>((value >> 8) & 0xFF));
@@ -40,13 +40,13 @@ void appendUint32LE(std::string& out, uint32_t value)
     out.push_back(static_cast<char>((value >> 24) & 0xFF));
 }
 
-void appendChecksum(std::string& wire)
+void append_checksum(std::string& wire)
 {
-    writeInt32LEAt(wire, 0, static_cast<int32_t>(wire.size() + 4));
-    appendUint32LE(wire, crc32c(wire));
+    write_int32_le_at(wire, 0, static_cast<int32_t>(wire.size() + 4));
+    append_uint32_le(wire, crc32c(wire));
 }
 
-bool failCase(const std::string& message)
+bool fail_case(const std::string& message)
 {
     std::cerr << "  FAILED: " << message << std::endl;
     return false;
@@ -74,39 +74,39 @@ bool test_bson_encode_decode()
     tags.append("mongodb");
     doc.append("tags", std::move(tags));
 
-    const auto encoded = BsonCodec::encodeDocument(doc);
+    const auto encoded = BsonCodec::encode_document(doc);
     if (!encoded) {
-        return failCase("encodeDocument failed: " + encoded.error());
+        return fail_case("encodeDocument failed: " + encoded.error());
     }
-    auto decoded = BsonCodec::decodeDocument(encoded->data(), encoded->size());
+    auto decoded = BsonCodec::decode_document(encoded->data(), encoded->size());
     if (!decoded.has_value()) {
-        return failCase("decodeDocument failed: " + decoded.error());
+        return fail_case("decodeDocument failed: " + decoded.error());
     }
 
-    if (decoded->getString("name") != "galay") {
-        return failCase("field name mismatch");
+    if (decoded->get_string("name") != "galay") {
+        return fail_case("field name mismatch");
     }
-    if (decoded->getInt32("age") != 18) {
-        return failCase("field age mismatch");
+    if (decoded->get_int32("age") != 18) {
+        return fail_case("field age mismatch");
     }
-    if (!decoded->getBool("active")) {
-        return failCase("field active mismatch");
+    if (!decoded->get_bool("active")) {
+        return fail_case("field active mismatch");
     }
 
     const auto* profile = decoded->find("profile");
-    if (profile == nullptr || !profile->isDocument()) {
-        return failCase("profile missing or invalid type");
+    if (profile == nullptr || !profile->is_document()) {
+        return fail_case("profile missing or invalid type");
     }
-    if (profile->toDocument().getString("city") != "shanghai") {
-        return failCase("profile.city mismatch");
+    if (profile->to_document().get_string("city") != "shanghai") {
+        return fail_case("profile.city mismatch");
     }
 
     const auto* tag_values = decoded->find("tags");
-    if (tag_values == nullptr || !tag_values->isArray()) {
-        return failCase("tags missing or invalid type");
+    if (tag_values == nullptr || !tag_values->is_array()) {
+        return fail_case("tags missing or invalid type");
     }
-    if (tag_values->toArray().size() != 2) {
-        return failCase("tags size mismatch");
+    if (tag_values->to_array().size() != 2) {
+        return fail_case("tags size mismatch");
     }
 
     std::cout << "  PASSED" << std::endl;
@@ -123,33 +123,33 @@ bool test_bson_boundaries()
     too_short_length.push_back('\0');
     too_short_length.push_back('\0');
     size_t consumed = 123;
-    auto too_short = BsonCodec::decodeDocument(too_short_length.data(),
+    auto too_short = BsonCodec::decode_document(too_short_length.data(),
                                                too_short_length.size(),
                                                consumed);
     if (too_short.has_value()) {
-        return failCase("BSON length smaller than minimum should fail");
+        return fail_case("BSON length smaller than minimum should fail");
     }
     if (consumed != 123) {
-        return failCase("failed BSON decode should not report consumed bytes");
+        return fail_case("failed BSON decode should not report consumed bytes");
     }
 
-    auto invalid_oid = MongoValue::fromObjectId("not-a-24-byte-objectid");
+    auto invalid_oid = MongoValue::from_object_id("not-a-24-byte-objectid");
     if (invalid_oid.has_value()) {
-        return failCase("ObjectId must reject non-24-hex input through std::expected");
+        return fail_case("ObjectId must reject non-24-hex input through std::expected");
     }
-    auto valid_oid = MongoValue::fromObjectId("0123456789abcdefABCDEF12");
+    auto valid_oid = MongoValue::from_object_id("0123456789abcdefABCDEF12");
     if (!valid_oid.has_value()) {
-        return failCase("ObjectId must accept 24-character hex input: " + valid_oid.error());
+        return fail_case("ObjectId must accept 24-character hex input: " + valid_oid.error());
     }
-    if (!valid_oid->isObjectId() || valid_oid->toString() != "0123456789abcdefABCDEF12") {
-        return failCase("ObjectId expected value mismatch");
+    if (!valid_oid->is_object_id() || valid_oid->to_string() != "0123456789abcdefABCDEF12") {
+        return fail_case("ObjectId expected value mismatch");
     }
 
     MongoDocument invalid_key_doc;
     invalid_key_doc.append(std::string("bad\0key", 7), int32_t(1));
-    auto invalid_key = BsonCodec::encodeDocument(invalid_key_doc);
+    auto invalid_key = BsonCodec::encode_document(invalid_key_doc);
     if (invalid_key.has_value()) {
-        return failCase("BSON keys with embedded NUL must fail through std::expected");
+        return fail_case("BSON keys with embedded NUL must fail through std::expected");
     }
 
     std::cout << "  PASSED" << std::endl;
@@ -164,30 +164,30 @@ bool test_op_msg_encode_decode()
     command.append("ping", int32_t(1));
     command.append("$db", "admin");
 
-    const auto wire = MongoProtocol::encodeOpMsg(123, command);
+    const auto wire = MongoProtocol::encode_op_msg(123, command);
     if (!wire) {
-        return failCase("encodeOpMsg failed: " + wire.error());
+        return fail_case("encodeOpMsg failed: " + wire.error());
     }
 
     size_t consumed = 0;
-    auto parsed = MongoProtocol::extractMessage(wire->data(), wire->size(), consumed);
+    auto parsed = MongoProtocol::extract_message(wire->data(), wire->size(), consumed);
     if (!parsed.has_value()) {
-        return failCase("extractMessage failed: " + parsed.error().message());
+        return fail_case("extractMessage failed: " + parsed.error().message());
     }
     if (consumed != wire->size()) {
-        return failCase("consumed bytes mismatch");
+        return fail_case("consumed bytes mismatch");
     }
     if (parsed->header.request_id != 123) {
-        return failCase("request_id mismatch");
+        return fail_case("request_id mismatch");
     }
     if (parsed->header.op_code != kMongoOpMsg) {
-        return failCase("op_code mismatch");
+        return fail_case("op_code mismatch");
     }
-    if (parsed->body.getInt32("ping") != 1) {
-        return failCase("ping value mismatch");
+    if (parsed->body.get_int32("ping") != 1) {
+        return fail_case("ping value mismatch");
     }
-    if (parsed->body.getString("$db") != "admin") {
-        return failCase("$db value mismatch");
+    if (parsed->body.get_string("$db") != "admin") {
+        return fail_case("$db value mismatch");
     }
 
     std::cout << "  PASSED" << std::endl;
@@ -202,22 +202,22 @@ bool test_op_msg_checksum()
     command.append("ping", int32_t(1));
     command.append("$db", "admin");
 
-    auto valid_or_err = MongoProtocol::encodeOpMsg(124, command, 0x01);
+    auto valid_or_err = MongoProtocol::encode_op_msg(124, command, 0x01);
     if (!valid_or_err) {
-        return failCase("encodeOpMsg(checksum) failed: " + valid_or_err.error());
+        return fail_case("encodeOpMsg(checksum) failed: " + valid_or_err.error());
     }
     auto valid = std::move(valid_or_err.value());
-    appendChecksum(valid);
-    auto parsed = MongoProtocol::decodeMessage(valid.data(), valid.size());
+    append_checksum(valid);
+    auto parsed = MongoProtocol::decode_message(valid.data(), valid.size());
     if (!parsed) {
-        return failCase("valid OP_MSG checksum should decode: " + parsed.error().message());
+        return fail_case("valid OP_MSG checksum should decode: " + parsed.error().message());
     }
 
     auto invalid = valid;
     invalid.back() = static_cast<char>(static_cast<unsigned char>(invalid.back()) ^ 0x01u);
-    auto rejected = MongoProtocol::decodeMessage(invalid.data(), invalid.size());
+    auto rejected = MongoProtocol::decode_message(invalid.data(), invalid.size());
     if (rejected) {
-        return failCase("invalid OP_MSG checksum should be rejected");
+        return fail_case("invalid OP_MSG checksum should be rejected");
     }
 
     std::cout << "  PASSED" << std::endl;

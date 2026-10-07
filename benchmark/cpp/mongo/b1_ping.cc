@@ -79,21 +79,21 @@ void operator delete[](void* ptr, std::size_t) noexcept
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     if (argc > 1 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help")) {
-        mongo_bench::printUsage(argv[0]);
+        mongo_bench::print_usage(argv[0]);
         return 0;
     }
 
-    auto cfg = mongo_bench::loadBenchConfig();
-    if (!mongo_bench::parseArgs(cfg, argc, argv, std::cerr)) {
-        mongo_bench::printUsage(argv[0]);
+    auto cfg = mongo_bench::load_bench_config();
+    if (!mongo_bench::parse_args(cfg, argc, argv, std::cerr)) {
+        mongo_bench::print_usage(argv[0]);
         return 2;
     }
-    mongo_bench::printBenchConfig("B1-SyncPingBench", cfg);
+    mongo_bench::print_bench_config("B1-SyncPingBench", cfg);
 
     if (cfg.mode != mongo_bench::BenchMode::Normal) {
         std::cerr << "B1-SyncPingBench currently supports only --mode normal" << std::endl;
@@ -103,7 +103,7 @@ int main(int argc, char** argv)
     std::vector<std::unique_ptr<MongoClient>> sessions;
     sessions.reserve(cfg.concurrency);
 
-    const auto mongo_cfg = mongo_bench::toMongoConfig(cfg);
+    const auto mongo_cfg = mongo_bench::to_mongo_config(cfg);
     for (size_t i = 0; i < cfg.concurrency; ++i) {
         auto session = std::make_unique<MongoClient>();
         auto conn = session->connect(mongo_cfg);
@@ -198,7 +198,7 @@ int main(int argc, char** argv)
     const size_t ok_count = ok.load(std::memory_order_relaxed);
     const size_t err_count = error.load(std::memory_order_relaxed);
 
-    mongo_bench::printBenchReport(cfg.total_requests,
+    mongo_bench::print_bench_report(cfg.total_requests,
                                   ok_count,
                                   err_count,
                                   duration_ms,

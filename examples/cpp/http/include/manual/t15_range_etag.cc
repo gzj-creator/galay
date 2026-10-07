@@ -20,10 +20,10 @@ using namespace galay::kernel;
 namespace fs = std::filesystem;
 
 // CORS 处理器 - 处理 OPTIONS 预检请求
-Task<void> corsHandler(HttpConn& conn, HttpRequest req) {
+Task<void> cors_handler(HttpConn& conn, HttpRequest req) {
     std::cout << "CORS OPTIONS request received for: " << req.header().uri() << std::endl;
 
-    auto response = Http1_1ResponseBuilder::noContent()
+    auto response = Http1_1ResponseBuilder::no_content()
         .header("Access-Control-Allow-Origin", "*")
         .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         .header("Access-Control-Allow-Headers", "Content-Type, Range, If-None-Match, If-Match, If-Range, Cache-Control, Pragma")
@@ -31,8 +31,8 @@ Task<void> corsHandler(HttpConn& conn, HttpRequest req) {
         .header("Access-Control-Max-Age", "86400")
         .build();
 
-    auto writer = conn.getWriter();
-    auto send_result = co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    auto send_result = co_await writer.send_response(response);
     if (!send_result) {
         std::cout << "  -> Send error: " << send_result.error().message() << std::endl;
         co_return;
@@ -43,31 +43,31 @@ Task<void> corsHandler(HttpConn& conn, HttpRequest req) {
 }
 
 // 自定义文件处理器 - 添加 CORS 头
-Task<void> fileHandlerWithCORS(HttpConn& conn, HttpRequest req) {
+Task<void> file_handler_with_cors(HttpConn& conn, HttpRequest req) {
     // 获取请求的文件路径
     std::string uri = req.header().uri();
 
     // 移除 /files 前缀
     std::string filePath = "./files" + uri.substr(6);  // 去掉 "/files"
 
-    std::cout << "Request: " << httpMethodToString(req.header().method()) << " " << uri << std::endl;
+    std::cout << "Request: " << http_method_to_string(req.header().method()) << " " << uri << std::endl;
     std::cout << "File path: " << filePath << std::endl;
 
     // 打印请求头（用于调试）
-    std::string ifNoneMatchHeader = req.header().headerPairs().getValue("If-None-Match");
+    std::string ifNoneMatchHeader = req.header().header_pairs().get_value("If-None-Match");
     if (!ifNoneMatchHeader.empty()) {
         std::cout << "  If-None-Match: " << ifNoneMatchHeader << std::endl;
     }
 
     // 检查文件是否存在
     if (!fs::exists(filePath) || !fs::is_regular_file(filePath)) {
-        auto response = Http1_1ResponseBuilder::notFound()
+        auto response = Http1_1ResponseBuilder::not_found()
             .header("Access-Control-Allow-Origin", "*")
             .text("File not found")
             .build();
 
-        auto writer = conn.getWriter();
-        auto send_result = co_await writer.sendResponse(response);
+        auto writer = conn.get_writer();
+        auto send_result = co_await writer.send_response(response);
         if (!send_result) {
             std::cout << "  -> Send error: " << send_result.error().message() << std::endl;
             co_return;
@@ -84,7 +84,7 @@ Task<void> fileHandlerWithCORS(HttpConn& conn, HttpRequest req) {
     std::string etag = ETagGenerator::generate(filePath);
 
     // 检查 If-None-Match
-    std::string ifNoneMatch = req.header().headerPairs().getValue("If-None-Match");
+    std::string ifNoneMatch = req.header().header_pairs().get_value("If-None-Match");
     if (!ifNoneMatch.empty() && ETagGenerator::match(etag, ifNoneMatch)) {
         std::cout << "  -> 304 Not Modified (ETag match)" << std::endl;
 
@@ -95,8 +95,8 @@ Task<void> fileHandlerWithCORS(HttpConn& conn, HttpRequest req) {
             .header("ETag", etag)
             .build();
 
-        auto writer = conn.getWriter();
-        auto send_result = co_await writer.sendResponse(response);
+        auto writer = conn.get_writer();
+        auto send_result = co_await writer.send_response(response);
         if (!send_result) {
             std::cout << "  -> Send error: " << send_result.error().message() << std::endl;
             co_return;
@@ -107,13 +107,13 @@ Task<void> fileHandlerWithCORS(HttpConn& conn, HttpRequest req) {
     }
 
     // 检查 Range 请求
-    std::string rangeHeader = req.header().headerPairs().getValue("Range");
+    std::string rangeHeader = req.header().header_pairs().get_value("Range");
 
     if (!rangeHeader.empty()) {
         std::cout << "  Range: " << rangeHeader << std::endl;
 
         // 检查 If-Range
-        std::string ifRange = req.header().headerPairs().getValue("If-Range");
+        std::string ifRange = req.header().header_pairs().get_value("If-Range");
         if (!ifRange.empty() && !ETagGenerator::match(etag, ifRange)) {
             std::cout << "  -> If-Range mismatch, returning full file" << std::endl;
             rangeHeader.clear();  // 忽略 Range，返回完整文件
@@ -140,8 +140,8 @@ Task<void> fileHandlerWithCORS(HttpConn& conn, HttpRequest req) {
             .body(content)
             .build();
 
-        auto writer = conn.getWriter();
-        auto send_result = co_await writer.sendResponse(response);
+        auto writer = conn.get_writer();
+        auto send_result = co_await writer.send_response(response);
         if (!send_result) {
             std::cout << "  -> Send error: " << send_result.error().message() << std::endl;
             co_return;
@@ -151,7 +151,7 @@ Task<void> fileHandlerWithCORS(HttpConn& conn, HttpRequest req) {
         // 解析 Range
         auto rangeResult = HttpRangeParser::parse(rangeHeader, fileSize);
 
-        if (!rangeResult.isValid() || rangeResult.ranges.empty()) {
+        if (!rangeResult.is_valid() || rangeResult.ranges.empty()) {
             std::cout << "  -> 416 Range Not Satisfiable" << std::endl;
 
             auto response = Http1_1ResponseBuilder()
@@ -160,8 +160,8 @@ Task<void> fileHandlerWithCORS(HttpConn& conn, HttpRequest req) {
                 .header("Content-Range", "bytes */" + std::to_string(fileSize))
                 .build();
 
-            auto writer = conn.getWriter();
-            auto send_result = co_await writer.sendResponse(response);
+            auto writer = conn.get_writer();
+            auto send_result = co_await writer.send_response(response);
             if (!send_result) {
                 std::cout << "  -> Send error: " << send_result.error().message() << std::endl;
                 co_return;
@@ -188,13 +188,13 @@ Task<void> fileHandlerWithCORS(HttpConn& conn, HttpRequest req) {
             .header("Access-Control-Expose-Headers", "Content-Range, ETag, Content-Length, Accept-Ranges")
             .header("ETag", etag)
             .header("Accept-Ranges", "bytes")
-            .header("Content-Range", HttpRangeParser::makeContentRange(range, fileSize))
+            .header("Content-Range", HttpRangeParser::make_content_range(range, fileSize))
             .header("Content-Type", "application/octet-stream")
             .body(content)
             .build();
 
-        auto writer = conn.getWriter();
-        auto send_result = co_await writer.sendResponse(response);
+        auto writer = conn.get_writer();
+        auto send_result = co_await writer.send_response(response);
         if (!send_result) {
             std::cout << "  -> Send error: " << send_result.error().message() << std::endl;
             co_return;
@@ -242,10 +242,10 @@ int main(int argc, char* argv[]) {
         HttpRouter router;
 
         // 添加 CORS 预检请求处理（OPTIONS 方法）
-        router.addHandler<HttpMethod::OPTIONS>("/files/*", corsHandler);
+        router.add_handler<HttpMethod::OPTIONS>("/files/*", cors_handler);
 
         // 添加文件处理器（带 CORS 支持）
-        router.addHandler<HttpMethod::GET>("/files/*", fileHandlerWithCORS);
+        router.add_handler<HttpMethod::GET>("/files/*", file_handler_with_cors);
 
         // 创建并启动服务器
         HttpServer server(HttpServerBuilder()

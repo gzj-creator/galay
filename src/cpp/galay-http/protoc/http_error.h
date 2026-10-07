@@ -115,7 +115,7 @@ namespace galay::http
          * @brief 将错误码转换为 HTTP 状态码
          * @return 对应的 HttpStatusCode 枚举值
          */
-        HttpStatusCode toHttpStatusCode() const;
+        HttpStatusCode to_http_status_code() const;
 
     private:
         std::string m_extra_msg;   ///< 附加错误描述

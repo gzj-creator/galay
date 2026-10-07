@@ -19,8 +19,8 @@ static std::atomic<bool> g_done{false};
 static int g_batch_size = 0;
 static int g_sum = 0;
 
-Task<void> batchConsumer(galay::spsc::UnboundedChannel<int>* channel) {
-    auto batch = co_await channel->recvBatch(8);
+Task<void> batch_consumer(galay::spsc::UnboundedChannel<int>* channel) {
+    auto batch = co_await channel->recv_batch(8);
     if (batch) {
         g_batch_size = static_cast<int>(batch->size());
         for (int value : *batch) {
@@ -31,17 +31,17 @@ Task<void> batchConsumer(galay::spsc::UnboundedChannel<int>* channel) {
     co_return;
 }
 
-Task<void> batchProducer(galay::spsc::UnboundedChannel<int>* channel) {
+Task<void> batch_producer(galay::spsc::UnboundedChannel<int>* channel) {
     channel->send(1);
     channel->send(2);
     co_return;
 }
 
 int main() {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "[T26] missing IO scheduler\n";
         runtime.stop();
@@ -49,8 +49,8 @@ int main() {
     }
 
     galay::spsc::UnboundedChannel<int> channel{galay::spsc::WakeMode::Deferred};
-    scheduler->schedule(detail::TaskAccess::detachTask(batchConsumer(&channel)));
-    scheduler->schedule(detail::TaskAccess::detachTask(batchProducer(&channel)));
+    scheduler->schedule(detail::TaskAccess::detach_task(batch_consumer(&channel)));
+    scheduler->schedule(detail::TaskAccess::detach_task(batch_producer(&channel)));
 
     for (int i = 0; i < 40; ++i) {
         if (g_done.load(std::memory_order_acquire)) {

@@ -2,7 +2,7 @@
  * @file b4_h2c.cc
  * @brief HTTP/2 Cleartext (h2c) Echo 客户端压力测试
  * @details 高并发 H2c 客户端，利用 HTTP/2 多路复用在单连接上并发多个 stream
- *          使用 StreamManager 进行帧分发，每个流通过 stream->getFrame() 协程接收响应
+ *          使用 StreamManager 进行帧分发，每个流通过 stream->get_frame() 协程接收响应
  */
 
 #include "../common/benchmark_environment.h"
@@ -35,10 +35,10 @@ struct ActiveClientGuard {
     ~ActiveClientGuard() { active_clients.fetch_sub(1); }
 };
 
-Task<void> handleStream(Http2Stream::ptr stream) {
+Task<void> handle_stream(Http2Stream::ptr stream) {
     bool finished = false;
     while (!finished) {
-        auto batch_result = co_await stream->getFrames(16);
+        auto batch_result = co_await stream->get_frames(16);
         if (!batch_result) {
             fail_count++;
             co_return;
@@ -49,7 +49,7 @@ Task<void> handleStream(Http2Stream::ptr stream) {
                 fail_count++;
                 co_return;
             }
-            if ((frame->isHeaders() || frame->isData()) && frame->isEndStream()) {
+            if ((frame->is_headers() || frame->is_data()) && frame->is_end_stream()) {
                 finished = true;
                 break;
             }
@@ -74,7 +74,7 @@ Task<void> handleStream(Http2Stream::ptr stream) {
 /**
  * @brief 单个客户端协程 - 使用 HTTP/2 多路复用
  */
-Task<void> runClient(std::shared_ptr<H2cClient<>> client,
+Task<void> run_client(std::shared_ptr<H2cClient<>> client,
                      int client_id,
                      const std::string& host,
                      uint16_t port,
@@ -98,7 +98,7 @@ Task<void> runClient(std::shared_ptr<H2cClient<>> client,
     if (!upgrade_result) {
         int idx = upgrade_failures.fetch_add(1);
         if (idx < 5) {
-            std::cerr << "[upgrade-fail] " << upgrade_result.error().toString() << "\n";
+            std::cerr << "[upgrade-fail] " << upgrade_result.error().to_string() << "\n";
         }
         fail_count += requests_per_client;
         co_await client->shutdown();
@@ -107,21 +107,21 @@ Task<void> runClient(std::shared_ptr<H2cClient<>> client,
 
     connected_clients++;
 
-    auto* mgr = client->getConn()->streamManager();
+    auto* mgr = client->get_conn()->stream_manager();
 
     // 发送请求
     for (int i = 0; i < requests_per_client; i++) {
-        auto stream = mgr->allocateStream();
+        auto stream = mgr->allocate_stream();
 
-        stream->sendHeaders(
+        stream->send_headers(
             Http2Headers().method("POST").scheme("http")
                 .authority(host + ":" + std::to_string(port)).path("/echo")
-                .contentType("text/plain").contentLength(kEchoPayload.size()),
+                .content_type("text/plain").content_length(kEchoPayload.size()),
             false, true);
-        stream->sendData(kEchoPayload, true);
+        stream->send_data(kEchoPayload, true);
         total_requests++;
 
-        co_await handleStream(stream);
+        co_await handle_stream(stream);
     }
 
     co_await client->shutdown();
@@ -131,7 +131,7 @@ Task<void> runClient(std::shared_ptr<H2cClient<>> client,
 /**
  * @brief 运行压测
  */
-void runBenchmark(const std::string& host,
+void run_benchmark(const std::string& host,
                   uint16_t port,
                   int concurrent_clients,
                   int requests_per_client,
@@ -165,7 +165,7 @@ void runBenchmark(const std::string& host,
     auto start_time = std::chrono::steady_clock::now();
 
     // 创建 Runtime
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_schedulers).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(io_schedulers).parallel_scheduler_count(0).build();
     runtime.start();
 
     // 客户端对象统一延迟释放，避免 kqueue 队列中残留事件访问已销毁 controller。
@@ -174,10 +174,10 @@ void runBenchmark(const std::string& host,
 
     // 启动所有客户端（负载均衡到不同的调度器）
     for (int i = 0; i < concurrent_clients; i++) {
-        auto client = std::make_shared<H2cClient<>>(H2cClientBuilder().buildConfig());
+        auto client = std::make_shared<H2cClient<>>(H2cClientBuilder().build_config());
         client_pool.push_back(client);
-        auto* scheduler = runtime.getNextIOScheduler();
-        scheduleTask(scheduler, runClient(std::move(client), i, host, port, requests_per_client));
+        auto* scheduler = runtime.get_next_io_scheduler();
+        schedule_task(scheduler, run_client(std::move(client), i, host, port, requests_per_client));
     }
 
     // 等待所有客户端完成
@@ -255,7 +255,7 @@ void runBenchmark(const std::string& host,
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -281,7 +281,7 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================\n";
 
     try {
-        runBenchmark(host, port, concurrent_clients, requests_per_client, max_wait_seconds, io_schedulers);
+        run_benchmark(host, port, concurrent_clients, requests_per_client, max_wait_seconds, io_schedulers);
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
         return 1;

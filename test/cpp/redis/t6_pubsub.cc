@@ -26,7 +26,7 @@ namespace
         std::cerr << "[FAILED] " << msg << std::endl;
     }
 
-    bool expectSingleStringReply(const std::expected<std::optional<std::vector<RedisValue>>, RedisError>& result,
+    bool expect_single_string_reply(const std::expected<std::optional<std::vector<RedisValue>>, RedisError>& result,
                                  std::string* out)
     {
         if (!result) {
@@ -38,15 +38,15 @@ namespace
             return false;
         }
         const auto& first = result.value()->front();
-        if (!first.isString() && !first.isStatus()) {
+        if (!first.is_string() && !first.is_status()) {
             fail("Reply is not string/status");
             return false;
         }
-        *out = first.isString() ? first.toString() : first.toStatus();
+        *out = first.is_string() ? first.to_string() : first.to_status();
         return true;
     }
 
-    bool expectSingleStringResult(const RedisCommandResult& result, std::string* out)
+    bool expect_single_string_result(const RedisCommandResult& result, std::string* out)
     {
         if (!result) {
             fail("Command failed: " + std::string(result.error().message()));
@@ -57,15 +57,15 @@ namespace
             return false;
         }
         const auto& first = result.value().front();
-        if (!first.isString() && !first.isStatus()) {
+        if (!first.is_string() && !first.is_status()) {
             fail("Reply is not string/status");
             return false;
         }
-        *out = first.isString() ? first.toString() : first.toStatus();
+        *out = first.is_string() ? first.to_string() : first.to_status();
         return true;
     }
 
-    bool expectAwaitedSingleStringResult(auto&& result, std::string* out)
+    bool expect_awaited_single_string_result(auto&& result, std::string* out)
     {
         if (!result) {
             fail("Command failed: " + std::string(result.error().message()));
@@ -75,11 +75,11 @@ namespace
             fail("Command failed: " + std::string(result.value().error().message()));
             return false;
         }
-        return expectSingleStringResult(result.value(), out);
+        return expect_single_string_result(result.value(), out);
     }
 }
 
-Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
+Task<void> run_topology_and_pub_sub_tests(IOScheduler* scheduler)
 {
     auto subscriber = RedisClientBuilder().scheduler(scheduler).build();
     auto publisher = RedisClientBuilder().scheduler(scheduler).build();
@@ -120,21 +120,21 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
             break;
         }
 
-        const auto msg_array = pubsub_message.value()->front().toArray();
+        const auto msg_array = pubsub_message.value()->front().to_array();
         if (msg_array.size() < 3) {
             fail("Pubsub message payload format invalid");
             break;
         }
 
-        if (!msg_array[0].isString() || msg_array[0].toString() != "message") {
+        if (!msg_array[0].is_string() || msg_array[0].to_string() != "message") {
             fail("Pubsub message type mismatch");
             break;
         }
-        if (!msg_array[1].isString() || msg_array[1].toString() != channel) {
+        if (!msg_array[1].is_string() || msg_array[1].to_string() != channel) {
             fail("Pubsub channel mismatch");
             break;
         }
-        if (!msg_array[2].isString() || msg_array[2].toString() != message) {
+        if (!msg_array[2].is_string() || msg_array[2].to_string() != message) {
             fail("Pubsub payload mismatch");
             break;
         }
@@ -145,13 +145,13 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
             node_addr.host = "127.0.0.1";
             node_addr.port = 6379;
 
-            auto master_connect = co_await ms_client.connectMaster(node_addr);
+            auto master_connect = co_await ms_client.connect_master(node_addr);
             if (!master_connect) {
                 fail("Master connect failed: " + std::string(master_connect.error().message()));
                 break;
             }
 
-            auto replica_connect = co_await ms_client.addReplica(node_addr);
+            auto replica_connect = co_await ms_client.add_replica(node_addr);
             if (!replica_connect) {
                 fail("Replica connect failed: " + std::string(replica_connect.error().message()));
                 break;
@@ -168,7 +168,7 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
 
             auto read_result = co_await ms_client.execute("GET", {key}, true, false);
             std::string read_value;
-            if (!expectAwaitedSingleStringResult(read_result, &read_value)) {
+            if (!expect_awaited_single_string_result(read_result, &read_value)) {
                 break;
             }
             if (read_value != value) {
@@ -184,12 +184,12 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
 
         {
             auto ms_auto = RedisMasterSlaveClientBuilder().scheduler(scheduler).build();
-            ms_auto.setAutoRetryAttempts(3);
+            ms_auto.set_auto_retry_attempts(3);
             RedisNodeAddress node_addr;
             node_addr.host = "127.0.0.1";
             node_addr.port = 6379;
 
-            auto master_connect = co_await ms_auto.connectMaster(node_addr);
+            auto master_connect = co_await ms_auto.connect_master(node_addr);
             if (!master_connect) {
                 fail("Master connect (auto) failed: " + std::string(master_connect.error().message()));
                 break;
@@ -203,7 +203,7 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
 
             auto read_auto = co_await ms_auto.execute("GET", {"galay:test:auto:ms"}, true);
             std::string read_auto_value;
-            if (!expectAwaitedSingleStringResult(read_auto, &read_auto_value)) {
+            if (!expect_awaited_single_string_result(read_auto, &read_auto_value)) {
                 break;
             }
             if (read_auto_value != "ok") {
@@ -211,8 +211,8 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
                 break;
             }
 
-            // 在非 Sentinel 环境下，refreshFromSentinel 允许失败，但不能崩溃
-            auto sentinel_refresh = co_await ms_auto.refreshFromSentinel();
+            // 在非 Sentinel 环境下，refresh_from_sentinel 允许失败，但不能崩溃
+            auto sentinel_refresh = co_await ms_auto.refresh_from_sentinel();
             if (sentinel_refresh && sentinel_refresh.value() && sentinel_refresh.value().value().empty()) {
                 fail("refreshFromSentinel unexpected empty success");
                 break;
@@ -236,20 +236,20 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
             node2.slot_start = 8192;
             node2.slot_end = 16383;
 
-            auto node1_connect = co_await cluster_client.addNode(node1);
+            auto node1_connect = co_await cluster_client.add_node(node1);
             if (!node1_connect) {
                 fail("Cluster node1 connect failed: " + std::string(node1_connect.error().message()));
                 break;
             }
 
-            auto node2_connect = co_await cluster_client.addNode(node2);
+            auto node2_connect = co_await cluster_client.add_node(node2);
             if (!node2_connect) {
                 fail("Cluster node2 connect failed: " + std::string(node2_connect.error().message()));
                 break;
             }
 
-            const auto slot_a = cluster_client.keySlot("{user100}:name");
-            const auto slot_b = cluster_client.keySlot("{user100}:email");
+            const auto slot_a = cluster_client.key_slot("{user100}:name");
+            const auto slot_b = cluster_client.key_slot("{user100}:email");
             if (slot_a != slot_b) {
                 fail("Cluster hashtag slot mismatch");
                 break;
@@ -272,7 +272,7 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
                                                                cluster_key,
                                                                false);
             std::string get_value;
-            if (!expectAwaitedSingleStringResult(cluster_get, &get_value)) {
+            if (!expect_awaited_single_string_result(cluster_get, &get_value)) {
                 break;
             }
             if (get_value != cluster_value) {
@@ -294,7 +294,7 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
                                                                     "{u200}:name",
                                                                     true);
             std::string auto_get_value;
-            if (!expectAwaitedSingleStringResult(cluster_auto_get, &auto_get_value)) {
+            if (!expect_awaited_single_string_result(cluster_auto_get, &auto_get_value)) {
                 break;
             }
             if (auto_get_value != "auto-cluster") {
@@ -302,7 +302,7 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
                 break;
             }
 
-            for (size_t i = 0; i < cluster_client.nodeCount(); ++i) {
+            for (size_t i = 0; i < cluster_client.node_count(); ++i) {
                 auto cluster_node = cluster_client.node(i);
                 if (cluster_node.has_value()) {
                     co_await cluster_node->get().close();
@@ -324,7 +324,7 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
 
 int main()
 {
-    if (const int skip_code = redis_test::requireIntegrationEnabledOrSkip("redis.t11.pubsub");
+    if (const int skip_code = redis_test::require_integration_enabled_or_skip("redis.t11.pubsub");
         skip_code != 0) {
         return skip_code;
     }
@@ -334,7 +334,7 @@ int main()
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "[FAILED] Failed to get scheduler" << std::endl;
         runtime.stop();
@@ -346,7 +346,7 @@ int main()
         g_done = false;
     }
 
-    scheduleTask(scheduler, runTopologyAndPubSubTests(scheduler));
+    schedule_task(scheduler, run_topology_and_pub_sub_tests(scheduler));
 
     bool finished = false;
     {

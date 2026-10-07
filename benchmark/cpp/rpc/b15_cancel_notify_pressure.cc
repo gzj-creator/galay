@@ -15,7 +15,7 @@ using namespace galay::rpc;
 
 namespace {
 
-std::expected<size_t, const char*> parseSize(const char* text)
+std::expected<size_t, const char*> parse_size(const char* text)
 {
     const size_t length = std::char_traits<char>::length(text);
     const char* end = text + length;
@@ -31,13 +31,13 @@ std::expected<size_t, const char*> parseSize(const char* text)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     size_t requests = 10000;
     if (argc > 1) {
-        auto parsed = parseSize(argv[1]);
+        auto parsed = parse_size(argv[1]);
         if (!parsed.has_value()) {
             std::cerr << parsed.error() << "\n";
             return 1;
@@ -61,7 +61,7 @@ int main(int argc, char** argv)
         auto pending = std::make_shared<RpcChannelPendingCall>();
         pending->request_id = static_cast<uint32_t>(i + 1);
         auto token = sources[i].token();
-        auto registration = token.registerCallback([locked = pending.get()] {
+        auto registration = token.register_callback([locked = pending.get()] {
             if (locked->completed.exchange(true, std::memory_order_acq_rel)) {
                 return;
             }

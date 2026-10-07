@@ -22,7 +22,7 @@ using galay::kernel::Task;
 namespace
 {
 
-std::string nowSuffix()
+std::string now_suffix()
 {
     const auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
     return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(now).count());
@@ -34,7 +34,7 @@ int fail(const std::string& message)
     return 1;
 }
 
-Task<void> runSmoke(IOScheduler* scheduler,
+Task<void> run_smoke(IOScheduler* scheduler,
                     std::string endpoint,
                     std::atomic<bool>* done,
                     int* exit_code)
@@ -62,8 +62,8 @@ Task<void> runSmoke(IOScheduler* scheduler,
     }
     std::cout << "[OK] connect\n";
 
-    const std::string key = "/galay-etcd/async-smoke/" + nowSuffix();
-    const std::string value = "v-" + nowSuffix();
+    const std::string key = "/galay-etcd/async-smoke/" + now_suffix();
+    const std::string value = "v-" + now_suffix();
     auto watch_state = std::make_shared<ThreadWatchState>();
 
     auto watch_started = client.watch(
@@ -112,7 +112,7 @@ Task<void> runSmoke(IOScheduler* scheduler,
         co_return;
     }
 
-    auto lease = co_await client.grantLease(3);
+    auto lease = co_await client.grant_lease(3);
     if (!lease.has_value()) {
         finish(fail("grant lease failed: " + lease.error().message()));
         co_return;
@@ -164,17 +164,17 @@ Task<void> runSmoke(IOScheduler* scheduler,
 
 int main(int argc, char** argv)
 {
-    if (const int skip_code = etcd_test::requireIntegrationEnabledOrSkip("etcd.smoke");
+    if (const int skip_code = etcd_test::require_integration_enabled_or_skip("etcd.smoke");
         skip_code != 0) {
         return skip_code;
     }
 
     const std::string endpoint = argc > 1 ? argv[1] : "http://127.0.0.1:2379";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         return fail("failed to get io scheduler");
@@ -182,7 +182,7 @@ int main(int argc, char** argv)
 
     std::atomic<bool> done{false};
     int exit_code = 1;
-    if (!galay::kernel::scheduleTask(scheduler, runSmoke(scheduler, endpoint, &done, &exit_code))) {
+    if (!galay::kernel::schedule_task(scheduler, run_smoke(scheduler, endpoint, &done, &exit_code))) {
         runtime.stop();
         return fail("failed to schedule async smoke task");
     }

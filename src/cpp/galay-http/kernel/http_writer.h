@@ -83,7 +83,7 @@ inline constexpr bool is_http_writer_ssl_socket_v = is_http_writer_ssl_socket<T>
 
 namespace detail {
 
-inline HttpError makeSendHttpError(const IOError& io_error) {
+inline HttpError make_send_http_error(const IOError& io_error) {
     if (IOError::contains(io_error.code(), kTimeout)) {
         return HttpError(kSendTimeOut, io_error.message());
     }
@@ -108,61 +108,61 @@ struct HttpTcpWriteMachine {
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (m_writer->getRemainingBytes() == 0) {
+        if (m_writer->get_remaining_bytes() == 0) {
             m_result = true;
             return MachineAction<result_type>::complete(true);
         }
 
         if constexpr (UseWritev) {
-            const auto* iov_data = m_writer->getIovecsData();
-            const size_t iov_count = m_writer->getIovecsCount();
+            const auto* iov_data = m_writer->get_iovecs_data();
+            const size_t iov_count = m_writer->get_iovecs_count();
             if (iov_data == nullptr || iov_count == 0) {
-                failWithMessage("No remaining iovec to write");
+                fail_with_message("No remaining iovec to write");
                 return MachineAction<result_type>::complete(std::move(*m_result));
             }
-            return MachineAction<result_type>::waitWritev(iov_data, iov_count);
+            return MachineAction<result_type>::wait_writev(iov_data, iov_count);
         } else {
-            return MachineAction<result_type>::waitWrite(
-                m_writer->bufferData() + m_writer->sentBytes(),
-                m_writer->getRemainingBytes());
+            return MachineAction<result_type>::wait_write(
+                m_writer->buffer_data() + m_writer->sent_bytes(),
+                m_writer->get_remaining_bytes());
         }
     }
 
-    void onRead(std::expected<size_t, IOError>) {}
+    void on_read(std::expected<size_t, IOError>) {}
 
-    void onWrite(std::expected<size_t, IOError> result) {
+    void on_write(std::expected<size_t, IOError> result) {
         if (!result) {
-            failWithIo(result.error(), UseWritev ? "writev" : "send");
+            fail_with_io(result.error(), UseWritev ? "writev" : "send");
             return;
         }
 
         const size_t written = result.value();
         if (written > 0) {
             if constexpr (UseWritev) {
-                m_writer->updateRemainingWritev(written);
+                m_writer->update_remaining_writev(written);
             } else {
-                m_writer->updateRemaining(written);
+                m_writer->update_remaining(written);
             }
         }
 
-        if (m_writer->getRemainingBytes() == 0) {
+        if (m_writer->get_remaining_bytes() == 0) {
             m_result = true;
             return;
         }
 
         if constexpr (UseWritev) {
-            if (m_writer->getIovecsData() == nullptr || m_writer->getIovecsCount() == 0) {
-                failWithMessage("No remaining iovec to write");
+            if (m_writer->get_iovecs_data() == nullptr || m_writer->get_iovecs_count() == 0) {
+                fail_with_message("No remaining iovec to write");
             }
         }
     }
 
 private:
-    void failWithIo(const IOError& io_error, const char*) {
-        m_result = std::unexpected(makeSendHttpError(io_error));
+    void fail_with_io(const IOError& io_error, const char*) {
+        m_result = std::unexpected(make_send_http_error(io_error));
     }
 
-    void failWithMessage(const char* message) {
+    void fail_with_message(const char* message) {
         m_result = std::unexpected(HttpError(kSendError, message));
     }
 
@@ -188,35 +188,35 @@ struct HttpSslSendMachine {
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (m_writer->getRemainingBytes() == 0) {
+        if (m_writer->get_remaining_bytes() == 0) {
             m_result = true;
             return galay::ssl::SslMachineAction<result_type>::complete(true);
         }
 
         return galay::ssl::SslMachineAction<result_type>::send(
-            m_writer->bufferData() + m_writer->sentBytes(),
-            m_writer->getRemainingBytes());
+            m_writer->buffer_data() + m_writer->sent_bytes(),
+            m_writer->get_remaining_bytes());
     }
 
-    void onHandshake(std::expected<void, galay::ssl::SslError>) {}
-    void onRecv(std::expected<Bytes, galay::ssl::SslError>) {}
-    void onShutdown(std::expected<void, galay::ssl::SslError>) {}
+    void on_handshake(std::expected<void, galay::ssl::SslError>) {}
+    void on_recv(std::expected<Bytes, galay::ssl::SslError>) {}
+    void on_shutdown(std::expected<void, galay::ssl::SslError>) {}
 
-    void onSend(std::expected<size_t, galay::ssl::SslError> result) {
+    void on_send(std::expected<size_t, galay::ssl::SslError> result) {
         if (!result) {
-            m_writer->updateRemaining(m_writer->getRemainingBytes());
+            m_writer->update_remaining(m_writer->get_remaining_bytes());
             m_result = std::unexpected(HttpError(result.error()));
             return;
         }
 
         if (result.value() == 0) {
-            m_writer->updateRemaining(m_writer->getRemainingBytes());
+            m_writer->update_remaining(m_writer->get_remaining_bytes());
             m_result = std::unexpected(HttpError(kSendError, "SSL send returned zero bytes"));
             return;
         }
 
-        m_writer->updateRemaining(result.value());
-        if (m_writer->getRemainingBytes() == 0) {
+        m_writer->update_remaining(result.value());
+        if (m_writer->get_remaining_bytes() == 0) {
             m_result = true;
         }
     }
@@ -237,11 +237,11 @@ private:
  *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
  */
 template<typename SocketType, bool UseWritev>
-auto buildSendAwaitable(SocketType& socket, HttpWriterImpl<SocketType>& writer) {
+auto build_send_awaitable(SocketType& socket, HttpWriterImpl<SocketType>& writer) {
     using ResultType = std::expected<bool, HttpError>;
     if constexpr (is_http_writer_ssl_socket_v<SocketType>) {
 #ifdef GALAY_SSL_FEATURE_ENABLED
-        return galay::ssl::SslAwaitableBuilder<ResultType>::fromStateMachine(
+        return galay::ssl::SslAwaitableBuilder<ResultType>::from_state_machine(
                    socket.controller(),
                    &socket,
                    HttpSslSendMachine<SocketType>(&writer))
@@ -250,7 +250,7 @@ auto buildSendAwaitable(SocketType& socket, HttpWriterImpl<SocketType>& writer) 
         static_assert(!sizeof(SocketType), "SSL support is disabled");
 #endif
     } else {
-        return AwaitableBuilder<ResultType>::fromStateMachine(
+        return AwaitableBuilder<ResultType>::from_state_machine(
                    socket.controller(),
                    HttpTcpWriteMachine<SocketType, UseWritev>(&writer))
             .build();
@@ -293,31 +293,31 @@ public:
      *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      * @note 启动新发送时会复制响应体到 writer，不转移 response 的响应体
      */
-    auto sendResponse(HttpResponse& response) {
+    auto send_response(HttpResponse& response) {
         if (m_remaining_bytes == 0) {
-            logResponseStatus(response.header().code());
+            log_response_status(response.header().code());
 
             if constexpr (is_tcp_socket_v<SocketType>) {
-                m_body_buffer = response.bodyStr();
+                m_body_buffer = response.body_str();
 
-                if (!response.header().isChunked()) {
-                    ensureContentLength(response.header().headerPairs(), m_body_buffer.size());
+                if (!response.header().is_chunked()) {
+                    ensure_content_length(response.header().header_pairs(), m_body_buffer.size());
                 }
 
-                m_buffer = response.header().toString();
-                prepareTcpSendLayout();
+                m_buffer = response.header().to_string();
+                prepare_tcp_send_layout();
             } else {
-                if (!response.header().isChunked()) {
-                    ensureContentLength(response.header().headerPairs(), response.bodyStr().size());
+                if (!response.header().is_chunked()) {
+                    ensure_content_length(response.header().header_pairs(), response.body_str().size());
                 }
-                prepareSslSendLayout(response.header().toString(), response.bodyStr());
+                prepare_ssl_send_layout(response.header().to_string(), response.body_str());
             }
         }
 
         if constexpr (is_tcp_socket_v<SocketType>) {
-            return withConfiguredTimeout(makeWritevAwaitable());
+            return with_configured_timeout(make_writev_awaitable());
         } else {
-            return withConfiguredTimeout(makeSendAwaitable());
+            return with_configured_timeout(make_send_awaitable());
         }
     }
 
@@ -328,23 +328,23 @@ public:
      *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      * @note 启动新发送时，待发送数据会在返回异步操作前保存到 writer，不持有 response 引用
      */
-    auto sendResponse(HttpResponse&& response) {
+    auto send_response(HttpResponse&& response) {
         if constexpr (is_tcp_socket_v<SocketType>) {
             if (m_remaining_bytes == 0) {
-                logResponseStatus(response.header().code());
-                m_body_buffer = response.getBodyStr();
+                log_response_status(response.header().code());
+                m_body_buffer = response.get_body_str();
 
-                if (!response.header().isChunked()) {
-                    ensureContentLength(response.header().headerPairs(), m_body_buffer.size());
+                if (!response.header().is_chunked()) {
+                    ensure_content_length(response.header().header_pairs(), m_body_buffer.size());
                 }
 
-                m_buffer = response.header().toString();
-                prepareTcpSendLayout();
+                m_buffer = response.header().to_string();
+                prepare_tcp_send_layout();
             }
 
-            return withConfiguredTimeout(makeWritevAwaitable());
+            return with_configured_timeout(make_writev_awaitable());
         } else {
-            return sendResponse(response);
+            return send_response(response);
         }
     }
 
@@ -354,29 +354,29 @@ public:
      * @return 可 co_await 的异步操作；co_await 结果为
      *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
-    auto sendRequest(HttpRequest& request) {
+    auto send_request(HttpRequest& request) {
         if (m_remaining_bytes == 0) {
             if constexpr (is_tcp_socket_v<SocketType>) {
-                m_body_buffer = request.bodyStr();
+                m_body_buffer = request.body_str();
 
-                if (!request.header().isChunked()) {
-                    ensureContentLength(request.header().headerPairs(), m_body_buffer.size());
+                if (!request.header().is_chunked()) {
+                    ensure_content_length(request.header().header_pairs(), m_body_buffer.size());
                 }
 
-                m_buffer = request.header().toString();
-                prepareTcpSendLayout();
+                m_buffer = request.header().to_string();
+                prepare_tcp_send_layout();
             } else {
-                if (!request.header().isChunked()) {
-                    ensureContentLength(request.header().headerPairs(), request.bodyStr().size());
+                if (!request.header().is_chunked()) {
+                    ensure_content_length(request.header().header_pairs(), request.body_str().size());
                 }
-                prepareSslSendLayout(request.header().toString(), request.bodyStr());
+                prepare_ssl_send_layout(request.header().to_string(), request.body_str());
             }
         }
 
         if constexpr (is_tcp_socket_v<SocketType>) {
-            return withConfiguredTimeout(makeWritevAwaitable());
+            return with_configured_timeout(make_writev_awaitable());
         } else {
-            return withConfiguredTimeout(makeSendAwaitable());
+            return with_configured_timeout(make_send_awaitable());
         }
     }
 
@@ -387,22 +387,22 @@ public:
      *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      * @note 启动新发送时，待发送数据会在返回异步操作前保存到 writer，不持有 request 引用
      */
-    auto sendRequest(HttpRequest&& request) {
+    auto send_request(HttpRequest&& request) {
         if constexpr (is_tcp_socket_v<SocketType>) {
             if (m_remaining_bytes == 0) {
-                m_body_buffer = request.getBodyStr();
+                m_body_buffer = request.get_body_str();
 
-                if (!request.header().isChunked()) {
-                    ensureContentLength(request.header().headerPairs(), m_body_buffer.size());
+                if (!request.header().is_chunked()) {
+                    ensure_content_length(request.header().header_pairs(), m_body_buffer.size());
                 }
 
-                m_buffer = request.header().toString();
-                prepareTcpSendLayout();
+                m_buffer = request.header().to_string();
+                prepare_tcp_send_layout();
             }
 
-            return withConfiguredTimeout(makeWritevAwaitable());
+            return with_configured_timeout(make_writev_awaitable());
         } else {
-            return sendRequest(request);
+            return send_request(request);
         }
     }
 
@@ -413,14 +413,14 @@ public:
      *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      * @note 启动新发送时，待发送数据会在返回异步操作前保存到 writer，不持有 header 引用
      */
-    auto sendHeader(HttpResponseHeader& header) {
+    auto send_header(HttpResponseHeader& header) {
         if (m_remaining_bytes == 0) {
-            logResponseStatus(header.code());
-            m_buffer = header.toString();
+            log_response_status(header.code());
+            m_buffer = header.to_string();
             m_remaining_bytes = m_buffer.size();
         }
 
-        return withConfiguredTimeout(makeSendAwaitable());
+        return with_configured_timeout(make_send_awaitable());
     }
 
     /**
@@ -429,8 +429,8 @@ public:
      * @return 可 co_await 的异步操作；co_await 结果为
      *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
-    auto sendHeader(HttpResponseHeader&& header) {
-        return sendHeader(header);
+    auto send_header(HttpResponseHeader&& header) {
+        return send_header(header);
     }
 
     /**
@@ -440,13 +440,13 @@ public:
      *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      * @note 启动新发送时，待发送数据会在返回异步操作前保存到 writer，不持有 header 引用
      */
-    auto sendHeader(HttpRequestHeader& header) {
+    auto send_header(HttpRequestHeader& header) {
         if (m_remaining_bytes == 0) {
-            m_buffer = header.toString();
+            m_buffer = header.to_string();
             m_remaining_bytes = m_buffer.size();
         }
 
-        return withConfiguredTimeout(makeSendAwaitable());
+        return with_configured_timeout(make_send_awaitable());
     }
 
     /**
@@ -455,8 +455,8 @@ public:
      * @return 可 co_await 的异步操作；co_await 结果为
      *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
-    auto sendHeader(HttpRequestHeader&& header) {
-        return sendHeader(header);
+    auto send_header(HttpRequestHeader&& header) {
+        return send_header(header);
     }
 
     /**
@@ -467,12 +467,12 @@ public:
      */
     auto send(std::string&& data) {
         if (m_remaining_bytes == 0) {
-            clearExternalBuffer();
+            clear_external_buffer();
             m_buffer = std::move(data);
             m_remaining_bytes = m_buffer.size();
         }
 
-        return withConfiguredTimeout(makeSendAwaitable());
+        return with_configured_timeout(make_send_awaitable());
     }
 
     /**
@@ -484,12 +484,12 @@ public:
      */
     auto send(const char* buffer, size_t length) {
         if (m_remaining_bytes == 0) {
-            clearExternalBuffer();
+            clear_external_buffer();
             m_buffer.assign(buffer, length);
             m_remaining_bytes = m_buffer.size();
         }
 
-        return withConfiguredTimeout(makeSendAwaitable());
+        return with_configured_timeout(make_send_awaitable());
     }
 
     /**
@@ -500,7 +500,7 @@ public:
      * @note 调用方必须保证 data 对应的底层存储在 await 完成前保持有效
      * @note 该接口适用于静态响应或连接级缓存响应，避免重复复制到 writer 内部缓冲区
      */
-    auto sendView(std::string_view data) {
+    auto send_view(std::string_view data) {
         if (m_remaining_bytes == 0) {
             m_buffer.clear();
             m_body_buffer.clear();
@@ -510,7 +510,7 @@ public:
             m_remaining_bytes = data.size();
         }
 
-        return withConfiguredTimeout(makeSendAwaitable());
+        return with_configured_timeout(make_send_awaitable());
     }
 
     /**
@@ -520,88 +520,88 @@ public:
      * @return 可 co_await 的异步操作；co_await 结果为
      *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
-    auto sendChunk(const std::string& data, bool is_last = false) {
+    auto send_chunk(const std::string& data, bool is_last = false) {
         if (m_remaining_bytes == 0) {
-            clearExternalBuffer();
-            m_buffer = Chunk::toChunk(data, is_last);
+            clear_external_buffer();
+            m_buffer = Chunk::to_chunk(data, is_last);
             m_remaining_bytes = m_buffer.size();
         }
 
-        return withConfiguredTimeout(makeSendAwaitable());
+        return with_configured_timeout(make_send_awaitable());
     }
 
-    void updateRemaining(size_t bytes_sent) {
+    void update_remaining(size_t bytes_sent) {
         if (bytes_sent >= m_remaining_bytes) {
             m_remaining_bytes = 0;
             m_buffer.clear();
             m_body_buffer.clear();
-            clearExternalBuffer();
+            clear_external_buffer();
             m_writev_cursor.clear();
         } else {
             m_remaining_bytes -= bytes_sent;
         }
     }
 
-    void updateRemainingWritev(size_t bytes_sent) {
+    void update_remaining_writev(size_t bytes_sent) {
         const size_t advanced = m_writev_cursor.advance(bytes_sent);
         if (advanced >= m_remaining_bytes) {
             m_remaining_bytes = 0;
             m_buffer.clear();
             m_body_buffer.clear();
-            clearExternalBuffer();
+            clear_external_buffer();
             m_writev_cursor.clear();
         } else {
             m_remaining_bytes -= advanced;
         }
     }
 
-    size_t getRemainingBytes() const {
+    size_t get_remaining_bytes() const {
         return m_remaining_bytes;
     }
 
-    const char* bufferData() const {
+    const char* buffer_data() const {
         return m_external_buffer != nullptr ? m_external_buffer : m_buffer.data();
     }
 
-    size_t sentBytes() const {
-        return currentBufferSize() - m_remaining_bytes;
+    size_t sent_bytes() const {
+        return current_buffer_size() - m_remaining_bytes;
     }
 
-    std::vector<iovec> getIovecsCopy() const {
+    std::vector<iovec> get_iovecs_copy() const {
         std::vector<iovec> out;
-        m_writev_cursor.exportWindow(out);
+        m_writev_cursor.export_window(out);
         return out;
     }
 
-    void copyIovecsTo(std::vector<iovec>& out) const {
-        m_writev_cursor.exportWindow(out);
+    void copy_iovecs_to(std::vector<iovec>& out) const {
+        m_writev_cursor.export_window(out);
     }
 
-    const iovec* getIovecsData() const {
+    const iovec* get_iovecs_data() const {
         return m_writev_cursor.data();
     }
 
-    size_t getIovecsCount() const {
+    size_t get_iovecs_count() const {
         return m_writev_cursor.count();
     }
 
 private:
     template<typename Awaitable>
-    auto withConfiguredTimeout(Awaitable&& awaitable) {
+    auto with_configured_timeout(Awaitable&& awaitable) {
         return std::forward<Awaitable>(awaitable).timeout(
-            std::chrono::milliseconds(m_setting.getSendTimeout()));
+            std::chrono::milliseconds(m_setting.get_send_timeout()));
     }
 
-    auto makeSendAwaitable() {
-        return detail::buildSendAwaitable<SocketType, false>(*m_socket, *this);
+    auto make_send_awaitable() {
+        return detail::build_send_awaitable<SocketType, false>(*m_socket, *this);
     }
 
-    auto makeWritevAwaitable() {
-        return detail::buildSendAwaitable<SocketType, true>(*m_socket, *this);
+    auto make_writev_awaitable() {
+        return detail::build_send_awaitable<SocketType, true>(*m_socket, *this);
     }
 
-    static void ensureContentLength(HeaderPair& headers, size_t size) {
-        const HttpErrorCode result = headers.addHeaderPairIfNotExist(
+    static void ensure_content_length(HeaderPair& headers, size_t size) {
+        const HttpErrorCode result = headers.add_header_pair_if_not_exist(
             "Content-Length",
             std::to_string(size));
         if (result != kNoError && result != kHeaderPairExist) {
@@ -609,9 +609,9 @@ private:
         }
     }
 
-    void prepareTcpSendLayout() {
+    void prepare_tcp_send_layout() {
         const size_t total_size = m_buffer.size() + m_body_buffer.size();
-        const size_t coalesce_threshold = m_setting.getWritevCoalesceThreshold();
+        const size_t coalesce_threshold = m_setting.get_writev_coalesce_threshold();
 
         if (coalesce_threshold > 0 && total_size <= coalesce_threshold) {
             if (!m_body_buffer.empty()) {
@@ -625,7 +625,7 @@ private:
             size_t iov_count = 0;
             iovecs[iov_count++] = {const_cast<char*>(m_buffer.data()), m_buffer.size()};
             m_writev_cursor.reset(iovecs, iov_count);
-            m_remaining_bytes = m_writev_cursor.remainingBytes();
+            m_remaining_bytes = m_writev_cursor.remaining_bytes();
             return;
         }
 
@@ -636,11 +636,11 @@ private:
             iovecs[iov_count++] = {const_cast<char*>(m_body_buffer.data()), m_body_buffer.size()};
         }
         m_writev_cursor.reset(iovecs, iov_count);
-        m_remaining_bytes = m_writev_cursor.remainingBytes();
+        m_remaining_bytes = m_writev_cursor.remaining_bytes();
     }
 
-    void prepareSslSendLayout(std::string header, std::string_view body) {
-        clearExternalBuffer();
+    void prepare_ssl_send_layout(std::string header, std::string_view body) {
+        clear_external_buffer();
         m_buffer.clear();
         m_buffer.reserve(header.size() + body.size());
         std::string& header_appended = m_buffer.append(header);
@@ -657,7 +657,7 @@ private:
         ++m_fast_path_counters.ssl_coalesced_layout_hits;
     }
 
-    static void logResponseStatus(HttpStatusCode code) {
+    static void log_response_status(HttpStatusCode code) {
         const int status = static_cast<int>(code);
         if (status >= 500) {
             HTTP_LOG_ERROR("[response]", "status={}", status);
@@ -668,11 +668,11 @@ private:
         }
     }
 
-    size_t currentBufferSize() const {
+    size_t current_buffer_size() const {
         return m_external_buffer != nullptr ? m_external_buffer_size : m_buffer.size();
     }
 
-    void clearExternalBuffer() {
+    void clear_external_buffer() {
         m_external_buffer = nullptr;
         m_external_buffer_size = 0;
     }

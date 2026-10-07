@@ -22,45 +22,45 @@ namespace detail
 /**
  * @brief 将 IO 事件注册分发到具体的 IOScheduler 后端
  *
- * @details 将通用 IOEventType 转换为对编译期选定的 IOScheduler 方法的调用（addAccept、addRecv 等）。
+ * @details 将通用 IOEventType 转换为对编译期选定的 IOScheduler 方法的调用（add_accept、add_recv 等）。
  *
  * @param scheduler  目标 IO 调度器（必须是 IOScheduler）
  * @param event      要注册的 IO 事件类型
  * @param controller 与 awaitable 关联的 IO 控制器
  * @return 1 表示 IO 立即完成，0 表示成功入队，负数表示错误
  */
-int registerIOSchedulerEvent(Scheduler* scheduler,
+int register_io_scheduler_event(Scheduler* scheduler,
                              IOEventType event,
                              IOController* controller) noexcept
 {
     auto* io_scheduler = static_cast<IOSchedulerBackend*>(scheduler);
     switch (event) {
     case ACCEPT:
-        return io_scheduler->addAccept(controller);
+        return io_scheduler->add_accept(controller);
     case CONNECT:
-        return io_scheduler->addConnect(controller);
+        return io_scheduler->add_connect(controller);
     case RECV:
-        return io_scheduler->addRecv(controller);
+        return io_scheduler->add_recv(controller);
     case SEND:
-        return io_scheduler->addSend(controller);
+        return io_scheduler->add_send(controller);
     case READV:
-        return io_scheduler->addReadv(controller);
+        return io_scheduler->add_readv(controller);
     case WRITEV:
-        return io_scheduler->addWritev(controller);
+        return io_scheduler->add_writev(controller);
     case SENDFILE:
-        return io_scheduler->addSendFile(controller);
+        return io_scheduler->add_send_file(controller);
     case FILEREAD:
-        return io_scheduler->addFileRead(controller);
+        return io_scheduler->add_file_read(controller);
     case FILEWRITE:
-        return io_scheduler->addFileWrite(controller);
+        return io_scheduler->add_file_write(controller);
     case FILEWATCH:
-        return io_scheduler->addFileWatch(controller);
+        return io_scheduler->add_file_watch(controller);
     case RECVFROM:
-        return io_scheduler->addRecvFrom(controller);
+        return io_scheduler->add_recv_from(controller);
     case SENDTO:
-        return io_scheduler->addSendTo(controller);
+        return io_scheduler->add_send_to(controller);
     case SEQUENCE:
-        return io_scheduler->addSequence(controller);
+        return io_scheduler->add_sequence(controller);
     default:
         return -EINVAL;
     }
@@ -73,13 +73,13 @@ int registerIOSchedulerEvent(Scheduler* scheduler,
  * @param controller 需要关闭句柄的 IO 控制器
  * @return 0 表示成功，负数表示错误
  */
-int registerIOSchedulerClose(Scheduler* scheduler,
+int register_io_scheduler_close(Scheduler* scheduler,
                              IOController* controller) noexcept
 {
-    return static_cast<IOSchedulerBackend*>(scheduler)->addClose(controller);
+    return static_cast<IOSchedulerBackend*>(scheduler)->add_close(controller);
 }
 
-int removeTimedOutIORegistration(Scheduler* scheduler, IOController* controller) noexcept
+int remove_timed_out_io_registration(Scheduler* scheduler, IOController* controller) noexcept
 {
     if (scheduler == nullptr || scheduler->type() != kIOScheduler) {
         return 0;
@@ -99,7 +99,7 @@ int removeTimedOutIORegistration(Scheduler* scheduler, IOController* controller)
  */
 std::expected<GHandle, IOError> AcceptAwaitable::await_resume() {
 #if defined(USE_EPOLL) || defined(USE_IOURING)
-    auto result = m_operation->takeResult();
+    auto result = m_operation->take_result();
     if (!result) {
         return std::unexpected(IOError(kNotReady, EINVAL));
     }
@@ -111,30 +111,30 @@ std::expected<GHandle, IOError> AcceptAwaitable::await_resume() {
     }
     return result->value().release();
 #else
-    return detail::resumeIOAwaitable<ACCEPT>(*this);
+    return detail::resume_io_awaitable<ACCEPT>(*this);
 #endif
 }
 
 #if defined(USE_EPOLL) || defined(USE_IOURING)
 bool AcceptAwaitable::suspend(Waker&& waker) {
-    m_scheduler = waker.getScheduler();
+    m_scheduler = waker.get_scheduler();
     if (!m_scheduler || m_scheduler->type() != kIOScheduler) {
         m_operation.emplace(OperationKey{}, std::move(waker));
-        if (selectError(CompletionReason::kBackendError, IOError(kNotRunningOnIOScheduler, 0))) {
+        if (select_error(CompletionReason::kBackendError, IOError(kNotRunningOnIOScheduler, 0))) {
             const auto resume = detach(); // 同步继续，消费但不排队恢复权。
             if (!resume) { return false; }
         }
         return false;
     }
-    ensureTimer();
-    return static_cast<IOSchedulerBackend*>(m_scheduler)->submitAccept(*this, std::move(waker));
+    ensure_timer();
+    return static_cast<IOSchedulerBackend*>(m_scheduler)->submit_accept(*this, std::move(waker));
 }
 
-bool AcceptAwaitable::selectError(CompletionReason reason, IOError error) noexcept {
-    return m_operation->tryComplete(reason, std::unexpected(error));
+bool AcceptAwaitable::select_error(CompletionReason reason, IOError error) noexcept {
+    return m_operation->try_complete(reason, std::unexpected(error));
 }
 
-bool AcceptAwaitable::selectReady(GHandle handle) {
+bool AcceptAwaitable::select_ready(GHandle handle) {
 #ifdef USE_IOURING
     // CQE/cache transfers ownership even if peer lookup or completion loses.
     Host peer;
@@ -144,19 +144,19 @@ bool AcceptAwaitable::selectReady(GHandle handle) {
         if (::getpeername(handle.fd, reinterpret_cast<sockaddr*>(&address), &length) != 0) {
             const auto error = static_cast<uint32_t>(errno);
             AcceptedConnection unconsumed(handle, std::move(peer));
-            return selectError(CompletionReason::kBackendError, IOError(kAcceptFailed, error));
+            return select_error(CompletionReason::kBackendError, IOError(kAcceptFailed, error));
         }
-        peer = Host::fromSockAddr(address);
+        peer = Host::from_sock_addr(address);
     }
-    return m_operation->tryComplete(CompletionReason::kReady,
+    return m_operation->try_complete(CompletionReason::kReady,
         AcceptedConnection(handle, std::move(peer)));
 #else
-    auto [result, peer] = io::handleAccept(handle);
+    auto [result, peer] = io::handle_accept(handle);
     if (!result) {
         if (IOError::contains(result.error().code(), kNotReady)) { return false; }
-        return selectError(CompletionReason::kBackendError, result.error());
+        return select_error(CompletionReason::kBackendError, result.error());
     }
-    return m_operation->tryComplete(CompletionReason::kReady,
+    return m_operation->try_complete(CompletionReason::kReady,
         AcceptedConnection(*result, std::move(peer)));
 #endif
 }
@@ -166,7 +166,7 @@ std::expected<ResumeCapability, OperationError> AcceptAwaitable::detach() {
     if (m_timer) { m_timer->detach(); }
     if (m_timer_attached) {
         m_timer_attached = false;
-        auto drained = m_operation->releasePhysicalReference();
+        auto drained = m_operation->release_physical_reference();
         if (!drained) { return std::unexpected(drained.error()); }
     }
     m_controller = nullptr;
@@ -175,15 +175,15 @@ std::expected<ResumeCapability, OperationError> AcceptAwaitable::detach() {
 #else
     m_registration_owner = nullptr;
 #endif
-    if (m_operation->state().physicalReferenceCount() != 0) {
-        auto drained = m_operation->releasePhysicalReference();
+    if (m_operation->state().physical_reference_count() != 0) {
+        auto drained = m_operation->release_physical_reference();
         if (!drained) { return std::unexpected(drained.error()); }
     }
-    return m_operation->takeResume();
+    return m_operation->take_resume();
 }
 
-void AcceptAwaitable::timeoutOnOwner() noexcept {
-    static_cast<IOSchedulerBackend*>(m_scheduler)->timeoutAccept(*this);
+void AcceptAwaitable::timeout_on_owner() noexcept {
+    static_cast<IOSchedulerBackend*>(m_scheduler)->timeout_accept(*this);
 }
 #endif
 
@@ -192,7 +192,7 @@ void AcceptAwaitable::timeoutOnOwner() noexcept {
  * @return 成功时返回已接收字节数，失败时返回 IOError
  */
 std::expected<size_t, IOError> RecvAwaitable::await_resume() {
-    return detail::resumeIOAwaitable<RECV>(*this);
+    return detail::resume_io_awaitable<RECV>(*this);
 }
 
 /**
@@ -200,7 +200,7 @@ std::expected<size_t, IOError> RecvAwaitable::await_resume() {
  * @return 成功时返回已发送字节数，失败时返回 IOError
  */
 std::expected<size_t, IOError> SendAwaitable::await_resume() {
-    return detail::resumeIOAwaitable<SEND>(*this);
+    return detail::resume_io_awaitable<SEND>(*this);
 }
 
 /**
@@ -208,7 +208,7 @@ std::expected<size_t, IOError> SendAwaitable::await_resume() {
  * @return 成功时返回已读取字节数，失败时返回 IOError
  */
 std::expected<size_t, IOError> ReadvAwaitable::await_resume() {
-    return detail::resumeIOAwaitable<READV>(*this);
+    return detail::resume_io_awaitable<READV>(*this);
 }
 
 /**
@@ -216,7 +216,7 @@ std::expected<size_t, IOError> ReadvAwaitable::await_resume() {
  * @return 成功时返回已写入字节数，失败时返回 IOError
  */
 std::expected<size_t, IOError> WritevAwaitable::await_resume() {
-    return detail::resumeIOAwaitable<WRITEV>(*this);
+    return detail::resume_io_awaitable<WRITEV>(*this);
 }
 
 /**
@@ -224,7 +224,7 @@ std::expected<size_t, IOError> WritevAwaitable::await_resume() {
  * @return 成功或 IOError
  */
 std::expected<void, IOError> ConnectAwaitable::await_resume() {
-    return detail::resumeIOAwaitable<CONNECT>(*this);
+    return detail::resume_io_awaitable<CONNECT>(*this);
 }
 
 /**
@@ -241,7 +241,7 @@ std::expected<void, IOError> CloseAwaitable::await_resume() {
  * @return 成功时返回已读取字节数，失败时返回 IOError
  */
 std::expected<size_t, IOError> FileReadAwaitable::await_resume() {
-    return detail::resumeIOAwaitable<FILEREAD>(*this);
+    return detail::resume_io_awaitable<FILEREAD>(*this);
 }
 
 /**
@@ -249,7 +249,7 @@ std::expected<size_t, IOError> FileReadAwaitable::await_resume() {
  * @return 成功时返回已写入字节数，失败时返回 IOError
  */
 std::expected<size_t, IOError> FileWriteAwaitable::await_resume() {
-    return detail::resumeIOAwaitable<FILEWRITE>(*this);
+    return detail::resume_io_awaitable<FILEWRITE>(*this);
 }
 
 /**
@@ -257,7 +257,7 @@ std::expected<size_t, IOError> FileWriteAwaitable::await_resume() {
  * @return 成功时返回已接收字节数，失败时返回 IOError
  */
 std::expected<size_t, IOError> RecvFromAwaitable::await_resume() {
-    return detail::resumeIOAwaitable<RECVFROM>(*this);
+    return detail::resume_io_awaitable<RECVFROM>(*this);
 }
 
 /**
@@ -265,7 +265,7 @@ std::expected<size_t, IOError> RecvFromAwaitable::await_resume() {
  * @return 成功时返回已发送字节数，失败时返回 IOError
  */
 std::expected<size_t, IOError> SendToAwaitable::await_resume() {
-    return detail::resumeIOAwaitable<SENDTO>(*this);
+    return detail::resume_io_awaitable<SENDTO>(*this);
 }
 
 /**
@@ -273,7 +273,7 @@ std::expected<size_t, IOError> SendToAwaitable::await_resume() {
  * @return 包含触发事件详情的 FileWatchResult，失败时返回 IOError
  */
 std::expected<FileWatchResult, IOError> FileWatchAwaitable::await_resume() {
-    return detail::resumeIOAwaitable<FILEWATCH>(*this);
+    return detail::resume_io_awaitable<FILEWATCH>(*this);
 }
 
 /**
@@ -281,7 +281,7 @@ std::expected<FileWatchResult, IOError> FileWatchAwaitable::await_resume() {
  * @return 成功时返回已发送字节数，失败时返回 IOError
  */
 std::expected<size_t, IOError> SendFileAwaitable::await_resume() {
-    return detail::resumeIOAwaitable<SENDFILE>(*this);
+    return detail::resume_io_awaitable<SENDFILE>(*this);
 }
 
 }

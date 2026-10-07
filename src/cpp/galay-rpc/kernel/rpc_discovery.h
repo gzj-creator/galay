@@ -47,7 +47,7 @@ struct ServiceEndpoint {
 /**
  * @brief 将旧服务发现endpoint转换为Phase 7完整endpoint模型
  */
-inline RpcEndpointInfo toRpcEndpointInfo(const ServiceEndpoint& endpoint) {
+inline RpcEndpointInfo to_rpc_endpoint_info(const ServiceEndpoint& endpoint) {
     RpcEndpointInfo info;
     info.host = endpoint.host;
     info.port = endpoint.port;
@@ -64,7 +64,7 @@ inline RpcEndpointInfo toRpcEndpointInfo(const ServiceEndpoint& endpoint) {
  *
  * @note version/zone/metadata/status没有旧字段承载，会在转换时丢弃。
  */
-inline ServiceEndpoint toServiceEndpoint(const RpcEndpointInfo& endpoint) {
+inline ServiceEndpoint to_service_endpoint(const RpcEndpointInfo& endpoint) {
     ServiceEndpoint service_endpoint;
     service_endpoint.host = endpoint.host;
     service_endpoint.port = endpoint.port;
@@ -98,9 +98,9 @@ struct DiscoveryError {
     DiscoveryError(Code c, std::string msg = "") : code(c), message(std::move(msg)) {}
 
     /// @brief 判断是否成功
-    bool isOk() const { return code == OK; }
+    bool is_ok() const { return code == OK; }
     /// @brief 判断是否存在错误
-    explicit operator bool() const { return !isOk(); }
+    explicit operator bool() const { return !is_ok(); }
 };
 
 /**
@@ -137,19 +137,19 @@ concept ServiceRegistry = requires(T registry,
                                    const ServiceEndpoint& endpoint,
                                    ServiceWatchCallback callback) {
     // 注册服务
-    { registry.registerService(endpoint) } -> std::same_as<std::expected<void, DiscoveryError>>;
+    { registry.register_service(endpoint) } -> std::same_as<std::expected<void, DiscoveryError>>;
 
     // 注销服务
-    { registry.deregisterService(endpoint) } -> std::same_as<std::expected<void, DiscoveryError>>;
+    { registry.deregister_service(endpoint) } -> std::same_as<std::expected<void, DiscoveryError>>;
 
     // 发现服务（获取所有实例）
-    { registry.discoverService(service_name) } -> std::same_as<std::expected<std::vector<ServiceEndpoint>, DiscoveryError>>;
+    { registry.discover_service(service_name) } -> std::same_as<std::expected<std::vector<ServiceEndpoint>, DiscoveryError>>;
 
     // 监听服务变更
-    { registry.watchService(service_name, callback) } -> std::same_as<std::expected<void, DiscoveryError>>;
+    { registry.watch_service(service_name, callback) } -> std::same_as<std::expected<void, DiscoveryError>>;
 
     // 取消监听
-    { registry.unwatchService(service_name) } -> std::same_as<void>;
+    { registry.unwatch_service(service_name) } -> std::same_as<void>;
 };
 
 /**
@@ -168,7 +168,7 @@ public:
     /**
      * @brief 注册服务
      */
-    std::expected<void, DiscoveryError> registerService(const ServiceEndpoint& endpoint) {
+    std::expected<void, DiscoveryError> register_service(const ServiceEndpoint& endpoint) {
         m_services[endpoint.service_name].push_back(endpoint);
 
         // 触发回调
@@ -185,7 +185,7 @@ public:
     /**
      * @brief 注销服务
      */
-    std::expected<void, DiscoveryError> deregisterService(const ServiceEndpoint& endpoint) {
+    std::expected<void, DiscoveryError> deregister_service(const ServiceEndpoint& endpoint) {
         auto it = m_services.find(endpoint.service_name);
         if (it == m_services.end()) {
             return std::unexpected(DiscoveryError(DiscoveryError::NOT_FOUND, "Service not found"));
@@ -218,7 +218,7 @@ public:
     /**
      * @brief 发现服务
      */
-    std::expected<std::vector<ServiceEndpoint>, DiscoveryError> discoverService(const std::string& service_name) {
+    std::expected<std::vector<ServiceEndpoint>, DiscoveryError> discover_service(const std::string& service_name) {
         auto it = m_services.find(service_name);
         if (it == m_services.end()) {
             return std::vector<ServiceEndpoint>{};
@@ -230,7 +230,7 @@ public:
     /**
      * @brief 监听服务变更
      */
-    std::expected<void, DiscoveryError> watchService(const std::string& service_name, ServiceWatchCallback callback) {
+    std::expected<void, DiscoveryError> watch_service(const std::string& service_name, ServiceWatchCallback callback) {
         m_watchers[service_name].push_back(std::move(callback));
         return {};
     }
@@ -238,7 +238,7 @@ public:
     /**
      * @brief 取消监听
      */
-    void unwatchService(const std::string& service_name) {
+    void unwatch_service(const std::string& service_name) {
         m_watchers.erase(service_name);
     }
 
@@ -262,23 +262,23 @@ concept AsyncServiceRegistry = requires(T registry,
                                         const ServiceEndpoint& endpoint,
                                         ServiceWatchCallback callback) {
     // 异步注册服务
-    { registry.registerServiceAsync(endpoint) } -> std::same_as<Task<void>>;
+    { registry.register_service_async(endpoint) } -> std::same_as<Task<void>>;
 
     // 异步注销服务
-    { registry.deregisterServiceAsync(endpoint) } -> std::same_as<Task<void>>;
+    { registry.deregister_service_async(endpoint) } -> std::same_as<Task<void>>;
 
     // 异步发现服务
-    { registry.discoverServiceAsync(service_name) } -> std::same_as<Task<void>>;
+    { registry.discover_service_async(service_name) } -> std::same_as<Task<void>>;
 
     // 异步监听服务变更
-    { registry.watchServiceAsync(service_name, callback) } -> std::same_as<Task<void>>;
+    { registry.watch_service_async(service_name, callback) } -> std::same_as<Task<void>>;
 
     // 异步取消监听
-    { registry.unwatchServiceAsync(service_name) } -> std::same_as<Task<void>>;
+    { registry.unwatch_service_async(service_name) } -> std::same_as<Task<void>>;
 
     // 获取最后一次操作的结果
-    { registry.lastError() } -> std::same_as<DiscoveryError>;
-    { registry.lastEndpoints() } -> std::same_as<std::vector<ServiceEndpoint>>;
+    { registry.last_error() } -> std::same_as<DiscoveryError>;
+    { registry.last_endpoints() } -> std::same_as<std::vector<ServiceEndpoint>>;
 };
 
 /**
@@ -295,7 +295,7 @@ public:
     /**
      * @brief 异步注册服务
      */
-    Task<void> registerServiceAsync(const ServiceEndpoint& endpoint) {
+    Task<void> register_service_async(const ServiceEndpoint& endpoint) {
         auto lock_result = co_await m_mutex.lock();
         if (!lock_result) {
             m_last_error = DiscoveryError(DiscoveryError::LOCK_TIMEOUT, "Lock timeout");
@@ -320,7 +320,7 @@ public:
     /**
      * @brief 异步注销服务
      */
-    Task<void> deregisterServiceAsync(const ServiceEndpoint& endpoint) {
+    Task<void> deregister_service_async(const ServiceEndpoint& endpoint) {
         auto lock_result = co_await m_mutex.lock();
         if (!lock_result) {
             m_last_error = DiscoveryError(DiscoveryError::LOCK_TIMEOUT, "Lock timeout");
@@ -365,7 +365,7 @@ public:
     /**
      * @brief 异步发现服务
      */
-    Task<void> discoverServiceAsync(const std::string& service_name) {
+    Task<void> discover_service_async(const std::string& service_name) {
         auto lock_result = co_await m_mutex.lock();
         if (!lock_result) {
             m_last_error = DiscoveryError(DiscoveryError::LOCK_TIMEOUT, "Lock timeout");
@@ -388,7 +388,7 @@ public:
     /**
      * @brief 异步监听服务变更
      */
-    Task<void> watchServiceAsync(const std::string& service_name, ServiceWatchCallback callback) {
+    Task<void> watch_service_async(const std::string& service_name, ServiceWatchCallback callback) {
         auto lock_result = co_await m_mutex.lock();
         if (!lock_result) {
             m_last_error = DiscoveryError(DiscoveryError::LOCK_TIMEOUT, "Lock timeout");
@@ -404,7 +404,7 @@ public:
     /**
      * @brief 异步取消监听
      */
-    Task<void> unwatchServiceAsync(const std::string& service_name) {
+    Task<void> unwatch_service_async(const std::string& service_name) {
         auto lock_result = co_await m_mutex.lock();
         if (!lock_result) {
             m_last_error = DiscoveryError(DiscoveryError::LOCK_TIMEOUT, "Lock timeout");
@@ -420,12 +420,12 @@ public:
     /**
      * @brief 获取最后一次操作的错误
      */
-    DiscoveryError lastError() const { return m_last_error; }
+    DiscoveryError last_error() const { return m_last_error; }
 
     /**
      * @brief 获取最后一次发现的端点列表
      */
-    std::vector<ServiceEndpoint> lastEndpoints() const { return m_last_endpoints; }
+    std::vector<ServiceEndpoint> last_endpoints() const { return m_last_endpoints; }
 
 private:
     kernel::AsyncMutex m_mutex;       ///< 异步互斥锁
@@ -463,8 +463,8 @@ public:
     /**
      * @brief 获取服务实例
      */
-    std::expected<ServiceEndpoint, DiscoveryError> getServiceEndpoint(const std::string& service_name) {
-        auto result = m_registry.discoverService(service_name);
+    std::expected<ServiceEndpoint, DiscoveryError> get_service_endpoint(const std::string& service_name) {
+        auto result = m_registry.discover_service(service_name);
         if (!result) {
             return std::unexpected(result.error());
         }
@@ -474,8 +474,8 @@ public:
             return std::unexpected(DiscoveryError(DiscoveryError::NOT_FOUND, "No available instance"));
         }
 
-        if (!m_selector.has_value() || !sameEndpoints(m_selector_endpoints, endpoints)) {
-            emplaceSelector(endpoints);
+        if (!m_selector.has_value() || !same_endpoints(m_selector_endpoints, endpoints)) {
+            emplace_selector(endpoints);
             m_selector_endpoints = endpoints;
         }
 
@@ -492,18 +492,18 @@ public:
      * @brief 监听服务变更
      */
     std::expected<void, DiscoveryError> watch(const std::string& service_name, ServiceWatchCallback callback) {
-        return m_registry.watchService(service_name, std::move(callback));
+        return m_registry.watch_service(service_name, std::move(callback));
     }
 
     /**
      * @brief 取消监听
      */
     void unwatch(const std::string& service_name) {
-        m_registry.unwatchService(service_name);
+        m_registry.unwatch_service(service_name);
     }
 
 private:
-    static bool sameEndpoint(const ServiceEndpoint& lhs, const ServiceEndpoint& rhs) {
+    static bool same_endpoint(const ServiceEndpoint& lhs, const ServiceEndpoint& rhs) {
         return lhs.host == rhs.host &&
                lhs.port == rhs.port &&
                lhs.service_name == rhs.service_name &&
@@ -511,20 +511,20 @@ private:
                lhs.weight == rhs.weight;
     }
 
-    static bool sameEndpoints(const std::vector<ServiceEndpoint>& lhs,
+    static bool same_endpoints(const std::vector<ServiceEndpoint>& lhs,
                               const std::vector<ServiceEndpoint>& rhs) {
         if (lhs.size() != rhs.size()) {
             return false;
         }
         for (size_t i = 0; i < lhs.size(); ++i) {
-            if (!sameEndpoint(lhs[i], rhs[i])) {
+            if (!same_endpoint(lhs[i], rhs[i])) {
                 return false;
             }
         }
         return true;
     }
 
-    static std::vector<uint32_t> endpointWeights(const std::vector<ServiceEndpoint>& endpoints) {
+    static std::vector<uint32_t> endpoint_weights(const std::vector<ServiceEndpoint>& endpoints) {
         std::vector<uint32_t> weights;
         weights.reserve(endpoints.size());
         for (const auto& endpoint : endpoints) {
@@ -533,13 +533,13 @@ private:
         return weights;
     }
 
-    void emplaceSelector(const std::vector<ServiceEndpoint>& endpoints) {
+    void emplace_selector(const std::vector<ServiceEndpoint>& endpoints) {
         if constexpr (std::is_constructible_v<Selector, const std::vector<ServiceEndpoint>&>) {
             m_selector.emplace(endpoints);
         } else if constexpr (std::is_constructible_v<Selector,
                                                      const std::vector<ServiceEndpoint>&,
                                                      const std::vector<uint32_t>&>) {
-            auto weights = endpointWeights(endpoints);
+            auto weights = endpoint_weights(endpoints);
             m_selector.emplace(endpoints, weights);
         } else {
             static_assert(std::is_constructible_v<Selector, const std::vector<ServiceEndpoint>&> ||

@@ -21,7 +21,7 @@ namespace
 {
 
 template <typename Pool>
-std::pair<int64_t, size_t> runConcurrentAcquire(
+std::pair<int64_t, size_t> run_concurrent_acquire(
     Pool& pool,
     size_t total_iterations,
     size_t thread_count)
@@ -36,7 +36,7 @@ std::pair<int64_t, size_t> runConcurrentAcquire(
             (thread_index < total_iterations % thread_count ? 1 : 0);
         workers.emplace_back([&pool, &failures, iterations] {
             for (size_t iteration = 0; iteration < iterations; ++iteration) {
-                auto lease = pool.tryAcquire();
+                auto lease = pool.try_acquire();
                 if (!lease.has_value()) {
                     failures.fetch_add(1, std::memory_order_relaxed);
                 }
@@ -57,7 +57,7 @@ std::pair<int64_t, size_t> runConcurrentAcquire(
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -75,9 +75,9 @@ int main(int argc, char** argv)
     production.connections_per_endpoint = 4;
 
     auto pool = galay::etcd::EtcdClusterClientBuilder()
-        .productionConfig(production)
+        .production_config(production)
         .build();
-    auto warmup = pool.tryAcquire();
+    auto warmup = pool.try_acquire();
     if (!warmup.has_value()) {
         std::cerr << "warmup acquire failed: " << warmup.error().message() << '\n';
         return 1;
@@ -86,7 +86,7 @@ int main(int argc, char** argv)
 
     const auto begin = std::chrono::steady_clock::now();
     for (size_t iteration = 0; iteration < iterations; ++iteration) {
-        auto lease = pool.tryAcquire();
+        auto lease = pool.try_acquire();
         if (!lease.has_value()) {
             std::cerr << "acquire failed at iteration " << iteration
                       << ": " << lease.error().message() << '\n';
@@ -98,11 +98,11 @@ int main(int argc, char** argv)
     production.connections_per_endpoint = 4;
     auto async_pool = galay::etcd::AsyncEtcdClusterClientBuilder()
         .scheduler(nullptr)
-        .productionConfig(std::move(production))
+        .production_config(std::move(production))
         .build();
     const auto async_begin = std::chrono::steady_clock::now();
     for (size_t iteration = 0; iteration < iterations; ++iteration) {
-        auto lease = async_pool.tryAcquire();
+        auto lease = async_pool.try_acquire();
         if (!lease.has_value()) {
             std::cerr << "async acquire failed at iteration " << iteration
                       << ": " << lease.error().message() << '\n';
@@ -124,12 +124,12 @@ int main(int argc, char** argv)
         : 0.0;
 
     constexpr size_t kThreadCount = 8;
-    const auto sync_concurrent = runConcurrentAcquire(pool, iterations, kThreadCount);
+    const auto sync_concurrent = run_concurrent_acquire(pool, iterations, kThreadCount);
     if (sync_concurrent.second != 0) {
         std::cerr << "sync concurrent acquire failures: " << sync_concurrent.second << '\n';
         return 1;
     }
-    const auto async_concurrent = runConcurrentAcquire(async_pool, iterations, kThreadCount);
+    const auto async_concurrent = run_concurrent_acquire(async_pool, iterations, kThreadCount);
     if (async_concurrent.second != 0) {
         std::cerr << "async concurrent acquire failures: " << async_concurrent.second << '\n';
         return 1;

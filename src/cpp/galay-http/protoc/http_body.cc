@@ -8,13 +8,13 @@ namespace galay::http {
         return copy;
     }
 
-    bool PlainBody::fromString(std::string &&str)
+    bool PlainBody::from_string(std::string &&str)
     {
         m_body = std::move(str);
         return true;
     }
 
-    std::string PlainBody::toString()
+    std::string PlainBody::to_string()
     {
         return std::move(m_body);
     }

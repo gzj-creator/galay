@@ -47,7 +47,7 @@ public:
      * @return true 唤醒已实际发出；false 已合并或已有待处理唤醒
      */
     template <typename NotifyFn>
-    bool requestWake(bool queue_was_empty, NotifyFn&& notify_fn) {
+    bool request_wake(bool queue_was_empty, NotifyFn&& notify_fn) {
         m_wake_requests.fetch_add(1, std::memory_order_relaxed);
         if (!(queue_was_empty || m_sleeping.load(std::memory_order_acquire))) {
             m_coalesced_wakes.fetch_add(1, std::memory_order_relaxed);
@@ -69,7 +69,7 @@ public:
      * @param notify_fn  唤醒函数
      */
     template <typename NotifyFn>
-    void forceWake(NotifyFn&& notify_fn) {
+    void force_wake(NotifyFn&& notify_fn) {
         std::forward<NotifyFn>(notify_fn)();
         m_wake_emits.fetch_add(1, std::memory_order_relaxed);
     }
@@ -77,21 +77,21 @@ public:
     /**
      * @brief 标记事件循环进入可能的休眠状态
      */
-    void markSleeping() noexcept {
+    void mark_sleeping() noexcept {
         m_sleeping.store(true, std::memory_order_release);
     }
 
     /**
      * @brief 标记事件循环为唤醒状态（poll 或任务处理之后）
      */
-    void markAwake() noexcept {
+    void mark_awake() noexcept {
         m_sleeping.store(false, std::memory_order_release);
     }
 
     /**
      * @brief 清除待处理唤醒标志（消费唤醒事件后调用）
      */
-    void cancelPendingWake() noexcept {
+    void cancel_pending_wake() noexcept {
         m_wakeup_pending.store(false, std::memory_order_release);
     }
 
@@ -102,36 +102,36 @@ public:
      * @details 若有任务被排空，标记循环为唤醒状态并取消待处理唤醒，
      *          因为循环已在运行。
      */
-    void onRemoteCollected(size_t drained) noexcept {
+    void on_remote_collected(size_t drained) noexcept {
         if (drained == 0) {
             return;
         }
-        markAwake();
-        cancelPendingWake();
+        mark_awake();
+        cancel_pending_wake();
     }
 
     /** @return true 事件循环当前处于休眠状态 */
-    bool isSleeping() const noexcept {
+    bool is_sleeping() const noexcept {
         return m_sleeping.load(std::memory_order_acquire);
     }
 
     /** @return true 唤醒已发出但尚未被消费 */
-    bool hasPendingWake() const noexcept {
+    bool has_pending_wake() const noexcept {
         return m_wakeup_pending.load(std::memory_order_acquire);
     }
 
     /** @return 收到的唤醒请求总数 */
-    uint64_t wakeRequests() const noexcept {
+    uint64_t wake_requests() const noexcept {
         return m_wake_requests.load(std::memory_order_acquire);
     }
 
     /** @return 实际发出的唤醒系统调用总数 */
-    uint64_t wakeEmits() const noexcept {
+    uint64_t wake_emits() const noexcept {
         return m_wake_emits.load(std::memory_order_acquire);
     }
 
     /** @return 被合并（跳过）的唤醒总数 */
-    uint64_t coalescedWakes() const noexcept {
+    uint64_t coalesced_wakes() const noexcept {
         return m_coalesced_wakes.load(std::memory_order_acquire);
     }
 

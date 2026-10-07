@@ -40,20 +40,20 @@ void fail(TestState* state, std::string message)
     state->error = std::move(message);
 }
 
-Task<bool> waitForWaiters(RedisConnectionPool* pool,
+Task<bool> wait_for_waiters(RedisConnectionPool* pool,
                           size_t expected,
                           std::chrono::milliseconds timeout)
 {
     for (auto waited = 0ms; waited < timeout; waited += 1ms) {
-        if (pool->getStats().waiting_requests == expected) {
+        if (pool->get_stats().waiting_requests == expected) {
             co_return true;
         }
         co_await sleep(1ms);
     }
-    co_return pool->getStats().waiting_requests == expected;
+    co_return pool->get_stats().waiting_requests == expected;
 }
 
-Task<bool> waitForProbe(WaiterProbe* probe, std::chrono::milliseconds timeout)
+Task<bool> wait_for_probe(WaiterProbe* probe, std::chrono::milliseconds timeout)
 {
     for (auto waited = 0ms; waited < timeout; waited += 1ms) {
         if (probe->done.load(std::memory_order_acquire)) {
@@ -64,7 +64,7 @@ Task<bool> waitForProbe(WaiterProbe* probe, std::chrono::milliseconds timeout)
     co_return probe->done.load(std::memory_order_acquire);
 }
 
-Task<void> acquireInWaiter(RedisConnectionPool* pool,
+Task<void> acquire_in_waiter(RedisConnectionPool* pool,
                            WaiterProbe* probe,
                            std::chrono::milliseconds timeout)
 {
@@ -81,7 +81,7 @@ Task<void> acquireInWaiter(RedisConnectionPool* pool,
     probe->done.store(true, std::memory_order_release);
 }
 
-ConnectionPoolConfig oneConnectionConfig()
+ConnectionPoolConfig one_connection_config()
 {
     ConnectionPoolConfig config = ConnectionPoolConfig::create("127.0.0.1", 6379, 0, 1);
     config.initial_connections = 0;
@@ -90,7 +90,7 @@ ConnectionPoolConfig oneConnectionConfig()
     return config;
 }
 
-bool statsMatch(const RedisConnectionPool::PoolStats& stats,
+bool stats_match(const RedisConnectionPool::PoolStats& stats,
                 size_t active,
                 size_t available,
                 size_t waiting)
@@ -100,9 +100,9 @@ bool statsMatch(const RedisConnectionPool::PoolStats& stats,
            stats.waiting_requests == waiting;
 }
 
-Task<bool> runReleaseWinsCase(IOScheduler* scheduler, TestState* state)
+Task<bool> run_release_wins_case(IOScheduler* scheduler, TestState* state)
 {
-    RedisConnectionPool pool(scheduler, oneConnectionConfig());
+    RedisConnectionPool pool(scheduler, one_connection_config());
     auto init = co_await pool.initialize().timeout(1s);
     if (!init) {
         fail(state, "release-wins init failed: " + init.error().message());
@@ -116,11 +116,11 @@ Task<bool> runReleaseWinsCase(IOScheduler* scheduler, TestState* state)
     }
 
     WaiterProbe waiter;
-    if (!scheduleTask(scheduler, acquireInWaiter(&pool, &waiter, 5s))) {
+    if (!schedule_task(scheduler, acquire_in_waiter(&pool, &waiter, 5s))) {
         fail(state, "release-wins failed to schedule waiter");
         co_return false;
     }
-    if (!co_await waitForWaiters(&pool, 1, 1s)) {
+    if (!co_await wait_for_waiters(&pool, 1, 1s)) {
         fail(state, "release-wins waiter did not enter queue");
         co_return false;
     }
@@ -129,22 +129,22 @@ Task<bool> runReleaseWinsCase(IOScheduler* scheduler, TestState* state)
     pool.release(first_conn);
     first_conn.reset();
 
-    if (!co_await waitForProbe(&waiter, 2s)) {
+    if (!co_await wait_for_probe(&waiter, 2s)) {
         fail(state, "release-wins waiter did not resume");
         co_return false;
     }
-    if (!waiter.got_connection || !waiter.connection || waiter.connection->isClosed()) {
+    if (!waiter.got_connection || !waiter.connection || waiter.connection->is_closed()) {
         fail(state, "release-wins waiter did not receive a live connection");
         co_return false;
     }
-    if (!statsMatch(pool.getStats(), 1, 0, 0)) {
+    if (!stats_match(pool.get_stats(), 1, 0, 0)) {
         fail(state, "release-wins stats leaked after waiter resume");
         co_return false;
     }
 
     pool.release(waiter.connection);
     waiter.connection.reset();
-    if (!statsMatch(pool.getStats(), 0, 1, 0)) {
+    if (!stats_match(pool.get_stats(), 0, 1, 0)) {
         fail(state, "release-wins stats leaked after final release");
         co_return false;
     }
@@ -152,9 +152,9 @@ Task<bool> runReleaseWinsCase(IOScheduler* scheduler, TestState* state)
     co_return true;
 }
 
-Task<bool> runTimeoutWinsCase(IOScheduler* scheduler, TestState* state)
+Task<bool> run_timeout_wins_case(IOScheduler* scheduler, TestState* state)
 {
-    RedisConnectionPool pool(scheduler, oneConnectionConfig());
+    RedisConnectionPool pool(scheduler, one_connection_config());
     auto init = co_await pool.initialize().timeout(1s);
     if (!init) {
         fail(state, "timeout-wins init failed: " + init.error().message());
@@ -168,15 +168,15 @@ Task<bool> runTimeoutWinsCase(IOScheduler* scheduler, TestState* state)
     }
 
     WaiterProbe waiter;
-    if (!scheduleTask(scheduler, acquireInWaiter(&pool, &waiter, 30ms))) {
+    if (!schedule_task(scheduler, acquire_in_waiter(&pool, &waiter, 30ms))) {
         fail(state, "timeout-wins failed to schedule waiter");
         co_return false;
     }
-    if (!co_await waitForWaiters(&pool, 1, 1s)) {
+    if (!co_await wait_for_waiters(&pool, 1, 1s)) {
         fail(state, "timeout-wins waiter did not enter queue");
         co_return false;
     }
-    if (!co_await waitForProbe(&waiter, 1s)) {
+    if (!co_await wait_for_probe(&waiter, 1s)) {
         fail(state, "timeout-wins waiter did not time out");
         co_return false;
     }
@@ -184,7 +184,7 @@ Task<bool> runTimeoutWinsCase(IOScheduler* scheduler, TestState* state)
         fail(state, "timeout-wins waiter did not return timeout");
         co_return false;
     }
-    if (pool.getStats().waiting_requests != 0) {
+    if (pool.get_stats().waiting_requests != 0) {
         fail(state, "timeout-wins waiter count leaked after timeout");
         co_return false;
     }
@@ -192,7 +192,7 @@ Task<bool> runTimeoutWinsCase(IOScheduler* scheduler, TestState* state)
     auto first_conn = std::move(first.value());
     pool.release(first_conn);
     first_conn.reset();
-    if (!statsMatch(pool.getStats(), 0, 1, 0)) {
+    if (!stats_match(pool.get_stats(), 0, 1, 0)) {
         fail(state, "timeout-wins stats leaked after releasing held connection");
         co_return false;
     }
@@ -200,9 +200,9 @@ Task<bool> runTimeoutWinsCase(IOScheduler* scheduler, TestState* state)
     co_return true;
 }
 
-Task<bool> runShutdownWakesWaiterCase(IOScheduler* scheduler, TestState* state)
+Task<bool> run_shutdown_wakes_waiter_case(IOScheduler* scheduler, TestState* state)
 {
-    RedisConnectionPool pool(scheduler, oneConnectionConfig());
+    RedisConnectionPool pool(scheduler, one_connection_config());
     auto init = co_await pool.initialize().timeout(1s);
     if (!init) {
         fail(state, "shutdown-waiter init failed: " + init.error().message());
@@ -216,17 +216,17 @@ Task<bool> runShutdownWakesWaiterCase(IOScheduler* scheduler, TestState* state)
     }
 
     WaiterProbe waiter;
-    if (!scheduleTask(scheduler, acquireInWaiter(&pool, &waiter, 5s))) {
+    if (!schedule_task(scheduler, acquire_in_waiter(&pool, &waiter, 5s))) {
         fail(state, "shutdown-waiter failed to schedule waiter");
         co_return false;
     }
-    if (!co_await waitForWaiters(&pool, 1, 1s)) {
+    if (!co_await wait_for_waiters(&pool, 1, 1s)) {
         fail(state, "shutdown-waiter waiter did not enter queue");
         co_return false;
     }
 
     pool.shutdown();
-    if (!co_await waitForProbe(&waiter, 1s)) {
+    if (!co_await wait_for_probe(&waiter, 1s)) {
         fail(state, "shutdown-waiter waiter did not resume");
         co_return false;
     }
@@ -234,7 +234,7 @@ Task<bool> runShutdownWakesWaiterCase(IOScheduler* scheduler, TestState* state)
         fail(state, "shutdown-waiter returned a connection after shutdown");
         co_return false;
     }
-    if (!statsMatch(pool.getStats(), 0, 0, 0)) {
+    if (!stats_match(pool.get_stats(), 0, 0, 0)) {
         fail(state, "shutdown-waiter stats leaked after shutdown");
         co_return false;
     }
@@ -244,17 +244,17 @@ Task<bool> runShutdownWakesWaiterCase(IOScheduler* scheduler, TestState* state)
     co_return true;
 }
 
-Task<void> runPoolWaiterBlackbox(IOScheduler* scheduler, TestState* state)
+Task<void> run_pool_waiter_blackbox(IOScheduler* scheduler, TestState* state)
 {
-    if (!co_await runReleaseWinsCase(scheduler, state)) {
+    if (!co_await run_release_wins_case(scheduler, state)) {
         state->done.store(true, std::memory_order_release);
         co_return;
     }
-    if (!co_await runTimeoutWinsCase(scheduler, state)) {
+    if (!co_await run_timeout_wins_case(scheduler, state)) {
         state->done.store(true, std::memory_order_release);
         co_return;
     }
-    if (!co_await runShutdownWakesWaiterCase(scheduler, state)) {
+    if (!co_await run_shutdown_wakes_waiter_case(scheduler, state)) {
         state->done.store(true, std::memory_order_release);
         co_return;
     }
@@ -266,15 +266,15 @@ Task<void> runPoolWaiterBlackbox(IOScheduler* scheduler, TestState* state)
 
 int main()
 {
-    if (const int skip_code = redis_test::requireIntegrationEnabledOrSkip("redis.t24.pool.waiter.blackbox");
+    if (const int skip_code = redis_test::require_integration_enabled_or_skip("redis.t24.pool.waiter.blackbox");
         skip_code != 0) {
         return skip_code;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         std::cerr << "Failed to get IO scheduler\n";
@@ -282,7 +282,7 @@ int main()
     }
 
     TestState state;
-    if (!scheduleTask(scheduler, runPoolWaiterBlackbox(scheduler, &state))) {
+    if (!schedule_task(scheduler, run_pool_waiter_blackbox(scheduler, &state))) {
         runtime.stop();
         std::cerr << "failed to schedule Redis pool waiter blackbox test\n";
         return 1;

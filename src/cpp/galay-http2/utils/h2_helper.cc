@@ -5,7 +5,7 @@
 namespace galay::http2
 {
 
-std::array<char, kHttp2FrameHeaderLength> buildH2FrameHeaderBytes(Http2FrameType type,
+std::array<char, kHttp2FrameHeaderLength> build_h2_frame_header_bytes(Http2FrameType type,
                                                                   uint8_t flags,
                                                                   uint32_t stream_id,
                                                                   uint32_t payload_length)
@@ -25,7 +25,7 @@ std::array<char, kHttp2FrameHeaderLength> buildH2FrameHeaderBytes(Http2FrameType
     return bytes;
 }
 
-std::string buildH2FrameBytes(Http2FrameType type,
+std::string build_h2_frame_bytes(Http2FrameType type,
                               uint8_t flags,
                               uint32_t stream_id,
                               std::string_view payload)
@@ -33,7 +33,7 @@ std::string buildH2FrameBytes(Http2FrameType type,
     std::string result;
     result.resize(kHttp2FrameHeaderLength + payload.size());
 
-    const auto header = buildH2FrameHeaderBytes(
+    const auto header = build_h2_frame_header_bytes(
         type, flags, stream_id, static_cast<uint32_t>(payload.size()));
     std::memcpy(result.data(), header.data(), header.size());
 

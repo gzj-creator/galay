@@ -38,8 +38,8 @@ using namespace std::chrono_literals;
 
 namespace {
 
-uint16_t udpTestPort() {
-    return galay::test::resolvePortFromEnv("GALAY_TEST_UDP_PORT", 8080);
+uint16_t udp_test_port() {
+    return galay::test::resolve_port_from_env("GALAY_TEST_UDP_PORT", 8080);
 }
 
 constexpr std::array<std::string_view, 3> kMessages{
@@ -48,7 +48,7 @@ constexpr std::array<std::string_view, 3> kMessages{
     "Final message",
 };
 
-bool waitForFlag(const std::atomic<bool>& flag, std::chrono::milliseconds timeout)
+bool wait_for_flag(const std::atomic<bool>& flag, std::chrono::milliseconds timeout)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
@@ -69,14 +69,14 @@ std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_test_done{false};
 
 // UDP Echo服务器协程
-Task<void> udpEchoServer() {
+Task<void> udp_echo_server() {
     g_total++;
     LogInfo("UDP Server starting...");
     AsyncUdpSocket socket;
     LogDebug("Socket created, fd={}", socket.handle().fd);
 
     // 设置选项
-    auto optResult = socket.option().handleReuseAddr();
+    auto optResult = socket.option().handle_reuse_addr();
     if (!optResult) {
         LogError("Failed to set reuse addr: {}", optResult.error().message());
         g_failed++;
@@ -84,7 +84,7 @@ Task<void> udpEchoServer() {
         co_return;
     }
 
-    optResult = socket.option().handleNonBlock();
+    optResult = socket.option().handle_non_block();
     if (!optResult) {
         LogError("Failed to set non-block: {}", optResult.error().message());
         g_failed++;
@@ -93,7 +93,7 @@ Task<void> udpEchoServer() {
     }
 
     // 绑定地址
-    Host bindHost(IPType::IPV4, "127.0.0.1", udpTestPort());
+    Host bindHost(IPType::IPV4, "127.0.0.1", udp_test_port());
     auto bindResult = socket.bind(bindHost);
     if (!bindResult) {
         LogError("Failed to bind: {}", bindResult.error().message());
@@ -103,7 +103,7 @@ Task<void> udpEchoServer() {
     }
     LogDebug("Bind successful");
 
-    LogInfo("UDP Server listening on 127.0.0.1:{}", udpTestPort());
+    LogInfo("UDP Server listening on 127.0.0.1:{}", udp_test_port());
     g_server_ready = true;
 
     // Echo循环 - 接收并回显3个数据报
@@ -147,11 +147,11 @@ Task<void> udpEchoServer() {
     co_return;
 }
 
-Task<void> peerUdpClient() {
+Task<void> peer_udp_client() {
     AsyncUdpSocket socket;
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
-    Host serverHost(IPType::IPV4, "127.0.0.1", udpTestPort());
+    Host serverHost(IPType::IPV4, "127.0.0.1", udp_test_port());
     char buffer[1024];
 
     for (const auto message : kMessages) {
@@ -190,10 +190,10 @@ int main() {
     LogDebug("Scheduler started");
 
     // 启动服务器
-    scheduleTask(scheduler, udpEchoServer());
+    schedule_task(scheduler, udp_echo_server());
     LogDebug("Server task submitted");
 
-    if (!waitForFlag(g_server_ready, 5s) && !g_test_done.load()) {
+    if (!wait_for_flag(g_server_ready, 5s) && !g_test_done.load()) {
         LogError("UDP server did not become ready in time");
         g_failed++;
         g_test_done = true;
@@ -201,14 +201,14 @@ int main() {
 
     if (!g_test_done.load()) {
         LogInfo("Server is ready, scheduling async peer UDP client...");
-        if (!scheduleTask(scheduler, peerUdpClient())) {
+        if (!schedule_task(scheduler, peer_udp_client())) {
             LogError("Failed to schedule async peer UDP client");
             g_failed++;
             g_test_done = true;
         }
     }
 
-    if (!waitForFlag(g_test_done, 5s)) {
+    if (!wait_for_flag(g_test_done, 5s)) {
         LogError("UDP server test timed out waiting for completion");
         g_failed++;
     }
@@ -221,14 +221,14 @@ int main() {
 #endif
 
     // 写入测试结果
-    writer.addTest();
+    writer.add_test();
     if (g_passed > 0) {
-        writer.addPassed();
+        writer.add_passed();
     }
     if (g_failed > 0) {
-        writer.addFailed();
+        writer.add_failed();
     }
-    writer.writeResult();
+    writer.write_result();
 
     LogInfo("========================================");
     LogInfo("Test Results: Total={}, Passed={}, Failed={}", g_total.load(), g_passed.load(), g_failed.load());

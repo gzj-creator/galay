@@ -1,7 +1,7 @@
 /**
  * @file t7_builder.cc
  * @brief 用途：锁定 SSL AwaitableBuilder 的公开链式表面。
- * 关键覆盖点：`fromStateMachine()`、`handshake()`、`recv()`、`send()`、`shutdown()`、`finish()`。
+ * 关键覆盖点：`from_state_machine()`、`handshake()`、`recv()`、`send()`、`shutdown()`、`finish()`。
  * 通过条件：静态断言成立，测试返回 0。
  */
 
@@ -24,37 +24,37 @@ struct SurfaceMachine {
         return SslMachineAction<result_type>::complete(result_type{0});
     }
 
-    void onHandshake(std::expected<void, SslError>) {}
-    void onRecv(std::expected<Bytes, SslError>) {}
-    void onSend(std::expected<size_t, SslError>) {}
-    void onShutdown(std::expected<void, SslError>) {}
+    void on_handshake(std::expected<void, SslError>) {}
+    void on_recv(std::expected<Bytes, SslError>) {}
+    void on_send(std::expected<size_t, SslError>) {}
+    void on_shutdown(std::expected<void, SslError>) {}
 };
 
 struct SurfaceFlow {
     std::array<char, 8> scratch{};
     std::array<char, 4> reply{'p', 'o', 'n', 'g'};
 
-    void onHandshake(SslBuilderOps<SurfaceResult, 8>&, SslHandshakeContext&) {}
-    void onRecv(SslBuilderOps<SurfaceResult, 8>&, SslRecvContext&) {}
-    ParseStatus onParse(SslBuilderOps<SurfaceResult, 8>&) { return ParseStatus::kCompleted; }
-    void onSend(SslBuilderOps<SurfaceResult, 8>&, SslSendContext&) {}
-    void onShutdown(SslBuilderOps<SurfaceResult, 8>&, SslShutdownContext&) {}
-    void onFinish(SslBuilderOps<SurfaceResult, 8>& ops) { ops.complete(SurfaceResult{0}); }
+    void on_handshake(SslBuilderOps<SurfaceResult, 8>&, SslHandshakeContext&) {}
+    void on_recv(SslBuilderOps<SurfaceResult, 8>&, SslRecvContext&) {}
+    ParseStatus on_parse(SslBuilderOps<SurfaceResult, 8>&) { return ParseStatus::kCompleted; }
+    void on_send(SslBuilderOps<SurfaceResult, 8>&, SslSendContext&) {}
+    void on_shutdown(SslBuilderOps<SurfaceResult, 8>&, SslShutdownContext&) {}
+    void on_finish(SslBuilderOps<SurfaceResult, 8>& ops) { ops.complete(SurfaceResult{0}); }
 };
 
 template <typename BuilderT>
 concept HasFromStateMachine = requires(IOController* controller, SslSocket* socket, SurfaceMachine machine) {
-    { BuilderT::fromStateMachine(controller, socket, std::move(machine)) };
+    { BuilderT::from_state_machine(controller, socket, std::move(machine)) };
 };
 
 using ChainedAwaitableT = decltype(
     std::declval<SslAwaitableBuilder<SurfaceResult, 8, SurfaceFlow>&>()
-        .handshake<&SurfaceFlow::onHandshake>()
-        .recv<&SurfaceFlow::onRecv>(std::declval<char*>(), std::declval<size_t>())
-        .parse<&SurfaceFlow::onParse>()
-        .send<&SurfaceFlow::onSend>(std::declval<const char*>(), std::declval<size_t>())
-        .shutdown<&SurfaceFlow::onShutdown>()
-        .finish<&SurfaceFlow::onFinish>()
+        .handshake<&SurfaceFlow::on_handshake>()
+        .recv<&SurfaceFlow::on_recv>(std::declval<char*>(), std::declval<size_t>())
+        .parse<&SurfaceFlow::on_parse>()
+        .send<&SurfaceFlow::on_send>(std::declval<const char*>(), std::declval<size_t>())
+        .shutdown<&SurfaceFlow::on_shutdown>()
+        .finish<&SurfaceFlow::on_finish>()
         .build()
 );
 

@@ -13,7 +13,7 @@ using namespace galay::mysql::protocol;
 namespace
 {
 
-size_t parseIterations(int argc, char** argv)
+size_t parse_iterations(int argc, char** argv)
 {
     if (argc < 2) {
         return 100000;
@@ -31,11 +31,11 @@ size_t parseIterations(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    const size_t iterations = parseIterations(argc, argv);
+    const size_t iterations = parse_iterations(argc, argv);
     const std::string valid_sql = "SELECT 1";
     const std::string oversized_sql(MYSQL_MAX_PACKET_SIZE, 'x');
 
@@ -46,18 +46,18 @@ int main(int argc, char** argv)
 
     const auto started = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
-        auto packet = encoder.encodeQuery(valid_sql);
+        auto packet = encoder.encode_query(valid_sql);
         if (!packet.empty()) {
             ++valid_packets;
         }
 
-        auto rejected = encoder.encodeQuery(oversized_sql);
+        auto rejected = encoder.encode_query(oversized_sql);
         if (rejected.empty()) {
             ++rejected_packets;
         }
 
         MysqlCommandBuilder builder;
-        builder.appendQuery(oversized_sql);
+        builder.append_query(oversized_sql);
         const auto views = builder.commands();
         if (builder.size() == 1 && builder.encoded().empty() &&
             views.size() == 1 && views[0].encoded.empty()) {

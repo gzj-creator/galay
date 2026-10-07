@@ -29,14 +29,14 @@ public:
      * @brief 处理已结束的 Span
      * @param span 已结束的 Span（调用方移交所有权，处理器可异步保存）
      */
-    virtual void onEnd(Span&& span) = 0;
+    virtual void on_end(Span&& span) = 0;
 
     /**
      * @brief 强制刷新所有待处理的 Span
      * @param timeout 超时时间
      * @return 成功刷新返回 true，超时或失败返回 false
      */
-    virtual bool forceFlush(std::chrono::milliseconds timeout) = 0;
+    virtual bool force_flush(std::chrono::milliseconds timeout) = 0;
 
     /**
      * @brief 关闭处理器并释放资源

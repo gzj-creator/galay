@@ -29,7 +29,7 @@ static std::atomic<bool> g_running{true};
 static std::atomic<uint64_t> g_connections{0};
 static std::atomic<uint64_t> g_messages{0};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
@@ -37,12 +37,12 @@ void signalHandler(int) {
  * @brief 处理 WSS 连接（使用底层帧处理）
  * @details 由于 SslSocket 不支持 readv，这里使用 recv 直接读取数据
  */
-Task<void> handleWssConnection(galay::ssl::SslSocket& socket) {
+Task<void> handle_wss_connection(galay::ssl::SslSocket& socket) {
     g_connections++;
 
     // 发送欢迎消息
-    WsFrame welcome_frame = WsFrameParser::createTextFrame("Welcome to WSS server!");
-    std::string welcome_data = WsFrameParser::toBytes(welcome_frame, false);
+    WsFrame welcome_frame = WsFrameParser::create_text_frame("Welcome to WSS server!");
+    std::string welcome_data = WsFrameParser::to_bytes(welcome_frame, false);
 
     size_t sent = 0;
     while (sent < welcome_data.size()) {
@@ -78,7 +78,7 @@ Task<void> handleWssConnection(galay::ssl::SslSocket& socket) {
             std::vector<iovec> iovecs;
             iovecs.push_back({const_cast<char*>(accumulated.data()), accumulated.size()});
 
-            auto parse_result = WsFrameParser::fromIOVec(iovecs, frame, true);
+            auto parse_result = WsFrameParser::from_io_vec(iovecs, frame, true);
             if (!parse_result) {
                 if (parse_result.error().code() == kWsIncomplete) {
                     break;  // 需要更多数据
@@ -91,14 +91,14 @@ Task<void> handleWssConnection(galay::ssl::SslSocket& socket) {
 
             // 处理帧
             if (frame.header.opcode == WsOpcode::Close) {
-                WsFrame close_frame = WsFrameParser::createCloseFrame(WsCloseCode::Normal);
-                std::string close_data = WsFrameParser::toBytes(close_frame, false);
+                WsFrame close_frame = WsFrameParser::create_close_frame(WsCloseCode::Normal);
+                std::string close_data = WsFrameParser::to_bytes(close_frame, false);
                 co_await socket.send(close_data.data(), close_data.size());
                 goto cleanup;
             }
             else if (frame.header.opcode == WsOpcode::Ping) {
-                WsFrame pong_frame = WsFrameParser::createPongFrame(frame.payload);
-                std::string pong_data = WsFrameParser::toBytes(pong_frame, false);
+                WsFrame pong_frame = WsFrameParser::create_pong_frame(frame.payload);
+                std::string pong_data = WsFrameParser::to_bytes(pong_frame, false);
                 co_await socket.send(pong_data.data(), pong_data.size());
             }
             else if (frame.header.opcode == WsOpcode::Text || frame.header.opcode == WsOpcode::Binary) {
@@ -106,8 +106,8 @@ Task<void> handleWssConnection(galay::ssl::SslSocket& socket) {
 
                 // 回显
                 std::string echo = "Echo: " + frame.payload;
-                WsFrame echo_frame = WsFrameParser::createTextFrame(echo);
-                std::string echo_data = WsFrameParser::toBytes(echo_frame, false);
+                WsFrame echo_frame = WsFrameParser::create_text_frame(echo);
+                std::string echo_data = WsFrameParser::to_bytes(echo_frame, false);
 
                 size_t echo_sent = 0;
                 while (echo_sent < echo_data.size()) {
@@ -128,13 +128,13 @@ cleanup:
 /**
  * @brief HTTPS 请求处理器（处理 WSS 升级）
  */
-Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
-    auto reader = conn.getReader();
+Task<void> https_handler(HttpConnImpl<galay::ssl::SslSocket> conn) {
+    auto reader = conn.get_reader();
     HttpRequest request;
 
     // 读取请求
     while (true) {
-        auto r = co_await reader.getRequest(request);
+        auto r = co_await reader.get_request(request);
         if (!r) {
             co_await conn.close();
             co_return;
@@ -146,12 +146,12 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
     // 检查是否是 WebSocket 升级请求
     std::string uri = request.header().uri();
     if (uri == "/ws" || uri.starts_with("/ws?")) {
-        auto upgrade_result = WsUpgrade::handleUpgrade(request);
+        auto upgrade_result = WsUpgrade::handle_upgrade(request);
 
         if (!upgrade_result.success) {
-            auto writer = conn.getWriter();
+            auto writer = conn.get_writer();
             while (true) {
-                auto r = co_await writer.sendResponse(upgrade_result.response);
+                auto r = co_await writer.send_response(upgrade_result.response);
                 if (!r || r.value()) break;
             }
             co_await conn.close();
@@ -160,9 +160,9 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
 
 
         // 发送 101 Switching Protocols
-        auto writer = conn.getWriter();
+        auto writer = conn.get_writer();
         while (true) {
-            auto r = co_await writer.sendResponse(upgrade_result.response);
+            auto r = co_await writer.send_response(upgrade_result.response);
             if (!r) {
                 co_await conn.close();
                 co_return;
@@ -172,8 +172,8 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
 
         // 获取底层 socket 并处理 WebSocket 连接
         // 注意：这里需要直接访问 socket，因为 WsConn 模板不支持 SslSocket
-        auto& socket = conn.getSocket();
-        co_await handleWssConnection(socket);
+        auto& socket = conn.get_socket();
+        co_await handle_wss_connection(socket);
         co_return;
     }
 
@@ -181,7 +181,7 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
     auto response = Http1_1ResponseBuilder()
         .status(HttpStatusCode::OK_200)
         .header("Content-Type", "text/html; charset=utf-8")
-        .buildMove();
+        .build_move();
 
     std::string body = R"html(<!DOCTYPE html>
 <html>
@@ -261,12 +261,12 @@ wscat -n -c wss://localhost:8443/ws
 </body>
 </html>)html";
 
-    response.header().headerPairs().addHeaderPair("Content-Length", std::to_string(body.size()));
-    response.setBodyStr(std::move(body));
+    response.header().header_pairs().add_header_pair("Content-Length", std::to_string(body.size()));
+    response.set_body_str(std::move(body));
 
-    auto writer = conn.getWriter();
+    auto writer = conn.get_writer();
     while (true) {
-        auto r = co_await writer.sendResponse(response);
+        auto r = co_await writer.send_response(response);
         if (!r || r.value()) break;
     }
     co_await conn.close();
@@ -286,16 +286,16 @@ int main(int argc, char* argv[]) {
     std::cout << "WSS (WebSocket Secure) Server Example\n";
     std::cout << "========================================\n";
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
         HttpsServer server(HttpsServerBuilder()
             .host("0.0.0.0")
             .port(static_cast<uint16_t>(port))
-            .certPath(cert_path)
-            .keyPath(key_path)
-            .ioSchedulerCount(4)
+            .cert_path(cert_path)
+            .key_path(key_path)
+            .io_scheduler_count(4)
             .build());
 
         std::cout << "Server running on https://0.0.0.0:" << port << "\n";
@@ -304,7 +304,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Press Ctrl+C to stop\n";
         std::cout << "========================================\n";
 
-        server.start(httpsHandler);
+        server.start(https_handler);
 
         while (g_running) {
             std::this_thread::sleep_for(std::chrono::seconds(1));

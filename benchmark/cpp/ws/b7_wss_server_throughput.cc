@@ -26,20 +26,20 @@ using namespace galay::kernel;
 
 static volatile bool g_running = true;
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
-Task<void> handleWssConnection(WssConn& ws_conn) {
+Task<void> handle_wss_connection(WssConn& ws_conn) {
 
-    auto writer = ws_conn.getWriter(WsWriterSetting::byServer());
+    auto writer = ws_conn.get_writer(WsWriterSetting::by_server());
 
-    auto welcome_result = co_await writer.sendText("Welcome to WSS Benchmark Server!");
+    auto welcome_result = co_await writer.send_text("Welcome to WSS Benchmark Server!");
     if (!welcome_result) {
         co_return;
     }
 
-    auto echo_result = co_await ws_conn.echoLoopConsume();
+    auto echo_result = co_await ws_conn.echo_loop_consume();
     if (!echo_result) {
     }
 
@@ -50,13 +50,13 @@ Task<void> handleWssConnection(WssConn& ws_conn) {
 /**
  * @brief HTTPS 请求处理器（处理 WSS 升级）
  */
-Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
-    auto reader = conn.getReader();
+Task<void> https_handler(HttpConnImpl<galay::ssl::SslSocket> conn) {
+    auto reader = conn.get_reader();
     HttpRequest request;
 
     // 读取请求
     while (true) {
-        auto r = co_await reader.getRequest(request);
+        auto r = co_await reader.get_request(request);
         if (!r) {
             co_await conn.close();
             co_return;
@@ -68,11 +68,11 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
     // 检查是否是 WebSocket 升级请求
     std::string uri = request.header().uri();
     if (uri == "/ws" || uri.starts_with("/ws?") || uri == "/") {
-        auto upgrade_result = WsUpgrade::handleUpgrade(request);
+        auto upgrade_result = WsUpgrade::handle_upgrade(request);
 
         if (!upgrade_result.success) {
-            auto writer = conn.getWriter();
-            auto result = co_await writer.sendResponse(upgrade_result.response);
+            auto writer = conn.get_writer();
+            auto result = co_await writer.send_response(upgrade_result.response);
             if (!result) {
             }
             co_await conn.close();
@@ -81,15 +81,15 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
 
 
         // 发送 101 Switching Protocols
-        auto writer = conn.getWriter();
-        auto r = co_await writer.sendResponse(upgrade_result.response);
+        auto writer = conn.get_writer();
+        auto r = co_await writer.send_response(upgrade_result.response);
         if (!r) {
             co_await conn.close();
             co_return;
         }
 
         WssConn ws_conn = WssConn::from(std::move(conn), true);
-        co_await handleWssConnection(ws_conn);
+        co_await handle_wss_connection(ws_conn);
         co_return;
     }
 
@@ -97,10 +97,10 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
     auto response = Http1_1ResponseBuilder()
         .status(HttpStatusCode::NotFound_404)
         .body("Not Found")
-        .buildMove();
+        .build_move();
 
-    auto writer = conn.getWriter();
-    auto result = co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    auto result = co_await writer.send_response(response);
     if (!result) {
     }
     co_await conn.close();
@@ -108,7 +108,7 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -129,7 +129,7 @@ int main(int argc, char* argv[]) {
     if (argc > 2) io_threads = std::atoi(argv[2]);
     if (argc > 3) cert_path = argv[3];
     if (argc > 4) key_path = argv[4];
-    const bool tcp_no_delay = galay::benchmark::ws::resolveBenchmarkServerNoDelay(argc, argv, 5);
+    const bool tcp_no_delay = galay::benchmark::ws::resolve_benchmark_server_no_delay(argc, argv, 5);
 
     std::cout << "========================================\n";
     std::cout << "WSS (WebSocket Secure) Benchmark Server\n";
@@ -144,25 +144,25 @@ int main(int argc, char* argv[]) {
     std::cout << "Press Ctrl+C to stop\n";
     std::cout << "========================================\n\n";
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
         HttpsServer server(HttpsServerBuilder()
             .host("0.0.0.0")
             .port(port)
-            .certPath(cert_path)
-            .keyPath(key_path)
-            .ioSchedulerCount(static_cast<size_t>(io_threads))
-            .parallelSchedulerCount(0)
-            .tcpNoDelay(tcp_no_delay)
+            .cert_path(cert_path)
+            .key_path(key_path)
+            .io_scheduler_count(static_cast<size_t>(io_threads))
+            .parallel_scheduler_count(0)
+            .tcp_no_delay(tcp_no_delay)
             .build());
 
-        server.start(httpsHandler);
+        server.start(https_handler);
 
         std::cout << "Server started successfully!\n";
-        std::cout << "Runtime Config: io=" << server.getRuntime().getIOSchedulerCount()
-                  << " parallel=" << server.getRuntime().getParallelSchedulerCount()
+        std::cout << "Runtime Config: io=" << server.get_runtime().get_io_scheduler_count()
+                  << " parallel=" << server.get_runtime().get_parallel_scheduler_count()
                   << " (configured io=" << io_threads << " parallel=0)\n";
         std::cout << "Waiting for requests...\n\n";
 
@@ -186,7 +186,7 @@ int main(int argc, char* argv[]) {
 #else
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 

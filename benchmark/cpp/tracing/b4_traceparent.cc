@@ -7,7 +7,7 @@
 
 namespace {
 
-[[nodiscard]] const char* buildType() {
+[[nodiscard]] const char* build_type() {
 #ifdef NDEBUG
     return "Release";
 #else
@@ -18,7 +18,7 @@ namespace {
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -28,16 +28,16 @@ int main() {
     const auto start = std::chrono::steady_clock::now();
     std::size_t bytes = 0;
     for (int i = 0; i < kIterations; ++i) {
-        auto context = galay::tracing::extractTraceparent(kHeader);
+        auto context = galay::tracing::extract_traceparent(kHeader);
         if (!context.has_value()) {
             return 1;
         }
-        bytes += galay::tracing::injectTraceparent(*context).size();
+        bytes += galay::tracing::inject_traceparent(*context).size();
     }
     const auto elapsed = std::chrono::steady_clock::now() - start;
     const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
 
-    std::cout << "B4-Traceparent workload=" << kIterations << " build=" << buildType()
+    std::cout << "B4-Traceparent workload=" << kIterations << " build=" << build_type()
               << " backend=core ns_per_parse_inject=" << (static_cast<double>(ns) / kIterations)
               << " bytes=" << bytes << '\n';
 }

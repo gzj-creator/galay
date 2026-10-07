@@ -9,45 +9,45 @@
 namespace mongo_test
 {
 
-inline std::expected<size_t, std::string> firstBatchSize(const galay::mongo::MongoReply& reply)
+inline std::expected<size_t, std::string> first_batch_size(const galay::mongo::MongoReply& reply)
 {
     const auto* cursor = reply.document().find("cursor");
-    if (cursor == nullptr || !cursor->isDocument()) {
+    if (cursor == nullptr || !cursor->is_document()) {
         return std::unexpected("reply missing cursor document");
     }
 
-    const auto* first_batch = cursor->toDocument().find("firstBatch");
-    if (first_batch == nullptr || !first_batch->isArray()) {
+    const auto* first_batch = cursor->to_document().find("firstBatch");
+    if (first_batch == nullptr || !first_batch->is_array()) {
         return std::unexpected("reply missing cursor.firstBatch array");
     }
 
-    return first_batch->toArray().size();
+    return first_batch->to_array().size();
 }
 
 inline std::expected<galay::mongo::MongoDocument, std::string>
-firstBatchFrontDocument(const galay::mongo::MongoReply& reply)
+first_batch_front_document(const galay::mongo::MongoReply& reply)
 {
     const auto* cursor = reply.document().find("cursor");
-    if (cursor == nullptr || !cursor->isDocument()) {
+    if (cursor == nullptr || !cursor->is_document()) {
         return std::unexpected("reply missing cursor document");
     }
 
-    const auto* first_batch = cursor->toDocument().find("firstBatch");
-    if (first_batch == nullptr || !first_batch->isArray()) {
+    const auto* first_batch = cursor->to_document().find("firstBatch");
+    if (first_batch == nullptr || !first_batch->is_array()) {
         return std::unexpected("reply missing cursor.firstBatch array");
     }
 
-    const auto& arr = first_batch->toArray();
+    const auto& arr = first_batch->to_array();
     if (arr.empty()) {
         return std::unexpected("cursor.firstBatch is empty");
     }
 
     const auto& first = arr[0];
-    if (!first.isDocument()) {
+    if (!first.is_document()) {
         return std::unexpected("cursor.firstBatch[0] is not document");
     }
 
-    return first.toDocument().clone();
+    return first.to_document().clone();
 }
 
 } // namespace mongo_test

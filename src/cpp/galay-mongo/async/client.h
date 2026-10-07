@@ -82,7 +82,7 @@ public:
      * @param timeout 发送超时时间
      * @return 当前建造者的引用
      */
-    AsyncMongoClientBuilder& sendTimeout(std::chrono::milliseconds timeout)
+    AsyncMongoClientBuilder& send_timeout(std::chrono::milliseconds timeout)
     {
         m_config.send_timeout = timeout;
         return *this;
@@ -93,7 +93,7 @@ public:
      * @param timeout 接收超时时间
      * @return 当前建造者的引用
      */
-    AsyncMongoClientBuilder& recvTimeout(std::chrono::milliseconds timeout)
+    AsyncMongoClientBuilder& recv_timeout(std::chrono::milliseconds timeout)
     {
         m_config.recv_timeout = timeout;
         return *this;
@@ -104,7 +104,7 @@ public:
      * @param size 缓冲区大小（字节）
      * @return 当前建造者的引用
      */
-    AsyncMongoClientBuilder& bufferSize(size_t size)
+    AsyncMongoClientBuilder& buffer_size(size_t size)
     {
         m_config.buffer_size = size;
         return *this;
@@ -115,7 +115,7 @@ public:
      * @param reserve 每条命令预留字节数
      * @return 当前建造者的引用
      */
-    AsyncMongoClientBuilder& pipelineReservePerCommand(size_t reserve)
+    AsyncMongoClientBuilder& pipeline_reserve_per_command(size_t reserve)
     {
         m_config.pipeline_reserve_per_command = reserve;
         return *this;
@@ -131,14 +131,14 @@ public:
      * @brief 仅构造配置对象，不创建客户端
      * @return 当前配置的副本
      */
-    AsyncMongoConfig buildConfig() const
+    AsyncMongoConfig build_config() const
     {
         return m_config;
     }
 
 private:
     IOScheduler* m_scheduler = nullptr;                                ///< I/O 调度器指针
-    AsyncMongoConfig m_config = AsyncMongoConfig::noTimeout();         ///< 异步客户端配置
+    AsyncMongoConfig m_config = AsyncMongoConfig::no_timeout();         ///< 异步客户端配置
 };
 
 /**
@@ -203,7 +203,7 @@ public:
      * @param config 异步客户端配置
      */
     AsyncMongoClient(IOScheduler* scheduler,
-                     AsyncMongoConfig config = AsyncMongoConfig::noTimeout());
+                     AsyncMongoConfig config = AsyncMongoConfig::no_timeout());
 
     AsyncMongoClient(AsyncMongoClient&& other) noexcept;             ///< 移动构造函数
     AsyncMongoClient& operator=(AsyncMongoClient&& other) noexcept;  ///< 移动赋值运算符
@@ -265,17 +265,17 @@ public:
         return m_socket.close();
     }
 
-    bool isClosed() const { return m_is_closed; }  ///< 判断连接是否已关闭
+    bool is_closed() const { return m_is_closed; }  ///< 判断连接是否已关闭
 
     AsyncTcpSocket& socket() { return m_socket; }        ///< 获取底层 TCP socket 的可变引用
-    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ringBuffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
-    const galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ringBuffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
+    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
+    const galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
 
     /**
      * @brief 分配下一个请求 ID（线程不安全）
      * @return 递增的请求 ID
      */
-    int32_t nextRequestId();
+    int32_t next_request_id();
 private:
     friend struct AsyncMongoClientInternals;
 
@@ -284,9 +284,9 @@ private:
      * @param count 需要预留的数量
      * @return 起始请求 ID
      */
-    int32_t reserveRequestIdBlock(size_t count);
+    int32_t reserve_request_id_block(size_t count);
 
-    AsyncMongoConfig m_config = AsyncMongoConfig::noTimeout();       ///< 异步客户端配置
+    AsyncMongoConfig m_config = AsyncMongoConfig::no_timeout();       ///< 异步客户端配置
     AsyncTcpSocket m_socket;                                              ///< 底层 TCP socket
     galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> m_ring_buffer;                        ///< 接收环形缓冲区
     std::string m_decode_scratch;                                    ///< 解码用的临时缓冲区

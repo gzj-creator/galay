@@ -91,7 +91,7 @@ Task<void> test_async_db_client(IOScheduler* scheduler, AsyncTestState* state, m
             co_return;
         }
         auto& rs = r->value();
-        std::cout << "  Affected rows: " << rs.affectedRows() << ", Last insert ID: " << rs.lastInsertId() << std::endl;
+        std::cout << "  Affected rows: " << rs.affected_rows() << ", Last insert ID: " << rs.last_insert_id() << std::endl;
     }
 
     // SELECT
@@ -107,15 +107,15 @@ Task<void> test_async_db_client(IOScheduler* scheduler, AsyncTestState* state, m
             co_return;
         }
         auto& rs = r->value();
-        std::cout << "  Columns: " << rs.fieldCount() << ", Rows: " << rs.rowCount() << std::endl;
-        for (size_t i = 0; i < rs.fieldCount(); ++i) {
+        std::cout << "  Columns: " << rs.field_count() << ", Rows: " << rs.row_count() << std::endl;
+        for (size_t i = 0; i < rs.field_count(); ++i) {
             std::cout << "  Field[" << i << "]: " << rs.field(i).name() << std::endl;
         }
-        for (size_t i = 0; i < rs.rowCount(); ++i) {
+        for (size_t i = 0; i < rs.row_count(); ++i) {
             auto& row = rs.row(i);
             std::cout << "  Row[" << i << "]:";
             for (size_t j = 0; j < row.size(); ++j) {
-                std::cout << " " << row.getString(j, "NULL");
+                std::cout << " " << row.get_string(j, "NULL");
             }
             std::cout << std::endl;
         }
@@ -146,14 +146,14 @@ Task<void> test_async_db_client(IOScheduler* scheduler, AsyncTestState* state, m
             co_return;
         }
 
-        if (results[0].rowCount() != 1 || results[1].rowCount() != 1 || results[2].rowCount() != 1) {
+        if (results[0].row_count() != 1 || results[1].row_count() != 1 || results[2].row_count() != 1) {
             state->fail("PIPELINE row count mismatch");
             co_return;
         }
 
-        const auto v1 = results[0].row(0).getInt64(0, -1);
-        const auto v2 = results[1].row(0).getInt64(0, -1);
-        const auto v3 = results[2].row(0).getInt64(0, -1);
+        const auto v1 = results[0].row(0).get_int64(0, -1);
+        const auto v2 = results[1].row(0).get_int64(0, -1);
+        const auto v3 = results[2].row(0).get_int64(0, -1);
         if (v1 != 11 || v2 != 22 || v3 != 33) {
             state->fail("PIPELINE result value mismatch");
             co_return;
@@ -172,7 +172,7 @@ Task<void> test_async_db_client(IOScheduler* scheduler, AsyncTestState* state, m
             state->fail("UPDATE awaitable resumed without value");
             co_return;
         }
-        std::cout << "  Affected rows: " << r->value().affectedRows() << std::endl;
+        std::cout << "  Affected rows: " << r->value().affected_rows() << std::endl;
     }
 
     // DELETE
@@ -187,7 +187,7 @@ Task<void> test_async_db_client(IOScheduler* scheduler, AsyncTestState* state, m
             state->fail("DELETE awaitable resumed without value");
             co_return;
         }
-        std::cout << "  Affected rows: " << r->value().affectedRows() << std::endl;
+        std::cout << "  Affected rows: " << r->value().affected_rows() << std::endl;
     }
 
     // 清理
@@ -208,24 +208,24 @@ Task<void> test_async_db_client(IOScheduler* scheduler, AsyncTestState* state, m
 int main()
 {
     std::cout << "=== T3: Async MySQL Client Tests ===" << std::endl;
-    const auto db_cfg = mysql_test::loadDbTestConfig();
-    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T3-AsyncMysqlClient<>");
+    const auto db_cfg = mysql_test::load_db_test_config();
+    if (const int skip_code = mysql_test::require_db_test_config_or_skip(db_cfg, "T3-AsyncMysqlClient<>");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printDbTestConfig(db_cfg);
+    mysql_test::print_db_test_config(db_cfg);
 
     try {
         Runtime runtime;
         runtime.start();
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             std::cerr << "Failed to get IO scheduler" << std::endl;
             return 1;
         }
         AsyncTestState state;
-        if (!scheduleTask(scheduler, test_async_db_client(scheduler, &state, db_cfg))) {
+        if (!schedule_task(scheduler, test_async_db_client(scheduler, &state, db_cfg))) {
             std::cerr << "Failed to schedule async MySQL test task on IO scheduler" << std::endl;
             runtime.stop();
             return 1;

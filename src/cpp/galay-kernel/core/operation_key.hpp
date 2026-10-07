@@ -19,7 +19,7 @@ struct OperationKey {
     uint32_t slot = 0;
     uint32_t generation = 0;
 
-    [[nodiscard]] constexpr bool isValid() const noexcept { return generation != 0; }
+    [[nodiscard]] constexpr bool is_valid() const noexcept { return generation != 0; }
     friend constexpr bool operator==(OperationKey, OperationKey) noexcept = default;
 };
 

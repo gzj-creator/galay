@@ -16,31 +16,31 @@ public:
 
     std::expected<void, McpError> initialize(const std::string& clientName,
                                              const std::string& clientVersion);
-    std::expected<std::string, McpError> callTool(const std::string& toolName,
+    std::expected<std::string, McpError> call_tool(const std::string& toolName,
                                                  const std::string& arguments);
-    std::expected<std::vector<Tool>, McpError> listTools();
-    std::expected<std::vector<Resource>, McpError> listResources();
-    std::expected<std::string, McpError> readResource(const std::string& uri);
-    std::expected<std::vector<Prompt>, McpError> listPrompts();
-    std::expected<std::string, McpError> getPrompt(const std::string& name,
+    std::expected<std::vector<Tool>, McpError> list_tools();
+    std::expected<std::vector<Resource>, McpError> list_resources();
+    std::expected<std::string, McpError> read_resource(const std::string& uri);
+    std::expected<std::vector<Prompt>, McpError> list_prompts();
+    std::expected<std::string, McpError> get_prompt(const std::string& name,
                                                   const std::string& arguments);
     std::expected<void, McpError> ping();
     std::expected<void, McpError> disconnect();
 
-    bool isConnected() const;
-    bool isInitialized() const;
-    const ServerInfo& getServerInfo() const;
-    const ServerCapabilities& getServerCapabilities() const;
+    bool is_connected() const;
+    bool is_initialized() const;
+    const ServerInfo& get_server_info() const;
+    const ServerCapabilities& get_server_capabilities() const;
 
 private:
-    std::expected<void, McpError> requireStreams() const;
-    std::expected<std::string, McpError> sendRequest(std::string_view method,
+    std::expected<void, McpError> require_streams() const;
+    std::expected<std::string, McpError> send_request(std::string_view method,
                                                     const std::optional<std::string>& params);
-    std::expected<void, McpError> sendNotification(std::string_view method,
+    std::expected<void, McpError> send_notification(std::string_view method,
                                                    const std::optional<std::string>& params);
-    std::expected<std::string, McpError> readMessage();
-    std::expected<void, McpError> writeMessage(const std::string& message);
-    int64_t generateRequestId();
+    std::expected<std::string, McpError> read_message();
+    std::expected<void, McpError> write_message(const std::string& message);
+    int64_t generate_request_id();
 
 private:
     std::string m_clientName;

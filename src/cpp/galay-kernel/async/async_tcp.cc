@@ -27,7 +27,7 @@ using namespace galay::kernel;
  */
 AsyncTcpSocket::AsyncTcpSocket(IPType type)
     : m_controller(std::make_shared<IOController>([](IPType socket_type) {
-        auto opened = openHandle(socket_type);
+        auto opened = open_handle(socket_type);
         return opened ? *opened : GHandle::invalid();
     }(type)))
 {
@@ -40,7 +40,7 @@ AsyncTcpSocket::AsyncTcpSocket(IPType type)
  */
 std::expected<AsyncTcpSocket, IOError> AsyncTcpSocket::create(IPType type)
 {
-    auto handle = openHandle(type);
+    auto handle = open_handle(type);
     if (!handle) {
         return std::unexpected(handle.error());
     }
@@ -60,7 +60,7 @@ AsyncTcpSocket::AsyncTcpSocket(GHandle handle)
  * @brief 释放本对象对共享控制器的持有
  * @note 本对象是最后一个持有者且句柄仍有效时才关闭句柄
  */
-void AsyncTcpSocket::releaseSharedOwnership() noexcept
+void AsyncTcpSocket::release_shared_ownership() noexcept
 {
     if (m_controller == nullptr) {
         return;
@@ -77,7 +77,7 @@ void AsyncTcpSocket::releaseSharedOwnership() noexcept
  */
 AsyncTcpSocket::~AsyncTcpSocket()
 {
-    releaseSharedOwnership();
+    release_shared_ownership();
 }
 
 /**
@@ -97,7 +97,7 @@ AsyncTcpSocket::AsyncTcpSocket(AsyncTcpSocket&& other) noexcept
 AsyncTcpSocket& AsyncTcpSocket::operator=(AsyncTcpSocket&& other) noexcept
 {
     if (this != &other) {
-        releaseSharedOwnership();
+        release_shared_ownership();
         m_controller = std::move(other.m_controller);
     }
     return *this;
@@ -109,14 +109,14 @@ AsyncTcpSocket& AsyncTcpSocket::operator=(AsyncTcpSocket&& other) noexcept
  * @param type IP 协议类型（IPV4 映射到 AF_INET，IPV6 映射到 AF_INET6）
  * @return 成功时返回有效的 GHandle，失败时返回无效的 GHandle
  */
-std::expected<GHandle, IOError> AsyncTcpSocket::openHandle(IPType type)
+std::expected<GHandle, IOError> AsyncTcpSocket::open_handle(IPType type)
 {
     int domain = (type == IPType::IPV4) ? AF_INET : AF_INET6;
     int fd = socket(domain, SOCK_STREAM, 0);
     if (fd < 0) {
         return std::unexpected(IOError(kOpenFailed, errno));
     }
-    auto no_sigpipe = HandleOption(GHandle{.fd = fd}).handleNoSigPipe();
+    auto no_sigpipe = HandleOption(GHandle{.fd = fd}).handle_no_sig_pipe();
     if (!no_sigpipe) {
         const auto option_error = no_sigpipe.error();
         if (::close(fd) != 0) {
@@ -125,7 +125,7 @@ std::expected<GHandle, IOError> AsyncTcpSocket::openHandle(IPType type)
         return std::unexpected(option_error);
     }
     if (type == IPType::IPV6) {
-        auto dual_stack = HandleOption(GHandle{.fd = fd}).handleIPv6Only(false);
+        auto dual_stack = HandleOption(GHandle{.fd = fd}).handle_ipv6_only(false);
         if (!dual_stack) {
             const auto option_error = dual_stack.error();
             if (::close(fd) != 0) {
@@ -151,7 +151,7 @@ std::expected<void, IOError> AsyncTcpSocket::bind(const Host& host)
     if (!m_controller || m_controller->m_handle == GHandle::invalid()) {
         return std::unexpected(IOError(kClosed, 0));
     }
-    if (::bind(m_controller->m_handle.fd, host.sockAddr(), host.addrLen()) < 0) {
+    if (::bind(m_controller->m_handle.fd, host.sock_addr(), host.addr_len()) < 0) {
         return std::unexpected(IOError(kBindFailed, errno));
     }
     return {};

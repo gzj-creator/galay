@@ -32,7 +32,7 @@ using namespace std::chrono_literals;
 
 namespace {
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 1500ms,
                std::chrono::milliseconds step = 1ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -51,20 +51,20 @@ struct RuntimePair {
     IOSchedulerType* sibling = nullptr;
 };
 
-void startRuntimePair(RuntimePair& pair, uint64_t tick_ns = 1'000'000ULL) {
+void start_runtime_pair(RuntimePair& pair, uint64_t tick_ns = 1'000'000ULL) {
     const auto initialized = pair.runtime.start();
     if (!initialized) { throw std::runtime_error("runtime initialization failed"); }
     pair.runtime.stop();
-    pair.source = pair.runtime.getIOScheduler(0);
-    pair.sibling = pair.runtime.getIOScheduler(1);
-    pair.source->replaceTimerManager(TimingWheelTimerManager(tick_ns));
-    pair.sibling->replaceTimerManager(TimingWheelTimerManager(tick_ns));
+    pair.source = pair.runtime.get_io_scheduler(0);
+    pair.sibling = pair.runtime.get_io_scheduler(1);
+    pair.source->replace_timer_manager(TimingWheelTimerManager(tick_ns));
+    pair.sibling->replace_timer_manager(TimingWheelTimerManager(tick_ns));
     const auto started = pair.runtime.start();
     if (!started) { throw std::runtime_error("runtime restart failed"); }
 
-    const bool threads_ready = waitUntil([&]() {
-        return pair.source->threadId() != std::thread::id{} &&
-               pair.sibling->threadId() != std::thread::id{};
+    const bool threads_ready = wait_until([&]() {
+        return pair.source->thread_id() != std::thread::id{} &&
+               pair.sibling->thread_id() != std::thread::id{};
     });
     if (!threads_ready) {
         throw std::runtime_error("scheduler threads did not start in time");
@@ -81,31 +81,31 @@ struct WakeOwnershipState {
     std::atomic<int> completed{0};
 };
 
-Task<void> resumeLifecycleTask(std::atomic<int>* resumed) {
+Task<void> resume_lifecycle_task(std::atomic<int>* resumed) {
     resumed->fetch_add(1, std::memory_order_release);
     co_return;
 }
 
-Task<void> notifyWaitersOnSource(std::vector<std::unique_ptr<AsyncWaiter<void>>>* waiters) {
+Task<void> notify_waiters_on_source(std::vector<std::unique_ptr<AsyncWaiter<void>>>* waiters) {
     for (auto& waiter : *waiters) {
         (void)waiter->notify();
     }
     co_return;
 }
 
-Task<void> occupySibling(WakeOwnershipState* state) {
+Task<void> occupy_sibling(WakeOwnershipState* state) {
     while (!state->release_sibling.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
     co_return;
 }
 
-Task<void> waiterTask(WakeOwnershipState* state,
+Task<void> waiter_task(WakeOwnershipState* state,
                       AsyncWaiter<void>* waiter,
                       IOScheduler* source,
                       IOScheduler* sibling) {
     const auto start_tid = std::this_thread::get_id();
-    if (start_tid != source->threadId()) {
+    if (start_tid != source->thread_id()) {
         state->wrong_start_thread.fetch_add(1, std::memory_order_relaxed);
     }
 
@@ -118,9 +118,9 @@ Task<void> waiterTask(WakeOwnershipState* state,
     }
 
     const auto resume_tid = std::this_thread::get_id();
-    if (resume_tid == source->threadId()) {
+    if (resume_tid == source->thread_id()) {
         state->resumed_on_source.fetch_add(1, std::memory_order_relaxed);
-    } else if (resume_tid == sibling->threadId()) {
+    } else if (resume_tid == sibling->thread_id()) {
         state->resumed_on_sibling.fetch_add(1, std::memory_order_relaxed);
     } else {
         state->wrong_resume_thread.fetch_add(1, std::memory_order_relaxed);
@@ -131,16 +131,16 @@ Task<void> waiterTask(WakeOwnershipState* state,
     co_return;
 }
 
-bool runWokenTaskStaysOnOwnerScenario() {
+bool run_woken_task_stays_on_owner_scenario() {
     constexpr int kWaiterCount = 96;
 
     RuntimePair pair;
-    startRuntimePair(pair);
+    start_runtime_pair(pair);
     WakeOwnershipState state;
     std::vector<std::unique_ptr<AsyncWaiter<void>>> waiters;
     waiters.reserve(kWaiterCount);
 
-    if (!scheduleTask(*pair.sibling, occupySibling(&state))) {
+    if (!schedule_task(*pair.sibling, occupy_sibling(&state))) {
         std::cerr << "[T120] " << kBackendName << " failed to occupy sibling scheduler\n";
         pair.runtime.stop();
         return false;
@@ -148,8 +148,8 @@ bool runWokenTaskStaysOnOwnerScenario() {
 
     for (int i = 0; i < kWaiterCount; ++i) {
         waiters.push_back(std::make_unique<AsyncWaiter<void>>());
-        if (!scheduleTask(*pair.source,
-                          waiterTask(&state, waiters.back().get(), pair.source, pair.sibling))) {
+        if (!schedule_task(*pair.source,
+                          waiter_task(&state, waiters.back().get(), pair.source, pair.sibling))) {
             std::cerr << "[T120] " << kBackendName
                       << " failed to enqueue waiter task " << i << "\n";
             state.release_sibling.store(true, std::memory_order_release);
@@ -158,7 +158,7 @@ bool runWokenTaskStaysOnOwnerScenario() {
         }
     }
 
-    const bool armed = waitUntil([&]() {
+    const bool armed = wait_until([&]() {
         return state.armed.load(std::memory_order_acquire) == kWaiterCount;
     }, 3000ms);
 
@@ -173,13 +173,13 @@ bool runWokenTaskStaysOnOwnerScenario() {
 
     state.release_sibling.store(true, std::memory_order_release);
 
-    if (!scheduleTask(*pair.source, notifyWaitersOnSource(&waiters))) {
+    if (!schedule_task(*pair.source, notify_waiters_on_source(&waiters))) {
         std::cerr << "[T120] " << kBackendName << " failed to schedule source-thread notifier\n";
         pair.runtime.stop();
         return false;
     }
 
-    const bool resumed = waitUntil([&]() {
+    const bool resumed = wait_until([&]() {
         return state.resumed_on_source.load(std::memory_order_acquire) +
                state.resumed_on_sibling.load(std::memory_order_acquire) == kWaiterCount;
     }, 4000ms);
@@ -194,7 +194,7 @@ bool runWokenTaskStaysOnOwnerScenario() {
         return false;
     }
 
-    const bool completed = waitUntil([&]() {
+    const bool completed = wait_until([&]() {
         return state.completed.load(std::memory_order_acquire) == kWaiterCount;
     }, 4000ms);
 
@@ -236,12 +236,12 @@ bool runWokenTaskStaysOnOwnerScenario() {
     return true;
 }
 
-bool runResumeAdmissionLifecycleScenario() {
+bool run_resume_admission_lifecycle_scenario() {
     IOSchedulerType scheduler;
     std::atomic<int> resumed{0};
 
-    const bool accepted_before_start = scheduler.scheduleResume(
-        detail::TaskAccess::detachTask(resumeLifecycleTask(&resumed)));
+    const bool accepted_before_start = scheduler.schedule_resume(
+        detail::TaskAccess::detach_task(resume_lifecycle_task(&resumed)));
 
     const auto started = scheduler.start();
     if (!started.has_value()) {
@@ -251,12 +251,12 @@ bool runResumeAdmissionLifecycleScenario() {
         return false;
     }
 
-    const bool accepted_while_running = scheduler.scheduleResume(
-        detail::TaskAccess::detachTask(resumeLifecycleTask(&resumed)));
+    const bool accepted_while_running = scheduler.schedule_resume(
+        detail::TaskAccess::detach_task(resume_lifecycle_task(&resumed)));
     scheduler.stop();
 
-    const bool accepted_after_stop = scheduler.scheduleResume(
-        detail::TaskAccess::detachTask(resumeLifecycleTask(&resumed)));
+    const bool accepted_after_stop = scheduler.schedule_resume(
+        detail::TaskAccess::detach_task(resume_lifecycle_task(&resumed)));
     const auto restarted = scheduler.start();
     if (!restarted.has_value()) {
         std::cerr << "[T120] " << kBackendName
@@ -283,10 +283,10 @@ bool runResumeAdmissionLifecycleScenario() {
 } // namespace
 
 int main() {
-    if (!runResumeAdmissionLifecycleScenario()) {
+    if (!run_resume_admission_lifecycle_scenario()) {
         return 1;
     }
-    if (!runWokenTaskStaysOnOwnerScenario()) {
+    if (!run_woken_task_stays_on_owner_scenario()) {
         return 1;
     }
     return 0;

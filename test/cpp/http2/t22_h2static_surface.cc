@@ -29,13 +29,13 @@ static_assert(std::is_same_v<decltype(std::declval<H2ClientBuilder>().build()), 
 int main()
 {
     H2cServerBuilder builder;
-    builder.staticResponse("/echo", H2StaticResponse{
+    builder.static_response("/echo", H2StaticResponse{
         .status = 200,
         .content_type = "text/plain",
         .body = "",
     });
 
-    auto config = builder.buildConfig();
+    auto config = builder.build_config();
     assert(config.static_routes.size() == 1);
     assert(config.static_routes[0].path == "/echo");
     assert(config.static_routes[0].response.status == 200);
@@ -45,13 +45,13 @@ int main()
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
     H2ServerBuilder tls_builder;
-    tls_builder.staticResponse("/tls", H2StaticResponse{
+    tls_builder.static_response("/tls", H2StaticResponse{
         .status = 204,
         .content_type = "text/plain",
         .body = "",
         .allow_head = false,
     });
-    auto tls_config = tls_builder.buildConfig();
+    auto tls_config = tls_builder.build_config();
     assert(tls_config.static_routes.size() == 1);
     assert(tls_config.static_routes[0].path == "/tls");
     assert(tls_config.static_routes[0].response.status == 204);

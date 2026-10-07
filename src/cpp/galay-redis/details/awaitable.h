@@ -95,20 +95,20 @@
              * @brief 读取完成回调
              * @param result 读取结果
              */
-            void onRead(std::expected<size_t, IOError> result);
+            void on_read(std::expected<size_t, IOError> result);
 
             /**
              * @brief 写入完成回调
              * @param result 写入结果
              */
-            void onWrite(std::expected<size_t, IOError> result);
+            void on_write(std::expected<size_t, IOError> result);
 
         private:
-            bool prepareReadWindow();                                   ///< 准备读取窗口
-            std::expected<bool, RedisError> tryParseReplies();         ///< 尝试解析回复
-            void setError(RedisError error) noexcept;                  ///< 设置 Redis 错误
-            void setSendError(const IOError& io_error) noexcept;       ///< 设置发送错误
-            void setRecvError(const IOError& io_error) noexcept;       ///< 设置接收错误
+            bool prepare_read_window();                                   ///< 准备读取窗口
+            std::expected<bool, RedisError> try_parse_replies();         ///< 尝试解析回复
+            void set_error(RedisError error) noexcept;                  ///< 设置 Redis 错误
+            void set_send_error(const IOError& io_error) noexcept;       ///< 设置发送错误
+            void set_recv_error(const IOError& io_error) noexcept;       ///< 设置接收错误
 
             std::shared_ptr<RedisExchangeSharedState<Strategy>> m_state; ///< 共享状态
         };
@@ -199,28 +199,28 @@
              * @brief 连接完成回调
              * @param result 连接结果
              */
-            void onConnect(std::expected<void, IOError> result);
+            void on_connect(std::expected<void, IOError> result);
 
             /**
              * @brief 读取完成回调
              * @param result 读取结果
              */
-            void onRead(std::expected<size_t, IOError> result);
+            void on_read(std::expected<size_t, IOError> result);
 
             /**
              * @brief 写入完成回调
              * @param result 写入结果
              */
-            void onWrite(std::expected<size_t, IOError> result);
+            void on_write(std::expected<size_t, IOError> result);
 
         private:
-            bool prepareReadWindow();                                   ///< 准备读取窗口
-            bool prepareNextCommand();                                  ///< 准备下一条命令
-            std::expected<bool, RedisError> tryParseReply();            ///< 尝试解析回复
-            void setError(RedisError error) noexcept;                  ///< 设置 Redis 错误
-            void setConnectError(const IOError& io_error) noexcept;    ///< 设置连接错误
-            void setSendError(const IOError& io_error) noexcept;       ///< 设置发送错误
-            void setRecvError(const IOError& io_error) noexcept;       ///< 设置接收错误
+            bool prepare_read_window();                                   ///< 准备读取窗口
+            bool prepare_next_command();                                  ///< 准备下一条命令
+            std::expected<bool, RedisError> try_parse_reply();            ///< 尝试解析回复
+            void set_error(RedisError error) noexcept;                  ///< 设置 Redis 错误
+            void set_connect_error(const IOError& io_error) noexcept;    ///< 设置连接错误
+            void set_send_error(const IOError& io_error) noexcept;       ///< 设置发送错误
+            void set_recv_error(const IOError& io_error) noexcept;       ///< 设置接收错误
 
             std::shared_ptr<RedisConnectSharedState<Strategy>> m_state; ///< 共享状态
         };
@@ -283,17 +283,17 @@
             explicit RedissExchangeMachine(std::shared_ptr<RedissExchangeSharedState> state);
 
             galay::ssl::SslMachineAction<result_type> advance();
-            void onHandshake(std::expected<void, galay::ssl::SslError> result);
-            void onRecv(std::expected<galay::utils::Bytes, galay::ssl::SslError> result);
-            void onSend(std::expected<size_t, galay::ssl::SslError> result);
-            void onShutdown(std::expected<void, galay::ssl::SslError> result);
+            void on_handshake(std::expected<void, galay::ssl::SslError> result);
+            void on_recv(std::expected<galay::utils::Bytes, galay::ssl::SslError> result);
+            void on_send(std::expected<size_t, galay::ssl::SslError> result);
+            void on_shutdown(std::expected<void, galay::ssl::SslError> result);
 
         private:
-            bool prepareReadWindow();
-            std::expected<bool, RedisError> tryParseReplies();
-            void setError(RedisError error) noexcept;
-            void setSendError(const galay::ssl::SslError& ssl_error) noexcept;
-            void setRecvError(const galay::ssl::SslError& ssl_error) noexcept;
+            bool prepare_read_window();
+            std::expected<bool, RedisError> try_parse_replies();
+            void set_error(RedisError error) noexcept;
+            void set_send_error(const galay::ssl::SslError& ssl_error) noexcept;
+            void set_recv_error(const galay::ssl::SslError& ssl_error) noexcept;
 
             std::shared_ptr<RedissExchangeSharedState> m_state;
         };
@@ -349,22 +349,22 @@
             explicit RedissConnectMachine(std::shared_ptr<RedissConnectSharedState> state);
 
             galay::kernel::MachineAction<result_type> advance();
-            void onConnect(std::expected<void, IOError> result);
-            void onRead(std::expected<size_t, IOError> result);
-            void onWrite(std::expected<size_t, IOError> result);
+            void on_connect(std::expected<void, IOError> result);
+            void on_read(std::expected<size_t, IOError> result);
+            void on_write(std::expected<size_t, IOError> result);
 
         private:
-            bool prepareReadWindow();
-            bool prepareNextCommand();
-            std::expected<bool, RedisError> tryParseReply();
-            galay::kernel::MachineAction<result_type> advanceSsl();
-            void setError(RedisError error) noexcept;
-            void setConnectError(const IOError& io_error) noexcept;
-            void setSendError(const galay::ssl::SslError& ssl_error) noexcept;
-            void setRecvError(const galay::ssl::SslError& ssl_error) noexcept;
-            void handleHandshakeResult(std::expected<void, galay::ssl::SslError> result);
-            void handleSendResult(std::expected<size_t, galay::ssl::SslError> result);
-            void handleRecvResult(std::expected<galay::utils::Bytes, galay::ssl::SslError> result);
+            bool prepare_read_window();
+            bool prepare_next_command();
+            std::expected<bool, RedisError> try_parse_reply();
+            galay::kernel::MachineAction<result_type> advance_ssl();
+            void set_error(RedisError error) noexcept;
+            void set_connect_error(const IOError& io_error) noexcept;
+            void set_send_error(const galay::ssl::SslError& ssl_error) noexcept;
+            void set_recv_error(const galay::ssl::SslError& ssl_error) noexcept;
+            void handle_handshake_result(std::expected<void, galay::ssl::SslError> result);
+            void handle_send_result(std::expected<size_t, galay::ssl::SslError> result);
+            void handle_recv_result(std::expected<galay::utils::Bytes, galay::ssl::SslError> result);
 
             std::shared_ptr<RedissConnectSharedState> m_state;
             galay::ssl::SslOperationDriver m_driver;

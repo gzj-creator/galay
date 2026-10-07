@@ -97,13 +97,13 @@ private:
     uint16_t m_port = 0;
 };
 
-uint16_t pickFreePort()
+uint16_t pick_free_port()
 {
     LoopbackListener listener;
     return listener.port();
 }
 
-int connectWithRetry(uint16_t port)
+int connect_with_retry(uint16_t port)
 {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -140,7 +140,7 @@ int connectWithRetry(uint16_t port)
     fail("connect retry exhausted");
 }
 
-void waitForCount(const std::atomic<int>& value, int expected, const char* message)
+void wait_for_count(const std::atomic<int>& value, int expected, const char* message)
 {
     for (int i = 0; i < 100; ++i) {
         if (value.load() >= expected) {
@@ -151,7 +151,7 @@ void waitForCount(const std::atomic<int>& value, int expected, const char* messa
     fail(message);
 }
 
-int readTcpNoDelay(int fd)
+int read_tcp_no_delay(int fd)
 {
     int value = 0;
     socklen_t value_len = sizeof(value);
@@ -169,7 +169,7 @@ public:
         : m_state(state) {}
 
     Task<bool> handle(Runtime&, SocketType& socket, const Host&) override {
-        m_state->observed_nodelay.store(readTcpNoDelay(socket.handle().fd));
+        m_state->observed_nodelay.store(read_tcp_no_delay(socket.handle().fd));
         m_state->calls.fetch_add(1);
         co_return false;
     }
@@ -178,7 +178,7 @@ private:
     ProbeState* m_state;
 };
 
-Task<std::expected<void, IOError>> closeTcpSocket(AsyncTcpSocket* socket)
+Task<std::expected<void, IOError>> close_tcp_socket(AsyncTcpSocket* socket)
 {
     if (socket == nullptr) {
         co_return std::unexpected(IOError(kNotReady, 0));
@@ -186,48 +186,48 @@ Task<std::expected<void, IOError>> closeTcpSocket(AsyncTcpSocket* socket)
     co_return co_await socket->close();
 }
 
-int observeH2cClientTcpNoDelay(bool tcp_no_delay)
+int observe_h2c_client_tcp_no_delay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     LoopbackListener listener;
-    H2cClient<> client(H2cClientBuilder().tcpNoDelay(tcp_no_delay).build());
+    H2cClient<> client(H2cClientBuilder().tcp_no_delay(tcp_no_delay).build());
 
-    auto connect_result = runtime.blockOnIO(client.connect("127.0.0.1", listener.port()));
+    auto connect_result = runtime.block_on_io(client.connect("127.0.0.1", listener.port()));
     require(connect_result.has_value(), "runtime should run H2cClient connect task");
     require(connect_result.value().has_value(), "H2cClient connect should succeed against loopback listener");
     require(client.m_socket != nullptr, "H2cClient should keep socket before upgrade");
-    const int observed = readTcpNoDelay(client.m_socket->handle().fd);
+    const int observed = read_tcp_no_delay(client.m_socket->handle().fd);
 
-    auto close_result = runtime.blockOnIO(closeTcpSocket(client.m_socket.get()));
+    auto close_result = runtime.block_on_io(close_tcp_socket(client.m_socket.get()));
     require(close_result.has_value(), "runtime should run H2cClient socket close task");
     require(close_result.value().has_value(), "H2cClient socket close should succeed");
     runtime.stop();
     return observed;
 }
 
-int observeH2cServerTcpNoDelay(bool tcp_no_delay)
+int observe_h2c_server_tcp_no_delay(bool tcp_no_delay)
 {
     ProbeState state;
-    const uint16_t port = pickFreePort();
+    const uint16_t port = pick_free_port();
     H2cServer server(H2cServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
-        .tcpNoDelay(tcp_no_delay)
-        .streamHandler([](Http2Stream::ptr) -> Task<void> {
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
+        .tcp_no_delay(tcp_no_delay)
+        .stream_handler([](Http2Stream::ptr) -> Task<void> {
             co_return;
         })
         .build());
 
-    require(server.addAcceptPlugin(std::make_unique<NoDelayProbePlugin<AsyncTcpSocket>>(&state)),
+    require(server.add_accept_plugin(std::make_unique<NoDelayProbePlugin<AsyncTcpSocket>>(&state)),
             "h2c nodelay probe plugin should register");
 
     server.start();
-    require(server.isRunning(), "h2c server should start for nodelay probe");
+    require(server.is_running(), "h2c server should start for nodelay probe");
 
-    const int client_fd = connectWithRetry(port);
-    waitForCount(state.calls, 1, "h2c nodelay probe plugin did not observe accepted socket");
+    const int client_fd = connect_with_retry(port);
+    wait_for_count(state.calls, 1, "h2c nodelay probe plugin did not observe accepted socket");
 
     if (::close(client_fd) != 0) {
         server.stop();
@@ -238,32 +238,32 @@ int observeH2cServerTcpNoDelay(bool tcp_no_delay)
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-int observeH2ServerTcpNoDelay(bool tcp_no_delay)
+int observe_h2_server_tcp_no_delay(bool tcp_no_delay)
 {
     ProbeState state;
-    const uint16_t port = pickFreePort();
+    const uint16_t port = pick_free_port();
     H2Server server(H2ServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .certPath("test/cpp/http2/test.crt")
-        .keyPath("test/cpp/http2/test.key")
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
-        .tcpNoDelay(tcp_no_delay)
-        .streamHandler([](Http2Stream::ptr) -> Task<void> {
+        .cert_path("test/cpp/http2/test.crt")
+        .key_path("test/cpp/http2/test.key")
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
+        .tcp_no_delay(tcp_no_delay)
+        .stream_handler([](Http2Stream::ptr) -> Task<void> {
             co_return;
         })
         .build());
 
-    require(server.addAcceptPlugin(
+    require(server.add_accept_plugin(
                 std::make_unique<NoDelayProbePlugin<galay::ssl::SslSocket>>(&state)),
             "h2 nodelay probe plugin should register");
 
     server.start();
-    require(server.isRunning(), "h2 server should start for nodelay probe");
+    require(server.is_running(), "h2 server should start for nodelay probe");
 
-    const int client_fd = connectWithRetry(port);
-    waitForCount(state.calls, 1, "h2 nodelay probe plugin did not observe accepted socket");
+    const int client_fd = connect_with_retry(port);
+    wait_for_count(state.calls, 1, "h2 nodelay probe plugin did not observe accepted socket");
 
     if (::close(client_fd) != 0) {
         server.stop();
@@ -273,10 +273,10 @@ int observeH2ServerTcpNoDelay(bool tcp_no_delay)
     return state.observed_nodelay.load();
 }
 
-Task<void> idleH2ConnectionHandler(Http2ConnContext& ctx)
+Task<void> idle_h2_connection_handler(Http2ConnContext& ctx)
 {
     while (true) {
-        auto streams = co_await ctx.getActiveStreams(1);
+        auto streams = co_await ctx.get_active_streams(1);
         if (!streams) {
             break;
         }
@@ -284,36 +284,36 @@ Task<void> idleH2ConnectionHandler(Http2ConnContext& ctx)
     co_return;
 }
 
-int observeH2ClientTcpNoDelay(bool tcp_no_delay)
+int observe_h2_client_tcp_no_delay(bool tcp_no_delay)
 {
-    const uint16_t port = pickFreePort();
+    const uint16_t port = pick_free_port();
     H2Server server(H2ServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .certPath("test/cpp/http2/test.crt")
-        .keyPath("test/cpp/http2/test.key")
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
-        .activeConnHandler(idleH2ConnectionHandler)
+        .cert_path("test/cpp/http2/test.crt")
+        .key_path("test/cpp/http2/test.key")
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
+        .active_conn_handler(idle_h2_connection_handler)
         .build());
 
     server.start();
-    require(server.isRunning(), "h2 server should start for client nodelay probe");
+    require(server.is_running(), "h2 server should start for client nodelay probe");
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     H2Client<> client(H2ClientBuilder()
-        .verifyPeer(false)
-        .tcpNoDelay(tcp_no_delay)
+        .verify_peer(false)
+        .tcp_no_delay(tcp_no_delay)
         .build());
 
-    auto connect_result = runtime.blockOnIO(client.connect("127.0.0.1", port));
+    auto connect_result = runtime.block_on_io(client.connect("127.0.0.1", port));
     require(connect_result.has_value(), "runtime should run H2Client connect task");
     require(connect_result.value().has_value(), "H2Client connect should succeed against local h2 server");
     require(client.m_conn != nullptr, "H2Client should finalize connected transport");
-    const int observed = readTcpNoDelay(client.m_conn->socket().handle().fd);
+    const int observed = read_tcp_no_delay(client.m_conn->socket().handle().fd);
 
-    auto close_result = runtime.blockOnIO(client.close());
+    auto close_result = runtime.block_on_io(client.close());
     require(close_result.has_value(), "runtime should run H2Client close task");
     require(close_result.value().has_value(), "H2Client close should succeed");
     runtime.stop();
@@ -324,67 +324,67 @@ int observeH2ClientTcpNoDelay(bool tcp_no_delay)
 
 void test_builder_config_surface()
 {
-    auto default_h2c_client = H2cClientBuilder().buildConfig();
+    auto default_h2c_client = H2cClientBuilder().build_config();
     require(default_h2c_client.tcp_no_delay, "H2cClientConfig should enable TCP_NODELAY by default");
 
-    auto disabled_h2c_client = H2cClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_h2c_client = H2cClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_h2c_client.tcp_no_delay, "H2cClientBuilder should support disabling TCP_NODELAY");
 
-    auto default_h2c_server = H2cServerBuilder().buildConfig();
+    auto default_h2c_server = H2cServerBuilder().build_config();
     require(default_h2c_server.tcp_no_delay, "H2cServerConfig should enable TCP_NODELAY by default");
 
-    auto disabled_h2c_server = H2cServerBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_h2c_server = H2cServerBuilder().tcp_no_delay(false).build_config();
     require(!disabled_h2c_server.tcp_no_delay, "H2cServerBuilder should support disabling TCP_NODELAY");
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    auto default_h2_client = H2ClientBuilder().buildConfig();
+    auto default_h2_client = H2ClientBuilder().build_config();
     require(default_h2_client.tcp_no_delay, "H2ClientConfig should enable TCP_NODELAY by default");
 
-    auto disabled_h2_client = H2ClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_h2_client = H2ClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_h2_client.tcp_no_delay, "H2ClientBuilder should support disabling TCP_NODELAY");
 
-    auto default_h2_server = H2ServerBuilder().buildConfig();
+    auto default_h2_server = H2ServerBuilder().build_config();
     require(default_h2_server.tcp_no_delay, "H2ServerConfig should enable TCP_NODELAY by default");
 
-    auto disabled_h2_server = H2ServerBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_h2_server = H2ServerBuilder().tcp_no_delay(false).build_config();
     require(!disabled_h2_server.tcp_no_delay, "H2ServerBuilder should support disabling TCP_NODELAY");
 #endif
 }
 
 void test_h2c_client_applies_config_to_connected_socket()
 {
-    const int default_nodelay = observeH2cClientTcpNoDelay(true);
+    const int default_nodelay = observe_h2c_client_tcp_no_delay(true);
     require(default_nodelay != 0, "default H2cClient socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeH2cClientTcpNoDelay(false);
+    const int disabled_nodelay = observe_h2c_client_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled H2cClient socket should leave TCP_NODELAY off");
 }
 
 void test_h2c_server_applies_config_to_accepted_socket()
 {
-    const int default_nodelay = observeH2cServerTcpNoDelay(true);
+    const int default_nodelay = observe_h2c_server_tcp_no_delay(true);
     require(default_nodelay != 0, "default H2cServer accepted socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeH2cServerTcpNoDelay(false);
+    const int disabled_nodelay = observe_h2c_server_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled H2cServer accepted socket should leave TCP_NODELAY off");
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 void test_h2_server_applies_config_to_accepted_socket()
 {
-    const int default_nodelay = observeH2ServerTcpNoDelay(true);
+    const int default_nodelay = observe_h2_server_tcp_no_delay(true);
     require(default_nodelay != 0, "default H2Server accepted socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeH2ServerTcpNoDelay(false);
+    const int disabled_nodelay = observe_h2_server_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled H2Server accepted socket should leave TCP_NODELAY off");
 }
 
 void test_h2_client_applies_config_to_connected_socket()
 {
-    const int default_nodelay = observeH2ClientTcpNoDelay(true);
+    const int default_nodelay = observe_h2_client_tcp_no_delay(true);
     require(default_nodelay != 0, "default H2Client socket should have TCP_NODELAY enabled");
 
-    const int disabled_nodelay = observeH2ClientTcpNoDelay(false);
+    const int disabled_nodelay = observe_h2_client_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled H2Client socket should leave TCP_NODELAY off");
 }
 #endif

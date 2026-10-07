@@ -19,7 +19,7 @@
 using namespace galay::http2;
 using namespace galay::kernel;
 
-Task<void> runClient(const std::string& host, uint16_t port) {
+Task<void> run_client(const std::string& host, uint16_t port) {
     auto client = H2cClientBuilder().build();
 
     std::cout << "Connecting to " << host << ":" << port << "...\n";
@@ -36,12 +36,12 @@ Task<void> runClient(const std::string& host, uint16_t port) {
     std::cout << "Upgrading to HTTP/2...\n";
     auto upgrade_result = co_await client.upgrade("/");
     if (!upgrade_result) {
-        std::cerr << "Upgrade failed: " << upgrade_result.error().toString() << "\n";
+        std::cerr << "Upgrade failed: " << upgrade_result.error().to_string() << "\n";
         co_return;
     }
     std::cout << "Upgraded to HTTP/2!\n\n";
 
-    auto* mgr = client.getConn()->streamManager();
+    auto* mgr = client.get_conn()->stream_manager();
 
     // 发送 POST /echo
     std::string body = "Hello from H2cEchoClient!";
@@ -56,15 +56,15 @@ Task<void> runClient(const std::string& host, uint16_t port) {
     headers.emplace_back("content-type", "text/plain");
     headers.emplace_back("content-length", content_length);
 
-    auto stream = mgr->allocateStream();
+    auto stream = mgr->allocate_stream();
 
     std::cout << "=== POST /echo ===\n";
-    stream->sendHeaders(headers, false, true);
-    stream->sendData(body, true);
+    stream->send_headers(headers, false, true);
+    stream->send_data(body, true);
 
     bool finished = false;
     while (!finished) {
-        auto batch_result = co_await stream->getFrames(16);
+        auto batch_result = co_await stream->get_frames(16);
         if (!batch_result) {
             std::cerr << "Response stream closed unexpectedly\n";
             co_await client.shutdown();
@@ -77,7 +77,7 @@ Task<void> runClient(const std::string& host, uint16_t port) {
                 co_await client.shutdown();
                 co_return;
             }
-            if ((frame->isHeaders() || frame->isData()) && frame->isEndStream()) {
+            if ((frame->is_headers() || frame->is_data()) && frame->is_end_stream()) {
                 finished = true;
                 break;
             }
@@ -107,10 +107,10 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================\n";
 
     try {
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
         runtime.start();
 
-        auto join = runtime.spawnIO(runClient(host, port));
+        auto join = runtime.spawn_io(run_client(host, port));
         if (!join) {
             runtime.stop();
             return 1;

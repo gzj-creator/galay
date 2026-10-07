@@ -64,25 +64,25 @@ class H2cClient;
 
 class H2cClientBuilder {
 public:
-    H2cClientBuilder& tcpNoDelay(bool v)              { m_config.tcp_no_delay = v; return *this; }
-    H2cClientBuilder& maxConcurrentStreams(uint32_t v)  { m_config.max_concurrent_streams = v; return *this; }
-    H2cClientBuilder& initialWindowSize(uint32_t v)    { m_config.initial_window_size = v; return *this; }
-    H2cClientBuilder& maxFrameSize(uint32_t v)         { m_config.max_frame_size = v; return *this; }
-    H2cClientBuilder& maxHeaderListSize(uint32_t v)    { m_config.max_header_list_size = v; return *this; }
-    H2cClientBuilder& pingEnabled(bool v)              { m_config.ping_enabled = v; return *this; }
-    H2cClientBuilder& pingInterval(std::chrono::milliseconds v) { m_config.ping_interval = v; return *this; }
-    H2cClientBuilder& pingTimeout(std::chrono::milliseconds v) { m_config.ping_timeout = v; return *this; }
-    H2cClientBuilder& settingsAckTimeout(std::chrono::milliseconds v) { m_config.settings_ack_timeout = v; return *this; }
-    H2cClientBuilder& gracefulShutdownRtt(std::chrono::milliseconds v) { m_config.graceful_shutdown_rtt = v; return *this; }
-    H2cClientBuilder& gracefulShutdownTimeout(std::chrono::milliseconds v) { m_config.graceful_shutdown_timeout = v; return *this; }
-    H2cClientBuilder& flowControlTargetWindow(uint32_t v) { m_config.flow_control_target_window = v; return *this; }
-    H2cClientBuilder& flowControlStrategy(Http2FlowControlStrategy v) {
+    H2cClientBuilder& tcp_no_delay(bool v)              { m_config.tcp_no_delay = v; return *this; }
+    H2cClientBuilder& max_concurrent_streams(uint32_t v)  { m_config.max_concurrent_streams = v; return *this; }
+    H2cClientBuilder& initial_window_size(uint32_t v)    { m_config.initial_window_size = v; return *this; }
+    H2cClientBuilder& max_frame_size(uint32_t v)         { m_config.max_frame_size = v; return *this; }
+    H2cClientBuilder& max_header_list_size(uint32_t v)    { m_config.max_header_list_size = v; return *this; }
+    H2cClientBuilder& ping_enabled(bool v)              { m_config.ping_enabled = v; return *this; }
+    H2cClientBuilder& ping_interval(std::chrono::milliseconds v) { m_config.ping_interval = v; return *this; }
+    H2cClientBuilder& ping_timeout(std::chrono::milliseconds v) { m_config.ping_timeout = v; return *this; }
+    H2cClientBuilder& settings_ack_timeout(std::chrono::milliseconds v) { m_config.settings_ack_timeout = v; return *this; }
+    H2cClientBuilder& graceful_shutdown_rtt(std::chrono::milliseconds v) { m_config.graceful_shutdown_rtt = v; return *this; }
+    H2cClientBuilder& graceful_shutdown_timeout(std::chrono::milliseconds v) { m_config.graceful_shutdown_timeout = v; return *this; }
+    H2cClientBuilder& flow_control_target_window(uint32_t v) { m_config.flow_control_target_window = v; return *this; }
+    H2cClientBuilder& flow_control_strategy(Http2FlowControlStrategy v) {
         m_config.flow_control_strategy = std::move(v);
         return *this;
     }
     H2cClient<> build() const;
-    H2cClientConfig buildConfig() const {
-        return Http2Conn::normalizeSettingsConfig(m_config);
+    H2cClientConfig build_config() const {
+        return Http2Conn::normalize_settings_config(m_config);
     }
 private:
     H2cClientConfig m_config;
@@ -103,7 +103,7 @@ class H2cClient
 {
 public:
     H2cClient(const H2cClientConfig& config = H2cClientConfig(), size_t ring_buffer_size = 65536)
-        : m_config(Http2Conn::normalizeSettingsConfig(config))
+        : m_config(Http2Conn::normalize_settings_config(config))
         , m_ring_buffer_size(ring_buffer_size)
         , m_port(0)
         , m_upgraded(false) {}
@@ -115,23 +115,23 @@ public:
     H2cClient& operator=(H2cClient&&) noexcept = default;
 
     auto connect(const std::string& host, uint16_t port) {
-        return connectImpl(host, port);
+        return connect_impl(host, port);
     }
 
-    Task<std::expected<void, IOError>> connectImpl(const std::string& host, uint16_t port) {
+    Task<std::expected<void, IOError>> connect_impl(const std::string& host, uint16_t port) {
         m_host = host;
         m_port = port;
         m_authority = m_host + ":" + std::to_string(m_port);
         m_socket = std::make_unique<AsyncTcpSocket>(IPType::IPV4);
         m_ring_buffer = std::make_unique<RingBuffer<Strategy, std::dynamic_extent>>(m_ring_buffer_size);
-        auto r = m_socket->option().handleNonBlock();
+        auto r = m_socket->option().handle_non_block();
         if (!r) {
             m_socket.reset();
             m_ring_buffer.reset();
             co_return std::unexpected(r.error());
         }
         if (m_config.tcp_no_delay) {
-            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            auto nodelay_result = m_socket->option().handle_tcp_no_delay();
             if (!nodelay_result) {
                 m_socket.reset();
                 m_ring_buffer.reset();
@@ -149,8 +149,8 @@ public:
                           const std::string& content_type = "application/x-www-form-urlencoded");
     Task<std::expected<bool, Http2Error>> shutdown();
 
-    bool isUpgraded() const { return m_upgraded; }
-    Http2ConnImpl<AsyncTcpSocket, Strategy>* getConn() { return m_conn.get(); }
+    bool is_upgraded() const { return m_upgraded; }
+    Http2ConnImpl<AsyncTcpSocket, Strategy>* get_conn() { return m_conn.get(); }
 
 private:
     friend struct H2cUpgradeMachine<Strategy>;
@@ -183,14 +183,14 @@ struct H2cUpgradeMachine {
         , m_ring_buffer(client.m_ring_buffer.get())
     {
         if (client.m_socket == nullptr || m_ring_buffer == nullptr) {
-            setConnectError("not connected");
+            set_connect_error("not connected");
             return;
         }
 
         client.m_pending_peer_settings.reset();
-        prepareUpgradeRequest(path);
-        preparePrefaceAndSettings();
-        prepareAck();
+        prepare_upgrade_request(path);
+        prepare_preface_and_settings();
+        prepare_ack();
     }
 
     MachineAction<result_type> advance() {
@@ -201,45 +201,45 @@ struct H2cUpgradeMachine {
         for (;;) {
             switch (m_phase) {
             case Phase::kSendUpgrade:
-                if (sendCompleted(m_upgrade_request_buf, Phase::kRecvUpgradeResponse)) {
+                if (send_completed(m_upgrade_request_buf, Phase::kRecvUpgradeResponse)) {
                     continue;
                 }
-                return waitSend(m_upgrade_request_buf);
+                return wait_send(m_upgrade_request_buf);
             case Phase::kRecvUpgradeResponse:
-                if (parseUpgradeResponse()) {
+                if (parse_upgrade_response()) {
                     if (m_result.has_value()) {
                         return MachineAction<result_type>::complete(std::move(*m_result));
                     }
                     m_phase = Phase::kSendPrefaceSettings;
                     continue;
                 }
-                if (!prepareRecvWindow("RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> full while waiting 101")) {
+                if (!prepare_recv_window("RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> full while waiting 101")) {
                     return MachineAction<result_type>::complete(std::move(*m_result));
                 }
-                return MachineAction<result_type>::waitReadv(m_read_iov_storage.data(), m_read_iov_count);
+                return MachineAction<result_type>::wait_readv(m_read_iov_storage.data(), m_read_iov_count);
             case Phase::kSendPrefaceSettings:
-                if (sendCompleted(m_preface_settings_buf, Phase::kRecvSettings)) {
+                if (send_completed(m_preface_settings_buf, Phase::kRecvSettings)) {
                     continue;
                 }
-                return waitSend(m_preface_settings_buf);
+                return wait_send(m_preface_settings_buf);
             case Phase::kRecvSettings:
-                if (tryConsumeSettingsFrame()) {
+                if (try_consume_settings_frame()) {
                     if (m_result.has_value()) {
                         return MachineAction<result_type>::complete(std::move(*m_result));
                     }
                     m_phase = Phase::kSendAck;
                     continue;
                 }
-                if (!prepareRecvWindow("RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> full while waiting SETTINGS")) {
+                if (!prepare_recv_window("RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> full while waiting SETTINGS")) {
                     return MachineAction<result_type>::complete(std::move(*m_result));
                 }
-                return MachineAction<result_type>::waitReadv(m_read_iov_storage.data(), m_read_iov_count);
+                return MachineAction<result_type>::wait_readv(m_read_iov_storage.data(), m_read_iov_count);
             case Phase::kSendAck:
-                if (sendCompleted(m_ack_buf, Phase::kDone)) {
+                if (send_completed(m_ack_buf, Phase::kDone)) {
                     m_result = true;
                     return MachineAction<result_type>::complete(std::move(*m_result));
                 }
-                return waitSend(m_ack_buf);
+                return wait_send(m_ack_buf);
             case Phase::kDone:
                 return MachineAction<result_type>::complete(
                     m_result.value_or(std::unexpected(Http2Error(Http2ErrorCode::InternalError, "upgrade incomplete"))));
@@ -247,17 +247,17 @@ struct H2cUpgradeMachine {
         }
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
-            setRecvError(result.error());
+            set_recv_error(result.error());
             return;
         }
 
         if (result.value() == 0) {
             if (m_phase == Phase::kRecvUpgradeResponse) {
-                setProtocolError("peer closed while waiting 101");
+                set_protocol_error("peer closed while waiting 101");
             } else {
-                setProtocolError("peer closed while waiting SETTINGS");
+                set_protocol_error("peer closed while waiting SETTINGS");
             }
             return;
         }
@@ -265,21 +265,21 @@ struct H2cUpgradeMachine {
         m_ring_buffer->produce(result.value());
     }
 
-    void onWrite(std::expected<size_t, IOError> result) {
+    void on_write(std::expected<size_t, IOError> result) {
         if (!result) {
-            setSendError(result.error());
+            set_send_error(result.error());
             return;
         }
 
         if (result.value() == 0) {
-            setSendError(IOError(kSendFailed, 0));
+            set_send_error(IOError(kSendFailed, 0));
             return;
         }
 
-        const auto& payload = currentPayload();
+        const auto& payload = current_payload();
         m_send_offset += result.value();
         if (m_send_offset > payload.size()) {
-            setSendError(IOError(kSendFailed, 0));
+            set_send_error(IOError(kSendFailed, 0));
             return;
         }
     }
@@ -294,12 +294,12 @@ private:
         kDone,
     };
 
-    MachineAction<result_type> waitSend(const std::string& payload) const {
-        return MachineAction<result_type>::waitWrite(payload.data() + m_send_offset,
+    MachineAction<result_type> wait_send(const std::string& payload) const {
+        return MachineAction<result_type>::wait_write(payload.data() + m_send_offset,
                                                      payload.size() - m_send_offset);
     }
 
-    bool sendCompleted(const std::string& payload, Phase next_phase) {
+    bool send_completed(const std::string& payload, Phase next_phase) {
         if (m_send_offset < payload.size()) {
             return false;
         }
@@ -308,7 +308,7 @@ private:
         return true;
     }
 
-    const std::string& currentPayload() const {
+    const std::string& current_payload() const {
         switch (m_phase) {
         case Phase::kSendUpgrade:
             return m_upgrade_request_buf;
@@ -324,23 +324,23 @@ private:
         return m_ack_buf;
     }
 
-    bool prepareRecvWindow(std::string_view error_message) {
-        const size_t iov_count = m_ring_buffer->getWriteIovecs(
+    bool prepare_recv_window(std::string_view error_message) {
+        const size_t iov_count = m_ring_buffer->get_write_iovecs(
             m_read_iov_storage.data(), m_read_iov_storage.size());
-        m_read_iov_count = compactIovecs(m_read_iov_storage, iov_count);
+        m_read_iov_count = compact_iovecs(m_read_iov_storage, iov_count);
         if (m_read_iov_count == 0) {
-            setProtocolError(std::string(error_message));
+            set_protocol_error(std::string(error_message));
             return false;
         }
         return true;
     }
 
-    void prepareUpgradeRequest(const std::string& path) {
-        auto settings_frame = Http2Conn::makeSettingsFrameFromConfig(
+    void prepare_upgrade_request(const std::string& path) {
+        auto settings_frame = Http2Conn::make_settings_frame_from_config(
             m_client->m_config,
             0);
         std::string serialized = settings_frame.serialize();
-        std::string base64_settings = galay::utils::Base64Util::Base64Encode(
+        std::string base64_settings = galay::utils::Base64Util::base64_encode(
             reinterpret_cast<const unsigned char*>(serialized.data() + kHttp2FrameHeaderLength),
             serialized.size() - kHttp2FrameHeaderLength);
         for (char& c : base64_settings) {
@@ -358,12 +358,12 @@ private:
             .header("Upgrade", "h2c")
             .header("HTTP2-Settings", base64_settings)
             .build();
-        m_upgrade_request_buf = request.toString();
+        m_upgrade_request_buf = request.to_string();
     }
 
-    void preparePrefaceAndSettings() {
+    void prepare_preface_and_settings() {
         std::string preface(kHttp2ConnectionPreface.begin(), kHttp2ConnectionPreface.end());
-        auto settings = Http2Conn::makeSettingsFrameFromConfig(
+        auto settings = Http2Conn::make_settings_frame_from_config(
             m_client->m_config,
             0);
         settings.header().stream_id = 0;
@@ -371,51 +371,51 @@ private:
         m_preface_settings_buf.append(settings.serialize());
     }
 
-    void prepareAck() {
+    void prepare_ack() {
         Http2SettingsFrame ack;
-        ack.setAck(true);
+        ack.set_ack(true);
         ack.header().stream_id = 0;
         m_ack_buf = ack.serialize();
     }
 
-    void setSendError(const IOError& error) {
-        setResult(Http2Error(Http2ErrorCode::InternalError, error.message()));
+    void set_send_error(const IOError& error) {
+        set_result(Http2Error(Http2ErrorCode::InternalError, error.message()));
     }
 
-    void setRecvError(const IOError& error) {
+    void set_recv_error(const IOError& error) {
         if (IOError::contains(error.code(), kDisconnectError)) {
-            setResult(Http2Error(Http2ErrorCode::ConnectError, "connection closed"));
+            set_result(Http2Error(Http2ErrorCode::ConnectError, "connection closed"));
             return;
         }
-        setResult(Http2Error(Http2ErrorCode::InternalError, error.message()));
+        set_result(Http2Error(Http2ErrorCode::InternalError, error.message()));
     }
 
-    void setProtocolError(std::string message) {
-        setResult(Http2Error(Http2ErrorCode::ProtocolError, std::move(message)));
+    void set_protocol_error(std::string message) {
+        set_result(Http2Error(Http2ErrorCode::ProtocolError, std::move(message)));
     }
 
-    void setConnectError(std::string message) {
-        setResult(Http2Error(Http2ErrorCode::ConnectError, std::move(message)));
+    void set_connect_error(std::string message) {
+        set_result(Http2Error(Http2ErrorCode::ConnectError, std::move(message)));
     }
 
-    void setResult(Http2Error error) {
+    void set_result(Http2Error error) {
         if (!m_result.has_value()) {
             m_result = std::unexpected(std::move(error));
         }
     }
 
-    bool parseUpgradeResponse() {
-        auto read_iovecs = borrowReadIovecs(*m_ring_buffer);
+    bool parse_upgrade_response() {
+        auto read_iovecs = borrow_read_iovecs(*m_ring_buffer);
         if (read_iovecs.empty()) {
             return false;
         }
 
         std::vector<iovec> parse_iovecs;
-        if (IoVecWindow::buildWindow(read_iovecs, parse_iovecs) == 0) {
+        if (IoVecWindow::build_window(read_iovecs, parse_iovecs) == 0) {
             return false;
         }
 
-        auto [error_code, consumed] = m_upgrade_response.fromIOVec(parse_iovecs);
+        auto [error_code, consumed] = m_upgrade_response.from_io_vec(parse_iovecs);
         if (consumed > 0) {
             m_ring_buffer->consume(consumed);
         }
@@ -424,31 +424,31 @@ private:
             return false;
         }
         if (error_code != HttpErrorCode::kNoError) {
-            setProtocolError("HTTP parse error during upgrade");
+            set_protocol_error("HTTP parse error during upgrade");
             return true;
         }
-        if (!m_upgrade_response.isComplete()) {
+        if (!m_upgrade_response.is_complete()) {
             return false;
         }
         if (m_upgrade_response.header().code() != HttpStatusCode::SwitchingProtocol_101) {
-            setProtocolError("expected 101, got " +
+            set_protocol_error("expected 101, got " +
                              std::to_string(static_cast<int>(m_upgrade_response.header().code())));
             return true;
         }
-        if (!m_upgrade_response.header().headerPairs().hasKey("Upgrade")) {
-            setProtocolError("missing Upgrade header");
+        if (!m_upgrade_response.header().header_pairs().has_key("Upgrade")) {
+            set_protocol_error("missing Upgrade header");
             return true;
         }
-        const std::string upgrade_value = m_upgrade_response.header().headerPairs().getValue("Upgrade");
+        const std::string upgrade_value = m_upgrade_response.header().header_pairs().get_value("Upgrade");
         if (upgrade_value != "h2c") {
-            setProtocolError("invalid Upgrade value: " + upgrade_value);
+            set_protocol_error("invalid Upgrade value: " + upgrade_value);
             return true;
         }
         return true;
     }
 
-    bool tryConsumeSettingsFrame() {
-        auto read_iovecs = borrowReadIovecs(*m_ring_buffer);
+    bool try_consume_settings_frame() {
+        auto read_iovecs = borrow_read_iovecs(*m_ring_buffer);
         size_t available = 0;
         for (const auto& iov : read_iovecs) {
             available += iov.iov_len;
@@ -474,7 +474,7 @@ private:
             return false;
         }
         if (frame_header.type != Http2FrameType::Settings) {
-            setProtocolError("expected SETTINGS, got " + http2FrameTypeToString(frame_header.type));
+            set_protocol_error("expected SETTINGS, got " + http2_frame_type_to_string(frame_header.type));
             return true;
         }
         std::string frame_bytes(frame_size, '\0');
@@ -487,26 +487,26 @@ private:
                 break;
             }
         }
-        auto frame_result = Http2FrameParser::parseFrame(
+        auto frame_result = Http2FrameParser::parse_frame(
             reinterpret_cast<const uint8_t*>(frame_bytes.data()),
             frame_bytes.size());
         m_ring_buffer->consume(frame_size);
-        if (!frame_result.has_value() || !frame_result.value() || !frame_result.value()->isSettings()) {
-            setProtocolError("invalid SETTINGS frame");
+        if (!frame_result.has_value() || !frame_result.value() || !frame_result.value()->is_settings()) {
+            set_protocol_error("invalid SETTINGS frame");
             return true;
         }
-        auto* settings = frame_result.value()->asSettings();
+        auto* settings = frame_result.value()->as_settings();
         Http2ErrorCode error = Http2ErrorCode::NoError;
         if (m_client->m_conn == nullptr) {
-            error = Http2Conn::validateSettingsFrame(*settings);
+            error = Http2Conn::validate_settings_frame(*settings);
             if (error == Http2ErrorCode::NoError) {
                 m_client->m_pending_peer_settings.emplace(settings->clone());
             }
         } else {
-            error = m_client->m_conn->applyPeerSettings(*settings);
+            error = m_client->m_conn->apply_peer_settings(*settings);
         }
         if (error != Http2ErrorCode::NoError) {
-            setProtocolError("invalid peer SETTINGS");
+            set_protocol_error("invalid peer SETTINGS");
             return true;
         }
         return true;
@@ -526,25 +526,25 @@ private:
 };
 
 inline H2cClient<> H2cClientBuilder::build() const {
-    return H2cClient<>(Http2Conn::normalizeSettingsConfig(m_config));
+    return H2cClient<>(Http2Conn::normalize_settings_config(m_config));
 }
 
 // ============== get() / post() ==============
 
 template<RingBufferBackendStrategy Strategy>
 inline Http2Stream::ptr H2cClient<Strategy>::get(const std::string& path) {
-    if (!m_conn || !m_conn->streamManager()) {
+    if (!m_conn || !m_conn->stream_manager()) {
         return nullptr;
     }
-    auto* mgr = m_conn->streamManager();
-    auto stream = mgr->allocateStream();
+    auto* mgr = m_conn->stream_manager();
+    auto stream = mgr->allocate_stream();
     std::vector<Http2HeaderField> headers;
     headers.reserve(4);
     headers.push_back({":method", "GET"});
     headers.push_back({":scheme", "http"});
     headers.push_back({":authority", m_authority});
     headers.push_back({":path", path.empty() ? "/" : path});
-    stream->sendHeaders(headers, true);
+    stream->send_headers(headers, true);
     return stream;
 }
 
@@ -552,11 +552,11 @@ template<RingBufferBackendStrategy Strategy>
 inline Http2Stream::ptr H2cClient<Strategy>::post(const std::string& path,
                                                   const std::string& body,
                                                   const std::string& content_type) {
-    if (!m_conn || !m_conn->streamManager()) {
+    if (!m_conn || !m_conn->stream_manager()) {
         return nullptr;
     }
-    auto* mgr = m_conn->streamManager();
-    auto stream = mgr->allocateStream();
+    auto* mgr = m_conn->stream_manager();
+    auto stream = mgr->allocate_stream();
     std::vector<Http2HeaderField> headers;
     headers.reserve(5);
     headers.push_back({":method", "POST"});
@@ -564,8 +564,8 @@ inline Http2Stream::ptr H2cClient<Strategy>::post(const std::string& path,
     headers.push_back({":authority", m_authority});
     headers.push_back({":path", path.empty() ? "/" : path});
     headers.push_back({"content-type", content_type});
-    stream->sendHeaders(headers, false);
-    stream->sendData(body, true);
+    stream->send_headers(headers, false);
+    stream->send_data(body, true);
     return stream;
 }
 
@@ -574,8 +574,8 @@ inline Task<std::expected<bool, Http2Error>> H2cClient<Strategy>::shutdown() {
     m_shutdown_result = true;
 
 
-    if (m_conn && m_conn->streamManager()) {
-        co_await m_conn->streamManager()->shutdown(Http2ErrorCode::NoError);
+    if (m_conn && m_conn->stream_manager()) {
+        co_await m_conn->stream_manager()->shutdown(Http2ErrorCode::NoError);
     } else if (m_socket) {
         auto close_result = co_await m_socket->close();
         if (!close_result) {

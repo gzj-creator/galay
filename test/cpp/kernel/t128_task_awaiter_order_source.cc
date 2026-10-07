@@ -4,7 +4,7 @@
  *
  * 关键覆盖点：
  * - `TaskAwaiter::await_suspend()` 必须先把父任务写入子任务 `m_next`，
- *   再调用 `scheduleTaskImmediately(childTask)`。
+ *   再调用 `schedule_task_immediately(childTask)`。
  * - 防止立即完成的子任务在 continuation 尚未注册时结束，导致父任务永久挂起。
  */
 
@@ -16,11 +16,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -28,7 +28,7 @@ std::string readAll(const std::filesystem::path& path) {
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
-std::string extractFunction(const std::string& content, const std::string& marker) {
+std::string extract_function(const std::string& content, const std::string& marker) {
     const auto begin_pos = content.find(marker);
     if (begin_pos == std::string::npos) {
         return {};
@@ -62,24 +62,24 @@ std::string extractFunction(const std::string& content, const std::string& marke
 }  // namespace
 
 int main() {
-    const auto task_path = projectRoot() / "galay-kernel" / "core" / "task.h";
-    const std::string task = readAll(task_path);
+    const auto task_path = project_root() / "galay-kernel" / "core" / "task.h";
+    const std::string task = read_all(task_path);
     if (task.empty()) {
         std::cerr << "[T128] failed to read " << task_path << '\n';
         return 1;
     }
 
     const std::string await_suspend =
-        extractFunction(task, "bool await_suspend(std::coroutine_handle<Promise> handle)");
+        extract_function(task, "bool await_suspend(std::coroutine_handle<Promise> handle)");
     if (await_suspend.empty()) {
         std::cerr << "[T128] failed to locate TaskAwaiter::await_suspend\n";
         return 1;
     }
 
     const auto attach_pos = await_suspend.find("childTask.state()->m_next");
-    const auto schedule_pos = await_suspend.find("scheduleTaskImmediately(childTask)");
+    const auto schedule_pos = await_suspend.find("schedule_task_immediately(childTask)");
     if (attach_pos == std::string::npos) {
-        std::cerr << "[T128] TaskAwaiter::await_suspend must attach childTask.m_next\n";
+        std::cerr << "[T128] TaskAwaiter::await_suspend must attach child_task.m_next\n";
         return 1;
     }
     if (schedule_pos == std::string::npos) {

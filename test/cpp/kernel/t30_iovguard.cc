@@ -24,13 +24,13 @@ bool check(bool condition, const char* message)
     return condition;
 }
 
-bool hasParamInvalid(const std::expected<size_t, galay::kernel::IOError>& result)
+bool has_param_invalid(const std::expected<size_t, galay::kernel::IOError>& result)
 {
     return !result && galay::kernel::IOError::contains(result.error().code(), galay::kernel::kParamInvalid);
 }
 
 template <typename Iovecs>
-bool readvAcceptsCount(galay::async::AsyncTcpSocket& socket,
+bool readv_accepts_count(galay::async::AsyncTcpSocket& socket,
                        Iovecs& iovecs,
                        size_t count,
                        const std::string& label)
@@ -40,7 +40,7 @@ bool readvAcceptsCount(galay::async::AsyncTcpSocket& socket,
 }
 
 template <typename Iovecs>
-bool writevAcceptsCount(galay::async::AsyncTcpSocket& socket,
+bool writev_accepts_count(galay::async::AsyncTcpSocket& socket,
                         Iovecs& iovecs,
                         size_t count,
                         const std::string& label)
@@ -50,7 +50,7 @@ bool writevAcceptsCount(galay::async::AsyncTcpSocket& socket,
 }
 
 template <typename Iovecs>
-bool readvRejectsCount(galay::async::AsyncTcpSocket& socket,
+bool readv_rejects_count(galay::async::AsyncTcpSocket& socket,
                        Iovecs& iovecs,
                        size_t count,
                        const std::string& label)
@@ -59,12 +59,12 @@ bool readvRejectsCount(galay::async::AsyncTcpSocket& socket,
     if (!check(awaitable.await_ready(), (label + " invalid readv count did not complete immediately").c_str())) {
         return false;
     }
-    return check(hasParamInvalid(awaitable.await_resume()),
+    return check(has_param_invalid(awaitable.await_resume()),
                  (label + " invalid readv count did not return kParamInvalid").c_str());
 }
 
 template <typename Iovecs>
-bool writevRejectsCount(galay::async::AsyncTcpSocket& socket,
+bool writev_rejects_count(galay::async::AsyncTcpSocket& socket,
                         Iovecs& iovecs,
                         size_t count,
                         const std::string& label)
@@ -73,45 +73,45 @@ bool writevRejectsCount(galay::async::AsyncTcpSocket& socket,
     if (!check(awaitable.await_ready(), (label + " invalid writev count did not complete immediately").c_str())) {
         return false;
     }
-    return check(hasParamInvalid(awaitable.await_resume()),
+    return check(has_param_invalid(awaitable.await_resume()),
                  (label + " invalid writev count did not return kParamInvalid").c_str());
 }
 
 template <size_t N>
-bool testStdArrayBounds()
+bool test_std_array_bounds()
 {
     galay::async::AsyncTcpSocket socket(GHandle::invalid());
     std::array<struct iovec, N> iovecs{};
     const std::string prefix = "std::array<" + std::to_string(N) + ">";
 
     bool ok = true;
-    ok = readvAcceptsCount(socket, iovecs, 0, prefix) && ok;
-    ok = readvAcceptsCount(socket, iovecs, N, prefix) && ok;
-    ok = writevAcceptsCount(socket, iovecs, 0, prefix) && ok;
-    ok = writevAcceptsCount(socket, iovecs, N, prefix) && ok;
-    ok = readvRejectsCount(socket, iovecs, N + 1, prefix) && ok;
-    ok = writevRejectsCount(socket, iovecs, N + 1, prefix) && ok;
-    ok = readvRejectsCount(socket, iovecs, std::numeric_limits<size_t>::max(), prefix) && ok;
-    ok = writevRejectsCount(socket, iovecs, std::numeric_limits<size_t>::max(), prefix) && ok;
+    ok = readv_accepts_count(socket, iovecs, 0, prefix) && ok;
+    ok = readv_accepts_count(socket, iovecs, N, prefix) && ok;
+    ok = writev_accepts_count(socket, iovecs, 0, prefix) && ok;
+    ok = writev_accepts_count(socket, iovecs, N, prefix) && ok;
+    ok = readv_rejects_count(socket, iovecs, N + 1, prefix) && ok;
+    ok = writev_rejects_count(socket, iovecs, N + 1, prefix) && ok;
+    ok = readv_rejects_count(socket, iovecs, std::numeric_limits<size_t>::max(), prefix) && ok;
+    ok = writev_rejects_count(socket, iovecs, std::numeric_limits<size_t>::max(), prefix) && ok;
     return ok;
 }
 
 template <size_t N>
-bool testCArrayBounds()
+bool test_c_array_bounds()
 {
     galay::async::AsyncTcpSocket socket(GHandle::invalid());
     struct iovec iovecs[N]{};
     const std::string prefix = "C array[" + std::to_string(N) + "]";
 
     bool ok = true;
-    ok = readvAcceptsCount(socket, iovecs, 0, prefix) && ok;
-    ok = readvAcceptsCount(socket, iovecs, N, prefix) && ok;
-    ok = writevAcceptsCount(socket, iovecs, 0, prefix) && ok;
-    ok = writevAcceptsCount(socket, iovecs, N, prefix) && ok;
-    ok = readvRejectsCount(socket, iovecs, N + 1, prefix) && ok;
-    ok = writevRejectsCount(socket, iovecs, N + 1, prefix) && ok;
-    ok = readvRejectsCount(socket, iovecs, std::numeric_limits<size_t>::max(), prefix) && ok;
-    ok = writevRejectsCount(socket, iovecs, std::numeric_limits<size_t>::max(), prefix) && ok;
+    ok = readv_accepts_count(socket, iovecs, 0, prefix) && ok;
+    ok = readv_accepts_count(socket, iovecs, N, prefix) && ok;
+    ok = writev_accepts_count(socket, iovecs, 0, prefix) && ok;
+    ok = writev_accepts_count(socket, iovecs, N, prefix) && ok;
+    ok = readv_rejects_count(socket, iovecs, N + 1, prefix) && ok;
+    ok = writev_rejects_count(socket, iovecs, N + 1, prefix) && ok;
+    ok = readv_rejects_count(socket, iovecs, std::numeric_limits<size_t>::max(), prefix) && ok;
+    ok = writev_rejects_count(socket, iovecs, std::numeric_limits<size_t>::max(), prefix) && ok;
     return ok;
 }
 
@@ -120,9 +120,9 @@ bool testCArrayBounds()
 int main()
 {
     bool ok = true;
-    ok = testStdArrayBounds<1>() && ok;
-    ok = testStdArrayBounds<2>() && ok;
-    ok = testCArrayBounds<1>() && ok;
-    ok = testCArrayBounds<2>() && ok;
+    ok = test_std_array_bounds<1>() && ok;
+    ok = test_std_array_bounds<2>() && ok;
+    ok = test_c_array_bounds<1>() && ok;
+    ok = test_c_array_bounds<2>() && ok;
     return ok ? 0 : 1;
 }

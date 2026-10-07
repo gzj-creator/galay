@@ -22,11 +22,11 @@ int main()
     std::cout << "[SKIP] benchmark environment integration requires Linux\n";
     return 0;
 #else
-    const auto original = CPU::cpuAffinity();
+    const auto original = CPU::cpu_affinity();
     if (!original || original->empty()) {
         return 1;
     }
-    const auto nodes = Numa::allowedNumaNodes();
+    const auto nodes = Numa::allowed_numa_nodes();
     std::array<bool, 3> numaAvailable{};
     bool probeValid = true;
     std::thread probe([&] {
@@ -39,7 +39,7 @@ int main()
             }
             const std::vector<unsigned> chosen = i == 0
                 ? std::vector<unsigned>{} : std::vector<unsigned>{nodes->front()};
-            const auto set = Memory::setNumaPolicy(modes[i], chosen);
+            const auto set = Memory::set_numa_policy(modes[i], chosen);
             if (!set) {
                 probeValid = probeValid &&
                     (set.error() == std::errc::operation_not_permitted ||
@@ -48,7 +48,7 @@ int main()
                 std::cout << "[SKIP] NUMA set probe: " << set.error().message() << '\n';
                 continue;
             }
-            numaAvailable[i] = Memory::numaPolicy().has_value();
+            numaAvailable[i] = Memory::numa_policy().has_value();
         }
     });
     probe.join();
@@ -102,31 +102,31 @@ int main()
             }
             if (test.narrow) {
                 const std::array<unsigned, 1> cpus{original->front()};
-                if (!CPU::bindCurrentThread(cpus)) {
+                if (!CPU::bind_current_thread(cpus)) {
                     _exit(3);
                 }
             }
-            const bool ok = galay::benchmark::initializeBenchmarkEnvironment();
+            const bool ok = galay::benchmark::initialize_benchmark_environment();
             if (ok != test.success) {
                 _exit(4);
             }
             if (ok) {
-                const auto actual = CPU::cpuAffinity();
+                const auto actual = CPU::cpu_affinity();
                 bool inherited = false;
-                std::thread child([&] { inherited = CPU::cpuAffinity() == actual; });
+                std::thread child([&] { inherited = CPU::cpu_affinity() == actual; });
                 child.join();
                 if (!inherited) {
                     _exit(5);
                 }
                 if (test.cpus == selected.c_str() && !test.narrow) {
-                    if (galay::benchmark::pinCurrentThread(0) !=
+                    if (galay::benchmark::pin_current_thread(0) !=
                         galay::benchmark::ThreadPlacement::kPinnedToCore) {
                         _exit(6);
                     }
                     bool mapped = false;
                     std::thread worker([&] {
-                        const auto placement = galay::benchmark::pinCurrentThread(1);
-                        const auto mask = CPU::cpuAffinity();
+                        const auto placement = galay::benchmark::pin_current_thread(1);
+                        const auto mask = CPU::cpu_affinity();
                         mapped = placement == galay::benchmark::ThreadPlacement::kPinnedToCore &&
                                  mask && *mask == std::vector<unsigned>{original->back()};
                     });
@@ -171,25 +171,25 @@ int main()
                 _exit(77);
             }
             if (denied == SYS_sched_setaffinity) {
-                const auto bound = CPU::bindCurrentThread(*original);
+                const auto bound = CPU::bind_current_thread(*original);
                 if (bound || bound.error().value() != EPERM) {
                     _exit(3);
                 }
             } else if (denied == SYS_set_mempolicy) {
-                const auto set = Memory::setNumaPolicy(galay::utils::Memory::Policy::Default, {});
-                const auto restore = Memory::restoreNumaPolicy({});
+                const auto set = Memory::set_numa_policy(galay::utils::Memory::Policy::Default, {});
+                const auto restore = Memory::restore_numa_policy({});
                 if (set || set.error().value() != EPERM ||
                     restore || restore.error().value() != EPERM ||
                     restore.error().category() != std::generic_category()) {
                     _exit(4);
                 }
             } else {
-                const auto policy = Memory::numaPolicy();
+                const auto policy = Memory::numa_policy();
                 if (policy || policy.error().value() != EPERM) {
                     _exit(5);
                 }
             }
-            _exit(galay::benchmark::initializeBenchmarkEnvironment() ? 6 : 0);
+            _exit(galay::benchmark::initialize_benchmark_environment() ? 6 : 0);
         }
         int status = 0;
         if (waitpid(pid, &status, 0) != pid || !WIFEXITED(status) ||
@@ -198,7 +198,7 @@ int main()
             return 1;
         }
     }
-    if (CPU::cpuAffinity() != original) {
+    if (CPU::cpu_affinity() != original) {
         return 1;
     }
     std::cout << "[PASS] benchmark startup validation / inheritance / worker mapping\n";

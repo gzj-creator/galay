@@ -27,7 +27,7 @@ void fail(TestState* state, std::string message)
     state->error = std::move(message);
 }
 
-Task<void> runPoolChecks(TestState* state)
+Task<void> run_pool_checks(TestState* state)
 {
     RpcEndpoint endpoint{"127.0.0.1", 41000};
 
@@ -37,7 +37,7 @@ Task<void> runPoolChecks(TestState* state)
     config.max_waiters_per_endpoint = 1;
 
     RpcConnectionPool pool(config);
-    auto ensure_result = pool.ensureEndpoint(endpoint);
+    auto ensure_result = pool.ensure_endpoint(endpoint);
     if (!ensure_result.has_value()) {
         fail(state, "ensureEndpoint rejected a valid endpoint");
         state->done.store(true, std::memory_order_release);
@@ -52,7 +52,7 @@ Task<void> runPoolChecks(TestState* state)
     }
     RpcPooledConnection first_connection = std::move(first->value());
     const uint64_t first_id = first_connection.id();
-    if (pool.availableCount(endpoint) != 0 || pool.inUseCount(endpoint) != 1) {
+    if (pool.available_count(endpoint) != 0 || pool.in_use_count(endpoint) != 1) {
         fail(state, "pool did not track checked-out connection");
         state->done.store(true, std::memory_order_release);
         co_return;
@@ -64,7 +64,7 @@ Task<void> runPoolChecks(TestState* state)
         state->done.store(true, std::memory_order_release);
         co_return;
     }
-    auto waiter_task = runtime->spawnIO([](RpcConnectionPool* pool_ptr,
+    auto waiter_task = runtime->spawn_io([](RpcConnectionPool* pool_ptr,
                                          RpcEndpoint waiter_endpoint,
                                          TestState* waiter_state) -> Task<void> {
         auto waited = co_await pool_ptr->acquire(waiter_endpoint);
@@ -85,7 +85,7 @@ Task<void> runPoolChecks(TestState* state)
         state->done.store(true, std::memory_order_release);
         co_return;
     }
-    while (pool.waiterCount(endpoint) == 0) {
+    while (pool.waiter_count(endpoint) == 0) {
         co_await sleep(std::chrono::milliseconds(1));
     }
 
@@ -120,7 +120,7 @@ Task<void> runPoolChecks(TestState* state)
         co_return;
     }
     RpcPooledConnection replacement_connection = std::move(replacement->value());
-    replacement_connection.markBroken();
+    replacement_connection.mark_broken();
     auto broken_release = pool.release(std::move(replacement_connection));
     if (!broken_release.has_value()) {
         fail(state, "broken release failed");
@@ -156,7 +156,7 @@ Task<void> runPoolChecks(TestState* state)
         state->done.store(true, std::memory_order_release);
         co_return;
     }
-    if (pool.totalTrackedConnections(endpoint) != 0) {
+    if (pool.total_tracked_connections(endpoint) != 0) {
         fail(state, "shutdown did not clear tracked connections");
         state->done.store(true, std::memory_order_release);
         co_return;
@@ -170,11 +170,11 @@ Task<void> runPoolChecks(TestState* state)
 
 int main()
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
     TestState state;
-    auto scheduled = runtime.spawnIO(runPoolChecks(&state));
+    auto scheduled = runtime.spawn_io(run_pool_checks(&state));
     if (!scheduled.has_value()) {
         runtime.stop();
         std::cerr << "failed to schedule pool checks\n";

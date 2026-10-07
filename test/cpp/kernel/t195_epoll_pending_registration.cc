@@ -18,10 +18,10 @@ using namespace galay::kernel;
 
 namespace galay::kernel {
 struct EpollReactorTestAccess {
-    static size_t pendingCount(const EpollReactor& reactor) {
+    static size_t pending_count(const EpollReactor& reactor) {
         return reactor.m_pending_changes.size();
     }
-    static size_t pendingIndexCount(const EpollReactor& reactor) {
+    static size_t pending_index_count(const EpollReactor& reactor) {
         return reactor.m_pending_change_index.size();
     }
 };
@@ -55,13 +55,13 @@ struct SocketPair {
     SocketPair& operator=(const SocketPair&) = delete;
 };
 
-void checkReadRegistration(EpollReactor& reactor, IOController& controller, const SocketPair& pair)
+void check_read_registration(EpollReactor& reactor, IOController& controller, const SocketPair& pair)
 {
     require(controller.m_registered_events == (EPOLLIN | EPOLLET),
             "each controller retains its own read registration");
     require(::send(pair.fds[1], "x", 1, 0) == 1, "send readiness probe");
     epoll_event event{};
-    require(::epoll_wait(reactor.getPollHandle().fd, &event, 1, 0) == 1 &&
+    require(::epoll_wait(reactor.get_poll_handle().fd, &event, 1, 0) == 1 &&
                 (event.events & EPOLLIN) != 0,
             "new read interest reaches epoll");
     char byte = 0;
@@ -69,108 +69,108 @@ void checkReadRegistration(EpollReactor& reactor, IOController& controller, cons
             "read readiness probe");
 }
 
-void retiredRegistrationCanBeQueuedAgain(EpollReactor& reactor)
+void retired_registration_can_be_queued_again(EpollReactor& reactor)
 {
     SocketPair first_pair;
     SocketPair second_pair;
     IOController first(GHandle{.fd = first_pair.fds[0]});
     IOController second(GHandle{.fd = second_pair.fds[0]});
 
-    require(reactor.addFileWrite(&first) == 0 && reactor.flushPendingChanges() == 0,
+    require(reactor.add_file_write(&first) == 0 && reactor.flush_pending_changes() == 0,
             "register initial write interest");
-    require(reactor.remove(&first) == 0 && reactor.flushPendingChanges() == 0,
+    require(reactor.remove(&first) == 0 && reactor.flush_pending_changes() == 0,
             "retire initial registration");
     require(first.m_registration_owner_slot == nullptr && first.m_registered_events == 0,
             "initial registration is retired");
 
     // Reuse the old queue index for another fd before rearming the first fd.
-    require(reactor.addFileRead(&second) == 0, "queue second fd");
-    require(reactor.addFileRead(&first) == 0, "requeue first fd");
-    require(reactor.flushPendingChanges() == 0, "flush both read interests");
-    checkReadRegistration(reactor, first, first_pair);
-    checkReadRegistration(reactor, second, second_pair);
+    require(reactor.add_file_read(&second) == 0, "queue second fd");
+    require(reactor.add_file_read(&first) == 0, "requeue first fd");
+    require(reactor.flush_pending_changes() == 0, "flush both read interests");
+    check_read_registration(reactor, first, first_pair);
+    check_read_registration(reactor, second, second_pair);
     require(reactor.remove(&first) == 0 && reactor.remove(&second) == 0 &&
-                reactor.flushPendingChanges() == 0, "remove read interests");
+                reactor.flush_pending_changes() == 0, "remove read interests");
 }
 
-void destroyedPendingControllerLeavesNoIndex(EpollReactor& reactor)
+void destroyed_pending_controller_leaves_no_index(EpollReactor& reactor)
 {
     SocketPair first_pair;
     SocketPair second_pair;
     std::optional<IOController> first;
     auto* const first_address = &first.emplace(GHandle{.fd = first_pair.fds[0]});
     IOController second(GHandle{.fd = second_pair.fds[0]});
-    require(reactor.addFileRead(&*first) == 0, "queue controller before destruction");
+    require(reactor.add_file_read(&*first) == 0, "queue controller before destruction");
     first.reset();
-    require(reactor.flushPendingChanges() == 0, "discard destroyed controller's change");
+    require(reactor.flush_pending_changes() == 0, "discard destroyed controller's change");
 
     // optional reuses the exact controller address, without allocator timing.
     auto& recreated = first.emplace(GHandle{.fd = first_pair.fds[0]});
     require(&recreated == first_address, "reuse controller storage");
-    require(reactor.addFileRead(&second) == 0 && reactor.addFileRead(&*first) == 0 &&
-                reactor.flushPendingChanges() == 0, "register after controller address reuse");
-    checkReadRegistration(reactor, *first, first_pair);
-    checkReadRegistration(reactor, second, second_pair);
+    require(reactor.add_file_read(&second) == 0 && reactor.add_file_read(&*first) == 0 &&
+                reactor.flush_pending_changes() == 0, "register after controller address reuse");
+    check_read_registration(reactor, *first, first_pair);
+    check_read_registration(reactor, second, second_pair);
     require(reactor.remove(&*first) == 0 && reactor.remove(&second) == 0 &&
-                reactor.flushPendingChanges() == 0, "remove recreated read interests");
+                reactor.flush_pending_changes() == 0, "remove recreated read interests");
 }
 
-void cancelledMiddleChangeKeepsSwappedIndex(EpollReactor& reactor)
+void cancelled_middle_change_keeps_swapped_index(EpollReactor& reactor)
 {
     SocketPair pairs[3];
     IOController first(GHandle{.fd = pairs[0].fds[0]});
     IOController middle(GHandle{.fd = pairs[1].fds[0]});
     IOController last(GHandle{.fd = pairs[2].fds[0]});
-    require(reactor.addFileRead(&first) == 0 && reactor.addFileRead(&middle) == 0 &&
-                reactor.addFileRead(&last) == 0, "queue three changes");
+    require(reactor.add_file_read(&first) == 0 && reactor.add_file_read(&middle) == 0 &&
+                reactor.add_file_read(&last) == 0, "queue three changes");
     require(reactor.remove(&middle) == 0 && reactor.remove(&last) == 0,
             "cancel middle and swapped changes");
-    require(reactor.flushPendingChanges() == 0, "flush surviving change");
+    require(reactor.flush_pending_changes() == 0, "flush surviving change");
     require(middle.m_registered_events == 0 && last.m_registered_events == 0,
             "cancelled changes stay unregistered");
-    checkReadRegistration(reactor, first, pairs[0]);
-    require(reactor.remove(&first) == 0 && reactor.flushPendingChanges() == 0,
+    check_read_registration(reactor, first, pairs[0]);
+    require(reactor.remove(&first) == 0 && reactor.flush_pending_changes() == 0,
             "remove surviving read interest");
 }
 
-void existingEntrySurvivesMergedAndCancelledChanges(EpollReactor& reactor)
+void existing_entry_survives_merged_and_cancelled_changes(EpollReactor& reactor)
 {
     SocketPair pair;
     IOController controller(GHandle{.fd = pair.fds[0]});
-    require(reactor.addFileWrite(&controller) == 0 &&
-                reactor.flushPendingChanges() == 0, "register reusable entry");
+    require(reactor.add_file_write(&controller) == 0 &&
+                reactor.flush_pending_changes() == 0, "register reusable entry");
     auto* const owner_slot = controller.m_registration_owner_slot;
     require(owner_slot != nullptr && *owner_slot == &controller,
             "initial registration owns its stable slot");
 
     for (int round = 0; round < 64; ++round) {
-        require(reactor.addFileRead(&controller) == 0 &&
-                    reactor.addFileRead(&controller) == 0,
+        require(reactor.add_file_read(&controller) == 0 &&
+                    reactor.add_file_read(&controller) == 0,
                 "merge repeated read registration");
-        require(EpollReactorTestAccess::pendingCount(reactor) == 1 &&
-                    EpollReactorTestAccess::pendingIndexCount(reactor) == 1,
+        require(EpollReactorTestAccess::pending_count(reactor) == 1 &&
+                    EpollReactorTestAccess::pending_index_count(reactor) == 1,
                 "repeated event has exactly one pending index");
-        require(reactor.addFileWrite(&controller) == 0,
+        require(reactor.add_file_write(&controller) == 0,
                 "return to registered events cancels pending change");
-        require(EpollReactorTestAccess::pendingCount(reactor) == 0 &&
-                    EpollReactorTestAccess::pendingIndexCount(reactor) == 0,
+        require(EpollReactorTestAccess::pending_count(reactor) == 0 &&
+                    EpollReactorTestAccess::pending_index_count(reactor) == 0,
                 "cancelled change removes both pending records");
         require(controller.m_registration_owner_slot == owner_slot &&
                     *owner_slot == &controller,
                 "cancellation retains registration ownership");
     }
 
-    require(reactor.addFileRead(&controller) == 0 &&
-                reactor.flushPendingChanges() == 0, "flush reused registration entry");
+    require(reactor.add_file_read(&controller) == 0 &&
+                reactor.flush_pending_changes() == 0, "flush reused registration entry");
     require(controller.m_registration_owner_slot == owner_slot &&
                 *owner_slot == &controller,
             "requeued registration uses the same owner slot");
-    checkReadRegistration(reactor, controller, pair);
-    require(reactor.remove(&controller) == 0 && reactor.flushPendingChanges() == 0,
+    check_read_registration(reactor, controller, pair);
+    require(reactor.remove(&controller) == 0 && reactor.flush_pending_changes() == 0,
             "remove reused registration");
     require(controller.m_registration_owner_slot == nullptr &&
-                EpollReactorTestAccess::pendingCount(reactor) == 0 &&
-                EpollReactorTestAccess::pendingIndexCount(reactor) == 0,
+                EpollReactorTestAccess::pending_count(reactor) == 0 &&
+                EpollReactorTestAccess::pending_index_count(reactor) == 0,
             "retired registration leaves no pending entry");
 }
 
@@ -183,10 +183,10 @@ int main()
     std::atomic<uint64_t> last_error{0};
     EpollReactor reactor(16, last_error);
     require(reactor.start().has_value(), "start reactor");
-    retiredRegistrationCanBeQueuedAgain(reactor);
-    destroyedPendingControllerLeavesNoIndex(reactor);
-    cancelledMiddleChangeKeepsSwappedIndex(reactor);
-    existingEntrySurvivesMergedAndCancelledChanges(reactor);
+    retired_registration_can_be_queued_again(reactor);
+    destroyed_pending_controller_leaves_no_index(reactor);
+    cancelled_middle_change_keeps_swapped_index(reactor);
+    existing_entry_survives_merged_and_cancelled_changes(reactor);
     require(last_error.load() == 0, "reactor reports no backend errors");
     require(std::puts("epoll pending registration PASS") >= 0, "print test result");
 #else

@@ -33,15 +33,15 @@ int expect_control_frame_body_rejected(RpcMessageType type, const char* name)
 
     RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> ring_buffer(128);
     if (auto rc = expect(
-            ring_buffer.tryWriteBatch(wire.data(), wire.size()) == wire.size(),
+            ring_buffer.try_write_batch(wire.data(), wire.size()) == wire.size(),
                          "failed to seed stream ring buffer")) {
         return rc;
     }
 
     StreamMessage parsed;
     galay::rpc::detail::StreamMessageReadState state(ring_buffer, parsed);
-    const bool completed = state.parseFromRingBuffer();
-    auto result = state.takeResult();
+    const bool completed = state.parse_from_ring_buffer();
+    auto result = state.take_result();
     if (auto rc = expect(completed &&
                              !result.has_value() &&
                              result.error().code() == RpcErrorCode::INVALID_REQUEST,
@@ -55,12 +55,12 @@ int expect_control_frame_body_rejected(RpcMessageType type, const char* name)
 
     StreamMessage next;
     galay::rpc::detail::StreamMessageReadState next_state(ring_buffer, next);
-    const bool next_completed = next_state.parseFromRingBuffer();
-    auto next_result = next_state.takeResult();
+    const bool next_completed = next_state.parse_from_ring_buffer();
+    auto next_result = next_state.take_result();
     return expect(next_completed &&
                       next_result.has_value() &&
-                      next.messageType() == RpcMessageType::STREAM_DATA &&
-                      next.payloadStr() == "ok",
+                      next.message_type() == RpcMessageType::STREAM_DATA &&
+                      next.payload_str() == "ok",
                   "stream reader did not recover after rejecting control body");
 }
 
@@ -75,15 +75,15 @@ int main()
     }
 
     RpcStreamServerBuilder builder;
-    auto built = builder.maxFrameBytes(4).buildConfig();
+    auto built = builder.max_frame_bytes(4).build_config();
     if (auto rc = expect(built.stream_limits.max_frame_bytes == 4,
                          "builder did not apply stream frame limit")) {
         return rc;
     }
 
     StreamMessage init(7, "svc", 3);
-    init.messageType(RpcMessageType::STREAM_INIT);
-    if (auto rc = expect(init.messageType() == RpcMessageType::STREAM_INIT,
+    init.message_type(RpcMessageType::STREAM_INIT);
+    if (auto rc = expect(init.message_type() == RpcMessageType::STREAM_INIT,
                          "stream init type was not stable")) {
         return rc;
     }
@@ -99,7 +99,7 @@ int main()
     }
 
     StreamMessage cancel(7, nullptr, 0);
-    cancel.messageType(RpcMessageType::STREAM_CANCEL);
+    cancel.message_type(RpcMessageType::STREAM_CANCEL);
     auto first_cancel = cancel.serialize(RpcMessageType::STREAM_CANCEL);
     auto second_cancel = cancel.serialize(RpcMessageType::STREAM_CANCEL);
     if (auto rc = expect(first_cancel == second_cancel,
@@ -108,9 +108,9 @@ int main()
     }
 
     StreamMessage overlapping_init(8, "svc", 3);
-    overlapping_init.messageType(RpcMessageType::STREAM_INIT);
+    overlapping_init.message_type(RpcMessageType::STREAM_INIT);
     auto deterministic_reject = overlapping_init.serialize(RpcMessageType::STREAM_CANCEL);
-    if (auto rc = expect(deterministic_reject.size() == RPC_HEADER_SIZE + overlapping_init.payloadSize(),
+    if (auto rc = expect(deterministic_reject.size() == RPC_HEADER_SIZE + overlapping_init.payload_size(),
                          "overlapping init rejection frame was not deterministic")) {
         return rc;
     }

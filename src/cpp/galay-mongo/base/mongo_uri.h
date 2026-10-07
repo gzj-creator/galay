@@ -26,7 +26,7 @@ namespace galay::mongo
  * @return 成功返回 MongoConfig；失败返回 MONGO_ERROR_INVALID_PARAM 或 MONGO_ERROR_UNSUPPORTED
  * @note 当前仅支持 mongodb:// scheme。TLS URI 选项在 TLS task 落地前返回不支持。
  */
-std::expected<MongoConfig, MongoError> parseMongoUri(std::string_view uri);
+std::expected<MongoConfig, MongoError> parse_mongo_uri(std::string_view uri);
 
 } // namespace galay::mongo
 

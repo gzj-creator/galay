@@ -27,23 +27,23 @@ SpanAttributeValue::SpanAttributeValue(Storage storage)
     : m_storage(std::move(storage)) {
 }
 
-SpanAttributeValue SpanAttributeValue::fromInt64(std::int64_t value) {
+SpanAttributeValue SpanAttributeValue::from_int64(std::int64_t value) {
     return SpanAttributeValue(value);
 }
 
-SpanAttributeValue SpanAttributeValue::fromUInt64(std::uint64_t value) {
+SpanAttributeValue SpanAttributeValue::from_uint64(std::uint64_t value) {
     return SpanAttributeValue(value);
 }
 
-SpanAttributeValue SpanAttributeValue::fromDouble(double value) {
+SpanAttributeValue SpanAttributeValue::from_double(double value) {
     return SpanAttributeValue(value);
 }
 
-SpanAttributeValue SpanAttributeValue::fromBool(bool value) {
+SpanAttributeValue SpanAttributeValue::from_bool(bool value) {
     return SpanAttributeValue(value);
 }
 
-SpanAttributeValue SpanAttributeValue::fromString(std::string value) {
+SpanAttributeValue SpanAttributeValue::from_string(std::string value) {
     return SpanAttributeValue(std::move(value));
 }
 
@@ -62,79 +62,79 @@ SpanAttributeType SpanAttributeValue::type() const noexcept {
     }
 }
 
-std::int64_t SpanAttributeValue::asInt64() const {
+std::int64_t SpanAttributeValue::as_int64() const {
     return std::get<std::int64_t>(m_storage);
 }
 
-std::uint64_t SpanAttributeValue::asUInt64() const {
+std::uint64_t SpanAttributeValue::as_uint64() const {
     return std::get<std::uint64_t>(m_storage);
 }
 
-double SpanAttributeValue::asDouble() const {
+double SpanAttributeValue::as_double() const {
     return std::get<double>(m_storage);
 }
 
-bool SpanAttributeValue::asBool() const {
+bool SpanAttributeValue::as_bool() const {
     return std::get<bool>(m_storage);
 }
 
-const std::string& SpanAttributeValue::asString() const {
+const std::string& SpanAttributeValue::as_string() const {
     return std::get<std::string>(m_storage);
 }
 
-SpanAttribute spanAttribute(std::string_view name, std::int64_t value) {
+SpanAttribute span_attribute(std::string_view name, std::int64_t value) {
     return SpanAttribute{
         .name = std::string(name),
-        .value = SpanAttributeValue::fromInt64(value),
+        .value = SpanAttributeValue::from_int64(value),
     };
 }
 
-SpanAttribute spanAttribute(std::string_view name, int value) {
-    return spanAttribute(name, static_cast<std::int64_t>(value));
+SpanAttribute span_attribute(std::string_view name, int value) {
+    return span_attribute(name, static_cast<std::int64_t>(value));
 }
 
-SpanAttribute spanAttribute(std::string_view name, std::uint64_t value) {
+SpanAttribute span_attribute(std::string_view name, std::uint64_t value) {
     return SpanAttribute{
         .name = std::string(name),
-        .value = SpanAttributeValue::fromUInt64(value),
+        .value = SpanAttributeValue::from_uint64(value),
     };
 }
 
-SpanAttribute spanAttribute(std::string_view name, double value) {
+SpanAttribute span_attribute(std::string_view name, double value) {
     return SpanAttribute{
         .name = std::string(name),
-        .value = SpanAttributeValue::fromDouble(value),
+        .value = SpanAttributeValue::from_double(value),
     };
 }
 
-SpanAttribute spanAttribute(std::string_view name, bool value) {
+SpanAttribute span_attribute(std::string_view name, bool value) {
     return SpanAttribute{
         .name = std::string(name),
-        .value = SpanAttributeValue::fromBool(value),
+        .value = SpanAttributeValue::from_bool(value),
     };
 }
 
-SpanAttribute spanAttribute(std::string_view name, std::string_view value) {
+SpanAttribute span_attribute(std::string_view name, std::string_view value) {
     return SpanAttribute{
         .name = std::string(name),
-        .value = SpanAttributeValue::fromString(std::string(value)),
+        .value = SpanAttributeValue::from_string(std::string(value)),
     };
 }
 
-SpanAttribute spanAttribute(std::string_view name, const char* value) {
-    return spanAttribute(name, std::string_view(value == nullptr ? "" : value));
+SpanAttribute span_attribute(std::string_view name, const char* value) {
+    return span_attribute(name, std::string_view(value == nullptr ? "" : value));
 }
 
-void setSpanTimingPolicy(SpanTimingPolicy policy) noexcept {
+void set_span_timing_policy(SpanTimingPolicy policy) noexcept {
     g_spanTimingPolicy.store(policy, std::memory_order_relaxed);
 }
 
-SpanTimingPolicy spanTimingPolicy() noexcept {
+SpanTimingPolicy span_timing_policy() noexcept {
     return g_spanTimingPolicy.load(std::memory_order_relaxed);
 }
 
 Span::Span(std::string name, TraceContext context)
-    : Span(std::move(name), std::move(context), spanTimingPolicy()) {
+    : Span(std::move(name), std::move(context), span_timing_policy()) {
 }
 
 Span::Span(std::string name, TraceContext context, SpanTimingPolicy timingPolicy)
@@ -142,7 +142,7 @@ Span::Span(std::string name, TraceContext context, SpanTimingPolicy timingPolicy
 }
 
 Span::Span(std::string name, SpanContext context, std::string tracestate)
-    : Span(std::move(name), context, std::move(tracestate), spanTimingPolicy()) {
+    : Span(std::move(name), context, std::move(tracestate), span_timing_policy()) {
 }
 
 Span::Span(std::string name, SpanContext context, std::string tracestate, SpanTimingPolicy timingPolicy)
@@ -165,11 +165,11 @@ void Span::end() noexcept {
     }
 }
 
-void Span::setStatus(SpanStatusCode code, std::string message) {
+void Span::set_status(SpanStatusCode code, std::string message) {
     m_status = SpanStatus{.message = std::move(message), .code = code};
 }
 
-bool Span::setAttribute(SpanAttribute attribute) {
+bool Span::set_attribute(SpanAttribute attribute) {
     if (m_attributes.size() >= kMaxAttributes) {
         return false;
     }
@@ -177,35 +177,35 @@ bool Span::setAttribute(SpanAttribute attribute) {
     return true;
 }
 
-bool Span::setAttribute(std::string_view name, std::int64_t value) {
-    return setAttribute(spanAttribute(name, value));
+bool Span::set_attribute(std::string_view name, std::int64_t value) {
+    return set_attribute(span_attribute(name, value));
 }
 
-bool Span::setAttribute(std::string_view name, int value) {
-    return setAttribute(name, static_cast<std::int64_t>(value));
+bool Span::set_attribute(std::string_view name, int value) {
+    return set_attribute(name, static_cast<std::int64_t>(value));
 }
 
-bool Span::setAttribute(std::string_view name, std::uint64_t value) {
-    return setAttribute(spanAttribute(name, value));
+bool Span::set_attribute(std::string_view name, std::uint64_t value) {
+    return set_attribute(span_attribute(name, value));
 }
 
-bool Span::setAttribute(std::string_view name, double value) {
-    return setAttribute(spanAttribute(name, value));
+bool Span::set_attribute(std::string_view name, double value) {
+    return set_attribute(span_attribute(name, value));
 }
 
-bool Span::setAttribute(std::string_view name, bool value) {
-    return setAttribute(spanAttribute(name, value));
+bool Span::set_attribute(std::string_view name, bool value) {
+    return set_attribute(span_attribute(name, value));
 }
 
-bool Span::setAttribute(std::string_view name, std::string_view value) {
-    return setAttribute(spanAttribute(name, value));
+bool Span::set_attribute(std::string_view name, std::string_view value) {
+    return set_attribute(span_attribute(name, value));
 }
 
-bool Span::setAttribute(std::string_view name, const char* value) {
-    return setAttribute(name, std::string_view(value == nullptr ? "" : value));
+bool Span::set_attribute(std::string_view name, const char* value) {
+    return set_attribute(name, std::string_view(value == nullptr ? "" : value));
 }
 
-bool Span::addEvent(std::string_view name, std::vector<SpanAttribute> attributes) {
+bool Span::add_event(std::string_view name, std::vector<SpanAttribute> attributes) {
     if (m_events.size() >= kMaxEvents) {
         return false;
     }
@@ -220,7 +220,7 @@ bool Span::addEvent(std::string_view name, std::vector<SpanAttribute> attributes
     return true;
 }
 
-bool Span::addLink(SpanContext context, std::string tracestate, std::vector<SpanAttribute> attributes) {
+bool Span::add_link(SpanContext context, std::string tracestate, std::vector<SpanAttribute> attributes) {
     if (m_links.size() >= kMaxLinks) {
         return false;
     }

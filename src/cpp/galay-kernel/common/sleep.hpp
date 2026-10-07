@@ -54,12 +54,12 @@ public:
      * @brief 存储超时时调用的 waker
      * @param waker 包装 coroutine_handle 的 waker
      */
-    void setWaker(Waker waker) { m_waker = waker; }
+    void set_waker(Waker waker) { m_waker = waker; }
 
     /**
      * @brief 恢复挂起的协程并标记此定时器完成
      */
-    void handleTimeout() override {  m_waker.wakeUp(); Timer::handleTimeout(); }
+    void handle_timeout() override {  m_waker.wake_up(); Timer::handle_timeout(); }
 
 private:
     Waker m_waker;
@@ -100,9 +100,9 @@ struct SleepAwaitable
      */
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        m_timer->setWaker(Waker(handle));
+        m_timer->set_waker(Waker(handle));
         // 使用全局 TimerScheduler 而不是 IOScheduler 的定时器
-        if(!TimerScheduler::getInstance()->addTimer(m_timer)) {
+        if(!TimerScheduler::get_instance()->add_timer(m_timer)) {
             return false;
         }
         return true;

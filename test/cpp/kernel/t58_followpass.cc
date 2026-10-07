@@ -14,11 +14,11 @@ using namespace galay::kernel;
 
 namespace {
 
-Task<void> pendingTask() {
+Task<void> pending_task() {
     co_return;
 }
 
-bool verifyLocalFollowupPassesDrainLocalBacklog() {
+bool verify_local_followup_passes_drain_local_backlog() {
     constexpr size_t kReadyBudget = 64;
     constexpr size_t kTaskCount = 200;
 
@@ -27,10 +27,10 @@ bool verifyLocalFollowupPassesDrainLocalBacklog() {
     size_t resumed = 0;
 
     for (size_t i = 0; i < kTaskCount; ++i) {
-        worker.scheduleLocal(detail::TaskAccess::detachTask(pendingTask()));
+        worker.schedule_local(detail::TaskAccess::detach_task(pending_task()));
     }
 
-    const auto summary = core.runLocalFollowupPasses(
+    const auto summary = core.run_local_followup_passes(
         8,
         [&](TaskRef&) { ++resumed; },
         [](size_t) {});
@@ -53,7 +53,7 @@ bool verifyLocalFollowupPassesDrainLocalBacklog() {
         return false;
     }
 
-    if (worker.hasLocalWork()) {
+    if (worker.has_local_work()) {
         std::cerr << "[T58] local backlog should be empty after follow-up passes\n";
         return false;
     }
@@ -61,7 +61,7 @@ bool verifyLocalFollowupPassesDrainLocalBacklog() {
     return true;
 }
 
-bool verifyRemoteDrainDoesNotNeedFollowupPasses() {
+bool verify_remote_drain_does_not_need_followup_passes() {
     constexpr size_t kReadyBudget = 64;
     constexpr size_t kTaskCount = 300;
 
@@ -71,10 +71,10 @@ bool verifyRemoteDrainDoesNotNeedFollowupPasses() {
     size_t remote_drained = 0;
 
     for (size_t i = 0; i < kTaskCount; ++i) {
-        worker.scheduleInjected(detail::TaskAccess::detachTask(pendingTask()));
+        worker.schedule_injected(detail::TaskAccess::detach_task(pending_task()));
     }
 
-    const auto summary = core.runLocalFollowupPasses(
+    const auto summary = core.run_local_followup_passes(
         8,
         [&](TaskRef&) { ++resumed; },
         [&](size_t drained) { remote_drained += drained; });
@@ -103,11 +103,11 @@ bool verifyRemoteDrainDoesNotNeedFollowupPasses() {
 }  // namespace
 
 int main() {
-    if (!verifyLocalFollowupPassesDrainLocalBacklog()) {
+    if (!verify_local_followup_passes_drain_local_backlog()) {
         return 1;
     }
 
-    if (!verifyRemoteDrainDoesNotNeedFollowupPasses()) {
+    if (!verify_remote_drain_does_not_need_followup_passes()) {
         return 1;
     }
 

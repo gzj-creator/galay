@@ -4,7 +4,7 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 实现 setAffinity()（存储目标 CPU）和 applyConfiguredAffinity()
+ * @details 实现 set_affinity()（存储目标 CPU）和 apply_configured_affinity()
  * （在 Linux 上通过 pthread_setaffinity_np 应用）。
  * 非 Linux 平台回退为空操作或不支持。
  */
@@ -32,7 +32,7 @@ thread_local bool g_is_scheduler_thread = false;
 
 } // namespace
 
-bool isSchedulerThread() noexcept
+bool is_scheduler_thread() noexcept
 {
     return g_is_scheduler_thread;
 }
@@ -48,18 +48,18 @@ SchedulerThreadScope::~SchedulerThreadScope()
     g_is_scheduler_thread = m_previous;
 }
 
-bool scheduleReadyEntry(ReadyEntry& entry) noexcept
+bool schedule_ready_entry(ReadyEntry& entry) noexcept
 {
-    if (!entry.isValid()) {
+    if (!entry.is_valid()) {
         return false;
     }
 
-    if (entry.isCppTask()) {
-        auto* scheduler = readyEntryScheduler(entry);
+    if (entry.is_cpp_task()) {
+        auto* scheduler = ready_entry_scheduler(entry);
         if (scheduler == nullptr) {
             return false;
         }
-        TaskRef task = readyEntryToTaskRef(entry);
+        TaskRef task = ready_entry_to_task_ref(entry);
         TaskRef scheduled_task(task);
         if (scheduler->schedule(std::move(scheduled_task))) {
             return true;
@@ -68,16 +68,16 @@ bool scheduleReadyEntry(ReadyEntry& entry) noexcept
         return false;
     }
 
-    auto* scheduler = readyEntryScheduler(entry);
-    return scheduler != nullptr && scheduleReadyEntryOnScheduler(scheduler, entry);
+    auto* scheduler = ready_entry_scheduler(entry);
+    return scheduler != nullptr && schedule_ready_entry_on_scheduler(scheduler, entry);
 }
 
-bool scheduleReadyEntryOnScheduler(Scheduler* scheduler, ReadyEntry& entry) noexcept
+bool schedule_ready_entry_on_scheduler(Scheduler* scheduler, ReadyEntry& entry) noexcept
 {
-    if (scheduler == nullptr || !entry.isValid()) {
+    if (scheduler == nullptr || !entry.is_valid()) {
         return false;
     }
-    return scheduler->scheduleReadyEntry(entry);
+    return scheduler->schedule_ready_entry(entry);
 }
 
 } // namespace detail
@@ -88,7 +88,7 @@ bool scheduleReadyEntryOnScheduler(Scheduler* scheduler, ReadyEntry& entry) noex
  * @param cpu_id  目标 CPU 核心索引，传 std::nullopt 清除亲和性
  * @return true 成功；false 平台不支持亲和性或 CPU 索引越界
  */
-bool Scheduler::setAffinity(std::optional<uint32_t> cpu_id)
+bool Scheduler::set_affinity(std::optional<uint32_t> cpu_id)
 {
     if (!cpu_id.has_value()) {
         m_affinity_cpu.store(kNoAffinity, std::memory_order_release);
@@ -113,7 +113,7 @@ bool Scheduler::setAffinity(std::optional<uint32_t> cpu_id)
  *
  * @return true 亲和性已应用或无需应用；false 在 Linux 上 pthread_setaffinity_np 失败或平台不支持
  */
-bool Scheduler::applyConfiguredAffinity()
+bool Scheduler::apply_configured_affinity()
 {
     const int32_t cpu_id = m_affinity_cpu.load(std::memory_order_acquire);
     if (cpu_id < 0) {

@@ -27,7 +27,7 @@ struct BenchmarkState
     std::atomic<std::uint64_t> failed{0};
 };
 
-void rememberError(BenchmarkState* state, std::string message)
+void remember_error(BenchmarkState* state, std::string message)
 {
     std::lock_guard lock(state->error_mutex);
     if (state->first_error.empty()) {
@@ -35,7 +35,7 @@ void rememberError(BenchmarkState* state, std::string message)
     }
 }
 
-bool runQuery(MYSQL* connection, const std::string& sql)
+bool run_query(MYSQL* connection, const std::string& sql)
 {
     if (mysql_real_query(connection, sql.data(), sql.size()) != 0) {
         return false;
@@ -49,18 +49,18 @@ bool runQuery(MYSQL* connection, const std::string& sql)
     return mysql_field_count(connection) == 0;
 }
 
-void runWorker(const mysql_benchmark::DbBenchmarkConfig* config, BenchmarkState* state)
+void run_worker(const mysql_benchmark::DbBenchmarkConfig* config, BenchmarkState* state)
 {
     if (mysql_thread_init() != 0) {
         state->failed.fetch_add(config->queries_per_client, std::memory_order_relaxed);
-        rememberError(state, "mysql_thread_init failed");
+        remember_error(state, "mysql_thread_init failed");
         return;
     }
 
     MYSQL* connection = mysql_init(nullptr);
     if (connection == nullptr) {
         state->failed.fetch_add(config->queries_per_client, std::memory_order_relaxed);
-        rememberError(state, "mysql_init failed");
+        remember_error(state, "mysql_init failed");
         mysql_thread_end();
         return;
     }
@@ -72,7 +72,7 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig* config, BenchmarkState*
         mysql_options(connection, MYSQL_OPT_READ_TIMEOUT, &timeout_seconds) != 0 ||
         mysql_options(connection, MYSQL_OPT_WRITE_TIMEOUT, &timeout_seconds) != 0) {
         state->failed.fetch_add(config->queries_per_client, std::memory_order_relaxed);
-        rememberError(state, mysql_error(connection));
+        remember_error(state, mysql_error(connection));
         mysql_close(connection);
         mysql_thread_end();
         return;
@@ -87,16 +87,16 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig* config, BenchmarkState*
                            nullptr,
                            0) == nullptr) {
         state->failed.fetch_add(config->queries_per_client, std::memory_order_relaxed);
-        rememberError(state, mysql_error(connection));
+        remember_error(state, mysql_error(connection));
         mysql_close(connection);
         mysql_thread_end();
         return;
     }
 
     for (std::size_t warmup = 0; warmup < config->warmup_queries; ++warmup) {
-        if (!runQuery(connection, config->sql)) {
+        if (!run_query(connection, config->sql)) {
             state->failed.fetch_add(config->queries_per_client, std::memory_order_relaxed);
-            rememberError(state, mysql_error(connection));
+            remember_error(state, mysql_error(connection));
             mysql_close(connection);
             mysql_thread_end();
             return;
@@ -114,13 +114,13 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig* config, BenchmarkState*
 
         bool transaction_ok = true;
         if (transaction_batch) {
-            transaction_ok = runQuery(connection, "START TRANSACTION");
+            transaction_ok = run_query(connection, "START TRANSACTION");
         }
 
         std::size_t batch_success = 0;
         for (std::size_t query = 0; query < batch_size; ++query) {
             const auto begin = std::chrono::steady_clock::now();
-            const bool ok = transaction_ok && runQuery(connection, config->sql);
+            const bool ok = transaction_ok && run_query(connection, config->sql);
             const auto end = std::chrono::steady_clock::now();
             local_samples.push_back(static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count()));
@@ -128,15 +128,15 @@ void runWorker(const mysql_benchmark::DbBenchmarkConfig* config, BenchmarkState*
                 ++batch_success;
             }
             if (!ok) {
-                rememberError(state, mysql_error(connection));
+                remember_error(state, mysql_error(connection));
             }
         }
 
         bool commit_ok = transaction_ok;
         if (transaction_batch && transaction_ok) {
-            commit_ok = runQuery(connection, "COMMIT");
+            commit_ok = run_query(connection, "COMMIT");
             if (!commit_ok) {
-                rememberError(state, mysql_error(connection));
+                remember_error(state, mysql_error(connection));
             }
         } else if (!transaction_batch) {
             commit_ok = true;
@@ -170,9 +170,9 @@ double percentile(const std::vector<std::uint64_t>& sorted_samples, double fract
 
 int main(int argc, char* argv[])
 {
-    auto config = mysql_benchmark::loadDbBenchmarkConfig();
-    if (!mysql_benchmark::parseArgs(config, argc, argv, std::cerr)) {
-        mysql_benchmark::printUsage(argv[0]);
+    auto config = mysql_benchmark::load_db_benchmark_config();
+    if (!mysql_benchmark::parse_args(config, argc, argv, std::cerr)) {
+        mysql_benchmark::print_usage(argv[0]);
         return 2;
     }
     if (config.mode == mysql_benchmark::BenchmarkMode::Pipeline) {
@@ -191,7 +191,7 @@ int main(int argc, char* argv[])
 
     const auto begin = std::chrono::steady_clock::now();
     for (std::size_t worker = 0; worker < config.clients; ++worker) {
-        workers.emplace_back(runWorker, &config, &state);
+        workers.emplace_back(run_worker, &config, &state);
     }
     for (auto& worker : workers) {
         worker.join();
@@ -206,7 +206,7 @@ int main(int argc, char* argv[])
     const double qps = seconds > 0.0 ? static_cast<double>(success) / seconds : 0.0;
 
     std::cout << "\n=== libmysqlclient Query Pressure Summary ===\n"
-              << "mode: " << mysql_benchmark::modeToString(config.mode) << '\n'
+              << "mode: " << mysql_benchmark::mode_to_string(config.mode) << '\n'
               << "clients: " << config.clients << '\n'
               << "queries_per_client: " << config.queries_per_client << '\n'
               << "total_queries: " << success + failed << '\n'

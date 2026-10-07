@@ -10,13 +10,13 @@ int main()
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         runtime.stop();
         return 1;
     }
 
-    AsyncRedisConfig client_config = AsyncRedisConfig::noTimeout();
+    AsyncRedisConfig client_config = AsyncRedisConfig::no_timeout();
     auto client = RedisClientBuilder().scheduler(scheduler).config(client_config).build();
 
     auto pool_config = ConnectionPoolConfig::create("127.0.0.1", 6379, 1, 2);

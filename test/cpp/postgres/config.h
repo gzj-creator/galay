@@ -10,7 +10,7 @@
 namespace galay::postgres::test
 {
 
-inline std::optional<PostgresConfig> integrationConfig()
+inline std::optional<PostgresConfig> integration_config()
 {
     const char* enabled = std::getenv("GALAY_IT_ENABLE");
     if (enabled == nullptr || std::string(enabled) != "1") {

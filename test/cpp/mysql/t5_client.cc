@@ -7,12 +7,12 @@ using namespace galay::mysql;
 int main()
 {
     std::cout << "=== T4: Sync MySQL Client Tests ===" << std::endl;
-    const auto db_cfg = mysql_test::loadDbTestConfig();
-    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T4-SyncMysqlClient");
+    const auto db_cfg = mysql_test::load_db_test_config();
+    if (const int skip_code = mysql_test::require_db_test_config_or_skip(db_cfg, "T4-SyncMysqlClient");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printDbTestConfig(db_cfg);
+    mysql_test::print_db_test_config(db_cfg);
 
     MysqlClient session;
 
@@ -46,8 +46,8 @@ int main()
     if (!insert_result) {
         std::cerr << "INSERT failed: " << insert_result.error().message() << std::endl;
     } else {
-        std::cout << "  Affected rows: " << insert_result->affectedRows()
-                  << ", Last insert ID: " << insert_result->lastInsertId() << std::endl;
+        std::cout << "  Affected rows: " << insert_result->affected_rows()
+                  << ", Last insert ID: " << insert_result->last_insert_id() << std::endl;
     }
 
     // SELECT
@@ -57,12 +57,12 @@ int main()
         std::cerr << "SELECT failed: " << select_result.error().message() << std::endl;
     } else {
         auto& rs = select_result.value();
-        std::cout << "  Columns: " << rs.fieldCount() << ", Rows: " << rs.rowCount() << std::endl;
-        for (size_t i = 0; i < rs.rowCount(); ++i) {
+        std::cout << "  Columns: " << rs.field_count() << ", Rows: " << rs.row_count() << std::endl;
+        for (size_t i = 0; i < rs.row_count(); ++i) {
             auto& row = rs.row(i);
             std::cout << "  Row[" << i << "]:";
             for (size_t j = 0; j < row.size(); ++j) {
-                std::cout << " " << row.getString(j, "NULL");
+                std::cout << " " << row.get_string(j, "NULL");
             }
             std::cout << std::endl;
         }
@@ -71,9 +71,9 @@ int main()
     std::cout << "Testing PIPELINE batch..." << std::endl;
     protocol::MysqlCommandBuilder pipeline_builder;
     pipeline_builder.reserve(3, 3 * (protocol::MYSQL_PACKET_HEADER_SIZE + 1 + 16));
-    pipeline_builder.appendQuery("SELECT 1");
-    pipeline_builder.appendQuery("SELECT 2");
-    pipeline_builder.appendQuery("SELECT 3");
+    pipeline_builder.append_query("SELECT 1");
+    pipeline_builder.append_query("SELECT 2");
+    pipeline_builder.append_query("SELECT 3");
     auto pipeline_result = session.batch(pipeline_builder.commands());
     if (!pipeline_result) {
         std::cerr << "PIPELINE batch failed: " << pipeline_result.error().message() << std::endl;

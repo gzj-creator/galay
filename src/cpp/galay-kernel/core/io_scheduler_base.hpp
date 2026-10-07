@@ -2,7 +2,7 @@
  * @file io_scheduler_base.hpp
  * @brief 三个 IO 后端共用的调度器实现。
  * @details 统一持有线程、就绪队列、时间轮及 reactor；Derived 仅实现
- * pollBackend() 和 flushBackend()，把平台的超时格式及批量提交差异留在后端。
+ * poll_backend() 和 flush_backend()，把平台的超时格式及批量提交差异留在后端。
  * @note schedule* 可跨线程提交；IO 注册和时间轮只由 owner 线程使用。
  * start/stop 是同步生命周期边界，不可在其自身工作线程内调用 stop。
  */
@@ -36,24 +36,24 @@ class IOSchedulerBase : public SchedulerBase<Derived, kIOScheduler>
         , m_batch_size(batch_size)
     {
         // IO 注册和 reactor 提交保持 owner 线程亲和，禁止跨线程窃取执行。
-        m_worker.setStealingEnabled(false);
-        m_worker.closeResumeAdmission();
+        m_worker.set_stealing_enabled(false);
+        m_worker.close_resume_admission();
     }
 
 public:
     /**
      * @brief 替换调度器的定时器管理器
      * @param manager 新的时间轮定时器管理器（右值引用）
-     * @details 用于自定义时间轮配置（wheelSize、tickDuration）以适应不同的超时场景
+     * @details 用于自定义时间轮配置（wheel_size、tick_duration）以适应不同的超时场景
      * @note 应在调度器启动前调用，避免运行时替换导致定时器丢失
      * @example
      * ```cpp
      * // 创建适合短超时场景的时间轮（60秒范围，1秒精度）
      * TimingWheelTimerManager manager(60, 1000000000ULL);
-     * scheduler->replaceTimerManager(std::move(manager));
+     * scheduler->replace_timer_manager(std::move(manager));
      * ```
      */
-    void replaceTimerManager(TimingWheelTimerManager&& manager) {
+    void replace_timer_manager(TimingWheelTimerManager&& manager) {
         m_timer_manager = std::move(manager);
     }
 
@@ -65,41 +65,41 @@ public:
      * @brief 以下注册操作只允许 owner 线程访问；结果原样交回 awaitable。
      * @return 1=立即完成，0=已登记，负数=错误；close/remove 的 0 表示成功。
      */
-    int addAccept(IOController* controller) { return m_reactor.addAccept(controller); }  ///< accept；返回后端结果。
-    int addConnect(IOController* controller) { return m_reactor.addConnect(controller); }  ///< connect；返回后端结果。
-    int addRecv(IOController* controller) { return m_reactor.addRecv(controller); }  ///< recv；返回后端结果。
-    int addSend(IOController* controller) { return m_reactor.addSend(controller); }  ///< send；返回后端结果。
-    int addReadv(IOController* controller) { return m_reactor.addReadv(controller); }  ///< readv；返回后端结果。
-    int addWritev(IOController* controller) { return m_reactor.addWritev(controller); }  ///< writev；返回后端结果。
-    int addClose(IOController* controller) { return m_reactor.addClose(controller); }  ///< close；返回后端结果。
-    int addFileRead(IOController* controller) { return m_reactor.addFileRead(controller); }  ///< 文件读取；返回后端结果。
-    int addFileWrite(IOController* controller) { return m_reactor.addFileWrite(controller); }  ///< 文件写入；返回后端结果。
-    int addRecvFrom(IOController* controller) { return m_reactor.addRecvFrom(controller); }  ///< recvfrom；返回后端结果。
-    int addSendTo(IOController* controller) { return m_reactor.addSendTo(controller); }  ///< sendto；返回后端结果。
-    int addFileWatch(IOController* controller) { return m_reactor.addFileWatch(controller); }  ///< 文件监控；返回后端结果。
-    int addSendFile(IOController* controller) { return m_reactor.addSendFile(controller); }  ///< sendfile；返回后端结果。
-    int addSequence(IOController* controller) { return m_reactor.addSequence(controller); }  ///< 组合式序列；返回后端结果。
+    int add_accept(IOController* controller) { return m_reactor.add_accept(controller); }  ///< accept；返回后端结果。
+    int add_connect(IOController* controller) { return m_reactor.add_connect(controller); }  ///< connect；返回后端结果。
+    int add_recv(IOController* controller) { return m_reactor.add_recv(controller); }  ///< recv；返回后端结果。
+    int add_send(IOController* controller) { return m_reactor.add_send(controller); }  ///< send；返回后端结果。
+    int add_readv(IOController* controller) { return m_reactor.add_readv(controller); }  ///< readv；返回后端结果。
+    int add_writev(IOController* controller) { return m_reactor.add_writev(controller); }  ///< writev；返回后端结果。
+    int add_close(IOController* controller) { return m_reactor.add_close(controller); }  ///< close；返回后端结果。
+    int add_file_read(IOController* controller) { return m_reactor.add_file_read(controller); }  ///< 文件读取；返回后端结果。
+    int add_file_write(IOController* controller) { return m_reactor.add_file_write(controller); }  ///< 文件写入；返回后端结果。
+    int add_recv_from(IOController* controller) { return m_reactor.add_recv_from(controller); }  ///< recvfrom；返回后端结果。
+    int add_send_to(IOController* controller) { return m_reactor.add_send_to(controller); }  ///< sendto；返回后端结果。
+    int add_file_watch(IOController* controller) { return m_reactor.add_file_watch(controller); }  ///< 文件监控；返回后端结果。
+    int add_send_file(IOController* controller) { return m_reactor.add_send_file(controller); }  ///< sendfile；返回后端结果。
+    int add_sequence(IOController* controller) { return m_reactor.add_sequence(controller); }  ///< 组合式序列；返回后端结果。
     int remove(IOController* controller) { return m_reactor.remove(controller); }  ///< 移除注册；返回后端结果。
 
     /** @brief 内部后端最近一次错误；无错误时为空。 */
-    std::optional<IOError> lastError() const { return detail::loadBackendError(m_last_error_code); }
+    std::optional<IOError> last_error() const { return detail::load_backend_error(m_last_error_code); }
 
     /** @brief 启动前配置 Runtime 借用的 sibling 视图；视图须覆盖整个运行周期。 */
-    void configureStealDomain(std::span<IOScheduler* const> siblings, size_t self_index) {
-        m_worker.configureStealDomain(self_index, siblings);
+    void configure_steal_domain(std::span<IOScheduler* const> siblings, size_t self_index) {
+        m_worker.configure_steal_domain(self_index, siblings);
     }
 
     /** @brief 内部窃取队列入口；当前 IO 后端默认禁用窃取。 */
-    IOReadyQueue* stealWorkerState() noexcept { return &m_worker; }
+    IOReadyQueue* steal_worker_state() noexcept { return &m_worker; }
 
     /** @brief 仅在停止或外部同步后读取统计快照。 */
-    IOSchedulerStealStats stealStats() const noexcept { return m_worker.snapshotStealStats(); }
+    IOSchedulerStealStats steal_stats() const noexcept { return m_worker.snapshot_steal_stats(); }
 
 protected:
     // 具体调度器析构前先 stop，保证 reactor/队列直到工作线程退出后才析构。
     ~IOSchedulerBase() = default;
 
-    std::expected<void, IOError> startImpl()
+    std::expected<void, IOError> start_impl()
     {
         if (m_running.exchange(true, std::memory_order_acq_rel)) { return {}; }
         m_last_error_code.store(0, std::memory_order_release);
@@ -108,7 +108,7 @@ protected:
             m_running.store(false, std::memory_order_release);
             return std::unexpected(reactor_ready.error());
         }
-        if (!m_worker.reopenResumeAdmission()) {
+        if (!m_worker.reopen_resume_admission()) {
             m_running.store(false, std::memory_order_release);
             return std::unexpected(IOError(kNotReady, 0));
         }
@@ -119,64 +119,64 @@ protected:
             this->m_threadId = std::this_thread::get_id();
             thread_ready.set_value();
             // 沿用现有亲和性行为；错误传播由后续亲和性配置改动处理。
-            (void)this->applyConfiguredAffinity();
-            eventLoop();
+            (void)this->apply_configured_affinity();
+            event_loop();
         });
         ready.wait();
         return {};
     }
 
-    void stopImpl()
+    void stop_impl()
     {
-        m_worker.closeResumeAdmission();
+        m_worker.close_resume_admission();
         if (!m_running.exchange(false, std::memory_order_acq_rel)) { return; }
-        m_wake_coordinator.forceWake([this]() { notify(); });
+        m_wake_coordinator.force_wake([this]() { notify(); });
         if (m_thread.joinable()) { m_thread.join(); }
     }
 
-    bool scheduleImpl(TaskRef task) noexcept
+    bool schedule_impl(TaskRef task) noexcept
     {
-        if (!this->bindTask(task)) { return false; }
+        if (!this->bind_task(task)) { return false; }
         if (std::this_thread::get_id() == this->m_threadId) {
-            m_worker.scheduleLocal(std::move(task));
+            m_worker.schedule_local(std::move(task));
             return true;
         }
-        return wakeAfterInjection(m_worker.scheduleInjected(std::move(task)));
+        return wake_after_injection(m_worker.schedule_injected(std::move(task)));
     }
 
-    bool scheduleResumeImpl(TaskRef task) noexcept
+    bool schedule_resume_impl(TaskRef task) noexcept
     {
-        if (!this->bindTask(task)) { return false; }
+        if (!this->bind_task(task)) { return false; }
         if (std::this_thread::get_id() == this->m_threadId) {
-            m_worker.scheduleLocal(std::move(task));
+            m_worker.schedule_local(std::move(task));
             return true;
         }
-        return wakeAfterInjection(m_worker.scheduleResume(std::move(task)));
+        return wake_after_injection(m_worker.schedule_resume(std::move(task)));
     }
 
-    bool scheduleReadyEntryImpl(detail::ReadyEntry& entry) noexcept
+    bool schedule_ready_entry_impl(detail::ReadyEntry& entry) noexcept
     {
-        if (!entry.isValid() || detail::readyEntryScheduler(entry) != this) { return false; }
+        if (!entry.is_valid() || detail::ready_entry_scheduler(entry) != this) { return false; }
         if (std::this_thread::get_id() == this->m_threadId) {
-            m_worker.scheduleLocal(std::move(entry));
+            m_worker.schedule_local(std::move(entry));
             return true;
         }
-        return wakeAfterInjection(m_worker.scheduleInjected(std::move(entry)));
+        return wake_after_injection(m_worker.schedule_injected(std::move(entry)));
     }
 
-    bool scheduleDeferredImpl(TaskRef task) noexcept
+    bool schedule_deferred_impl(TaskRef task) noexcept
     {
-        if (!this->bindTask(task)) { return false; }
+        if (!this->bind_task(task)) { return false; }
         if (std::this_thread::get_id() == this->m_threadId) {
-            m_worker.scheduleLocalDeferred(std::move(task));
+            m_worker.schedule_local_deferred(std::move(task));
             return true;
         }
-        return wakeAfterInjection(m_worker.scheduleInjected(std::move(task)));
+        return wake_after_injection(m_worker.schedule_injected(std::move(task)));
     }
 
-    bool scheduleImmediatelyImpl(TaskRef task) noexcept
+    bool schedule_immediately_impl(TaskRef task) noexcept
     {
-        if (!this->bindTask(task)) { return false; }
+        if (!this->bind_task(task)) { return false; }
         this->resume(task);
         return true;
     }
@@ -187,7 +187,7 @@ protected:
      * @param timer 定时器共享指针
      * @return true 定时器已加入当前调度器的时间轮；false 插入失败
      */
-    bool addTimerImpl(Timer::ptr timer) {
+    bool add_timer_impl(Timer::ptr timer) {
         return m_timer_manager.push(timer);
     }
 
@@ -197,20 +197,20 @@ protected:
      * 空轮使用 idle 上限，非空轮对齐下一个 tick 边界；统一在纳秒域
      * 应用通用毫秒上限，避免 kqueue 发生 ms->ns 往返精度损失。
      */
-    uint64_t schedulerPollTimeoutNanoseconds() const noexcept {
+    uint64_t scheduler_poll_timeout_nanoseconds() const noexcept {
         constexpr uint64_t kNsPerMs = 1'000'000ULL;
         const uint64_t max_ns =
             static_cast<uint64_t>(GALAY_KERNEL_IO_POLL_TIMEOUT_MAX_MS) * kNsPerMs;
         uint64_t ns = m_timer_manager.empty()
             ? static_cast<uint64_t>(GALAY_KERNEL_IO_POLL_IDLE_TIMEOUT_MS) * kNsPerMs
-            : m_timer_manager.nsToNextTickBoundary();
+            : m_timer_manager.ns_to_next_tick_boundary();
         return std::min(max_ns, ns);
     }
 
     /** @brief epoll 等毫秒接口使用纳秒边界的向上取整结果。 */
-    int schedulerPollTimeoutMilliseconds() const noexcept {
+    int scheduler_poll_timeout_milliseconds() const noexcept {
         constexpr uint64_t kNsPerMs = 1'000'000ULL;
-        const uint64_t ns = schedulerPollTimeoutNanoseconds();
+        const uint64_t ns = scheduler_poll_timeout_nanoseconds();
         const uint64_t rounded_ms = (ns + kNsPerMs - 1) / kNsPerMs;
         const uint64_t ms = std::max<uint64_t>(GALAY_KERNEL_IO_POLL_TIMEOUT_MIN_MS,
                                                rounded_ms);
@@ -222,8 +222,8 @@ protected:
      * @details io_uring 的有效等待时间还会受空闲轮 50ms 默认值影响，最终
      *          取时间轮边界与 GALAY_KERNEL_IO_POLL_WAIT_MAX_NS 的较小值。
      */
-    uint64_t schedulerPollTimeoutIoUringNanoseconds() const noexcept {
-        return std::min<uint64_t>(schedulerPollTimeoutNanoseconds(),
+    uint64_t scheduler_poll_timeout_io_uring_nanoseconds() const noexcept {
+        return std::min<uint64_t>(scheduler_poll_timeout_nanoseconds(),
                                   GALAY_KERNEL_IO_POLL_WAIT_MAX_NS);
     }
     IOReadyQueue m_worker;
@@ -239,49 +239,49 @@ protected:
     std::atomic<bool> m_running{false};
 
 private:
-    bool wakeAfterInjection(std::optional<bool> queue_was_empty) noexcept
+    bool wake_after_injection(std::optional<bool> queue_was_empty) noexcept
     {
         if (!queue_was_empty) { return false; }
         // 返回值只表示唤醒是否合并；成功入队的任务始终已被接纳。
-        (void)m_wake_coordinator.requestWake(*queue_was_empty, [this]() { notify(); });
+        (void)m_wake_coordinator.request_wake(*queue_was_empty, [this]() { notify(); });
         return true;
     }
 
-    void processPendingTasks()
+    void process_pending_tasks()
     {
-        detail::ioSchedulerProcessPendingTasks(
+        detail::io_scheduler_process_pending_tasks(
             m_core, m_wake_coordinator, [this](TaskRef& task) { this->resume(task); });
     }
 
-    void eventLoop()
+    void event_loop()
     {
         auto& backend = static_cast<Derived&>(*this);
-        detail::runIOSchedulerEventLoop(
+        detail::run_io_scheduler_event_loop(
             m_running, m_core, m_timer_manager, m_wake_coordinator,
             static_cast<size_t>(m_batch_size),
             [this](TaskRef& task) { this->resume(task); },
-            [&backend]() { backend.pollBackend(); },
-            [&backend]() { backend.flushBackend(); });
+            [&backend]() { backend.poll_backend(); },
+            [&backend]() { backend.flush_backend(); });
 #ifdef USE_EPOLL
         // Accept 的最小停机闭环；其他 operation 的统一 drain 属于后续阶段。
         // 仍在 owner 上，local resume admission 可完成已接纳的等待者。
-        m_reactor.stopAccepts();
-        while (m_core.hasPendingWork()) {
-            const auto ran = m_core.runReadyPass(
+        m_reactor.stop_accepts();
+        while (m_core.has_pending_work()) {
+            const auto ran = m_core.run_ready_pass(
                 [this](TaskRef& task) { this->resume(task); },
-                [this](size_t drained) { m_wake_coordinator.onRemoteCollected(drained); });
+                [this](size_t drained) { m_wake_coordinator.on_remote_collected(drained); });
             if (ran == 0) { break; }
-            backend.flushBackend();
+            backend.flush_backend();
         }
 #endif
 #ifdef USE_IOURING
         // io_uring has no readiness registration queue, but its persistent
         // accept resource still needs an owner-side logical stop completion.
-        m_reactor.stopAccepts();
-        while (m_core.hasPendingWork()) {
-            const auto ran = m_core.runReadyPass(
+        m_reactor.stop_accepts();
+        while (m_core.has_pending_work()) {
+            const auto ran = m_core.run_ready_pass(
                 [this](TaskRef& task) { this->resume(task); },
-                [this](size_t drained) { m_wake_coordinator.onRemoteCollected(drained); });
+                [this](size_t drained) { m_wake_coordinator.on_remote_collected(drained); });
             if (ran == 0) { break; }
         }
 #endif

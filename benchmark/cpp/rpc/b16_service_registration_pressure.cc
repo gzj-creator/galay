@@ -65,10 +65,10 @@ struct Services {
 };
 
 template<typename Server>
-bool registerAll(Server& server, Services& services)
+bool register_all(Server& server, Services& services)
 {
     for (auto& service : services.values) {
-        auto registered = server.registerService(service.value());
+        auto registered = server.register_service(service.value());
         if (!registered.has_value()) {
             return false;
         }
@@ -80,7 +80,7 @@ bool registerAll(Server& server, Services& services)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -100,7 +100,7 @@ int main(int argc, char** argv)
         RpcServer unary_server = unary_builder.build();
         g_allocation_count.store(0, std::memory_order_relaxed);
         g_count_allocations.store(true, std::memory_order_release);
-        const bool unary_ok = registerAll(unary_server, services);
+        const bool unary_ok = register_all(unary_server, services);
         g_count_allocations.store(false, std::memory_order_release);
         allocations += g_allocation_count.load(std::memory_order_relaxed);
         if (!unary_ok) {
@@ -110,7 +110,7 @@ int main(int argc, char** argv)
         RpcStreamServer stream_server = stream_builder.build();
         g_allocation_count.store(0, std::memory_order_relaxed);
         g_count_allocations.store(true, std::memory_order_release);
-        const bool stream_ok = registerAll(stream_server, services);
+        const bool stream_ok = register_all(stream_server, services);
         g_count_allocations.store(false, std::memory_order_release);
         allocations += g_allocation_count.load(std::memory_order_relaxed);
         if (!stream_ok) {

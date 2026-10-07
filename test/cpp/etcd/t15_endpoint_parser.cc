@@ -20,13 +20,13 @@ bool contains(const std::string& text, const std::string& needle)
     return text.find(needle) != std::string::npos;
 }
 
-std::filesystem::path repoRoot()
+std::filesystem::path repo_root()
 {
     std::filesystem::path file = __FILE__;
     return file.parent_path().parent_path().parent_path().parent_path();
 }
 
-std::string readFile(const std::filesystem::path& path)
+std::string read_file(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input) {
@@ -38,14 +38,14 @@ std::string readFile(const std::filesystem::path& path)
     return buffer.str();
 }
 
-int expectParsed(
+int expect_parsed(
     const std::string& endpoint,
     const std::string& host,
     uint16_t port,
     bool secure,
     bool ipv6)
 {
-    auto parsed = galay::etcd::internal::parseEndpoint(endpoint);
+    auto parsed = galay::etcd::internal::parse_endpoint(endpoint);
     if (!parsed.has_value()) {
         return fail("parseEndpoint rejected " + endpoint + ": " + parsed.error());
     }
@@ -64,9 +64,9 @@ int expectParsed(
     return 0;
 }
 
-int expectRejected(const std::string& endpoint, const std::string& error_fragment)
+int expect_rejected(const std::string& endpoint, const std::string& error_fragment)
 {
-    auto parsed = galay::etcd::internal::parseEndpoint(endpoint);
+    auto parsed = galay::etcd::internal::parse_endpoint(endpoint);
     if (parsed.has_value()) {
         return fail("parseEndpoint accepted invalid endpoint " + endpoint);
     }
@@ -80,31 +80,31 @@ int expectRejected(const std::string& endpoint, const std::string& error_fragmen
 
 int main()
 {
-    if (const int rc = expectParsed("http://127.0.0.1:2379", "127.0.0.1", 2379, false, false);
+    if (const int rc = expect_parsed("http://127.0.0.1:2379", "127.0.0.1", 2379, false, false);
         rc != 0) {
         return rc;
     }
-    if (const int rc = expectParsed("https://etcd.example.com:1234", "etcd.example.com", 1234, true, false);
+    if (const int rc = expect_parsed("https://etcd.example.com:1234", "etcd.example.com", 1234, true, false);
         rc != 0) {
         return rc;
     }
-    if (const int rc = expectRejected("127.0.0.1:2379", "invalid endpoint:"); rc != 0) {
+    if (const int rc = expect_rejected("127.0.0.1:2379", "invalid endpoint:"); rc != 0) {
         return rc;
     }
-    if (const int rc = expectRejected("http://127.0.0.1:0", "endpoint port out of range:"); rc != 0) {
+    if (const int rc = expect_rejected("http://127.0.0.1:0", "endpoint port out of range:"); rc != 0) {
         return rc;
     }
-    if (const int rc = expectRejected("http://127.0.0.1:65536", "endpoint port out of range:"); rc != 0) {
+    if (const int rc = expect_rejected("http://127.0.0.1:65536", "endpoint port out of range:"); rc != 0) {
         return rc;
     }
-    if (const int rc = expectRejected("http://127.0.0.1:abc", "invalid endpoint:"); rc != 0) {
+    if (const int rc = expect_rejected("http://127.0.0.1:abc", "invalid endpoint:"); rc != 0) {
         return rc;
     }
-    if (const int rc = expectRejected("http://:2379", "invalid endpoint:"); rc != 0) {
+    if (const int rc = expect_rejected("http://:2379", "invalid endpoint:"); rc != 0) {
         return rc;
     }
 
-    const std::string internal_header = readFile(repoRoot() / "src/cpp/galay-etcd/base/etcd_internal.h");
+    const std::string internal_header = read_file(repo_root() / "src/cpp/galay-etcd/base/etcd_internal.h");
     if (internal_header.empty()) {
         return fail("failed to read etcd_internal.h");
     }

@@ -29,8 +29,8 @@ namespace {
 
 class TestEpollScheduler final : public EpollScheduler {
 public:
-    int epollFd() const {
-        return m_reactor.getPollHandle().fd;
+    int epoll_fd() const {
+        return m_reactor.get_poll_handle().fd;
     }
 };
 
@@ -58,16 +58,16 @@ struct ReadvMachine {
         }
         if (!waiting) {
             waiting = true;
-            return MachineAction<result_type>::waitReadv(iovecs, 1);
+            return MachineAction<result_type>::wait_readv(iovecs, 1);
         }
         return MachineAction<result_type>::fail(IOError(kParamInvalid, 0));
     }
 
-    void onRead(result_type read_result) {
+    void on_read(result_type read_result) {
         result = std::move(read_result);
     }
 
-    void onWrite(result_type write_result) {
+    void on_write(result_type write_result) {
         result = write_result
             ? result_type(std::unexpected(IOError(kParamInvalid, 0)))
             : result_type(std::unexpected(write_result.error()));
@@ -101,9 +101,9 @@ struct SuspendProbeAwaitable {
     }
 };
 
-Task<void> readOne(ReadState* state) {
+Task<void> read_one(ReadState* state) {
     char byte = 0;
-    auto operation = AwaitableBuilder<ReadvMachine::result_type>::fromStateMachine(
+    auto operation = AwaitableBuilder<ReadvMachine::result_type>::from_state_machine(
                          &state->controller,
                          ReadvMachine(&byte))
                          .build();
@@ -119,7 +119,7 @@ Task<void> readOne(ReadState* state) {
     state->done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -132,12 +132,12 @@ bool waitUntil(auto&& predicate,
     return predicate();
 }
 
-bool setNonBlocking(int fd) {
+bool set_non_blocking(int fd) {
     const int flags = fcntl(fd, F_GETFL, 0);
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool sendByte(int fd, char byte) {
+bool send_byte(int fd, char byte) {
     while (true) {
         const ssize_t written = ::send(fd, &byte, 1, 0);
         if (written == 1) {
@@ -150,7 +150,7 @@ bool sendByte(int fd, char byte) {
     }
 }
 
-bool closeFd(int fd) {
+bool close_fd(int fd) {
     if (::close(fd) == 0) {
         return true;
     }
@@ -171,10 +171,10 @@ int main() {
         std::cerr << "[T148] socketpair failed, errno=" << errno << '\n';
         return 1;
     }
-    if (!setNonBlocking(fds[0]) || !setNonBlocking(fds[1])) {
+    if (!set_non_blocking(fds[0]) || !set_non_blocking(fds[1])) {
         std::cerr << "[T148] failed to set non-blocking mode\n";
-        const bool first_closed = closeFd(fds[0]);
-        const bool second_closed = closeFd(fds[1]);
+        const bool first_closed = close_fd(fds[0]);
+        const bool second_closed = close_fd(fds[1]);
         return first_closed && second_closed ? 1 : 2;
     }
 
@@ -183,27 +183,27 @@ int main() {
     auto started = scheduler.start();
     if (!started) {
         std::cerr << "[T148] scheduler start failed: " << started.error().message() << '\n';
-        const bool first_closed = closeFd(fds[0]);
-        const bool second_closed = closeFd(fds[1]);
+        const bool first_closed = close_fd(fds[0]);
+        const bool second_closed = close_fd(fds[1]);
         return first_closed && second_closed ? 1 : 2;
     }
 
     bool passed = true;
-    if (!scheduleTask(scheduler, readOne(&state))) {
+    if (!schedule_task(scheduler, read_one(&state))) {
         std::cerr << "[T148] failed to schedule first readv\n";
         passed = false;
     }
-    if (passed && !waitUntil([&]() {
+    if (passed && !wait_until([&]() {
             return state.suspend_done.load(std::memory_order_acquire);
         })) {
         std::cerr << "[T148] first readv did not reach await_suspend\n";
         passed = false;
     }
-    if (passed && !sendByte(fds[1], 'a')) {
+    if (passed && !send_byte(fds[1], 'a')) {
         std::cerr << "[T148] failed to send first byte\n";
         passed = false;
     }
-    if (passed && !waitUntil([&]() {
+    if (passed && !wait_until([&]() {
             return state.done.load(std::memory_order_acquire);
         })) {
         std::cerr << "[T148] first readv did not complete\n";
@@ -216,7 +216,7 @@ int main() {
     }
 
     scheduler.stop();
-    const int epoll_fd = scheduler.epollFd();
+    const int epoll_fd = scheduler.epoll_fd();
     epoll_event duplicate{};
     duplicate.events = EPOLLIN | EPOLLET;
     errno = 0;
@@ -226,7 +226,7 @@ int main() {
         passed = false;
     }
 
-    if (passed && !sendByte(fds[1], 'b')) {
+    if (passed && !send_byte(fds[1], 'b')) {
         std::cerr << "[T148] failed to send lost-edge byte\n";
         passed = false;
     }
@@ -259,11 +259,11 @@ int main() {
             passed = false;
         }
     }
-    if (passed && !scheduleTask(scheduler, readOne(&state))) {
+    if (passed && !schedule_task(scheduler, read_one(&state))) {
         std::cerr << "[T148] failed to schedule lost-edge fallback readv\n";
         passed = false;
     }
-    if (passed && !waitUntil([&]() {
+    if (passed && !wait_until([&]() {
             return state.done.load(std::memory_order_acquire);
         })) {
         std::cerr << "[T148] optimistic readv did not recover the discarded edge\n";
@@ -276,8 +276,8 @@ int main() {
     }
 
     scheduler.stop();
-    const bool first_closed = closeFd(fds[0]);
-    const bool second_closed = closeFd(fds[1]);
+    const bool first_closed = close_fd(fds[0]);
+    const bool second_closed = close_fd(fds[1]);
     if (!first_closed || !second_closed) {
         passed = false;
     }

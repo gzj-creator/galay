@@ -46,7 +46,7 @@ struct ThroughputSample {
     double throughput;
 };
 
-void markCompleted(BenchState* state) {
+void mark_completed(BenchState* state) {
     state->completed.fetch_add(1, std::memory_order_relaxed);
     if (state->completion_latch) {
         state->completion_latch->arrive();
@@ -56,40 +56,40 @@ void markCompleted(BenchState* state) {
 // ============== 测试协程 ==============
 
 // 空协程（测试调度开销）
-Task<void> emptyTask(BenchState* state) {
-    markCompleted(state);
+Task<void> empty_task(BenchState* state) {
+    mark_completed(state);
     co_return;
 }
 
 // 轻量计算协程
-Task<void> lightComputeTask(BenchState* state) {
+Task<void> light_compute_task(BenchState* state) {
     volatile int sum = 0;
     for (int i = 0; i < 100; ++i) {
         sum += i;
     }
-    markCompleted(state);
+    mark_completed(state);
     co_return;
 }
 
 // 计算密集型协程
-Task<void> heavyComputeTask(BenchState* state) {
+Task<void> heavy_compute_task(BenchState* state) {
     volatile double result = 0;
     for (int i = 0; i < COMPUTE_ITERATIONS; ++i) {
         result += std::sin(i) * std::cos(i);
     }
-    markCompleted(state);
+    mark_completed(state);
     co_return;
 }
 
 // 延迟测试协程
-Task<void> latencyTask(BenchState* state,
+Task<void> latency_task(BenchState* state,
                        std::chrono::steady_clock::time_point submitted_at) {
     auto now = std::chrono::steady_clock::now();
     auto latency = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now - submitted_at).count();
     state->latency_sum_ns.fetch_add(latency, std::memory_order_relaxed);
     state->latency_count.fetch_add(1, std::memory_order_relaxed);
-    markCompleted(state);
+    mark_completed(state);
     co_return;
 }
 
@@ -118,7 +118,7 @@ public:
     void spawn(Task<void> task) {
         // 轮询分发
         int idx = m_next.fetch_add(1, std::memory_order_relaxed) % m_count;
-        scheduleTask(*m_schedulers[idx], std::move(task));
+        schedule_task(*m_schedulers[idx], std::move(task));
     }
 
     int count() const { return m_count; }
@@ -129,7 +129,7 @@ private:
     std::vector<std::unique_ptr<ParallelScheduler>> m_schedulers;
 };
 
-ThroughputSample measureThroughputSample(
+ThroughputSample measure_throughput_sample(
     int scheduler_count,
     int task_count,
     const std::function<Task<void>(BenchState*)>& task_factory) {
@@ -171,14 +171,14 @@ ThroughputSample measureThroughputSample(
 // ============== 压测函数 ==============
 
 // 吞吐量测试
-void benchThroughput(const std::string& name, int scheduler_count, int task_count,
+void bench_throughput(const std::string& name, int scheduler_count, int task_count,
                      const std::function<Task<void>(BenchState*)>& task_factory) {
     std::vector<ThroughputSample> samples;
     samples.reserve(THROUGHPUT_SAMPLE_COUNT);
     for (std::size_t sample_index = 0; sample_index < THROUGHPUT_SAMPLE_COUNT; ++sample_index) {
-        samples.push_back(measureThroughputSample(scheduler_count, task_count, task_factory));
+        samples.push_back(measure_throughput_sample(scheduler_count, task_count, task_factory));
     }
-    const auto median_sample = galay::benchmark::medianElement(
+    const auto median_sample = galay::benchmark::median_element(
         std::move(samples),
         [](const ThroughputSample& lhs, const ThroughputSample& rhs) {
             return lhs.throughput < rhs.throughput;
@@ -189,7 +189,7 @@ void benchThroughput(const std::string& name, int scheduler_count, int task_coun
 }
 
 // 延迟测试
-void benchLatency(int scheduler_count, int task_count) {
+void bench_latency(int scheduler_count, int task_count) {
     SchedulerPool pool(scheduler_count);
     pool.start();
 
@@ -198,7 +198,7 @@ void benchLatency(int scheduler_count, int task_count) {
     BenchState warmup_state;
     warmup_state.completion_latch = &warmup_latch;
     for (int i = 0; i < WARMUP_COUNT; ++i) {
-        pool.spawn(emptyTask(&warmup_state));
+        pool.spawn(empty_task(&warmup_state));
     }
     warmup_latch.wait();
 
@@ -208,7 +208,7 @@ void benchLatency(int scheduler_count, int task_count) {
         galay::benchmark::CompletionLatch measure_latch(1);
         BenchState measure_state;
         measure_state.completion_latch = &measure_latch;
-        pool.spawn(latencyTask(&measure_state, std::chrono::steady_clock::now()));
+        pool.spawn(latency_task(&measure_state, std::chrono::steady_clock::now()));
         measure_latch.wait();
         latency_sum_ns += measure_state.latency_sum_ns.load(std::memory_order_relaxed);
     }
@@ -224,7 +224,7 @@ void benchLatency(int scheduler_count, int task_count) {
 }
 
 // 扩展性测试
-void benchScalability() {
+void bench_scalability() {
     LogInfo("--- Scalability Test (heavy compute tasks) ---");
 
     std::vector<int> scheduler_counts = {1, 2, 4, 8};
@@ -242,7 +242,7 @@ void benchScalability() {
         auto start = std::chrono::steady_clock::now();
 
         for (int i = 0; i < task_count; ++i) {
-            pool.spawn(heavyComputeTask(&state));
+            pool.spawn(heavy_compute_task(&state));
         }
         completion_latch.wait();
 
@@ -267,7 +267,7 @@ void benchScalability() {
 }
 
 // 持续压力测试
-void benchSustained(int scheduler_count, int duration_sec) {
+void bench_sustained(int scheduler_count, int duration_sec) {
     LogInfo("--- Sustained Load Test ({}s) ---", duration_sec);
 
     SchedulerPool pool(scheduler_count);
@@ -282,7 +282,7 @@ void benchSustained(int scheduler_count, int duration_sec) {
     // 生产者线程
     std::thread producer([&]() {
         while (running) {
-            pool.spawn(lightComputeTask(&state));
+            pool.spawn(light_compute_task(&state));
             // 控制提交速率
             if (state.completed.load(std::memory_order_relaxed) < 10000) {
                 continue;
@@ -318,12 +318,12 @@ void benchSustained(int scheduler_count, int duration_sec) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     const unsigned hardware_threads = std::max(1u, std::thread::hardware_concurrency());
-    int scheduler_count = galay::benchmark::defaultBenchmarkSchedulerCount(hardware_threads);
+    int scheduler_count = galay::benchmark::default_benchmark_scheduler_count(hardware_threads);
     if (argc > 1) {
         scheduler_count = std::max(1, std::atoi(argv[1]));
     }
@@ -334,36 +334,36 @@ int main(int argc, char* argv[]) {
 
     // 1. 吞吐量测试 - 空任务
     LogInfo("--- Throughput Test (empty tasks) ---");
-    benchThroughput("Empty", scheduler_count, THROUGHPUT_TASKS, emptyTask);
+    bench_throughput("Empty", scheduler_count, THROUGHPUT_TASKS, empty_task);
 
     LogInfo("");
 
     // 2. 吞吐量测试 - 轻量计算
     LogInfo("--- Throughput Test (light compute) ---");
-    benchThroughput("Light", scheduler_count, THROUGHPUT_TASKS, lightComputeTask);
+    bench_throughput("Light", scheduler_count, THROUGHPUT_TASKS, light_compute_task);
 
     LogInfo("");
 
     // 3. 吞吐量测试 - 重计算
     LogInfo("--- Throughput Test (heavy compute) ---");
-    benchThroughput("Heavy", scheduler_count, HEAVY_THROUGHPUT_TASKS, heavyComputeTask);
+    bench_throughput("Heavy", scheduler_count, HEAVY_THROUGHPUT_TASKS, heavy_compute_task);
 
     LogInfo("");
 
     // 4. 延迟测试
     LogInfo("--- Latency Test ---");
     // 延迟更适合测轻度并发下的调度开销，避免大 burst 排队时间淹没 wakeup/schedule 成本。
-    benchLatency(std::min(scheduler_count, 2), LATENCY_TASKS);
+    bench_latency(std::min(scheduler_count, 2), LATENCY_TASKS);
 
     LogInfo("");
 
     // 5. 扩展性测试
-    benchScalability();
+    bench_scalability();
 
     LogInfo("");
 
     // 6. 持续压力测试
-    benchSustained(scheduler_count, 5);
+    bench_sustained(scheduler_count, 5);
 
     LogInfo("");
     LogInfo("=== Benchmark Complete ===");

@@ -4,7 +4,7 @@
 
 int main()
 {
-    if (!galay::rpc::rpcTlsCompiled()) {
+    if (!galay::rpc::rpc_tls_compiled()) {
         std::cout << "RPC TLS smoke SKIP: TLS support is not compiled into rpc target\n";
         return 0;
     }

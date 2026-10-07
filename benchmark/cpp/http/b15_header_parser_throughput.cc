@@ -3,10 +3,10 @@
  * @brief HTTP Header 解析性能基准测试
  *
  * 测试场景：
- * 1. BM_ParseCommonHeaders - 全部常见 header（fast-path）
- * 2. BM_ParseRareHeaders - 全部罕见 header（slow-path）
- * 3. BM_ParseMixedHeaders - 混合场景（常见 + 罕见）
- * 4. BM_HeaderLookup_Common - 常见 header 查询性能（O(1) vs O(log n)）
+ * 1. bm_parse_common_headers - 全部常见 header（fast-path）
+ * 2. bm_parse_rare_headers - 全部罕见 header（slow-path）
+ * 3. bm_parse_mixed_headers - 混合场景（常见 + 罕见）
+ * 4. bm_header_lookup_common - 常见 header 查询性能（O(1) vs O(log n)）
  */
 
 #include "../common/benchmark_environment.h"
@@ -85,7 +85,7 @@ private:
     size_t m_items_per_iteration;
 };
 
-void printResult(const BenchmarkResult& result) {
+void print_result(const BenchmarkResult& result) {
     std::cout << std::left << std::setw(35) << result.name
               << std::right << std::setw(12) << std::fixed << std::setprecision(1) << result.avg_ns << " ns"
               << std::setw(12) << result.median_ns << " ns"
@@ -102,7 +102,7 @@ void printResult(const BenchmarkResult& result) {
     std::cout << std::endl;
 }
 
-void printHeader() {
+void print_header() {
     std::cout << std::string(120, '=') << std::endl;
     std::cout << "HTTP Header Parsing Performance Benchmark" << std::endl;
     std::cout << std::string(120, '=') << std::endl;
@@ -120,7 +120,7 @@ void printHeader() {
 }
 
 // Benchmark 1: 解析全部常见 header（fast-path）
-void BM_ParseCommonHeaders() {
+void bm_parse_common_headers() {
     const char* request =
         "GET /index.html HTTP/1.1\r\n"
         "host: example.com\r\n"
@@ -134,16 +134,16 @@ void BM_ParseCommonHeaders() {
     BenchmarkRunner runner("BM_ParseCommonHeaders", 100000);
     auto result = runner.run([&]() {
         HttpRequestHeader header;
-        auto [err, consumed] = header.fromString(request);
+        auto [err, consumed] = header.from_string(request);
         // DoNotOptimize equivalent
         asm volatile("" : : "r,m"(err) : "memory");
         asm volatile("" : : "r,m"(consumed) : "memory");
     });
-    printResult(result);
+    print_result(result);
 }
 
 // Benchmark 2: 解析全部罕见 header（slow-path）
-void BM_ParseRareHeaders() {
+void bm_parse_rare_headers() {
     const char* request =
         "GET /index.html HTTP/1.1\r\n"
         "x-custom-1: value1\r\n"
@@ -156,15 +156,15 @@ void BM_ParseRareHeaders() {
     BenchmarkRunner runner("BM_ParseRareHeaders", 100000);
     auto result = runner.run([&]() {
         HttpRequestHeader header;
-        auto [err, consumed] = header.fromString(request);
+        auto [err, consumed] = header.from_string(request);
         asm volatile("" : : "r,m"(err) : "memory");
         asm volatile("" : : "r,m"(consumed) : "memory");
     });
-    printResult(result);
+    print_result(result);
 }
 
 // Benchmark 3: 解析混合 header（常见 + 罕见）
-void BM_ParseMixedHeaders() {
+void bm_parse_mixed_headers() {
     const char* request =
         "GET /api/data HTTP/1.1\r\n"
         "host: api.example.com\r\n"
@@ -179,15 +179,15 @@ void BM_ParseMixedHeaders() {
     BenchmarkRunner runner("BM_ParseMixedHeaders", 100000);
     auto result = runner.run([&]() {
         HttpRequestHeader header;
-        auto [err, consumed] = header.fromString(request);
+        auto [err, consumed] = header.from_string(request);
         asm volatile("" : : "r,m"(err) : "memory");
         asm volatile("" : : "r,m"(consumed) : "memory");
     });
-    printResult(result);
+    print_result(result);
 }
 
 // Benchmark 4: 常见 header 查询性能（O(1) vs O(log n)）
-void BM_HeaderLookup_Common() {
+void bm_header_lookup_common() {
     HttpRequestHeader header;
     const char* request =
         "GET / HTTP/1.1\r\n"
@@ -195,22 +195,22 @@ void BM_HeaderLookup_Common() {
         "content-length: 100\r\n"
         "user-agent: test\r\n"
         "\r\n";
-    header.fromString(request);
+    header.from_string(request);
 
     BenchmarkRunner runner("BM_HeaderLookup_Common", 100000, 3);
     auto result = runner.run([&]() {
-        auto host = header.headerPairs().getValue("host");
-        auto length = header.headerPairs().getValue("content-length");
-        auto ua = header.headerPairs().getValue("user-agent");
+        auto host = header.header_pairs().get_value("host");
+        auto length = header.header_pairs().get_value("content-length");
+        auto ua = header.header_pairs().get_value("user-agent");
         asm volatile("" : : "r,m"(host) : "memory");
         asm volatile("" : : "r,m"(length) : "memory");
         asm volatile("" : : "r,m"(ua) : "memory");
     });
-    printResult(result);
+    print_result(result);
 }
 
 // Benchmark 5: 罕见 header 查询性能
-void BM_HeaderLookup_Rare() {
+void bm_header_lookup_rare() {
     HttpRequestHeader header;
     const char* request =
         "GET / HTTP/1.1\r\n"
@@ -218,22 +218,22 @@ void BM_HeaderLookup_Rare() {
         "x-custom-2: value2\r\n"
         "x-custom-3: value3\r\n"
         "\r\n";
-    header.fromString(request);
+    header.from_string(request);
 
     BenchmarkRunner runner("BM_HeaderLookup_Rare", 100000, 3);
     auto result = runner.run([&]() {
-        auto v1 = header.headerPairs().getValue("x-custom-1");
-        auto v2 = header.headerPairs().getValue("x-custom-2");
-        auto v3 = header.headerPairs().getValue("x-custom-3");
+        auto v1 = header.header_pairs().get_value("x-custom-1");
+        auto v2 = header.header_pairs().get_value("x-custom-2");
+        auto v3 = header.header_pairs().get_value("x-custom-3");
         asm volatile("" : : "r,m"(v1) : "memory");
         asm volatile("" : : "r,m"(v2) : "memory");
         asm volatile("" : : "r,m"(v3) : "memory");
     });
-    printResult(result);
+    print_result(result);
 }
 
 // Benchmark 6: 大量 header 解析（压力测试）
-void BM_ParseLargeHeaders() {
+void bm_parse_large_headers() {
     const char* request =
         "GET /api/endpoint HTTP/1.1\r\n"
         "host: api.example.com\r\n"
@@ -261,15 +261,15 @@ void BM_ParseLargeHeaders() {
     BenchmarkRunner runner("BM_ParseLargeHeaders", 50000);
     auto result = runner.run([&]() {
         HttpRequestHeader header;
-        auto [err, consumed] = header.fromString(request);
+        auto [err, consumed] = header.from_string(request);
         asm volatile("" : : "r,m"(err) : "memory");
         asm volatile("" : : "r,m"(consumed) : "memory");
     });
-    printResult(result);
+    print_result(result);
 }
 
 // Benchmark 7: Response header 解析
-void BM_ParseResponseHeaders() {
+void bm_parse_response_headers() {
     const char* response =
         "HTTP/1.1 200 OK\r\n"
         "content-type: application/json\r\n"
@@ -281,30 +281,30 @@ void BM_ParseResponseHeaders() {
     BenchmarkRunner runner("BM_ParseResponseHeaders", 100000);
     auto result = runner.run([&]() {
         HttpResponseHeader header;
-        auto [err, consumed] = header.fromString(response);
+        auto [err, consumed] = header.from_string(response);
         asm volatile("" : : "r,m"(err) : "memory");
         asm volatile("" : : "r,m"(consumed) : "memory");
     });
-    printResult(result);
+    print_result(result);
 }
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    printHeader();
+    print_header();
 
     std::cout << "\n[Phase 1: Parsing Performance - Fast-path vs Slow-path]\n" << std::endl;
-    BM_ParseCommonHeaders();
-    BM_ParseRareHeaders();
-    BM_ParseMixedHeaders();
-    BM_ParseLargeHeaders();
-    BM_ParseResponseHeaders();
+    bm_parse_common_headers();
+    bm_parse_rare_headers();
+    bm_parse_mixed_headers();
+    bm_parse_large_headers();
+    bm_parse_response_headers();
 
     std::cout << "\n[Phase 2: Lookup Performance - O(1) vs O(log n)]\n" << std::endl;
-    BM_HeaderLookup_Common();
-    BM_HeaderLookup_Rare();
+    bm_header_lookup_common();
+    bm_header_lookup_rare();
 
     std::cout << "\n" << std::string(120, '=') << std::endl;
     std::cout << "Benchmark completed successfully!" << std::endl;

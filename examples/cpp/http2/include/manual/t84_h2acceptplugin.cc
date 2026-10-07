@@ -34,7 +34,7 @@ namespace {
     std::abort();
 }
 
-std::string resolveHttp2Asset(const char* name)
+std::string resolve_http2_asset(const char* name)
 {
     const char* dirs[] = {
         GALAY_SOURCE_DIR "/test/cpp/http2",
@@ -56,7 +56,7 @@ std::string resolveHttp2Asset(const char* name)
     fail("missing http2 TLS test asset");
 }
 
-uint16_t pickFreePort()
+uint16_t pick_free_port()
 {
     int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -90,7 +90,7 @@ uint16_t pickFreePort()
     return port;
 }
 
-int connectWithRetry(uint16_t port)
+int connect_with_retry(uint16_t port)
 {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -127,13 +127,13 @@ int connectWithRetry(uint16_t port)
     fail("connect retry exhausted");
 }
 
-void openAndClose(uint16_t port)
+void open_and_close(uint16_t port)
 {
-    int fd = connectWithRetry(port);
+    int fd = connect_with_retry(port);
     ::close(fd);
 }
 
-void waitForCount(const std::atomic<int>& value, int expected, const char* message)
+void wait_for_count(const std::atomic<int>& value, int expected, const char* message)
 {
     for (int i = 0; i < 100; ++i) {
         if (value.load() >= expected) {
@@ -144,7 +144,7 @@ void waitForCount(const std::atomic<int>& value, int expected, const char* messa
     fail(message);
 }
 
-void waitForStableCount(const std::atomic<int>& value,
+void wait_for_stable_count(const std::atomic<int>& value,
                         int expected,
                         std::chrono::milliseconds duration,
                         const char* message)
@@ -158,7 +158,7 @@ void waitForStableCount(const std::atomic<int>& value,
     }
 }
 
-Task<void> unusedStreamHandler(Http2Stream::ptr)
+Task<void> unused_stream_handler(Http2Stream::ptr)
 {
     co_return;
 }
@@ -234,20 +234,20 @@ void test_h2c_accept_plugin_blocks_before_downstream_plugin()
     std::atomic<int> gate_stop_count{0};
     std::atomic<int> downstream_start_count{0};
     std::atomic<int> downstream_stop_count{0};
-    uint16_t port = pickFreePort();
+    uint16_t port = pick_free_port();
 
     H2cServer server(H2cServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(2)
-        .parallelSchedulerCount(0)
-        .streamHandler(unusedStreamHandler)
+        .io_scheduler_count(2)
+        .parallel_scheduler_count(0)
+        .stream_handler(unused_stream_handler)
         .build());
 
     bool registered_blacklist =
-        server.addAcceptPlugin(std::make_unique<OneAndBlockPlugin<AsyncTcpSocket>>(
+        server.add_accept_plugin(std::make_unique<OneAndBlockPlugin<AsyncTcpSocket>>(
             &gate_count, &gate_start_count, &gate_stop_count));
-    bool registered_downstream = server.addAcceptPlugin(
+    bool registered_downstream = server.add_accept_plugin(
         std::make_unique<CountingPlugin<AsyncTcpSocket>>(
             &downstream_count, &downstream_start_count, &downstream_stop_count, true));
     if (!registered_blacklist || !registered_downstream) {
@@ -256,14 +256,14 @@ void test_h2c_accept_plugin_blocks_before_downstream_plugin()
 
     server.start();
 
-    openAndClose(port);
-    waitForCount(downstream_count, 1, "first h2c connection should reach downstream plugin");
+    open_and_close(port);
+    wait_for_count(downstream_count, 1, "first h2c connection should reach downstream plugin");
 
-    openAndClose(port);
-    waitForStableCount(downstream_count, 1, 150ms,
+    open_and_close(port);
+    wait_for_stable_count(downstream_count, 1, 150ms,
                        "blacklisted h2c connection should stop downstream plugin");
 
-    bool registered_after_start = server.addAcceptPlugin(
+    bool registered_after_start = server.add_accept_plugin(
         std::make_unique<CountingPlugin<AsyncTcpSocket>>(
             &downstream_count, &downstream_start_count, &downstream_stop_count, true));
     if (registered_after_start) {
@@ -271,10 +271,10 @@ void test_h2c_accept_plugin_blocks_before_downstream_plugin()
     }
 
     server.stop();
-    waitForCount(gate_start_count, 1, "h2c gate plugin start should run once");
-    waitForCount(downstream_start_count, 1, "h2c downstream plugin start should run once");
-    waitForCount(gate_stop_count, 1, "h2c gate plugin stop should run once");
-    waitForCount(downstream_stop_count, 1, "h2c downstream plugin stop should run once");
+    wait_for_count(gate_start_count, 1, "h2c gate plugin start should run once");
+    wait_for_count(downstream_start_count, 1, "h2c downstream plugin start should run once");
+    wait_for_count(gate_stop_count, 1, "h2c gate plugin stop should run once");
+    wait_for_count(downstream_stop_count, 1, "h2c downstream plugin stop should run once");
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
@@ -286,24 +286,24 @@ void test_h2_accept_plugin_blocks_before_downstream_plugin()
     std::atomic<int> gate_stop_count{0};
     std::atomic<int> downstream_start_count{0};
     std::atomic<int> downstream_stop_count{0};
-    uint16_t port = pickFreePort();
-    const std::string cert_path = resolveHttp2Asset("test.crt");
-    const std::string key_path = resolveHttp2Asset("test.key");
+    uint16_t port = pick_free_port();
+    const std::string cert_path = resolve_http2_asset("test.crt");
+    const std::string key_path = resolve_http2_asset("test.key");
 
     H2Server server(H2ServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .certPath(cert_path)
-        .keyPath(key_path)
-        .ioSchedulerCount(2)
-        .parallelSchedulerCount(0)
-        .streamHandler(unusedStreamHandler)
+        .cert_path(cert_path)
+        .key_path(key_path)
+        .io_scheduler_count(2)
+        .parallel_scheduler_count(0)
+        .stream_handler(unused_stream_handler)
         .build());
 
-    bool registered_blacklist = server.addAcceptPlugin(
+    bool registered_blacklist = server.add_accept_plugin(
         std::make_unique<OneAndBlockPlugin<galay::ssl::SslSocket>>(
             &gate_count, &gate_start_count, &gate_stop_count));
-    bool registered_downstream = server.addAcceptPlugin(
+    bool registered_downstream = server.add_accept_plugin(
         std::make_unique<CountingPlugin<galay::ssl::SslSocket>>(
             &downstream_count, &downstream_start_count, &downstream_stop_count, true));
     if (!registered_blacklist || !registered_downstream) {
@@ -312,14 +312,14 @@ void test_h2_accept_plugin_blocks_before_downstream_plugin()
 
     server.start();
 
-    openAndClose(port);
-    waitForCount(downstream_count, 1, "first h2 connection should reach downstream plugin");
+    open_and_close(port);
+    wait_for_count(downstream_count, 1, "first h2 connection should reach downstream plugin");
 
-    openAndClose(port);
-    waitForStableCount(downstream_count, 1, 150ms,
+    open_and_close(port);
+    wait_for_stable_count(downstream_count, 1, 150ms,
                        "blacklisted h2 connection should stop downstream plugin");
 
-    bool registered_after_start = server.addAcceptPlugin(
+    bool registered_after_start = server.add_accept_plugin(
         std::make_unique<CountingPlugin<galay::ssl::SslSocket>>(
             &downstream_count, &downstream_start_count, &downstream_stop_count, true));
     if (registered_after_start) {
@@ -327,10 +327,10 @@ void test_h2_accept_plugin_blocks_before_downstream_plugin()
     }
 
     server.stop();
-    waitForCount(gate_start_count, 1, "h2 gate plugin start should run once");
-    waitForCount(downstream_start_count, 1, "h2 downstream plugin start should run once");
-    waitForCount(gate_stop_count, 1, "h2 gate plugin stop should run once");
-    waitForCount(downstream_stop_count, 1, "h2 downstream plugin stop should run once");
+    wait_for_count(gate_start_count, 1, "h2 gate plugin start should run once");
+    wait_for_count(downstream_start_count, 1, "h2 downstream plugin start should run once");
+    wait_for_count(gate_stop_count, 1, "h2 gate plugin stop should run once");
+    wait_for_count(downstream_stop_count, 1, "h2 downstream plugin stop should run once");
 }
 #endif
 

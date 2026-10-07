@@ -21,83 +21,83 @@ namespace {
 using Result = std::expected<int, IOError>;
 
 struct BindingProbe final : TimeoutTimerBinding {
-    using TimeoutTimerBinding::forwardBoundTimeoutTimer;
+    using TimeoutTimerBinding::forward_bound_timeout_timer;
 };
 
-void completionDoesNotRetainTimerPointer()
+void completion_does_not_retain_timer_pointer()
 {
     using Sequence = SequenceAwaitable<Result, 1>;
     alignas(TimeoutTimer) std::byte storage[sizeof(TimeoutTimer)];
     auto* timer = std::construct_at(reinterpret_cast<TimeoutTimer*>(storage), 1h);
     Sequence sequence(nullptr);
-    sequence.bindTimeoutTimer(timer);
-    sequence.cancelBoundTimeoutTimer();
+    sequence.bind_timeout_timer(timer);
+    sequence.cancel_bound_timeout_timer();
 
     std::destroy_at(timer);
     timer = std::construct_at(reinterpret_cast<TimeoutTimer*>(storage), 1h);
-    sequence.cancelBoundTimeoutTimer();
+    sequence.cancel_bound_timeout_timer();
 
     // 第二次完成通知不能再次解引用旧绑定。
     assert(!timer->cancelled());
     std::destroy_at(timer);
 }
 
-void closeAwaitableUsesTheSameBindingContract()
+void close_awaitable_uses_the_same_binding_contract()
 {
     alignas(TimeoutTimer) std::byte storage[sizeof(TimeoutTimer)];
     auto* timer = std::construct_at(reinterpret_cast<TimeoutTimer*>(storage), 1h);
     CloseAwaitable close(nullptr);
-    close.bindTimeoutTimer(timer);
-    close.cancelBoundTimeoutTimer();
+    close.bind_timeout_timer(timer);
+    close.cancel_bound_timeout_timer();
 
     std::destroy_at(timer);
     timer = std::construct_at(reinterpret_cast<TimeoutTimer*>(storage), 1h);
-    close.cancelBoundTimeoutTimer();
+    close.cancel_bound_timeout_timer();
     assert(!timer->cancelled());
     std::destroy_at(timer);
 }
 
-Task<void> closeAwaitableImmediateProbe(TimeoutTimer* timer, bool* canceled)
+Task<void> close_awaitable_immediate_probe(TimeoutTimer* timer, bool* canceled)
 {
     CloseAwaitable close(nullptr);
-    close.bindTimeoutTimer(timer);
+    close.bind_timeout_timer(timer);
     (void)co_await close;
     *canceled = timer->cancelled();
 }
 
-void closeAwaitSuspendConsumesBinding()
+void close_await_suspend_consumes_binding()
 {
     auto timer = TimeoutTimer::create(1h);
     bool canceled = false;
     ParallelScheduler scheduler;
-    auto task = detail::TaskAccess::detachTask(
-        closeAwaitableImmediateProbe(timer.get(), &canceled));
-    assert(scheduler.scheduleImmediately(std::move(task)));
+    auto task = detail::TaskAccess::detach_task(
+        close_awaitable_immediate_probe(timer.get(), &canceled));
+    assert(scheduler.schedule_immediately(std::move(task)));
     assert(canceled);
 }
 
-void timeoutBindingCanMoveFromWrapperToInner()
+void timeout_binding_can_move_from_wrapper_to_inner()
 {
     BindingProbe outer;
     BindingProbe inner;
     auto timer = TimeoutTimer::create(1h);
 
-    outer.bindTimeoutTimer(timer.get());
-    outer.forwardBoundTimeoutTimer(inner);
-    outer.cancelBoundTimeoutTimer();
+    outer.bind_timeout_timer(timer.get());
+    outer.forward_bound_timeout_timer(inner);
+    outer.cancel_bound_timeout_timer();
     assert(!timer->cancelled());
-    inner.cancelBoundTimeoutTimer();
+    inner.cancel_bound_timeout_timer();
     assert(timer->cancelled());
 }
 
-void sequenceCompletionRemainsIdempotent()
+void sequence_completion_remains_idempotent()
 {
     IOController controller(GHandle::invalid());
     SequenceAwaitable<Result, 1> sequence(&controller);
-    assert(sequence.claimRequestedDomain());
+    assert(sequence.claim_requested_domain());
 
-    sequence.onCompleted();
-    sequence.onCompleted();
+    sequence.on_completed();
+    sequence.on_completed();
 
     assert(!sequence.m_registered);
     assert(controller.m_sequence_owner[IOController::READ] == nullptr);
@@ -108,11 +108,11 @@ void sequenceCompletionRemainsIdempotent()
 
 int main()
 {
-    completionDoesNotRetainTimerPointer();
-    closeAwaitableUsesTheSameBindingContract();
-    closeAwaitSuspendConsumesBinding();
-    timeoutBindingCanMoveFromWrapperToInner();
-    sequenceCompletionRemainsIdempotent();
+    completion_does_not_retain_timer_pointer();
+    close_awaitable_uses_the_same_binding_contract();
+    close_await_suspend_consumes_binding();
+    timeout_binding_can_move_from_wrapper_to_inner();
+    sequence_completion_remains_idempotent();
     std::cout << "T179-SequenceCompletionOnce PASS\n";
     return 0;
 }

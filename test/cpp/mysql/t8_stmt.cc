@@ -23,7 +23,7 @@ struct AsyncTestState {
     }
 };
 
-inline void markFailure(AsyncTestState* state, const std::string& msg) {
+inline void mark_failure(AsyncTestState* state, const std::string& msg) {
     std::cerr << msg << std::endl;
     state->fail(msg);
 }
@@ -32,38 +32,38 @@ inline void markFailure(AsyncTestState* state, const std::string& msg) {
 #define MYSQL_CO_CONNECT(client, host, port, user, pass, db) \
     { \
         auto _r = co_await client.connect(host, port, user, pass, db); \
-        if (!_r) { markFailure(state, "Connect failed: " + _r.error().message()); co_return; } \
-        if (!_r->has_value()) { markFailure(state, "Connect awaitable resumed without value"); co_return; } \
+        if (!_r) { mark_failure(state, "Connect failed: " + _r.error().message()); co_return; } \
+        if (!_r->has_value()) { mark_failure(state, "Connect awaitable resumed without value"); co_return; } \
     }
 
 #define MYSQL_CO_QUERY(client, sql, result_var) \
     { \
         auto _r = co_await client.query(sql); \
-        if (!_r) { markFailure(state, std::string("Query failed [") + sql + "]: " + _r.error().message()); co_return; } \
-        if (!_r->has_value()) { markFailure(state, std::string("Query awaitable resumed without value [") + sql + "]"); co_return; } \
+        if (!_r) { mark_failure(state, std::string("Query failed [") + sql + "]: " + _r.error().message()); co_return; } \
+        if (!_r->has_value()) { mark_failure(state, std::string("Query awaitable resumed without value [") + sql + "]"); co_return; } \
         if (_r) { result_var = std::move(_r->value()); } \
     }
 
 #define MYSQL_CO_QUERY_VOID(client, sql) \
     { \
         auto _r = co_await client.query(sql); \
-        if (!_r) { markFailure(state, std::string("Query failed [") + sql + "]: " + _r.error().message()); co_return; } \
-        if (!_r->has_value()) { markFailure(state, std::string("Query awaitable resumed without value [") + sql + "]"); co_return; } \
+        if (!_r) { mark_failure(state, std::string("Query failed [") + sql + "]: " + _r.error().message()); co_return; } \
+        if (!_r->has_value()) { mark_failure(state, std::string("Query awaitable resumed without value [") + sql + "]"); co_return; } \
     }
 
 #define MYSQL_CO_PREPARE(client, sql, result_var) \
     { \
         auto _r = co_await client.prepare(sql); \
-        if (!_r) { markFailure(state, std::string("PREPARE failed [") + sql + "]: " + _r.error().message()); co_return; } \
-        if (!_r->has_value()) { markFailure(state, std::string("PREPARE awaitable resumed without value [") + sql + "]"); co_return; } \
+        if (!_r) { mark_failure(state, std::string("PREPARE failed [") + sql + "]: " + _r.error().message()); co_return; } \
+        if (!_r->has_value()) { mark_failure(state, std::string("PREPARE awaitable resumed without value [") + sql + "]"); co_return; } \
         if (_r && _r->has_value()) { result_var = std::move(_r->value()); } \
     }
 
 #define MYSQL_CO_EXECUTE(client, stmt_id, params, result_var) \
     { \
-        auto _r = co_await client.stmtExecute(stmt_id, params); \
-        if (!_r) { markFailure(state, std::string("EXECUTE failed [stmt=") + std::to_string(stmt_id) + "]: " + _r.error().message()); co_return; } \
-        if (!_r->has_value()) { markFailure(state, std::string("EXECUTE awaitable resumed without value [stmt=") + std::to_string(stmt_id) + "]"); co_return; } \
+        auto _r = co_await client.stmt_execute(stmt_id, params); \
+        if (!_r) { mark_failure(state, std::string("EXECUTE failed [stmt=") + std::to_string(stmt_id) + "]: " + _r.error().message()); co_return; } \
+        if (!_r->has_value()) { mark_failure(state, std::string("EXECUTE awaitable resumed without value [stmt=") + std::to_string(stmt_id) + "]"); co_return; } \
         if (_r) { result_var = std::move(_r->value()); } \
     }
 
@@ -97,14 +97,14 @@ Task<void> test_prepared_statement(IOScheduler* scheduler, AsyncTestState* state
             std::vector<std::optional<std::string>> params1 = {"Alice", "25"};
             std::expected<MysqlResultSet, MysqlError> er = std::unexpected(MysqlError(MYSQL_ERROR_INTERNAL, "init"));
             MYSQL_CO_EXECUTE(client, pr.statement_id, params1, er);
-            std::cout << "  Inserted, affected rows: " << er->affectedRows() << std::endl;
+            std::cout << "  Inserted, affected rows: " << er->affected_rows() << std::endl;
         }
 
         {
             std::vector<std::optional<std::string>> params2 = {"Bob", "30"};
             std::expected<MysqlResultSet, MysqlError> er = std::unexpected(MysqlError(MYSQL_ERROR_INTERNAL, "init"));
             MYSQL_CO_EXECUTE(client, pr.statement_id, params2, er);
-            std::cout << "  Inserted, affected rows: " << er->affectedRows() << std::endl;
+            std::cout << "  Inserted, affected rows: " << er->affected_rows() << std::endl;
         }
 
         // 测试NULL参数
@@ -113,7 +113,7 @@ Task<void> test_prepared_statement(IOScheduler* scheduler, AsyncTestState* state
             std::vector<std::optional<std::string>> params3 = {"Charlie", std::nullopt};
             std::expected<MysqlResultSet, MysqlError> er = std::unexpected(MysqlError(MYSQL_ERROR_INTERNAL, "init"));
             MYSQL_CO_EXECUTE(client, pr.statement_id, params3, er);
-            std::cout << "  Inserted with NULL, affected rows: " << er->affectedRows() << std::endl;
+            std::cout << "  Inserted with NULL, affected rows: " << er->affected_rows() << std::endl;
         }
     }
 
@@ -122,12 +122,12 @@ Task<void> test_prepared_statement(IOScheduler* scheduler, AsyncTestState* state
     {
         std::expected<MysqlResultSet, MysqlError> sr = std::unexpected(MysqlError(MYSQL_ERROR_INTERNAL, "init"));
         MYSQL_CO_QUERY(client, "SELECT * FROM galay_stmt_test ORDER BY id", sr);
-        std::cout << "  Total rows: " << sr->rowCount() << std::endl;
-        for (size_t i = 0; i < sr->rowCount(); ++i) {
+        std::cout << "  Total rows: " << sr->row_count() << std::endl;
+        for (size_t i = 0; i < sr->row_count(); ++i) {
             auto& row = sr->row(i);
-            std::cout << "  [" << row.getString(0) << "] "
-                      << row.getString(1) << " - age: "
-                      << row.getString(2, "NULL") << std::endl;
+            std::cout << "  [" << row.get_string(0) << "] "
+                      << row.get_string(1) << " - age: "
+                      << row.get_string(2, "NULL") << std::endl;
         }
     }
 
@@ -141,7 +141,7 @@ Task<void> test_prepared_statement(IOScheduler* scheduler, AsyncTestState* state
             std::vector<std::optional<std::string>> params = {"Alice"};
             std::expected<MysqlResultSet, MysqlError> er = std::unexpected(MysqlError(MYSQL_ERROR_INTERNAL, "init"));
             MYSQL_CO_EXECUTE(client, prep_sel->statement_id, params, er);
-            std::cout << "  Found " << er->rowCount() << " rows for Alice" << std::endl;
+            std::cout << "  Found " << er->row_count() << " rows for Alice" << std::endl;
         }
     }
 
@@ -157,20 +157,20 @@ Task<void> test_prepared_statement(IOScheduler* scheduler, AsyncTestState* state
 int main()
 {
     std::cout << "=== T7: Prepared Statement Tests ===" << std::endl;
-    const auto db_cfg = mysql_test::loadDbTestConfig();
-    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T7-PreparedStatement");
+    const auto db_cfg = mysql_test::load_db_test_config();
+    if (const int skip_code = mysql_test::require_db_test_config_or_skip(db_cfg, "T7-PreparedStatement");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printDbTestConfig(db_cfg);
+    mysql_test::print_db_test_config(db_cfg);
 
     try {
         Runtime runtime;
         runtime.start();
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) { std::cerr << "No scheduler" << std::endl; return 1; }
         AsyncTestState state;
-        if (!scheduleTask(scheduler, test_prepared_statement(scheduler, &state, db_cfg))) {
+        if (!schedule_task(scheduler, test_prepared_statement(scheduler, &state, db_cfg))) {
             std::cerr << "Failed to schedule prepared statement test task on IO scheduler" << std::endl;
             runtime.stop();
             return 1;

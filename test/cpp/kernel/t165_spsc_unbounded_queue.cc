@@ -56,7 +56,7 @@ concept SupportsConstUnboundedSend = requires(
 template <typename T>
 concept SupportsConstUnboundedBatchSend = requires(
     galay::spsc::UnboundedChannel<T>& channel, const std::vector<T>& values) {
-    { channel.sendBatch(values) } -> std::same_as<bool>;
+    { channel.send_batch(values) } -> std::same_as<bool>;
 };
 
 static_assert(UnboundedQueueValue<std::unique_ptr<int>>);
@@ -68,7 +68,7 @@ static_assert(!SupportsConstUnboundedBatchSend<ThrowingCopy>);
 static_assert(!UnboundedQueueValue<int&>);
 static_assert(!UnboundedQueueValue<const int>);
 
-bool testMoveOnlyAcrossBlocks()
+bool test_move_only_across_blocks()
 {
     UnboundedQueue<std::unique_ptr<int>> queue;
     if (!queue.valid()) {
@@ -83,7 +83,7 @@ bool testMoveOnlyAcrossBlocks()
         }
     }
     for (int expected = 0; expected < kMessages; ++expected) {
-        auto item = queue.tryRecv();
+        auto item = queue.try_recv();
         if (!item.has_value() || !*item || **item != expected) {
             return false;
         }
@@ -91,7 +91,7 @@ bool testMoveOnlyAcrossBlocks()
     return queue.empty();
 }
 
-bool testCallerOwnedBatch()
+bool test_caller_owned_batch()
 {
     UnboundedQueue<uint64_t> queue;
     if (!queue.valid()) {
@@ -102,14 +102,14 @@ bool testCallerOwnedBatch()
     for (size_t index = 0; index < source.size(); ++index) {
         source[index] = index + 11;
     }
-    if (!queue.sendBatch(std::span<uint64_t>(source))) {
+    if (!queue.send_batch(std::span<uint64_t>(source))) {
         return false;
     }
 
     std::array<uint64_t, 257> output{};
     size_t received = 0;
     while (received < source.size()) {
-        const size_t count = queue.tryRecvBatch(std::span<uint64_t>(output));
+        const size_t count = queue.try_recv_batch(std::span<uint64_t>(output));
         if (count == 0 || count > output.size()) {
             return false;
         }
@@ -120,20 +120,20 @@ bool testCallerOwnedBatch()
         }
         received += count;
     }
-    return queue.tryRecvBatch(std::span<uint64_t>(output)) == 0 && queue.empty();
+    return queue.try_recv_batch(std::span<uint64_t>(output)) == 0 && queue.empty();
 }
 
-bool testCallerOwnedSingleReceive()
+bool test_caller_owned_single_receive()
 {
     UnboundedQueue<int> queue;
     int input = 91;
     int output = -1;
     return queue.valid() && queue.send(std::move(input)) &&
-        queue.tryRecv(output) && output == 91 && !queue.tryRecv(output) &&
+        queue.try_recv(output) && output == 91 && !queue.try_recv(output) &&
         output == 91;
 }
 
-bool testConcurrentValidSnapshot()
+bool test_concurrent_valid_snapshot()
 {
     UnboundedQueue<uint64_t> queue;
     if (!queue.valid()) {
@@ -168,7 +168,7 @@ bool testConcurrentValidSnapshot()
     return !failed.load(std::memory_order_acquire);
 }
 
-bool testCrossThreadFifo()
+bool test_cross_thread_fifo()
 {
     constexpr uint64_t kMessages = 500'000;
     UnboundedQueue<uint64_t> queue;
@@ -192,7 +192,7 @@ bool testCrossThreadFifo()
         const auto deadline = std::chrono::steady_clock::now() + 5s;
         uint64_t expected = 0;
         while (expected < kMessages) {
-            auto value = queue.tryRecv();
+            auto value = queue.try_recv();
             if (!value.has_value()) {
                 if (failed.load(std::memory_order_acquire) ||
                     std::chrono::steady_clock::now() >= deadline) {
@@ -222,25 +222,25 @@ bool testCrossThreadFifo()
 int main()
 {
     const std::array results{
-        std::pair{"move_only_across_blocks", testMoveOnlyAcrossBlocks()},
-        std::pair{"caller_owned_batch", testCallerOwnedBatch()},
-        std::pair{"caller_owned_single_receive", testCallerOwnedSingleReceive()},
-        std::pair{"concurrent_valid_snapshot", testConcurrentValidSnapshot()},
-        std::pair{"cross_thread_fifo", testCrossThreadFifo()},
+        std::pair{"move_only_across_blocks", test_move_only_across_blocks()},
+        std::pair{"caller_owned_batch", test_caller_owned_batch()},
+        std::pair{"caller_owned_single_receive", test_caller_owned_single_receive()},
+        std::pair{"concurrent_valid_snapshot", test_concurrent_valid_snapshot()},
+        std::pair{"cross_thread_fifo", test_cross_thread_fifo()},
     };
 
     galay::test::TestResultWriter writer("t165_spsc_unbounded_queue");
     bool passed = true;
     for (const auto& [name, result] : results) {
-        writer.addTest();
+        writer.add_test();
         if (result) {
-            writer.addPassed();
+            writer.add_passed();
         } else {
-            writer.addFailed();
+            writer.add_failed();
             passed = false;
         }
         std::cout << name << '=' << (result ? "PASS" : "FAIL") << '\n';
     }
-    writer.writeResult();
+    writer.write_result();
     return passed ? 0 : 1;
 }

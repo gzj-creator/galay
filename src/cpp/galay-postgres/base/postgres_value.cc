@@ -49,22 +49,22 @@ const std::optional<std::string>& PostgresRow::operator[](size_t index) const no
     return m_values[index];
 }
 
-bool PostgresRow::isNull(size_t index) const noexcept
+bool PostgresRow::is_null(size_t index) const noexcept
 {
     return index >= m_values.size() || !m_values[index].has_value();
 }
 
-std::string PostgresRow::getString(size_t index, const std::string& default_value) const
+std::string PostgresRow::get_string(size_t index, const std::string& default_value) const
 {
-    if (isNull(index)) {
+    if (is_null(index)) {
         return default_value;
     }
     return *m_values[index];
 }
 
-int64_t PostgresRow::getInt64(size_t index, int64_t default_value) const noexcept
+int64_t PostgresRow::get_int64(size_t index, int64_t default_value) const noexcept
 {
-    if (isNull(index)) {
+    if (is_null(index)) {
         return default_value;
     }
     const std::string& value = *m_values[index];
@@ -75,9 +75,9 @@ int64_t PostgresRow::getInt64(size_t index, int64_t default_value) const noexcep
         : default_value;
 }
 
-uint64_t PostgresRow::getUint64(size_t index, uint64_t default_value) const noexcept
+uint64_t PostgresRow::get_uint64(size_t index, uint64_t default_value) const noexcept
 {
-    if (isNull(index)) {
+    if (is_null(index)) {
         return default_value;
     }
     const std::string& value = *m_values[index];
@@ -88,9 +88,9 @@ uint64_t PostgresRow::getUint64(size_t index, uint64_t default_value) const noex
         : default_value;
 }
 
-double PostgresRow::getDouble(size_t index, double default_value) const noexcept
+double PostgresRow::get_double(size_t index, double default_value) const noexcept
 {
-    if (isNull(index)) {
+    if (is_null(index)) {
         return default_value;
     }
     const std::string& value = *m_values[index];
@@ -120,7 +120,7 @@ PostgresResultSet PostgresResultSet::clone() const
     return copy;
 }
 
-void PostgresResultSet::addField(PostgresField field)
+void PostgresResultSet::add_field(PostgresField field)
 {
     m_fields.push_back(std::move(field));
 }
@@ -130,7 +130,7 @@ const PostgresField& PostgresResultSet::field(size_t index) const noexcept
     return m_fields[index];
 }
 
-void PostgresResultSet::addRow(PostgresRow row)
+void PostgresResultSet::add_row(PostgresRow row)
 {
     m_rows.push_back(std::move(row));
 }
@@ -140,7 +140,7 @@ const PostgresRow& PostgresResultSet::row(size_t index) const noexcept
     return m_rows[index];
 }
 
-int PostgresResultSet::findField(std::string_view name) const noexcept
+int PostgresResultSet::find_field(std::string_view name) const noexcept
 {
     for (size_t index = 0; index < m_fields.size(); ++index) {
         if (m_fields[index].name() == name) {

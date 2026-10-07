@@ -45,11 +45,11 @@ int main()
         "swagger-ui.css", "swagger-ui-bundle.js", "swagger-ui-standalone-preset.js",
         "favicon-16x16.png", "favicon-32x32.png", "LICENSE", "NOTICE", "README.md", "SHA256SUMS"};
     for (const auto name : names) {
-        require(prepared.router.findHandler(galay::http::HttpMethod::GET,
+        require(prepared.router.find_handler(galay::http::HttpMethod::GET,
                     std::string("/docs/") + name).handler != nullptr,
                 "embedded UI and provenance routes must exist without deployed files");
     }
-    require(prepared.router.findHandler(galay::http::HttpMethod::GET, "/openapi.json").handler != nullptr,
+    require(prepared.router.find_handler(galay::http::HttpMethod::GET, "/openapi.json").handler != nullptr,
             "default Swagger installs the REST document");
     std::cout << "Embedded UI installs from an empty working directory\n";
 }

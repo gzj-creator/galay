@@ -96,7 +96,7 @@ private:
     uint16_t m_port = 0;
 };
 
-int readTcpNoDelay(int fd)
+int read_tcp_no_delay(int fd)
 {
     int value = 0;
     socklen_t value_len = sizeof(value);
@@ -107,46 +107,46 @@ int readTcpNoDelay(int fd)
     return value;
 }
 
-std::string endpointFor(uint16_t port)
+std::string endpoint_for(uint16_t port)
 {
     return "http://127.0.0.1:" + std::to_string(port);
 }
 
-int observeSyncClientTcpNoDelay(bool tcp_no_delay)
+int observe_sync_client_tcp_no_delay(bool tcp_no_delay)
 {
     LoopbackListener listener;
     EtcdConfig config = EtcdClientBuilder()
-        .endpoint(endpointFor(listener.port()))
-        .tcpNoDelay(tcp_no_delay)
-        .buildConfig();
+        .endpoint(endpoint_for(listener.port()))
+        .tcp_no_delay(tcp_no_delay)
+        .build_config();
     EtcdClient client(config);
 
     auto connect_result = client.connect();
     require(connect_result.has_value(), "EtcdClient should connect to loopback listener");
-    const int observed = readTcpNoDelay(client.m_socket_fd);
+    const int observed = read_tcp_no_delay(client.m_socket_fd);
     auto close_result = client.close();
     require(close_result.has_value(), "EtcdClient close should succeed");
     return observed;
 }
 
-int observeAsyncConnectSetupTcpNoDelay(bool tcp_no_delay)
+int observe_async_connect_setup_tcp_no_delay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto start_result = runtime.start();
     require(start_result.has_value(), "runtime should start for AsyncEtcdClient connect probe");
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     require(scheduler != nullptr, "runtime should provide an IO scheduler");
 
     EtcdConfig config = AsyncEtcdClientBuilder()
         .scheduler(scheduler)
         .endpoint("http://127.0.0.1:2379")
-        .tcpNoDelay(tcp_no_delay)
-        .buildConfig();
+        .tcp_no_delay(tcp_no_delay)
+        .build_config();
     AsyncEtcdClient client(scheduler, config);
     AsyncEtcdClient::ConnectAwaitable::SharedState state(client);
     require(!state.result.has_value(), "AsyncEtcdClient setup should remain ready to connect");
     require(client.m_socket != nullptr, "AsyncEtcdClient setup should create a socket");
-    const int observed = readTcpNoDelay(client.m_socket->handle().fd);
+    const int observed = read_tcp_no_delay(client.m_socket->handle().fd);
     runtime.stop();
     return observed;
 }
@@ -159,28 +159,28 @@ void test_config_surface()
     EtcdConfig etcd_config;
     require(etcd_config.tcp_no_delay, "EtcdConfig should inherit TCP_NODELAY default");
 
-    auto disabled_sync = EtcdClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_sync = EtcdClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_sync.tcp_no_delay, "EtcdClientBuilder should support disabling TCP_NODELAY");
 
-    auto disabled_async = AsyncEtcdClientBuilder().tcpNoDelay(false).buildConfig();
+    auto disabled_async = AsyncEtcdClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_async.tcp_no_delay, "AsyncEtcdClientBuilder should support disabling TCP_NODELAY");
 }
 
 void test_sync_client_applies_config()
 {
-    const int default_nodelay = observeSyncClientTcpNoDelay(true);
+    const int default_nodelay = observe_sync_client_tcp_no_delay(true);
     require(default_nodelay != 0, "default EtcdClient socket should enable TCP_NODELAY");
 
-    const int disabled_nodelay = observeSyncClientTcpNoDelay(false);
+    const int disabled_nodelay = observe_sync_client_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled EtcdClient socket should leave TCP_NODELAY off");
 }
 
 void test_async_client_applies_config()
 {
-    const int default_nodelay = observeAsyncConnectSetupTcpNoDelay(true);
+    const int default_nodelay = observe_async_connect_setup_tcp_no_delay(true);
     require(default_nodelay != 0, "default AsyncEtcdClient setup should enable TCP_NODELAY");
 
-    const int disabled_nodelay = observeAsyncConnectSetupTcpNoDelay(false);
+    const int disabled_nodelay = observe_async_connect_setup_tcp_no_delay(false);
     require(disabled_nodelay == 0, "disabled AsyncEtcdClient setup should leave TCP_NODELAY off");
 }
 

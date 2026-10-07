@@ -27,7 +27,7 @@ namespace {
 std::atomic<size_t> g_benchmark_sink{0};
 std::atomic<bool> g_benchmark_valid{true};
 
-inline void benchmarkBarrier(const void* address) noexcept {
+inline void benchmark_barrier(const void* address) noexcept {
 #if defined(__GNUC__) || defined(__clang__)
     asm volatile("" : : "r"(address) : "memory");
 #else
@@ -38,7 +38,7 @@ inline void benchmarkBarrier(const void* address) noexcept {
 #endif
 }
 
-void observeChecksum(size_t checksum) noexcept {
+void observe_checksum(size_t checksum) noexcept {
     const size_t current = g_benchmark_sink.load(std::memory_order_relaxed);
     g_benchmark_sink.store(current ^ checksum, std::memory_order_relaxed);
 }
@@ -55,7 +55,7 @@ constexpr auto MIN_WRAP_SAMPLE_DURATION = std::chrono::milliseconds(100);
 constexpr size_t MICRO_BENCH_SAMPLES = 5;
 
 template <typename SampleFn>
-double medianSample(SampleFn&& sample_fn) {
+double median_sample(SampleFn&& sample_fn) {
     std::vector<double> samples;
     samples.reserve(MICRO_BENCH_SAMPLES);
     for (size_t i = 0; i < MICRO_BENCH_SAMPLES; ++i) {
@@ -67,7 +67,7 @@ double medianSample(SampleFn&& sample_fn) {
 
 // ============== 辅助函数 ==============
 
-void printResult(const char* testName, size_t totalBytes, double durationMs) {
+void print_result(const char* testName, size_t totalBytes, double durationMs) {
     double throughputMBps = (totalBytes / (1024.0 * 1024.0)) / (durationMs / 1000.0);
     double throughputGbps = throughputMBps * 8 / 1024.0;
     LogInfo("{}: {:.2f} MB/s ({:.2f} Gbps), duration: {:.2f} ms",
@@ -76,7 +76,7 @@ void printResult(const char* testName, size_t totalBytes, double durationMs) {
 
 // ============== 压测1: 写入吞吐量 ==============
 
-void benchWriteThroughput(size_t chunkSize) {
+void bench_write_throughput(size_t chunkSize) {
     RingBuffer buffer(BUFFER_SIZE);
     std::vector<char> data(chunkSize, 'A');
 
@@ -85,8 +85,8 @@ void benchWriteThroughput(size_t chunkSize) {
 
     while (totalWritten < TOTAL_DATA_SIZE ||
            steady_clock::now() - start < MIN_WRITE_SAMPLE_DURATION) {
-        size_t written = buffer.tryWriteBatch(data.data(), chunkSize);
-        benchmarkBarrier(&buffer);
+        size_t written = buffer.try_write_batch(data.data(), chunkSize);
+        benchmark_barrier(&buffer);
         totalWritten += written;
         if (written != chunkSize) {
             g_benchmark_valid.store(false, std::memory_order_relaxed);
@@ -95,7 +95,7 @@ void benchWriteThroughput(size_t chunkSize) {
         // 消费数据以腾出空间
         if (buffer.writable() < chunkSize) {
             buffer.consume(buffer.readable());
-            benchmarkBarrier(&buffer);
+            benchmark_barrier(&buffer);
         }
     }
 
@@ -103,15 +103,15 @@ void benchWriteThroughput(size_t chunkSize) {
     double durationMs = duration_cast<microseconds>(end - start).count() / 1000.0;
 
     const std::string testName = "Write Throughput (chunk=" + std::to_string(chunkSize) + ")";
-    printResult(testName.c_str(), totalWritten, durationMs);
+    print_result(testName.c_str(), totalWritten, durationMs);
 }
 
 // ============== 压测2: 读写吞吐量（模拟网络IO场景）==============
 
-void benchReadWriteThroughput(size_t chunkSize) {
+void bench_read_write_throughput(size_t chunkSize) {
     RingBuffer buffer(BUFFER_SIZE);
     std::vector<char> writeData(chunkSize, 'B');
-    std::vector<char> readData(chunkSize);
+    std::vector<char> read_data(chunkSize);
 
     size_t totalProcessed = 0;
     size_t checksum = 0;
@@ -120,45 +120,45 @@ void benchReadWriteThroughput(size_t chunkSize) {
 
     while (totalProcessed < TOTAL_DATA_SIZE) {
         // 写入
-        size_t written = buffer.tryWriteBatch(writeData.data(), chunkSize);
-        benchmarkBarrier(&buffer);
+        size_t written = buffer.try_write_batch(writeData.data(), chunkSize);
+        benchmark_barrier(&buffer);
 
         // 通过 iovec 读取
-        size_t iovecCount = buffer.getReadIovecs(iovecs);
+        size_t iovecCount = buffer.get_read_iovecs(iovecs);
         size_t bytesRead = 0;
         for (size_t i = 0; i < iovecCount; ++i) {
             const auto& iov = iovecs[i];
             size_t toRead = std::min(iov.iov_len, chunkSize - bytesRead);
-            std::memcpy(readData.data() + bytesRead, iov.iov_base, toRead);
+            std::memcpy(read_data.data() + bytesRead, iov.iov_base, toRead);
             bytesRead += toRead;
             if (bytesRead >= chunkSize) break;
         }
         buffer.consume(bytesRead);
-        benchmarkBarrier(&buffer);
+        benchmark_barrier(&buffer);
 
         if (written != chunkSize || bytesRead != chunkSize) {
             g_benchmark_valid.store(false, std::memory_order_relaxed);
         }
         if (bytesRead > 0) {
-            checksum += static_cast<unsigned char>(readData[bytesRead - 1]);
-            benchmarkBarrier(readData.data());
+            checksum += static_cast<unsigned char>(read_data[bytesRead - 1]);
+            benchmark_barrier(read_data.data());
         }
 
         totalProcessed += written;
     }
-    observeChecksum(checksum);
+    observe_checksum(checksum);
 
     auto end = steady_clock::now();
     double durationMs = duration_cast<microseconds>(end - start).count() / 1000.0;
 
     const std::string testName = "Read/Write Throughput (chunk=" +
         std::to_string(chunkSize) + ")";
-    printResult(testName.c_str(), totalProcessed, durationMs);
+    print_result(testName.c_str(), totalProcessed, durationMs);
 }
 
 // ============== 压测3: 环绕性能 ==============
 
-void benchWrapAroundPerformance() {
+void bench_wrap_around_performance() {
     // mmap 双映射后跨逻辑边界仍保持单 iovec，不能用 iovec_count==2 判断环绕。
     RingBuffer mmap_buffer(SMALL_BUFFER_SIZE);
     std::vector<char> data(256, 'C');
@@ -172,16 +172,16 @@ void benchWrapAroundPerformance() {
 
     while (totalWritten < targetData ||
            steady_clock::now() - start < MIN_WRAP_SAMPLE_DURATION) {
-        size_t written = mmap_buffer.tryWriteBatch(data.data(), data.size());
-        benchmarkBarrier(&mmap_buffer);
+        size_t written = mmap_buffer.try_write_batch(data.data(), data.size());
+        benchmark_barrier(&mmap_buffer);
         totalWritten += written;
-        if (mmap_buffer.getReadIovecs(iovecs) > 1) {
+        if (mmap_buffer.get_read_iovecs(iovecs) > 1) {
             ++fallback_physical_wraps;
         }
 
         const size_t toConsume = mmap_buffer.readable() / 2;
         mmap_buffer.consume(toConsume);
-        benchmarkBarrier(&mmap_buffer);
+        benchmark_barrier(&mmap_buffer);
     }
 
     auto end = steady_clock::now();
@@ -205,16 +205,16 @@ void benchWrapAroundPerformance() {
     while (totalWritten < targetData ||
            steady_clock::now() - start < MIN_WRAP_SAMPLE_DURATION) {
         const size_t written =
-            vector_buffer.tryWriteBatch(data.data(), data.size());
-        benchmarkBarrier(&vector_buffer);
+            vector_buffer.try_write_batch(data.data(), data.size());
+        benchmark_barrier(&vector_buffer);
         totalWritten += written;
-        if (vector_buffer.getReadIovecs(iovecs) == 2) {
+        if (vector_buffer.get_read_iovecs(iovecs) == 2) {
             ++physical_wraps;
         }
 
         const size_t toConsume = vector_buffer.readable() / 2;
         vector_buffer.consume(toConsume);
-        benchmarkBarrier(&vector_buffer);
+        benchmark_barrier(&vector_buffer);
     }
     end = steady_clock::now();
     durationMs = duration_cast<microseconds>(end - start).count() / 1000.0;
@@ -228,12 +228,12 @@ void benchWrapAroundPerformance() {
 
 // ============== 压测4: iovec 获取性能 ==============
 
-void benchIovecPerformance() {
+void bench_iovec_performance() {
     RingBuffer buffer(BUFFER_SIZE);
 
     // 先写入一些数据
     std::vector<char> data(1024, 'D');
-    const size_t prepared = buffer.tryWriteBatch(data.data(), data.size());
+    const size_t prepared = buffer.try_write_batch(data.data(), data.size());
     if (prepared != data.size()) {
         g_benchmark_valid.store(false, std::memory_order_relaxed);
         return;
@@ -244,26 +244,26 @@ void benchIovecPerformance() {
     std::array<struct iovec, 2> readIovecs{};
     size_t sink = 0;
 
-    const double duration1 = medianSample([&]() {
+    const double duration1 = median_sample([&]() {
         auto start1 = steady_clock::now();
         for (size_t i = 0; i < iterations; i++) {
-            sink += buffer.getWriteIovecs(writeIovecs);
-            benchmarkBarrier(writeIovecs.data());
+            sink += buffer.get_write_iovecs(writeIovecs);
+            benchmark_barrier(writeIovecs.data());
         }
         auto end1 = steady_clock::now();
         return duration_cast<nanoseconds>(end1 - start1).count() / (double)iterations;
     });
 
-    const double duration2 = medianSample([&]() {
+    const double duration2 = median_sample([&]() {
         auto start2 = steady_clock::now();
         for (size_t i = 0; i < iterations; i++) {
-            sink += buffer.getReadIovecs(readIovecs);
-            benchmarkBarrier(readIovecs.data());
+            sink += buffer.get_read_iovecs(readIovecs);
+            benchmark_barrier(readIovecs.data());
         }
         auto end2 = steady_clock::now();
         return duration_cast<nanoseconds>(end2 - start2).count() / (double)iterations;
     });
-    observeChecksum(sink);
+    observe_checksum(sink);
 
     LogInfo("getWriteIovecs: {:.2f} amortized ns/call ({:.2f} M calls/s)",
             duration1, 1000.0 / duration1);
@@ -273,26 +273,26 @@ void benchIovecPerformance() {
 
 // ============== 压测5: produce/consume 性能 ==============
 
-void benchProduceConsumePerformance() {
+void bench_produce_consume_performance() {
     RingBuffer buffer(BUFFER_SIZE);
 
     constexpr size_t iterations = 100000000;
     size_t checksum = 0;
 
-    const double duration = medianSample([&]() {
+    const double duration = median_sample([&]() {
         auto start = steady_clock::now();
         for (size_t i = 0; i < iterations; i++) {
             const size_t amount = 1 + (i & 63);
             buffer.produce(amount);
-            benchmarkBarrier(&buffer);
+            benchmark_barrier(&buffer);
             checksum += buffer.readable();
             buffer.consume(amount);
-            benchmarkBarrier(&buffer);
+            benchmark_barrier(&buffer);
         }
         auto end = steady_clock::now();
         return duration_cast<nanoseconds>(end - start).count() / (double)iterations;
     });
-    observeChecksum(checksum);
+    observe_checksum(checksum);
 
     LogInfo("produce+consume: {:.2f} amortized ns/pair ({:.2f} M pairs/s)",
             duration, 1000.0 / duration);
@@ -300,7 +300,7 @@ void benchProduceConsumePerformance() {
 
 // ============== 压测6: 模拟网络接收场景 ==============
 
-void benchNetworkReceiveSimulation() {
+void bench_network_receive_simulation() {
     RingBuffer buffer(BUFFER_SIZE);
     std::vector<char> networkData(4096, 'E');
 
@@ -313,7 +313,7 @@ void benchNetworkReceiveSimulation() {
 
     while (totalReceived < targetData) {
         // 模拟 readv: 获取可写 iovec
-        size_t writeCount = buffer.getWriteIovecs(writeIovecs);
+        size_t writeCount = buffer.get_write_iovecs(writeIovecs);
         if (writeCount == 0) {
             // 缓冲区满，消费数据
             buffer.consume(buffer.readable());
@@ -333,26 +333,26 @@ void benchNetworkReceiveSimulation() {
             if (bytesReceived >= networkData.size()) break;
         }
         buffer.produce(bytesReceived);
-        benchmarkBarrier(&buffer);
+        benchmark_barrier(&buffer);
         totalReceived += bytesReceived;
 
         // 模拟应用层处理：消费部分数据
         if (buffer.readable() > BUFFER_SIZE / 2) {
             buffer.consume(buffer.readable() / 2);
-            benchmarkBarrier(&buffer);
+            benchmark_barrier(&buffer);
         }
     }
-    observeChecksum(checksum);
+    observe_checksum(checksum);
 
     auto end = steady_clock::now();
     double durationMs = duration_cast<microseconds>(end - start).count() / 1000.0;
 
-    printResult("Memory-only Receive Copy", totalReceived, durationMs);
+    print_result("Memory-only Receive Copy", totalReceived, durationMs);
 }
 
 // ============== 压测7: 模拟网络发送场景 ==============
 
-void benchNetworkSendSimulation() {
+void bench_network_send_simulation() {
     RingBuffer buffer(BUFFER_SIZE);
     std::vector<char> appData(1024, 'F');
     std::vector<char> networkBuffer(4096);
@@ -368,16 +368,16 @@ void benchNetworkSendSimulation() {
         // 应用层写入数据
         while (buffer.writable() >= appData.size()) {
             const size_t written =
-                buffer.tryWriteBatch(appData.data(), appData.size());
+                buffer.try_write_batch(appData.data(), appData.size());
             if (written != appData.size()) {
                 g_benchmark_valid.store(false, std::memory_order_relaxed);
                 break;
             }
-            benchmarkBarrier(&buffer);
+            benchmark_barrier(&buffer);
         }
 
         // 模拟 writev: 获取可读 iovec
-        size_t readCount = buffer.getReadIovecs(readIovecs);
+        size_t readCount = buffer.get_read_iovecs(readIovecs);
         if (readCount == 0) continue;
 
         // 模拟发送：从 iovec 拷贝到网络缓冲区
@@ -391,22 +391,22 @@ void benchNetworkSendSimulation() {
         }
         if (bytesSent > 0) {
             checksum += static_cast<unsigned char>(networkBuffer[bytesSent - 1]);
-            benchmarkBarrier(networkBuffer.data());
+            benchmark_barrier(networkBuffer.data());
         }
         buffer.consume(bytesSent);
-        benchmarkBarrier(&buffer);
+        benchmark_barrier(&buffer);
         totalSent += bytesSent;
     }
-    observeChecksum(checksum);
+    observe_checksum(checksum);
 
     auto end = steady_clock::now();
     double durationMs = duration_cast<microseconds>(end - start).count() / 1000.0;
 
-    printResult("Memory-only Send Copy", totalSent, durationMs);
+    print_result("Memory-only Send Copy", totalSent, durationMs);
 }
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -421,40 +421,40 @@ int main() {
     // 压测1: 写入吞吐量
     LogInfo("--- Write Throughput ---");
     for (size_t chunkSize : CHUNK_SIZES) {
-        benchWriteThroughput(chunkSize);
+        bench_write_throughput(chunkSize);
     }
     LogInfo("");
 
     // 压测2: 读写吞吐量
     LogInfo("--- Read/Write Throughput ---");
     for (size_t chunkSize : CHUNK_SIZES) {
-        benchReadWriteThroughput(chunkSize);
+        bench_read_write_throughput(chunkSize);
     }
     LogInfo("");
 
     // 压测3: 环绕性能
     LogInfo("--- Wrap Around Performance ---");
-    benchWrapAroundPerformance();
+    bench_wrap_around_performance();
     LogInfo("");
 
     // 压测4: iovec 获取性能
     LogInfo("--- iovec Performance ---");
-    benchIovecPerformance();
+    bench_iovec_performance();
     LogInfo("");
 
     // 压测5: produce/consume 性能
     LogInfo("--- produce/consume Performance ---");
-    benchProduceConsumePerformance();
+    bench_produce_consume_performance();
     LogInfo("");
 
     // 压测6: 网络接收模拟
     LogInfo("--- Memory-only Receive Copy ---");
-    benchNetworkReceiveSimulation();
+    bench_network_receive_simulation();
     LogInfo("");
 
     // 压测7: 网络发送模拟
     LogInfo("--- Memory-only Send Copy ---");
-    benchNetworkSendSimulation();
+    bench_network_send_simulation();
     LogInfo("");
 
     LogInfo("========================================");

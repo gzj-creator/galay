@@ -14,28 +14,28 @@
 
 namespace {
 
-std::filesystem::path projectRoot()
+std::filesystem::path project_root()
 {
     return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path();
 }
 
-std::string readAll(const std::filesystem::path& path)
+std::string read_all(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 
-void randomIdsStayValid()
+void random_ids_stay_valid()
 {
     for (int i = 0; i < 128; ++i) {
-        assert(galay::tracing::TraceId::random().isValid());
-        assert(galay::tracing::SpanId::random().isValid());
+        assert(galay::tracing::TraceId::random().is_valid());
+        assert(galay::tracing::SpanId::random().is_valid());
     }
 }
 
-void idGeneratorUsesSystemCsprng()
+void id_generator_uses_system_csprng()
 {
-    const auto source = readAll(projectRoot() / "src/cpp/galay-tracing/common/id_format.cc");
+    const auto source = read_all(project_root() / "src/cpp/galay-tracing/common/id_format.cc");
     assert(source.find("RAND_bytes") != std::string::npos ||
            source.find("RAND_priv_bytes") != std::string::npos);
     assert(source.find("#include <random>") == std::string::npos);
@@ -47,8 +47,8 @@ void idGeneratorUsesSystemCsprng()
 
 int main()
 {
-    randomIdsStayValid();
-    idGeneratorUsesSystemCsprng();
+    random_ids_stay_valid();
+    id_generator_uses_system_csprng();
     std::cout << "T16-TraceIdCspRngSource PASS\n";
     return 0;
 }

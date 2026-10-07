@@ -43,11 +43,11 @@ constexpr int kSendNoSignalFlag =
     0;
 #endif
 
-inline auto wakeUserData() -> void* {
+inline auto wake_user_data() -> void* {
     return reinterpret_cast<void*>(static_cast<intptr_t>(-1));
 }
 
-inline int waitForIoUringCompletion(struct io_uring* ring,
+inline int wait_for_io_uring_completion(struct io_uring* ring,
                                     struct io_uring_cqe** cqe,
                                     struct __kernel_timespec* timeout) {
     if (io_uring_sq_ready(ring) == 0) {
@@ -61,37 +61,37 @@ inline int waitForIoUringCompletion(struct io_uring* ring,
     return ret;
 }
 
-inline auto negativeRetOrErrno(int ret) -> uint32_t {
+inline auto negative_ret_or_errno(int ret) -> uint32_t {
     return (ret < 0 && ret != -1)
         ? static_cast<uint32_t>(-ret)
         : static_cast<uint32_t>(errno);
 }
 
-inline auto systemCodeFromError(const IOError& error) -> uint32_t {
+inline auto system_code_from_error(const IOError& error) -> uint32_t {
     return static_cast<uint32_t>(error.code() >> 32);
 }
 
-inline auto ioErrorCodeFromError(const IOError& error) -> IOErrorCode {
+inline auto io_error_code_from_error(const IOError& error) -> IOErrorCode {
     return static_cast<IOErrorCode>(error.code() & 0xffffffffu);
 }
 
 template <typename Awaitable>
 requires requires(Awaitable& awaitable) {
-    { awaitable.cancelBoundTimeoutTimer() } noexcept;
-    { awaitable.m_waker.wakeUp() } noexcept;
+    { awaitable.cancel_bound_timeout_timer() } noexcept;
+    { awaitable.m_waker.wake_up() } noexcept;
 }
-inline void completeAndWake(Awaitable* awaitable) noexcept
+inline void complete_and_wake(Awaitable* awaitable) noexcept
 {
-    awaitable->cancelBoundTimeoutTimer();
-    awaitable->m_waker.wakeUp();
+    awaitable->cancel_bound_timeout_timer();
+    awaitable->m_waker.wake_up();
 }
 
-inline bool resolveSequenceSlot(IOEventType type, IOController::Index& slot) {
-    if (detail::sequenceEventUsesSlot(type, IOController::READ)) {
+inline bool resolve_sequence_slot(IOEventType type, IOController::Index& slot) {
+    if (detail::sequence_event_uses_slot(type, IOController::READ)) {
         slot = IOController::READ;
         return true;
     }
-    if (detail::sequenceEventUsesSlot(type, IOController::WRITE)) {
+    if (detail::sequence_event_uses_slot(type, IOController::WRITE)) {
         slot = IOController::WRITE;
         return true;
     }
@@ -99,7 +99,7 @@ inline bool resolveSequenceSlot(IOEventType type, IOController::Index& slot) {
 }
 
 #if GALAY_HAS_IO_URING_RECVMSG_MULTISHOT
-inline bool kernelAtLeast(unsigned required_major, unsigned required_minor) noexcept
+inline bool kernel_at_least(unsigned required_major, unsigned required_minor) noexcept
 {
     utsname info{};
     if (::uname(&info) != 0) {
@@ -217,22 +217,22 @@ struct RecvBufferPool {
     std::vector<std::unique_ptr<char[]>> buffers;
 };
 
-inline void recycleRecvBuffer(const std::shared_ptr<void>& owner, uint16_t bid) noexcept {
+inline void recycle_recv_buffer(const std::shared_ptr<void>& owner, uint16_t bid) noexcept {
     if (!owner) {
         return;
     }
     static_cast<RecvBufferPool*>(owner.get())->recycle(bid);
 }
 
-inline auto recvBufferPool(const std::shared_ptr<void>& owner) -> RecvBufferPool* {
+inline auto recv_buffer_pool(const std::shared_ptr<void>& owner) -> RecvBufferPool* {
     return static_cast<RecvBufferPool*>(owner.get());
 }
 
-inline auto cqeBufferId(const struct io_uring_cqe* cqe) -> uint16_t {
+inline auto cqe_buffer_id(const struct io_uring_cqe* cqe) -> uint16_t {
     return static_cast<uint16_t>(cqe->flags >> IORING_CQE_BUFFER_SHIFT);
 }
 
-inline bool tryImmediateReadv(int fd, ReadvIOContext* ctx, int& res) {
+inline bool try_immediate_readv(int fd, ReadvIOContext* ctx, int& res) {
     if (ctx == nullptr || ctx->m_iovecs.empty()) {
         res = 0;
         return true;
@@ -273,7 +273,7 @@ std::expected<void, IOError> IOUringReactor::start()
 
     m_event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (m_event_fd == -1) {
-        detail::storeBackendError(m_last_error_code, kOpenFailed, static_cast<uint32_t>(errno));
+        detail::store_backend_error(m_last_error_code, kOpenFailed, static_cast<uint32_t>(errno));
         return std::unexpected(IOError(kOpenFailed, static_cast<uint32_t>(errno)));
     }
 
@@ -294,7 +294,7 @@ std::expected<void, IOError> IOUringReactor::start()
                 const uint32_t system_code = static_cast<uint32_t>(-init_result);
                 close(m_event_fd);
                 m_event_fd = -1;
-                detail::storeBackendError(m_last_error_code, kOpenFailed, system_code);
+                detail::store_backend_error(m_last_error_code, kOpenFailed, system_code);
                 return std::unexpected(IOError(kOpenFailed, system_code));
             }
         }
@@ -308,10 +308,10 @@ std::expected<void, IOError> IOUringReactor::start()
     auto recv_pool_ready = recv_pool->initialize();
     if (!recv_pool_ready) {
         const auto error = recv_pool_ready.error();
-        detail::storeBackendError(
+        detail::store_backend_error(
             m_last_error_code,
-            ioErrorCodeFromError(error),
-            systemCodeFromError(error));
+            io_error_code_from_error(error),
+            system_code_from_error(error));
         io_uring_queue_exit(&m_ring);
         m_ring_initialized = false;
         close(m_event_fd);
@@ -328,7 +328,7 @@ std::expected<void, IOError> IOUringReactor::start()
     }
 
 #if GALAY_HAS_IO_URING_RECVMSG_MULTISHOT
-    m_recvmsg_multishot_supported = recvmsg_opcode_supported && kernelAtLeast(6, 0);
+    m_recvmsg_multishot_supported = recvmsg_opcode_supported && kernel_at_least(6, 0);
 #else
     (void)recvmsg_opcode_supported;
 #endif
@@ -337,10 +337,10 @@ std::expected<void, IOError> IOUringReactor::start()
 
 IOUringReactor::~IOUringReactor() {
     if (m_recvfrom_buffer_pool) {
-        recvBufferPool(m_recvfrom_buffer_pool)->shutdown();
+        recv_buffer_pool(m_recvfrom_buffer_pool)->shutdown();
     }
     if (m_recv_buffer_pool) {
-        recvBufferPool(m_recv_buffer_pool)->shutdown();
+        recv_buffer_pool(m_recv_buffer_pool)->shutdown();
     }
     if (m_ring_initialized) {
         io_uring_queue_exit(&m_ring);
@@ -363,20 +363,20 @@ IOUringReactor::~IOUringReactor() {
 void IOUringReactor::notify() {
     uint64_t val = 1;
     if (write(m_event_fd, &val, sizeof(val)) < 0) {
-        detail::storeBackendError(
+        detail::store_backend_error(
             m_last_error_code, kNotReady, static_cast<uint32_t>(errno));
     }
 }
 
-GHandle IOUringReactor::getHandle() const {
+GHandle IOUringReactor::get_handle() const {
     return {m_event_fd};
 }
 
-bool IOUringReactor::shouldUseSendZc(size_t length) const noexcept {
+bool IOUringReactor::should_use_send_zc(size_t length) const noexcept {
     return m_send_zc_supported && length >= kSendZcThreshold;
 }
 
-void IOUringReactor::prepareSendSqe(struct io_uring_sqe* sqe,
+void IOUringReactor::prepare_send_sqe(struct io_uring_sqe* sqe,
                                     SqeRequestHandle* handle,
                                     int fd,
                                     const void* buffer,
@@ -389,7 +389,7 @@ void IOUringReactor::prepareSendSqe(struct io_uring_sqe* sqe,
     }
 
     const int send_flags = flags | kSendNoSignalFlag;
-    if (shouldUseSendZc(length)) {
+    if (should_use_send_zc(length)) {
         io_uring_prep_send_zc(sqe,
                               fd,
                               buffer,
@@ -405,7 +405,7 @@ void IOUringReactor::prepareSendSqe(struct io_uring_sqe* sqe,
     io_uring_prep_send(sqe, fd, buffer, length, send_flags);
 }
 
-bool IOUringReactor::submitAccept(AcceptAwaitable& awaitable, Waker&& waker) {
+bool IOUringReactor::submit_accept(AcceptAwaitable& awaitable, Waker&& waker) {
     auto* controller = awaitable.m_controller;
     const bool valid = controller && controller->m_handle != GHandle::invalid();
     const OperationKey key{valid ? static_cast<uint32_t>(controller->m_handle.fd) : 0,
@@ -413,9 +413,9 @@ bool IOUringReactor::submitAccept(AcceptAwaitable& awaitable, Waker&& waker) {
     // emplace 返回内部可写别名；这里只构造存储，不向 adapter 暴露该别名。
     (void)awaitable.m_operation.emplace(key, std::move(waker));
     const auto fail = [&](IOError error) {
-        if (awaitable.selectError(CompletionReason::kBackendError, error)) {
-            const auto resume = detachAccept(awaitable); // 同步继续，不调用恢复回调。
-            if (!resume) { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+        if (awaitable.select_error(CompletionReason::kBackendError, error)) {
+            const auto resume = detach_accept(awaitable); // 同步继续，不调用恢复回调。
+            if (!resume) { detail::store_backend_error(m_last_error_code, kNotReady, EINVAL); }
         }
         return false;
     };
@@ -427,86 +427,86 @@ bool IOUringReactor::submitAccept(AcceptAwaitable& awaitable, Waker&& waker) {
         controller->m_sequence_owner[IOController::READ]) {
         return fail(IOError(kNotReady, EBUSY));
     }
-    if (!awaitable.m_operation->markSubmitted()) { return fail(IOError(kNotReady, EINVAL)); }
-    const auto retained = awaitable.m_operation->addPhysicalReference();
+    if (!awaitable.m_operation->mark_submitted()) { return fail(IOError(kNotReady, EINVAL)); }
+    const auto retained = awaitable.m_operation->add_physical_reference();
     if (!retained) { return fail(IOError(kNotReady, EOVERFLOW)); }
     awaitable.m_sqe_type = ACCEPT;
-    if (!controller->fillAwaitable(ACCEPT, &awaitable)) { return fail(IOError(kNotReady, EINVAL)); }
+    if (!controller->fill_awaitable(ACCEPT, &awaitable)) { return fail(IOError(kNotReady, EINVAL)); }
     awaitable.m_registration_state = controller->m_sqe_state[IOController::READ];
-    const int result = addAccept(controller);
-    if (result < 0) { return fail(IOError(kAcceptFailed, negativeRetOrErrno(result))); }
+    const int result = add_accept(controller);
+    if (result < 0) { return fail(IOError(kAcceptFailed, negative_ret_or_errno(result))); }
     if (result == kImmediateReady) {
         // FIX: 同步完成路径必须立即释放 physical reference
-        const auto release_result = awaitable.m_operation->releasePhysicalReference();
+        const auto release_result = awaitable.m_operation->release_physical_reference();
         if (!release_result) {
-            detail::storeBackendError(m_last_error_code, kNotReady,
+            detail::store_backend_error(m_last_error_code, kNotReady,
                                        static_cast<uint32_t>(OperationError::kNoPhysicalReference));
             return fail(IOError(kNotReady, EAGAIN));
         }
-        const auto resume = detachAccept(awaitable);
-        if (!resume) { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+        const auto resume = detach_accept(awaitable);
+        if (!resume) { detail::store_backend_error(m_last_error_code, kNotReady, EINVAL); }
         return false;
     }
     if (awaitable.m_timer) {
-        const auto retained_timer = awaitable.m_operation->addPhysicalReference();
+        const auto retained_timer = awaitable.m_operation->add_physical_reference();
         if (!retained_timer) { return fail(IOError(kNotReady, EOVERFLOW)); }
         awaitable.m_timer_attached = true;
         awaitable.m_timer->bind(&awaitable, [](void* value) noexcept {
-            static_cast<AcceptAwaitable*>(value)->timeoutOnOwner();
+            static_cast<AcceptAwaitable*>(value)->timeout_on_owner();
         });
         // 时间轮 push 可同步到期；此时只允许 await_suspend 返回 false，不能内联恢复。
         awaitable.m_submitting = true;
-        const bool added = awaitable.m_scheduler->addTimer(awaitable.m_timer);
+        const bool added = awaitable.m_scheduler->add_timer(awaitable.m_timer);
         awaitable.m_submitting = false;
-        if (awaitable.m_operation->state().completionReason()) { return false; }
+        if (awaitable.m_operation->state().completion_reason()) { return false; }
         if (!added) { return fail(IOError(kNotReady, ENOMEM)); }
     }
     return true;
 }
 
 std::expected<ResumeCapability, OperationError>
-IOUringReactor::detachAccept(AcceptAwaitable& awaitable) {
+IOUringReactor::detach_accept(AcceptAwaitable& awaitable) {
     auto* controller = awaitable.m_registration_state
         ? awaitable.m_registration_state->owner.load(std::memory_order_acquire)
         : awaitable.m_controller;
     if (controller && controller->m_awaitable[IOController::READ] == &awaitable) {
         // 只解除当前 frame 的入口。持久 SQE 无 frame 指针，后续 fd 仍归资源缓存。
-        controller->removeAwaitable(ACCEPT);
+        controller->remove_awaitable(ACCEPT);
     }
     return awaitable.detach();
 }
 
-void IOUringReactor::timeoutAccept(AcceptAwaitable& awaitable) {
-    if (!awaitable.selectError(CompletionReason::kTimedOut, IOError(kTimeout, 0))) { return; }
+void IOUringReactor::timeout_accept(AcceptAwaitable& awaitable) {
+    if (!awaitable.select_error(CompletionReason::kTimedOut, IOError(kTimeout, 0))) { return; }
     const bool submitting = awaitable.m_submitting;
-    auto resume = detachAccept(awaitable);
+    auto resume = detach_accept(awaitable);
     if (!resume) {
-        detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
+        detail::store_backend_error(m_last_error_code, kNotReady, EINVAL);
         return;
     }
     if (!submitting) { std::move(*resume).resume(); }
 }
 
-int IOUringReactor::addAccept(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<AcceptAwaitable>();
+int IOUringReactor::add_accept(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<AcceptAwaitable>();
     if (awaitable == nullptr) { return -EINVAL; }
-    if (const auto accepted = controller->takeAcceptedHandle()) {
-        if (awaitable->selectReady(*accepted)) { return kImmediateReady; }
+    if (const auto accepted = controller->take_accepted_handle()) {
+        if (awaitable->select_ready(*accepted)) { return kImmediateReady; }
         return -EINVAL; // 已有 winner 不应再次发布同一个 awaiter。
     }
     if (controller->m_accept_multishot_armed) { return 0; }
-    return submitMultishotAccept(controller);
+    return submit_multishot_accept(controller);
 }
 
-int IOUringReactor::submitMultishotAccept(IOController* controller) {
+int IOUringReactor::submit_multishot_accept(IOController* controller) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
         return -EINVAL;
     }
 
     // 每次重新挂载 multishot 请求都切换一次 request epoch，
     // 让旧 request 的晚到 CQE 无法误命中新 handle。
-    controller->advanceSqeGeneration(IOController::READ);
-    auto* handle = controller->makeSqeRequest(IOController::READ);
+    controller->advance_sqe_generation(IOController::READ);
+    auto* handle = controller->make_sqe_request(IOController::READ);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -539,7 +539,7 @@ int IOUringReactor::submitMultishotAccept(IOController* controller) {
     return 0;
 }
 
-void IOUringReactor::stopAccepts() {
+void IOUringReactor::stop_accepts() {
     m_accept_stopping = true;
     // PERF: O(n) 优化 - 使用 unordered_map 迭代
     for (auto& [state_key, registration] : m_accept_registrations) {
@@ -552,21 +552,21 @@ void IOUringReactor::stopAccepts() {
             (static_cast<uint32_t>(controller->m_type) & ACCEPT) == 0) {
             continue;
         }
-        // addClose() is the owner-side logical completion boundary. It
+        // add_close() is the owner-side logical completion boundary. It
         // invalidates generation before waking the task; late accept CQEs
         // close undelivered fds and retain the handle until terminal. Ring
         // cancellation/drain remain a separate physical-shutdown gate.
-        const int closed = addClose(controller);
+        const int closed = add_close(controller);
         if (closed < 0) {
-            detail::storeBackendError(m_last_error_code, kDisconnectError, negativeRetOrErrno(closed));
+            detail::store_backend_error(m_last_error_code, kDisconnectError, negative_ret_or_errno(closed));
         }
     }
 }
 
-int IOUringReactor::addConnect(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<ConnectAwaitable>();
+int IOUringReactor::add_connect(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<ConnectAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    auto* handle = controller->make_sqe_request(IOController::WRITE);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -579,16 +579,16 @@ int IOUringReactor::addConnect(IOController* controller) {
 
     io_uring_prep_connect(sqe,
                           controller->m_handle.fd,
-                          awaitable->m_host.sockAddr(),
-                          *awaitable->m_host.addrLen());
+                          awaitable->m_host.sock_addr(),
+                          *awaitable->m_host.addr_len());
     io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
-int IOUringReactor::addRecv(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<RecvAwaitable>();
+int IOUringReactor::add_recv(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<RecvAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (controller->tryConsumeReadyRecv(awaitable->m_buffer,
+    if (controller->try_consume_ready_recv(awaitable->m_buffer,
                                         awaitable->m_length,
                                         awaitable->m_result)) {
         return kImmediateReady;
@@ -596,10 +596,10 @@ int IOUringReactor::addRecv(IOController* controller) {
     if (controller->m_recv_multishot_armed) {
         return 0;
     }
-    return submitMultishotRecv(controller);
+    return submit_multishot_recv(controller);
 }
 
-int IOUringReactor::submitMultishotRecv(IOController* controller) {
+int IOUringReactor::submit_multishot_recv(IOController* controller) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
         return -EINVAL;
     }
@@ -609,8 +609,8 @@ int IOUringReactor::submitMultishotRecv(IOController* controller) {
 
     // awaitable 切换不应使持久 recv handle 失效，但每次真正重挂
     // multishot recv SQE 时必须推进 request epoch 以隔离旧 CQE。
-    controller->advanceSqeGeneration(IOController::READ);
-    auto* handle = controller->makeSqeRequest(IOController::READ);
+    controller->advance_sqe_generation(IOController::READ);
+    auto* handle = controller->make_sqe_request(IOController::READ);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -632,10 +632,10 @@ int IOUringReactor::submitMultishotRecv(IOController* controller) {
     return 0;
 }
 
-int IOUringReactor::addSend(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<SendAwaitable>();
+int IOUringReactor::add_send(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<SendAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    auto* handle = controller->make_sqe_request(IOController::WRITE);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -646,7 +646,7 @@ int IOUringReactor::addSend(IOController* controller) {
         return -EAGAIN;
     }
 
-    prepareSendSqe(sqe,
+    prepare_send_sqe(sqe,
                    handle,
                    controller->m_handle.fd,
                    awaitable->m_buffer,
@@ -656,10 +656,10 @@ int IOUringReactor::addSend(IOController* controller) {
     return 0;
 }
 
-int IOUringReactor::addReadv(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<ReadvAwaitable>();
+int IOUringReactor::add_readv(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<ReadvAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* handle = controller->makeSqeRequest(IOController::READ);
+    auto* handle = controller->make_sqe_request(IOController::READ);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -684,10 +684,10 @@ int IOUringReactor::addReadv(IOController* controller) {
     return 0;
 }
 
-int IOUringReactor::addWritev(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<WritevAwaitable>();
+int IOUringReactor::add_writev(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<WritevAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    auto* handle = controller->make_sqe_request(IOController::WRITE);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -712,10 +712,10 @@ int IOUringReactor::addWritev(IOController* controller) {
     return 0;
 }
 
-int IOUringReactor::addSendFile(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<SendFileAwaitable>();
+int IOUringReactor::add_send_file(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<SendFileAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    auto* handle = controller->make_sqe_request(IOController::WRITE);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -731,7 +731,7 @@ int IOUringReactor::addSendFile(IOController* controller) {
     return 0;
 }
 
-int IOUringReactor::addClose(IOController* controller) {
+int IOUringReactor::add_close(IOController* controller) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
         return 0;
     }
@@ -740,14 +740,14 @@ int IOUringReactor::addClose(IOController* controller) {
 
     std::optional<ResumeCapability> accept_resume;
     if ((static_cast<uint32_t>(controller->m_type) & ACCEPT) != 0) {
-        if (auto* awaitable = controller->getAwaitable<AcceptAwaitable>();
-            awaitable && awaitable->selectError(m_accept_stopping
+        if (auto* awaitable = controller->get_awaitable<AcceptAwaitable>();
+            awaitable && awaitable->select_error(m_accept_stopping
                 ? CompletionReason::kRuntimeStopped : CompletionReason::kResourceClosed,
                 IOError(kClosed, 0))) {
-            auto resume = detachAccept(*awaitable);
+            auto resume = detach_accept(*awaitable);
             // 不使用 emplace 的可写别名；仅在资源记账完成后消费局部恢复权。
             if (resume) { (void)accept_resume.emplace(std::move(*resume)); }
-            else { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+            else { detail::store_backend_error(m_last_error_code, kNotReady, EINVAL); }
         }
     }
 
@@ -769,7 +769,7 @@ int IOUringReactor::addClose(IOController* controller) {
     controller->m_type = IOEventType::INVALID;
     controller->m_awaitable[IOController::READ] = nullptr;
     controller->m_awaitable[IOController::WRITE] = nullptr;
-    controller->invalidateSqeRequests();
+    controller->invalidate_sqe_requests();
 
     if (accept_resume) {
         std::move(*accept_resume).resume();
@@ -780,10 +780,10 @@ int IOUringReactor::addClose(IOController* controller) {
     return result;
 }
 
-int IOUringReactor::addFileRead(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<FileReadAwaitable>();
+int IOUringReactor::add_file_read(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<FileReadAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* handle = controller->makeSqeRequest(IOController::READ);
+    auto* handle = controller->make_sqe_request(IOController::READ);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -803,10 +803,10 @@ int IOUringReactor::addFileRead(IOController* controller) {
     return 0;
 }
 
-int IOUringReactor::addFileWrite(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<FileWriteAwaitable>();
+int IOUringReactor::add_file_write(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<FileWriteAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    auto* handle = controller->make_sqe_request(IOController::WRITE);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -826,10 +826,10 @@ int IOUringReactor::addFileWrite(IOController* controller) {
     return 0;
 }
 
-int IOUringReactor::addRecvFrom(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<RecvFromAwaitable>();
+int IOUringReactor::add_recv_from(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<RecvFromAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (controller->tryConsumeReadyRecvFrom(awaitable->m_buffer,
+    if (controller->try_consume_ready_recv_from(awaitable->m_buffer,
                                             awaitable->m_length,
                                             awaitable->m_from,
                                             awaitable->m_result)) {
@@ -837,13 +837,13 @@ int IOUringReactor::addRecvFrom(IOController* controller) {
     }
     if (m_recvmsg_multishot_supported) {
         if (!m_recvfrom_buffer_pool) {
-            auto pool_ready = initializeRecvFromBufferPool();
+            auto pool_ready = initialize_recv_from_buffer_pool();
             if (!pool_ready) {
                 const auto error = pool_ready.error();
-                detail::storeBackendError(
+                detail::store_backend_error(
                     m_last_error_code,
-                    ioErrorCodeFromError(error),
-                    systemCodeFromError(error));
+                    io_error_code_from_error(error),
+                    system_code_from_error(error));
                 m_recvmsg_multishot_supported = false;
                 m_recvmsg_multishot_confirmed = false;
             }
@@ -852,13 +852,13 @@ int IOUringReactor::addRecvFrom(IOController* controller) {
             return 0;
         }
         if (m_recvmsg_multishot_supported) {
-            return submitMultishotRecvFrom(controller);
+            return submit_multishot_recv_from(controller);
         }
     }
-    return addRecvFromOneShot(controller, awaitable);
+    return add_recv_from_one_shot(controller, awaitable);
 }
 
-std::expected<void, IOError> IOUringReactor::initializeRecvFromBufferPool()
+std::expected<void, IOError> IOUringReactor::initialize_recv_from_buffer_pool()
 {
     auto recvfrom_pool = std::make_shared<RecvBufferPool>(&m_ring,
                                                           kRecvFromBufferCount,
@@ -872,7 +872,7 @@ std::expected<void, IOError> IOUringReactor::initializeRecvFromBufferPool()
     return {};
 }
 
-int IOUringReactor::submitMultishotRecvFrom(IOController* controller)
+int IOUringReactor::submit_multishot_recv_from(IOController* controller)
 {
 #if !GALAY_HAS_IO_URING_RECVMSG_MULTISHOT
     (void)controller;
@@ -883,13 +883,13 @@ int IOUringReactor::submitMultishotRecvFrom(IOController* controller)
         return -EINVAL;
     }
 
-    controller->advanceSqeGeneration(IOController::READ);
-    auto* handle = controller->makeSqeRequest(IOController::READ);
+    controller->advance_sqe_generation(IOController::READ);
+    auto* handle = controller->make_sqe_request(IOController::READ);
     if (handle == nullptr) {
         return -ENOMEM;
     }
 
-    auto* message = handle->arena != nullptr ? handle->arena->recvFromMessage() : nullptr;
+    auto* message = handle->arena != nullptr ? handle->arena->recv_from_message() : nullptr;
     if (message == nullptr) {
         handle->recycle();
         return -EINVAL;
@@ -916,13 +916,13 @@ int IOUringReactor::submitMultishotRecvFrom(IOController* controller)
 #endif
 }
 
-int IOUringReactor::addRecvFromOneShot(IOController* controller,
+int IOUringReactor::add_recv_from_one_shot(IOController* controller,
                                        RecvFromAwaitable* awaitable)
 {
     if (controller == nullptr || awaitable == nullptr) {
         return -EINVAL;
     }
-    auto* handle = controller->makeSqeRequest(IOController::READ);
+    auto* handle = controller->make_sqe_request(IOController::READ);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -947,10 +947,10 @@ int IOUringReactor::addRecvFromOneShot(IOController* controller,
     return 0;
 }
 
-int IOUringReactor::addSendTo(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<SendToAwaitable>();
+int IOUringReactor::add_send_to(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<SendToAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    auto* handle = controller->make_sqe_request(IOController::WRITE);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -966,18 +966,18 @@ int IOUringReactor::addSendTo(IOController* controller) {
     awaitable->m_iov.iov_len = awaitable->m_length;
     awaitable->m_msg.msg_iov = &awaitable->m_iov;
     awaitable->m_msg.msg_iovlen = 1;
-    awaitable->m_msg.msg_name = const_cast<sockaddr*>(awaitable->m_to.sockAddr());
-    awaitable->m_msg.msg_namelen = *awaitable->m_to.addrLen();
+    awaitable->m_msg.msg_name = const_cast<sockaddr*>(awaitable->m_to.sock_addr());
+    awaitable->m_msg.msg_namelen = *awaitable->m_to.addr_len();
 
     io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &awaitable->m_msg, kSendNoSignalFlag);
     io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
-int IOUringReactor::addFileWatch(IOController* controller) {
-    auto* awaitable = controller->getAwaitable<FileWatchAwaitable>();
+int IOUringReactor::add_file_watch(IOController* controller) {
+    auto* awaitable = controller->get_awaitable<FileWatchAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* handle = controller->makeSqeRequest(IOController::READ);
+    auto* handle = controller->make_sqe_request(IOController::READ);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -997,7 +997,7 @@ int IOUringReactor::addFileWatch(IOController* controller) {
     return 0;
 }
 
-int IOUringReactor::addSequence(IOController* controller) {
+int IOUringReactor::add_sequence(IOController* controller) {
     if (controller == nullptr) {
         return -1;
     }
@@ -1015,9 +1015,9 @@ int IOUringReactor::addSequence(IOController* controller) {
             return -EINVAL;
         }
 
-        const IOEventType type = owner->resolveTaskEventType(*task);
+        const IOEventType type = owner->resolve_task_event_type(*task);
         IOController::Index slot = IOController::READ;
-        if (!resolveSequenceSlot(type, slot)) {
+        if (!resolve_sequence_slot(type, slot)) {
             return -EINVAL;
         }
         if (controller->m_awaitable[slot] == owner) {
@@ -1026,10 +1026,10 @@ int IOUringReactor::addSequence(IOController* controller) {
         if (controller->m_awaitable[slot] != nullptr) {
             return -EBUSY;
         }
-        const int ret = submitSequenceSqe(slot, type, task->context, controller, owner);
+        const int ret = submit_sequence_sqe(slot, type, task->context, controller, owner);
         if (ret == kImmediateReady) {
-            owner->onCompleted();
-            owner->m_waker.wakeUp();
+            owner->on_completed();
+            owner->m_waker.wake_up();
             return 0;
         }
         return ret;
@@ -1050,7 +1050,7 @@ int IOUringReactor::addSequence(IOController* controller) {
     return 0;
 }
 
-int IOUringReactor::submitSequenceSqe(IOController::Index slot,
+int IOUringReactor::submit_sequence_sqe(IOController::Index slot,
                                       IOEventType type,
                                       IOContextBase* ctx,
                                       IOController* controller,
@@ -1060,18 +1060,18 @@ int IOUringReactor::submitSequenceSqe(IOController::Index slot,
         // 因此分阶段推进 sequence 不会漏掉已就绪字节。
         auto* readv_ctx = static_cast<ReadvIOContext*>(ctx);
         int immediate_res = 0;
-        if (tryImmediateReadv(controller->m_handle.fd, readv_ctx, immediate_res)) {
+        if (try_immediate_readv(controller->m_handle.fd, readv_ctx, immediate_res)) {
             io_uring_cqe ready_cqe{};
             ready_cqe.res = immediate_res;
-            const auto progress = owner->onActiveEvent(&ready_cqe, controller->m_handle);
+            const auto progress = owner->on_active_event(&ready_cqe, controller->m_handle);
             if (progress == SequenceProgress::kCompleted) {
                 return kImmediateReady;
             }
-            return addSequence(controller);
+            return add_sequence(controller);
         }
     }
 
-    auto* handle = controller->makeSqeRequest(slot);
+    auto* handle = controller->make_sqe_request(slot);
     if (handle == nullptr) {
         return -ENOMEM;
     }
@@ -1090,15 +1090,15 @@ int IOUringReactor::submitSequenceSqe(IOController::Index slot,
     }
     case SEND: {
         auto* c = static_cast<SendIOContext*>(ctx);
-        prepareSendSqe(sqe, handle, controller->m_handle.fd, c->m_buffer, c->m_length, 0);
+        prepare_send_sqe(sqe, handle, controller->m_handle.fd, c->m_buffer, c->m_length, 0);
         break;
     }
     case ACCEPT: {
         auto* c = static_cast<AcceptIOContext*>(ctx);
         io_uring_prep_accept(sqe,
                              controller->m_handle.fd,
-                             c->m_host->sockAddr(),
-                             c->m_host->addrLen(),
+                             c->m_host->sock_addr(),
+                             c->m_host->addr_len(),
                              SOCK_NONBLOCK | SOCK_CLOEXEC);
         break;
     }
@@ -1106,8 +1106,8 @@ int IOUringReactor::submitSequenceSqe(IOController::Index slot,
         auto* c = static_cast<ConnectIOContext*>(ctx);
         io_uring_prep_connect(sqe,
                               controller->m_handle.fd,
-                              c->m_host.sockAddr(),
-                              *c->m_host.addrLen());
+                              c->m_host.sock_addr(),
+                              *c->m_host.addr_len());
         break;
     }
     case READV: {
@@ -1158,8 +1158,8 @@ int IOUringReactor::submitSequenceSqe(IOController::Index slot,
         c->m_iov.iov_len = c->m_length;
         c->m_msg.msg_iov = &c->m_iov;
         c->m_msg.msg_iovlen = 1;
-        c->m_msg.msg_name = const_cast<sockaddr*>(c->m_to.sockAddr());
-        c->m_msg.msg_namelen = *c->m_to.addrLen();
+        c->m_msg.msg_name = const_cast<sockaddr*>(c->m_to.sock_addr());
+        c->m_msg.msg_namelen = *c->m_to.addr_len();
         io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &c->m_msg, kSendNoSignalFlag);
         break;
     }
@@ -1197,7 +1197,7 @@ int IOUringReactor::remove(IOController* controller) {
     return 0;
 }
 
-void IOUringReactor::ensureWakeReadArmed() {
+void IOUringReactor::ensure_wake_read_armed() {
     if (m_wake_read_armed) {
         return;
     }
@@ -1208,24 +1208,24 @@ void IOUringReactor::ensureWakeReadArmed() {
     }
 
     io_uring_prep_read(sqe, m_event_fd, &m_eventfd_buf, sizeof(m_eventfd_buf), 0);
-    io_uring_sqe_set_data(sqe, wakeUserData());
+    io_uring_sqe_set_data(sqe, wake_user_data());
     m_wake_read_armed = true;
 }
 
 void IOUringReactor::poll(uint64_t timeout_ns, WakeCoordinator& wake_coordinator) {
-    ensureWakeReadArmed();
+    ensure_wake_read_armed();
 
     struct io_uring_cqe* cqe = nullptr;
     struct __kernel_timespec timeout;
     timeout.tv_sec = static_cast<__kernel_time64_t>(timeout_ns / 1000000000ULL);
     timeout.tv_nsec = timeout_ns % 1000000000ULL;
 
-    const int ret = waitForIoUringCompletion(&m_ring, &cqe, &timeout);
+    const int ret = wait_for_io_uring_completion(&m_ring, &cqe, &timeout);
     if (ret < 0) {
         if (ret == -EINTR || ret == -ETIME) {
             return;
         }
-        detail::storeBackendError(
+        detail::store_backend_error(
             m_last_error_code, kNotReady, static_cast<uint32_t>(-ret));
         return;
     }
@@ -1236,11 +1236,11 @@ void IOUringReactor::poll(uint64_t timeout_ns, WakeCoordinator& wake_coordinator
 
     io_uring_for_each_cqe(&m_ring, head, cqe) {
         void* user_data = io_uring_cqe_get_data(cqe);
-        if (user_data == wakeUserData()) {
+        if (user_data == wake_user_data()) {
             wake_triggered = true;
             m_wake_read_armed = false;
         } else if (user_data != nullptr) {
-            processCompletion(cqe);
+            process_completion(cqe);
         }
         ++count;
     }
@@ -1250,12 +1250,12 @@ void IOUringReactor::poll(uint64_t timeout_ns, WakeCoordinator& wake_coordinator
     }
 
     if (wake_triggered) {
-        wake_coordinator.cancelPendingWake();
-        ensureWakeReadArmed();
+        wake_coordinator.cancel_pending_wake();
+        ensure_wake_read_armed();
     }
 }
 
-void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
+void IOUringReactor::process_completion(struct io_uring_cqe* cqe) {
     void* data = io_uring_cqe_get_data(cqe);
     if (!data) {
         return;
@@ -1292,7 +1292,7 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
         // keeps this identity alive; only the original terminal CQE recycles it.
         if (!notification && handle->multishot_type == ACCEPT && cqe->res >= 0) {
             if (::close(cqe->res) != 0) {
-                detail::storeBackendError(
+                detail::store_backend_error(
                     m_last_error_code, kDisconnectError, static_cast<uint32_t>(errno));
             }
         }
@@ -1308,11 +1308,11 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     if (!base) {
         if (slot == IOController::READ) {
             if (controller->m_recvfrom_multishot_armed) {
-                processRecvFromCompletion(controller, nullptr, handle, cqe);
+                process_recv_from_completion(controller, nullptr, handle, cqe);
             } else if (controller->m_recv_multishot_armed) {
-                processRecvCompletion(controller, nullptr, cqe);
+                process_recv_completion(controller, nullptr, cqe);
             } else if (controller->m_accept_multishot_armed) {
-                processAcceptCompletion(controller, nullptr, cqe);
+                process_accept_completion(controller, nullptr, cqe);
             }
         }
         return;
@@ -1321,94 +1321,94 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     switch (base->m_sqe_type) {
     case ACCEPT: {
         auto* awaitable = static_cast<AcceptAwaitable*>(base);
-        processAcceptCompletion(controller, awaitable, cqe);
+        process_accept_completion(controller, awaitable, cqe);
         break;
     }
     case CONNECT: {
         auto* awaitable = static_cast<ConnectAwaitable*>(base);
-        if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            completeAndWake(awaitable);
+        if (awaitable->handle_complete(cqe, controller->m_handle)) {
+            complete_and_wake(awaitable);
         } else {
-            const int ret = addConnect(controller);
+            const int ret = add_connect(controller);
             if (ret < 0) {
                 awaitable->m_result =
-                    std::unexpected(IOError(kConnectFailed, negativeRetOrErrno(ret)));
-                completeAndWake(awaitable);
+                    std::unexpected(IOError(kConnectFailed, negative_ret_or_errno(ret)));
+                complete_and_wake(awaitable);
             }
         }
         break;
     }
     case RECV: {
         auto* awaitable = static_cast<RecvAwaitable*>(base);
-        processRecvCompletion(controller, awaitable, cqe);
+        process_recv_completion(controller, awaitable, cqe);
         break;
     }
     case SEND: {
         auto* awaitable = static_cast<SendAwaitable*>(base);
-        if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            completeAndWake(awaitable);
+        if (awaitable->handle_complete(cqe, controller->m_handle)) {
+            complete_and_wake(awaitable);
         } else {
-            const int ret = addSend(controller);
+            const int ret = add_send(controller);
             if (ret < 0) {
                 awaitable->m_result =
-                    std::unexpected(IOError(kSendFailed, negativeRetOrErrno(ret)));
-                completeAndWake(awaitable);
+                    std::unexpected(IOError(kSendFailed, negative_ret_or_errno(ret)));
+                complete_and_wake(awaitable);
             }
         }
         break;
     }
     case READV: {
         auto* awaitable = static_cast<ReadvAwaitable*>(base);
-        if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            completeAndWake(awaitable);
+        if (awaitable->handle_complete(cqe, controller->m_handle)) {
+            complete_and_wake(awaitable);
         } else {
-            const int ret = addReadv(controller);
+            const int ret = add_readv(controller);
             if (ret < 0) {
                 awaitable->m_result =
-                    std::unexpected(IOError(kRecvFailed, negativeRetOrErrno(ret)));
-                completeAndWake(awaitable);
+                    std::unexpected(IOError(kRecvFailed, negative_ret_or_errno(ret)));
+                complete_and_wake(awaitable);
             }
         }
         break;
     }
     case WRITEV: {
         auto* awaitable = static_cast<WritevAwaitable*>(base);
-        if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            completeAndWake(awaitable);
+        if (awaitable->handle_complete(cqe, controller->m_handle)) {
+            complete_and_wake(awaitable);
         } else {
-            const int ret = addWritev(controller);
+            const int ret = add_writev(controller);
             if (ret < 0) {
                 awaitable->m_result =
-                    std::unexpected(IOError(kSendFailed, negativeRetOrErrno(ret)));
-                completeAndWake(awaitable);
+                    std::unexpected(IOError(kSendFailed, negative_ret_or_errno(ret)));
+                complete_and_wake(awaitable);
             }
         }
         break;
     }
     case FILEREAD: {
         auto* awaitable = static_cast<FileReadAwaitable*>(base);
-        if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            completeAndWake(awaitable);
+        if (awaitable->handle_complete(cqe, controller->m_handle)) {
+            complete_and_wake(awaitable);
         } else {
-            const int ret = addFileRead(controller);
+            const int ret = add_file_read(controller);
             if (ret < 0) {
                 awaitable->m_result =
-                    std::unexpected(IOError(kReadFailed, negativeRetOrErrno(ret)));
-                completeAndWake(awaitable);
+                    std::unexpected(IOError(kReadFailed, negative_ret_or_errno(ret)));
+                complete_and_wake(awaitable);
             }
         }
         break;
     }
     case FILEWRITE: {
         auto* awaitable = static_cast<FileWriteAwaitable*>(base);
-        if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            completeAndWake(awaitable);
+        if (awaitable->handle_complete(cqe, controller->m_handle)) {
+            complete_and_wake(awaitable);
         } else {
-            const int ret = addFileWrite(controller);
+            const int ret = add_file_write(controller);
             if (ret < 0) {
                 awaitable->m_result =
-                    std::unexpected(IOError(kWriteFailed, negativeRetOrErrno(ret)));
-                completeAndWake(awaitable);
+                    std::unexpected(IOError(kWriteFailed, negative_ret_or_errno(ret)));
+                complete_and_wake(awaitable);
             }
         }
         break;
@@ -1416,16 +1416,16 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     case RECVFROM: {
         auto* awaitable = static_cast<RecvFromAwaitable*>(base);
         if (controller->m_recvfrom_multishot_armed) {
-            processRecvFromCompletion(controller, awaitable, handle, cqe);
+            process_recv_from_completion(controller, awaitable, handle, cqe);
         } else {
-            if (awaitable->handleComplete(cqe, controller->m_handle)) {
-                completeAndWake(awaitable);
+            if (awaitable->handle_complete(cqe, controller->m_handle)) {
+                complete_and_wake(awaitable);
             } else {
-                const int ret = addRecvFrom(controller);
+                const int ret = add_recv_from(controller);
                 if (ret < 0) {
                     awaitable->m_result =
-                        std::unexpected(IOError(kRecvFailed, negativeRetOrErrno(ret)));
-                    completeAndWake(awaitable);
+                        std::unexpected(IOError(kRecvFailed, negative_ret_or_errno(ret)));
+                    complete_and_wake(awaitable);
                 }
             }
         }
@@ -1433,51 +1433,51 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     }
     case SENDTO: {
         auto* awaitable = static_cast<SendToAwaitable*>(base);
-        if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            completeAndWake(awaitable);
+        if (awaitable->handle_complete(cqe, controller->m_handle)) {
+            complete_and_wake(awaitable);
         } else {
-            const int ret = addSendTo(controller);
+            const int ret = add_send_to(controller);
             if (ret < 0) {
                 awaitable->m_result =
-                    std::unexpected(IOError(kSendFailed, negativeRetOrErrno(ret)));
-                completeAndWake(awaitable);
+                    std::unexpected(IOError(kSendFailed, negative_ret_or_errno(ret)));
+                complete_and_wake(awaitable);
             }
         }
         break;
     }
     case FILEWATCH: {
         auto* awaitable = static_cast<FileWatchAwaitable*>(base);
-        if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            completeAndWake(awaitable);
+        if (awaitable->handle_complete(cqe, controller->m_handle)) {
+            complete_and_wake(awaitable);
         } else {
-            const int ret = addFileWatch(controller);
+            const int ret = add_file_watch(controller);
             if (ret < 0) {
                 awaitable->m_result =
-                    std::unexpected(IOError(kReadFailed, negativeRetOrErrno(ret)));
-                completeAndWake(awaitable);
+                    std::unexpected(IOError(kReadFailed, negative_ret_or_errno(ret)));
+                complete_and_wake(awaitable);
             }
         }
         break;
     }
     case SENDFILE: {
         auto* awaitable = static_cast<SendFileAwaitable*>(base);
-        if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            completeAndWake(awaitable);
+        if (awaitable->handle_complete(cqe, controller->m_handle)) {
+            complete_and_wake(awaitable);
         } else {
-            const int ret = addSendFile(controller);
+            const int ret = add_send_file(controller);
             if (ret < 0) {
                 awaitable->m_result =
-                    std::unexpected(IOError(kSendFailed, negativeRetOrErrno(ret)));
-                completeAndWake(awaitable);
+                    std::unexpected(IOError(kSendFailed, negative_ret_or_errno(ret)));
+                complete_and_wake(awaitable);
             }
         }
         break;
     }
     case SEQUENCE: {
         auto* sequence = static_cast<SequenceAwaitableBase*>(base);
-        const auto event_type = sequence->activeEventType();
+        const auto event_type = sequence->active_event_type();
         controller->m_awaitable[slot] = nullptr;
-        controller->advanceSqeGeneration(slot);
+        controller->advance_sqe_generation(slot);
 
         SequenceProgress progress = SequenceProgress::kNeedWait;
         if (slot == IOController::READ && event_type == READV) {
@@ -1489,27 +1489,27 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
                     ? static_cast<ReadvIOContext*>(task->context)
                     : nullptr;
                 int immediate_res = 0;
-                if (tryImmediateReadv(controller->m_handle.fd, readv_ctx, immediate_res)) {
+                if (try_immediate_readv(controller->m_handle.fd, readv_ctx, immediate_res)) {
                     ready_cqe.res = immediate_res;
                     deliver = true;
                 }
             }
             if (deliver) {
-                progress = sequence->onActiveEvent(&ready_cqe, controller->m_handle);
+                progress = sequence->on_active_event(&ready_cqe, controller->m_handle);
             }
         } else {
-            progress = sequence->onActiveEvent(cqe, controller->m_handle);
+            progress = sequence->on_active_event(cqe, controller->m_handle);
         }
         if (progress == SequenceProgress::kCompleted) {
-            sequence->onCompleted();
-            sequence->m_waker.wakeUp();
+            sequence->on_completed();
+            sequence->m_waker.wake_up();
         } else {
-            const int ret = addSequence(controller);
+            const int ret = add_sequence(controller);
             if (ret < 0) {
-                detail::storeBackendError(
-                    m_last_error_code, kNotReady, negativeRetOrErrno(ret));
-                sequence->onCompleted();
-                sequence->m_waker.wakeUp();
+                detail::store_backend_error(
+                    m_last_error_code, kNotReady, negative_ret_or_errno(ret));
+                sequence->on_completed();
+                sequence->m_waker.wake_up();
             }
         }
         break;
@@ -1519,21 +1519,21 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     }
 }
 
-void IOUringReactor::processAcceptCompletion(IOController* controller,
+void IOUringReactor::process_accept_completion(IOController* controller,
                                              AcceptAwaitable* awaitable,
                                              struct io_uring_cqe* cqe) {
     const bool more = (cqe->flags & IORING_CQE_F_MORE) != 0;
-    auto result = io::handleAccept(cqe);
-    bool completed = false; // 本次 tryComplete 的返回值，不是第二个持久完成 gate。
+    auto result = io::handle_accept(cqe);
+    bool completed = false; // 本次 try_complete 的返回值，不是第二个持久完成 gate。
     if (result) {
-        if (awaitable) { completed = awaitable->selectReady(*result); }
-        else { controller->enqueueAcceptedHandle(*result); }
+        if (awaitable) { completed = awaitable->select_ready(*result); }
+        else { controller->enqueue_accepted_handle(*result); }
     } else if (!IOError::contains(result.error().code(), kNotReady)) {
         if (awaitable) {
-            completed = awaitable->selectError(CompletionReason::kBackendError, result.error());
+            completed = awaitable->select_error(CompletionReason::kBackendError, result.error());
         } else {
-            detail::storeBackendError(m_last_error_code,
-                ioErrorCodeFromError(result.error()), systemCodeFromError(result.error()));
+            detail::store_backend_error(m_last_error_code,
+                io_error_code_from_error(result.error()), system_code_from_error(result.error()));
         }
     }
 
@@ -1541,13 +1541,13 @@ void IOUringReactor::processAcceptCompletion(IOController* controller,
         controller->m_accept_multishot_handle = nullptr;
         controller->m_accept_multishot_armed = false;
         if (controller->m_handle != GHandle::invalid() && !m_accept_stopping) {
-            const int ret = submitMultishotAccept(controller);
+            const int ret = submit_multishot_accept(controller);
             if (ret < 0) {
-                if (awaitable && awaitable->selectError(CompletionReason::kBackendError,
-                        IOError(kAcceptFailed, negativeRetOrErrno(ret)))) {
+                if (awaitable && awaitable->select_error(CompletionReason::kBackendError,
+                        IOError(kAcceptFailed, negative_ret_or_errno(ret)))) {
                     completed = true;
                 } else {
-                    detail::storeBackendError(m_last_error_code, kAcceptFailed, negativeRetOrErrno(ret));
+                    detail::store_backend_error(m_last_error_code, kAcceptFailed, negative_ret_or_errno(ret));
                 }
             }
         }
@@ -1555,16 +1555,16 @@ void IOUringReactor::processAcceptCompletion(IOController* controller,
     // 先完成资源重挂/错误记账，再断开 frame 入口。原请求由 terminal guard
     // 独立 recycle；MORE 完成单次 accept 不等待、更不回收持久请求。
     if (completed) {
-        auto resume = detachAccept(*awaitable);
+        auto resume = detach_accept(*awaitable);
         if (!resume) {
-            detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
+            detail::store_backend_error(m_last_error_code, kNotReady, EINVAL);
             return;
         }
         std::move(*resume).resume();
     }
 }
 
-void IOUringReactor::processRecvCompletion(IOController* controller,
+void IOUringReactor::process_recv_completion(IOController* controller,
                                            RecvAwaitable* awaitable,
                                            struct io_uring_cqe* cqe) {
     if (controller == nullptr) {
@@ -1582,51 +1582,51 @@ void IOUringReactor::processRecvCompletion(IOController* controller,
             ReadyRecvChunk chunk;
             chunk.kind = ReadyRecvChunk::Kind::Error;
             chunk.result = std::unexpected(IOError(kRecvFailed, static_cast<uint32_t>(EINVAL)));
-            controller->enqueueReadyRecv(std::move(chunk));
+            controller->enqueue_ready_recv(std::move(chunk));
         } else {
-            const uint16_t bid = cqeBufferId(cqe);
-            auto* pool = recvBufferPool(m_recv_buffer_pool);
+            const uint16_t bid = cqe_buffer_id(cqe);
+            auto* pool = recv_buffer_pool(m_recv_buffer_pool);
             ReadyRecvChunk chunk;
             chunk.owner = m_recv_buffer_pool;
             chunk.data = pool != nullptr ? pool->data(bid) : nullptr;
             chunk.bid = bid;
             chunk.length = static_cast<size_t>(cqe->res);
             chunk.kind = ReadyRecvChunk::Kind::Buffer;
-            chunk.recycle = recycleRecvBuffer;
+            chunk.recycle = recycle_recv_buffer;
             if (chunk.data == nullptr) {
                 chunk.release();
                 chunk.kind = ReadyRecvChunk::Kind::Error;
                 chunk.result = std::unexpected(IOError(kRecvFailed, static_cast<uint32_t>(EINVAL)));
             }
-            controller->enqueueReadyRecv(std::move(chunk));
+            controller->enqueue_ready_recv(std::move(chunk));
         }
     } else if (cqe->res == 0) {
         ReadyRecvChunk chunk;
         chunk.kind = ReadyRecvChunk::Kind::Eof;
         chunk.result = static_cast<size_t>(0);
-        controller->enqueueReadyRecv(std::move(chunk));
+        controller->enqueue_ready_recv(std::move(chunk));
     } else if (!transient && !buffer_exhausted && !cancelled) {
         ReadyRecvChunk chunk;
         chunk.kind = ReadyRecvChunk::Kind::Error;
         chunk.result = std::unexpected(IOError(kRecvFailed, static_cast<uint32_t>(-cqe->res)));
-        controller->enqueueReadyRecv(std::move(chunk));
+        controller->enqueue_ready_recv(std::move(chunk));
     }
 
     if (awaitable != nullptr && !cancelled && !controller->m_recv_result_assigned) {
         bool should_deliver = false;
         if (buffer_exhausted) {
-            should_deliver = controller->tryConsumeReadyRecv(awaitable->m_buffer,
+            should_deliver = controller->try_consume_ready_recv(awaitable->m_buffer,
                                                              awaitable->m_length,
                                                              awaitable->m_result);
-        } else if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            should_deliver = controller->tryConsumeReadyRecv(awaitable->m_buffer,
+        } else if (awaitable->handle_complete(cqe, controller->m_handle)) {
+            should_deliver = controller->try_consume_ready_recv(awaitable->m_buffer,
                                                              awaitable->m_length,
                                                              awaitable->m_result);
         }
 
         if (should_deliver) {
             controller->m_recv_result_assigned = true;
-            completeAndWake(awaitable);
+            complete_and_wake(awaitable);
         }
     }
 
@@ -1638,7 +1638,7 @@ void IOUringReactor::processRecvCompletion(IOController* controller,
     controller->m_recv_multishot_armed = false;
 }
 
-void IOUringReactor::processRecvFromCompletion(IOController* controller,
+void IOUringReactor::process_recv_from_completion(IOController* controller,
                                                RecvFromAwaitable* awaitable,
                                                SqeRequestHandle* handle,
                                                struct io_uring_cqe* cqe)
@@ -1670,15 +1670,15 @@ void IOUringReactor::processRecvFromCompletion(IOController* controller,
             datagram.result = std::unexpected(
                 IOError(kRecvFailed, static_cast<uint32_t>(EINVAL)));
         } else {
-            const uint16_t bid = cqeBufferId(cqe);
-            auto* pool = recvBufferPool(m_recvfrom_buffer_pool);
+            const uint16_t bid = cqe_buffer_id(cqe);
+            auto* pool = recv_buffer_pool(m_recvfrom_buffer_pool);
             datagram.owner = m_recvfrom_buffer_pool;
-            datagram.recycle = recycleRecvBuffer;
+            datagram.recycle = recycle_recv_buffer;
             datagram.bid = bid;
             datagram.data = pool != nullptr ? pool->data(bid) : nullptr;
 
             auto* message = handle->arena != nullptr
-                ? handle->arena->recvFromMessage()
+                ? handle->arena->recv_from_message()
                 : nullptr;
             auto* output = datagram.data != nullptr && message != nullptr
                 ? io_uring_recvmsg_validate(datagram.data, cqe->res, message)
@@ -1700,22 +1700,22 @@ void IOUringReactor::processRecvFromCompletion(IOController* controller,
                 datagram.length = io_uring_recvmsg_payload_length(output, cqe->res, message);
             }
         }
-        controller->enqueueReadyRecvFrom(std::move(datagram));
+        controller->enqueue_ready_recv_from(std::move(datagram));
     } else if (!transient && !buffer_exhausted && !cancelled && !unsupported) {
         ReadyRecvDatagram datagram;
         datagram.kind = ReadyRecvDatagram::Kind::Error;
         datagram.result = std::unexpected(
             IOError(kRecvFailed, static_cast<uint32_t>(-cqe->res)));
-        controller->enqueueReadyRecvFrom(std::move(datagram));
+        controller->enqueue_ready_recv_from(std::move(datagram));
     }
 
     if (awaitable != nullptr && !cancelled && !controller->m_recvfrom_result_assigned &&
-        controller->tryConsumeReadyRecvFrom(awaitable->m_buffer,
+        controller->try_consume_ready_recv_from(awaitable->m_buffer,
                                             awaitable->m_length,
                                             awaitable->m_from,
                                             awaitable->m_result)) {
         controller->m_recvfrom_result_assigned = true;
-        completeAndWake(awaitable);
+        complete_and_wake(awaitable);
     }
 
     if (more) {
@@ -1735,15 +1735,15 @@ void IOUringReactor::processRecvFromCompletion(IOController* controller,
 
     int ret = 0;
     if (m_recvmsg_multishot_supported) {
-        ret = submitMultishotRecvFrom(controller);
+        ret = submit_multishot_recv_from(controller);
     } else {
-        ret = addRecvFromOneShot(controller, awaitable);
+        ret = add_recv_from_one_shot(controller, awaitable);
     }
     if (ret < 0) {
         awaitable->m_result =
-            std::unexpected(IOError(kRecvFailed, negativeRetOrErrno(ret)));
+            std::unexpected(IOError(kRecvFailed, negative_ret_or_errno(ret)));
         controller->m_recvfrom_result_assigned = true;
-        completeAndWake(awaitable);
+        complete_and_wake(awaitable);
     }
 #endif
 }

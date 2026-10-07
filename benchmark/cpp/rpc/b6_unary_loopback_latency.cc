@@ -31,12 +31,12 @@ public:
     BenchLoopbackService()
         : RpcService("BenchLoopbackService")
     {
-        registerMethod("echo", &BenchLoopbackService::echo);
+        register_method("echo", &BenchLoopbackService::echo);
     }
 
     Task<void> echo(RpcContext& ctx)
     {
-        ctx.setPayload(ctx.request().payloadView());
+        ctx.set_payload(ctx.request().payload_view());
         co_return;
     }
 };
@@ -49,12 +49,12 @@ struct BenchResult {
     std::vector<uint64_t> latencies_us;
 };
 
-uint16_t loopbackPort()
+uint16_t loopback_port()
 {
     return static_cast<uint16_t>(24000 + (::getpid() % 20000));
 }
 
-Task<void> runBenchmarkClient(uint16_t port, size_t iterations, BenchResult* result)
+Task<void> run_benchmark_client(uint16_t port, size_t iterations, BenchResult* result)
 {
     RpcClient client;
     bool connected = false;
@@ -89,7 +89,7 @@ Task<void> runBenchmarkClient(uint16_t port, size_t iterations, BenchResult* res
             call_result.value()->has_value()) {
             response = &call_result.value()->value();
         }
-        if (response == nullptr || !response->isOk() ||
+        if (response == nullptr || !response->is_ok() ||
             std::string(response->payload().begin(), response->payload().end()) != payload) {
             ++result->errors;
             continue;
@@ -119,7 +119,7 @@ uint64_t percentile(const std::vector<uint64_t>& values, double p)
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -128,15 +128,15 @@ int main(int argc, char* argv[])
         iterations = std::max<size_t>(1, std::strtoull(argv[1], nullptr, 10));
     }
 
-    const uint16_t port = loopbackPort();
+    const uint16_t port = loopback_port();
     auto server = RpcServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     BenchLoopbackService service;
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register loopback benchmark service: "
                   << registered.error().message() << "\n";
@@ -149,7 +149,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();
@@ -159,7 +159,7 @@ int main(int argc, char* argv[])
     }
 
     BenchResult result;
-    if (!scheduleTask(runtime.getNextIOScheduler(), runBenchmarkClient(port, iterations, &result))) {
+    if (!schedule_task(runtime.get_next_io_scheduler(), run_benchmark_client(port, iterations, &result))) {
         runtime.stop();
         server.stop();
         std::cerr << "failed to schedule benchmark client\n";

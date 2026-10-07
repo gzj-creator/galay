@@ -47,7 +47,7 @@ public:
      * @param max 最大值（含）
      * @return min < max 时返回闭区间随机数；否则返回 min
      */
-    int randomInt(int min, int max) {
+    int random_int(int min, int max) {
         if (min >= max) return min;
         std::uniform_int_distribution<int> dist(min, max);
         return dist(m_engine);
@@ -59,7 +59,7 @@ public:
      * @param max 最大值（含）
      * @return min < max 时返回闭区间随机数；否则返回 min
      */
-    uint32_t randomUint32(uint32_t min, uint32_t max) {
+    uint32_t random_uint32(uint32_t min, uint32_t max) {
         if (min >= max) return min;
         std::uniform_int_distribution<uint32_t> dist(min, max);
         return dist(m_engine);
@@ -71,7 +71,7 @@ public:
      * @param max 最大值（含）
      * @return min < max 时返回闭区间随机数；否则返回 min
      */
-    uint64_t randomUint64(uint64_t min, uint64_t max) {
+    uint64_t random_uint64(uint64_t min, uint64_t max) {
         if (min >= max) return min;
         std::uniform_int_distribution<uint64_t> dist(min, max);
         return dist(m_engine);
@@ -83,7 +83,7 @@ public:
      * @param max 最大值（不含）
      * @return min < max 时返回半开区间随机数；否则返回 min
      */
-    double randomDouble(double min, double max) {
+    double random_double(double min, double max) {
         if (min >= max) return min;
         std::uniform_real_distribution<double> dist(min, max);
         return dist(m_engine);
@@ -95,7 +95,7 @@ public:
      * @param max 最大值（不含）
      * @return min < max 时返回半开区间随机数；否则返回 min
      */
-    float randomFloat(float min, float max) {
+    float random_float(float min, float max) {
         if (min >= max) return min;
         std::uniform_real_distribution<float> dist(min, max);
         return dist(m_engine);
@@ -106,7 +106,7 @@ public:
      * @param probability 为 true 的概率；小于等于 0 返回 false，大于等于 1 返回 true
      * @return 随机布尔值
      */
-    bool randomBool(double probability = 0.5) {
+    bool random_bool(double probability = 0.5) {
         if (probability <= 0.0) return false;
         if (probability >= 1.0) return true;
         std::bernoulli_distribution dist(probability);
@@ -119,7 +119,7 @@ public:
      * @param charset 字符集（默认为字母数字）；为空时返回空字符串
      * @return 随机字符串；length 为 0 或 charset 为空时返回空字符串
      */
-    std::string randomString(size_t length,
+    std::string random_string(size_t length,
                              std::string_view charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") {
         if (charset.empty() || length == 0) return "";
 
@@ -141,7 +141,7 @@ public:
      * @param uppercase 是否使用大写字母
      * @return 随机十六进制字符串；length 为 0 时返回空字符串
      */
-    std::string randomHex(size_t length, bool uppercase = false) {
+    std::string random_hex(size_t length, bool uppercase = false) {
         if (length == 0) return "";
 
         const char* hexChars = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
@@ -163,7 +163,7 @@ public:
      * @param buffer 输出缓冲区；为空时直接返回
      * @param length 字节数量
      */
-    void randomBytes(uint8_t* buffer, size_t length) {
+    void random_bytes(uint8_t* buffer, size_t length) {
         if (buffer == nullptr || length == 0) return;
 
         std::uniform_int_distribution<int> dist(0, 255);
@@ -243,10 +243,10 @@ public:
      * @param max 最大值（含）
      * @return min < max 时返回闭区间随机数；否则返回 min
      */
-    int randomInt(int min, int max) {
+    int random_int(int min, int max) {
         if (min >= max) return min;
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_generator.randomInt(min, max);
+        return m_generator.random_int(min, max);
     }
 
     /**
@@ -255,10 +255,10 @@ public:
      * @param max 最大值（含）
      * @return min < max 时返回闭区间随机数；否则返回 min
      */
-    uint32_t randomUint32(uint32_t min, uint32_t max) {
+    uint32_t random_uint32(uint32_t min, uint32_t max) {
         if (min >= max) return min;
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_generator.randomUint32(min, max);
+        return m_generator.random_uint32(min, max);
     }
 
     /**
@@ -267,10 +267,10 @@ public:
      * @param max 最大值（含）
      * @return min < max 时返回闭区间随机数；否则返回 min
      */
-    uint64_t randomUint64(uint64_t min, uint64_t max) {
+    uint64_t random_uint64(uint64_t min, uint64_t max) {
         if (min >= max) return min;
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_generator.randomUint64(min, max);
+        return m_generator.random_uint64(min, max);
     }
 
     /**
@@ -279,10 +279,10 @@ public:
      * @param max 最大值（不含）
      * @return min < max 时返回半开区间随机数；否则返回 min
      */
-    double randomDouble(double min, double max) {
+    double random_double(double min, double max) {
         if (min >= max) return min;
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_generator.randomDouble(min, max);
+        return m_generator.random_double(min, max);
     }
 
     /**
@@ -291,10 +291,10 @@ public:
      * @param max 最大值（不含）
      * @return min < max 时返回半开区间随机数；否则返回 min
      */
-    float randomFloat(float min, float max) {
+    float random_float(float min, float max) {
         if (min >= max) return min;
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_generator.randomFloat(min, max);
+        return m_generator.random_float(min, max);
     }
 
     /**
@@ -302,11 +302,11 @@ public:
      * @param probability 为 true 的概率；小于等于 0 返回 false，大于等于 1 返回 true
      * @return 随机布尔值
      */
-    bool randomBool(double probability = 0.5) {
+    bool random_bool(double probability = 0.5) {
         if (probability <= 0.0) return false;
         if (probability >= 1.0) return true;
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_generator.randomBool(probability);
+        return m_generator.random_bool(probability);
     }
 
     /**
@@ -315,11 +315,11 @@ public:
      * @param charset 字符集（默认为字母数字）；为空时返回空字符串
      * @return 随机字符串；length 为 0 或 charset 为空时返回空字符串
      */
-    std::string randomString(size_t length,
+    std::string random_string(size_t length,
                              std::string_view charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") {
         if (charset.empty() || length == 0) return "";
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_generator.randomString(length, charset);
+        return m_generator.random_string(length, charset);
     }
 
     /**
@@ -328,10 +328,10 @@ public:
      * @param uppercase 是否使用大写字母
      * @return 随机十六进制字符串；length 为 0 时返回空字符串
      */
-    std::string randomHex(size_t length, bool uppercase = false) {
+    std::string random_hex(size_t length, bool uppercase = false) {
         if (length == 0) return "";
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_generator.randomHex(length, uppercase);
+        return m_generator.random_hex(length, uppercase);
     }
 
     /**
@@ -339,10 +339,10 @@ public:
      * @param buffer 输出缓冲区；为空时直接返回
      * @param length 字节数量
      */
-    void randomBytes(uint8_t* buffer, size_t length) {
+    void random_bytes(uint8_t* buffer, size_t length) {
         if (buffer == nullptr || length == 0) return;
         std::lock_guard<std::mutex> lock(m_mutex);
-        m_generator.randomBytes(buffer, length);
+        m_generator.random_bytes(buffer, length);
     }
 
     /**

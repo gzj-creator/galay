@@ -39,12 +39,12 @@ namespace {
 using ConnectResult = std::expected<size_t, IOError>;
 
 struct ConnectFlow {
-    void onConnect(SequenceOps<ConnectResult, 4>&, ConnectIOContext& connect_ctx) {
+    void on_connect(SequenceOps<ConnectResult, 4>&, ConnectIOContext& connect_ctx) {
         connect_handler_called = true;
         connect_ok = connect_ctx.m_result.has_value();
     }
 
-    void onFinish(SequenceOps<ConnectResult, 4>& ops) {
+    void on_finish(SequenceOps<ConnectResult, 4>& ops) {
         finish_handler_called = true;
         ops.complete((connect_handler_called && connect_ok) ? 1u : 0u);
     }
@@ -59,7 +59,7 @@ struct TestState {
     std::atomic<bool> success{false};
 };
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -72,7 +72,7 @@ bool waitUntil(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-int createListenSocket(uint16_t* port_out) {
+int create_listen_socket(uint16_t* port_out) {
     int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd < 0) {
         return -1;
@@ -107,7 +107,7 @@ int createListenSocket(uint16_t* port_out) {
     return listen_fd;
 }
 
-void acceptWithTimeout(int listen_fd,
+void accept_with_timeout(int listen_fd,
                        std::atomic<bool>* accepted,
                        std::chrono::milliseconds timeout = 1000ms,
                        std::chrono::milliseconds step = 2ms) {
@@ -126,12 +126,12 @@ void acceptWithTimeout(int listen_fd,
     }
 }
 
-Task<void> connectBuilderTask(TestState* state, int fd, Host host) {
+Task<void> connect_builder_task(TestState* state, int fd, Host host) {
     IOController controller(GHandle{.fd = fd});
     ConnectFlow flow;
     auto awaitable = AwaitableBuilder<ConnectResult, 4, ConnectFlow>(&controller, flow)
-        .connect<&ConnectFlow::onConnect>(host)
-        .finish<&ConnectFlow::onFinish>()
+        .connect<&ConnectFlow::on_connect>(host)
+        .finish<&ConnectFlow::on_finish>()
         .build();
 
     auto result = co_await awaitable;
@@ -149,14 +149,14 @@ Task<void> connectBuilderTask(TestState* state, int fd, Host host) {
 
 int main() {
     uint16_t port = 0;
-    int listen_fd = createListenSocket(&port);
+    int listen_fd = create_listen_socket(&port);
     if (listen_fd < 0) {
         std::cerr << "[T73] createListenSocket failed: " << std::strerror(errno) << "\n";
         return 1;
     }
 
     std::atomic<bool> accepted{false};
-    std::thread accept_thread(acceptWithTimeout, listen_fd, &accepted, 1000ms, 2ms);
+    std::thread accept_thread(accept_with_timeout, listen_fd, &accepted, 1000ms, 2ms);
 
     int client_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (client_fd < 0) {
@@ -172,13 +172,13 @@ int main() {
     scheduler.start();
 
     TestState state;
-    scheduleTask(
+    schedule_task(
         scheduler,
-        connectBuilderTask(&state, client_fd, Host(IPType::IPV4, "127.0.0.1", port))
+        connect_builder_task(&state, client_fd, Host(IPType::IPV4, "127.0.0.1", port))
     );
 
-    const bool completed = waitUntil(state.done);
-    const bool server_accepted = waitUntil(accepted);
+    const bool completed = wait_until(state.done);
+    const bool server_accepted = wait_until(accepted);
 
     scheduler.stop();
     close(client_fd);

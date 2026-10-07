@@ -6,7 +6,7 @@ namespace galay::http2
 namespace
 {
 
-H2DispatchResult connectionError(Http2ErrorCode code)
+H2DispatchResult connection_error(Http2ErrorCode code)
 {
     H2DispatchResult result;
     result.ok = false;
@@ -20,7 +20,7 @@ H2DispatchResult connectionError(Http2ErrorCode code)
     return result;
 }
 
-H2DispatchResult streamError(uint32_t stream_id, Http2ErrorCode code)
+H2DispatchResult stream_error(uint32_t stream_id, Http2ErrorCode code)
 {
     H2DispatchResult result;
     result.ok = false;
@@ -34,41 +34,41 @@ H2DispatchResult streamError(uint32_t stream_id, Http2ErrorCode code)
     return result;
 }
 
-bool requiresNonZeroStream(const Http2Frame& frame)
+bool requires_non_zero_stream(const Http2Frame& frame)
 {
-    return frame.isData() ||
-           frame.isHeaders() ||
-           frame.isPriority() ||
-           frame.isRstStream() ||
-           frame.isContinuation();
+    return frame.is_data() ||
+           frame.is_headers() ||
+           frame.is_priority() ||
+           frame.is_rst_stream() ||
+           frame.is_continuation();
 }
 
-bool requiresZeroStream(const Http2Frame& frame)
+bool requires_zero_stream(const Http2Frame& frame)
 {
-    return frame.isSettings() ||
-           frame.isPing() ||
-           frame.isGoAway();
+    return frame.is_settings() ||
+           frame.is_ping() ||
+           frame.is_go_away();
 }
 
-bool isStreamFrame(const Http2Frame& frame)
+bool is_stream_frame(const Http2Frame& frame)
 {
-    return requiresNonZeroStream(frame) ||
-           frame.isPushPromise();
+    return requires_non_zero_stream(frame) ||
+           frame.is_push_promise();
 }
 
-H2DispatcherStreamState& streamState(H2DispatcherConnectionState& state,
+H2DispatcherStreamState& stream_state(H2DispatcherConnectionState& state,
                                      uint32_t stream_id)
 {
     return state.streams.try_emplace(stream_id).first->second;
 }
 
-bool isRemoteClosed(const H2DispatcherStreamState& stream)
+bool is_remote_closed(const H2DispatcherStreamState& stream)
 {
     return stream.lifecycle == H2StreamLifecycleState::HalfClosedRemote ||
            stream.lifecycle == H2StreamLifecycleState::Closed;
 }
 
-void markRemoteEndStream(H2DispatcherStreamState& stream)
+void mark_remote_end_stream(H2DispatcherStreamState& stream)
 {
     switch (stream.lifecycle) {
         case H2StreamLifecycleState::Idle:
@@ -86,17 +86,17 @@ void markRemoteEndStream(H2DispatcherStreamState& stream)
     }
 }
 
-bool canReceiveData(const H2DispatcherStreamState& stream)
+bool can_receive_data(const H2DispatcherStreamState& stream)
 {
     return stream.lifecycle == H2StreamLifecycleState::Open ||
            stream.lifecycle == H2StreamLifecycleState::HalfClosedLocal;
 }
 
-bool isNewStreamRejectedByGoaway(const Http2Frame& frame,
+bool is_new_stream_rejected_by_goaway(const Http2Frame& frame,
                                  const H2DispatcherConnectionState& state,
                                  uint32_t stream_id)
 {
-    if (!state.goaway_received || !frame.isHeaders()) {
+    if (!state.goaway_received || !frame.is_headers()) {
         return false;
     }
     if (stream_id <= state.goaway_last_stream_id) {
@@ -111,29 +111,29 @@ H2DispatchResult Http2FrameDispatcher::dispatch(const Http2Frame& frame,
                                                 H2DispatcherConnectionState& state)
 {
     H2DispatchResult result;
-    const uint32_t stream_id = frame.streamId();
+    const uint32_t stream_id = frame.stream_id();
 
-    if (requiresNonZeroStream(frame) && stream_id == 0) {
-        return connectionError(Http2ErrorCode::ProtocolError);
+    if (requires_non_zero_stream(frame) && stream_id == 0) {
+        return connection_error(Http2ErrorCode::ProtocolError);
     }
-    if (requiresZeroStream(frame) && stream_id != 0) {
-        return connectionError(Http2ErrorCode::ProtocolError);
+    if (requires_zero_stream(frame) && stream_id != 0) {
+        return connection_error(Http2ErrorCode::ProtocolError);
     }
 
     if (state.expecting_continuation) {
-        if (!frame.isContinuation() || stream_id != state.continuation_stream_id) {
-            return connectionError(Http2ErrorCode::ProtocolError);
+        if (!frame.is_continuation() || stream_id != state.continuation_stream_id) {
+            return connection_error(Http2ErrorCode::ProtocolError);
         }
     }
 
-    if (isNewStreamRejectedByGoaway(frame, state, stream_id)) {
-        return streamError(stream_id, Http2ErrorCode::ProtocolError);
+    if (is_new_stream_rejected_by_goaway(frame, state, stream_id)) {
+        return stream_error(stream_id, Http2ErrorCode::ProtocolError);
     }
 
-    if (frame.isHeaders()) {
-        auto& stream = streamState(state, stream_id);
-        if (isRemoteClosed(stream)) {
-            return streamError(stream_id, Http2ErrorCode::ProtocolError);
+    if (frame.is_headers()) {
+        auto& stream = stream_state(state, stream_id);
+        if (is_remote_closed(stream)) {
+            return stream_error(stream_id, Http2ErrorCode::ProtocolError);
         }
         if (stream.lifecycle == H2StreamLifecycleState::Idle) {
             stream.lifecycle = H2StreamLifecycleState::Open;
@@ -142,11 +142,11 @@ H2DispatchResult Http2FrameDispatcher::dispatch(const Http2Frame& frame,
             }
         }
 
-        const auto* headers = frame.asHeaders();
-        if (headers && headers->isEndStream()) {
-            markRemoteEndStream(stream);
+        const auto* headers = frame.as_headers();
+        if (headers && headers->is_end_stream()) {
+            mark_remote_end_stream(stream);
         }
-        if (headers && !headers->isEndHeaders()) {
+        if (headers && !headers->is_end_headers()) {
             state.expecting_continuation = true;
             state.continuation_stream_id = stream_id;
         } else {
@@ -157,25 +157,25 @@ H2DispatchResult Http2FrameDispatcher::dispatch(const Http2Frame& frame,
         return result;
     }
 
-    if (frame.isData()) {
+    if (frame.is_data()) {
         auto it = state.streams.find(stream_id);
-        if (it == state.streams.end() || !canReceiveData(it->second)) {
-            return streamError(stream_id, Http2ErrorCode::ProtocolError);
+        if (it == state.streams.end() || !can_receive_data(it->second)) {
+            return stream_error(stream_id, Http2ErrorCode::ProtocolError);
         }
-        const auto* data = frame.asData();
-        if (data && data->isEndStream()) {
-            markRemoteEndStream(it->second);
+        const auto* data = frame.as_data();
+        if (data && data->is_end_stream()) {
+            mark_remote_end_stream(it->second);
         }
         result.actions.push_back({H2DispatchActionType::DeliverToStream, stream_id, Http2ErrorCode::NoError});
         return result;
     }
 
-    if (frame.isContinuation()) {
-        const auto* cont = frame.asContinuation();
+    if (frame.is_continuation()) {
+        const auto* cont = frame.as_continuation();
         if (!state.expecting_continuation || stream_id != state.continuation_stream_id) {
-            return connectionError(Http2ErrorCode::ProtocolError);
+            return connection_error(Http2ErrorCode::ProtocolError);
         }
-        if (cont && cont->isEndHeaders()) {
+        if (cont && cont->is_end_headers()) {
             state.expecting_continuation = false;
             state.continuation_stream_id = 0;
         }
@@ -183,34 +183,34 @@ H2DispatchResult Http2FrameDispatcher::dispatch(const Http2Frame& frame,
         return result;
     }
 
-    if (frame.isRstStream()) {
-        auto& stream = streamState(state, stream_id);
+    if (frame.is_rst_stream()) {
+        auto& stream = stream_state(state, stream_id);
         stream.lifecycle = H2StreamLifecycleState::Closed;
         result.actions.push_back({H2DispatchActionType::DeliverToStream, stream_id, Http2ErrorCode::NoError});
         return result;
     }
 
-    if (frame.isGoAway()) {
+    if (frame.is_go_away()) {
         state.goaway_received = true;
-        if (const auto* goaway = frame.asGoAway()) {
-            state.goaway_last_stream_id = goaway->lastStreamId();
+        if (const auto* goaway = frame.as_go_away()) {
+            state.goaway_last_stream_id = goaway->last_stream_id();
         }
         return result;
     }
 
-    if (frame.isWindowUpdate()) {
-        const auto* wu = frame.asWindowUpdate();
-        if (wu && wu->windowSizeIncrement() == 0) {
+    if (frame.is_window_update()) {
+        const auto* wu = frame.as_window_update();
+        if (wu && wu->window_size_increment() == 0) {
             if (stream_id == 0) {
-                return connectionError(Http2ErrorCode::ProtocolError);
+                return connection_error(Http2ErrorCode::ProtocolError);
             }
-            return streamError(stream_id, Http2ErrorCode::ProtocolError);
+            return stream_error(stream_id, Http2ErrorCode::ProtocolError);
         }
         result.actions.push_back({H2DispatchActionType::UpdateWindow, stream_id, Http2ErrorCode::NoError});
         return result;
     }
 
-    if (isStreamFrame(frame)) {
+    if (is_stream_frame(frame)) {
         result.actions.push_back({H2DispatchActionType::DeliverToStream, stream_id, Http2ErrorCode::NoError});
     }
 

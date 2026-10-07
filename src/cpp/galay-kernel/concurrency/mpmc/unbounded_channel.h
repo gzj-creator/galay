@@ -91,7 +91,7 @@ struct UnboundedChannelWaiter
         : localWaker(timeout_timer ? Waker() : std::move(waiter_waker))
         , timeoutTimer(std::move(timeout_timer))
         , completionWaker(timeoutTimer != nullptr
-              ? &timeoutTimer->completionWaker()
+              ? &timeoutTimer->completion_waker()
               : &localWaker)
     {
     }
@@ -99,7 +99,7 @@ struct UnboundedChannelWaiter
 
 namespace detail {
 
-inline void unboundedChannelCpuPause() noexcept
+inline void unbounded_channel_cpu_pause() noexcept
 {
 #if defined(_MSC_VER)
     YieldProcessor();
@@ -112,11 +112,11 @@ inline void unboundedChannelCpuPause() noexcept
 #endif
 }
 
-inline void unboundedChannelBackoff(uint32_t& step) noexcept
+inline void unbounded_channel_backoff(uint32_t& step) noexcept
 {
     const uint32_t count = uint32_t{1} << (step < 6 ? step : 6);
     for (uint32_t index = 0; index < count; ++index) {
-        unboundedChannelCpuPause();
+        unbounded_channel_cpu_pause();
     }
     if (step < 6) {
         ++step;
@@ -124,11 +124,11 @@ inline void unboundedChannelBackoff(uint32_t& step) noexcept
 }
 
 template <UnboundedValue T>
-void waitForUnboundedChannelFulfillment(UnboundedChannelWaiter<T>& waiter) noexcept
+void wait_for_unbounded_channel_fulfillment(UnboundedChannelWaiter<T>& waiter) noexcept
 {
     while (waiter.state.load(std::memory_order_acquire) ==
            UnboundedWaiterState::kFulfilling) {
-        unboundedChannelCpuPause();
+        unbounded_channel_cpu_pause();
     }
 }
 
@@ -175,12 +175,12 @@ public:
     std::expected<T, IOError> await_resume() noexcept;
 
     /** @brief 尝试取消尚未被发送或关闭路径认领的等待者。 */
-    void markTimeout() noexcept;
+    void mark_timeout() noexcept;
 
 private:
     friend struct WithTimeout<UnboundedRecvAwaitable<T>>;
 
-    void bindTimeoutTimer(const TimeoutTimer::ptr& timer) noexcept
+    void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
     }
@@ -226,12 +226,12 @@ public:
     std::expected<std::vector<T>, IOError> await_resume() noexcept;
 
     /** @brief 尝试取消尚未被发送或关闭路径认领的等待者。 */
-    void markTimeout() noexcept;
+    void mark_timeout() noexcept;
 
 private:
     friend struct WithTimeout<UnboundedRecvBatchAwaitable<T>>;
 
-    void bindTimeoutTimer(const TimeoutTimer::ptr& timer) noexcept
+    void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
     }
@@ -248,7 +248,7 @@ private:
  * @brief 线程安全的无界 MPMC 异步通道。
  * @tparam T 元素类型，要求默认构造、移动构造和移动赋值均不抛异常。
  * @details 多个生产者和多个消费者可以并发访问。发送只会在底层队列内存申请失败时
- *          返回 false；接收为空时可通过 recv()/recvBatch() 挂起协程。
+ *          返回 false；接收为空时可通过 recv()/recv_batch() 挂起协程。
  * @note 通道具有唯一身份，不可复制或移动；必须存活到所有挂起操作完成或超时。
  */
 template <UnboundedValue T>
@@ -375,7 +375,7 @@ public:
         {
         }
 
-        bool validFor(const UnboundedChannel& channel) const noexcept
+        bool valid_for(const UnboundedChannel& channel) const noexcept
         {
             return m_channel == &channel && m_generation == channel.m_generation;
         }
@@ -433,7 +433,7 @@ public:
         {
         }
 
-        bool validFor(const UnboundedChannel& channel) const noexcept
+        bool valid_for(const UnboundedChannel& channel) const noexcept
         {
             return m_channel == &channel;
         }
@@ -444,9 +444,9 @@ public:
     };
 
     UnboundedChannel() noexcept
-        : m_generation(nextGeneration())
+        : m_generation(next_generation())
     {
-        Block* initial = allocateBlock(0);
+        Block* initial = allocate_block(0);
         m_headBlock.store(initial, std::memory_order_relaxed);
         m_tailBlock.store(initial, std::memory_order_relaxed);
     }
@@ -475,13 +475,13 @@ public:
     UnboundedChannel& operator=(UnboundedChannel&&) = delete;
 
     /** @brief 为当前生产线程创建显式 producer token。 */
-    [[nodiscard]] ProducerToken makeProducerToken()
+    [[nodiscard]] ProducerToken make_producer_token()
     {
         return ProducerToken(*this);
     }
 
     /** @brief 为当前消费线程创建显式 consumer token。 */
-    [[nodiscard]] ConsumerToken makeConsumerToken()
+    [[nodiscard]] ConsumerToken make_consumer_token()
     {
         return ConsumerToken(*this);
     }
@@ -493,7 +493,7 @@ public:
      */
     bool send(T&& value)
     {
-        return sendImpl(nullptr, std::move(value));
+        return send_impl(nullptr, std::move(value));
     }
 
     /**
@@ -502,10 +502,10 @@ public:
      */
     bool send(ProducerToken& token, T&& value)
     {
-        if (!token.validFor(*this)) {
+        if (!token.valid_for(*this)) {
             return false;
         }
-        return sendTokenFast<true>(token, std::move(value));
+        return send_token_fast<true>(token, std::move(value));
     }
 
     /** @brief 复制并发送一条消息。 */
@@ -530,61 +530,61 @@ public:
      * @brief 复制发送一批消息。
      * @return 全部入队成功返回 true；失败时返回 false 且本批次未入队。
      */
-    bool sendBatch(const std::vector<T>& values)
+    bool send_batch(const std::vector<T>& values)
         requires std::copy_constructible<T> &&
             std::is_nothrow_copy_constructible_v<T>
     {
-        return sendBatchImpl(nullptr, values.data(), values.size());
+        return send_batch_impl(nullptr, values.data(), values.size());
     }
 
     /** @brief 使用线程独占 producer token 复制发送一批消息。 */
-    bool sendBatch(ProducerToken& token,
+    bool send_batch(ProducerToken& token,
                    const std::vector<T>& values)
         requires std::copy_constructible<T> &&
             std::is_nothrow_copy_constructible_v<T>
     {
-        if (!token.validFor(*this)) {
+        if (!token.valid_for(*this)) {
             return false;
         }
-        return sendBatchImpl(&token, values.data(), values.size());
+        return send_batch_impl(&token, values.data(), values.size());
     }
 
     /**
      * @brief 移动发送一批消息。
      * @return 全部入队成功返回 true；失败时返回 false。
      */
-    bool sendBatch(std::vector<T>&& values)
+    bool send_batch(std::vector<T>&& values)
     {
-        return sendBatchImpl(
+        return send_batch_impl(
             nullptr, std::make_move_iterator(values.begin()), values.size());
     }
 
     /** @brief 使用线程独占 producer token 移动发送一批消息。 */
-    bool sendBatch(ProducerToken& token, std::vector<T>&& values)
+    bool send_batch(ProducerToken& token, std::vector<T>&& values)
     {
-        if (!token.validFor(*this)) {
+        if (!token.valid_for(*this)) {
             return false;
         }
-        return sendBatchImpl(
+        return send_batch_impl(
             &token, std::make_move_iterator(values.begin()), values.size());
     }
 
     /** @brief 尝试立即接收一条消息；为空时返回 std::nullopt。 */
-    std::optional<T> tryRecv()
+    std::optional<T> try_recv()
     {
-        return tryRecvImpl(nullptr);
+        return try_recv_impl(nullptr);
     }
 
     /**
      * @brief 使用线程独占 consumer token 尝试立即接收一条消息。
      * @return 取到消息时返回该值；队列为空或 token 不属于当前通道时返回 std::nullopt。
      */
-    std::optional<T> tryRecv(ConsumerToken& token)
+    std::optional<T> try_recv(ConsumerToken& token)
     {
-        if (!token.validFor(*this)) {
+        if (!token.valid_for(*this)) {
             return std::nullopt;
         }
-        return tryRecvTokenFast(token);
+        return try_recv_token_fast(token);
     }
 
     /** @brief 异步接收一条消息；空时挂起协程。 */
@@ -594,25 +594,25 @@ public:
     }
 
     /** @brief 尝试接收最多 count 条消息；无消息时返回 std::nullopt。 */
-    std::optional<std::vector<T>> tryRecvBatch(size_t count)
+    std::optional<std::vector<T>> try_recv_batch(size_t count)
     {
-        return tryRecvBatchImpl(nullptr, count);
+        return try_recv_batch_impl(nullptr, count);
     }
 
     /**
      * @brief 使用线程独占 consumer token 尝试接收最多 count 条消息。
      * @return 取到消息时返回批次；队列为空或 token 不属于当前通道时返回 std::nullopt。
      */
-    std::optional<std::vector<T>> tryRecvBatch(ConsumerToken& token, size_t count)
+    std::optional<std::vector<T>> try_recv_batch(ConsumerToken& token, size_t count)
     {
-        if (!token.validFor(*this)) {
+        if (!token.valid_for(*this)) {
             return std::nullopt;
         }
-        return tryRecvBatchImpl(&token, count);
+        return try_recv_batch_impl(&token, count);
     }
 
     /** @brief 异步接收最多 count 条消息；空时等待至少一条。 */
-    UnboundedRecvBatchAwaitable<T> recvBatch(size_t count)
+    UnboundedRecvBatchAwaitable<T> recv_batch(size_t count)
     {
         return UnboundedRecvBatchAwaitable<T>(this, count);
     }
@@ -630,16 +630,16 @@ public:
         if ((previous & kClosedBit) != 0) {
             return;
         }
-        requestRecvPump();
+        request_recv_pump();
     }
 
     /**
      * @brief 查询 close 是否已经发布。
      * @return true 表示已拒绝新的发送许可，但在先发送仍可能尚未完成入队。
-     * @note 存在并发发送时，不可用 tryRecv() 为空且 isClosed() 为 true 推断 drain 完成；
-     *       异步 recv()/recvBatch() 会等待 producer 静止、二次判空后返回 kClosed。
+     * @note 存在并发发送时，不可用 try_recv() 为空且 is_closed() 为 true 推断 drain 完成；
+     *       异步 recv()/recv_batch() 会等待 producer 静止、二次判空后返回 kClosed。
      */
-    bool isClosed() const noexcept
+    bool is_closed() const noexcept
     {
         return (m_tail.load(std::memory_order_acquire) & kClosedBit) != 0;
     }
@@ -672,7 +672,7 @@ private:
 
     inline static std::atomic<uint64_t> s_generationSeed{1};
 
-    static uint64_t nextGeneration() noexcept
+    static uint64_t next_generation() noexcept
     {
         uint64_t generation =
             s_generationSeed.fetch_add(1, std::memory_order_relaxed);
@@ -682,25 +682,25 @@ private:
         return generation;
     }
 
-    static DefaultProducerCache& defaultProducerCache() noexcept
+    static DefaultProducerCache& default_producer_cache() noexcept
     {
         static thread_local DefaultProducerCache cache;
         return cache;
     }
 
-    void lockBlockPool() noexcept
+    void lock_block_pool() noexcept
     {
         while (m_blockPoolLock.test_and_set(std::memory_order_acquire)) {
-            detail::unboundedChannelCpuPause();
+            detail::unbounded_channel_cpu_pause();
         }
     }
 
-    void unlockBlockPool() noexcept
+    void unlock_block_pool() noexcept
     {
         m_blockPoolLock.clear(std::memory_order_release);
     }
 
-    bool blockSlotsAreFree(const Block& block) const noexcept
+    bool block_slots_are_free(const Block& block) const noexcept
     {
         const uint64_t base = block.base.load(std::memory_order_acquire);
         // 新退役 block 的高位 slot 更可能仍由晚认领的 consumer 处理。
@@ -715,12 +715,12 @@ private:
         return true;
     }
 
-    Block* takeBlockLocked(uint64_t base) noexcept
+    Block* take_block_locked(uint64_t base) noexcept
     {
         Block* block = nullptr;
         Block** link = &m_retiredBlocks;
         while (*link != nullptr) {
-            if (blockSlotsAreFree(**link)) {
+            if (block_slots_are_free(**link)) {
                 block = *link;
                 *link = block->poolNext;
                 block->poolNext = nullptr;
@@ -747,15 +747,15 @@ private:
         return block;
     }
 
-    Block* allocateBlock(uint64_t base) noexcept
+    Block* allocate_block(uint64_t base) noexcept
     {
-        lockBlockPool();
-        Block* block = takeBlockLocked(base);
-        unlockBlockPool();
+        lock_block_pool();
+        Block* block = take_block_locked(base);
+        unlock_block_pool();
         return block;
     }
 
-    Block* ensureNextBlock(Block& block, uint64_t nextBase) noexcept
+    Block* ensure_next_block(Block& block, uint64_t nextBase) noexcept
     {
         const uint64_t expectedBase = nextBase - kSlotsPerBlock;
         if (block.base.load(std::memory_order_acquire) != expectedBase ||
@@ -772,20 +772,20 @@ private:
             if ((m_tail.load(std::memory_order_acquire) & kPositionMask) >=
                     nextBase ||
                 m_head.load(std::memory_order_acquire) >= nextBase) {
-                catchUpBlockAnchors();
+                catch_up_block_anchors();
             }
             return next;
         }
 
-        lockBlockPool();
+        lock_block_pool();
         if (block.base.load(std::memory_order_acquire) != expectedBase ||
             block.state.load(std::memory_order_acquire) != BlockState::kActive) {
-            unlockBlockPool();
+            unlock_block_pool();
             return nullptr;
         }
         next = block.next.load(std::memory_order_acquire);
         if (next == nullptr) {
-            next = takeBlockLocked(nextBase);
+            next = take_block_locked(nextBase);
             if (next != nullptr) {
                 block.next.store(next, std::memory_order_release);
             }
@@ -794,20 +794,20 @@ private:
                        BlockState::kActive) {
             next = nullptr;
         }
-        unlockBlockPool();
+        unlock_block_pool();
         if (next != nullptr) {
             if ((m_tail.load(std::memory_order_acquire) & kPositionMask) >=
                     nextBase ||
                 m_head.load(std::memory_order_acquire) >= nextBase) {
-                catchUpBlockAnchors();
+                catch_up_block_anchors();
             }
         }
         return next;
     }
 
-    void catchUpBlockAnchors() noexcept
+    void catch_up_block_anchors() noexcept
     {
-        lockBlockPool();
+        lock_block_pool();
         const uint64_t tailPosition =
             m_tail.load(std::memory_order_acquire) & kPositionMask;
         Block* tailBlock = m_tailBlock.load(std::memory_order_acquire);
@@ -858,7 +858,7 @@ private:
             }
             headBlock = next;
         }
-        unlockBlockPool();
+        unlock_block_pool();
     }
 
 #if defined(_MSC_VER)
@@ -866,7 +866,7 @@ private:
 #elif defined(__GNUC__) || defined(__clang__)
     __attribute__((noinline, cold))
 #endif
-    Block* tailBlockFor(Block*& cached,
+    Block* tail_block_for(Block*& cached,
                         uint64_t& cachedBase,
                         uint64_t position) noexcept
     {
@@ -891,7 +891,7 @@ private:
             if (base > targetBase || base > kPositionMask - kSlotsPerBlock) {
                 return nullptr;
             }
-            Block* next = ensureNextBlock(*block, base + kSlotsPerBlock);
+            Block* next = ensure_next_block(*block, base + kSlotsPerBlock);
             if (next == nullptr) {
                 return nullptr;
             }
@@ -905,7 +905,7 @@ private:
 #elif defined(__GNUC__) || defined(__clang__)
     __attribute__((noinline, cold))
 #endif
-    Block* headBlockFor(Block*& cached,
+    Block* head_block_for(Block*& cached,
                         uint64_t& cachedBase,
                         uint64_t position) noexcept
     {
@@ -939,9 +939,9 @@ private:
         return nullptr;
     }
 
-    DefaultProducerCacheEntry* defaultProducerEntry() noexcept
+    DefaultProducerCacheEntry* default_producer_entry() noexcept
     {
-        DefaultProducerCache& cache = defaultProducerCache();
+        DefaultProducerCache& cache = default_producer_cache();
         DefaultProducerCacheEntry** link = &cache.head;
         while (*link != nullptr) {
             DefaultProducerCacheEntry* entry = *link;
@@ -971,13 +971,13 @@ private:
         return entry;
     }
 
-    bool reserveRange(ProducerToken* token,
+    bool reserve_range(ProducerToken* token,
                       size_t count,
                       Block*& firstBlock,
                       uint64_t& firstPosition) noexcept
     {
         DefaultProducerCacheEntry* entry =
-            token == nullptr ? defaultProducerEntry() : nullptr;
+            token == nullptr ? default_producer_entry() : nullptr;
         if (token == nullptr && entry == nullptr) {
             return false;
         }
@@ -994,13 +994,13 @@ private:
             if (count > kPositionMask - position) {
                 return false;
             }
-            Block* first = tailBlockFor(cachedBlock, cachedBase, position);
+            Block* first = tail_block_for(cachedBlock, cachedBase, position);
             if (first == nullptr) {
                 const uint64_t latest =
                     m_tail.load(std::memory_order_relaxed);
                 if (latest != tail) {
                     tail = latest;
-                    detail::unboundedChannelCpuPause();
+                    detail::unbounded_channel_cpu_pause();
                     continue;
                 }
                 return false;
@@ -1009,13 +1009,13 @@ private:
             const uint64_t lastPosition = position + count - 1;
             uint64_t lastBase = first->base.load(std::memory_order_acquire);
             while (lastPosition >= lastBase + kSlotsPerBlock) {
-                last = ensureNextBlock(*last, lastBase + kSlotsPerBlock);
+                last = ensure_next_block(*last, lastBase + kSlotsPerBlock);
                 if (last == nullptr) {
                     const uint64_t latest =
                         m_tail.load(std::memory_order_relaxed);
                     if (latest != tail) {
                         tail = latest;
-                        detail::unboundedChannelCpuPause();
+                        detail::unbounded_channel_cpu_pause();
                         last = nullptr;
                         break;
                     }
@@ -1035,35 +1035,35 @@ private:
                 firstPosition = position;
                 cachedBlock = last;
                 cachedBase = lastBase;
-                catchUpBlockAnchors();
+                catch_up_block_anchors();
                 return true;
             }
-            detail::unboundedChannelCpuPause();
+            detail::unbounded_channel_cpu_pause();
         }
     }
 
     /** @brief 发布入队完成后的 waiter work。 */
-    void releaseSendPublication() noexcept
+    void release_send_publication() noexcept
     {
-        if (waiterPathUsedAfterPublish()) [[unlikely]] {
-            requestRecvPumpAfterSend();
+        if (waiter_path_used_after_publish()) [[unlikely]] {
+            request_recv_pump_after_send();
         }
     }
 
-    // 同步 tryRecv 压测中 waiter 路径从未启用；把完整 pump 状态机留在冷函数，
+    // 同步 try_recv 压测中 waiter 路径从未启用；把完整 pump 状态机留在冷函数，
     // 避免每条 send 的公共热路径因内联冷分支而膨胀。
 #if defined(_MSC_VER)
     __declspec(noinline)
 #elif defined(__GNUC__) || defined(__clang__)
     __attribute__((noinline, cold))
 #endif
-    void requestRecvPumpAfterSend() noexcept
+    void request_recv_pump_after_send() noexcept
     {
-        requestRecvPump();
+        request_recv_pump();
     }
 
     /** @brief 仅当 close 已发布且所有保留位置均已被 consumer claim 时返回 true。 */
-    bool sendSideQuiescentAfterClose() const noexcept
+    bool send_side_quiescent_after_close() const noexcept
     {
         const uint64_t tail = m_tail.load(std::memory_order_acquire);
         return (tail & kClosedBit) != 0 &&
@@ -1075,13 +1075,13 @@ private:
      * @details producer 可能在首次空检查后完成 enqueue 并恢复为 idle；只有
      *          quiescent scan 后的第二次 dequeue 仍为空，接收方才可发布 Closed。
      */
-    ClosedRecvProbe probeRecvAfterEmpty(T& value) noexcept
+    ClosedRecvProbe probe_recv_after_empty(T& value) noexcept
     {
-        if (auto received = tryRecvImpl(nullptr); received.has_value()) {
+        if (auto received = try_recv_impl(nullptr); received.has_value()) {
             value = std::move(*received);
             return ClosedRecvProbe::kValue;
         }
-        return sendSideQuiescentAfterClose()
+        return send_side_quiescent_after_close()
             ? ClosedRecvProbe::kClosed
             : ClosedRecvProbe::kOpen;
     }
@@ -1091,17 +1091,17 @@ private:
 #elif defined(__GNUC__) || defined(__clang__)
     __attribute__((noinline, cold))
 #endif
-    void prepareNextBlockAfterReservation(Block& block,
+    void prepare_next_block_after_reservation(Block& block,
                                           uint64_t blockBase) noexcept
     {
         if (blockBase <= kPositionMask - kSlotsPerBlock) {
             Block* prepared =
-                ensureNextBlock(block, blockBase + kSlotsPerBlock);
+                ensure_next_block(block, blockBase + kSlotsPerBlock);
             if (prepared == nullptr) {
                 // 当前 reservation 已成功；预取失败由下次 rollover 重试。
             }
         }
-        catchUpBlockAnchors();
+        catch_up_block_anchors();
     }
 
     template <bool NotifyWaiter>
@@ -1112,7 +1112,7 @@ private:
 #else
     inline
 #endif
-    bool sendTokenFast(ProducerToken& token, T&& value)
+    bool send_token_fast(ProducerToken& token, T&& value)
     {
         uint64_t tail = m_tail.load(std::memory_order_relaxed);
         uint32_t backoffStep = 0;
@@ -1130,14 +1130,14 @@ private:
                     BlockState::kActive) {
                 Block* const anchor =
                     m_tailBlock.load(std::memory_order_acquire);
-                block = tailBlockFor(token.m_block, token.m_blockBase, position);
+                block = tail_block_for(token.m_block, token.m_blockBase, position);
                 if (block == nullptr) {
                     const uint64_t latest =
                         m_tail.load(std::memory_order_relaxed);
                     if (latest != tail ||
                         m_tailBlock.load(std::memory_order_acquire) != anchor) {
                         tail = latest;
-                        detail::unboundedChannelBackoff(backoffStep);
+                        detail::unbounded_channel_backoff(backoffStep);
                         continue;
                     }
                     return false;
@@ -1147,23 +1147,23 @@ private:
                 position & (kSlotsPerBlock - 1))];
             if (slot.sequence.load(std::memory_order_acquire) != position) {
                 tail = m_tail.load(std::memory_order_relaxed);
-                detail::unboundedChannelBackoff(backoffStep);
+                detail::unbounded_channel_backoff(backoffStep);
                 continue;
             }
             if (!m_tail.compare_exchange_weak(tail,
                                               position + 1,
                                               std::memory_order_relaxed,
                                               std::memory_order_relaxed)) {
-                detail::unboundedChannelBackoff(backoffStep);
+                detail::unbounded_channel_backoff(backoffStep);
                 continue;
             }
             std::construct_at(slot.value(), std::move(value));
             slot.sequence.store(position + 1, std::memory_order_release);
             if constexpr (NotifyWaiter) {
-                releaseSendPublication();
+                release_send_publication();
             }
             if ((position & (kSlotsPerBlock - 1)) == 0) {
-                prepareNextBlockAfterReservation(*block, blockBase);
+                prepare_next_block_after_reservation(*block, blockBase);
             }
             return true;
         }
@@ -1176,7 +1176,7 @@ private:
 #else
     inline
 #endif
-    std::optional<T> tryRecvTokenFast(ConsumerToken& token)
+    std::optional<T> try_recv_token_fast(ConsumerToken& token)
     {
         uint64_t position = m_head.load(std::memory_order_relaxed);
         uint32_t backoffStep = 0;
@@ -1188,7 +1188,7 @@ private:
                 block->base.load(std::memory_order_acquire) != blockBase ||
                 block->state.load(std::memory_order_acquire) !=
                     BlockState::kActive) {
-                block = headBlockFor(token.m_block, token.m_blockBase, position);
+                block = head_block_for(token.m_block, token.m_blockBase, position);
                 if (block == nullptr) {
                     return std::nullopt;
                 }
@@ -1202,12 +1202,12 @@ private:
                                                    position + 1,
                                                    std::memory_order_relaxed,
                                                    std::memory_order_relaxed)) {
-                    detail::unboundedChannelBackoff(backoffStep);
+                    detail::unbounded_channel_backoff(backoffStep);
                     continue;
                 }
                 if ((position & (kSlotsPerBlock - 1)) ==
                     kSlotsPerBlock - 1) {
-                    catchUpBlockAnchors();
+                    catch_up_block_anchors();
                 }
                 T value = std::move(*slot.value());
                 std::destroy_at(slot.value());
@@ -1219,7 +1219,7 @@ private:
                 return std::nullopt;
             }
             position = m_head.load(std::memory_order_relaxed);
-            detail::unboundedChannelBackoff(backoffStep);
+            detail::unbounded_channel_backoff(backoffStep);
         }
     }
 
@@ -1230,10 +1230,10 @@ private:
 #else
     inline
 #endif
-    bool sendImpl(ProducerToken* token, T&& value)
+    bool send_impl(ProducerToken* token, T&& value)
     {
         DefaultProducerCacheEntry* entry =
-            token == nullptr ? defaultProducerEntry() : nullptr;
+            token == nullptr ? default_producer_entry() : nullptr;
         if (token == nullptr && entry == nullptr) {
             return false;
         }
@@ -1259,13 +1259,13 @@ private:
                 block->base.load(std::memory_order_acquire) != blockBase ||
                 block->state.load(std::memory_order_acquire) !=
                     BlockState::kActive) {
-                block = tailBlockFor(cachedBlock, cachedBase, position);
+                block = tail_block_for(cachedBlock, cachedBase, position);
                 if (block == nullptr) {
                     const uint64_t latest =
                         m_tail.load(std::memory_order_relaxed);
                     if (latest != tail) {
                         tail = latest;
-                        detail::unboundedChannelCpuPause();
+                        detail::unbounded_channel_cpu_pause();
                         continue;
                     }
                     return false;
@@ -1277,28 +1277,28 @@ private:
                                              std::memory_order_relaxed)) {
                 break;
             }
-            detail::unboundedChannelCpuPause();
+            detail::unbounded_channel_cpu_pause();
         }
         Slot& slot = block->slots[static_cast<size_t>(
             position & (kSlotsPerBlock - 1))];
         std::construct_at(slot.value(), std::move(value));
         slot.sequence.store(position + 1, std::memory_order_release);
-        releaseSendPublication();
+        release_send_publication();
         if ((position & (kSlotsPerBlock - 1)) == 0) {
-            prepareNextBlockAfterReservation(*block, blockBase);
+            prepare_next_block_after_reservation(*block, blockBase);
         }
         return true;
     }
 
     template <typename Iterator>
-    bool sendBatchImpl(ProducerToken* token, Iterator first, size_t count)
+    bool send_batch_impl(ProducerToken* token, Iterator first, size_t count)
     {
         if (count == 0) {
             return true;
         }
         Block* block = nullptr;
         uint64_t position = 0;
-        if (!reserveRange(token, count, block, position)) {
+        if (!reserve_range(token, count, block, position)) {
             return false;
         }
 
@@ -1314,7 +1314,7 @@ private:
             std::construct_at(slot.value(), std::move(value));
             slot.sequence.store(position + 1, std::memory_order_release);
         }
-        releaseSendPublication();
+        release_send_publication();
         return true;
     }
 
@@ -1325,7 +1325,7 @@ private:
 #else
     inline
 #endif
-    std::optional<T> tryRecvImpl(ConsumerToken* token)
+    std::optional<T> try_recv_impl(ConsumerToken* token)
     {
         Block* uncached = nullptr;
         uint64_t uncachedBase = kInvalidBlockBase;
@@ -1334,7 +1334,7 @@ private:
             token != nullptr ? token->m_blockBase : uncachedBase;
         uint64_t position = m_head.load(std::memory_order_relaxed);
         for (;;) {
-            Block* block = headBlockFor(cachedBlock, cachedBase, position);
+            Block* block = head_block_for(cachedBlock, cachedBase, position);
             if (block == nullptr) {
                 return std::nullopt;
             }
@@ -1348,12 +1348,12 @@ private:
                                                    position + 1,
                                                    std::memory_order_relaxed,
                                                    std::memory_order_relaxed)) {
-                    detail::unboundedChannelCpuPause();
+                    detail::unbounded_channel_cpu_pause();
                     continue;
                 }
                 if ((position & (kSlotsPerBlock - 1)) ==
                     kSlotsPerBlock - 1) {
-                    catchUpBlockAnchors();
+                    catch_up_block_anchors();
                 }
                 T value = std::move(*slot.value());
                 std::destroy_at(slot.value());
@@ -1365,11 +1365,11 @@ private:
                 return std::nullopt;
             }
             position = m_head.load(std::memory_order_relaxed);
-            detail::unboundedChannelCpuPause();
+            detail::unbounded_channel_cpu_pause();
         }
     }
 
-    std::optional<std::vector<T>> tryRecvBatchImpl(ConsumerToken* token, size_t count)
+    std::optional<std::vector<T>> try_recv_batch_impl(ConsumerToken* token, size_t count)
     {
         if (count == 0) {
             return std::vector<T>{};
@@ -1378,7 +1378,7 @@ private:
         values.resize(count);
         size_t received = 0;
         while (received < count) {
-            auto value = tryRecvImpl(token);
+            auto value = try_recv_impl(token);
             if (!value.has_value()) {
                 break;
             }
@@ -1392,7 +1392,7 @@ private:
         return values;
     }
 
-    bool claimWaiter(const WaiterPtr& waiter) noexcept
+    bool claim_waiter(const WaiterPtr& waiter) noexcept
     {
         UnboundedWaiterState expected = UnboundedWaiterState::kWaiting;
         return waiter->state.compare_exchange_strong(
@@ -1402,7 +1402,7 @@ private:
             std::memory_order_acquire);
     }
 
-    bool enqueueWaiter(const WaiterPtr& waiter) noexcept
+    bool enqueue_waiter(const WaiterPtr& waiter) noexcept
     {
         bool expected = false;
         if (!waiter->queued.compare_exchange_strong(expected,
@@ -1418,7 +1418,7 @@ private:
         return false;
     }
 
-    bool tryDequeueWaiter(WaiterPtr& waiter) noexcept
+    bool try_dequeue_waiter(WaiterPtr& waiter) noexcept
     {
         while (m_recvWaiters.try_dequeue(waiter)) {
             if (waiter && waiter->queued.exchange(false, std::memory_order_acq_rel)) {
@@ -1428,7 +1428,7 @@ private:
         return false;
     }
 
-    bool waiterPathUsedAfterPublish() noexcept
+    bool waiter_path_used_after_publish() noexcept
     {
         // 读到 1 时由 producer 请求 pump；读到 0 的并发注册方会在发布 waiter 后
         // 无条件请求 pump，因此两种顺序都不会漏掉已入队消息。
@@ -1436,7 +1436,7 @@ private:
                 kRecvWaiterPathUsed) != 0;
     }
 
-    void registerRecvWaiterPath() noexcept
+    void register_recv_waiter_path() noexcept
     {
         // waiter 已先进入等待队列；生产者读到 1 时会请求 recv pump 推进。
         uint8_t observed = m_recvWaiterPathUsed.load(std::memory_order_seq_cst);
@@ -1446,11 +1446,11 @@ private:
                    static_cast<uint8_t>(observed | kRecvWaiterPathUsed),
                    std::memory_order_seq_cst,
                    std::memory_order_seq_cst)) {
-            detail::unboundedChannelCpuPause();
+            detail::unbounded_channel_cpu_pause();
         }
     }
 
-    bool takeRecvCleanupRequest() noexcept
+    bool take_recv_cleanup_request() noexcept
     {
         uint8_t observed = m_recvWaiterPathUsed.load(std::memory_order_acquire);
         while ((observed & kRecvCleanupPending) != 0) {
@@ -1467,14 +1467,14 @@ private:
         return false;
     }
 
-    void wakeWaiter(Waiter& waiter) noexcept
+    void wake_waiter(Waiter& waiter) noexcept
     {
-        if (!waiter.completionWaker->requestWake()) {
+        if (!waiter.completionWaker->request_wake()) {
             // timeout 或其他完成路径已经发布同一 waiter 的唤醒。
         }
     }
 
-    UnboundedWaiterProgress tryCompleteRecvWaiter(const WaiterPtr& waiter) noexcept
+    UnboundedWaiterProgress try_complete_recv_waiter(const WaiterPtr& waiter) noexcept
     {
         if (!waiter) {
             return UnboundedWaiterProgress::kSkipped;
@@ -1483,11 +1483,11 @@ private:
         TimeoutTimer* const timeoutTimer = waiter->timeoutTimer.get();
         bool timeoutOperationStarted = false;
         if (timeoutTimer != nullptr) {
-            const auto start = timeoutTimer->tryBeginOperation();
+            const auto start = timeoutTimer->try_begin_operation();
             if (start == TimeoutTimer::OperationStart::kBusy) {
                 const auto state = waiter->state.load(std::memory_order_acquire);
                 if (state == UnboundedWaiterState::kWaiting &&
-                    enqueueWaiter(waiter)) {
+                    enqueue_waiter(waiter)) {
                     return UnboundedWaiterProgress::kBlocked;
                 }
                 return UnboundedWaiterProgress::kSkipped;
@@ -1509,13 +1509,13 @@ private:
             timeoutOperationStarted = true;
         }
 
-        if (!claimWaiter(waiter)) {
+        if (!claim_waiter(waiter)) {
             if (timeoutOperationStarted) {
-                const auto aborted = timeoutTimer->abortOperation();
+                const auto aborted = timeoutTimer->abort_operation();
                 if (aborted == TimeoutTimer::OperationAbort::kTimeoutWon) {
                     waiter->state.store(UnboundedWaiterState::kCancelled,
                                         std::memory_order_release);
-                    timeoutTimer->wakeTimeoutWinner();
+                    timeoutTimer->wake_timeout_winner();
                     return UnboundedWaiterProgress::kSkipped;
                 }
             }
@@ -1523,48 +1523,48 @@ private:
         }
 
         T value;
-        auto received = tryRecvImpl(nullptr);
+        auto received = try_recv_impl(nullptr);
         bool dequeued = received.has_value();
         if (dequeued) {
             value = std::move(*received);
         }
         ClosedRecvProbe closedProbe = ClosedRecvProbe::kOpen;
         if (!dequeued) {
-            closedProbe = probeRecvAfterEmpty(value);
+            closedProbe = probe_recv_after_empty(value);
             dequeued = closedProbe == ClosedRecvProbe::kValue;
         }
         if (dequeued) {
             waiter->value.emplace(std::move(value));
             const bool completionCommitted =
-                !timeoutOperationStarted || timeoutTimer->commitOperation();
+                !timeoutOperationStarted || timeoutTimer->commit_operation();
             waiter->state.store(completionCommitted
                                     ? UnboundedWaiterState::kFulfilled
                                     : UnboundedWaiterState::kFailed,
                                 std::memory_order_release);
-            wakeWaiter(*waiter);
+            wake_waiter(*waiter);
             return UnboundedWaiterProgress::kProgressed;
         }
 
         if (closedProbe == ClosedRecvProbe::kClosed) {
             const bool completionCommitted =
-                !timeoutOperationStarted || timeoutTimer->commitOperation();
+                !timeoutOperationStarted || timeoutTimer->commit_operation();
             waiter->state.store(completionCommitted
                                     ? UnboundedWaiterState::kClosed
                                     : UnboundedWaiterState::kFailed,
                                 std::memory_order_release);
-            wakeWaiter(*waiter);
+            wake_waiter(*waiter);
             return UnboundedWaiterProgress::kProgressed;
         }
 
-        if (!enqueueWaiter(waiter)) {
+        if (!enqueue_waiter(waiter)) {
             const bool completionCommitted =
-                !timeoutOperationStarted || timeoutTimer->commitOperation();
+                !timeoutOperationStarted || timeoutTimer->commit_operation();
             waiter->state.store(UnboundedWaiterState::kFailed,
                                 std::memory_order_release);
             if (!completionCommitted) {
                 // kFailed 已是唯一可传播的终态，不再覆盖。
             }
-            wakeWaiter(*waiter);
+            wake_waiter(*waiter);
             return UnboundedWaiterProgress::kProgressed;
         }
         waiter->state.store(UnboundedWaiterState::kWaiting, std::memory_order_release);
@@ -1572,11 +1572,11 @@ private:
             return UnboundedWaiterProgress::kBlocked;
         }
 
-        const auto aborted = timeoutTimer->abortOperation();
+        const auto aborted = timeoutTimer->abort_operation();
         if (aborted == TimeoutTimer::OperationAbort::kTimeoutWon) {
             waiter->state.store(UnboundedWaiterState::kCancelled,
                                 std::memory_order_release);
-            timeoutTimer->wakeTimeoutWinner();
+            timeoutTimer->wake_timeout_winner();
             return UnboundedWaiterProgress::kSkipped;
         }
         if (aborted == TimeoutTimer::OperationAbort::kCompleted) {
@@ -1585,13 +1585,13 @@ private:
         return UnboundedWaiterProgress::kBlocked;
     }
 
-    void drainRecvWaiters(bool cleanupRequested) noexcept
+    void drain_recv_waiters(bool cleanupRequested) noexcept
     {
         Waiter* blockedBoundary = nullptr;
         WaiterPtr waiter;
-        while (tryDequeueWaiter(waiter)) {
+        while (try_dequeue_waiter(waiter)) {
             const bool reachedBoundary = waiter.get() == blockedBoundary;
-            const auto progress = tryCompleteRecvWaiter(waiter);
+            const auto progress = try_complete_recv_waiter(waiter);
             if (progress != UnboundedWaiterProgress::kBlocked) {
                 if (reachedBoundary) {
                     blockedBoundary = nullptr;
@@ -1612,13 +1612,13 @@ private:
     }
 
     /** @brief 由唯一 owner 排空已发布的 recv work，直到退出 CAS 确认没有新事件。 */
-    void runRecvPump() noexcept
+    void run_recv_pump() noexcept
     {
         for (;;) {
             const uint8_t claimed =
                 m_recvPumpState.fetch_and(kPumpRunning, std::memory_order_acq_rel);
             if ((claimed & kRecvWork) != 0) {
-                drainRecvWaiters(takeRecvCleanupRequest());
+                drain_recv_waiters(take_recv_cleanup_request());
             }
 
             uint8_t expected = kPumpRunning;
@@ -1637,7 +1637,7 @@ private:
      * @note Running 与 RecvWork 共用一个原子，owner 退出 CAS 与并发请求互斥，
      *       因而 requester 观察到 Running 后可以直接返回而不会丢事件。
      */
-    void requestRecvPump() noexcept
+    void request_recv_pump() noexcept
     {
         uint8_t observed = static_cast<uint8_t>(
             m_recvPumpState.fetch_or(kRecvWork, std::memory_order_release) |
@@ -1659,13 +1659,13 @@ private:
                     desired,
                     std::memory_order_acq_rel,
                     std::memory_order_acquire)) {
-                runRecvPump();
+                run_recv_pump();
                 return;
             }
         }
     }
 
-    void requestRecvCleanup() noexcept
+    void request_recv_cleanup() noexcept
     {
         uint8_t observed = m_recvWaiterPathUsed.load(std::memory_order_relaxed);
         while ((observed & kRecvCleanupPending) == 0 &&
@@ -1674,9 +1674,9 @@ private:
                    static_cast<uint8_t>(observed | kRecvCleanupPending),
                    std::memory_order_release,
                    std::memory_order_relaxed)) {
-            detail::unboundedChannelCpuPause();
+            detail::unbounded_channel_cpu_pause();
         }
-        requestRecvPump();
+        request_recv_pump();
     }
 
     friend class UnboundedRecvAwaitable<T>;
@@ -1703,12 +1703,12 @@ private:
 template <UnboundedValue T>
 inline bool UnboundedRecvAwaitable<T>::await_ready() noexcept
 {
-    if (auto value = m_channel->tryRecv(); value.has_value()) {
+    if (auto value = m_channel->try_recv(); value.has_value()) {
         m_ready.emplace(std::move(*value));
         return true;
     }
     T value;
-    const auto probe = m_channel->probeRecvAfterEmpty(value);
+    const auto probe = m_channel->probe_recv_after_empty(value);
     if (probe == UnboundedChannel<T>::ClosedRecvProbe::kValue) {
         m_ready.emplace(std::move(value));
         return true;
@@ -1722,7 +1722,7 @@ inline bool UnboundedRecvAwaitable<T>::await_suspend(
     std::coroutine_handle<Promise> handle) noexcept
 {
     auto* channel = m_channel;
-    if (auto value = channel->tryRecv(); value.has_value()) {
+    if (auto value = channel->try_recv(); value.has_value()) {
         m_ready.emplace(std::move(*value));
         return false;
     }
@@ -1731,12 +1731,12 @@ inline bool UnboundedRecvAwaitable<T>::await_suspend(
     auto waiter = std::make_shared<UnboundedChannelWaiter<T>>(
         Waker(handle), std::move(timeoutTimer));
     m_waiter = waiter;
-    if (!channel->enqueueWaiter(waiter)) {
+    if (!channel->enqueue_waiter(waiter)) {
         waiter->state.store(UnboundedWaiterState::kFailed, std::memory_order_release);
         return false;
     }
-    channel->registerRecvWaiterPath();
-    channel->requestRecvPump();
+    channel->register_recv_waiter_path();
+    channel->request_recv_pump();
     if (waiter->timeoutTimer != nullptr) {
         // WithTimeout 在 timer 注册完成后统一发布共享 completion gate。
         return true;
@@ -1752,9 +1752,9 @@ inline std::expected<T, IOError> UnboundedRecvAwaitable<T>::await_resume() noexc
         return std::move(*m_ready);
     }
     if (m_waiter) {
-        detail::waitForUnboundedChannelFulfillment(*m_waiter);
+        detail::wait_for_unbounded_channel_fulfillment(*m_waiter);
         const auto state = m_waiter->state.load(std::memory_order_acquire);
-        m_waiter->completionWaker->clearWaker();
+        m_waiter->completionWaker->clear_waker();
         if (state == UnboundedWaiterState::kFulfilled && m_waiter->value.has_value()) {
             T value = std::move(*m_waiter->value);
             m_waiter->value.reset();
@@ -1770,11 +1770,11 @@ inline std::expected<T, IOError> UnboundedRecvAwaitable<T>::await_resume() noexc
     if (m_timedOut) {
         return std::unexpected(IOError(kTimeout, 0));
     }
-    if (auto value = m_channel->tryRecv(); value.has_value()) {
+    if (auto value = m_channel->try_recv(); value.has_value()) {
         return std::move(*value);
     }
     T value;
-    const auto probe = m_channel->probeRecvAfterEmpty(value);
+    const auto probe = m_channel->probe_recv_after_empty(value);
     if (probe == UnboundedChannel<T>::ClosedRecvProbe::kValue) {
         return std::move(value);
     }
@@ -1786,7 +1786,7 @@ inline std::expected<T, IOError> UnboundedRecvAwaitable<T>::await_resume() noexc
 }
 
 template <UnboundedValue T>
-inline void UnboundedRecvAwaitable<T>::markTimeout() noexcept
+inline void UnboundedRecvAwaitable<T>::mark_timeout() noexcept
 {
     m_timedOut = true;
     if (!m_waiter) {
@@ -1797,24 +1797,24 @@ inline void UnboundedRecvAwaitable<T>::markTimeout() noexcept
                                                 UnboundedWaiterState::kCancelled,
                                                 std::memory_order_acq_rel,
                                                 std::memory_order_acquire)) {
-        m_waiter->completionWaker->clearWaker();
-        m_channel->requestRecvCleanup();
+        m_waiter->completionWaker->clear_waker();
+        m_channel->request_recv_cleanup();
     } else if (expected == UnboundedWaiterState::kCancelled) {
-        m_waiter->completionWaker->clearWaker();
+        m_waiter->completionWaker->clear_waker();
     }
 }
 
 template <UnboundedValue T>
 inline bool UnboundedRecvBatchAwaitable<T>::await_ready() noexcept
 {
-    if (auto values = m_channel->tryRecvBatch(m_count); values.has_value()) {
+    if (auto values = m_channel->try_recv_batch(m_count); values.has_value()) {
         m_ready.emplace(std::move(*values));
         return true;
     }
-    if (!m_channel->sendSideQuiescentAfterClose()) {
+    if (!m_channel->send_side_quiescent_after_close()) {
         return false;
     }
-    if (auto values = m_channel->tryRecvBatch(m_count); values.has_value()) {
+    if (auto values = m_channel->try_recv_batch(m_count); values.has_value()) {
         m_ready.emplace(std::move(*values));
     }
     return true;
@@ -1826,7 +1826,7 @@ inline bool UnboundedRecvBatchAwaitable<T>::await_suspend(
     std::coroutine_handle<Promise> handle) noexcept
 {
     auto* channel = m_channel;
-    if (auto values = channel->tryRecvBatch(m_count); values.has_value()) {
+    if (auto values = channel->try_recv_batch(m_count); values.has_value()) {
         m_ready.emplace(std::move(*values));
         return false;
     }
@@ -1835,12 +1835,12 @@ inline bool UnboundedRecvBatchAwaitable<T>::await_suspend(
     auto waiter = std::make_shared<UnboundedChannelWaiter<T>>(
         Waker(handle), std::move(timeoutTimer));
     m_waiter = waiter;
-    if (!channel->enqueueWaiter(waiter)) {
+    if (!channel->enqueue_waiter(waiter)) {
         waiter->state.store(UnboundedWaiterState::kFailed, std::memory_order_release);
         return false;
     }
-    channel->registerRecvWaiterPath();
-    channel->requestRecvPump();
+    channel->register_recv_waiter_path();
+    channel->request_recv_pump();
     if (waiter->timeoutTimer != nullptr) {
         return true;
     }
@@ -1855,16 +1855,16 @@ UnboundedRecvBatchAwaitable<T>::await_resume() noexcept
         return std::move(*m_ready);
     }
     if (m_waiter) {
-        detail::waitForUnboundedChannelFulfillment(*m_waiter);
+        detail::wait_for_unbounded_channel_fulfillment(*m_waiter);
         const auto state = m_waiter->state.load(std::memory_order_acquire);
-        m_waiter->completionWaker->clearWaker();
+        m_waiter->completionWaker->clear_waker();
         if (state == UnboundedWaiterState::kFulfilled && m_waiter->value.has_value()) {
             std::vector<T> values;
             values.reserve(m_count);
             values.push_back(std::move(*m_waiter->value));
             m_waiter->value.reset();
             while (values.size() < m_count) {
-                auto value = m_channel->tryRecv();
+                auto value = m_channel->try_recv();
                 if (!value.has_value()) {
                     break;
                 }
@@ -1882,20 +1882,20 @@ UnboundedRecvBatchAwaitable<T>::await_resume() noexcept
     if (m_timedOut) {
         return std::unexpected(IOError(kTimeout, 0));
     }
-    if (auto values = m_channel->tryRecvBatch(m_count); values.has_value()) {
+    if (auto values = m_channel->try_recv_batch(m_count); values.has_value()) {
         return std::move(*values);
     }
-    if (!m_channel->sendSideQuiescentAfterClose()) {
+    if (!m_channel->send_side_quiescent_after_close()) {
         return std::unexpected(IOError(kTimeout, 0));
     }
-    if (auto values = m_channel->tryRecvBatch(m_count); values.has_value()) {
+    if (auto values = m_channel->try_recv_batch(m_count); values.has_value()) {
         return std::move(*values);
     }
     return std::unexpected(IOError(kClosed, 0));
 }
 
 template <UnboundedValue T>
-inline void UnboundedRecvBatchAwaitable<T>::markTimeout() noexcept
+inline void UnboundedRecvBatchAwaitable<T>::mark_timeout() noexcept
 {
     m_timedOut = true;
     if (!m_waiter) {
@@ -1906,10 +1906,10 @@ inline void UnboundedRecvBatchAwaitable<T>::markTimeout() noexcept
                                                 UnboundedWaiterState::kCancelled,
                                                 std::memory_order_acq_rel,
                                                 std::memory_order_acquire)) {
-        m_waiter->completionWaker->clearWaker();
-        m_channel->requestRecvCleanup();
+        m_waiter->completionWaker->clear_waker();
+        m_channel->request_recv_cleanup();
     } else if (expected == UnboundedWaiterState::kCancelled) {
-        m_waiter->completionWaker->clearWaker();
+        m_waiter->completionWaker->clear_waker();
     }
 }
 

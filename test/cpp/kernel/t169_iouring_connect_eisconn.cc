@@ -13,7 +13,7 @@ int main()
 #ifdef USE_IOURING
     io_uring_cqe cqe{};
     cqe.res = -EISCONN;
-    const auto result = galay::kernel::io::handleConnect(&cqe);
+    const auto result = galay::kernel::io::handle_connect(&cqe);
     if (!result) {
         std::cerr << "io_uring connect rejected EISCONN: "
                   << result.error().message() << '\n';

@@ -14,7 +14,7 @@
 namespace
 {
 
-std::string readAll(const std::filesystem::path& path)
+std::string read_all(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -24,7 +24,7 @@ std::string readAll(const std::filesystem::path& path)
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
-bool containsWord(const std::string& text, const std::string& word)
+bool contains_word(const std::string& text, const std::string& word)
 {
     size_t pos = text.find(word);
     while (pos != std::string::npos) {
@@ -59,8 +59,8 @@ int main()
 
     bool failed = false;
     for (const auto& path : checked_files) {
-        const std::string text = readAll(path);
-        if (containsWord(text, "throw")) {
+        const std::string text = read_all(path);
+        if (contains_word(text, "throw")) {
             std::cerr << path << ": Mongo public/protocol boundary must not throw\n";
             failed = true;
         }

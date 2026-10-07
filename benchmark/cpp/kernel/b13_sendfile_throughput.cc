@@ -62,7 +62,7 @@ struct BenchmarkResult {
 std::vector<BenchmarkResult> g_results;
 
 // 创建测试文件
-void createBenchmarkFile(size_t size) {
+void create_benchmark_file(size_t size) {
     int fd = open(TEST_FILE, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
         LogError("Failed to create test file");
@@ -85,7 +85,7 @@ void createBenchmarkFile(size_t size) {
 }
 
 // 方法1: 使用 sendfile
-Task<void> serverSendFile(AsyncTcpSocket client, size_t file_size) {
+Task<void> server_send_file(AsyncTcpSocket client, size_t file_size) {
     int file_fd = open(TEST_FILE, O_RDONLY);
     if (file_fd < 0) {
         co_await client.close();
@@ -110,7 +110,7 @@ Task<void> serverSendFile(AsyncTcpSocket client, size_t file_size) {
 }
 
 // 方法2: 使用传统 read + send
-Task<void> serverReadSend(AsyncTcpSocket client, size_t file_size) {
+Task<void> server_read_send(AsyncTcpSocket client, size_t file_size) {
     int file_fd = open(TEST_FILE, O_RDONLY);
     if (file_fd < 0) {
         co_await client.close();
@@ -141,11 +141,11 @@ Task<void> serverReadSend(AsyncTcpSocket client, size_t file_size) {
 }
 
 // 服务器
-Task<void> benchmarkServer(bool use_sendfile, size_t file_size) {
+Task<void> benchmark_server(bool use_sendfile, size_t file_size) {
     AsyncTcpSocket listener;
-    listener.option().handleReuseAddr();
-    listener.option().handleNonBlock();
-    listener.option().handleTcpDeferAccept();
+    listener.option().handle_reuse_addr();
+    listener.option().handle_non_block();
+    listener.option().handle_tcp_defer_accept();
 
     Host bindHost(IPType::IPV4, "127.0.0.1", TEST_PORT);
     listener.bind(bindHost);
@@ -161,12 +161,12 @@ Task<void> benchmarkServer(bool use_sendfile, size_t file_size) {
     }
 
     AsyncTcpSocket client(acceptResult.value());
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     if (use_sendfile) {
-        co_await serverSendFile(std::move(client), file_size);
+        co_await server_send_file(std::move(client), file_size);
     } else {
-        co_await serverReadSend(std::move(client), file_size);
+        co_await server_read_send(std::move(client), file_size);
     }
 
     co_await listener.close();
@@ -174,8 +174,8 @@ Task<void> benchmarkServer(bool use_sendfile, size_t file_size) {
 }
 
 // 客户端
-Task<void> benchmarkClient(size_t file_size) {
-    if (!galay::benchmark::waitForFlag(g_server_ready,
+Task<void> benchmark_client(size_t file_size) {
+    if (!galay::benchmark::wait_for_flag(g_server_ready,
                                        SERVER_READY_TIMEOUT,
                                        std::chrono::milliseconds(10))) {
         LogError("Client timed out waiting for benchmark server readiness");
@@ -184,7 +184,7 @@ Task<void> benchmarkClient(size_t file_size) {
     }
 
     AsyncTcpSocket socket;
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host serverHost(IPType::IPV4, "127.0.0.1", TEST_PORT);
     auto connectResult = co_await socket.connect(serverHost);
@@ -208,7 +208,7 @@ Task<void> benchmarkClient(size_t file_size) {
 }
 
 // 运行基准测试
-BenchmarkResult runBenchmark(bool use_sendfile, size_t file_size, const char* method_name) {
+BenchmarkResult run_benchmark(bool use_sendfile, size_t file_size, const char* method_name) {
     LogInfo("\n=== Benchmark: {} ({} MB) ===", method_name, file_size / (1024.0 * 1024.0));
 
     g_server_ready = false;
@@ -220,11 +220,11 @@ BenchmarkResult runBenchmark(bool use_sendfile, size_t file_size, const char* me
 
     auto start_time = high_resolution_clock::now();
 
-    scheduleTask(scheduler, benchmarkServer(use_sendfile, file_size));
+    schedule_task(scheduler, benchmark_server(use_sendfile, file_size));
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    scheduleTask(scheduler, benchmarkClient(file_size));
+    schedule_task(scheduler, benchmark_client(file_size));
 
-    const bool completed = galay::benchmark::waitForFlag(g_test_done,
+    const bool completed = galay::benchmark::wait_for_flag(g_test_done,
                                                          BENCHMARK_COMPLETION_TIMEOUT,
                                                          std::chrono::milliseconds(10));
     if (!completed) {
@@ -255,7 +255,7 @@ BenchmarkResult runBenchmark(bool use_sendfile, size_t file_size, const char* me
 }
 
 // 打印结果表格
-void printResults() {
+void print_results() {
     LogInfo("\n========================================");
     LogInfo("Performance Comparison Results");
     LogInfo("========================================");
@@ -286,7 +286,7 @@ void printResults() {
 }
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -300,16 +300,16 @@ int main() {
     };
 
     for (size_t size : test_sizes) {
-        createBenchmarkFile(size);
+        create_benchmark_file(size);
 
         // 测试 sendfile
-        auto result1 = runBenchmark(true, size, "sendfile");
+        auto result1 = run_benchmark(true, size, "sendfile");
         g_results.push_back(result1);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         // 测试 read+send
-        auto result2 = runBenchmark(false, size, "read+send");
+        auto result2 = run_benchmark(false, size, "read+send");
         g_results.push_back(result2);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -317,14 +317,14 @@ int main() {
 
     std::remove(TEST_FILE);
 
-    printResults();
+    print_results();
 
     galay::test::TestResultWriter writer("test_sendfile_benchmark");
     for (size_t i = 0; i < g_results.size(); ++i) {
-        writer.addTest();
-        writer.addPassed();
+        writer.add_test();
+        writer.add_passed();
     }
-    writer.writeResult();
+    writer.write_result();
 
     return 0;
 }

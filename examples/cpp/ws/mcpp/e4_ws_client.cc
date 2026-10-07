@@ -8,7 +8,7 @@ import galay.websocket;
 using namespace galay::websocket;
 using namespace galay::kernel;
 
-Task<bool> runWebSocketClient(const std::string& url) {
+Task<bool> run_web_socket_client(const std::string& url) {
     auto client = WsClientBuilder().build();
     auto connect_result = co_await client.connect(url);
     if (!connect_result) {
@@ -20,7 +20,7 @@ Task<bool> runWebSocketClient(const std::string& url) {
     reader_setting.max_frame_size = 1024 * 1024;
     reader_setting.max_message_size = 10 * 1024 * 1024;
 
-    auto session_result = client.getSession(WsWriterSetting::byClient(), 8192, reader_setting);
+    auto session_result = client.get_session(WsWriterSetting::by_client(), 8192, reader_setting);
     if (!session_result) {
         co_return false;
     }
@@ -31,13 +31,13 @@ Task<bool> runWebSocketClient(const std::string& url) {
         co_return false;
     }
 
-    auto& reader = session.getReader();
-    auto& writer = session.getWriter();
+    auto& reader = session.get_reader();
+    auto& writer = session.get_writer();
 
     std::string message;
     WsOpcode opcode{};
     while (true) {
-        auto result = co_await reader.getMessage(message, opcode);
+        auto result = co_await reader.get_message(message, opcode);
         if (!result) {
             std::cerr << "Failed to receive welcome message: " << result.error().message() << "\n";
             co_return false;
@@ -48,14 +48,14 @@ Task<bool> runWebSocketClient(const std::string& url) {
     }
     std::cout << "Welcome: " << message << "\n";
 
-    auto send_result = co_await writer.sendText("Hello from import websocket client!");
+    auto send_result = co_await writer.send_text("Hello from import websocket client!");
     if (!send_result) {
         std::cerr << "Send failed: " << send_result.error().message() << "\n";
         co_return false;
     }
 
     while (true) {
-        auto result = co_await reader.getMessage(message, opcode);
+        auto result = co_await reader.get_message(message, opcode);
         if (!result) {
             std::cerr << "Failed to read echo: " << result.error().message() << "\n";
             co_return false;
@@ -67,7 +67,7 @@ Task<bool> runWebSocketClient(const std::string& url) {
             break;
         }
         if (opcode == WsOpcode::Ping) {
-            auto pong_result = co_await writer.sendPong(message);
+            auto pong_result = co_await writer.send_pong(message);
             if (!pong_result) {
                 std::cerr << "Pong failed: " << pong_result.error().message() << "\n";
                 co_return false;
@@ -76,7 +76,7 @@ Task<bool> runWebSocketClient(const std::string& url) {
     }
 
     std::cout << "Echo: " << message << "\n";
-    (void)co_await writer.sendClose();
+    (void)co_await writer.send_close();
     (void)co_await client.close();
     co_return true;
 }
@@ -88,9 +88,9 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
         runtime.start();
-        auto join = runtime.spawnIO(runWebSocketClient(url));
+        auto join = runtime.spawn_io(run_web_socket_client(url));
         bool ok = false;
         if (join) {
             auto result = join->join();

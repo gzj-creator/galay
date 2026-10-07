@@ -31,32 +31,32 @@ int main() {
         auto first = pool.acquire(1);
         first_raw = first.get();
 
-        first->setState(Http2StreamState::Closed);
-        first->adjustSendWindow(-123);
-        first->adjustRecvWindow(-321);
-        first->setEndStreamReceived();
-        first->setEndStreamSent();
-        first->setEndHeadersReceived();
-        first->appendHeaderBlock(std::string_view("abc"));
-        first->setDecodedHeaders({{":method", "POST"}, {"x-test", "1"}});
-        first->consumeDecodedHeadersAsRequest();
-        first->appendRequestData(std::string_view("payload"));
-        first->response().setStatus(503);
-        first->response().setHeader("x-resp", "1");
-        first->response().setBody("resp");
+        first->set_state(Http2StreamState::Closed);
+        first->adjust_send_window(-123);
+        first->adjust_recv_window(-321);
+        first->set_end_stream_received();
+        first->set_end_stream_sent();
+        first->set_end_headers_received();
+        first->append_header_block(std::string_view("abc"));
+        first->set_decoded_headers({{":method", "POST"}, {"x-test", "1"}});
+        first->consume_decoded_headers_as_request();
+        first->append_request_data(std::string_view("payload"));
+        first->response().set_status(503);
+        first->response().set_header("x-resp", "1");
+        first->response().set_body("resp");
         first->m_pending_events = Http2StreamEvent::HeadersReady | Http2StreamEvent::RequestComplete;
         first->m_active_queued = true;
-        first->setGoAwayError(Http2GoAwayError{
+        first->set_go_away_error(Http2GoAwayError{
             .stream_id = 1,
             .last_stream_id = 1,
             .error_code = Http2ErrorCode::ProtocolError,
             .retryable = false,
             .debug = "boom",
         });
-        first->closeFrameQueue();
+        first->close_frame_queue();
 
-        assert(first->waitRequestComplete().await_ready());
-        assert(first->waitResponseComplete().await_ready());
+        assert(first->wait_request_complete().await_ready());
+        assert(first->wait_response_complete().await_ready());
     }
 
     assert(pool.available() == 1);
@@ -64,32 +64,32 @@ int main() {
     auto reused = pool.acquire(3);
     assert(reused.get() == first_raw);
     assert(pool.available() == 0);
-    assert(reused->streamId() == 3);
+    assert(reused->stream_id() == 3);
     assert(reused->state() == Http2StreamState::Idle);
-    assert(reused->sendWindow() == static_cast<int32_t>(kDefaultInitialWindowSize));
-    assert(reused->recvWindow() == static_cast<int32_t>(kDefaultInitialWindowSize));
-    assert(!reused->isEndStreamReceived());
-    assert(!reused->isEndStreamSent());
-    assert(!reused->isEndHeadersReceived());
-    assert(reused->headerBlock().empty());
-    assert(!reused->hasDecodedHeaders());
+    assert(reused->send_window() == static_cast<int32_t>(kDefaultInitialWindowSize));
+    assert(reused->recv_window() == static_cast<int32_t>(kDefaultInitialWindowSize));
+    assert(!reused->is_end_stream_received());
+    assert(!reused->is_end_stream_sent());
+    assert(!reused->is_end_headers_received());
+    assert(reused->header_block().empty());
+    assert(!reused->has_decoded_headers());
     assert(reused->request().method.empty());
     assert(reused->request().scheme.empty());
     assert(reused->request().authority.empty());
     assert(reused->request().path.empty());
     assert(reused->request().headers.empty());
-    assert(reused->request().bodySize() == 0);
-    assert(reused->request().bodyChunkCount() == 0);
+    assert(reused->request().body_size() == 0);
+    assert(reused->request().body_chunk_count() == 0);
     assert(reused->response().status == 200);
     assert(reused->response().headers.empty());
     assert(reused->response().body.empty());
-    assert(reused->takeEvents() == Http2StreamEvent::None);
-    assert(!reused->hasGoAwayError());
-    assert(!reused->isFrameQueueClosed());
-    assert(reused->isFrameQueueEnabled());
-    assert(!reused->waitRequestComplete().await_ready());
-    assert(!reused->waitResponseComplete().await_ready());
-    assert(!reused->getFrame().await_ready());
+    assert(reused->take_events() == Http2StreamEvent::None);
+    assert(!reused->has_go_away_error());
+    assert(!reused->is_frame_queue_closed());
+    assert(reused->is_frame_queue_enabled());
+    assert(!reused->wait_request_complete().await_ready());
+    assert(!reused->wait_response_complete().await_ready());
+    assert(!reused->get_frame().await_ready());
 
     galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
@@ -98,14 +98,14 @@ int main() {
 
     Http2Stream* manager_first_raw = nullptr;
     {
-        auto manager_first = manager.createStreamInternal(1);
+        auto manager_first = manager.create_stream_internal(1);
         manager_first_raw = manager_first.get();
-        manager_first->setState(Http2StreamState::HalfClosedRemote);
-        manager_first->onDataSent(true);
+        manager_first->set_state(Http2StreamState::HalfClosedRemote);
+        manager_first->on_data_sent(true);
     }
-    auto manager_reused = manager.createStreamInternal(3);
+    auto manager_reused = manager.create_stream_internal(3);
     assert(manager_reused.get() == manager_first_raw);
-    assert(manager_reused->streamId() == 3);
+    assert(manager_reused->stream_id() == 3);
 
     std::cout << "T53-H2StreamPool PASS\n";
     return 0;

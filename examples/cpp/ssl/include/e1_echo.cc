@@ -38,11 +38,11 @@ using namespace galay::kernel;
 
 std::atomic<bool> g_running{true};
 
-void logErrno(const char* prefix) {
+void log_errno(const char* prefix) {
     std::cerr << prefix << ": errno=" << errno << " (" << std::strerror(errno) << ")" << std::endl;
 }
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
@@ -51,9 +51,9 @@ void signalHandler(int) {
  * @param ctx SSL上下文
  * @param handle 客户端socket句柄
  */
-Task<void> handleClient(SslContext* ctx, GHandle handle) {
+Task<void> handle_client(SslContext* ctx, GHandle handle) {
     SslSocket client(ctx, handle);
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     auto result = co_await client.handshake();
     if (!result) {
@@ -77,7 +77,7 @@ Task<void> handleClient(SslContext* ctx, GHandle handle) {
             break;
         }
 
-        std::cout << "Received: " << bytes.toStringView() << std::endl;
+        std::cout << "Received: " << bytes.to_string_view() << std::endl;
 
         // 回显数据
         auto sendResult = co_await client.send(reinterpret_cast<const char*>(bytes.data()), bytes.size());
@@ -93,25 +93,25 @@ Task<void> handleClient(SslContext* ctx, GHandle handle) {
 /**
  * @brief SSL Echo服务器协程
  */
-Task<void> sslEchoServer(IOSchedulerType* scheduler, SslContext* ctx, uint16_t port) {
+Task<void> ssl_echo_server(IOSchedulerType* scheduler, SslContext* ctx, uint16_t port) {
     SslSocket listener(ctx);
 
-    if (!listener.isValid()) {
+    if (!listener.is_valid()) {
         co_return;
     }
 
-    listener.option().handleReuseAddr();
-    listener.option().handleNonBlock();
+    listener.option().handle_reuse_addr();
+    listener.option().handle_non_block();
 
     auto bindResult = listener.bind(Host(IPType::IPV4, "0.0.0.0", port));
     if (!bindResult) {
-        logErrno("bind failed");
+        log_errno("bind failed");
         co_return;
     }
 
     auto listenResult = listener.listen(128);
     if (!listenResult) {
-        logErrno("listen failed");
+        log_errno("listen failed");
         co_return;
     }
 
@@ -121,12 +121,12 @@ Task<void> sslEchoServer(IOSchedulerType* scheduler, SslContext* ctx, uint16_t p
         Host clientHost;
         auto acceptResult = co_await listener.accept(&clientHost);
         if (!acceptResult) {
-            logErrno("accept failed");
+            log_errno("accept failed");
             continue;
         }
         std::cout << "New connection from " << clientHost.ip()
                   << ":" << clientHost.port() << std::endl;
-        if (!scheduleTask(scheduler, handleClient(ctx, acceptResult.value()))) {
+        if (!schedule_task(scheduler, handle_client(ctx, acceptResult.value()))) {
             std::cerr << "spawn failed for client handler" << std::endl;
         }
     }
@@ -145,22 +145,22 @@ int main(int argc, char* argv[]) {
     std::string keyFile = argv[3];
 
     // 设置信号处理
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
     signal(SIGPIPE, SIG_IGN);
 
     // 创建SSL上下文
     SslContext ctx(SslMethod::TLS_Server);
-    if (!ctx.isValid()) {
+    if (!ctx.is_valid()) {
         return 1;
     }
 
-    auto certResult = ctx.loadCertificate(certFile);
+    auto certResult = ctx.load_certificate(certFile);
     if (!certResult) {
         return 1;
     }
 
-    auto keyResult = ctx.loadPrivateKey(keyFile);
+    auto keyResult = ctx.load_private_key(keyFile);
     if (!keyResult) {
         return 1;
     }
@@ -170,7 +170,7 @@ int main(int argc, char* argv[]) {
     scheduler.start();
 
     // 启动服务器
-    scheduleTask(scheduler, sslEchoServer(&scheduler, &ctx, port));
+    schedule_task(scheduler, ssl_echo_server(&scheduler, &ctx, port));
 
     // 等待退出
     std::cout << "Press Ctrl+C to stop server..." << std::endl;

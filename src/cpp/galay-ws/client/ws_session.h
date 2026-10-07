@@ -116,7 +116,7 @@ public:
             : m_upgrader(upgrader)
             , m_recv_buffer(std::max<size_t>(upgrader->m_session->m_ring_buffer.capacity(), 1))
         {
-            initUpgradeRequest();
+            init_upgrade_request();
         }
 
     private:
@@ -126,13 +126,13 @@ public:
         UpgradeFlow(UpgradeFlow&&) noexcept = default;
         UpgradeFlow& operator=(UpgradeFlow&&) noexcept = default;
 
-        void onSend(SequenceOps<ResultType, 4>& ops, SendIOContext& send_ctx) {
+        void on_send(SequenceOps<ResultType, 4>& ops, SendIOContext& send_ctx) {
             if (!send_ctx.m_result) {
                 ops.complete(std::unexpected(WsError(kWsSendError, send_ctx.m_result.error().message())));
             }
         }
 
-        void onRecv(SequenceOps<ResultType, 4>& ops, RecvIOContext& recv_ctx) {
+        void on_recv(SequenceOps<ResultType, 4>& ops, RecvIOContext& recv_ctx) {
             if (!recv_ctx.m_result) {
                 const auto& error = recv_ctx.m_result.error();
                 if (IOError::contains(error.code(), kDisconnectError)) {
@@ -150,25 +150,25 @@ public:
             }
 
             auto& session = *m_upgrader->m_session;
-            if (session.m_ring_buffer.tryWriteBatch(
+            if (session.m_ring_buffer.try_write_batch(
                     m_recv_buffer.data(), recv_bytes) != recv_bytes) {
                 ops.complete(std::unexpected(WsError(kWsProtocolError, "Upgrade response too large")));
             }
         }
 
-        ParseStatus onParse(SequenceOps<ResultType, 4>& ops) {
+        ParseStatus on_parse(SequenceOps<ResultType, 4>& ops) {
             auto& session = *m_upgrader->m_session;
-            auto iovecs = borrowReadIovecs(session.m_ring_buffer);
+            auto iovecs = borrow_read_iovecs(session.m_ring_buffer);
             if (iovecs.empty()) {
                 return ParseStatus::kNeedMore;
             }
 
             std::vector<iovec> parse_iovecs;
-            if (IoVecWindow::buildWindow(iovecs, parse_iovecs) == 0) {
+            if (IoVecWindow::build_window(iovecs, parse_iovecs) == 0) {
                 return ParseStatus::kNeedMore;
             }
 
-            auto [error_code, consumed] = m_upgrade_response.fromIOVec(parse_iovecs);
+            auto [error_code, consumed] = m_upgrade_response.from_io_vec(parse_iovecs);
             if (consumed > 0) {
                 session.m_ring_buffer.consume(consumed);
             }
@@ -186,7 +186,7 @@ public:
                 return ParseStatus::kCompleted;
             }
 
-            if (!m_upgrade_response.isComplete()) {
+            if (!m_upgrade_response.is_complete()) {
                 if (session.m_ring_buffer.full()) {
                     ops.complete(std::unexpected(WsError(kWsProtocolError, "Upgrade response too large")));
                     return ParseStatus::kCompleted;
@@ -203,13 +203,13 @@ public:
                 return ParseStatus::kCompleted;
             }
 
-            if (!m_upgrade_response.header().headerPairs().hasKey("Sec-WebSocket-Accept")) {
+            if (!m_upgrade_response.header().header_pairs().has_key("Sec-WebSocket-Accept")) {
                 ops.complete(std::unexpected(WsError(kWsUpgradeFailed, "Missing Sec-WebSocket-Accept header")));
                 return ParseStatus::kCompleted;
             }
 
-            std::string accept_key = m_upgrade_response.header().headerPairs().getValue("Sec-WebSocket-Accept");
-            std::string expected_accept = WsUpgrade::generateAcceptKey(m_ws_key);
+            std::string accept_key = m_upgrade_response.header().header_pairs().get_value("Sec-WebSocket-Accept");
+            std::string expected_accept = WsUpgrade::generate_accept_key(m_ws_key);
             if (accept_key != expected_accept) {
                 ops.complete(std::unexpected(WsError(kWsUpgradeFailed, "Invalid Sec-WebSocket-Accept value")));
                 return ParseStatus::kCompleted;
@@ -220,9 +220,9 @@ public:
             return ParseStatus::kCompleted;
         }
 
-        void initUpgradeRequest() {
+        void init_upgrade_request() {
             auto& session = *m_upgrader->m_session;
-            m_ws_key = generateWebSocketKey();
+            m_ws_key = generate_web_socket_key();
 
             auto request = Http1_1RequestBuilder::get(session.m_url.path)
                 .header("Host", session.m_url.host + ":" + std::to_string(session.m_url.port))
@@ -232,7 +232,7 @@ public:
                 .header("Sec-WebSocket-Version", "13")
                 .build();
 
-            m_send_buffer = request.toString();
+            m_send_buffer = request.to_string();
         }
 
         WsSessionUpgraderImpl<SocketType>* m_upgrader;
@@ -259,15 +259,15 @@ public:
         m_flow = std::make_unique<UpgradeFlow>(upgrader);
         m_inner_operation = std::make_unique<InnerOperation>(
             AwaitableBuilder<ResultType, 4, UpgradeFlow>(upgrader->m_session->m_socket.controller(), *m_flow)
-                .template send<&UpgradeFlow::onSend>(m_flow->m_send_buffer.data(), m_flow->m_send_buffer.size())
-                .template recv<&UpgradeFlow::onRecv>(m_flow->m_recv_buffer.data(), m_flow->m_recv_buffer.size())
-                .template parse<&UpgradeFlow::onParse>()
+                .template send<&UpgradeFlow::on_send>(m_flow->m_send_buffer.data(), m_flow->m_send_buffer.size())
+                .template recv<&UpgradeFlow::on_recv>(m_flow->m_recv_buffer.data(), m_flow->m_recv_buffer.size())
+                .template parse<&UpgradeFlow::on_parse>()
                 .build()
         );
     }
 
     ~WsSessionUpgradeOperation() {
-        cleanupInnerIfArmed();
+        cleanup_inner_if_armed();
     }
 
     bool await_ready() noexcept {
@@ -277,22 +277,22 @@ public:
     template<typename Promise>
     decltype(auto) await_suspend(std::coroutine_handle<Promise> handle) {
         if (m_inner_operation == nullptr) {
-            cancelBoundTimeoutTimer();
+            cancel_bound_timeout_timer();
             return false;
         }
-        forwardBoundTimeoutTimer(*m_inner_operation);
+        forward_bound_timeout_timer(*m_inner_operation);
         m_inner_armed = true;
         return m_inner_operation->await_suspend(handle);
     }
 
     /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
-    void bindTimeoutTimer(TimeoutTimer* timer) noexcept {
-        SequenceAwaitableBase::bindTimeoutTimer(timer);
+    void bind_timeout_timer(TimeoutTimer* timer) noexcept {
+        SequenceAwaitableBase::bind_timeout_timer(timer);
     }
 
     ResultType await_resume() {
         if (!m_result.has_value()) {
-            cleanupInnerIfArmed();
+            cleanup_inner_if_armed();
             const auto& io_error = m_result.error();
             if (IOError::contains(io_error.code(), kTimeout)) {
                 return std::unexpected(WsError(kWsConnectionError, "Upgrade timeout"));
@@ -306,7 +306,7 @@ public:
         if (m_ready) {
             return true;
         }
-        return resumeInner();
+        return resume_inner();
     }
 
     IOTask* front() override {
@@ -317,9 +317,9 @@ public:
         return m_inner_operation ? m_inner_operation->front() : nullptr;
     }
 
-    void popFront() override {
+    void pop_front() override {
         if (m_inner_operation) {
-            m_inner_operation->popFront();
+            m_inner_operation->pop_front();
         }
     }
 
@@ -328,34 +328,34 @@ public:
     }
 
 #ifdef USE_IOURING
-    SequenceProgress prepareForSubmit() override {
-        return m_inner_operation ? m_inner_operation->prepareForSubmit() : SequenceProgress::kCompleted;
+    SequenceProgress prepare_for_submit() override {
+        return m_inner_operation ? m_inner_operation->prepare_for_submit() : SequenceProgress::kCompleted;
     }
 
-    SequenceProgress onActiveEvent(struct io_uring_cqe* cqe, GHandle handle) override {
-        return m_inner_operation ? m_inner_operation->onActiveEvent(cqe, handle) : SequenceProgress::kCompleted;
+    SequenceProgress on_active_event(struct io_uring_cqe* cqe, GHandle handle) override {
+        return m_inner_operation ? m_inner_operation->on_active_event(cqe, handle) : SequenceProgress::kCompleted;
     }
 #else
-    SequenceProgress prepareForSubmit(GHandle handle) override {
-        return m_inner_operation ? m_inner_operation->prepareForSubmit(handle) : SequenceProgress::kCompleted;
+    SequenceProgress prepare_for_submit(GHandle handle) override {
+        return m_inner_operation ? m_inner_operation->prepare_for_submit(handle) : SequenceProgress::kCompleted;
     }
 
-    SequenceProgress onActiveEvent(GHandle handle) override {
-        return m_inner_operation ? m_inner_operation->onActiveEvent(handle) : SequenceProgress::kCompleted;
+    SequenceProgress on_active_event(GHandle handle) override {
+        return m_inner_operation ? m_inner_operation->on_active_event(handle) : SequenceProgress::kCompleted;
     }
 #endif
 
     std::expected<bool, galay::kernel::IOError> m_result;
 
 private:
-    ResultType resumeInner() {
+    ResultType resume_inner() {
         m_inner_completed = true;
         return m_inner_operation->await_resume();
     }
 
-    void cleanupInnerIfArmed() {
+    void cleanup_inner_if_armed() {
         if (m_inner_operation != nullptr && m_inner_armed && !m_inner_completed) {
-            m_inner_operation->onCompleted();
+            m_inner_operation->on_completed();
             m_inner_completed = true;
         }
     }
@@ -400,42 +400,42 @@ public:
         UpgradeState(UpgradeState&&) noexcept = default;
         UpgradeState& operator=(UpgradeState&&) noexcept = default;
 
-        bool isFinished() const {
+        bool is_finished() const {
             return m_result.has_value() || m_error.has_value();
         }
 
-        ResultType takeResult() {
+        ResultType take_result() {
             if (m_error.has_value()) {
                 return std::unexpected(std::move(*m_error));
             }
             return m_result.value_or(ResultType(true));
         }
 
-        bool hasPendingSend() const {
-            return !isFinished() && m_send_offset < m_send_buffer.size();
+        bool has_pending_send() const {
+            return !is_finished() && m_send_offset < m_send_buffer.size();
         }
 
-        const char* sendData() const {
+        const char* send_data() const {
             return m_send_buffer.data() + m_send_offset;
         }
 
-        size_t remainingSendBytes() const {
+        size_t remaining_send_bytes() const {
             return m_send_buffer.size() - m_send_offset;
         }
 
-        void onBytesSent(size_t sent_bytes) {
+        void on_bytes_sent(size_t sent_bytes) {
             if (sent_bytes == 0) {
-                setProtocolError("Connection closed");
+                set_protocol_error("Connection closed");
                 return;
             }
-            if (sent_bytes > remainingSendBytes()) {
-                setProtocolError("Send progress overflow");
+            if (sent_bytes > remaining_send_bytes()) {
+                set_protocol_error("Send progress overflow");
                 return;
             }
             m_send_offset += sent_bytes;
         }
 
-        bool prepareRecvWindow(char*& buffer, size_t& length) {
+        bool prepare_recv_window(char*& buffer, size_t& length) {
             auto& session = *m_upgrader->m_session;
             if (session.m_ring_buffer.full()) {
                 buffer = nullptr;
@@ -448,45 +448,45 @@ public:
             return length > 0;
         }
 
-        void onBytesReceived(size_t recv_bytes) {
+        void on_bytes_received(size_t recv_bytes) {
             auto& session = *m_upgrader->m_session;
-            if (session.m_ring_buffer.tryWriteBatch(
+            if (session.m_ring_buffer.try_write_batch(
                     m_recv_buffer.data(), recv_bytes) != recv_bytes) {
-                setProtocolError("Upgrade response too large");
+                set_protocol_error("Upgrade response too large");
             }
         }
 
-        bool tryParseUpgradeResponse() {
+        bool try_parse_upgrade_response() {
             auto& session = *m_upgrader->m_session;
-            auto iovecs = borrowReadIovecs(session.m_ring_buffer);
+            auto iovecs = borrow_read_iovecs(session.m_ring_buffer);
             if (iovecs.empty()) {
                 return false;
             }
 
             std::vector<iovec> parse_iovecs;
-            if (IoVecWindow::buildWindow(iovecs, parse_iovecs) == 0) {
+            if (IoVecWindow::build_window(iovecs, parse_iovecs) == 0) {
                 return false;
             }
 
-            auto [error_code, consumed] = m_upgrade_response.fromIOVec(parse_iovecs);
+            auto [error_code, consumed] = m_upgrade_response.from_io_vec(parse_iovecs);
             if (consumed > 0) {
                 session.m_ring_buffer.consume(consumed);
             }
 
             if (error_code == kIncomplete || error_code == kHeaderInComplete) {
                 if (session.m_ring_buffer.full()) {
-                    setProtocolError("Upgrade response too large");
+                    set_protocol_error("Upgrade response too large");
                     return true;
                 }
                 return false;
             }
 
             if (error_code != kNoError) {
-                setProtocolError("Failed to parse upgrade response");
+                set_protocol_error("Failed to parse upgrade response");
                 return true;
             }
 
-            if (!m_upgrade_response.isComplete()) {
+            if (!m_upgrade_response.is_complete()) {
                 return false;
             }
 
@@ -498,13 +498,13 @@ public:
                 return true;
             }
 
-            if (!m_upgrade_response.header().headerPairs().hasKey("Sec-WebSocket-Accept")) {
+            if (!m_upgrade_response.header().header_pairs().has_key("Sec-WebSocket-Accept")) {
                 m_error = WsError(kWsUpgradeFailed, "Missing Sec-WebSocket-Accept header");
                 return true;
             }
 
-            std::string accept_key = m_upgrade_response.header().headerPairs().getValue("Sec-WebSocket-Accept");
-            if (accept_key != WsUpgrade::generateAcceptKey(m_ws_key)) {
+            std::string accept_key = m_upgrade_response.header().header_pairs().get_value("Sec-WebSocket-Accept");
+            if (accept_key != WsUpgrade::generate_accept_key(m_ws_key)) {
                 m_error = WsError(kWsUpgradeFailed, "Invalid Sec-WebSocket-Accept value");
                 return true;
             }
@@ -514,15 +514,15 @@ public:
             return true;
         }
 
-        void setSslSendError(const galay::ssl::SslError& error) {
+        void set_ssl_send_error(const galay::ssl::SslError& error) {
             m_error = WsError(error);
         }
 
-        void setSslRecvError(const galay::ssl::SslError& error) {
+        void set_ssl_recv_error(const galay::ssl::SslError& error) {
             m_error = WsError(error);
         }
 
-        void setProtocolError(std::string message) {
+        void set_protocol_error(std::string message) {
             m_error = WsError(kWsProtocolError, std::move(message));
         }
 
@@ -534,7 +534,7 @@ public:
                 return;
             }
 
-            m_ws_key = generateWebSocketKey();
+            m_ws_key = generate_web_socket_key();
 
             auto request = Http1_1RequestBuilder::get(session.m_url.path)
                 .header("Host", session.m_url.host + ":" + std::to_string(session.m_url.port))
@@ -544,7 +544,7 @@ public:
                 .header("Sec-WebSocket-Version", "13")
                 .build();
 
-            m_send_buffer = request.toString();
+            m_send_buffer = request.to_string();
         }
 
         WsSessionUpgraderImpl<SocketType>* m_upgrader;
@@ -564,59 +564,59 @@ public:
             : m_state(std::move(state)) {}
 
         galay::ssl::SslMachineAction<result_type> advance() {
-            if (m_state->isFinished()) {
-                return galay::ssl::SslMachineAction<result_type>::complete(m_state->takeResult());
+            if (m_state->is_finished()) {
+                return galay::ssl::SslMachineAction<result_type>::complete(m_state->take_result());
             }
 
-            if (m_state->hasPendingSend()) {
+            if (m_state->has_pending_send()) {
                 return galay::ssl::SslMachineAction<result_type>::send(
-                    m_state->sendData(),
-                    m_state->remainingSendBytes());
+                    m_state->send_data(),
+                    m_state->remaining_send_bytes());
             }
 
-            if (m_state->tryParseUpgradeResponse()) {
-                return galay::ssl::SslMachineAction<result_type>::complete(m_state->takeResult());
+            if (m_state->try_parse_upgrade_response()) {
+                return galay::ssl::SslMachineAction<result_type>::complete(m_state->take_result());
             }
 
             char* recv_buffer = nullptr;
             size_t recv_length = 0;
-            if (!m_state->prepareRecvWindow(recv_buffer, recv_length)) {
-                if (!m_state->isFinished()) {
-                    m_state->setProtocolError("Upgrade response too large");
+            if (!m_state->prepare_recv_window(recv_buffer, recv_length)) {
+                if (!m_state->is_finished()) {
+                    m_state->set_protocol_error("Upgrade response too large");
                 }
-                return galay::ssl::SslMachineAction<result_type>::complete(m_state->takeResult());
+                return galay::ssl::SslMachineAction<result_type>::complete(m_state->take_result());
             }
 
             return galay::ssl::SslMachineAction<result_type>::recv(recv_buffer, recv_length);
         }
 
-        void onHandshake(std::expected<void, galay::ssl::SslError>) {}
+        void on_handshake(std::expected<void, galay::ssl::SslError>) {}
 
-        void onRecv(std::expected<Bytes, galay::ssl::SslError> result) {
+        void on_recv(std::expected<Bytes, galay::ssl::SslError> result) {
             if (!result) {
-                m_state->setSslRecvError(result.error());
+                m_state->set_ssl_recv_error(result.error());
                 return;
             }
 
             const size_t recv_bytes = result.value().size();
             if (recv_bytes == 0) {
-                m_state->setProtocolError("Connection closed");
+                m_state->set_protocol_error("Connection closed");
                 return;
             }
 
-            m_state->onBytesReceived(recv_bytes);
+            m_state->on_bytes_received(recv_bytes);
         }
 
-        void onSend(std::expected<size_t, galay::ssl::SslError> result) {
+        void on_send(std::expected<size_t, galay::ssl::SslError> result) {
             if (!result) {
-                m_state->setSslSendError(result.error());
+                m_state->set_ssl_send_error(result.error());
                 return;
             }
 
-            m_state->onBytesSent(result.value());
+            m_state->on_bytes_sent(result.value());
         }
 
-        void onShutdown(std::expected<void, galay::ssl::SslError>) {}
+        void on_shutdown(std::expected<void, galay::ssl::SslError>) {}
 
         std::shared_ptr<UpgradeState> m_state;
     };
@@ -636,7 +636,7 @@ public:
 
         auto state = std::make_shared<UpgradeState>(upgrader);
         m_inner_operation = std::make_unique<InnerOperation>(
-            galay::ssl::SslAwaitableBuilder<ResultType>::fromStateMachine(
+            galay::ssl::SslAwaitableBuilder<ResultType>::from_state_machine(
                 upgrader->m_session->m_socket.controller(),
                 &upgrader->m_session->m_socket,
                 UpgradeMachine(std::move(state)))
@@ -645,7 +645,7 @@ public:
     }
 
     ~WsSessionUpgradeOperation() {
-        cleanupInnerIfArmed();
+        cleanup_inner_if_armed();
     }
 
     bool await_ready() noexcept {
@@ -655,22 +655,22 @@ public:
     template<typename Promise>
     decltype(auto) await_suspend(std::coroutine_handle<Promise> handle) {
         if (m_inner_operation == nullptr) {
-            cancelBoundTimeoutTimer();
+            cancel_bound_timeout_timer();
             return false;
         }
-        forwardBoundTimeoutTimer(*m_inner_operation);
+        forward_bound_timeout_timer(*m_inner_operation);
         m_inner_armed = true;
         return m_inner_operation->await_suspend(handle);
     }
 
     /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
-    void bindTimeoutTimer(TimeoutTimer* timer) noexcept {
-        SequenceAwaitableBase::bindTimeoutTimer(timer);
+    void bind_timeout_timer(TimeoutTimer* timer) noexcept {
+        SequenceAwaitableBase::bind_timeout_timer(timer);
     }
 
     ResultType await_resume() {
         if (!m_result.has_value()) {
-            cleanupInnerIfArmed();
+            cleanup_inner_if_armed();
             const auto& io_error = m_result.error();
             if (IOError::contains(io_error.code(), kTimeout)) {
                 return std::unexpected(WsError(kWsConnectionError, "Upgrade timeout"));
@@ -684,7 +684,7 @@ public:
         if (m_ready) {
             return true;
         }
-        return resumeInner();
+        return resume_inner();
     }
 
     IOTask* front() override {
@@ -695,9 +695,9 @@ public:
         return m_inner_operation ? m_inner_operation->front() : nullptr;
     }
 
-    void popFront() override {
+    void pop_front() override {
         if (m_inner_operation) {
-            m_inner_operation->popFront();
+            m_inner_operation->pop_front();
         }
     }
 
@@ -706,20 +706,20 @@ public:
     }
 
 #ifdef USE_IOURING
-    SequenceProgress prepareForSubmit() override {
-        return m_inner_operation ? m_inner_operation->prepareForSubmit() : SequenceProgress::kCompleted;
+    SequenceProgress prepare_for_submit() override {
+        return m_inner_operation ? m_inner_operation->prepare_for_submit() : SequenceProgress::kCompleted;
     }
 
-    SequenceProgress onActiveEvent(struct io_uring_cqe* cqe, GHandle handle) override {
-        return m_inner_operation ? m_inner_operation->onActiveEvent(cqe, handle) : SequenceProgress::kCompleted;
+    SequenceProgress on_active_event(struct io_uring_cqe* cqe, GHandle handle) override {
+        return m_inner_operation ? m_inner_operation->on_active_event(cqe, handle) : SequenceProgress::kCompleted;
     }
 #else
-    SequenceProgress prepareForSubmit(GHandle handle) override {
-        return m_inner_operation ? m_inner_operation->prepareForSubmit(handle) : SequenceProgress::kCompleted;
+    SequenceProgress prepare_for_submit(GHandle handle) override {
+        return m_inner_operation ? m_inner_operation->prepare_for_submit(handle) : SequenceProgress::kCompleted;
     }
 
-    SequenceProgress onActiveEvent(GHandle handle) override {
-        return m_inner_operation ? m_inner_operation->onActiveEvent(handle) : SequenceProgress::kCompleted;
+    SequenceProgress on_active_event(GHandle handle) override {
+        return m_inner_operation ? m_inner_operation->on_active_event(handle) : SequenceProgress::kCompleted;
     }
 #endif
 
@@ -727,14 +727,14 @@ public:
     std::expected<bool, galay::kernel::IOError> m_result;
 
 private:
-    ResultType resumeInner() {
+    ResultType resume_inner() {
         m_inner_completed = true;
         return m_inner_operation->await_resume();
     }
 
-    void cleanupInnerIfArmed() {
+    void cleanup_inner_if_armed() {
         if (m_inner_operation != nullptr && m_inner_armed && !m_inner_completed) {
-            m_inner_operation->onCompleted();
+            m_inner_operation->on_completed();
             m_inner_completed = true;
         }
     }
@@ -777,11 +777,11 @@ public:
     WsSessionImpl(WsSessionImpl&&) = delete;
     WsSessionImpl& operator=(WsSessionImpl&&) = delete;
 
-    WsReaderImpl<SocketType>& getReader() {
+    WsReaderImpl<SocketType>& get_reader() {
         return m_reader;
     }
 
-    WsWriterImpl<SocketType>& getWriter() {
+    WsWriterImpl<SocketType>& get_writer() {
         return m_writer;
     }
 
@@ -793,53 +793,53 @@ public:
         return WsSessionUpgraderImpl<SocketType>(this);
     }
 
-    bool isUpgraded() const {
+    bool is_upgraded() const {
         return m_upgraded;
     }
 
     // 便捷方法：发送文本消息
-    auto sendText(const std::string& text, bool fin = true) {
-        return m_writer.sendText(text, fin);
+    auto send_text(const std::string& text, bool fin = true) {
+        return m_writer.send_text(text, fin);
     }
 
     // 便捷方法：发送文本消息（移动语义）
-    auto sendText(std::string&& text, bool fin = true) {
-        return m_writer.sendText(std::move(text), fin);
+    auto send_text(std::string&& text, bool fin = true) {
+        return m_writer.send_text(std::move(text), fin);
     }
 
     // 便捷方法：发送二进制消息
-    auto sendBinary(const std::string& data, bool fin = true) {
-        return m_writer.sendBinary(data, fin);
+    auto send_binary(const std::string& data, bool fin = true) {
+        return m_writer.send_binary(data, fin);
     }
 
     // 便捷方法：发送二进制消息（移动语义）
-    auto sendBinary(std::string&& data, bool fin = true) {
-        return m_writer.sendBinary(std::move(data), fin);
+    auto send_binary(std::string&& data, bool fin = true) {
+        return m_writer.send_binary(std::move(data), fin);
     }
 
     // 便捷方法：发送Ping
-    auto sendPing(const std::string& data = "") {
-        return m_writer.sendPing(data);
+    auto send_ping(const std::string& data = "") {
+        return m_writer.send_ping(data);
     }
 
     // 便捷方法：发送Pong
-    auto sendPong(const std::string& data = "") {
-        return m_writer.sendPong(data);
+    auto send_pong(const std::string& data = "") {
+        return m_writer.send_pong(data);
     }
 
     // 便捷方法：发送Close
-    auto sendClose(WsCloseCode code = WsCloseCode::Normal, const std::string& reason = "") {
-        return m_writer.sendClose(code, reason);
+    auto send_close(WsCloseCode code = WsCloseCode::Normal, const std::string& reason = "") {
+        return m_writer.send_close(code, reason);
     }
 
     // 便捷方法：接收消息
-    auto getMessage(std::string& message, WsOpcode& opcode) {
-        return m_reader.getMessage(message, opcode);
+    auto get_message(std::string& message, WsOpcode& opcode) {
+        return m_reader.get_message(message, opcode);
     }
 
     // 便捷方法：接收帧
-    auto getFrame(WsFrame& frame) {
-        return m_reader.getFrame(frame);
+    auto get_frame(WsFrame& frame) {
+        return m_reader.get_frame(frame);
     }
 
     friend class detail::WsSessionUpgradeOperation<SocketType, false>;

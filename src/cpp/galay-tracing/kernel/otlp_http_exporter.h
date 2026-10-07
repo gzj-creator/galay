@@ -93,7 +93,7 @@ struct GalayHttpOtlpTransportConfig {
  * @param config 传输运行时配置
  * @return OtlpHttpTransport 可调用对象
  */
-OtlpHttpTransport makeGalayHttpOtlpTransport(GalayHttpOtlpTransportConfig config = {});
+OtlpHttpTransport make_galay_http_otlp_transport(GalayHttpOtlpTransportConfig config = {});
 #endif
 
 /**
@@ -131,14 +131,14 @@ public:
      * @param spans 待导出的 Span 只读视图
      * @return 导出结果
      */
-    ExportResult exportSpans(std::span<const Span> spans) override;
+    ExportResult export_spans(std::span<const Span> spans) override;
 
     /**
      * @brief 强制刷新（本实现为空操作）
      * @param timeout 超时时间
      * @return 始终返回 true
      */
-    bool forceFlush(std::chrono::milliseconds timeout) override;
+    bool force_flush(std::chrono::milliseconds timeout) override;
 
     /**
      * @brief 关闭导出器

@@ -34,9 +34,9 @@ public:
 
     /**
      * @brief 构造追踪上下文
-     * @param traceId 追踪标识符
-     * @param spanId Span 标识符
-     * @param traceFlags 追踪标志位（默认 0，位 0 表示采样）
+     * @param trace_id 追踪标识符
+     * @param span_id Span 标识符
+     * @param trace_flags 追踪标志位（默认 0，位 0 表示采样）
      * @param tracestate W3C tracestate 字符串（默认为空）
      */
     TraceContext(TraceId traceId, SpanId spanId, std::uint8_t traceFlags = 0, std::string tracestate = {})
@@ -51,15 +51,15 @@ public:
      * @brief 检查上下文是否有效（TraceId 和 SpanId 均有效）
      * @return 有效返回 true
      */
-    [[nodiscard]] bool isValid() const noexcept {
-        return m_traceId.isValid() && m_spanId.isValid();
+    [[nodiscard]] bool is_valid() const noexcept {
+        return m_traceId.is_valid() && m_spanId.is_valid();
     }
 
     /**
      * @brief 获取追踪标识符
      * @return TraceId 的常量引用
      */
-    [[nodiscard]] const TraceId& traceId() const noexcept {
+    [[nodiscard]] const TraceId& trace_id() const noexcept {
         return m_traceId;
     }
 
@@ -67,7 +67,7 @@ public:
      * @brief 获取 Span 标识符
      * @return SpanId 的常量引用
      */
-    [[nodiscard]] const SpanId& spanId() const noexcept {
+    [[nodiscard]] const SpanId& span_id() const noexcept {
         return m_spanId;
     }
 
@@ -75,7 +75,7 @@ public:
      * @brief 获取追踪标志位
      * @return 追踪标志位的原始值
      */
-    [[nodiscard]] std::uint8_t traceFlags() const noexcept {
+    [[nodiscard]] std::uint8_t trace_flags() const noexcept {
         return m_traceFlags;
     }
 
@@ -99,31 +99,31 @@ public:
      * @brief 获取父 Span 标识符
      * @return 父 SpanId 的可选值
      */
-    [[nodiscard]] const std::optional<SpanId>& parentSpanId() const noexcept {
+    [[nodiscard]] const std::optional<SpanId>& parent_span_id() const noexcept {
         return m_parentSpanId;
     }
 
     /**
      * @brief 设置 Span 标识符
-     * @param spanId 新的 SpanId
+     * @param span_id 新的 SpanId
      */
-    void setSpanId(SpanId spanId) noexcept {
+    void set_span_id(SpanId spanId) noexcept {
         m_spanId = spanId;
     }
 
     /**
      * @brief 设置父 Span 标识符
-     * @param parentSpanId 父 SpanId 的可选值
+     * @param parent_span_id 父 SpanId 的可选值
      */
-    void setParentSpanId(std::optional<SpanId> parentSpanId) {
+    void set_parent_span_id(std::optional<SpanId> parentSpanId) {
         m_parentSpanId = std::move(parentSpanId);
     }
 
     /**
      * @brief 设置追踪标志位
-     * @param traceFlags 新的标志位值
+     * @param trace_flags 新的标志位值
      */
-    void setTraceFlags(std::uint8_t traceFlags) noexcept {
+    void set_trace_flags(std::uint8_t traceFlags) noexcept {
         m_traceFlags = traceFlags;
     }
 
@@ -131,7 +131,7 @@ public:
      * @brief 设置 W3C tracestate 字符串
      * @param tracestate 新的 tracestate 值
      */
-    void setTracestate(std::string tracestate) {
+    void set_tracestate(std::string tracestate) {
         m_tracestate = std::move(tracestate);
     }
 
@@ -158,10 +158,10 @@ public:
 
     /**
      * @brief 构造 Span 上下文
-     * @param traceId 追踪标识符
-     * @param spanId Span 标识符
-     * @param traceFlags 追踪标志位（默认 0）
-     * @param parentSpanId 父 SpanId（默认为空）
+     * @param trace_id 追踪标识符
+     * @param span_id Span 标识符
+     * @param trace_flags 追踪标志位（默认 0）
+     * @param parent_span_id 父 SpanId（默认为空）
      */
     explicit constexpr SpanContext(
         TraceId traceId,
@@ -179,22 +179,22 @@ public:
      * @param context 源追踪上下文
      */
     explicit SpanContext(const TraceContext& context) noexcept
-        : SpanContext(context.traceId(), context.spanId(), context.traceFlags(), context.parentSpanId()) {
+        : SpanContext(context.trace_id(), context.span_id(), context.trace_flags(), context.parent_span_id()) {
     }
 
     /**
      * @brief 检查上下文是否有效
      * @return TraceId 和 SpanId 均有效时返回 true
      */
-    [[nodiscard]] bool isValid() const noexcept {
-        return m_traceId.isValid() && m_spanId.isValid();
+    [[nodiscard]] bool is_valid() const noexcept {
+        return m_traceId.is_valid() && m_spanId.is_valid();
     }
 
     /**
      * @brief 获取追踪标识符
      * @return TraceId 的常量引用
      */
-    [[nodiscard]] const TraceId& traceId() const noexcept {
+    [[nodiscard]] const TraceId& trace_id() const noexcept {
         return m_traceId;
     }
 
@@ -202,7 +202,7 @@ public:
      * @brief 获取 Span 标识符
      * @return SpanId 的常量引用
      */
-    [[nodiscard]] const SpanId& spanId() const noexcept {
+    [[nodiscard]] const SpanId& span_id() const noexcept {
         return m_spanId;
     }
 
@@ -210,7 +210,7 @@ public:
      * @brief 获取父 Span 标识符
      * @return 父 SpanId 的可选值
      */
-    [[nodiscard]] const std::optional<SpanId>& parentSpanId() const noexcept {
+    [[nodiscard]] const std::optional<SpanId>& parent_span_id() const noexcept {
         return m_parentSpanId;
     }
 
@@ -218,7 +218,7 @@ public:
      * @brief 获取追踪标志位
      * @return 追踪标志位的原始值
      */
-    [[nodiscard]] std::uint8_t traceFlags() const noexcept {
+    [[nodiscard]] std::uint8_t trace_flags() const noexcept {
         return m_traceFlags;
     }
 
@@ -232,25 +232,25 @@ public:
 
     /**
      * @brief 设置 Span 标识符
-     * @param spanId 新的 SpanId
+     * @param span_id 新的 SpanId
      */
-    void setSpanId(SpanId spanId) noexcept {
+    void set_span_id(SpanId spanId) noexcept {
         m_spanId = spanId;
     }
 
     /**
      * @brief 设置父 Span 标识符
-     * @param parentSpanId 父 SpanId 的可选值
+     * @param parent_span_id 父 SpanId 的可选值
      */
-    void setParentSpanId(std::optional<SpanId> parentSpanId) noexcept {
+    void set_parent_span_id(std::optional<SpanId> parentSpanId) noexcept {
         m_parentSpanId = parentSpanId;
     }
 
     /**
      * @brief 设置追踪标志位
-     * @param traceFlags 新的标志位值
+     * @param trace_flags 新的标志位值
      */
-    void setTraceFlags(std::uint8_t traceFlags) noexcept {
+    void set_trace_flags(std::uint8_t traceFlags) noexcept {
         m_traceFlags = traceFlags;
     }
 
@@ -259,9 +259,9 @@ public:
      * @param tracestate W3C tracestate 字符串（默认为空）
      * @return 包含给定 tracestate 的完整 TraceContext
      */
-    [[nodiscard]] TraceContext toTraceContext(std::string tracestate = {}) const {
+    [[nodiscard]] TraceContext to_trace_context(std::string tracestate = {}) const {
         TraceContext context(m_traceId, m_spanId, m_traceFlags, std::move(tracestate));
-        context.setParentSpanId(m_parentSpanId);
+        context.set_parent_span_id(m_parentSpanId);
         return context;
     }
 
@@ -287,9 +287,9 @@ public:
 
     /**
      * @brief 构造日志上下文
-     * @param traceId 追踪标识符
-     * @param spanId Span 标识符
-     * @param traceFlags 追踪标志位（默认 0）
+     * @param trace_id 追踪标识符
+     * @param span_id Span 标识符
+     * @param trace_flags 追踪标志位（默认 0）
      */
     explicit constexpr LogContext(TraceId traceId, SpanId spanId, std::uint8_t traceFlags = 0) noexcept
         : m_traceId(traceId),
@@ -302,22 +302,22 @@ public:
      * @param context 源追踪上下文
      */
     explicit LogContext(const TraceContext& context) noexcept
-        : LogContext(context.traceId(), context.spanId(), context.traceFlags()) {
+        : LogContext(context.trace_id(), context.span_id(), context.trace_flags()) {
     }
 
     /**
      * @brief 检查上下文是否有效
      * @return TraceId 和 SpanId 均有效时返回 true
      */
-    [[nodiscard]] bool isValid() const noexcept {
-        return m_traceId.isValid() && m_spanId.isValid();
+    [[nodiscard]] bool is_valid() const noexcept {
+        return m_traceId.is_valid() && m_spanId.is_valid();
     }
 
     /**
      * @brief 获取追踪标识符
      * @return TraceId 的常量引用
      */
-    [[nodiscard]] const TraceId& traceId() const noexcept {
+    [[nodiscard]] const TraceId& trace_id() const noexcept {
         return m_traceId;
     }
 
@@ -325,7 +325,7 @@ public:
      * @brief 获取 Span 标识符
      * @return SpanId 的常量引用
      */
-    [[nodiscard]] const SpanId& spanId() const noexcept {
+    [[nodiscard]] const SpanId& span_id() const noexcept {
         return m_spanId;
     }
 
@@ -333,7 +333,7 @@ public:
      * @brief 获取追踪标志位
      * @return 追踪标志位的原始值
      */
-    [[nodiscard]] std::uint8_t traceFlags() const noexcept {
+    [[nodiscard]] std::uint8_t trace_flags() const noexcept {
         return m_traceFlags;
     }
 
@@ -360,7 +360,7 @@ private:
  * @param context 可选的追踪上下文
  * @return 包含 LogContext 的可选值，输入为空时返回空
  */
-[[nodiscard]] inline std::optional<LogContext> makeLogContext(const std::optional<TraceContext>& context) {
+[[nodiscard]] inline std::optional<LogContext> make_log_context(const std::optional<TraceContext>& context) {
     if (!context.has_value()) {
         return std::nullopt;
     }
@@ -372,8 +372,8 @@ private:
  * @param context 可选的追踪上下文右值
  * @return 包含 LogContext 的可选值
  */
-[[nodiscard]] inline std::optional<LogContext> makeLogContext(std::optional<TraceContext>&& context) {
-    return makeLogContext(context);
+[[nodiscard]] inline std::optional<LogContext> make_log_context(std::optional<TraceContext>&& context) {
+    return make_log_context(context);
 }
 
 /**
@@ -381,7 +381,7 @@ private:
  * @param context 追踪上下文引用
  * @return 对应的 LogContext
  */
-[[nodiscard]] inline std::optional<LogContext> makeLogContext(const TraceContext& context) {
+[[nodiscard]] inline std::optional<LogContext> make_log_context(const TraceContext& context) {
     return LogContext(context);
 }
 
@@ -389,7 +389,7 @@ private:
  * @brief 从 std::nullopt 创建空的 LogContext
  * @return 空的可选值
  */
-[[nodiscard]] constexpr std::optional<LogContext> makeLogContext(std::nullopt_t) noexcept {
+[[nodiscard]] constexpr std::optional<LogContext> make_log_context(std::nullopt_t) noexcept {
     return std::nullopt;
 }
 

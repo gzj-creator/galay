@@ -28,32 +28,32 @@ constexpr size_t kDefaultBenchRingBufferSize = 128 * 1024;
 class BenchEchoService : public RpcService {
 public:
     BenchEchoService() : RpcService("BenchEchoService") {
-        registerMethod("echo", &BenchEchoService::echo);
-        registerClientStreamingMethod("echo", &BenchEchoService::echo);
-        registerServerStreamingMethod("echo", &BenchEchoService::echo);
-        registerBidiStreamingMethod("echo", &BenchEchoService::echo);
+        register_method("echo", &BenchEchoService::echo);
+        register_client_streaming_method("echo", &BenchEchoService::echo);
+        register_server_streaming_method("echo", &BenchEchoService::echo);
+        register_bidi_streaming_method("echo", &BenchEchoService::echo);
     }
 
     Task<void> echo(RpcContext& ctx) {
         auto& req = ctx.request();
-        ctx.setPayload(req.payloadView());
+        ctx.set_payload(req.payload_view());
         co_return;
     }
 };
 
 std::atomic<bool> g_running{true};
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running.store(false);
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 #if defined(SIGPIPE)
     std::signal(SIGPIPE, SIG_IGN);
 #endif
@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "=== RPC Benchmark Server ===\n";
     std::cout << "Port: " << port << "\n";
-    const size_t resolved_io_count = resolveIoSchedulerCount(io_count);
+    const size_t resolved_io_count = resolve_io_scheduler_count(io_count);
     std::cout << "IO Schedulers: " << (io_count == 0 ? "auto" : std::to_string(io_count)) << "\n";
     if (io_count == 0) {
         std::cout << "Resolved IO Schedulers: " << resolved_io_count << "\n";
@@ -86,11 +86,11 @@ int main(int argc, char* argv[]) {
     auto server = RpcServerBuilder()
         .host("0.0.0.0")
         .port(port)
-        .ioSchedulerCount(resolved_io_count)
+        .io_scheduler_count(resolved_io_count)
         .backlog(kDefaultBacklog)
-        .ringBufferSize(ring_buffer_size)
+        .ring_buffer_size(ring_buffer_size)
         .build();
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register benchmark service: "
                   << registered.error().message() << "\n";
@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Server started. Press Ctrl+C to stop.\n";
 
-    while (g_running.load() && server.isRunning()) {
+    while (g_running.load() && server.is_running()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 

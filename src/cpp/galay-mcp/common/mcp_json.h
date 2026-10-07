@@ -56,7 +56,7 @@ private:
  * @note StreamWriter失败粘滞：中间写入调用的返回值可安全丢弃，
  *       最终必须检查 finish() 的结果。
  */
-inline json::stream::StreamWriter makeJsonWriter(std::string& out) {
+inline json::stream::StreamWriter make_json_writer(std::string& out) {
     return json::stream::StreamWriter{[&out](std::string_view text) -> json::result<void> {
         out.append(text);
         return {};
@@ -67,7 +67,7 @@ inline json::stream::StreamWriter makeJsonWriter(std::string& out) {
  * @brief 获取空JSON对象 "{}" 的静态引用
  * @return 常驻的空对象 serde JSON 值
  */
-inline const json::Json& emptyJsonObject() {
+inline const json::Json& empty_json_object() {
     static const json::Json empty = []() {
         auto parsed = json::parse("{}");
         return parsed ? std::move(parsed.value()) : json::Json{};

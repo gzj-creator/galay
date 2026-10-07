@@ -27,7 +27,7 @@ namespace galay::utils {
  * @return 反解后的类型名称字符串
  */
 template<typename T>
-inline std::string getTypeName() {
+inline std::string get_type_name() {
     const char* name = typeid(T).name();
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -50,7 +50,7 @@ inline std::string getTypeName() {
  * @return 反解后的类型名称字符串
  */
 template<typename T>
-inline std::string getTypeName(const T& obj) {
+inline std::string get_type_name(const T& obj) {
     const char* name = typeid(obj).name();
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -71,7 +71,7 @@ inline std::string getTypeName(const T& obj) {
  * @param mangledName 混淆的符号名称
  * @return 反解后的符号名称字符串
  */
-inline std::string demangleSymbol(const char* mangledName) {
+inline std::string demangle_symbol(const char* mangledName) {
     if (!mangledName) {
         return "";
     }

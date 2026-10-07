@@ -116,7 +116,7 @@ public:
      * @param timeout 超时时长（毫秒）
      * @return 构建器引用，支持链式调用
      */
-    AsyncMysqlClientBuilder& sendTimeout(std::chrono::milliseconds timeout)
+    AsyncMysqlClientBuilder& send_timeout(std::chrono::milliseconds timeout)
     {
         m_config.send_timeout = timeout;
         return *this;
@@ -127,7 +127,7 @@ public:
      * @param timeout 超时时长（毫秒）
      * @return 构建器引用，支持链式调用
      */
-    AsyncMysqlClientBuilder& recvTimeout(std::chrono::milliseconds timeout)
+    AsyncMysqlClientBuilder& recv_timeout(std::chrono::milliseconds timeout)
     {
         m_config.recv_timeout = timeout;
         return *this;
@@ -138,7 +138,7 @@ public:
      * @param size 缓冲区大小（字节）
      * @return 构建器引用，支持链式调用
      */
-    AsyncMysqlClientBuilder& bufferSize(size_t size)
+    AsyncMysqlClientBuilder& buffer_size(size_t size)
     {
         m_config.buffer_size = size;
         return *this;
@@ -149,7 +149,7 @@ public:
      * @param hint 预分配行数提示
      * @return 构建器引用，支持链式调用
      */
-    AsyncMysqlClientBuilder& resultRowReserveHint(size_t hint)
+    AsyncMysqlClientBuilder& result_row_reserve_hint(size_t hint)
     {
         m_config.result_row_reserve_hint = hint;
         return *this;
@@ -161,7 +161,7 @@ public:
      * @return 构建器引用，支持链式调用
      * @note 显式传入 MysqlConfig 的 connect(MysqlConfig) 以 MysqlConfig::tcp_no_delay 为准。
      */
-    AsyncMysqlClientBuilder& tcpNoDelay(bool enabled)
+    AsyncMysqlClientBuilder& tcp_no_delay(bool enabled)
     {
         m_config.tcp_no_delay = enabled;
         return *this;
@@ -177,14 +177,14 @@ public:
      * @brief 仅构建配置对象
      * @return 当前的AsyncMysqlConfig配置
      */
-    AsyncMysqlConfig buildConfig() const
+    AsyncMysqlConfig build_config() const
     {
         return m_config;
     }
 
 private:
     IOScheduler* m_scheduler = nullptr;                                 ///< IO调度器指针
-    AsyncMysqlConfig m_config = AsyncMysqlConfig::noTimeout();          ///< 异步配置
+    AsyncMysqlConfig m_config = AsyncMysqlConfig::no_timeout();          ///< 异步配置
 };
 
 // ======================== AsyncMysqlClient ========================
@@ -194,7 +194,7 @@ private:
  * @details 所有异步接口返回自定义Awaitable值对象（而非Task<void>）
  *
  * @code
- * Task<void> testMysql(IOScheduler* scheduler) {
+ * Task<void> test_mysql(IOScheduler* scheduler) {
  *     AsyncMysqlClient client(scheduler);
  *     auto config = MysqlConfig::create("127.0.0.1", 3306, "root", "password", "test_db");
  *     auto connect_result = co_await client.connect(config);
@@ -223,7 +223,7 @@ public:
      * @param config 异步配置（超时、缓冲区大小等）
      */
     AsyncMysqlClient(IOScheduler* scheduler,
-                     AsyncMysqlConfig config = AsyncMysqlConfig::noTimeout());
+                     AsyncMysqlConfig config = AsyncMysqlConfig::no_timeout());
 
     AsyncMysqlClient(AsyncMysqlClient&& other) noexcept;             ///< 移动构造
     AsyncMysqlClient& operator=(AsyncMysqlClient&& other) noexcept;  ///< 移动赋值
@@ -294,7 +294,7 @@ public:
      * @param param_types 参数类型列表
      * @return 执行等待体
      */
-    MysqlStmtExecuteAwaitable<Strategy> stmtExecute(uint32_t stmt_id,
+    MysqlStmtExecuteAwaitable<Strategy> stmt_execute(uint32_t stmt_id,
                                                     std::span<const std::optional<std::string>> params,
                                                     std::span<const uint8_t> param_types = {});
 
@@ -305,36 +305,36 @@ public:
      * @param param_types 参数类型列表
      * @return 执行等待体
      */
-    MysqlStmtExecuteAwaitable<Strategy> stmtExecute(uint32_t stmt_id,
+    MysqlStmtExecuteAwaitable<Strategy> stmt_execute(uint32_t stmt_id,
                                                     std::span<const std::optional<std::string_view>> params,
                                                     std::span<const uint8_t> param_types = {});
 
     // ======================== 事务 ========================
 
-    MysqlQueryAwaitable<Strategy> beginTransaction();  ///< 异步开启事务
+    MysqlQueryAwaitable<Strategy> begin_transaction();  ///< 异步开启事务
     MysqlQueryAwaitable<Strategy> commit();             ///< 异步提交事务
     MysqlQueryAwaitable<Strategy> rollback();           ///< 异步回滚事务
 
     // ======================== 工具命令 ========================
 
     MysqlQueryAwaitable<Strategy> ping();                                ///< 异步发送心跳检测
-    MysqlQueryAwaitable<Strategy> useDatabase(std::string_view database); ///< 异步切换数据库
+    MysqlQueryAwaitable<Strategy> use_database(std::string_view database); ///< 异步切换数据库
 
     // ======================== 连接管理 ========================
 
     auto close() { m_is_closed = true; return m_socket.close(); } ///< 关闭连接
-    bool isClosed() const { return m_is_closed; }                 ///< 检查连接是否已关闭
+    bool is_closed() const { return m_is_closed; }                 ///< 检查连接是否已关闭
 
     // ======================== 内部访问 ========================
 
     AsyncTcpSocket& socket() { return m_socket; }                   ///< 获取TCP套接字引用
-    RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
-    const RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
+    RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
+    const RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
     protocol::MysqlParser& parser() { return m_parser; }       ///< 获取协议解析器引用
     protocol::MysqlEncoder& encoder() { return m_encoder; }    ///< 获取协议编码器引用
-    const AsyncMysqlConfig& asyncConfig() const { return m_config; } ///< 获取异步配置
-    uint32_t serverCapabilities() const { return m_server_capabilities; } ///< 获取服务器能力标志
-    void setServerCapabilities(uint32_t caps) { m_server_capabilities = caps; } ///< 设置服务器能力标志
+    const AsyncMysqlConfig& async_config() const { return m_config; } ///< 获取异步配置
+    uint32_t server_capabilities() const { return m_server_capabilities; } ///< 获取服务器能力标志
+    void set_server_capabilities(uint32_t caps) { m_server_capabilities = caps; } ///< 设置服务器能力标志
 private:
     friend class details::MysqlConnectAwaitable<Strategy>;
     friend class details::MysqlQueryAwaitable<Strategy>;

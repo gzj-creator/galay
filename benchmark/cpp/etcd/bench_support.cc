@@ -61,7 +61,7 @@ struct EndpointParts {
     bool valid = false;
 };
 
-EndpointParts parseHttpEndpoint(const std::string& endpoint)
+EndpointParts parse_http_endpoint(const std::string& endpoint)
 {
     constexpr std::string_view prefix = "http://";
     if (endpoint.rfind(prefix, 0) != 0) {
@@ -87,13 +87,13 @@ EndpointParts parseHttpEndpoint(const std::string& endpoint)
     return parts;
 }
 
-bool setNonBlocking(int fd)
+bool set_non_blocking(int fd)
 {
     const int flags = ::fcntl(fd, F_GETFL, 0);
     return flags >= 0 && ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool endpointReachable(const EndpointParts& endpoint)
+bool endpoint_reachable(const EndpointParts& endpoint)
 {
     if (!endpoint.valid) {
         return true;
@@ -115,7 +115,7 @@ bool endpointReachable(const EndpointParts& endpoint)
         if (fd < 0) {
             continue;
         }
-        if (!setNonBlocking(fd)) {
+        if (!set_non_blocking(fd)) {
             (void)::close(fd);
             continue;
         }
@@ -142,18 +142,18 @@ bool endpointReachable(const EndpointParts& endpoint)
     return reachable;
 }
 
-std::string payloadOfSize(int size)
+std::string payload_of_size(int size)
 {
     return std::string(static_cast<size_t>(std::max(size, 1)), 'x');
 }
 
-std::string nowSuffix()
+std::string now_suffix()
 {
     const auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
     return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(now).count());
 }
 
-int resolvedSchedulerCount(const AsyncBenchmarkArgs& args)
+int resolved_scheduler_count(const AsyncBenchmarkArgs& args)
 {
     if (args.io_schedulers > 0) {
         return std::max(1, std::min(args.io_schedulers, args.workers));
@@ -164,7 +164,7 @@ int resolvedSchedulerCount(const AsyncBenchmarkArgs& args)
     return std::max(1, std::min(args.workers, hardware_count));
 }
 
-void rememberFirstError(const std::shared_ptr<SharedState>& state, const std::string& error)
+void remember_first_error(const std::shared_ptr<SharedState>& state, const std::string& error)
 {
     if (error.empty()) {
         return;
@@ -175,7 +175,7 @@ void rememberFirstError(const std::shared_ptr<SharedState>& state, const std::st
     }
 }
 
-void cleanupPrefix(const AsyncBenchmarkArgs& args,
+void cleanup_prefix(const AsyncBenchmarkArgs& args,
                    const std::string& key_prefix,
                    const std::shared_ptr<SharedState>& state)
 {
@@ -185,19 +185,19 @@ void cleanupPrefix(const AsyncBenchmarkArgs& args,
     auto session = EtcdClientBuilder().config(config).build();
     auto connect_result = session.connect();
     if (!connect_result.has_value()) {
-        rememberFirstError(state, "cleanup connect failed: " + connect_result.error().message());
+        remember_first_error(state, "cleanup connect failed: " + connect_result.error().message());
         return;
     }
 
     auto delete_result = session.del(key_prefix, true);
     if (!delete_result.has_value()) {
-        rememberFirstError(state, "cleanup delete failed: " + delete_result.error().message());
+        remember_first_error(state, "cleanup delete failed: " + delete_result.error().message());
     }
 
     (void)session.close();
 }
 
-Task<void> runWorker(std::shared_ptr<SharedState> state,
+Task<void> run_worker(std::shared_ptr<SharedState> state,
                      int worker_id,
                      AsyncBenchmarkArgs args,
                      std::string key_prefix,
@@ -213,7 +213,7 @@ Task<void> runWorker(std::shared_ptr<SharedState> state,
         auto client = AsyncEtcdClientBuilder().scheduler(scheduler).config(config).build();
         auto connect_result = co_await client.connect();
         if (!connect_result.has_value()) {
-            rememberFirstError(state, connect_result.error().message());
+            remember_first_error(state, connect_result.error().message());
             state->startup_failures.fetch_add(1, std::memory_order_release);
             co_return;
         }
@@ -221,13 +221,13 @@ Task<void> runWorker(std::shared_ptr<SharedState> state,
         const std::string warmup_key = key_prefix + "warmup/" + std::to_string(worker_id);
         auto warmup_result = co_await client.get(warmup_key);
         if (!warmup_result.has_value()) {
-            rememberFirstError(state, "warmup get failed: " + warmup_result.error().message());
+            remember_first_error(state, "warmup get failed: " + warmup_result.error().message());
             state->startup_failures.fetch_add(1, std::memory_order_release);
             (void)co_await client.close();
             co_return;
         }
         if (!warmup_result.value().empty()) {
-            rememberFirstError(state, "warmup verification failed");
+            remember_first_error(state, "warmup verification failed");
             state->startup_failures.fetch_add(1, std::memory_order_release);
             (void)co_await client.close();
             co_return;
@@ -242,7 +242,7 @@ Task<void> runWorker(std::shared_ptr<SharedState> state,
         if (state->benchmark_aborted.load(std::memory_order_acquire)) {
             auto close_result = co_await client.close();
             if (!close_result.has_value()) {
-                rememberFirstError(state, close_result.error().message());
+                remember_first_error(state, close_result.error().message());
             }
             state->finalized_workers.fetch_add(1, std::memory_order_release);
             co_return;
@@ -265,18 +265,18 @@ Task<void> runWorker(std::shared_ptr<SharedState> state,
                         !get_result.value().empty() &&
                         get_result.value().front().value == value;
                     if (!ok && !get_result.has_value()) {
-                        rememberFirstError(state, get_result.error().message());
+                        remember_first_error(state, get_result.error().message());
                     } else if (!ok) {
-                        rememberFirstError(state, "mixed benchmark verification failed");
+                        remember_first_error(state, "mixed benchmark verification failed");
                     }
                 } else {
-                    rememberFirstError(state, put_result.error().message());
+                    remember_first_error(state, put_result.error().message());
                 }
             } else {
                 auto put_result = co_await client.put(key, value);
                 ok = put_result.has_value();
                 if (!ok) {
-                    rememberFirstError(state, put_result.error().message());
+                    remember_first_error(state, put_result.error().message());
                 }
             }
 
@@ -295,21 +295,21 @@ Task<void> runWorker(std::shared_ptr<SharedState> state,
         state->completed_workers.fetch_add(1, std::memory_order_release);
         auto close_result = co_await client.close();
         if (!close_result.has_value()) {
-            rememberFirstError(state, close_result.error().message());
+            remember_first_error(state, close_result.error().message());
         }
         state->finalized_workers.fetch_add(1, std::memory_order_release);
     } catch (const std::exception& ex) {
-        rememberFirstError(state, ex.what());
+        remember_first_error(state, ex.what());
         state->failure.fetch_add(args.ops_per_worker - completed_ops, std::memory_order_relaxed);
     } catch (...) {
-        rememberFirstError(state, "unknown async benchmark worker exception");
+        remember_first_error(state, "unknown async benchmark worker exception");
         state->failure.fetch_add(args.ops_per_worker - completed_ops, std::memory_order_relaxed);
     }
 }
 
 } // namespace
 
-const char* toString(AsyncBenchmarkMode mode) noexcept
+const char* to_string(AsyncBenchmarkMode mode) noexcept
 {
     switch (mode) {
     case AsyncBenchmarkMode::Put:
@@ -320,7 +320,7 @@ const char* toString(AsyncBenchmarkMode mode) noexcept
     return "unknown";
 }
 
-std::expected<AsyncBenchmarkMode, std::string> parseAsyncBenchmarkMode(const std::string& value)
+std::expected<AsyncBenchmarkMode, std::string> parse_async_benchmark_mode(const std::string& value)
 {
     if (value.empty() || value == "put") {
         return AsyncBenchmarkMode::Put;
@@ -343,7 +343,7 @@ double percentile(std::vector<int64_t> samples_us, double p)
 }
 
 std::expected<AsyncBenchmarkResult, std::string>
-runAsyncBenchmark(const AsyncBenchmarkArgs& args)
+run_async_benchmark(const AsyncBenchmarkArgs& args)
 {
     if (args.workers <= 0) {
         return std::unexpected("workers must be > 0");
@@ -357,18 +357,18 @@ runAsyncBenchmark(const AsyncBenchmarkArgs& args)
     if (args.timeout_seconds <= 0) {
         return std::unexpected("timeout_seconds must be > 0");
     }
-    if (!endpointReachable(parseHttpEndpoint(args.endpoint))) {
+    if (!endpoint_reachable(parse_http_endpoint(args.endpoint))) {
         return std::unexpected("[EXTERNAL_DEP] etcd endpoint is required: " + args.endpoint);
     }
 
-    const int io_schedulers = resolvedSchedulerCount(args);
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_schedulers).parallelSchedulerCount(0).build();
+    const int io_schedulers = resolved_scheduler_count(args);
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(io_schedulers).parallel_scheduler_count(0).build();
     runtime.start();
 
     std::vector<IOScheduler*> schedulers;
     schedulers.reserve(static_cast<size_t>(io_schedulers));
     for (int i = 0; i < io_schedulers; ++i) {
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (scheduler == nullptr) {
             runtime.stop();
             return std::unexpected("failed to get io scheduler");
@@ -377,14 +377,14 @@ runAsyncBenchmark(const AsyncBenchmarkArgs& args)
     }
 
     auto state = std::make_shared<SharedState>(args.workers);
-    const std::string value = payloadOfSize(args.value_size);
-    const std::string key_prefix = "/galay-etcd/bench/async/" + nowSuffix() + "/";
+    const std::string value = payload_of_size(args.value_size);
+    const std::string key_prefix = "/galay-etcd/bench/async/" + now_suffix() + "/";
 
     for (int worker_id = 0; worker_id < args.workers; ++worker_id) {
         IOScheduler* scheduler = schedulers[static_cast<size_t>(worker_id % io_schedulers)];
-        if (!galay::kernel::scheduleTask(
+        if (!galay::kernel::schedule_task(
                 scheduler,
-                runWorker(state, worker_id, args, key_prefix, value, scheduler))) {
+                run_worker(state, worker_id, args, key_prefix, value, scheduler))) {
             runtime.stop();
             return std::unexpected("failed to schedule async benchmark worker " + std::to_string(worker_id));
         }
@@ -424,7 +424,7 @@ runAsyncBenchmark(const AsyncBenchmarkArgs& args)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     runtime.stop();
-    cleanupPrefix(args, key_prefix, state);
+    cleanup_prefix(args, key_prefix, state);
 
     AsyncBenchmarkResult result;
     result.endpoint = args.endpoint;

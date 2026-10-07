@@ -35,7 +35,7 @@ bool require(bool condition, const char* message)
 }
 
 template <typename Func>
-bool runBench(const char* name, size_t iterations, Func&& func)
+bool run_bench(const char* name, size_t iterations, Func&& func)
 {
     size_t checksum = 0;
     const auto start = std::chrono::steady_clock::now();
@@ -57,7 +57,7 @@ bool runBench(const char* name, size_t iterations, Func&& func)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -80,22 +80,22 @@ int main(int argc, char** argv)
     writer.m_buffer.reserve(header.size());
     writer.m_body_buffer.reserve(body.size());
 
-    if (!runBench("BM_HttpWriterTcpLayout", iterations, [&](size_t i) {
+    if (!run_bench("BM_HttpWriterTcpLayout", iterations, [&](size_t i) {
             writer.m_buffer = header;
             writer.m_body_buffer = body;
-            writer.prepareTcpSendLayout();
-            const size_t count = writer.getIovecsCount();
-            const size_t remaining = writer.getRemainingBytes();
-            writer.updateRemainingWritev(remaining);
+            writer.prepare_tcp_send_layout();
+            const size_t count = writer.get_iovecs_count();
+            const size_t remaining = writer.get_remaining_bytes();
+            writer.update_remaining_writev(remaining);
             return count + remaining + (i & 1U);
         })) {
         return 1;
     }
 
-    if (!runBench("BM_HttpWriterSslCoalesceLayout", iterations, [&](size_t i) {
-            writer.prepareSslSendLayout(header, body);
-            const size_t remaining = writer.getRemainingBytes();
-            writer.updateRemaining(remaining);
+    if (!run_bench("BM_HttpWriterSslCoalesceLayout", iterations, [&](size_t i) {
+            writer.prepare_ssl_send_layout(header, body);
+            const size_t remaining = writer.get_remaining_bytes();
+            writer.update_remaining(remaining);
             return remaining + (i & 1U);
         })) {
         return 1;
@@ -103,36 +103,36 @@ int main(int argc, char** argv)
 
     // These cases measure synchronous layout preparation without starting socket sends.
     HttpResponse lvalue_response;
-    lvalue_response.setBodyStr(std::string(body));
-    if (!runBench("BM_HttpWriterLvalueResponseLayout", iterations, [&](size_t i) {
-            (void) writer.sendResponse(lvalue_response);
-            const size_t count = writer.getIovecsCount();
-            const size_t remaining = writer.getRemainingBytes();
-            writer.updateRemainingWritev(remaining);
-            return count + remaining + lvalue_response.bodyStr().size() + (i & 1U);
+    lvalue_response.set_body_str(std::string(body));
+    if (!run_bench("BM_HttpWriterLvalueResponseLayout", iterations, [&](size_t i) {
+            (void) writer.send_response(lvalue_response);
+            const size_t count = writer.get_iovecs_count();
+            const size_t remaining = writer.get_remaining_bytes();
+            writer.update_remaining_writev(remaining);
+            return count + remaining + lvalue_response.body_str().size() + (i & 1U);
         })) {
         return 1;
     }
 
-    if (!runBench("BM_HttpWriterRvalueResponseLayout", iterations, [&](size_t i) {
+    if (!run_bench("BM_HttpWriterRvalueResponseLayout", iterations, [&](size_t i) {
             HttpResponse response;
-            response.setBodyStr(std::string(body));
-            (void) writer.sendResponse(std::move(response));
-            const size_t count = writer.getIovecsCount();
-            const size_t remaining = writer.getRemainingBytes();
-            writer.updateRemainingWritev(remaining);
+            response.set_body_str(std::string(body));
+            (void) writer.send_response(std::move(response));
+            const size_t count = writer.get_iovecs_count();
+            const size_t remaining = writer.get_remaining_bytes();
+            writer.update_remaining_writev(remaining);
             return count + remaining + (i & 1U);
         })) {
         return 1;
     }
 
-    if (!runBench("BM_HttpWriterRvalueRequestLayout", iterations, [&](size_t i) {
+    if (!run_bench("BM_HttpWriterRvalueRequestLayout", iterations, [&](size_t i) {
             HttpRequest request;
-            request.setBodyStr(std::string(body));
-            (void) writer.sendRequest(std::move(request));
-            const size_t count = writer.getIovecsCount();
-            const size_t remaining = writer.getRemainingBytes();
-            writer.updateRemainingWritev(remaining);
+            request.set_body_str(std::string(body));
+            (void) writer.send_request(std::move(request));
+            const size_t count = writer.get_iovecs_count();
+            const size_t remaining = writer.get_remaining_bytes();
+            writer.update_remaining_writev(remaining);
             return count + remaining + (i & 1U);
         })) {
         return 1;
@@ -140,14 +140,14 @@ int main(int argc, char** argv)
 
     HttpResponseHeader response_header;
     HttpRequestHeader request_header;
-    if (!runBench("BM_HttpWriterLvalueHeaderLayout", iterations, [&](size_t i) {
-            (void) writer.sendHeader(response_header);
-            const size_t response_size = writer.getRemainingBytes();
-            writer.updateRemaining(response_size);
+    if (!run_bench("BM_HttpWriterLvalueHeaderLayout", iterations, [&](size_t i) {
+            (void) writer.send_header(response_header);
+            const size_t response_size = writer.get_remaining_bytes();
+            writer.update_remaining(response_size);
 
-            (void) writer.sendHeader(request_header);
-            const size_t request_size = writer.getRemainingBytes();
-            writer.updateRemaining(request_size);
+            (void) writer.send_header(request_header);
+            const size_t request_size = writer.get_remaining_bytes();
+            writer.update_remaining(request_size);
             return response_size + request_size + (i & 1U);
         })) {
         return 1;

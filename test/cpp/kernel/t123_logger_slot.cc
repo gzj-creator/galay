@@ -40,12 +40,12 @@ public:
         m_functions.emplace_back(function);
     }
 
-    galay::kernel::LogLevel minLevel() const override
+    galay::kernel::LogLevel min_level() const override
     {
         return m_min_level;
     }
 
-    void setMinLevel(galay::kernel::LogLevel level)
+    void set_min_level(galay::kernel::LogLevel level)
     {
         m_min_level = level;
     }
@@ -55,12 +55,12 @@ public:
         return m_messages.size();
     }
 
-    const std::string& tagAt(size_t index) const
+    const std::string& tag_at(size_t index) const
     {
         return m_tags[index];
     }
 
-    const std::string& messageAt(size_t index) const
+    const std::string& message_at(size_t index) const
     {
         return m_messages[index];
     }
@@ -83,7 +83,7 @@ bool expect(bool condition)
     return condition;
 }
 
-int buildLogValue(int& call_count)
+int build_log_value(int& call_count)
 {
     ++call_count;
     return 42;
@@ -117,20 +117,20 @@ int main()
     GALAY_KERNEL_LOG_ERROR("[kernel] [event]", "code={}", 42);
 
     if (!expect(first_raw->size() == 1) ||
-        !expect(first_raw->tagAt(0) == "[first] [event]") ||
-        !expect(first_raw->messageAt(0) == "value=7")) {
+        !expect(first_raw->tag_at(0) == "[first] [event]") ||
+        !expect(first_raw->message_at(0) == "value=7")) {
         return EXIT_FAILURE;
     }
 
     if (!expect(second_raw->size() == 1) ||
-        !expect(second_raw->tagAt(0) == "[second] [event]") ||
-        !expect(second_raw->messageAt(0) == "state=warn")) {
+        !expect(second_raw->tag_at(0) == "[second] [event]") ||
+        !expect(second_raw->message_at(0) == "state=warn")) {
         return EXIT_FAILURE;
     }
 
     if (!expect(kernel_raw->size() == 1) ||
-        !expect(kernel_raw->tagAt(0) == "[kernel] [event]") ||
-        !expect(kernel_raw->messageAt(0) == "code=42")) {
+        !expect(kernel_raw->tag_at(0) == "[kernel] [event]") ||
+        !expect(kernel_raw->message_at(0) == "code=42")) {
         return EXIT_FAILURE;
     }
 
@@ -140,14 +140,14 @@ int main()
                           galay::kernel::LogLevel::kError,
                           "[first] [disabled]",
                           "value={}",
-                          buildLogValue(disabled_argument_count));
+                          build_log_value(disabled_argument_count));
     if (!expect(disabled_argument_count == 0)) {
         return EXIT_FAILURE;
     }
 
     auto filtered_logger = std::make_unique<CollectingLogger>();
     auto* filtered_raw = filtered_logger.get();
-    filtered_raw->setMinLevel(galay::kernel::LogLevel::kError);
+    filtered_raw->set_min_level(galay::kernel::LogLevel::kError);
     FirstSlot::set(std::move(filtered_logger));
 
     int filtered_argument_count = 0;
@@ -155,7 +155,7 @@ int main()
                           galay::kernel::LogLevel::kDebug,
                           "[first] [filtered]",
                           "value={}",
-                          buildLogValue(filtered_argument_count));
+                          build_log_value(filtered_argument_count));
     if (!expect(filtered_argument_count == 0) || !expect(filtered_raw->size() == 0)) {
         return EXIT_FAILURE;
     }
@@ -166,11 +166,11 @@ int main()
                               galay::kernel::LogLevel::kError,
                               "[first] [enabled]",
                               "value={}",
-                              buildLogValue(enabled_argument_count));
+                              build_log_value(enabled_argument_count));
     }
     if (!expect(enabled_argument_count == 1) ||
         !expect(filtered_raw->size() == 1) ||
-        !expect(filtered_raw->messageAt(0) == "value=42")) {
+        !expect(filtered_raw->message_at(0) == "value=42")) {
         return EXIT_FAILURE;
     }
 

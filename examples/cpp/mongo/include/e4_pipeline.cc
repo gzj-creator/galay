@@ -33,7 +33,7 @@ Task<void> run(IOScheduler* scheduler,
     auto client = AsyncMongoClientBuilder().scheduler(scheduler).config(cfg.async).build();
 
     const std::expected<bool, MongoError> conn_result =
-        mongo_example::unwrapMongoTaskResult(co_await client.connect(cfg.mongo),
+        mongo_example::unwrap_mongo_task_result(co_await client.connect(cfg.mongo),
                                              MONGO_ERROR_CONNECTION);
     if (!conn_result) {
         state->ok.store(false, std::memory_order_relaxed);
@@ -58,7 +58,7 @@ Task<void> run(IOScheduler* scheduler,
     commands.push_back(std::move(c3));
 
     const std::expected<std::vector<MongoPipelineResponse>, MongoError> pipeline_result =
-        mongo_example::unwrapMongoTaskResult(
+        mongo_example::unwrap_mongo_task_result(
             co_await client.pipeline(cfg.mongo.database, std::move(commands)),
             MONGO_ERROR_COMMAND);
     if (!pipeline_result) {
@@ -86,13 +86,13 @@ Task<void> run(IOScheduler* scheduler,
 
 int main()
 {
-    const auto mongo_cfg = mongo_example::loadMongoConfigFromEnv();
-    const auto async_cfg = mongo_example::loadAsyncMongoConfigFromEnv();
+    const auto mongo_cfg = mongo_example::load_mongo_config_from_env();
+    const auto async_cfg = mongo_example::load_async_mongo_config_from_env();
 
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "No scheduler available" << std::endl;
         runtime.stop();
@@ -100,7 +100,7 @@ int main()
     }
 
     RunState state;
-    if (!scheduleTask(scheduler, run(scheduler, &state, AsyncClientConfig{mongo_cfg, async_cfg}))) {
+    if (!schedule_task(scheduler, run(scheduler, &state, AsyncClientConfig{mongo_cfg, async_cfg}))) {
         std::cerr << "Failed to schedule async pipeline task" << std::endl;
         runtime.stop();
         return 1;

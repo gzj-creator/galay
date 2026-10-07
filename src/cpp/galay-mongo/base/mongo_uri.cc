@@ -13,7 +13,7 @@ namespace
 
 constexpr std::string_view kMongoScheme = "mongodb://";
 
-std::unexpected<MongoError> invalidParam(std::string message)
+std::unexpected<MongoError> invalid_param(std::string message)
 {
     return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, std::move(message)));
 }
@@ -23,7 +23,7 @@ std::unexpected<MongoError> unsupported(std::string message)
     return std::unexpected(MongoError(MONGO_ERROR_UNSUPPORTED, std::move(message)));
 }
 
-bool isDigits(std::string_view text)
+bool is_digits(std::string_view text)
 {
     return !text.empty() &&
            std::all_of(text.begin(), text.end(), [](unsigned char ch) {
@@ -31,10 +31,10 @@ bool isDigits(std::string_view text)
            });
 }
 
-std::expected<uint16_t, MongoError> parsePort(std::string_view text)
+std::expected<uint16_t, MongoError> parse_port(std::string_view text)
 {
-    if (!isDigits(text)) {
-        return invalidParam("malformed port");
+    if (!is_digits(text)) {
+        return invalid_param("malformed port");
     }
 
     uint32_t value = 0;
@@ -42,15 +42,15 @@ std::expected<uint16_t, MongoError> parsePort(std::string_view text)
     const auto* last = text.data() + text.size();
     const auto [ptr, ec] = std::from_chars(first, last, value);
     if (ec != std::errc() || ptr != last || value == 0 || value > 65535) {
-        return invalidParam("port out of range");
+        return invalid_param("port out of range");
     }
     return static_cast<uint16_t>(value);
 }
 
-std::expected<MongoEndpoint, MongoError> parseEndpoint(std::string_view text)
+std::expected<MongoEndpoint, MongoError> parse_endpoint(std::string_view text)
 {
     if (text.empty()) {
-        return invalidParam("empty seed");
+        return invalid_param("empty seed");
     }
 
     MongoEndpoint endpoint;
@@ -60,10 +60,10 @@ std::expected<MongoEndpoint, MongoError> parseEndpoint(std::string_view text)
         endpoint.port = MongoConfig::kDefaultPort;
     } else {
         if (colon == 0 || colon + 1 >= text.size()) {
-            return invalidParam("malformed seed");
+            return invalid_param("malformed seed");
         }
         endpoint.host = std::string(text.substr(0, colon));
-        auto port = parsePort(text.substr(colon + 1));
+        auto port = parse_port(text.substr(colon + 1));
         if (!port) {
             return std::unexpected(port.error());
         }
@@ -71,15 +71,15 @@ std::expected<MongoEndpoint, MongoError> parseEndpoint(std::string_view text)
     }
 
     if (endpoint.host.empty()) {
-        return invalidParam("empty seed host");
+        return invalid_param("empty seed host");
     }
     return endpoint;
 }
 
-std::expected<std::vector<MongoEndpoint>, MongoError> parseSeeds(std::string_view authority)
+std::expected<std::vector<MongoEndpoint>, MongoError> parse_seeds(std::string_view authority)
 {
     if (authority.empty()) {
-        return invalidParam("empty seed list");
+        return invalid_param("empty seed list");
     }
 
     std::vector<MongoEndpoint> seeds;
@@ -89,7 +89,7 @@ std::expected<std::vector<MongoEndpoint>, MongoError> parseSeeds(std::string_vie
         const auto token = authority.substr(
             begin,
             comma == std::string_view::npos ? std::string_view::npos : comma - begin);
-        auto endpoint = parseEndpoint(token);
+        auto endpoint = parse_endpoint(token);
         if (!endpoint) {
             return std::unexpected(endpoint.error());
         }
@@ -101,12 +101,12 @@ std::expected<std::vector<MongoEndpoint>, MongoError> parseSeeds(std::string_vie
     }
 
     if (seeds.empty()) {
-        return invalidParam("empty seed list");
+        return invalid_param("empty seed list");
     }
     return seeds;
 }
 
-std::expected<MongoReadPreference, MongoError> parseReadPreference(std::string_view value)
+std::expected<MongoReadPreference, MongoError> parse_read_preference(std::string_view value)
 {
     if (value == "primary") {
         return MongoReadPreference::kPrimary;
@@ -123,13 +123,13 @@ std::expected<MongoReadPreference, MongoError> parseReadPreference(std::string_v
     if (value == "nearest") {
         return MongoReadPreference::kNearest;
     }
-    return invalidParam("unsupported readPreference");
+    return invalid_param("unsupported readPreference");
 }
 
-std::expected<uint32_t, MongoError> parseUint32(std::string_view value, std::string_view name)
+std::expected<uint32_t, MongoError> parse_uint32(std::string_view value, std::string_view name)
 {
-    if (!isDigits(value)) {
-        return invalidParam(std::string(name) + " must be numeric");
+    if (!is_digits(value)) {
+        return invalid_param(std::string(name) + " must be numeric");
     }
 
     uint32_t parsed = 0;
@@ -137,27 +137,27 @@ std::expected<uint32_t, MongoError> parseUint32(std::string_view value, std::str
     const auto* last = value.data() + value.size();
     const auto [ptr, ec] = std::from_chars(first, last, parsed);
     if (ec != std::errc() || ptr != last) {
-        return invalidParam(std::string(name) + " out of range");
+        return invalid_param(std::string(name) + " out of range");
     }
     return parsed;
 }
 
-bool isTlsOption(std::string_view key)
+bool is_tls_option(std::string_view key)
 {
     return key == "tls" || key == "ssl" || key == "tlsCAFile" ||
            key == "tlsCertificateKeyFile" || key == "tlsAllowInvalidCertificates" ||
            key == "tlsAllowInvalidHostnames";
 }
 
-std::expected<void, MongoError> applyQueryOption(MongoConfig& cfg,
+std::expected<void, MongoError> apply_query_option(MongoConfig& cfg,
                                                  std::string_view key,
                                                  std::string_view value)
 {
     if (key.empty()) {
-        return invalidParam("empty URI option");
+        return invalid_param("empty URI option");
     }
 
-    if (isTlsOption(key)) {
+    if (is_tls_option(key)) {
         return unsupported("TLS URI options are not supported yet");
     }
 
@@ -167,13 +167,13 @@ std::expected<void, MongoError> applyQueryOption(MongoConfig& cfg,
     }
     if (key == "authSource") {
         if (value.empty()) {
-            return invalidParam("authSource cannot be empty");
+            return invalid_param("authSource cannot be empty");
         }
         cfg.auth_database = std::string(value);
         return {};
     }
     if (key == "readPreference") {
-        auto read_preference = parseReadPreference(value);
+        auto read_preference = parse_read_preference(value);
         if (!read_preference) {
             return std::unexpected(read_preference.error());
         }
@@ -181,7 +181,7 @@ std::expected<void, MongoError> applyQueryOption(MongoConfig& cfg,
         return {};
     }
     if (key == "serverSelectionTimeoutMS") {
-        auto timeout = parseUint32(value, key);
+        auto timeout = parse_uint32(value, key);
         if (!timeout) {
             return std::unexpected(timeout.error());
         }
@@ -189,7 +189,7 @@ std::expected<void, MongoError> applyQueryOption(MongoConfig& cfg,
         return {};
     }
     if (key == "connectTimeoutMS") {
-        auto timeout = parseUint32(value, key);
+        auto timeout = parse_uint32(value, key);
         if (!timeout) {
             return std::unexpected(timeout.error());
         }
@@ -201,10 +201,10 @@ std::expected<void, MongoError> applyQueryOption(MongoConfig& cfg,
         return {};
     }
 
-    return invalidParam("unsupported URI option: " + std::string(key));
+    return invalid_param("unsupported URI option: " + std::string(key));
 }
 
-std::expected<void, MongoError> applyQuery(MongoConfig& cfg, std::string_view query)
+std::expected<void, MongoError> apply_query(MongoConfig& cfg, std::string_view query)
 {
     size_t begin = 0;
     while (begin < query.size()) {
@@ -214,10 +214,10 @@ std::expected<void, MongoError> applyQuery(MongoConfig& cfg, std::string_view qu
             amp == std::string_view::npos ? std::string_view::npos : amp - begin);
         const size_t eq = pair.find('=');
         if (eq == std::string_view::npos) {
-            return invalidParam("URI option missing '='");
+            return invalid_param("URI option missing '='");
         }
 
-        auto applied = applyQueryOption(cfg, pair.substr(0, eq), pair.substr(eq + 1));
+        auto applied = apply_query_option(cfg, pair.substr(0, eq), pair.substr(eq + 1));
         if (!applied) {
             return applied;
         }
@@ -232,10 +232,10 @@ std::expected<void, MongoError> applyQuery(MongoConfig& cfg, std::string_view qu
 
 } // namespace
 
-std::expected<MongoConfig, MongoError> parseMongoUri(std::string_view uri)
+std::expected<MongoConfig, MongoError> parse_mongo_uri(std::string_view uri)
 {
     if (!uri.starts_with(kMongoScheme)) {
-        return invalidParam("URI scheme must be mongodb://");
+        return invalid_param("URI scheme must be mongodb://");
     }
 
     MongoConfig cfg;
@@ -257,14 +257,14 @@ std::expected<MongoConfig, MongoError> parseMongoUri(std::string_view uri)
         const std::string_view credential = authority.substr(0, at);
         const size_t colon = credential.find(':');
         if (colon == std::string_view::npos) {
-            return invalidParam("URI credentials must be user:password");
+            return invalid_param("URI credentials must be user:password");
         }
         cfg.username = std::string(credential.substr(0, colon));
         cfg.password = std::string(credential.substr(colon + 1));
         authority = authority.substr(at + 1);
     }
 
-    auto seeds = parseSeeds(authority);
+    auto seeds = parse_seeds(authority);
     if (!seeds) {
         return std::unexpected(seeds.error());
     }
@@ -278,7 +278,7 @@ std::expected<MongoConfig, MongoError> parseMongoUri(std::string_view uri)
     }
 
     if (!query.empty()) {
-        auto applied = applyQuery(cfg, query);
+        auto applied = apply_query(cfg, query);
         if (!applied) {
             return std::unexpected(applied.error());
         }

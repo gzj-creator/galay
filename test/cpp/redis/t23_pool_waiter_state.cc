@@ -8,7 +8,7 @@ using galay::redis::detail::try_complete_waiter;
 namespace
 {
 
-bool expectState(const char* scenario,
+bool expect_state(const char* scenario,
                  const std::atomic<PoolWaiterState>& state,
                  PoolWaiterState expected)
 {
@@ -20,7 +20,7 @@ bool expectState(const char* scenario,
     return true;
 }
 
-bool releaseWinsBeforeTimeout()
+bool release_wins_before_timeout()
 {
     std::atomic<PoolWaiterState> state{PoolWaiterState::Waiting};
     if (!try_complete_waiter(state, PoolWaiterState::Completed)) {
@@ -31,10 +31,10 @@ bool releaseWinsBeforeTimeout()
         std::cerr << "timeout must not overwrite a completed waiter\n";
         return false;
     }
-    return expectState("release before timeout", state, PoolWaiterState::Completed);
+    return expect_state("release before timeout", state, PoolWaiterState::Completed);
 }
 
-bool timeoutWinsBeforeRelease()
+bool timeout_wins_before_release()
 {
     std::atomic<PoolWaiterState> state{PoolWaiterState::Waiting};
     if (!try_complete_waiter(state, PoolWaiterState::TimedOut)) {
@@ -45,10 +45,10 @@ bool timeoutWinsBeforeRelease()
         std::cerr << "release must not overwrite a timed-out waiter\n";
         return false;
     }
-    return expectState("timeout before release", state, PoolWaiterState::TimedOut);
+    return expect_state("timeout before release", state, PoolWaiterState::TimedOut);
 }
 
-bool duplicateCallbacksAreIdempotent()
+bool duplicate_callbacks_are_idempotent()
 {
     std::atomic<PoolWaiterState> completed{PoolWaiterState::Waiting};
     if (!try_complete_waiter(completed, PoolWaiterState::Completed)) {
@@ -70,11 +70,11 @@ bool duplicateCallbacksAreIdempotent()
         return false;
     }
 
-    return expectState("duplicate release", completed, PoolWaiterState::Completed) &&
-           expectState("duplicate timeout", timed_out, PoolWaiterState::TimedOut);
+    return expect_state("duplicate release", completed, PoolWaiterState::Completed) &&
+           expect_state("duplicate timeout", timed_out, PoolWaiterState::TimedOut);
 }
 
-bool cancelledWaiterCannotBeCompleted()
+bool cancelled_waiter_cannot_be_completed()
 {
     std::atomic<PoolWaiterState> state{PoolWaiterState::Waiting};
     if (!try_complete_waiter(state, PoolWaiterState::Cancelled)) {
@@ -89,17 +89,17 @@ bool cancelledWaiterCannotBeCompleted()
         std::cerr << "timeout must not overwrite a cancelled waiter\n";
         return false;
     }
-    return expectState("cancelled waiter", state, PoolWaiterState::Cancelled);
+    return expect_state("cancelled waiter", state, PoolWaiterState::Cancelled);
 }
 
 } // namespace
 
 int main()
 {
-    if (!releaseWinsBeforeTimeout() ||
-        !timeoutWinsBeforeRelease() ||
-        !duplicateCallbacksAreIdempotent() ||
-        !cancelledWaiterCannotBeCompleted()) {
+    if (!release_wins_before_timeout() ||
+        !timeout_wins_before_release() ||
+        !duplicate_callbacks_are_idempotent() ||
+        !cancelled_waiter_cannot_be_completed()) {
         return 1;
     }
 

@@ -1,7 +1,7 @@
 /**
  * @file t74_connact.cc
- * @brief 用途：验证自定义状态机可以通过 waitConnect/onConnect 直接建模连接阶段。
- * 关键覆盖点：`MachineAction::waitConnect(...)`、`onConnect(...)`、状态机完成收口。
+ * @brief 用途：验证自定义状态机可以通过 wait_connect/on_connect 直接建模连接阶段。
+ * 关键覆盖点：`MachineAction::wait_connect(...)`、`on_connect(...)`、状态机完成收口。
  * 通过条件：状态机连接成功、服务端 accept 到连接、最终结果正确。
  */
 
@@ -47,7 +47,7 @@ struct ConnectMachine {
         switch (m_state) {
         case State::kInit:
             m_state = State::kWaiting;
-            return MachineAction<result_type>::waitConnect(m_host);
+            return MachineAction<result_type>::wait_connect(m_host);
         case State::kWaiting:
             return MachineAction<result_type>::continue_();
         case State::kDone:
@@ -56,11 +56,11 @@ struct ConnectMachine {
         return MachineAction<result_type>::fail(IOError(kParamInvalid, 0));
     }
 
-    void onRead(std::expected<size_t, IOError>) {}
+    void on_read(std::expected<size_t, IOError>) {}
 
-    void onWrite(std::expected<size_t, IOError>) {}
+    void on_write(std::expected<size_t, IOError>) {}
 
-    void onConnect(std::expected<void, IOError> result) {
+    void on_connect(std::expected<void, IOError> result) {
         m_connect_ok = result.has_value();
         m_state = State::kDone;
     }
@@ -82,7 +82,7 @@ struct TestState {
     std::atomic<bool> success{false};
 };
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -95,7 +95,7 @@ bool waitUntil(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-int createListenSocket(uint16_t* port_out) {
+int create_listen_socket(uint16_t* port_out) {
     int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd < 0) {
         return -1;
@@ -130,7 +130,7 @@ int createListenSocket(uint16_t* port_out) {
     return listen_fd;
 }
 
-void acceptWithTimeout(int listen_fd,
+void accept_with_timeout(int listen_fd,
                        std::atomic<bool>* accepted,
                        std::chrono::milliseconds timeout = 1000ms,
                        std::chrono::milliseconds step = 2ms) {
@@ -149,9 +149,9 @@ void acceptWithTimeout(int listen_fd,
     }
 }
 
-Task<void> stateMachineConnectTask(TestState* state, int fd, Host host) {
+Task<void> state_machine_connect_task(TestState* state, int fd, Host host) {
     IOController controller(GHandle{.fd = fd});
-    auto awaitable = AwaitableBuilder<ConnectResult>::fromStateMachine(
+    auto awaitable = AwaitableBuilder<ConnectResult>::from_state_machine(
         &controller,
         ConnectMachine(std::move(host))
     ).build();
@@ -165,14 +165,14 @@ Task<void> stateMachineConnectTask(TestState* state, int fd, Host host) {
 
 int main() {
     uint16_t port = 0;
-    int listen_fd = createListenSocket(&port);
+    int listen_fd = create_listen_socket(&port);
     if (listen_fd < 0) {
         std::cerr << "[T74] createListenSocket failed: " << std::strerror(errno) << "\n";
         return 1;
     }
 
     std::atomic<bool> accepted{false};
-    std::thread accept_thread(acceptWithTimeout, listen_fd, &accepted, 1000ms, 2ms);
+    std::thread accept_thread(accept_with_timeout, listen_fd, &accepted, 1000ms, 2ms);
 
     int client_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (client_fd < 0) {
@@ -188,13 +188,13 @@ int main() {
     scheduler.start();
 
     TestState state;
-    scheduleTask(
+    schedule_task(
         scheduler,
-        stateMachineConnectTask(&state, client_fd, Host(IPType::IPV4, "127.0.0.1", port))
+        state_machine_connect_task(&state, client_fd, Host(IPType::IPV4, "127.0.0.1", port))
     );
 
-    const bool completed = waitUntil(state.done);
-    const bool server_accepted = waitUntil(accepted);
+    const bool completed = wait_until(state.done);
+    const bool server_accepted = wait_until(accepted);
 
     scheduler.stop();
     close(client_fd);

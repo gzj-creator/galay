@@ -81,7 +81,7 @@ struct alignas(galay::utils::kCacheLineSize) StartState
     std::atomic<bool> failed{false};
 };
 
-const char* argumentErrorName(ArgumentError error) noexcept
+const char* argument_error_name(ArgumentError error) noexcept
 {
     switch (error) {
     case ArgumentError::kMissingValue: return "missing option value";
@@ -99,18 +99,18 @@ const char* argumentErrorName(ArgumentError error) noexcept
     return "unknown argument error";
 }
 
-const char* caseName(CaseKind kind) noexcept
+const char* case_name(CaseKind kind) noexcept
 {
     return kind == CaseKind::kBounded ? "bounded" : "unbounded";
 }
 
-const char* consumeModeName(ConsumeMode mode) noexcept
+const char* consume_mode_name(ConsumeMode mode) noexcept
 {
     return mode == ConsumeMode::kSingle ? "single" : "batch";
 }
 
 template <typename UInt>
-std::expected<UInt, ArgumentError> parseUnsigned(std::string_view text) noexcept
+std::expected<UInt, ArgumentError> parse_unsigned(std::string_view text) noexcept
 {
     UInt value = 0;
     const auto [end, error] =
@@ -121,7 +121,7 @@ std::expected<UInt, ArgumentError> parseUnsigned(std::string_view text) noexcept
     return value;
 }
 
-std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexcept
+std::expected<Config, ArgumentError> parse_arguments(int argc, char** argv) noexcept
 {
     Config config;
     for (int index = 1; index < argc; index += 2) {
@@ -147,27 +147,27 @@ std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexc
                 return std::unexpected(ArgumentError::kInvalidConsumeMode);
             }
         } else if (option == "--messages") {
-            auto parsed = parseUnsigned<uint64_t>(value);
+            auto parsed = parse_unsigned<uint64_t>(value);
             if (!parsed || *parsed == 0) {
                 return std::unexpected(ArgumentError::kInvalidNumber);
             }
             config.messages = *parsed;
         } else if (option == "--capacity") {
-            auto parsed = parseUnsigned<size_t>(value);
+            auto parsed = parse_unsigned<size_t>(value);
             if (!parsed) return std::unexpected(parsed.error());
             config.capacity = *parsed;
         } else if (option == "--producers") {
-            auto parsed = parseUnsigned<size_t>(value);
+            auto parsed = parse_unsigned<size_t>(value);
             if (!parsed || *parsed < 2 || *parsed > 32) {
                 return std::unexpected(ArgumentError::kInvalidTopology);
             }
             config.producers = *parsed;
         } else if (option == "--producer-core") {
-            auto parsed = parseUnsigned<size_t>(value);
+            auto parsed = parse_unsigned<size_t>(value);
             if (!parsed) return std::unexpected(parsed.error());
             config.producerCore = *parsed;
         } else if (option == "--consumer-core") {
-            auto parsed = parseUnsigned<size_t>(value);
+            auto parsed = parse_unsigned<size_t>(value);
             if (!parsed) return std::unexpected(parsed.error());
             config.consumerCore = *parsed;
         } else {
@@ -201,35 +201,35 @@ std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexc
     return config;
 }
 
-uint64_t firstSequence(const Config& config, size_t producer) noexcept
+uint64_t first_sequence(const Config& config, size_t producer) noexcept
 {
     return config.messages * producer / config.producers;
 }
 
-uint64_t producerMessages(const Config& config, size_t producer) noexcept
+uint64_t producer_messages(const Config& config, size_t producer) noexcept
 {
-    return firstSequence(config, producer + 1) - firstSequence(config, producer);
+    return first_sequence(config, producer + 1) - first_sequence(config, producer);
 }
 
-uint64_t triangularChecksum(uint64_t count) noexcept
+uint64_t triangular_checksum(uint64_t count) noexcept
 {
     return (count & 1U) == 0
         ? (count / 2) * (count - 1)
         : count * ((count - 1) / 2);
 }
 
-uint64_t expectedChecksum(const Config& config) noexcept
+uint64_t expected_checksum(const Config& config) noexcept
 {
     uint64_t checksum = 0;
     for (size_t producer = 0; producer < config.producers; ++producer) {
-        const uint64_t count = producerMessages(config, producer);
+        const uint64_t count = producer_messages(config, producer);
         checksum += (static_cast<uint64_t>(producer) << 32U) * count;
-        checksum += triangularChecksum(count);
+        checksum += triangular_checksum(count);
     }
     return checksum;
 }
 
-uint64_t encodeValue(size_t producer, uint64_t sequence) noexcept
+uint64_t encode_value(size_t producer, uint64_t sequence) noexcept
 {
     return (static_cast<uint64_t>(producer) << 32U) | sequence;
 }
@@ -238,10 +238,10 @@ template <ConsumeMode Mode,
           typename Send,
           typename ReceiveSingle,
           typename DrainBatch>
-Measurement runMpsc(const Config& config,
+Measurement run_mpsc(const Config& config,
                     Send&& send,
-                    ReceiveSingle&& receiveSingle,
-                    DrainBatch&& drainBatch)
+                    ReceiveSingle&& receive_single,
+                    DrainBatch&& drain_batch)
 {
     StartState state;
     std::vector<uint64_t> fullRetries(config.producers, 0);
@@ -257,7 +257,7 @@ Measurement runMpsc(const Config& config,
 
     for (size_t producer = 0; producer < config.producers; ++producer) {
         producers.emplace_back([&, producer]() {
-            producerPlacements[producer] = galay::benchmark::pinCurrentThread(
+            producerPlacements[producer] = galay::benchmark::pin_current_thread(
                 config.producerCore + producer);
             const size_t ready = state.ready.fetch_add(1, std::memory_order_release) + 1;
             if (ready > config.producers + 1) {
@@ -266,11 +266,11 @@ Measurement runMpsc(const Config& config,
             while (!state.start.load(std::memory_order_acquire)) {
                 std::this_thread::yield();
             }
-            const uint64_t count = producerMessages(config, producer);
+            const uint64_t count = producer_messages(config, producer);
             uint64_t retries = 0;
             bool sendOk = true;
             for (uint64_t sequence = 0; sequence < count; ++sequence) {
-                uint64_t pending = encodeValue(producer, sequence);
+                uint64_t pending = encode_value(producer, sequence);
                 for (;;) {
                     const SendResult result = send(producer, pending);
                     if (result == SendResult::kSent) break;
@@ -294,7 +294,7 @@ Measurement runMpsc(const Config& config,
     }
 
     std::thread consumer([&]() {
-        consumerPlacement = galay::benchmark::pinCurrentThread(config.consumerCore);
+        consumerPlacement = galay::benchmark::pin_current_thread(config.consumerCore);
         const size_t ready = state.ready.fetch_add(1, std::memory_order_release) + 1;
         if (ready > config.producers + 1) {
             state.failed.store(true, std::memory_order_release);
@@ -307,7 +307,7 @@ Measurement runMpsc(const Config& config,
         if constexpr (Mode == ConsumeMode::kBatch) {
             batch.reserve(kBatchLimit);
         }
-        const auto consumeValue = [&](uint64_t value) {
+        const auto consume_value = [&](uint64_t value) {
             const size_t producer = static_cast<size_t>(value >> 32U);
             const uint64_t sequence = value & 0xffff'ffffULL;
             if (producer >= config.producers || sequence != expected[producer]) {
@@ -325,13 +325,13 @@ Measurement runMpsc(const Config& config,
                !state.failed.load(std::memory_order_acquire)) {
             bool receivedAny = false;
             if constexpr (Mode == ConsumeMode::kSingle) {
-                auto value = receiveSingle();
+                auto value = receive_single();
                 if (value.has_value()) {
-                    receivedAny = consumeValue(*value);
+                    receivedAny = consume_value(*value);
                 }
             } else {
                 batch.clear();
-                const size_t drained = drainBatch(batch);
+                const size_t drained = drain_batch(batch);
                 if (drained != batch.size()) {
                     fifoOk = false;
                     state.failed.store(true, std::memory_order_release);
@@ -339,7 +339,7 @@ Measurement runMpsc(const Config& config,
                 }
                 receivedAny = drained != 0;
                 for (const uint64_t value : batch) {
-                    if (!consumeValue(value)) {
+                    if (!consume_value(value)) {
                         break;
                     }
                 }
@@ -363,7 +363,7 @@ Measurement runMpsc(const Config& config,
             }
         }
         for (size_t producer = 0; producer < config.producers; ++producer) {
-            fifoOk = fifoOk && expected[producer] == producerMessages(config, producer);
+            fifoOk = fifoOk && expected[producer] == producer_messages(config, producer);
         }
     });
 
@@ -388,7 +388,7 @@ Measurement runMpsc(const Config& config,
         .elapsedNs = elapsed,
         .received = received,
         .checksum = checksum,
-        .expectedChecksum = expectedChecksum(config),
+        .expectedChecksum = expected_checksum(config),
         .fullRetries = std::accumulate(fullRetries.begin(), fullRetries.end(), uint64_t{0}),
         .emptyRetries = emptyRetries,
         .producerPlacement = producerPlacement,
@@ -398,40 +398,40 @@ Measurement runMpsc(const Config& config,
     };
 }
 
-Measurement runBounded(const Config& config)
+Measurement run_bounded(const Config& config)
 {
     using Channel = galay::mpsc::BoundedChannel<uint64_t>;
     Channel channel(config.capacity, config.producers);
     std::vector<Channel::ProducerToken> tokens;
     tokens.reserve(config.producers);
     for (size_t producer = 0; producer < config.producers; ++producer) {
-        auto token = channel.makeProducerToken();
+        auto token = channel.make_producer_token();
         if (!token.valid()) return {};
         tokens.push_back(std::move(token));
     }
     const auto send = [&channel, &tokens](size_t producer, uint64_t& value) {
-        return channel.trySend(tokens[producer], std::move(value))
+        return channel.try_send(tokens[producer], std::move(value))
             ? SendResult::kSent : SendResult::kRetry;
     };
-    const auto receiveSingle = [&channel]() { return channel.tryRecv(); };
-    const auto drainBatch = [&channel](std::vector<uint64_t>& destination) {
-        return channel.drainTo(destination, kBatchLimit);
+    const auto receive_single = [&channel]() { return channel.try_recv(); };
+    const auto drain_batch = [&channel](std::vector<uint64_t>& destination) {
+        return channel.drain_to(destination, kBatchLimit);
     };
     return config.consumeMode == ConsumeMode::kSingle
-        ? runMpsc<ConsumeMode::kSingle>(
-              config, send, receiveSingle, drainBatch)
-        : runMpsc<ConsumeMode::kBatch>(
-              config, send, receiveSingle, drainBatch);
+        ? run_mpsc<ConsumeMode::kSingle>(
+              config, send, receive_single, drain_batch)
+        : run_mpsc<ConsumeMode::kBatch>(
+              config, send, receive_single, drain_batch);
 }
 
-Measurement runUnbounded(const Config& config)
+Measurement run_unbounded(const Config& config)
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     Channel channel;
     std::vector<Channel::ProducerToken> tokens;
     tokens.reserve(config.producers);
     for (size_t producer = 0; producer < config.producers; ++producer) {
-        auto token = channel.makeProducerToken();
+        auto token = channel.make_producer_token();
         if (!token.valid()) return {};
         tokens.push_back(std::move(token));
     }
@@ -439,33 +439,33 @@ Measurement runUnbounded(const Config& config)
         return channel.send(tokens[producer], std::move(value))
             ? SendResult::kSent : SendResult::kFailed;
     };
-    const auto receiveSingle = [&channel]() { return channel.tryRecv(); };
-    const auto drainBatch = [&channel](std::vector<uint64_t>& destination) {
-        return channel.drainTo(destination, kBatchLimit);
+    const auto receive_single = [&channel]() { return channel.try_recv(); };
+    const auto drain_batch = [&channel](std::vector<uint64_t>& destination) {
+        return channel.drain_to(destination, kBatchLimit);
     };
     return config.consumeMode == ConsumeMode::kSingle
-        ? runMpsc<ConsumeMode::kSingle>(
-              config, send, receiveSingle, drainBatch)
-        : runMpsc<ConsumeMode::kBatch>(
-              config, send, receiveSingle, drainBatch);
+        ? run_mpsc<ConsumeMode::kSingle>(
+              config, send, receive_single, drain_batch)
+        : run_mpsc<ConsumeMode::kBatch>(
+              config, send, receive_single, drain_batch);
 }
 
 } // namespace
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    auto config = parseArguments(argc, argv);
+    auto config = parse_arguments(argc, argv);
     if (!config) {
         std::cerr << "mpsc paired benchmark argument error: "
-                  << argumentErrorName(config.error()) << '\n';
+                  << argument_error_name(config.error()) << '\n';
         return std::cerr.good() ? 2 : 3;
     }
     const Measurement measurement = config->kind == CaseKind::kBounded
-        ? runBounded(*config) : runUnbounded(*config);
+        ? run_bounded(*config) : run_unbounded(*config);
     const bool valid = measurement.elapsedNs > 0 && measurement.sendOk &&
         measurement.received == config->messages && measurement.fifoOk &&
         measurement.checksum == measurement.expectedChecksum;
@@ -475,9 +475,9 @@ int main(int argc, char** argv)
     std::cout << std::setprecision(17) << std::boolalpha
               << "{\"schema\":\"galay.mpsc.paired.v1\""
               << ",\"language\":\"cpp\""
-              << ",\"case\":\"" << caseName(config->kind) << "\""
+              << ",\"case\":\"" << case_name(config->kind) << "\""
               << ",\"consume_mode\":\""
-              << consumeModeName(config->consumeMode) << "\""
+              << consume_mode_name(config->consumeMode) << "\""
               << ",\"batch_limit\":"
               << (config->consumeMode == ConsumeMode::kBatch ? kBatchLimit : 1)
               << ",\"topology\":\"" << config->producers << "p1c\""
@@ -494,9 +494,9 @@ int main(int argc, char** argv)
               << ",\"full_retries\":" << measurement.fullRetries
               << ",\"empty_retries\":" << measurement.emptyRetries
               << ",\"producer_placement\":\""
-              << galay::benchmark::threadPlacementName(measurement.producerPlacement) << "\""
+              << galay::benchmark::thread_placement_name(measurement.producerPlacement) << "\""
               << ",\"consumer_placement\":\""
-              << galay::benchmark::threadPlacementName(measurement.consumerPlacement) << "\""
+              << galay::benchmark::thread_placement_name(measurement.consumerPlacement) << "\""
               << ",\"backoff\":\"yield\""
               << ",\"generator\":\"per_producer_monotonic_u64\""
               << ",\"valid\":" << valid << "}\n";

@@ -38,7 +38,7 @@ struct TestState {
     std::abort();
 }
 
-uint16_t pickFreePort()
+uint16_t pick_free_port()
 {
     int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -72,7 +72,7 @@ uint16_t pickFreePort()
     return port;
 }
 
-int connectWithRetry(uint16_t port)
+int connect_with_retry(uint16_t port)
 {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -114,7 +114,7 @@ int connectWithRetry(uint16_t port)
     fail("connect retry exhausted");
 }
 
-void sendAll(int fd, const std::string& data)
+void send_all(int fd, const std::string& data)
 {
     size_t sent = 0;
     while (sent < data.size()) {
@@ -128,7 +128,7 @@ void sendAll(int fd, const std::string& data)
     }
 }
 
-std::string recvUntilClosed(int fd)
+std::string recv_until_closed(int fd)
 {
     std::string response;
     char buffer[4096];
@@ -147,20 +147,20 @@ std::string recvUntilClosed(int fd)
     return response;
 }
 
-std::string sendRawHttp(uint16_t port)
+std::string send_raw_http(uint16_t port)
 {
-    int fd = connectWithRetry(port);
-    sendAll(fd,
+    int fd = connect_with_retry(port);
+    send_all(fd,
             "GET / HTTP/1.1\r\n"
             "Host: 127.0.0.1\r\n"
             "Connection: close\r\n"
             "\r\n");
-    std::string response = recvUntilClosed(fd);
+    std::string response = recv_until_closed(fd);
     ::close(fd);
     return response;
 }
 
-Task<bool> firstAcceptHook(AsyncTcpSocket& socket, const Host&, TestState* state)
+Task<bool> first_accept_hook(AsyncTcpSocket& socket, const Host&, TestState* state)
 {
     state->first_count.fetch_add(1);
     if (socket.handle().fd >= 0) {
@@ -170,7 +170,7 @@ Task<bool> firstAcceptHook(AsyncTcpSocket& socket, const Host&, TestState* state
     co_return true;
 }
 
-Task<bool> secondAcceptHook(AsyncTcpSocket&, const Host&, TestState* state)
+Task<bool> second_accept_hook(AsyncTcpSocket&, const Host&, TestState* state)
 {
     int prior_second_count = state->second_count.load();
     if (state->first_count.load() > prior_second_count) {
@@ -196,7 +196,7 @@ public:
     }
 
     Task<bool> handle(Runtime&, AsyncTcpSocket& socket, const Host& client_host) override {
-        auto continuing = co_await firstAcceptHook(socket, client_host, m_state);
+        auto continuing = co_await first_accept_hook(socket, client_host, m_state);
         co_return continuing.value_or(false);
     }
 
@@ -219,7 +219,7 @@ public:
     }
 
     Task<bool> handle(Runtime&, AsyncTcpSocket& socket, const Host& client_host) override {
-        auto continuing = co_await secondAcceptHook(socket, client_host, m_state);
+        auto continuing = co_await second_accept_hook(socket, client_host, m_state);
         co_return continuing.value_or(false);
     }
 
@@ -248,13 +248,13 @@ private:
     std::atomic<int>* m_stop_count;
 };
 
-Task<void> respondOk(HttpConn conn, TestState* state)
+Task<void> respond_ok(HttpConn conn, TestState* state)
 {
     state->conn_count.fetch_add(1);
 
     HttpRequest request;
-    auto reader = conn.getReader();
-    auto read_result = co_await reader.getRequest(request);
+    auto reader = conn.get_reader();
+    auto read_result = co_await reader.get_request(request);
     if (!read_result) {
         co_await conn.close();
         co_return;
@@ -264,15 +264,15 @@ Task<void> respondOk(HttpConn conn, TestState* state)
         .status(HttpStatusCode::OK_200)
         .header("Connection", "close")
         .text("ok")
-        .buildMove();
+        .build_move();
 
-    auto writer = conn.getWriter();
-    (void) co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    (void) co_await writer.send_response(response);
     co_await conn.close();
     co_return;
 }
 
-void waitForCount(const std::atomic<int>& value, int expected, const char* message)
+void wait_for_count(const std::atomic<int>& value, int expected, const char* message)
 {
     for (int i = 0; i < 100; ++i) {
         if (value.load() >= expected) {
@@ -288,30 +288,30 @@ void test_start_failure_stops_already_started_plugins()
     TestState state;
     std::atomic<int> failing_stop_count{0};
 
-    uint16_t port = pickFreePort();
+    uint16_t port = pick_free_port();
     HttpServer server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build());
 
-    bool registered_first = server.addAcceptPlugin(std::make_unique<FirstPlugin>(&state));
+    bool registered_first = server.add_accept_plugin(std::make_unique<FirstPlugin>(&state));
     bool registered_failing =
-        server.addAcceptPlugin(std::make_unique<FailingStartPlugin>(&failing_stop_count));
+        server.add_accept_plugin(std::make_unique<FailingStartPlugin>(&failing_stop_count));
     if (!registered_first || !registered_failing) {
         fail("start-failure plugins should register before start");
     }
 
     server.start([&state](HttpConn conn) -> Task<void> {
-        co_await respondOk(std::move(conn), &state);
+        co_await respond_ok(std::move(conn), &state);
     });
 
-    if (server.isRunning()) {
+    if (server.is_running()) {
         fail("server should not be running after accept plugin start failure");
     }
-    waitForCount(state.first_start_count, 1, "first plugin start should run before failure");
-    waitForCount(state.first_stop_count, 1, "started plugin stop should run after failure");
+    wait_for_count(state.first_start_count, 1, "first plugin start should run before failure");
+    wait_for_count(state.first_stop_count, 1, "started plugin stop should run after failure");
     if (failing_stop_count.load() != 0) {
         fail("failing plugin stop should not run when start returned false before being counted");
     }
@@ -325,37 +325,37 @@ int main()
 
     TestState state;
 
-    uint16_t port = pickFreePort();
+    uint16_t port = pick_free_port();
     HttpServer server(HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build());
 
-    if (server.addAcceptPlugin(nullptr)) {
+    if (server.add_accept_plugin(nullptr)) {
         fail("null plugin registration should be rejected");
     }
 
-    bool registered_first = server.addAcceptPlugin(std::make_unique<FirstPlugin>(&state));
-    bool registered_second = server.addAcceptPlugin(std::make_unique<SecondPlugin>(&state));
+    bool registered_first = server.add_accept_plugin(std::make_unique<FirstPlugin>(&state));
+    bool registered_second = server.add_accept_plugin(std::make_unique<SecondPlugin>(&state));
 
     if (!registered_first || !registered_second) {
         fail("accept handlers should register before start");
     }
 
     server.start([&state](HttpConn conn) -> Task<void> {
-        co_await respondOk(std::move(conn), &state);
+        co_await respond_ok(std::move(conn), &state);
     });
 
-    bool registered_after_start = server.addAcceptPlugin(
+    bool registered_after_start = server.add_accept_plugin(
         std::make_unique<FirstPlugin>(&state));
     if (registered_after_start) {
         fail("accept handler registration after start should be rejected");
     }
 
-    std::string first_response = sendRawHttp(port);
-    std::string second_response = sendRawHttp(port);
+    std::string first_response = send_raw_http(port);
+    std::string second_response = send_raw_http(port);
 
     server.stop();
 
@@ -364,13 +364,13 @@ int main()
         fail("server should respond after accept hooks run");
     }
 
-    waitForCount(state.first_count, 2, "first hook did not run twice");
-    waitForCount(state.second_count, 2, "second hook did not run twice");
-    waitForCount(state.conn_count, 2, "connection handler did not run twice");
-    waitForCount(state.first_start_count, 1, "first plugin start should run once");
-    waitForCount(state.second_start_count, 1, "second plugin start should run once");
-    waitForCount(state.first_stop_count, 1, "first plugin stop should run once");
-    waitForCount(state.second_stop_count, 1, "second plugin stop should run once");
+    wait_for_count(state.first_count, 2, "first hook did not run twice");
+    wait_for_count(state.second_count, 2, "second hook did not run twice");
+    wait_for_count(state.conn_count, 2, "connection handler did not run twice");
+    wait_for_count(state.first_start_count, 1, "first plugin start should run once");
+    wait_for_count(state.second_start_count, 1, "second plugin start should run once");
+    wait_for_count(state.first_stop_count, 1, "first plugin stop should run once");
+    wait_for_count(state.second_stop_count, 1, "second plugin stop should run once");
 
     if (state.valid_socket_count.load() != 2) {
         fail("accept hook should receive a valid AsyncTcpSocket");

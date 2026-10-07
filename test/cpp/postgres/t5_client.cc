@@ -20,11 +20,11 @@ using galay::kernel::Task;
 using galay::postgres::AsyncPostgresClient;
 using galay::postgres::PostgresConfig;
 
-Task<int> runClient(IOScheduler* scheduler, PostgresConfig config)
+Task<int> run_client(IOScheduler* scheduler, PostgresConfig config)
 {
     AsyncPostgresClient<> client(scheduler);
     auto connected = co_await client.connect(std::move(config)).timeout(5s);
-    if (!connected || !connected->has_value() || !connected->value() || client.isClosed()) {
+    if (!connected || !connected->has_value() || !connected->value() || client.is_closed()) {
         std::cerr << "PostgreSQL connect failed";
         if (!connected) {
             std::cerr << ": " << connected.error().message();
@@ -48,32 +48,32 @@ Task<int> runClient(IOScheduler* scheduler, PostgresConfig config)
     }
 
     const auto& rows = selected->value();
-    if (rows.fieldCount() != 3 || rows.rowCount() != 2 ||
-        rows.row(0).getInt64(0, -1) != 1 || rows.row(0).getString(1) != "alpha" ||
-        !rows.row(0).isNull(2) || rows.row(1).getInt64(0, -1) != 2 ||
-        rows.row(1).getString(1) != "beta" || rows.row(1).isNull(2) ||
-        rows.row(1).getString(2) != "present") {
+    if (rows.field_count() != 3 || rows.row_count() != 2 ||
+        rows.row(0).get_int64(0, -1) != 1 || rows.row(0).get_string(1) != "alpha" ||
+        !rows.row(0).is_null(2) || rows.row(1).get_int64(0, -1) != 2 ||
+        rows.row(1).get_string(1) != "beta" || rows.row(1).is_null(2) ||
+        rows.row(1).get_string(2) != "present") {
         std::cerr << "multi-row/NULL result did not match\n";
         co_return 3;
     }
 
     auto failed = co_await client.query(
         "SELECT * FROM galay_postgres_t5_relation_that_does_not_exist").timeout(5s);
-    if (failed || failed.error().sqlState() != "42P01" ||
-        client.transactionStatus() != 'I') {
+    if (failed || failed.error().sql_state() != "42P01" ||
+        client.transaction_status() != 'I') {
         std::cerr << "expected SQLSTATE 42P01 followed by ReadyForQuery(I)\n";
         co_return 4;
     }
 
     auto recovered = co_await client.query("SELECT 42 AS recovered").timeout(5s);
-    if (!recovered || !recovered->has_value() || recovered->value().rowCount() != 1 ||
-        recovered->value().row(0).getInt64(0, -1) != 42) {
+    if (!recovered || !recovered->has_value() || recovered->value().row_count() != 1 ||
+        recovered->value().row(0).get_int64(0, -1) != 42) {
         std::cerr << "connection was not reusable after ErrorResponse\n";
         co_return 5;
     }
 
     auto closed = co_await client.close();
-    if (!closed || !client.isClosed()) {
+    if (!closed || !client.is_closed()) {
         std::cerr << "PostgreSQL close failed\n";
         co_return 6;
     }
@@ -84,27 +84,27 @@ Task<int> runClient(IOScheduler* scheduler, PostgresConfig config)
 
 int main()
 {
-    auto config = galay::postgres::test::integrationConfig();
+    auto config = galay::postgres::test::integration_config();
     if (!config) {
         std::cerr << "t5_client skipped: set GALAY_IT_ENABLE=1 and "
                      "GALAY_POSTGRES_TEST_{HOST,PORT,USER,PASSWORD,DATABASE}.\n";
         return 125;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto started = runtime.start();
     if (!started) {
         std::cerr << "runtime start failed: " << started.error().message() << '\n';
         return EXIT_FAILURE;
     }
-    IOScheduler* scheduler = runtime.getNextIOScheduler();
+    IOScheduler* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         std::cerr << "runtime has no IO scheduler\n";
         return EXIT_FAILURE;
     }
 
-    auto result = runtime.blockOnIO(runClient(scheduler, std::move(*config)));
+    auto result = runtime.block_on_io(run_client(scheduler, std::move(*config)));
     runtime.stop();
     if (!result) {
         std::cerr << "runtime blockOn failed: " << result.error().message() << '\n';

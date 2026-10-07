@@ -80,7 +80,7 @@ static_assert(requires(DefaultMysqlClient& client, MysqlConfig config) {
     { client.connect(config) } -> std::same_as<DefaultMysqlConnectAwaitable>;
     { client.query("SELECT 1") } -> std::same_as<DefaultMysqlQueryAwaitable>;
     { client.prepare("SELECT ?") } -> std::same_as<DefaultMysqlPrepareAwaitable>;
-    { client.stmtExecute(1u,
+    { client.stmt_execute(1u,
                          std::declval<std::span<const std::optional<std::string>>>(),
                          std::declval<std::span<const uint8_t>>()) } -> std::same_as<DefaultMysqlStmtExecuteAwaitable>;
     { client.batch(std::declval<std::span<const protocol::MysqlCommandView>>()) } -> std::same_as<DefaultMysqlPipelineAwaitable>;
@@ -90,11 +90,11 @@ static_assert(requires(VectorMysqlClient& client, MysqlConfig config) {
     { client.connect(config) } -> std::same_as<VectorMysqlConnectAwaitable>;
     { client.query("SELECT 1") } -> std::same_as<VectorMysqlQueryAwaitable>;
     { client.prepare("SELECT ?") } -> std::same_as<VectorMysqlPrepareAwaitable>;
-    { client.stmtExecute(1u,
+    { client.stmt_execute(1u,
                          std::declval<std::span<const std::optional<std::string>>>(),
                          std::declval<std::span<const uint8_t>>()) } -> std::same_as<VectorMysqlStmtExecuteAwaitable>;
     { client.batch(std::declval<std::span<const protocol::MysqlCommandView>>()) } -> std::same_as<VectorMysqlPipelineAwaitable>;
-    { client.ringBuffer() } -> std::same_as<RingBuffer<RingBufferBackendStrategy::Vector, std::dynamic_extent>&>;
+    { client.ring_buffer() } -> std::same_as<RingBuffer<RingBufferBackendStrategy::Vector, std::dynamic_extent>&>;
 });
 
 int main()
@@ -114,9 +114,9 @@ int main()
 
     DefaultMysqlClient async_client(nullptr);
     auto async_query = async_client.query(oversized_sql);
-    require(async_query.isInvalid(), "oversized async query awaitable should be invalid");
+    require(async_query.is_invalid(), "oversized async query awaitable should be invalid");
     auto async_pipeline = async_client.pipeline(oversized_pipeline);
-    require(async_pipeline.isInvalid(), "oversized async pipeline awaitable should be invalid");
+    require(async_pipeline.is_invalid(), "oversized async pipeline awaitable should be invalid");
 
     return 0;
 }

@@ -539,7 +539,7 @@ C_IOResult apply_peer_settings(galay_http2_conn_t* conn, const RawFrame& frame)
             return result(C_IOResultError, GALAY_HTTP2_ERROR_PROTOCOL);
         }
         if (id == GALAY_HTTP2_SETTINGS_HEADER_TABLE_SIZE) {
-            conn->hpack_encoder.setMaxTableSize(value);
+            conn->hpack_encoder.set_max_table_size(value);
         } else if (id == GALAY_HTTP2_SETTINGS_INITIAL_WINDOW_SIZE) {
             const int32_t old_window = static_cast<int32_t>(conn->peer_initial_window);
             conn->peer_initial_window = value;

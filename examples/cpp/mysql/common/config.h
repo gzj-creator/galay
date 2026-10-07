@@ -18,28 +18,28 @@ struct DbExampleConfig {
     std::string database = "test";
 };
 
-inline const char* getEnvIfSet(const char* key)
+inline const char* get_env_if_set(const char* key)
 {
     return std::getenv(key);
 }
 
-inline const char* getEnvNonEmpty(const char* key)
+inline const char* get_env_non_empty(const char* key)
 {
-    const char* value = getEnvIfSet(key);
+    const char* value = get_env_if_set(key);
     if (value == nullptr || value[0] == '\0') {
         return nullptr;
     }
     return value;
 }
 
-inline std::string getEnvOrDefault(const char* key1, const char* key2, const std::string& default_value)
+inline std::string get_env_or_default(const char* key1, const char* key2, const std::string& default_value)
 {
-    if (const char* value = getEnvIfSet(key1)) return value;
-    if (const char* value = getEnvIfSet(key2)) return value;
+    if (const char* value = get_env_if_set(key1)) return value;
+    if (const char* value = get_env_if_set(key2)) return value;
     return default_value;
 }
 
-inline uint16_t parsePortOrDefault(const char* value, uint16_t default_value)
+inline uint16_t parse_port_or_default(const char* value, uint16_t default_value)
 {
     if (value == nullptr || value[0] == '\0') {
         return default_value;
@@ -54,25 +54,25 @@ inline uint16_t parsePortOrDefault(const char* value, uint16_t default_value)
     return static_cast<uint16_t>(parsed);
 }
 
-inline uint16_t getEnvPortOrDefault(const char* key1, const char* key2, uint16_t default_value)
+inline uint16_t get_env_port_or_default(const char* key1, const char* key2, uint16_t default_value)
 {
-    if (const char* value = getEnvNonEmpty(key1)) return parsePortOrDefault(value, default_value);
-    if (const char* value = getEnvNonEmpty(key2)) return parsePortOrDefault(value, default_value);
+    if (const char* value = get_env_non_empty(key1)) return parse_port_or_default(value, default_value);
+    if (const char* value = get_env_non_empty(key2)) return parse_port_or_default(value, default_value);
     return default_value;
 }
 
-inline DbExampleConfig loadDbExampleConfig()
+inline DbExampleConfig load_db_example_config()
 {
     DbExampleConfig cfg;
-    cfg.host = getEnvOrDefault("GALAY_MYSQL_HOST", "MYSQL_HOST", cfg.host);
-    cfg.port = getEnvPortOrDefault("GALAY_MYSQL_PORT", "MYSQL_PORT", cfg.port);
-    cfg.user = getEnvOrDefault("GALAY_MYSQL_USER", "MYSQL_USER", cfg.user);
-    cfg.password = getEnvOrDefault("GALAY_MYSQL_PASSWORD", "MYSQL_PASSWORD", cfg.password);
-    cfg.database = getEnvOrDefault("GALAY_MYSQL_DB", "MYSQL_DATABASE", cfg.database);
+    cfg.host = get_env_or_default("GALAY_MYSQL_HOST", "MYSQL_HOST", cfg.host);
+    cfg.port = get_env_port_or_default("GALAY_MYSQL_PORT", "MYSQL_PORT", cfg.port);
+    cfg.user = get_env_or_default("GALAY_MYSQL_USER", "MYSQL_USER", cfg.user);
+    cfg.password = get_env_or_default("GALAY_MYSQL_PASSWORD", "MYSQL_PASSWORD", cfg.password);
+    cfg.database = get_env_or_default("GALAY_MYSQL_DB", "MYSQL_DATABASE", cfg.database);
     return cfg;
 }
 
-inline void printDbExampleConfig(const DbExampleConfig& cfg)
+inline void print_db_example_config(const DbExampleConfig& cfg)
 {
     std::cout << "MySQL config: host=" << cfg.host
               << ", port=" << cfg.port

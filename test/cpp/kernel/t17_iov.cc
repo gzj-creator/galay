@@ -37,17 +37,17 @@ std::atomic<bool> g_test_passed{false};
 std::atomic<uint16_t> g_test_port{0};  ///< 测试监听端口；服务端绑定后从内核读取
 
 // 服务器协程 - 使用 readv 接收数据
-Task<void> readvServer([[maybe_unused]] IOScheduler* scheduler) {
+Task<void> readv_server([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("[Server] Starting...");
     AsyncTcpSocket listener;
 
-    auto optResult = listener.option().handleReuseAddr();
+    auto optResult = listener.option().handle_reuse_addr();
     if (!optResult) {
         LogError("[Server] Failed to set reuse addr: {}", optResult.error().message());
         co_return;
     }
 
-    optResult = listener.option().handleNonBlock();
+    optResult = listener.option().handle_non_block();
     if (!optResult) {
         LogError("[Server] Failed to set non-block: {}", optResult.error().message());
         co_return;
@@ -89,7 +89,7 @@ Task<void> readvServer([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("[Server] Client connected from {}:{}", clientHost.ip(), clientHost.port());
 
     AsyncTcpSocket client(acceptResult.value());
-    optResult = client.option().handleNonBlock();
+    optResult = client.option().handle_non_block();
     if (!optResult) {
         LogError("[Server] Failed to set client non-block: {}", optResult.error().message());
         co_await client.close();
@@ -163,7 +163,7 @@ Task<void> readvServer([[maybe_unused]] IOScheduler* scheduler) {
 }
 
 // 客户端协程 - 使用 writev 发送数据
-Task<void> writevClient([[maybe_unused]] IOScheduler* scheduler) {
+Task<void> writev_client([[maybe_unused]] IOScheduler* scheduler) {
     // 等待服务器就绪
     while (!g_server_ready) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -171,7 +171,7 @@ Task<void> writevClient([[maybe_unused]] IOScheduler* scheduler) {
 
     LogInfo("[Client] Starting...");
     AsyncTcpSocket client;
-    auto optResult = client.option().handleNonBlock();
+    auto optResult = client.option().handle_non_block();
     if (!optResult) {
         LogError("[Client] Failed to set non-block: {}", optResult.error().message());
         co_await client.close();
@@ -257,14 +257,14 @@ int main() {
     scheduler.start();
 
     // 端口：优先环境变量；默认由服务端绑定 0 并读取内核分配的端口。
-    uint16_t port = galay::test::resolvePortFromEnv("GALAY_TEST_IOV_PORT", 0);
+    uint16_t port = galay::test::resolve_port_from_env("GALAY_TEST_IOV_PORT", 0);
     g_test_port.store(port);
 
     // 启动服务器
-    scheduleTask(scheduler, readvServer(&scheduler));
+    schedule_task(scheduler, readv_server(&scheduler));
 
     // 启动客户端
-    scheduleTask(scheduler, writevClient(&scheduler));
+    schedule_task(scheduler, writev_client(&scheduler));
 
     // 等待测试完成
     std::this_thread::sleep_for(std::chrono::seconds(3));

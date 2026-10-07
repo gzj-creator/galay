@@ -16,7 +16,7 @@
  *     .host("0.0.0.0")
  *     .port(9000)
  *     .build();
- * auto registered = server.registerService(echoService);
+ * auto registered = server.register_service(echoService);
  * if (!registered) {
  *     return;
  * }
@@ -64,7 +64,7 @@ struct RpcServerConfig {
     size_t parallel_scheduler_count = 0; ///< 计算调度器数量，0表示自动
     RuntimeAffinityConfig affinity;     ///< 绑核配置
     size_t ring_buffer_size = kDefaultRpcRingBufferSize;  ///< RingBuffer大小
-    RpcServerInterceptor interceptor = AllowAllRpcInterceptor();  ///< 请求前置拦截器
+    RpcServerInterceptor interceptor = allow_all_rpc_interceptor();  ///< 请求前置拦截器
 };
 
 class RpcServer;
@@ -83,18 +83,18 @@ public:
     /// @brief 设置监听队列长度
     RpcServerBuilder& backlog(int value)                                 { m_config.backlog = value; return *this; }
     /// @brief 设置已接受连接是否启用 TCP_NODELAY
-    RpcServerBuilder& tcpNoDelay(bool value)                             { m_config.tcp_no_delay = value; return *this; }
+    RpcServerBuilder& tcp_no_delay(bool value)                             { m_config.tcp_no_delay = value; return *this; }
     /// @brief 设置IO调度器数量
-    RpcServerBuilder& ioSchedulerCount(size_t value)                     { m_config.io_scheduler_count = value; return *this; }
+    RpcServerBuilder& io_scheduler_count(size_t value)                     { m_config.io_scheduler_count = value; return *this; }
     /// @brief 设置计算调度器数量
-    RpcServerBuilder& parallelSchedulerCount(size_t value)                { m_config.parallel_scheduler_count = value; return *this; }
+    RpcServerBuilder& parallel_scheduler_count(size_t value)                { m_config.parallel_scheduler_count = value; return *this; }
     /**
      * @brief 设置顺序绑核策略
      * @param io_count IO调度器绑核数
      * @param parallel_count 计算调度器绑核数
      * @return 构建器引用
      */
-    RpcServerBuilder& sequentialAffinity(size_t io_count, size_t parallel_count) {
+    RpcServerBuilder& sequential_affinity(size_t io_count, size_t parallel_count) {
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Sequential;
         m_config.affinity.seq_io_count = io_count;
         m_config.affinity.seq_parallel_count = parallel_count;
@@ -106,7 +106,7 @@ public:
      * @param parallel_cpus 计算调度器绑定的CPU列表
      * @return 是否设置成功（数量必须匹配调度器数量）
      */
-    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus) {
+    bool custom_affinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus) {
         if (io_cpus.size() != m_config.io_scheduler_count ||
             parallel_cpus.size() != m_config.parallel_scheduler_count) {
             return false;
@@ -117,13 +117,13 @@ public:
         return true;
     }
     /// @brief 设置环形缓冲区大小
-    RpcServerBuilder& ringBufferSize(size_t value)                       { m_config.ring_buffer_size = value; return *this; }
+    RpcServerBuilder& ring_buffer_size(size_t value)                       { m_config.ring_buffer_size = value; return *this; }
     /// @brief 设置请求前置拦截器
     RpcServerBuilder& interceptor(RpcServerInterceptor value)             { m_config.interceptor = std::move(value); return *this; }
     /// @brief 构建RpcServer实例
     RpcServer build() const;
     /// @brief 仅导出配置
-    RpcServerConfig buildConfig() const                                  { return m_config; }
+    RpcServerConfig build_config() const                                  { return m_config; }
 
 private:
     RpcServerConfig m_config;  ///< 服务器配置
@@ -146,9 +146,9 @@ public:
     explicit RpcServer(const RpcServerConfig& config)
         : m_config(config)
         , m_runtime(RuntimeBuilder()
-                        .ioSchedulerCount(resolveIoSchedulerCount(config.io_scheduler_count))
-                        .parallelSchedulerCount(config.parallel_scheduler_count)
-                        .applyAffinity(config.affinity)
+                        .io_scheduler_count(resolve_io_scheduler_count(config.io_scheduler_count))
+                        .parallel_scheduler_count(config.parallel_scheduler_count)
+                        .apply_affinity(config.affinity)
                         .build()) {}
 
     ~RpcServer() {
@@ -161,7 +161,7 @@ public:
      * @return 成功返回void；服务名为空或重复时返回INVALID_REQUEST，容量耗尽时返回RESOURCE_EXHAUSTED
      * @note 注册表使用固定内联存储，调用过程不执行堆分配；仅可在start()之前调用
      */
-    std::expected<void, RpcError> registerService(RpcService& service) {
+    std::expected<void, RpcError> register_service(RpcService& service) {
         if (m_running.load(std::memory_order_acquire)) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                             "Cannot register RPC service after server start"));
@@ -170,7 +170,7 @@ public:
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
                                             "RPC service name is empty"));
         }
-        const size_t initial_index = serviceBucketIndex(service.name());
+        const size_t initial_index = service_bucket_index(service.name());
         for (size_t probe = 0; probe < m_services.size(); ++probe) {
             RpcService*& slot = m_services[(initial_index + probe) % m_services.size()];
             if (slot == nullptr) {
@@ -221,7 +221,7 @@ public:
         }
         AsyncTcpSocket listener = std::move(*listener_result);
 
-        auto reuse_addr_result = listener.option().handleReuseAddr();
+        auto reuse_addr_result = listener.option().handle_reuse_addr();
         if (!reuse_addr_result.has_value()) {
             RpcError error = RpcError::from(reuse_addr_result.error());
             RPC_LOG_ERROR("[server] [socket] [reuseaddr-fail]",
@@ -229,7 +229,7 @@ public:
             m_runtime.stop();
             return std::unexpected(std::move(error));
         }
-        auto non_block_result = listener.option().handleNonBlock();
+        auto non_block_result = listener.option().handle_non_block();
         if (!non_block_result.has_value()) {
             RpcError error = RpcError::from(non_block_result.error());
             RPC_LOG_ERROR("[server] [socket] [nonblock-fail]",
@@ -263,8 +263,8 @@ public:
         }
 
         m_running.store(true, std::memory_order_release);
-        auto* scheduler = m_runtime.getNextIOScheduler();
-        if (!scheduleTask(scheduler, acceptLoop(std::move(listener)))) {
+        auto* scheduler = m_runtime.get_next_io_scheduler();
+        if (!schedule_task(scheduler, accept_loop(std::move(listener)))) {
             RpcError error(RpcErrorCode::INTERNAL_ERROR,
                            "Failed to schedule accept loop");
             RPC_LOG_ERROR("[server] [schedule] [fail]", "accept-loop");
@@ -288,7 +288,7 @@ public:
     /**
      * @brief 检查是否运行中
      */
-    bool isRunning() const {
+    bool is_running() const {
         return m_running.load(std::memory_order_acquire);
     }
 
@@ -301,7 +301,7 @@ public:
      * @brief 获取最近一次异步运行错误（若有）
      * @note 非线程安全，仅保留兼容诊断用途；启动失败必须读取start()返回值。
      */
-    std::optional<RpcError> lastError() const {
+    std::optional<RpcError> last_error() const {
         return m_last_error;
     }
 
@@ -319,7 +319,7 @@ private:
         RpcMethodHandler* handler = nullptr;
     };
 
-    static uint64_t hashAppend(uint64_t hash, std::string_view str) {
+    static uint64_t hash_append(uint64_t hash, std::string_view str) {
         for (unsigned char ch : str) {
             hash ^= static_cast<uint64_t>(ch);
             hash *= kFnvPrime;
@@ -327,44 +327,44 @@ private:
         return hash;
     }
 
-    static size_t serviceBucketIndex(std::string_view service_name) {
-        return static_cast<size_t>(hashAppend(kFnvOffset, service_name) %
+    static size_t service_bucket_index(std::string_view service_name) {
+        return static_cast<size_t>(hash_append(kFnvOffset, service_name) %
                                    kMaxRegisteredServices);
     }
 
-    static uint64_t buildRouteHash(std::string_view service_name,
+    static uint64_t build_route_hash(std::string_view service_name,
                                    std::string_view method_name,
                                    RpcCallMode call_mode) {
         uint64_t hash = kFnvOffset;
-        hash = hashAppend(hash, service_name);
+        hash = hash_append(hash, service_name);
         hash ^= 0xffu;
         hash *= kFnvPrime;
-        hash = hashAppend(hash, method_name);
+        hash = hash_append(hash, method_name);
         hash ^= static_cast<uint64_t>(call_mode);
         hash *= kFnvPrime;
         return hash;
     }
 
-    static bool routeCacheHit(const RouteCacheEntry& entry,
+    static bool route_cache_hit(const RouteCacheEntry& entry,
                               const RpcRequest& request,
                               uint64_t route_hash) {
         return entry.handler != nullptr &&
                entry.route_hash == route_hash &&
-               entry.call_mode == request.callMode() &&
-               entry.service_name == request.serviceName() &&
-               entry.method_name == request.methodName();
+               entry.call_mode == request.call_mode() &&
+               entry.service_name == request.service_name() &&
+               entry.method_name == request.method_name();
     }
 
-    static bool routeCacheKeyMatch(const RouteCacheEntry& entry,
+    static bool route_cache_key_match(const RouteCacheEntry& entry,
                                    const RpcRequest& request,
                                    uint64_t route_hash) {
         return entry.route_hash == route_hash &&
-               entry.call_mode == request.callMode() &&
-               entry.service_name == request.serviceName() &&
-               entry.method_name == request.methodName();
+               entry.call_mode == request.call_mode() &&
+               entry.service_name == request.service_name() &&
+               entry.method_name == request.method_name();
     }
 
-    static void assignCachedString(std::string& cache_value, std::string_view incoming) {
+    static void assign_cached_string(std::string& cache_value, std::string_view incoming) {
         if (std::string_view(cache_value) == incoming) {
             return;
         }
@@ -380,16 +380,16 @@ private:
         cache_value.assign(incoming.data(), incoming.size());
     }
 
-    RpcMethodHandler* findCachedHandler(const RpcRequest& request,
+    RpcMethodHandler* find_cached_handler(const RpcRequest& request,
                                         uint64_t route_hash,
                                         std::array<RouteCacheEntry, kRouteCacheSize>& route_cache,
                                         RouteCacheEntry*& last_hit) const {
-        if (last_hit != nullptr && routeCacheHit(*last_hit, request, route_hash)) {
+        if (last_hit != nullptr && route_cache_hit(*last_hit, request, route_hash)) {
             return last_hit->handler;
         }
 
         for (auto& entry : route_cache) {
-            if (routeCacheHit(entry, request, route_hash)) {
+            if (route_cache_hit(entry, request, route_hash)) {
                 last_hit = &entry;
                 return entry.handler;
             }
@@ -398,14 +398,14 @@ private:
         return nullptr;
     }
 
-    void updateRouteCache(const RpcRequest& request,
+    void update_route_cache(const RpcRequest& request,
                           uint64_t route_hash,
                           RpcMethodHandler* handler,
                           std::array<RouteCacheEntry, kRouteCacheSize>& route_cache,
                           size_t& route_cache_cursor,
                           RouteCacheEntry*& last_hit) const {
         for (auto& entry : route_cache) {
-            if (routeCacheKeyMatch(entry, request, route_hash)) {
+            if (route_cache_key_match(entry, request, route_hash)) {
                 entry.handler = handler;
                 last_hit = &entry;
                 return;
@@ -415,22 +415,22 @@ private:
         auto& slot = route_cache[route_cache_cursor];
         route_cache_cursor = (route_cache_cursor + 1) % kRouteCacheSize;
         slot.route_hash = route_hash;
-        assignCachedString(slot.service_name, request.serviceName());
-        assignCachedString(slot.method_name, request.methodName());
-        slot.call_mode = request.callMode();
+        assign_cached_string(slot.service_name, request.service_name());
+        assign_cached_string(slot.method_name, request.method_name());
+        slot.call_mode = request.call_mode();
         slot.handler = handler;
         last_hit = &slot;
     }
 
-    std::expected<RpcMethodHandler*, RpcErrorCode> resolveMethodHandler(const RpcRequest& request) {
-        const size_t initial_index = serviceBucketIndex(request.serviceName());
+    std::expected<RpcMethodHandler*, RpcErrorCode> resolve_method_handler(const RpcRequest& request) {
+        const size_t initial_index = service_bucket_index(request.service_name());
         for (size_t probe = 0; probe < m_services.size(); ++probe) {
             RpcService* service = m_services[(initial_index + probe) % m_services.size()];
             if (service == nullptr) {
                 break;
             }
-            if (service->name() == request.serviceName()) {
-                auto* handler = service->findMethod(request.methodName(), request.callMode());
+            if (service->name() == request.service_name()) {
+                auto* handler = service->find_method(request.method_name(), request.call_mode());
                 if (handler == nullptr) {
                     return std::unexpected(RpcErrorCode::METHOD_NOT_FOUND);
                 }
@@ -443,7 +443,7 @@ private:
     /**
      * @brief 接受连接循环
      */
-    Task<void> acceptLoop(AsyncTcpSocket listener) {
+    Task<void> accept_loop(AsyncTcpSocket listener) {
         while (m_running.load(std::memory_order_acquire)) {
             Host client_host;
             auto accept_result = co_await listener.accept(&client_host);
@@ -456,8 +456,8 @@ private:
             }
 
             // 分发到下一个IO调度器处理
-            auto* scheduler = m_runtime.getNextIOScheduler();
-            if (!scheduleTask(scheduler, handleConnection(accept_result.value()))) {
+            auto* scheduler = m_runtime.get_next_io_scheduler();
+            if (!schedule_task(scheduler, handle_connection(accept_result.value()))) {
                 m_last_error = RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule connection handler");
                 RPC_LOG_ERROR("[server] [schedule] [fail]", "connection-handler");
                 GHandle accepted = accept_result.value();
@@ -485,18 +485,18 @@ private:
     /**
      * @brief 处理连接
      */
-    Task<void> handleConnection(GHandle handle) {
+    Task<void> handle_connection(GHandle handle) {
         RpcConn conn(handle, RpcReaderSetting{}, RpcWriterSetting{}, m_config.ring_buffer_size);
         if (m_config.tcp_no_delay) {
-            auto nodelay_result = conn.socket().option().handleTcpNoDelay();
+            auto nodelay_result = conn.socket().option().handle_tcp_no_delay();
             if (!nodelay_result) {
                 RPC_LOG_WARN("[server] [socket] [nodelay-fail]",
                              "error={}",
                              nodelay_result.error().message());
             }
         }
-        auto reader = conn.getReader();
-        auto writer = conn.getWriter();
+        auto reader = conn.get_reader();
+        auto writer = conn.get_writer();
         std::array<RouteCacheEntry, kRouteCacheSize> route_cache{};
         for (auto& entry : route_cache) {
             entry.service_name.reserve(kRouteStringReserve);
@@ -509,7 +509,7 @@ private:
             // 读取请求（co_await直到完整消息）
             RpcRequest request;
             RpcHeader header;
-            auto result = co_await GetRpcHeaderAwaitable<AsyncTcpSocket>(conn.ringBuffer(), header, conn.socket());
+            auto result = co_await GetRpcHeaderAwaitable<AsyncTcpSocket>(conn.ring_buffer(), header, conn.socket());
             if (!result) {
                 // 错误，关闭连接
                 m_last_error = result.error();
@@ -529,7 +529,7 @@ private:
 
             if (header.m_type == static_cast<uint8_t>(RpcMessageType::HEARTBEAT)) {
                 auto heartbeat_result = co_await SendRawDataAwaitable<AsyncTcpSocket>(
-                    rpcBuildHeartbeatFrame(header.m_request_id),
+                    rpc_build_heartbeat_frame(header.m_request_id),
                     conn.socket());
                 if (!heartbeat_result) {
                     m_last_error = heartbeat_result.error();
@@ -576,7 +576,7 @@ private:
             std::vector<char> request_body(header.m_body_length);
             if (header.m_body_length > 0) {
                 result = co_await GetRpcBodyAwaitable<AsyncTcpSocket>(
-                    conn.ringBuffer(),
+                    conn.ring_buffer(),
                     request_body.data(),
                     request_body.size(),
                     conn.socket());
@@ -590,10 +590,10 @@ private:
                 }
             }
 
-            request.requestId(header.m_request_id);
-            request.callMode(rpcDecodeCallMode(header.m_flags));
-            request.endOfStream(rpcIsEndStream(header.m_flags));
-            if (!request.deserializeBody(request_body.data(),
+            request.request_id(header.m_request_id);
+            request.call_mode(rpc_decode_call_mode(header.m_flags));
+            request.end_of_stream(rpc_is_end_stream(header.m_flags));
+            if (!request.deserialize_body(request_body.data(),
                                          request_body.size(),
                                          (header.m_reserved & RPC_RESERVED_METADATA) != 0)) {
                 m_last_error = RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Failed to parse request body");
@@ -605,14 +605,14 @@ private:
             }
 
             // 处理请求
-            RpcResponse response(request.requestId());
-            response.callMode(request.callMode());
-            response.endOfStream(true);
+            RpcResponse response(request.request_id());
+            response.call_mode(request.call_mode());
+            response.end_of_stream(true);
 
             auto intercept_result = m_config.interceptor(request);
             if (!intercept_result.has_value()) {
-                response.errorCode(intercept_result.error().code());
-                result = co_await writer.sendResponse(response);
+                response.error_code(intercept_result.error().code());
+                result = co_await writer.send_response(response);
                 if (!result) {
                     m_last_error = result.error();
                     auto close_result = co_await conn.close();
@@ -622,26 +622,26 @@ private:
                 continue;
             }
 
-            const uint64_t route_hash = buildRouteHash(request.serviceName(),
-                                                       request.methodName(),
-                                                       request.callMode());
-            RpcMethodHandler* handler = findCachedHandler(request,
+            const uint64_t route_hash = build_route_hash(request.service_name(),
+                                                       request.method_name(),
+                                                       request.call_mode());
+            RpcMethodHandler* handler = find_cached_handler(request,
                                                           route_hash,
                                                           route_cache,
                                                           last_hit);
             if (handler == nullptr) {
-                auto resolve_result = resolveMethodHandler(request);
+                auto resolve_result = resolve_method_handler(request);
                 if (!resolve_result.has_value()) {
-                    response.errorCode(resolve_result.error());
+                    response.error_code(resolve_result.error());
                     RPC_LOG_WARN("[server] [route] [not-found]",
                                  "service={} method={} mode={} code={}",
-                                 request.serviceName(),
-                                 request.methodName(),
-                                 static_cast<int>(request.callMode()),
+                                 request.service_name(),
+                                 request.method_name(),
+                                 static_cast<int>(request.call_mode()),
                                  static_cast<int>(resolve_result.error()));
                 } else {
                     handler = resolve_result.value();
-                    updateRouteCache(request,
+                    update_route_cache(request,
                                      route_hash,
                                      handler,
                                      route_cache,
@@ -655,15 +655,15 @@ private:
                 co_await (*handler)(ctx);
             }
 
-            response.materializePayload();
+            response.materialize_payload();
 
             // 发送响应（co_await直到完整发送）
-            result = co_await writer.sendResponse(response);
+            result = co_await writer.send_response(response);
             if (!result) {
                 m_last_error = result.error();
                 RPC_LOG_WARN("[server] [send] [fail]",
                              "request_id={} code={} error={}",
-                             response.requestId(),
+                             response.request_id(),
                              static_cast<int>(m_last_error->code()),
                              m_last_error->message());
                 auto close_result = co_await conn.close();

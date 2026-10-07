@@ -57,8 +57,8 @@ Task<void> run(IOScheduler* scheduler, AsyncState* state, const mysql_example::D
     }
 
     const MysqlResultSet& rs = query_result->value();
-    if (rs.rowCount() > 0) {
-        std::cout << "[E1-import] SELECT 1 => " << rs.row(0).getString(0) << std::endl;
+    if (rs.row_count() > 0) {
+        std::cout << "[E1-import] SELECT 1 => " << rs.row(0).get_string(0) << std::endl;
     } else {
         std::cout << "[E1-import] empty result" << std::endl;
     }
@@ -71,13 +71,13 @@ Task<void> run(IOScheduler* scheduler, AsyncState* state, const mysql_example::D
 
 int main()
 {
-    const auto cfg = mysql_example::loadDbExampleConfig();
-    mysql_example::printDbExampleConfig(cfg);
+    const auto cfg = mysql_example::load_db_example_config();
+    mysql_example::print_db_example_config(cfg);
 
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "no IO scheduler" << std::endl;
         runtime.stop();
@@ -85,7 +85,7 @@ int main()
     }
 
     AsyncState state;
-    if (!scheduleTask(scheduler, run(scheduler, &state, cfg))) {
+    if (!schedule_task(scheduler, run(scheduler, &state, cfg))) {
         std::cerr << "failed to schedule async query example on IO scheduler" << std::endl;
         runtime.stop();
         return 1;

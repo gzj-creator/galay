@@ -39,7 +39,7 @@ void measure(const std::string& name, std::size_t iterations, Fn&& fn)
               << "  checksum=" << checksum << '\n';
 }
 
-std::size_t requireParamInvalid(const std::expected<void, galay::kernel::IOError>& result)
+std::size_t require_param_invalid(const std::expected<void, galay::kernel::IOError>& result)
 {
     if (result.has_value() ||
         !galay::kernel::IOError::contains(result.error().code(), galay::kernel::kParamInvalid)) {
@@ -52,7 +52,7 @@ std::size_t requireParamInvalid(const std::expected<void, galay::kernel::IOError
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -71,13 +71,13 @@ int main()
     measure("tcp invalid bind fast path", iterations, [](std::size_t i) {
         galay::async::AsyncTcpSocket socket(GHandle::invalid());
         galay::kernel::Host host(galay::kernel::IPType::IPV4, "not-an-ip", 0);
-        return requireParamInvalid(socket.bind(host)) + (i & 1U);
+        return require_param_invalid(socket.bind(host)) + (i & 1U);
     });
 
     measure("udp invalid bind fast path", iterations, [](std::size_t i) {
         galay::async::AsyncUdpSocket socket(GHandle::invalid());
         galay::kernel::Host host(galay::kernel::IPType::IPV4, "not-an-ip", 0);
-        return requireParamInvalid(socket.bind(host)) + (i & 1U);
+        return require_param_invalid(socket.bind(host)) + (i & 1U);
     });
 
     return static_cast<int>(g_sink == static_cast<std::size_t>(-1));

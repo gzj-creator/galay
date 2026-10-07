@@ -44,7 +44,7 @@ Result measure(std::string name, std::size_t iterations, Fn&& fn) {
     return Result{std::move(name), nsPerOp, mopsPerSec, checksum};
 }
 
-void printResult(const Result& result) {
+void print_result(const Result& result) {
     std::cout << std::left << std::setw(28) << result.name
               << std::right << std::setw(12) << std::fixed << std::setprecision(2)
               << result.nsPerOp
@@ -54,7 +54,7 @@ void printResult(const Result& result) {
 }
 
 template<typename Fn>
-Result measureConcurrent(std::string name,
+Result measure_concurrent(std::string name,
                          std::size_t threadCount,
                          std::size_t iterationsPerThread,
                          Fn&& fn) {
@@ -96,7 +96,7 @@ Result measureConcurrent(std::string name,
 } // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -115,7 +115,7 @@ int main() {
         galay::utils::CircuitBreakerConfig config;
         config.failureThreshold = iterations + 1;
         galay::utils::CircuitBreaker breaker(config);
-        printResult(measure("closed execute success", iterations, [&](std::size_t i) {
+        print_result(measure("closed execute success", iterations, [&](std::size_t i) {
             auto result = breaker.execute([&]() -> ExpectedInt {
                 return static_cast<int>(i & 0xffu);
             });
@@ -127,7 +127,7 @@ int main() {
         galay::utils::CircuitBreakerConfig config;
         config.failureThreshold = iterations + 1;
         galay::utils::CircuitBreaker breaker(config);
-        printResult(measure("closed execute failure", iterations, [&](std::size_t) {
+        print_result(measure("closed execute failure", iterations, [&](std::size_t) {
             auto result = breaker.execute([]() -> ExpectedInt {
                 return std::unexpected(galay::utils::CircuitBreakerError::Open);
             });
@@ -139,8 +139,8 @@ int main() {
         galay::utils::CircuitBreakerConfig config;
         config.resetTimeout = std::chrono::hours(1);
         galay::utils::CircuitBreaker breaker(config);
-        breaker.forceOpen();
-        printResult(measure("open execute reject", iterations, [&](std::size_t) {
+        breaker.force_open();
+        print_result(measure("open execute reject", iterations, [&](std::size_t) {
             auto result = breaker.execute([]() -> ExpectedInt {
                 return 1;
             });
@@ -155,12 +155,12 @@ int main() {
         config.halfOpenMaxRequests = 1;
         config.resetTimeout = std::chrono::seconds::zero();
         galay::utils::CircuitBreaker breaker(config);
-        breaker.forceOpen();
-        (void)breaker.allowRequest();
+        breaker.force_open();
+        (void)breaker.allow_request();
 
-        printResult(measure("half-open probe success", iterations, [&](std::size_t) {
-            breaker.onSuccess();
-            const bool allowed = breaker.allowRequest();
+        print_result(measure("half-open probe success", iterations, [&](std::size_t) {
+            breaker.on_success();
+            const bool allowed = breaker.allow_request();
             return allowed ? 1u : 0u;
         }));
     }
@@ -177,7 +177,7 @@ int main() {
         galay::utils::CircuitBreakerConfig config;
         config.failureThreshold = threadCount * iterationsPerThread + 1;
         galay::utils::CircuitBreaker breaker(config);
-        printResult(measureConcurrent(
+        print_result(measure_concurrent(
             "mt shared closed success",
             threadCount,
             iterationsPerThread,
@@ -193,7 +193,7 @@ int main() {
         galay::utils::CircuitBreakerConfig config;
         config.failureThreshold = threadCount * iterationsPerThread + 1;
         galay::utils::CircuitBreaker breaker(config);
-        printResult(measureConcurrent(
+        print_result(measure_concurrent(
             "mt shared closed failure",
             threadCount,
             iterationsPerThread,
@@ -209,8 +209,8 @@ int main() {
         galay::utils::CircuitBreakerConfig config;
         config.resetTimeout = std::chrono::hours(1);
         galay::utils::CircuitBreaker breaker(config);
-        breaker.forceOpen();
-        printResult(measureConcurrent(
+        breaker.force_open();
+        print_result(measure_concurrent(
             "mt shared open reject",
             threadCount,
             iterationsPerThread,
@@ -229,18 +229,18 @@ int main() {
         config.halfOpenMaxRequests = 1;
         config.resetTimeout = std::chrono::seconds::zero();
         galay::utils::CircuitBreaker breaker(config);
-        breaker.forceOpen();
-        (void)breaker.allowRequest();
-        breaker.onSuccess();
+        breaker.force_open();
+        (void)breaker.allow_request();
+        breaker.on_success();
 
-        printResult(measureConcurrent(
+        print_result(measure_concurrent(
             "mt half-open contended",
             threadCount,
             iterationsPerThread,
             [&](std::size_t, std::size_t) {
-                const bool allowed = breaker.allowRequest();
+                const bool allowed = breaker.allow_request();
                 if (allowed) {
-                    breaker.onSuccess();
+                    breaker.on_success();
                 }
                 return allowed ? 1u : 0u;
             }));

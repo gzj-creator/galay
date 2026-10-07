@@ -25,16 +25,16 @@ std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_server_done{false};
 std::atomic<bool> g_client_done{false};
 
-Task<void> udpServer() {
+Task<void> udp_server() {
     AsyncUdpSocket socket;
 
-    auto optResult = socket.option().handleReuseAddr();
+    auto optResult = socket.option().handle_reuse_addr();
     if (!optResult) {
         g_server_done.store(true, std::memory_order_release);
         co_return;
     }
 
-    optResult = socket.option().handleNonBlock();
+    optResult = socket.option().handle_non_block();
     if (!optResult) {
         g_server_done.store(true, std::memory_order_release);
         co_return;
@@ -63,13 +63,13 @@ Task<void> udpServer() {
     g_server_done.store(true, std::memory_order_release);
 }
 
-Task<void> udpClient() {
+Task<void> udp_client() {
     while (!g_server_ready.load(std::memory_order_acquire)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     AsyncUdpSocket socket;
-    auto optResult = socket.option().handleNonBlock();
+    auto optResult = socket.option().handle_non_block();
     if (!optResult) {
         g_client_done.store(true, std::memory_order_release);
         co_return;
@@ -97,12 +97,12 @@ Task<void> udpClient() {
 }  // namespace
 
 int main() {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(1).build();
     runtime.start();
 
-    auto* io = runtime.getNextIOScheduler();
-    scheduleTask(io, udpServer());
-    scheduleTask(io, udpClient());
+    auto* io = runtime.get_next_io_scheduler();
+    schedule_task(io, udp_server());
+    schedule_task(io, udp_client());
 
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while ((!g_server_done.load(std::memory_order_acquire) ||

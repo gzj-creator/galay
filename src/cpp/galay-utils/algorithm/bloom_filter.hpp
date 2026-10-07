@@ -43,7 +43,7 @@ inline constexpr std::array<uint32_t, 8> kBloomFilterSalt{
     0x5c6bfb31U
 };
 
-inline uint64_t mixBloomHash(uint64_t value) noexcept {
+inline uint64_t mix_bloom_hash(uint64_t value) noexcept {
     value ^= value >> 30;
     value *= 0xbf58476d1ce4e5b9ULL;
     value ^= value >> 27;
@@ -52,7 +52,7 @@ inline uint64_t mixBloomHash(uint64_t value) noexcept {
     return value;
 }
 
-inline size_t nextPowerOfTwo(size_t value) {
+inline size_t next_power_of_two(size_t value) {
     if (value <= 1) {
         return 1;
     }
@@ -73,9 +73,9 @@ inline size_t nextPowerOfTwo(size_t value) {
  * @brief 高吞吐 split-block Bloom Filter
  * @details
  * Bloom Filter 是概率型集合成员判断结构：
- * - add(value) 后，possiblyContains(value) 必定返回 true，除非 clear() 已清空过滤器。
- * - possiblyContains(value) == false 表示 value 一定没有被加入过。
- * - possiblyContains(value) == true 只表示 value 可能被加入过，存在假阳性。
+ * - add(value) 后，possibly_contains(value) 必定返回 true，除非 clear() 已清空过滤器。
+ * - possibly_contains(value) == false 表示 value 一定没有被加入过。
+ * - possibly_contains(value) == true 只表示 value 可能被加入过，存在假阳性。
  *
  * 本实现固定每个元素设置 8 个 bit，且 8 个 bit 都落在同一个 256-bit block
  * 的 8 个不同 word 中。相比传统 Bloom Filter 的多次随机位图访问，这种布局
@@ -88,7 +88,7 @@ inline size_t nextPowerOfTwo(size_t value) {
  * @warning 本类非线程安全。并发 add/query/clear 同一个实例时必须由调用方外部同步。
  * @warning 默认 Hash 基于进程内 std::hash，不保证跨进程、跨编译器或跨版本稳定。
  *          若要持久化或跨服务共享过滤器，必须提供稳定的 64-bit hash 策略并使用
- *          addHash()/possiblyContainsHash()。
+ *          add_hash()/possibly_contains_hash()。
  *
  * @tparam T 待判断的值类型
  * @tparam Hash 返回可转换为 uint64_t 的哈希函数；默认 std::hash<T>
@@ -102,9 +102,9 @@ public:
 
     /**
      * @brief 按 bit 数构造 Bloom Filter
-     * @param bitCount 期望 bit 数；会向上取整到完整 256-bit block
+     * @param bit_count 期望 bit 数；会向上取整到完整 256-bit block
      * @param hash 哈希函数；结果会经过内部 64-bit 混合后进入 split-block 算法
-     * @throws std::invalid_argument bitCount 为 0 时抛出
+     * @throws std::invalid_argument bit_count 为 0 时抛出
      * @throws std::length_error block 数超过 uint32_t 可寻址范围时抛出
      */
     explicit BloomFilter(size_t bitCount, Hash hash = Hash{})
@@ -152,10 +152,10 @@ public:
      *          split-block Bloom Filter 的真实假阳性率还受 block 负载分布影响；
      *          因此该工厂函数是容量建议，不是百分百的误判率承诺。
      */
-    static BloomFilter fromExpectedItems(size_t expectedItems,
+    static BloomFilter from_expected_items(size_t expectedItems,
                                          double falsePositiveRate,
                                          Hash hash = Hash{}) {
-        const size_t bits = bitCountForExpectedItems(expectedItems, falsePositiveRate);
+        const size_t bits = bit_count_for_expected_items(expectedItems, falsePositiveRate);
         return BloomFilter(bits, std::move(hash));
     }
 
@@ -166,7 +166,7 @@ public:
      * @return 向上取整到 256-bit block 的 bit 数
      * @throws std::invalid_argument 参数不合法时抛出
      */
-    static size_t bitCountForExpectedItems(size_t expectedItems,
+    static size_t bit_count_for_expected_items(size_t expectedItems,
                                            double falsePositiveRate) {
         if (expectedItems == 0) {
             throw std::invalid_argument("BloomFilter expectedItems must be greater than 0");
@@ -188,7 +188,7 @@ public:
         const size_t requestedBytes =
             static_cast<size_t>(std::ceil(rawBits / static_cast<double>(8)));
         const size_t roundedBytes =
-            std::max<size_t>(kBitsPerBlock / 8, detail::nextPowerOfTwo(requestedBytes));
+            std::max<size_t>(kBitsPerBlock / 8, detail::next_power_of_two(requestedBytes));
         return roundedBytes * 8;
     }
 
@@ -197,7 +197,7 @@ public:
      * @param value 待加入值
      */
     void add(const T& value) {
-        addHash(hashValue(value));
+        add_hash(hash_value(value));
     }
 
     /**
@@ -206,9 +206,9 @@ public:
      *
      * @details 该接口不会再次混合 hash，用于调用方已有稳定 hash 的场景。
      */
-    void addHash(uint64_t hash64) {
-        auto& block = m_blocks[blockIndex(hash64)];
-        const auto mask = makeMask(static_cast<uint32_t>(hash64));
+    void add_hash(uint64_t hash64) {
+        auto& block = m_blocks[block_index(hash64)];
+        const auto mask = make_mask(static_cast<uint32_t>(hash64));
         for (size_t i = 0; i < kWordsPerBlock; ++i) {
             block.words[i] |= mask[i];
         }
@@ -220,8 +220,8 @@ public:
      * @param value 待判断值
      * @return false 表示一定不存在；true 表示可能存在，需接受假阳性
      */
-    bool possiblyContains(const T& value) const {
-        return possiblyContainsHash(hashValue(value));
+    bool possibly_contains(const T& value) const {
+        return possibly_contains_hash(hash_value(value));
     }
 
     /**
@@ -229,9 +229,9 @@ public:
      * @param hash64 稳定且分布良好的 64-bit hash
      * @return false 表示一定不存在；true 表示可能存在，需接受假阳性
      */
-    bool possiblyContainsHash(uint64_t hash64) const {
-        const auto& block = m_blocks[blockIndex(hash64)];
-        const auto mask = makeMask(static_cast<uint32_t>(hash64));
+    bool possibly_contains_hash(uint64_t hash64) const {
+        const auto& block = m_blocks[block_index(hash64)];
+        const auto mask = make_mask(static_cast<uint32_t>(hash64));
         for (size_t i = 0; i < kWordsPerBlock; ++i) {
             if ((block.words[i] & mask[i]) == 0) {
                 return false;
@@ -251,15 +251,15 @@ public:
         m_insertions = 0;
     }
 
-    size_t bitCount() const noexcept {
+    size_t bit_count() const noexcept {
         return m_blocks.size() * kBitsPerBlock;
     }
 
-    size_t blockCount() const noexcept {
+    size_t block_count() const noexcept {
         return m_blocks.size();
     }
 
-    static constexpr size_t hashCount() noexcept {
+    static constexpr size_t hash_count() noexcept {
         return kHashCount;
     }
 
@@ -267,7 +267,7 @@ public:
         return m_insertions == 0;
     }
 
-    size_t insertionCount() const noexcept {
+    size_t insertion_count() const noexcept {
         return m_insertions;
     }
 
@@ -275,20 +275,20 @@ private:
     BloomFilter(const BloomFilter&) = default;
     BloomFilter& operator=(const BloomFilter&) = default;
 
-    uint64_t hashValue(const T& value) const {
+    uint64_t hash_value(const T& value) const {
         using Result = std::invoke_result_t<Hash, const T&>;
         static_assert(std::is_convertible_v<Result, uint64_t>,
                       "BloomFilter Hash result must be convertible to uint64_t");
-        return detail::mixBloomHash(static_cast<uint64_t>(m_hash(value)));
+        return detail::mix_bloom_hash(static_cast<uint64_t>(m_hash(value)));
     }
 
-    size_t blockIndex(uint64_t hash64) const noexcept {
+    size_t block_index(uint64_t hash64) const noexcept {
         const uint64_t high = hash64 >> 32;
         const uint64_t blocks = static_cast<uint64_t>(m_blocks.size());
         return static_cast<size_t>((high * blocks) >> 32);
     }
 
-    static std::array<uint32_t, kWordsPerBlock> makeMask(uint32_t hash32) noexcept {
+    static std::array<uint32_t, kWordsPerBlock> make_mask(uint32_t hash32) noexcept {
         std::array<uint32_t, kWordsPerBlock> mask{};
         for (size_t i = 0; i < kWordsPerBlock; ++i) {
             const uint32_t bit =

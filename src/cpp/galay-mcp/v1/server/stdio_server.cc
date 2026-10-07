@@ -9,7 +9,7 @@ namespace galay::mcp {
 
 namespace {
 
-std::string emptyObjectString() {
+std::string empty_object_string() {
     return "{}";
 }
 
@@ -22,13 +22,13 @@ McpStdioServer::McpStdioServer()
     , m_output(&std::cout)
     , m_running(false)
     , m_initialized(false) {
-    m_toolsListCache = protocol::buildListResultFromMap(
+    m_toolsListCache = protocol::build_list_result_from_map(
         m_tools, "tools",
         [](const ToolInfo& info) -> const Tool& { return info.tool; });
-    m_resourcesListCache = protocol::buildListResultFromMap(
+    m_resourcesListCache = protocol::build_list_result_from_map(
         m_resources, "resources",
         [](const ResourceInfo& info) -> const Resource& { return info.resource; });
-    m_promptsListCache = protocol::buildListResultFromMap(
+    m_promptsListCache = protocol::build_list_result_from_map(
         m_prompts, "prompts",
         [](const PromptInfo& info) -> const Prompt& { return info.prompt; });
 }
@@ -37,21 +37,21 @@ McpStdioServer::~McpStdioServer() {
     stop();
 }
 
-void McpStdioServer::setServerInfo(const std::string& name, const std::string& version) {
+void McpStdioServer::set_server_info(const std::string& name, const std::string& version) {
     m_serverName = name;
     m_serverVersion = version;
 }
 
-void McpStdioServer::setProductionPolicy(McpProductionPolicy policy) {
+void McpStdioServer::set_production_policy(McpProductionPolicy policy) {
     m_policy = std::move(policy);
 }
 
-void McpStdioServer::setStreams(std::istream& input, std::ostream& output) noexcept {
+void McpStdioServer::set_streams(std::istream& input, std::ostream& output) noexcept {
     m_input = &input;
     m_output = &output;
 }
 
-void McpStdioServer::addTool(std::string name,
+void McpStdioServer::add_tool(std::string name,
                              std::string description,
                              std::string inputSchema,
                              McpStdioServer::ToolHandler handler) {
@@ -68,12 +68,12 @@ void McpStdioServer::addTool(std::string name,
 
     std::string key = info.tool.name;
     m_tools.insert_or_assign(std::move(key), std::move(info));
-    m_toolsListCache = protocol::buildListResultFromMap(
+    m_toolsListCache = protocol::build_list_result_from_map(
         m_tools, "tools",
         [](const ToolInfo& info) -> const Tool& { return info.tool; });
 }
 
-void McpStdioServer::addResource(std::string uri,
+void McpStdioServer::add_resource(std::string uri,
                                  std::string name,
                                  std::string description,
                                  std::string mimeType,
@@ -92,12 +92,12 @@ void McpStdioServer::addResource(std::string uri,
 
     std::string key = info.resource.uri;
     m_resources.insert_or_assign(std::move(key), std::move(info));
-    m_resourcesListCache = protocol::buildListResultFromMap(
+    m_resourcesListCache = protocol::build_list_result_from_map(
         m_resources, "resources",
         [](const ResourceInfo& info) -> const Resource& { return info.resource; });
 }
 
-void McpStdioServer::addPrompt(std::string name,
+void McpStdioServer::add_prompt(std::string name,
                                std::string description,
                                std::vector<PromptArgument> arguments,
                                McpStdioServer::PromptGetter getter) {
@@ -114,7 +114,7 @@ void McpStdioServer::addPrompt(std::string name,
 
     std::string key = info.prompt.name;
     m_prompts.insert_or_assign(std::move(key), std::move(info));
-    m_promptsListCache = protocol::buildListResultFromMap(
+    m_promptsListCache = protocol::build_list_result_from_map(
         m_prompts, "prompts",
         [](const PromptInfo& info) -> const Prompt& { return info.prompt; });
 }
@@ -124,10 +124,10 @@ void McpStdioServer::run() {
     MCP_LOG_INFO("[stdio_server]", "run loop started server={}/{}", m_serverName, m_serverVersion);
 
     while (m_running) {
-        auto messageResult = readMessage();
+        auto messageResult = read_message();
         if (!messageResult) {
             if (messageResult.error().code() == McpErrorCode::PayloadTooLarge) {
-                sendError(0, messageResult.error().toJsonRpcErrorCode(), messageResult.error().message(), "");
+                send_error(0, messageResult.error().to_json_rpc_error_code(), messageResult.error().message(), "");
                 continue;
             }
             // 读取失败，可能是EOF或错误
@@ -139,15 +139,15 @@ void McpStdioServer::run() {
             continue;
         }
 
-        auto parsed = parseJsonRpcRequest(messageResult.value());
+        auto parsed = parse_json_rpc_request(messageResult.value());
         if (!parsed) {
             MCP_LOG_WARN("[stdio_server]", "json-rpc request parse failed error={}",
                          parsed.error().details());
-            sendError(0, ErrorCodes::PARSE_ERROR, "Parse error", parsed.error().details());
+            send_error(0, ErrorCodes::PARSE_ERROR, "Parse error", parsed.error().details());
             continue;
         }
 
-        handleRequest(parsed.value().request);
+        handle_request(parsed.value().request);
     }
 
     m_running = false;
@@ -160,78 +160,78 @@ void McpStdioServer::stop() {
     m_running = false;
 }
 
-bool McpStdioServer::isRunning() const {
+bool McpStdioServer::is_running() const {
     return m_running;
 }
 
-void McpStdioServer::handleRequest(const JsonRpcRequestView& request) {
+void McpStdioServer::handle_request(const JsonRpcRequestView& request) {
     const std::string& method = request.method;
 
     if (method == Methods::INITIALIZE) {
-        handleInitialize(request);
+        handle_initialize(request);
     } else if (method == Methods::TOOLS_LIST) {
-        handleToolsList(request);
+        handle_tools_list(request);
     } else if (method == Methods::TOOLS_CALL) {
-        handleToolsCall(request);
+        handle_tools_call(request);
     } else if (method == Methods::RESOURCES_LIST) {
-        handleResourcesList(request);
+        handle_resources_list(request);
     } else if (method == Methods::RESOURCES_READ) {
-        handleResourcesRead(request);
+        handle_resources_read(request);
     } else if (method == Methods::PROMPTS_LIST) {
-        handlePromptsList(request);
+        handle_prompts_list(request);
     } else if (method == Methods::PROMPTS_GET) {
-        handlePromptsGet(request);
+        handle_prompts_get(request);
     } else if (method == Methods::PING) {
-        handlePing(request);
+        handle_ping(request);
     } else {
         if (request.id.has_value()) {
             MCP_LOG_WARN("[stdio_server]", "method not found method={} id={}", method, request.id.value());
-            sendError(request.id.value(), ErrorCodes::METHOD_NOT_FOUND,
+            send_error(request.id.value(), ErrorCodes::METHOD_NOT_FOUND,
                      "Method not found", method);
         }
     }
 }
 
-void McpStdioServer::handleInitialize(const JsonRpcRequestView& request) {
+void McpStdioServer::handle_initialize(const JsonRpcRequestView& request) {
     if (!request.id.has_value()) {
         return;
     }
 
     if (m_initialized) {
         MCP_LOG_WARN("[stdio_server]", "initialize rejected: already initialized id={}", request.id.value());
-        sendError(request.id.value(), ErrorCodes::INVALID_REQUEST,
+        send_error(request.id.value(), ErrorCodes::INVALID_REQUEST,
                  "Already initialized", "");
         return;
     }
 
     if (!request.hasParams) {
         MCP_LOG_WARN("[stdio_server]", "initialize missing params id={}", request.id.value());
-        sendError(request.id.value(), ErrorCodes::INVALID_PARAMS,
+        send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
                  "Invalid parameters", "Missing params");
         return;
     }
 
-    auto paramsExp = InitializeParams::fromJson(request.params);
+    auto paramsExp = InitializeParams::from_json(request.params);
     if (!paramsExp) {
         MCP_LOG_WARN("[stdio_server]", "initialize params parse failed id={} error={}",
                      request.id.value(),
                      paramsExp.error().message());
-        sendError(request.id.value(), ErrorCodes::INVALID_PARAMS,
+        send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
                  "Invalid parameters", paramsExp.error().message());
         return;
     }
 
     // 构建响应
-    std::string result = protocol::buildInitializeResult(
+    std::string result = protocol::build_initialize_result(
         m_serverName,
         m_serverVersion,
         !m_tools.empty(),
         !m_resources.empty(),
         !m_prompts.empty());
 
-    JsonRpcResponse response = protocol::makeResultResponse(request.id.value(), result);
+    JsonRpcResponse response = protocol::make_result_response(request.id.value(), result);
 
-    sendResponse(response);
+    send_response(response);
 
     m_initialized = true;
     MCP_LOG_INFO("[stdio_server]", "initialized id={} server={}/{}",
@@ -240,37 +240,37 @@ void McpStdioServer::handleInitialize(const JsonRpcRequestView& request) {
                  m_serverVersion);
 
     // 发送initialized通知
-    sendNotification(Methods::INITIALIZED, emptyObjectString());
+    send_notification(Methods::INITIALIZED, empty_object_string());
 }
 
-void McpStdioServer::handleToolsList(const JsonRpcRequestView& request) {
+void McpStdioServer::handle_tools_list(const JsonRpcRequestView& request) {
     if (!request.id.has_value()) {
         return;
     }
 
     if (!m_initialized) {
         MCP_LOG_WARN("[stdio_server]", "tools/list before initialization id={}", request.id.value());
-        sendError(request.id.value(), ErrorCodes::INVALID_REQUEST,
+        send_error(request.id.value(), ErrorCodes::INVALID_REQUEST,
                  "Not initialized", "");
         return;
     }
 
     std::shared_lock<std::shared_mutex> lock(m_toolsMutex);
 
-    JsonRpcResponse response = protocol::makeResultResponse(
+    JsonRpcResponse response = protocol::make_result_response(
         request.id.value(), m_toolsListCache);
 
-    sendResponse(response);
+    send_response(response);
 }
 
-void McpStdioServer::handleToolsCall(const JsonRpcRequestView& request) {
+void McpStdioServer::handle_tools_call(const JsonRpcRequestView& request) {
     if (!request.id.has_value()) {
         return;
     }
 
     if (!m_initialized) {
         MCP_LOG_WARN("[stdio_server]", "tools/call before initialization id={}", request.id.value());
-        sendError(request.id.value(), ErrorCodes::INVALID_REQUEST,
+        send_error(request.id.value(), ErrorCodes::INVALID_REQUEST,
                  "Not initialized", "");
         return;
     }
@@ -278,7 +278,7 @@ void McpStdioServer::handleToolsCall(const JsonRpcRequestView& request) {
     try {
         if (!request.hasParams) {
             MCP_LOG_WARN("[stdio_server]", "tools/call missing params id={}", request.id.value());
-            sendError(request.id.value(), ErrorCodes::INVALID_PARAMS,
+            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
                      "Invalid parameters", "Missing params");
             return;
         }
@@ -286,7 +286,7 @@ void McpStdioServer::handleToolsCall(const JsonRpcRequestView& request) {
         json::Json paramsObj = request.params;
         if (!paramsObj.is_object()) {
             MCP_LOG_WARN("[stdio_server]", "tools/call params not object id={}", request.id.value());
-            sendError(request.id.value(), ErrorCodes::INVALID_PARAMS,
+            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
                      "Invalid parameters", "Params must be object");
             return;
         }
@@ -295,7 +295,7 @@ void McpStdioServer::handleToolsCall(const JsonRpcRequestView& request) {
         auto nameVal = paramsObj.at("name").as_string();
         if (!nameVal) {
             MCP_LOG_WARN("[stdio_server]", "tools/call missing tool name id={}", request.id.value());
-            sendError(request.id.value(), ErrorCodes::INVALID_PARAMS,
+            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
                      "Invalid parameters", "Missing tool name");
             return;
         }
@@ -306,12 +306,12 @@ void McpStdioServer::handleToolsCall(const JsonRpcRequestView& request) {
         auto it = m_tools.find(toolName);
         if (it == m_tools.end()) {
             MCP_LOG_WARN("[stdio_server]", "tool not found id={} tool={}", request.id.value(), toolName);
-            sendError(request.id.value(), ErrorCodes::METHOD_NOT_FOUND,
+            send_error(request.id.value(), ErrorCodes::METHOD_NOT_FOUND,
                      "Tool not found", toolName);
             return;
         }
 
-        json::Json arguments = emptyJsonObject();
+        json::Json arguments = empty_json_object();
         json::Json argsElement = paramsObj.at("arguments");
         if (argsElement.valid()) {
             arguments = argsElement;
@@ -325,7 +325,7 @@ void McpStdioServer::handleToolsCall(const JsonRpcRequestView& request) {
                          request.id.value(),
                          toolName,
                          result.error().message());
-            sendError(request.id.value(), result.error().toJsonRpcErrorCode(),
+            send_error(request.id.value(), result.error().to_json_rpc_error_code(),
                      result.error().message(), result.error().details());
             return;
         }
@@ -339,45 +339,45 @@ void McpStdioServer::handleToolsCall(const JsonRpcRequestView& request) {
 
         JsonRpcResponse response;
         response.id = request.id.value();
-        response.result = callResult.toJson();
+        response.result = callResult.to_json();
 
-        sendResponse(response);
+        send_response(response);
 
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[stdio_server]", "tools/call threw id={} error={}", request.id.value(), e.what());
-        sendError(request.id.value(), ErrorCodes::INTERNAL_ERROR,
+        send_error(request.id.value(), ErrorCodes::INTERNAL_ERROR,
                  "Internal error", "");
     }
 }
 
-void McpStdioServer::handleResourcesList(const JsonRpcRequestView& request) {
+void McpStdioServer::handle_resources_list(const JsonRpcRequestView& request) {
     if (!request.id.has_value()) {
         return;
     }
 
     if (!m_initialized) {
         MCP_LOG_WARN("[stdio_server]", "resources/list before initialization id={}", request.id.value());
-        sendError(request.id.value(), ErrorCodes::INVALID_REQUEST,
+        send_error(request.id.value(), ErrorCodes::INVALID_REQUEST,
                  "Not initialized", "");
         return;
     }
 
     std::shared_lock<std::shared_mutex> lock(m_resourcesMutex);
 
-    JsonRpcResponse response = protocol::makeResultResponse(
+    JsonRpcResponse response = protocol::make_result_response(
         request.id.value(), m_resourcesListCache);
 
-    sendResponse(response);
+    send_response(response);
 }
 
-void McpStdioServer::handleResourcesRead(const JsonRpcRequestView& request) {
+void McpStdioServer::handle_resources_read(const JsonRpcRequestView& request) {
     if (!request.id.has_value()) {
         return;
     }
 
     if (!m_initialized) {
         MCP_LOG_WARN("[stdio_server]", "resources/read before initialization id={}", request.id.value());
-        sendError(request.id.value(), ErrorCodes::INVALID_REQUEST,
+        send_error(request.id.value(), ErrorCodes::INVALID_REQUEST,
                  "Not initialized", "");
         return;
     }
@@ -385,7 +385,7 @@ void McpStdioServer::handleResourcesRead(const JsonRpcRequestView& request) {
     try {
         if (!request.hasParams) {
             MCP_LOG_WARN("[stdio_server]", "resources/read missing params id={}", request.id.value());
-            sendError(request.id.value(), ErrorCodes::INVALID_PARAMS,
+            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
                      "Invalid parameters", "Missing params");
             return;
         }
@@ -393,7 +393,7 @@ void McpStdioServer::handleResourcesRead(const JsonRpcRequestView& request) {
         json::Json paramsObj = request.params;
         if (!paramsObj.is_object()) {
             MCP_LOG_WARN("[stdio_server]", "resources/read params not object id={}", request.id.value());
-            sendError(request.id.value(), ErrorCodes::INVALID_PARAMS,
+            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
                      "Invalid parameters", "Params must be object");
             return;
         }
@@ -402,7 +402,7 @@ void McpStdioServer::handleResourcesRead(const JsonRpcRequestView& request) {
         auto uriVal = paramsObj.at("uri").as_string();
         if (!uriVal) {
             MCP_LOG_WARN("[stdio_server]", "resources/read missing uri id={}", request.id.value());
-            sendError(request.id.value(), ErrorCodes::INVALID_PARAMS,
+            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
                      "Invalid parameters", "Missing uri");
             return;
         }
@@ -413,7 +413,7 @@ void McpStdioServer::handleResourcesRead(const JsonRpcRequestView& request) {
         auto it = m_resources.find(uri);
         if (it == m_resources.end()) {
             MCP_LOG_WARN("[stdio_server]", "resource not found id={} uri={}", request.id.value(), uri);
-            sendError(request.id.value(), ErrorCodes::METHOD_NOT_FOUND,
+            send_error(request.id.value(), ErrorCodes::METHOD_NOT_FOUND,
                      "Resource not found", uri);
             return;
         }
@@ -426,7 +426,7 @@ void McpStdioServer::handleResourcesRead(const JsonRpcRequestView& request) {
                          request.id.value(),
                          uri,
                          result.error().message());
-            sendError(request.id.value(), result.error().toJsonRpcErrorCode(),
+            send_error(request.id.value(), result.error().to_json_rpc_error_code(),
                      result.error().message(), result.error().details());
             return;
         }
@@ -437,17 +437,17 @@ void McpStdioServer::handleResourcesRead(const JsonRpcRequestView& request) {
         content.text = result.value();
 
         std::string resultJson;
-        auto resultWriter = makeJsonWriter(resultJson);
+        auto resultWriter = make_json_writer(resultJson);
         // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
         (void)resultWriter.start_object();
         (void)resultWriter.key("contents");
         (void)resultWriter.start_array();
-        (void)resultWriter.raw(content.toJson());
+        (void)resultWriter.raw(content.to_json());
         (void)resultWriter.end_array();
         (void)resultWriter.end_object();
         if (!resultWriter.finish()) {
             MCP_LOG_ERROR("[stdio_server]", "result encode failed id={}", request.id.value());
-            sendError(request.id.value(), ErrorCodes::INTERNAL_ERROR,
+            send_error(request.id.value(), ErrorCodes::INTERNAL_ERROR,
                      "Internal error", "");
             return;
         }
@@ -456,43 +456,43 @@ void McpStdioServer::handleResourcesRead(const JsonRpcRequestView& request) {
         response.id = request.id.value();
         response.result = std::move(resultJson);
 
-        sendResponse(response);
+        send_response(response);
 
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[stdio_server]", "resources/read threw id={} error={}", request.id.value(), e.what());
-        sendError(request.id.value(), ErrorCodes::INTERNAL_ERROR,
+        send_error(request.id.value(), ErrorCodes::INTERNAL_ERROR,
                  "Internal error", "");
     }
 }
 
-void McpStdioServer::handlePromptsList(const JsonRpcRequestView& request) {
+void McpStdioServer::handle_prompts_list(const JsonRpcRequestView& request) {
     if (!request.id.has_value()) {
         return;
     }
 
     if (!m_initialized) {
         MCP_LOG_WARN("[stdio_server]", "prompts/list before initialization id={}", request.id.value());
-        sendError(request.id.value(), ErrorCodes::INVALID_REQUEST,
+        send_error(request.id.value(), ErrorCodes::INVALID_REQUEST,
                  "Not initialized", "");
         return;
     }
 
     std::shared_lock<std::shared_mutex> lock(m_promptsMutex);
 
-    JsonRpcResponse response = protocol::makeResultResponse(
+    JsonRpcResponse response = protocol::make_result_response(
         request.id.value(), m_promptsListCache);
 
-    sendResponse(response);
+    send_response(response);
 }
 
-void McpStdioServer::handlePromptsGet(const JsonRpcRequestView& request) {
+void McpStdioServer::handle_prompts_get(const JsonRpcRequestView& request) {
     if (!request.id.has_value()) {
         return;
     }
 
     if (!m_initialized) {
         MCP_LOG_WARN("[stdio_server]", "prompts/get before initialization id={}", request.id.value());
-        sendError(request.id.value(), ErrorCodes::INVALID_REQUEST,
+        send_error(request.id.value(), ErrorCodes::INVALID_REQUEST,
                  "Not initialized", "");
         return;
     }
@@ -500,7 +500,7 @@ void McpStdioServer::handlePromptsGet(const JsonRpcRequestView& request) {
     try {
         if (!request.hasParams) {
             MCP_LOG_WARN("[stdio_server]", "prompts/get missing params id={}", request.id.value());
-            sendError(request.id.value(), ErrorCodes::INVALID_PARAMS,
+            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
                      "Invalid parameters", "Missing params");
             return;
         }
@@ -508,7 +508,7 @@ void McpStdioServer::handlePromptsGet(const JsonRpcRequestView& request) {
         json::Json paramsObj = request.params;
         if (!paramsObj.is_object()) {
             MCP_LOG_WARN("[stdio_server]", "prompts/get params not object id={}", request.id.value());
-            sendError(request.id.value(), ErrorCodes::INVALID_PARAMS,
+            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
                      "Invalid parameters", "Params must be object");
             return;
         }
@@ -517,13 +517,13 @@ void McpStdioServer::handlePromptsGet(const JsonRpcRequestView& request) {
         auto nameVal = paramsObj.at("name").as_string();
         if (!nameVal) {
             MCP_LOG_WARN("[stdio_server]", "prompts/get missing name id={}", request.id.value());
-            sendError(request.id.value(), ErrorCodes::INVALID_PARAMS,
+            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
                      "Invalid parameters", "Missing prompt name");
             return;
         }
         name = std::string(*nameVal);
 
-        json::Json arguments = emptyJsonObject();
+        json::Json arguments = empty_json_object();
         json::Json argsElement = paramsObj.at("arguments");
         if (argsElement.valid()) {
             arguments = argsElement;
@@ -534,7 +534,7 @@ void McpStdioServer::handlePromptsGet(const JsonRpcRequestView& request) {
         auto it = m_prompts.find(name);
         if (it == m_prompts.end()) {
             MCP_LOG_WARN("[stdio_server]", "prompt not found id={} name={}", request.id.value(), name);
-            sendError(request.id.value(), ErrorCodes::METHOD_NOT_FOUND,
+            send_error(request.id.value(), ErrorCodes::METHOD_NOT_FOUND,
                      "Prompt not found", name);
             return;
         }
@@ -547,7 +547,7 @@ void McpStdioServer::handlePromptsGet(const JsonRpcRequestView& request) {
                          request.id.value(),
                          name,
                          result.error().message());
-            sendError(request.id.value(), result.error().toJsonRpcErrorCode(),
+            send_error(request.id.value(), result.error().to_json_rpc_error_code(),
                      result.error().message(), result.error().details());
             return;
         }
@@ -556,37 +556,37 @@ void McpStdioServer::handlePromptsGet(const JsonRpcRequestView& request) {
         response.id = request.id.value();
         response.result = result.value();
 
-        sendResponse(response);
+        send_response(response);
 
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[stdio_server]", "prompts/get threw id={} error={}", request.id.value(), e.what());
-        sendError(request.id.value(), ErrorCodes::INTERNAL_ERROR,
+        send_error(request.id.value(), ErrorCodes::INTERNAL_ERROR,
                  "Internal error", "");
     }
 }
 
-void McpStdioServer::handlePing(const JsonRpcRequestView& request) {
+void McpStdioServer::handle_ping(const JsonRpcRequestView& request) {
     if (!request.id.has_value()) {
         return;
     }
 
-    JsonRpcResponse response = protocol::makeResultResponse(
-        request.id.value(), emptyObjectString());
+    JsonRpcResponse response = protocol::make_result_response(
+        request.id.value(), empty_object_string());
 
-    sendResponse(response);
+    send_response(response);
 }
 
-void McpStdioServer::sendResponse(const JsonRpcResponse& response) {
-    std::string message = response.toJson();
+void McpStdioServer::send_response(const JsonRpcResponse& response) {
+    std::string message = response.to_json();
     if (message.size() > m_policy.transport.max_response_bytes) {
-        message = protocol::makeErrorResponse(
+        message = protocol::make_error_response(
             response.id,
             ErrorCodes::INVALID_REQUEST,
             "Payload too large",
-            "").toJson();
+            "").to_json();
     }
 
-    auto result = writeMessage(message);
+    auto result = write_message(message);
     if (!result) {
         MCP_LOG_ERROR("[stdio_server]", "write response failed id={} error={}",
                       response.id,
@@ -594,17 +594,17 @@ void McpStdioServer::sendResponse(const JsonRpcResponse& response) {
     }
 }
 
-void McpStdioServer::sendError(int64_t id, int code, const std::string& message,
+void McpStdioServer::send_error(int64_t id, int code, const std::string& message,
                                const std::string& details) {
-    sendResponse(protocol::makeErrorResponse(id, code, message, details));
+    send_response(protocol::make_error_response(id, code, message, details));
 }
 
-void McpStdioServer::sendNotification(const std::string& method, const std::string& params) {
+void McpStdioServer::send_notification(const std::string& method, const std::string& params) {
     JsonRpcNotification notification;
     notification.method = method;
     notification.params = params;
 
-    auto result = writeMessage(notification.toJson());
+    auto result = write_message(notification.to_json());
     if (!result) {
         MCP_LOG_ERROR("[stdio_server]", "write notification failed method={} error={}",
                       method,
@@ -612,23 +612,23 @@ void McpStdioServer::sendNotification(const std::string& method, const std::stri
     }
 }
 
-std::expected<std::string, McpError> McpStdioServer::readMessage() {
+std::expected<std::string, McpError> McpStdioServer::read_message() {
     std::string line;
     if (!std::getline(*m_input, line)) {
-        return std::unexpected(McpError::readError("Failed to read from stdin"));
+        return std::unexpected(McpError::read_error("Failed to read from stdin"));
     }
 
     if (line.empty()) {
-        return std::unexpected(McpError::invalidMessage("Empty message"));
+        return std::unexpected(McpError::invalid_message("Empty message"));
     }
     if (line.size() > m_policy.transport.max_stdio_line_bytes) {
-        return std::unexpected(McpError::payloadTooLarge("stdio line exceeds configured limit"));
+        return std::unexpected(McpError::payload_too_large("stdio line exceeds configured limit"));
     }
 
     return line;
 }
 
-std::expected<void, McpError> McpStdioServer::writeMessage(const std::string& message) {
+std::expected<void, McpError> McpStdioServer::write_message(const std::string& message) {
     std::lock_guard<std::mutex> lock(m_outputMutex);
 
     try {
@@ -636,7 +636,7 @@ std::expected<void, McpError> McpStdioServer::writeMessage(const std::string& me
         m_output->flush();
         return {};
     } catch (const std::exception& e) {
-        return std::unexpected(McpError::writeError(e.what()));
+        return std::unexpected(McpError::write_error(e.what()));
     }
 }
 

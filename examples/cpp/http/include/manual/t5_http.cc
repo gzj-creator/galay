@@ -39,7 +39,7 @@ namespace {
 
 constexpr const char* kApiAllowMethods = "GET, POST, PUT, DELETE, HEAD, OPTIONS, PATCH, TRACE";
 
-int parseDelaySeconds(const std::string& uri) {
+int parse_delay_seconds(const std::string& uri) {
     constexpr std::string_view prefix = "/delay/";
     if (!uri.starts_with(prefix)) {
         return 0;
@@ -51,7 +51,7 @@ int parseDelaySeconds(const std::string& uri) {
     }
 }
 
-std::string buildApiDataBody(std::string_view method_name,
+std::string build_api_data_body(std::string_view method_name,
                              std::string_view uri,
                              size_t body_size) {
     return std::string("{\"method\":\"")
@@ -63,8 +63,8 @@ std::string buildApiDataBody(std::string_view method_name,
         + "}";
 }
 
-Task<void> sendRawPayload(HttpConn& conn, std::string payload) {
-    auto& socket = conn.getSocket();
+Task<void> send_raw_payload(HttpConn& conn, std::string payload) {
+    auto& socket = conn.get_socket();
     size_t sent = 0;
     while (sent < payload.size()) {
         auto result = co_await socket.send(payload.data() + sent, payload.size() - sent);
@@ -79,9 +79,9 @@ Task<void> sendRawPayload(HttpConn& conn, std::string payload) {
 }  // namespace
 
 // HTTP请求处理器协程
-Task<void> handleRequest(HttpConn conn) {
-    auto reader = conn.getReader();
-    auto writer = conn.getWriter();
+Task<void> handle_request(HttpConn conn) {
+    auto reader = conn.get_reader();
+    auto writer = conn.get_writer();
 
     while (true) {
         // 读取HTTP请求
@@ -89,7 +89,7 @@ Task<void> handleRequest(HttpConn conn) {
         bool requestComplete = false;
 
         while (!requestComplete) {
-            auto result = co_await reader.getRequest(request);
+            auto result = co_await reader.get_request(request);
 
             if (!result) {
                 auto& error = result.error();
@@ -126,10 +126,10 @@ Task<void> handleRequest(HttpConn conn) {
                 "Connection: keep-alive\r\n"
                 "\r\n"
                 "partial";
-            co_await sendRawPayload(conn, std::move(partial));
+            co_await send_raw_payload(conn, std::move(partial));
             continue;
         } else if (uri.starts_with("/delay/")) {
-            const int delay_seconds = parseDelaySeconds(uri);
+            const int delay_seconds = parse_delay_seconds(uri);
             std::this_thread::sleep_for(std::chrono::seconds(delay_seconds));
             content_type = "text/plain; charset=utf-8";
             body = "Delayed " + std::to_string(delay_seconds) + " second(s)";
@@ -190,10 +190,10 @@ Task<void> handleRequest(HttpConn conn) {
                 case HttpMethod::POST:
                 case HttpMethod::PUT:
                 case HttpMethod::PATCH:
-                    body = buildApiDataBody(
-                        httpMethodToString(method),
+                    body = build_api_data_body(
+                        http_method_to_string(method),
                         uri,
-                        request.bodyStr().size());
+                        request.body_str().size());
                     break;
                 case HttpMethod::DELETE:
                     code = HttpStatusCode::NoContent_204;
@@ -235,7 +235,7 @@ Task<void> handleRequest(HttpConn conn) {
         }
 
         bool keep_alive = true;
-        std::string conn_hdr = request.header().headerPairs().getValue("Connection");
+        std::string conn_hdr = request.header().header_pairs().get_value("Connection");
         if (!conn_hdr.empty()) {
             for (auto& c : conn_hdr) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
             if (conn_hdr == "close") {
@@ -260,9 +260,9 @@ Task<void> handleRequest(HttpConn conn) {
             response_builder.body(std::move(body));
         }
 
-        auto response = response_builder.buildMove();
+        auto response = response_builder.build_move();
 
-        auto sendResult = co_await writer.sendResponse(response);
+        auto sendResult = co_await writer.send_response(response);
         if (!sendResult) {
             keep_alive = false;
         } else {
@@ -290,7 +290,7 @@ int main() {
     g_server_running = true;
 
     // 运行服务器（阻塞）
-    server.start(handleRequest);
+    server.start(handle_request);
     while (g_server_running.load()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }

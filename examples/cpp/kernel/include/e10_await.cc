@@ -1,8 +1,8 @@
 /**
  * @file e10_await.cc
  * @brief 用途：用头文件方式演示如何通过状态机实现一个最小自定义 Awaitable。
- * 关键覆盖点：`MachineAction`、`advance()`、`onRead()`、`onWrite()`、
- * `AwaitableBuilder<Result>::fromStateMachine(...).build()`。
+ * 关键覆盖点：`MachineAction`、`advance()`、`on_read()`、`on_write()`、
+ * `AwaitableBuilder<Result>::from_state_machine(...).build()`。
  * 通过条件：本地 `ping -> pong` 自闭环完成并返回 0。
  */
 
@@ -40,12 +40,12 @@ struct PingPongMachine {
 
         switch (m_phase) {
         case Phase::kReadPing:
-            return MachineAction<result_type>::waitRead(
+            return MachineAction<result_type>::wait_read(
                 m_ping.data() + m_ping_received,
                 m_ping.size() - m_ping_received
             );
         case Phase::kWritePong:
-            return MachineAction<result_type>::waitWrite(
+            return MachineAction<result_type>::wait_write(
                 m_pong.data() + m_pong_sent,
                 m_pong.size() - m_pong_sent
             );
@@ -55,7 +55,7 @@ struct PingPongMachine {
         return MachineAction<result_type>::fail(IOError(kParamInvalid, 0));
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
             m_result = std::unexpected(result.error());
             m_phase = Phase::kDone;
@@ -76,7 +76,7 @@ struct PingPongMachine {
         m_phase = Phase::kWritePong;
     }
 
-    void onWrite(std::expected<size_t, IOError> result) {
+    void on_write(std::expected<size_t, IOError> result) {
         if (!result) {
             m_result = std::unexpected(result.error());
             m_phase = Phase::kDone;
@@ -113,7 +113,7 @@ struct ExampleState {
     std::atomic<bool> peer_ok{false};
 };
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -126,7 +126,7 @@ bool waitUntil(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-bool sendAll(int fd, const char* buffer, size_t length) {
+bool send_all(int fd, const char* buffer, size_t length) {
     size_t sent = 0;
     while (sent < length) {
         const ssize_t n = ::send(fd, buffer + sent, length - sent, 0);
@@ -138,7 +138,7 @@ bool sendAll(int fd, const char* buffer, size_t length) {
     return true;
 }
 
-bool recvExact(int fd, char* buffer, size_t length) {
+bool recv_exact(int fd, char* buffer, size_t length) {
     size_t received = 0;
     while (received < length) {
         const ssize_t n = ::recv(fd, buffer + received, length - received, 0);
@@ -150,16 +150,16 @@ bool recvExact(int fd, char* buffer, size_t length) {
     return true;
 }
 
-void setRecvTimeout(int fd, int milliseconds) {
+void set_recv_timeout(int fd, int milliseconds) {
     timeval tv{};
     tv.tv_sec = milliseconds / 1000;
     tv.tv_usec = (milliseconds % 1000) * 1000;
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 }
 
-Task<void> customAwaitableTask(ExampleState* state, int fd) {
+Task<void> custom_awaitable_task(ExampleState* state, int fd) {
     IOController controller(GHandle{.fd = fd});
-    auto awaitable = AwaitableBuilder<ExampleResult>::fromStateMachine(
+    auto awaitable = AwaitableBuilder<ExampleResult>::from_state_machine(
         &controller,
         PingPongMachine{}
     ).build();
@@ -181,29 +181,29 @@ int main() {
         return 1;
     }
 
-    setRecvTimeout(fds[1], 1000);
+    set_recv_timeout(fds[1], 1000);
 
     ExampleState state;
     std::thread peer([&]() {
         constexpr char kPing[] = "ping";
         char pong[4]{};
 
-        if (sendAll(fds[1], kPing, sizeof(kPing) - 1) &&
-            recvExact(fds[1], pong, sizeof(pong)) &&
+        if (send_all(fds[1], kPing, sizeof(kPing) - 1) &&
+            recv_exact(fds[1], pong, sizeof(pong)) &&
             std::string(pong, sizeof(pong)) == "pong") {
             state.peer_ok.store(true, std::memory_order_release);
         }
     });
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
     runtime.start();
 
-    scheduleTask(runtime.getNextIOScheduler(), customAwaitableTask(&state, fds[0]));
+    schedule_task(runtime.get_next_io_scheduler(), custom_awaitable_task(&state, fds[0]));
 
-    const bool completed = waitUntil(state.done, 2000ms);
+    const bool completed = wait_until(state.done, 2000ms);
 
     runtime.stop();
     close(fds[0]);

@@ -27,7 +27,7 @@ public:
     StreamLoopbackService()
         : RpcService("StreamLoopbackService")
     {
-        registerStreamMethod("echo", &StreamLoopbackService::echo);
+        register_stream_method("echo", &StreamLoopbackService::echo);
     }
 
     Task<void> echo(RpcStream& stream)
@@ -39,24 +39,24 @@ public:
                 co_return;
             }
 
-            if (msg.messageType() == RpcMessageType::STREAM_DATA) {
-                auto send_result = co_await stream.sendData(msg.payloadView());
+            if (msg.message_type() == RpcMessageType::STREAM_DATA) {
+                auto send_result = co_await stream.send_data(msg.payload_view());
                 if (!send_result.has_value()) {
                     co_return;
                 }
                 continue;
             }
 
-            if (msg.messageType() == RpcMessageType::STREAM_END) {
-                (void)co_await stream.sendEnd();
+            if (msg.message_type() == RpcMessageType::STREAM_END) {
+                (void)co_await stream.send_end();
                 co_return;
             }
 
-            if (msg.messageType() == RpcMessageType::STREAM_CANCEL) {
+            if (msg.message_type() == RpcMessageType::STREAM_CANCEL) {
                 co_return;
             }
 
-            (void)co_await stream.sendCancel();
+            (void)co_await stream.send_cancel();
             co_return;
         }
     }
@@ -68,7 +68,7 @@ struct StreamResult {
     std::string error;
 };
 
-uint16_t loopbackPort()
+uint16_t loopback_port()
 {
     return static_cast<uint16_t>(23000 + (::getpid() % 20000));
 }
@@ -79,7 +79,7 @@ void fail(StreamResult& state, std::string message)
     state.error = std::move(message);
 }
 
-Task<bool> connectClient(RpcClient& client, uint16_t port)
+Task<bool> connect_client(RpcClient& client, uint16_t port)
 {
     for (int attempt = 0; attempt < 100; ++attempt) {
         auto connect_result = co_await client.connect("127.0.0.1", port);
@@ -91,24 +91,24 @@ Task<bool> connectClient(RpcClient& client, uint16_t port)
     co_return false;
 }
 
-Task<bool> expectCancel(uint16_t port,
+Task<bool> expect_cancel(uint16_t port,
                         uint32_t stream_id,
                         const std::string& service,
                         const std::string& method)
 {
     RpcClient client;
-    if (!co_await connectClient(client, port)) {
+    if (!co_await connect_client(client, port)) {
         co_return false;
     }
 
-    auto stream_result = client.createStream(stream_id, service, method);
+    auto stream_result = client.create_stream(stream_id, service, method);
     if (!stream_result.has_value()) {
         co_await client.close();
         co_return false;
     }
     auto stream = std::move(stream_result.value());
 
-    auto send_result = co_await stream.sendInit();
+    auto send_result = co_await stream.send_init();
     if (!send_result.has_value()) {
         co_await client.close();
         co_return false;
@@ -117,22 +117,22 @@ Task<bool> expectCancel(uint16_t port,
     StreamMessage msg;
     auto recv_result = co_await stream.read(msg);
     const bool ok = recv_result.has_value() &&
-                    msg.messageType() == RpcMessageType::STREAM_CANCEL &&
-                    msg.streamId() == stream_id;
+                    msg.message_type() == RpcMessageType::STREAM_CANCEL &&
+                    msg.stream_id() == stream_id;
     co_await client.close();
     co_return ok;
 }
 
-Task<void> runStreamClient(uint16_t port, StreamResult* state)
+Task<void> run_stream_client(uint16_t port, StreamResult* state)
 {
     RpcClient client;
-    if (!co_await connectClient(client, port)) {
+    if (!co_await connect_client(client, port)) {
         fail(*state, "stream client connect retry exhausted");
         state->done = true;
         co_return;
     }
 
-    auto stream_result = client.createStream(1, "StreamLoopbackService", "echo");
+    auto stream_result = client.create_stream(1, "StreamLoopbackService", "echo");
     if (!stream_result.has_value()) {
         fail(*state, "create stream failed");
         state->done = true;
@@ -140,7 +140,7 @@ Task<void> runStreamClient(uint16_t port, StreamResult* state)
     }
     auto stream = std::move(stream_result.value());
 
-    auto send_result = co_await stream.sendInit();
+    auto send_result = co_await stream.send_init();
     if (!send_result.has_value()) {
         fail(*state, "send init failed");
         co_await client.close();
@@ -151,8 +151,8 @@ Task<void> runStreamClient(uint16_t port, StreamResult* state)
     StreamMessage init_ack;
     auto recv_result = co_await stream.read(init_ack);
     if (!recv_result.has_value() ||
-        init_ack.messageType() != RpcMessageType::STREAM_INIT_ACK ||
-        init_ack.streamId() != 1) {
+        init_ack.message_type() != RpcMessageType::STREAM_INIT_ACK ||
+        init_ack.stream_id() != 1) {
         fail(*state, "init ack failed");
         co_await client.close();
         state->done = true;
@@ -160,7 +160,7 @@ Task<void> runStreamClient(uint16_t port, StreamResult* state)
     }
 
     for (const std::string payload : {"alpha", "beta", "gamma"}) {
-        send_result = co_await stream.sendData(payload);
+        send_result = co_await stream.send_data(payload);
         if (!send_result.has_value()) {
             fail(*state, "send data failed");
             co_await client.close();
@@ -171,8 +171,8 @@ Task<void> runStreamClient(uint16_t port, StreamResult* state)
         StreamMessage echo;
         recv_result = co_await stream.read(echo);
         if (!recv_result.has_value() ||
-            echo.messageType() != RpcMessageType::STREAM_DATA ||
-            echo.payloadStr() != payload) {
+            echo.message_type() != RpcMessageType::STREAM_DATA ||
+            echo.payload_str() != payload) {
             fail(*state, "echo frame mismatch");
             co_await client.close();
             state->done = true;
@@ -180,7 +180,7 @@ Task<void> runStreamClient(uint16_t port, StreamResult* state)
         }
     }
 
-    send_result = co_await stream.sendEnd();
+    send_result = co_await stream.send_end();
     if (!send_result.has_value()) {
         fail(*state, "send end failed");
         co_await client.close();
@@ -190,7 +190,7 @@ Task<void> runStreamClient(uint16_t port, StreamResult* state)
 
     StreamMessage end_msg;
     recv_result = co_await stream.read(end_msg);
-    if (!recv_result.has_value() || end_msg.messageType() != RpcMessageType::STREAM_END) {
+    if (!recv_result.has_value() || end_msg.message_type() != RpcMessageType::STREAM_END) {
         fail(*state, "server end frame missing");
         co_await client.close();
         state->done = true;
@@ -199,25 +199,25 @@ Task<void> runStreamClient(uint16_t port, StreamResult* state)
 
     co_await client.close();
 
-    if (!co_await expectCancel(port, 2, "MissingService", "echo")) {
+    if (!co_await expect_cancel(port, 2, "MissingService", "echo")) {
         fail(*state, "missing stream service did not return cancel");
         state->done = true;
         co_return;
     }
 
-    if (!co_await expectCancel(port, 3, "StreamLoopbackService", "missing")) {
+    if (!co_await expect_cancel(port, 3, "StreamLoopbackService", "missing")) {
         fail(*state, "missing stream method did not return cancel");
         state->done = true;
         co_return;
     }
 
     RpcClient invalid_client;
-    if (!co_await connectClient(invalid_client, port)) {
+    if (!co_await connect_client(invalid_client, port)) {
         fail(*state, "invalid-frame client connect failed");
         state->done = true;
         co_return;
     }
-    auto invalid_stream_result = invalid_client.createStream(4);
+    auto invalid_stream_result = invalid_client.create_stream(4);
     if (!invalid_stream_result.has_value()) {
         fail(*state, "invalid stream create failed");
         co_await invalid_client.close();
@@ -225,13 +225,13 @@ Task<void> runStreamClient(uint16_t port, StreamResult* state)
         co_return;
     }
     auto invalid_stream = std::move(invalid_stream_result.value());
-    send_result = co_await invalid_stream.sendData("not-init");
+    send_result = co_await invalid_stream.send_data("not-init");
     StreamMessage cancel_msg;
     recv_result = co_await invalid_stream.read(cancel_msg);
     if (!send_result.has_value() ||
         !recv_result.has_value() ||
-        cancel_msg.messageType() != RpcMessageType::STREAM_CANCEL ||
-        cancel_msg.streamId() != 4) {
+        cancel_msg.message_type() != RpcMessageType::STREAM_CANCEL ||
+        cancel_msg.stream_id() != 4) {
         fail(*state, "invalid first frame did not return cancel");
         co_await invalid_client.close();
         state->done = true;
@@ -247,16 +247,16 @@ Task<void> runStreamClient(uint16_t port, StreamResult* state)
 
 int main()
 {
-    const uint16_t port = loopbackPort();
+    const uint16_t port = loopback_port();
 
     auto server = RpcStreamServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     StreamLoopbackService service;
-    auto registered = server.registerService(service);
+    auto registered = server.register_service(service);
     if (!registered.has_value()) {
         std::cerr << "failed to register stream loopback service: "
                   << registered.error().message() << "\n";
@@ -269,7 +269,7 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();
@@ -279,7 +279,7 @@ int main()
     }
 
     StreamResult state;
-    if (!scheduleTask(runtime.getNextIOScheduler(), runStreamClient(port, &state))) {
+    if (!schedule_task(runtime.get_next_io_scheduler(), run_stream_client(port, &state))) {
         runtime.stop();
         server.stop();
         std::cerr << "failed to schedule stream client\n";

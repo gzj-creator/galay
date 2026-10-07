@@ -59,7 +59,7 @@ bool require(bool condition, const char* message)
     return true;
 }
 
-bool runLruHotKey(size_t iterations)
+bool run_lru_hot_key(size_t iterations)
 {
     using Cache = galay::utils::LruCache<std::string,
                                          int,
@@ -99,12 +99,12 @@ bool runLruHotKey(size_t iterations)
     return cache.m_expirations.size() <= (iterations / 250) + 4;
 }
 
-bool runConsistentHashLookup(size_t iterations, size_t thread_count)
+bool run_consistent_hash_lookup(size_t iterations, size_t thread_count)
 {
     galay::utils::ConsistentHash hash(128);
-    hash.addNode({"node-a", "127.0.0.1:9001", 1});
-    hash.addNode({"node-b", "127.0.0.1:9002", 1});
-    hash.addNode({"node-c", "127.0.0.1:9003", 1});
+    hash.add_node({"node-a", "127.0.0.1:9001", 1});
+    hash.add_node({"node-b", "127.0.0.1:9002", 1});
+    hash.add_node({"node-c", "127.0.0.1:9003", 1});
 
     const std::array<std::string, 8> keys = {
         "order-1", "order-2", "order-3", "order-4",
@@ -121,7 +121,7 @@ bool runConsistentHashLookup(size_t iterations, size_t thread_count)
             size_t local = 0;
             for (size_t i = 0; i < iterations; ++i) {
                 const std::string& key = keys[(i + t) % keys.size()];
-                auto node = hash.getNode(key);
+                auto node = hash.get_node(key);
                 if (node.has_value()) {
                     local += node->id.size();
                 }
@@ -160,7 +160,7 @@ bool runConsistentHashLookup(size_t iterations, size_t thread_count)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -179,10 +179,10 @@ int main(int argc, char** argv)
         }
     }
 
-    if (!runLruHotKey(iterations)) {
+    if (!run_lru_hot_key(iterations)) {
         return 1;
     }
-    if (!runConsistentHashLookup(iterations / 4 + 1, thread_count)) {
+    if (!run_consistent_hash_lookup(iterations / 4 + 1, thread_count)) {
         return 1;
     }
     return 0;

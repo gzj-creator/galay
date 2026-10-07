@@ -72,7 +72,7 @@ private:
     std::atomic<int>* m_counter;
 };
 
-static uint32_t toLatencyUs(std::chrono::steady_clock::duration duration) {
+static uint32_t to_latency_us(std::chrono::steady_clock::duration duration) {
     auto us = std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
     if (us < 0) {
         return 0;
@@ -83,7 +83,7 @@ static uint32_t toLatencyUs(std::chrono::steady_clock::duration duration) {
 /**
  * @brief 单个 WebSocket 客户端压测
  */
-Task<void> benchmarkWebSocketClient(
+Task<void> benchmark_web_socket_client(
     IOScheduler* scheduler,
     int client_id,
     const std::string& target_url,
@@ -102,7 +102,7 @@ Task<void> benchmarkWebSocketClient(
         co_return;
     }
 
-    auto session_result = client.getSession(WsWriterSetting::byClient());
+    auto session_result = client.get_session(WsWriterSetting::by_client());
     if (!session_result) {
         g_failed_connections.fetch_add(1);
         co_return;
@@ -120,13 +120,13 @@ Task<void> benchmarkWebSocketClient(
 
     g_successful_connections.fetch_add(1);
 
-    auto& ws_reader = session.getReader();
-    auto& ws_writer = session.getWriter();
+    auto& ws_reader = session.get_reader();
+    auto& ws_writer = session.get_writer();
     // 读取欢迎消息
     std::string welcome_msg;
     WsOpcode welcome_opcode;
     while(true) {
-        auto welcome_result = co_await ws_reader.getMessage(welcome_msg, welcome_opcode);
+        auto welcome_result = co_await ws_reader.get_message(welcome_msg, welcome_opcode);
         if(!welcome_result) {
             co_return;
         }
@@ -152,7 +152,7 @@ Task<void> benchmarkWebSocketClient(
            std::chrono::steady_clock::now() < end_time) {
         auto round_start = std::chrono::steady_clock::now();
         while(true) {
-            auto send_result = co_await ws_writer.sendFrame(send_frame);
+            auto send_result = co_await ws_writer.send_frame(send_frame);
             if (!send_result) {
                 co_return;
             }
@@ -165,7 +165,7 @@ Task<void> benchmarkWebSocketClient(
         // 读取回显消息
         echo_msg.clear();
         while(true) {
-            auto echo_result = co_await ws_reader.getMessage(echo_msg, echo_opcode);
+            auto echo_result = co_await ws_reader.get_message(echo_msg, echo_opcode);
             if (!echo_result.has_value()) {
                 // 连接错误，退出
                 co_return;
@@ -176,7 +176,7 @@ Task<void> benchmarkWebSocketClient(
                 g_total_bytes_received.fetch_add(echo_msg.size());
 
                 // 记录延迟统计
-                uint32_t latency_us = toLatencyUs(std::chrono::steady_clock::now() - round_start);
+                uint32_t latency_us = to_latency_us(std::chrono::steady_clock::now() - round_start);
                 g_latency_sum_us.fetch_add(latency_us);
                 g_latency_count.fetch_add(1);
 
@@ -203,7 +203,7 @@ Task<void> benchmarkWebSocketClient(
 /**
  * @brief 打印统计信息
  */
-void printStats(const std::chrono::steady_clock::time_point& start_time,
+void print_stats(const std::chrono::steady_clock::time_point& start_time,
                 const std::chrono::steady_clock::time_point& end_time) {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
     double duration_sec = duration / 1000.0;
@@ -246,7 +246,7 @@ void printStats(const std::chrono::steady_clock::time_point& start_time,
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -265,7 +265,7 @@ int main(int argc, char* argv[]) {
     if (argc > 1) num_clients = std::stoi(argv[1]);
     if (argc > 2) duration_sec = std::stod(argv[2]);
     if (argc > 3) message_size = std::stoi(argv[3]);
-    std::string target_url = galay::benchmark::ws::resolveBenchmarkClientUrl(argc, argv);
+    std::string target_url = galay::benchmark::ws::resolve_benchmark_client_url(argc, argv);
 
     std::cout << "========================================\n";
     std::cout << "WebSocket Client Benchmark\n";
@@ -292,12 +292,12 @@ int main(int argc, char* argv[]) {
     std::cout << "Starting " << num_clients << " clients...\n";
     for (int i = 0; i < num_clients; i++) {
         // 每个客户端使用不同的 IO 调度器，充分利用多核
-        auto* scheduler = rt.getNextIOScheduler();
+        auto* scheduler = rt.get_next_io_scheduler();
         if (!scheduler) {
             std::cerr << "Failed to get IO scheduler for client " << i << "\n";
             return 1;
         }
-        scheduleTask(scheduler, benchmarkWebSocketClient(scheduler, i, target_url, message_payload, end_time));
+        schedule_task(scheduler, benchmark_web_socket_client(scheduler, i, target_url, message_payload, end_time));
     }
 
     std::cout << "Running for " << duration_sec << " seconds...\n";
@@ -308,7 +308,7 @@ int main(int argc, char* argv[]) {
     rt.stop();
 
     // 打印统计信息
-    printStats(start_time, stop_time);
+    print_stats(start_time, stop_time);
 
     return 0;
 #else

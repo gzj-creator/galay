@@ -7,7 +7,7 @@
 namespace
 {
 
-bool expectCrc32c(const std::string_view name,
+bool expect_crc32c(const std::string_view name,
                   const std::string_view input,
                   const uint32_t expected)
 {
@@ -27,13 +27,13 @@ int main()
 {
     std::cout << "=== T14: Mongo CRC32C Tests ===\n";
 
-    if (!expectCrc32c("empty", "", 0x00000000u)) {
+    if (!expect_crc32c("empty", "", 0x00000000u)) {
         return 1;
     }
-    if (!expectCrc32c("standard-check", "123456789", 0xE3069283u)) {
+    if (!expect_crc32c("standard-check", "123456789", 0xE3069283u)) {
         return 1;
     }
-    if (!expectCrc32c("quick-brown-fox", "The quick brown fox jumps over the lazy dog",
+    if (!expect_crc32c("quick-brown-fox", "The quick brown fox jumps over the lazy dog",
                       0x22620404u)) {
         return 1;
     }

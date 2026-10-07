@@ -22,7 +22,7 @@
 | `galay-http/server/galay-http/http_server.h` | `HttpServer`、`HttpServerBuilder`、`HttpsServer`、`HttpsServerBuilder` | HTTP/HTTPS 服务端 builder、启动与停止语义 |
 | `galay-http/client/galay-http/http_client.h` | `HttpClient`、`HttpClientBuilder`、`HttpsClient`、`HttpsClientBuilder` | HTTP/HTTPS 客户端连接、握手与 `HttpSession` 入口 |
 | `galay-http/client/websocket/ws_client.h` | `WsClient`、`WsClientBuilder`、`WssClient`、`WssClientBuilder` | WebSocket / WSS 客户端连接与升级入口 |
-| `galay-http/client/websocket/ws_session.h` | `WsSessionImpl`、`WssSession` | `upgrade()`、`sendText()`、`getMessage()` 等会话能力 |
+| `galay-http/client/websocket/ws_session.h` | `WsSessionImpl`、`WssSession` | `upgrade()`、`send_text()`、`get_message()` 等会话能力 |
 | `galay-http/client/galay-http2/h2c_client.h` | `H2cClient`、`H2cClientBuilder` | h2c 客户端连接、Upgrade、请求与关闭 |
 | `galay-http/client/galay-http2/h2_client.h` | `H2Client`、`H2ClientBuilder` | h2 客户端连接、ALPN 校验、请求与关闭 |
 | `galay-http/server/galay-http2/http2_server.h` | `H2cServer`、`H2cServerBuilder`、`H2Server`、`H2ServerBuilder` | h2c / h2 服务端与 fallback 入口 |
@@ -141,7 +141,7 @@ struct HttpServerConfig {
 ```
 
 - `io_scheduler_count` / `parallel_scheduler_count` 都复用 `galay-kernel` Runtime 语义：`GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 表示自动推导，`0` 表示禁用对应 scheduler
-- `affinity` 直接沿用 `RuntimeAffinityConfig`；`HttpServerBuilder::sequentialAffinity(...)` 和 `customAffinity(...)` 只是往这个结构里写值
+- `affinity` 直接沿用 `RuntimeAffinityConfig`；`HttpServerBuilder::sequential_affinity(...)` 和 `custom_affinity(...)` 只是往这个结构里写值
 
 ### `HttpServerBuilder`
 
@@ -150,20 +150,20 @@ struct HttpServerConfig {
 - `host(std::string)`
 - `port(uint16_t)`
 - `backlog(int)`
-- `ioSchedulerCount(size_t)`
-- `parallelSchedulerCount(size_t)`
-- `sequentialAffinity(size_t io_count, size_t parallel_count)`
-- `customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus)`
+- `io_scheduler_count(size_t)`
+- `parallel_scheduler_count(size_t)`
+- `sequential_affinity(size_t io_count, size_t parallel_count)`
+- `custom_affinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus)`
 - `build()`
 
 `HttpServer` 的常用生命周期方法：
 
-- `addAcceptPlugin(std::unique_ptr<plugin::AcceptPlugin<AsyncTcpSocket>> plugin)`
+- `add_accept_plugin(std::unique_ptr<plugin::AcceptPlugin<AsyncTcpSocket>> plugin)`
 - `start(ConnHandler handler)`
 - `start(HttpRouter&& router)`
 - `stop()`
-- `isRunning() const`
-- `getRuntime()`
+- `is_running() const`
+- `get_runtime()`
 
 `AcceptPlugin` 在每次 accept 创建底层 socket 并完成基础 socket 选项设置后执行，类型定义在 `galay-http/plugin/common/defn.h`：
 
@@ -193,7 +193,7 @@ public:
 ```cpp
 #include <galay/cpp/galay-http/plugin/blacklist/blacklist.hpp>
 
-server.addAcceptPlugin(
+server.add_accept_plugin(
     std::make_unique<galay::http::plugin::BlackList<AsyncTcpSocket>>(100));
 ```
 
@@ -230,11 +230,11 @@ struct HttpsServerConfig {
 
 `HttpsServerBuilder` 在 `HttpServerBuilder` 基础上增加 TLS 参数：
 
-- `certPath(std::string)`
-- `keyPath(std::string)`
-- `caPath(std::string)`
-- `verifyPeer(bool)`
-- `verifyDepth(int)`
+- `cert_path(std::string)`
+- `key_path(std::string)`
+- `ca_path(std::string)`
+- `verify_peer(bool)`
+- `verify_depth(int)`
 
 典型服务端调用顺序：
 
@@ -242,8 +242,8 @@ struct HttpsServerConfig {
 HttpsServer server(HttpsServerBuilder()
     .host("0.0.0.0")
     .port(8443)
-    .certPath("test/test.crt")
-    .keyPath("test/test.key")
+    .cert_path("test/test.crt")
+    .key_path("test/test.key")
     .build());
 
 server.start(handler);
@@ -252,7 +252,7 @@ server.start(handler);
 说明：
 
 - `HttpsServer` 没有单独的 `listen()` 或 `bind()` 公共 API。
-- 证书加载发生在服务端启动阶段；缺少 `certPath` / `keyPath` 会直接影响 TLS 上线。
+- 证书加载发生在服务端启动阶段；缺少 `cert_path` / `key_path` 会直接影响 TLS 上线。
 - 参考真实示例：`examples/include/e5_https.cpp`。
 
 ## HTTP / HTTPS 客户端
@@ -297,19 +297,19 @@ struct HttpsClientConfig {
 
 - `header_mode` 是客户端请求头存储模式；`HttpClientBuilder` 只暴露这一个配置项
 - `HttpsClientConfig` 在 `HttpClientConfig` 的基础上增加证书校验参数；`HttpsClientBuilder` 会把它转成底层 `HttpClientConfig` 并单独初始化 TLS 上下文
-- `HttpsClient::connect()` 内部会调用 `setHostname(m_url.host)` 尝试设置 SNI；失败只记 warning，不会在设置阶段抛出
+- `HttpsClient::connect()` 内部会调用 `set_hostname(m_url.host)` 尝试设置 SNI；失败只记 warning，不会在设置阶段抛出
 
 ### `HttpClient`
 
 `HttpClientBuilder` 只暴露：
 
-- `headerMode(HeaderPair::Mode)`
+- `header_mode(HeaderPair::Mode)`
 - `build()`
 
 `HttpClient` 的常用入口：
 
 - `connect(const std::string& url)`
-- `getSession(size_t ring_buffer_size = 8192, const HttpReaderSetting& = {}, const HttpWriterSetting& = {})`
+- `get_session(size_t ring_buffer_size = 8192, const HttpReaderSetting& = {}, const HttpWriterSetting& = {})`
 - `close()`
 
 关键语义：
@@ -321,30 +321,30 @@ struct HttpsClientConfig {
 
 `HttpsClientBuilder` 的真实配置项：
 
-- `caPath(std::string)`
-- `verifyPeer(bool)`
-- `verifyDepth(int)`
-- `headerMode(HeaderPair::Mode)`
+- `ca_path(std::string)`
+- `verify_peer(bool)`
+- `verify_depth(int)`
+- `header_mode(HeaderPair::Mode)`
 - `build()`
 
 `HttpsClient` 的常用入口：
 
 - `connect(const std::string& url)`
 - `handshake()`
-- `isHandshakeCompleted() const`
-- `getSession(...)`
+- `is_handshake_completed() const`
+- `get_session(...)`
 - `close()`
 
 真实调用顺序必须是：
 
 ```cpp
 HttpsClient client(HttpsClientBuilder()
-    .verifyPeer(false)
+    .verify_peer(false)
     .build());
 
 co_await client.connect("https://127.0.0.1:8443/");
 co_await client.handshake();
-auto session = client.getSession();
+auto session = client.get_session();
 ```
 
 这与旧文档里“`connect()` 自动完成 HTTPS 握手”的说法不同；当前公开头和真实示例 `examples/include/e6_https.cpp` 明确要求显式 `handshake()`。
@@ -357,7 +357,7 @@ auto session = client.getSession();
 
 来源：`galay-http/kernel/galay-http/http_session.h`
 
-`HttpSession` 是 `HttpClient::getSession()` / `HttpsClient::getSession()` 返回的 HTTP/1.x 会话层。
+`HttpSession` 是 `HttpClient::get_session()` / `HttpsClient::get_session()` 返回的 HTTP/1.x 会话层。
 
 常用入口：
 
@@ -366,18 +366,18 @@ auto session = client.getSession();
 - `post(const std::string& uri, std::string&& body, ...)`
 - `put(...)`
 - `del(...)`
-- `sendRequest(HttpRequest&)`
-- `sendSerializedRequest(std::string)`
-- `getResponse(HttpResponse&)`
-- `sendChunk(...)`
+- `send_request(HttpRequest&)`
+- `send_serialized_request(std::string)`
+- `get_response(HttpResponse&)`
+- `send_chunk(...)`
 
 关键语义：
 
 - 常规调用优先使用 `get()` / `post()` / `put()` 这类按语义构造请求的入口。
 - `post(..., std::string&& body, ...)` 会把请求体直接移动进内部 `HttpRequest`，适合热点路径减少一次 body 拷贝。
-- `sendSerializedRequest(std::string)` 属于高级入口：调用方直接提供完整 HTTP/1.x 请求报文，`HttpSession` 只负责发送、超时控制和响应解析，不再帮你构造请求头。
-- 使用 `sendSerializedRequest(...)` 时，调用方必须自行保证请求行、Header、空行、Body 和 `Content-Length` 一致；该接口不会再校正这些字段。
-- 传入 `sendSerializedRequest(...)` 的字符串所有权会转移到 awaitable 内部；await 完成前不需要额外保活外部缓冲。
+- `send_serialized_request(std::string)` 属于高级入口：调用方直接提供完整 HTTP/1.x 请求报文，`HttpSession` 只负责发送、超时控制和响应解析，不再帮你构造请求头。
+- 使用 `send_serialized_request(...)` 时，调用方必须自行保证请求行、Header、空行、Body 和 `Content-Length` 一致；该接口不会再校正这些字段。
+- 传入 `send_serialized_request(...)` 的字符串所有权会转移到 awaitable 内部；await 完成前不需要额外保活外部缓冲。
 
 ## WebSocket / WSS
 
@@ -385,28 +385,28 @@ auto session = client.getSession();
 
 `WsClientBuilder` 只暴露：
 
-- `headerMode(HeaderPair::Mode)`
+- `header_mode(HeaderPair::Mode)`
 - `build()`
 
 `WsClient` 的常用入口：
 
 - `connect(const std::string& url)`
-- `getSession(WsWriterSetting writer_setting, size_t ring_buffer_size = 8192, const WsReaderSetting& = {})`
+- `get_session(WsWriterSetting writer_setting, size_t ring_buffer_size = 8192, const WsReaderSetting& = {})`
 - `close()`
 
 `WsSessionImpl` 的常用入口：
 
 - `upgrade()`
-- `sendText(...)`
-- `sendBinary(...)`
-- `getMessage(std::string&, WsOpcode&)`
+- `send_text(...)`
+- `send_binary(...)`
+- `get_message(std::string&, WsOpcode&)`
 
 `ws://` 客户端的最小流程：
 
 ```cpp
 WsClient client = WsClientBuilder().build();
 co_await client.connect("ws://127.0.0.1:8080/ws");
-auto session = client.getSession(WsWriterSetting::byClient());
+auto session = client.get_session(WsWriterSetting::by_client());
 auto upgrader = session.upgrade();
 co_await upgrader();
 ```
@@ -415,22 +415,22 @@ co_await upgrader();
 
 `WssClientBuilder` 的真实配置项：
 
-- `caPath(std::string)`
-- `verifyPeer(bool)`
-- `verifyDepth(int)`
-- `headerMode(HeaderPair::Mode)`
+- `ca_path(std::string)`
+- `verify_peer(bool)`
+- `verify_depth(int)`
+- `header_mode(HeaderPair::Mode)`
 - `build()`
 
 `WssClient` 的真实流程必须是：
 
 ```cpp
 WssClient client(WssClientBuilder()
-    .verifyPeer(false)
+    .verify_peer(false)
     .build());
 
 co_await client.connect("wss://127.0.0.1:9443/ws");
 co_await client.handshake();
-auto session = client.getSession(WsWriterSetting::byClient());
+auto session = client.get_session(WsWriterSetting::by_client());
 auto upgrader = session.upgrade();
 co_await upgrader();
 ```
@@ -480,18 +480,18 @@ struct H2cClientConfig {
 
 `galay-http/client/galay-http2/h2c_client.h` 当前暴露的配置项：
 
-- `maxConcurrentStreams(uint32_t)`
-- `initialWindowSize(uint32_t)`
-- `maxFrameSize(uint32_t)`
-- `maxHeaderListSize(uint32_t)`
-- `pingEnabled(bool)`
-- `pingInterval(std::chrono::milliseconds)`
-- `pingTimeout(std::chrono::milliseconds)`
-- `settingsAckTimeout(std::chrono::milliseconds)`
-- `gracefulShutdownRtt(std::chrono::milliseconds)`
-- `gracefulShutdownTimeout(std::chrono::milliseconds)`
-- `flowControlTargetWindow(uint32_t)`
-- `flowControlStrategy(Http2FlowControlStrategy)`
+- `max_concurrent_streams(uint32_t)`
+- `initial_window_size(uint32_t)`
+- `max_frame_size(uint32_t)`
+- `max_header_list_size(uint32_t)`
+- `ping_enabled(bool)`
+- `ping_interval(std::chrono::milliseconds)`
+- `ping_timeout(std::chrono::milliseconds)`
+- `settings_ack_timeout(std::chrono::milliseconds)`
+- `graceful_shutdown_rtt(std::chrono::milliseconds)`
+- `graceful_shutdown_timeout(std::chrono::milliseconds)`
+- `flow_control_target_window(uint32_t)`
+- `flow_control_strategy(Http2FlowControlStrategy)`
 - `build()`
 
 `H2cClient` 的真实调用顺序：
@@ -541,23 +541,23 @@ struct H2cServerConfig {
 
 - `enable_push` 默认是 `false`；头文件注释明确说明这是出于客户端兼容性考虑
 - `stream_handler` 与 `active_conn_handler` 都是配置字段；`start(handler)` 的重载本质上是启动前覆盖它们
-- 明文回退入口 `setHttp1Fallback(...)` 不在配置结构里，而是在 `H2cServer` 实例上单独设置
+- 明文回退入口 `set_http1_fallback(...)` 不在配置结构里，而是在 `H2cServer` 实例上单独设置
 
 ### `H2cServerBuilder`
 
 `galay-http/server/galay-http2/http2_server.h` 中的 `H2cServerBuilder` 暴露：
 
 - `host` / `port` / `backlog`
-- `ioSchedulerCount` / `parallelSchedulerCount`
-- `maxConcurrentStreams` / `initialWindowSize` / `maxFrameSize` / `maxHeaderListSize`
-- `enablePush`
-- `pingEnabled` / `pingInterval` / `pingTimeout`
-- `settingsAckTimeout`
-- `gracefulShutdownRtt` / `gracefulShutdownTimeout`
-- `flowControlTargetWindow` / `flowControlStrategy`
-- `streamHandler(Http2ConnectionHandler)`
-- `activeConnHandler(Http2ActiveConnHandler)`
-- `sequentialAffinity(...)` / `customAffinity(...)`
+- `io_scheduler_count` / `parallel_scheduler_count`
+- `max_concurrent_streams` / `initial_window_size` / `max_frame_size` / `max_header_list_size`
+- `enable_push`
+- `ping_enabled` / `ping_interval` / `ping_timeout`
+- `settings_ack_timeout`
+- `graceful_shutdown_rtt` / `graceful_shutdown_timeout`
+- `flow_control_target_window` / `flow_control_strategy`
+- `stream_handler(Http2ConnectionHandler)`
+- `active_conn_handler(Http2ActiveConnHandler)`
+- `sequential_affinity(...)` / `custom_affinity(...)`
 - `build()`
 
 `H2cServer` 的服务端入口：
@@ -565,7 +565,7 @@ struct H2cServerConfig {
 - `start()`
 - `start(Http2ConnectionHandler handler)`
 - `start(Http2ActiveConnHandler handler)`
-- `setHttp1Fallback(Http1FallbackHandler handler)`
+- `set_http1_fallback(Http1FallbackHandler handler)`
 - `stop()`
 
 ## h2（HTTP/2 over TLS）
@@ -592,12 +592,12 @@ struct H2ClientConfig {
 
 `H2ClientBuilder` 暴露：
 
-- `maxConcurrentStreams(uint32_t)`
-- `initialWindowSize(uint32_t)`
-- `maxFrameSize(uint32_t)`
-- `maxHeaderListSize(uint32_t)`
-- `verifyPeer(bool)`
-- `caPath(std::string)`
+- `max_concurrent_streams(uint32_t)`
+- `initial_window_size(uint32_t)`
+- `max_frame_size(uint32_t)`
+- `max_header_list_size(uint32_t)`
+- `verify_peer(bool)`
+- `ca_path(std::string)`
 - `build()`
 
 `H2Client` 的关键入口：
@@ -606,8 +606,8 @@ struct H2ClientConfig {
 - `get(const std::string& path)`
 - `post(const std::string& path, const std::string& body, const std::string& content_type = "application/x-www-form-urlencoded")`
 - `close()`
-- `isConnected() const`
-- `getALPNProtocol() const`
+- `is_connected() const`
+- `get_alpn_protocol() const`
 
 与 `HttpsClient` / `WssClient` 不同，`H2Client::connect()` 内部已经完成：
 
@@ -620,7 +620,7 @@ struct H2ClientConfig {
 
 ```cpp
 H2Client client(H2ClientBuilder()
-    .verifyPeer(false)
+    .verify_peer(false)
     .build());
 
 auto connect_result = co_await client.connect("127.0.0.1", 9443);
@@ -674,39 +674,39 @@ struct H2ServerConfig {
 
 `H2ServerBuilder` 在 `H2cServerBuilder` 基础上增加 TLS 参数：
 
-- `certPath(std::string)`
-- `keyPath(std::string)`
-- `caPath(std::string)`
-- `verifyPeer(bool)`
-- `verifyDepth(int)`
+- `cert_path(std::string)`
+- `key_path(std::string)`
+- `ca_path(std::string)`
+- `verify_peer(bool)`
+- `verify_depth(int)`
 
 同时保留 HTTP/2 运行时参数：
 
-- `maxConcurrentStreams`
-- `initialWindowSize`
-- `maxFrameSize`
-- `maxHeaderListSize`
-- `enablePush`
-- `pingEnabled`
-- `pingInterval`
-- `pingTimeout`
-- `settingsAckTimeout`
-- `gracefulShutdownRtt`
-- `gracefulShutdownTimeout`
-- `flowControlTargetWindow`
-- `flowControlStrategy`
-- `streamHandler`
-- `activeConnHandler`
+- `max_concurrent_streams`
+- `initial_window_size`
+- `max_frame_size`
+- `max_header_list_size`
+- `enable_push`
+- `ping_enabled`
+- `ping_interval`
+- `ping_timeout`
+- `settings_ack_timeout`
+- `graceful_shutdown_rtt`
+- `graceful_shutdown_timeout`
+- `flow_control_target_window`
+- `flow_control_strategy`
+- `stream_handler`
+- `active_conn_handler`
 
 `H2Server` 的常用入口：
 
 - `start()`
 - `start(Http2ConnectionHandler handler)`
 - `start(Http2ActiveConnHandler handler)`
-- `setHttp1Fallback(std::function<Task<void>(HttpConnImpl<SslSocket>, HttpRequestHeader)>)`
+- `set_http1_fallback(std::function<Task<void>(HttpConnImpl<SslSocket>, HttpRequestHeader)>)`
 - `stop()`
-- `isRunning() const`
-- `getRuntime()`
+- `is_running() const`
+- `get_runtime()`
 
 ## HttpRouter 与静态文件配置
 
@@ -735,38 +735,38 @@ class StaticFileSetting {
 public:
     StaticFileSetting();
 
-    void setTransferMode(FileTransferMode mode);
-    FileTransferMode getTransferMode() const;
+    void set_transfer_mode(FileTransferMode mode);
+    FileTransferMode get_transfer_mode() const;
 
-    void setSmallFileThreshold(size_t threshold);
-    size_t getSmallFileThreshold() const;
+    void set_small_file_threshold(size_t threshold);
+    size_t get_small_file_threshold() const;
 
-    void setLargeFileThreshold(size_t threshold);
-    size_t getLargeFileThreshold() const;
+    void set_large_file_threshold(size_t threshold);
+    size_t get_large_file_threshold() const;
 
-    void setChunkSize(size_t size);
-    size_t getChunkSize() const;
+    void set_chunk_size(size_t size);
+    size_t get_chunk_size() const;
 
-    void setSendFileChunkSize(size_t size);
-    size_t getSendFileChunkSize() const;
+    void set_send_file_chunk_size(size_t size);
+    size_t get_send_file_chunk_size() const;
 
-    void setEnableCache(bool enable);
-    bool isEnableCache() const;
+    void set_enable_cache(bool enable);
+    bool is_enable_cache() const;
 
-    void setEnableETag(bool enable);
-    bool isEnableETag() const;
+    void set_enable_e_tag(bool enable);
+    bool is_enable_e_tag() const;
 
-    void setMaxCacheSize(size_t size);
-    size_t getMaxCacheSize() const;
+    void set_max_cache_size(size_t size);
+    size_t get_max_cache_size() const;
 
-    FileTransferMode decideTransferMode(size_t file_size) const;
+    FileTransferMode decide_transfer_mode(size_t file_size) const;
 };
 ```
 
-- `StaticFileSetting` 没有公开 `mode` 字段；示例代码必须使用 `setTransferMode(FileTransferMode::...)`。
+- `StaticFileSetting` 没有公开 `mode` 字段；示例代码必须使用 `set_transfer_mode(FileTransferMode::...)`。
 - 默认阈值是：小文件 `64KB`、大文件 `1MB`、chunk 大小 `64KB`、sendfile 分块 `10MB`。
-- `setEnableCache(...)` 仅对 `mountHardly(...)` 的启动期预加载缓存生效。
-- `decideTransferMode(...)` 只在 `AUTO` 模式下根据文件大小决策；其他模式直接返回显式设置值。
+- `set_enable_cache(...)` 仅对 `mount_hardly(...)` 的启动期预加载缓存生效。
+- `decide_transfer_mode(...)` 只在 `AUTO` 模式下根据文件大小决策；其他模式直接返回显式设置值。
 
 ### `HttpRouter`
 
@@ -776,10 +776,10 @@ public:
     HttpRouter();
 
     template<HttpMethod... Methods>
-    void addHandler(const std::string& path, HttpRouteHandler handler);
+    void add_handler(const std::string& path, HttpRouteHandler handler);
 
-    RouteMatch findHandler(HttpMethod method, const std::string& path);
-    bool delHandler(HttpMethod method, const std::string& path);
+    RouteMatch find_handler(HttpMethod method, const std::string& path);
+    bool del_handler(HttpMethod method, const std::string& path);
     void clear();
     size_t size() const;
 
@@ -787,11 +787,11 @@ public:
                const std::string& dirPath,
                const StaticFileSetting& config = StaticFileSetting());
 
-    void mountHardly(const std::string& routePrefix,
+    void mount_hardly(const std::string& routePrefix,
                      const std::string& dirPath,
                      const StaticFileSetting& config = StaticFileSetting());
 
-    void tryFiles(const std::string& routePrefix,
+    void try_files(const std::string& routePrefix,
                   const std::string& dirPath,
                   const std::string& upstreamHost,
                   uint16_t upstreamPort,
@@ -806,8 +806,8 @@ public:
 ```
 
 - `mount(...)`：运行时查文件系统，适合动态静态资源目录。
-- `mountHardly(...)`：调用时扫描目录并注册精确路由，适合启动期预热和配合缓存。
-- `tryFiles(...)`：静态命中优先，未命中回源到上游；`mode` 决定代理走 `HTTP` 还是 `Raw`。
+- `mount_hardly(...)`：调用时扫描目录并注册精确路由，适合启动期预热和配合缓存。
+- `try_files(...)`：静态命中优先，未命中回源到上游；`mode` 决定代理走 `HTTP` 还是 `Raw`。
 - `proxy(...)`：无本地静态文件阶段，直接把命中的前缀转发到上游。
 
 ## 生命周期与返回语义
@@ -837,15 +837,15 @@ struct RangeParseResult {
     RangeType type;
     std::vector<HttpRange> ranges;
     std::string boundary;
-    bool isValid() const;
+    bool is_valid() const;
 };
 
 class HttpRangeParser {
 public:
-    static RangeParseResult parse(const std::string& rangeHeader, uint64_t fileSize);
-    static std::string makeContentRange(uint64_t start, uint64_t end, uint64_t fileSize);
-    static std::string makeContentRange(const HttpRange& range, uint64_t fileSize);
-    static bool checkIfRange(const std::string& ifRangeHeader,
+    static RangeParseResult parse(const std::string& rangeHeader, uint64_t file_size);
+    static std::string make_content_range(uint64_t start, uint64_t end, uint64_t file_size);
+    static std::string make_content_range(const HttpRange& range, uint64_t file_size);
+    static bool check_if_range(const std::string& ifRangeHeader,
                              const std::string& etag,
                              std::time_t lastModified);
 };
@@ -853,7 +853,7 @@ public:
 
 - `parse(...)` 只接受以 `bytes=` 开头的 Range 值；任何其他单位或空值都会得到 `RangeType::INVALID`
 - 多范围请求会在 `RangeParseResult.boundary` 中生成随机 multipart boundary；如果所有子范围都非法，则最终仍回退到 `INVALID`
-- `checkIfRange(...)` 只是把 `If-Range` 判定委托给 `ETagGenerator::matchIfRange(...)`
+- `check_if_range(...)` 只是把 `If-Range` 判定委托给 `ETagGenerator::match_if_range(...)`
 
 ### `Http2ErrorCode`
 
@@ -877,10 +877,10 @@ enum class Http2ErrorCode : uint32_t {
     Http11Required = 0xd
 };
 
-std::string http2ErrorCodeToString(Http2ErrorCode code);
+std::string http2_error_code_to_string(Http2ErrorCode code);
 ```
 
-`http2ErrorCodeToString(...)` 的真实映射是：
+`http2_error_code_to_string(...)` 的真实映射是：
 
 - `NoError -> "NO_ERROR"`
 - `ProtocolError -> "PROTOCOL_ERROR"`

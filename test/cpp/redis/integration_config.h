@@ -10,7 +10,7 @@ namespace redis_test
 
 inline constexpr int kRedisTestSkippedExitCode = 125;
 
-inline bool integrationEnabled()
+inline bool integration_enabled()
 {
     const char* value = std::getenv("GALAY_IT_ENABLE");
     if (value == nullptr || value[0] == '\0') {
@@ -27,9 +27,9 @@ inline bool integrationEnabled()
         || enabled == "ON";
 }
 
-inline int requireIntegrationEnabledOrSkip(const char* test_name)
+inline int require_integration_enabled_or_skip(const char* test_name)
 {
-    if (integrationEnabled()) {
+    if (integration_enabled()) {
         return 0;
     }
 

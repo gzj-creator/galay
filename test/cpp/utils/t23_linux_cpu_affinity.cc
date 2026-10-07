@@ -78,19 +78,19 @@ int main()
     for (const unsigned high : {hint + 1U, hint + CPU_SETSIZE + 1U}) {
         kernelCpus = {0, high};
         kernelMaskSize = CPU_ALLOC_SIZE(static_cast<std::size_t>(high) + 1);
-        const auto process = galay::utils::Process::cpuAffinity();
+        const auto process = galay::utils::Process::cpu_affinity();
         if (!process || *process != kernelCpus) {
             std::cerr << "Process truncated a sparse mask at CPU::count()/CPU_SETSIZE\n";
             return 1;
         }
-        const auto current = galay::utils::CPU::cpuAffinity();
+        const auto current = galay::utils::CPU::cpu_affinity();
         if (!current || *current != kernelCpus) {
             return 1;
         }
         const std::array<unsigned, 1> selected{high};
-        const auto set = galay::utils::Process::setCpuAffinity(selected);
-        const auto bound = galay::utils::CPU::bindCurrentThread(selected);
-        const auto after = galay::utils::Process::cpuAffinity();
+        const auto set = galay::utils::Process::set_cpu_affinity(selected);
+        const auto bound = galay::utils::CPU::bind_current_thread(selected);
+        const auto after = galay::utils::Process::cpu_affinity();
         if (!set || !bound || *bound != std::vector<unsigned>{high} ||
             !after || *after != *bound) {
             std::cerr << "A valid sparse CPU ID above the hardware hint was rejected\n";
@@ -103,35 +103,35 @@ int main()
     const std::string chosen = std::to_string(kernelCpus.front());
     if (setenv("GALAY_BENCH_CPUS", chosen.c_str(), 1) != 0 ||
         setenv("GALAY_BENCH_NUMA", "keep", 1) != 0 ||
-        !galay::benchmark::initializeBenchmarkEnvironment() ||
+        !galay::benchmark::initialize_benchmark_environment() ||
         galay::benchmark::detail::selectedCpus != kernelCpus) {
         std::cerr << "benchmark rejected a valid inherited CPU ID above 1023\n";
         return 1;
     }
     queryError = EACCES;
-    const auto failedQuery = galay::utils::CPU::cpuAffinity();
+    const auto failedQuery = galay::utils::CPU::cpu_affinity();
     if (failedQuery || failedQuery.error().value() != EACCES ||
         failedQuery.error().category() != std::generic_category()) {
         return 1;
     }
     queryError = ESRCH;
-    const auto missing = galay::utils::Process::cpuAffinity(123);
+    const auto missing = galay::utils::Process::cpu_affinity(123);
     if (missing || missing.error() != galay::utils::ProcessAffinityError::NotFound) {
         return 1;
     }
     queryError = 0;
     bindError = EPERM;
-    const auto denied = galay::utils::CPU::bindCurrentThread(kernelCpus);
+    const auto denied = galay::utils::CPU::bind_current_thread(kernelCpus);
     if (denied || denied.error().value() != EPERM ||
         denied.error().category() != std::generic_category()) {
         return 1;
     }
-    const auto current = galay::utils::CPU::currentId();
+    const auto current = galay::utils::CPU::current_id();
     if (!current || *current != kernelCpus.front()) {
         return 1;
     }
     currentError = ENOSYS;
-    const auto unavailable = galay::utils::CPU::currentId();
+    const auto unavailable = galay::utils::CPU::current_id();
     if (unavailable || unavailable.error().value() != ENOSYS ||
         unavailable.error().category() != std::generic_category()) {
         return 1;

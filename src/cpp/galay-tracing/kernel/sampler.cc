@@ -20,9 +20,9 @@ namespace {
 
 std::atomic<const Sampler*> g_sampler{nullptr};
 
-[[nodiscard]] std::uint64_t traceIdHighBits(const TraceId& traceId) noexcept {
+[[nodiscard]] std::uint64_t trace_id_high_bits(const TraceId& trace_id) noexcept {
     static_assert(TraceId::kByteLength >= sizeof(std::uint64_t));
-    const auto& bytes = traceId.bytes();
+    const auto& bytes = trace_id.bytes();
     return (static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[0])) << 56U)
         | (static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[1])) << 48U)
         | (static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[2])) << 40U)
@@ -33,7 +33,7 @@ std::atomic<const Sampler*> g_sampler{nullptr};
         | static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[7]));
 }
 
-[[nodiscard]] const Sampler& builtInSampler() noexcept {
+[[nodiscard]] const Sampler& built_in_sampler() noexcept {
     static const AlwaysOnSampler rootSampler;
     static const ParentBasedSampler sampler(rootSampler);
     return sampler;
@@ -41,11 +41,11 @@ std::atomic<const Sampler*> g_sampler{nullptr};
 
 } // namespace
 
-bool AlwaysOnSampler::shouldSample(const SpanContext*, const TraceId&) const noexcept {
+bool AlwaysOnSampler::should_sample(const SpanContext*, const TraceId&) const noexcept {
     return true;
 }
 
-bool AlwaysOffSampler::shouldSample(const SpanContext*, const TraceId&) const noexcept {
+bool AlwaysOffSampler::should_sample(const SpanContext*, const TraceId&) const noexcept {
     return false;
 }
 
@@ -53,18 +53,18 @@ ParentBasedSampler::ParentBasedSampler(const Sampler& rootSampler) noexcept
     : m_rootSampler(&rootSampler) {
 }
 
-bool ParentBasedSampler::shouldSample(const SpanContext* parent, const TraceId& traceId) const noexcept {
-    if (parent != nullptr && parent->isValid()) {
+bool ParentBasedSampler::should_sample(const SpanContext* parent, const TraceId& trace_id) const noexcept {
+    if (parent != nullptr && parent->is_valid()) {
         return parent->sampled();
     }
-    return m_rootSampler == nullptr || m_rootSampler->shouldSample(nullptr, traceId);
+    return m_rootSampler == nullptr || m_rootSampler->should_sample(nullptr, trace_id);
 }
 
 TraceIdRatioSampler::TraceIdRatioSampler(double ratio) noexcept
     : m_ratio(std::clamp(ratio, 0.0, 1.0)) {
 }
 
-bool TraceIdRatioSampler::shouldSample(const SpanContext*, const TraceId& traceId) const noexcept {
+bool TraceIdRatioSampler::should_sample(const SpanContext*, const TraceId& trace_id) const noexcept {
     if (m_ratio <= 0.0) {
         return false;
     }
@@ -73,19 +73,19 @@ bool TraceIdRatioSampler::shouldSample(const SpanContext*, const TraceId& traceI
     }
 
     constexpr long double kDenominator = static_cast<long double>(UINT64_MAX) + 1.0L;
-    const auto normalized = static_cast<long double>(traceIdHighBits(traceId)) / kDenominator;
+    const auto normalized = static_cast<long double>(trace_id_high_bits(trace_id)) / kDenominator;
     return normalized < static_cast<long double>(m_ratio);
 }
 
-void setSampler(const Sampler* sampler) noexcept {
+void set_sampler(const Sampler* sampler) noexcept {
     g_sampler.store(sampler, std::memory_order_release);
 }
 
-const Sampler& currentSampler() noexcept {
+const Sampler& current_sampler() noexcept {
     if (auto* sampler = g_sampler.load(std::memory_order_acquire); sampler != nullptr) {
         return *sampler;
     }
-    return builtInSampler();
+    return built_in_sampler();
 }
 
 } // namespace galay::tracing

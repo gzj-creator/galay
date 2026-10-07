@@ -32,14 +32,14 @@ namespace galay::ssl
  * @example
  * @code
  * // 服务端上下文
- * SslContext serverCtx(SslMethod::TLS_Server);
- * serverCtx.loadCertificate("server.crt");
- * serverCtx.loadPrivateKey("server.key");
+ * SslContext server_ctx(SslMethod::TLS_Server);
+ * server_ctx.load_certificate("server.crt");
+ * server_ctx.load_private_key("server.key");
  *
  * // 客户端上下文
- * SslContext clientCtx(SslMethod::TLS_Client);
- * clientCtx.setVerifyMode(SslVerifyMode::Peer);
- * clientCtx.loadCACertificate("ca.crt");
+ * SslContext client_ctx(SslMethod::TLS_Client);
+ * client_ctx.set_verify_mode(SslVerifyMode::Peer);
+ * client_ctx.load_ca_certificate("ca.crt");
  * @endcode
  *
  * @note
@@ -77,7 +77,7 @@ public:
     /**
      * @brief 检查上下文是否有效
      */
-    bool isValid() const { return m_ctx != nullptr; }
+    bool is_valid() const { return m_ctx != nullptr; }
 
     /**
      * @brief 获取底层 SSL_CTX 指针
@@ -91,7 +91,7 @@ public:
      * @param type 文件类型，默认 PEM
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> loadCertificate(
+    std::expected<void, SslError> load_certificate(
         const std::string& certFile,
         SslFileType type = SslFileType::PEM);
 
@@ -101,7 +101,7 @@ public:
      * @param certChainFile 证书链文件路径
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> loadCertificateChain(const std::string& certChainFile);
+    std::expected<void, SslError> load_certificate_chain(const std::string& certChainFile);
 
     /**
      * @brief 加载私钥文件
@@ -110,7 +110,7 @@ public:
      * @param type 文件类型，默认 PEM
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> loadPrivateKey(
+    std::expected<void, SslError> load_private_key(
         const std::string& keyFile,
         SslFileType type = SslFileType::PEM);
 
@@ -120,21 +120,21 @@ public:
      * @param caFile CA 证书文件路径
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> loadCACertificate(const std::string& caFile);
+    std::expected<void, SslError> load_ca_certificate(const std::string& caFile);
 
     /**
      * @brief 加载 CA 证书目录
      *
-     * @param caPath CA 证书目录路径
+     * @param ca_path CA 证书目录路径
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> loadCAPath(const std::string& caPath);
+    std::expected<void, SslError> load_ca_path(const std::string& ca_path);
 
     /**
      * @brief 使用系统默认 CA 证书
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> useDefaultCA();
+    std::expected<void, SslError> use_default_ca();
 
     /**
      * @brief 设置验证模式
@@ -142,14 +142,14 @@ public:
      * @param mode 验证模式
      * @param callback 可选的验证回调函数
      */
-    void setVerifyMode(SslVerifyMode mode,
+    void set_verify_mode(SslVerifyMode mode,
                        std::function<bool(bool, X509_STORE_CTX*)> callback = nullptr);
 
     /**
      * @brief 设置验证深度
      * @param depth 证书链验证深度
      */
-    void setVerifyDepth(int depth);
+    void set_verify_depth(int depth);
 
     /**
      * @brief 设置密码套件（TLS 1.2 及以下）
@@ -157,7 +157,7 @@ public:
      * @param ciphers 密码套件字符串
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> setCiphers(const std::string& ciphers);
+    std::expected<void, SslError> set_ciphers(const std::string& ciphers);
 
     /**
      * @brief 设置密码套件（TLS 1.3）
@@ -165,7 +165,7 @@ public:
      * @param ciphersuites TLS 1.3 密码套件字符串
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> setCiphersuites(const std::string& ciphersuites);
+    std::expected<void, SslError> set_ciphersuites(const std::string& ciphersuites);
 
     /**
      * @brief 设置 ALPN 协议列表
@@ -173,7 +173,7 @@ public:
      * @param protocols 协议列表，如 {"h2", "http/1.1"}
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> setALPNProtocols(const std::vector<std::string>& protocols);
+    std::expected<void, SslError> set_alpn_protocols(const std::vector<std::string>& protocols);
 
     /**
      * @brief 设置服务端 ALPN 选择列表
@@ -181,41 +181,41 @@ public:
      * @param protocols 按优先级排列的协议列表，如 {"h2", "http/1.1"}
      * @return 成功返回 void，失败返回 SslError
      */
-    std::expected<void, SslError> setALPNSelectProtocols(const std::vector<std::string>& protocols);
+    std::expected<void, SslError> set_alpn_select_protocols(const std::vector<std::string>& protocols);
 
     /**
      * @brief 设置最小 TLS 版本
      * @param version TLS 版本（如 TLS1_2_VERSION）
      */
-    void setMinProtocolVersion(int version);
+    void set_min_protocol_version(int version);
 
     /**
      * @brief 设置最大 TLS 版本
      * @param version TLS 版本（如 TLS1_3_VERSION）
      */
-    void setMaxProtocolVersion(int version);
+    void set_max_protocol_version(int version);
 
     /**
      * @brief 启用会话缓存
      * @param mode 缓存模式
      */
-    void setSessionCacheMode(long mode);
+    void set_session_cache_mode(long mode);
 
     /**
      * @brief 设置会话超时时间
      * @param timeout 超时秒数
      */
-    void setSessionTimeout(long timeout);
+    void set_session_timeout(long timeout);
 
     /**
      * @brief 关闭 SSL 会话缓存
      */
-    void disableSessionCache();
+    void disable_session_cache();
 
     /**
      * @brief 关闭 TLS session ticket
      */
-    void disableSessionTickets();
+    void disable_session_tickets();
 
     /**
      * @brief 获取创建时的错误
@@ -223,17 +223,17 @@ public:
     const SslError& error() const { return m_error; }
 
 private:
-    static int selectALPNCallback(SSL* ssl,
+    static int select_alpn_callback(SSL* ssl,
                                   const unsigned char** out,
                                   unsigned char* outlen,
                                   const unsigned char* in,
                                   unsigned int inlen,
                                   void* arg);
-    void refreshCallbackContext() noexcept;
+    void refresh_callback_context() noexcept;
 
     SSL_CTX* m_ctx;                                             ///< OpenSSL SSL_CTX
     SslError m_error;                                           ///< 创建时的错误
-    std::function<bool(bool, X509_STORE_CTX*)> m_verifyCallback;///< 验证回调
+    std::function<bool(bool, X509_STORE_CTX*)> m_verify_callback;///< 验证回调
     std::vector<std::string> m_alpnSelectProtocols;             ///< 服务端 ALPN 选择优先级
 };
 

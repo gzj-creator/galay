@@ -1,7 +1,7 @@
 /** @file t190_iou_accept_completion_resource.cc
  *  @brief 确定性 accept CQE 资源测试：有效交付、过期结果、terminal 与 arena 回收。
- *  确定性用例只准备 SQE 并注入 CQE；realKernelClose 另外收集真实内核 CQE，
- *  再重排交付顺序。单次操作经 submitAccept/await_resume 接入 typed completion；
+ *  确定性用例只准备 SQE 并注入 CQE；real_kernel_close 另外收集真实内核 CQE，
+ *  再重排交付顺序。单次操作经 submit_accept/await_resume 接入 typed completion；
  *  完成竞争/frame 边界见 T191；本测试不证明 Runtime 全量 drain。
  */
 #include <galay/cpp/galay-kernel/core/awaitable.h>
@@ -35,10 +35,10 @@ struct IOUringReactorTestAccess {
         cqe.user_data = reinterpret_cast<uintptr_t>(handle);
         cqe.res = result;
         cqe.flags = flags;
-        reactor.processCompletion(&cqe);
+        reactor.process_completion(&cqe);
     }
     // Bounded synchronous test driver only; no coroutine/executor waits here.
-    static std::expected<Completion, int> takeKernelCompletion(IOUringReactor& reactor) {
+    static std::expected<Completion, int> take_kernel_completion(IOUringReactor& reactor) {
         io_uring_cqe* cqe = nullptr;
         __kernel_timespec deadline{.tv_sec = 1, .tv_nsec = 0};
         const int ret = io_uring_submit_and_wait_timeout(&reactor.m_ring, &cqe, 1, &deadline, nullptr);
@@ -100,26 +100,26 @@ const detail::ResumeTokenHooks kHooks{
 
 bool bind(IOUringReactor& reactor, AcceptAwaitable& awaitable, Probe& probe) {
     probe.header.hooks = &kHooks;
-    return reactor.submitAccept(awaitable,
-        Waker(detail::ResumeToken::fromNonOwningCCoroutine(&probe)));
+    return reactor.submit_accept(awaitable,
+        Waker(detail::ResumeToken::from_non_owning_c_coroutine(&probe)));
 }
 
-bool isClosed(int fd) {
+bool is_closed(int fd) {
     errno = 0;
     return ::fcntl(fd, F_GETFD) == -1 && errno == EBADF;
 }
 
 // On a red run the driver owns cleanup of leaked descriptors, so subsequent
 // scenarios can run and fd leaks are diagnosed independently of LSan.
-void expectClosed(int fd) {
-    if (!check(isClosed(fd), "late accept fd must be closed")) {
+void expect_closed(int fd) {
+    if (!check(is_closed(fd), "late accept fd must be closed")) {
         check(::close(fd) == 0, "red-run leaked fd cleanup");
     }
 }
 
 // Migration red test: a logical success must release frame entry points and
 // own an unconsumed descriptor independently of the persistent resource.
-void logicalCompletionBoundary(bool release_controller) {
+void logical_completion_boundary(bool release_controller) {
     std::atomic<uint64_t> error{0};
     TestFd listener(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
     IOUringReactor reactor(32, error);
@@ -144,14 +144,14 @@ void logicalCompletionBoundary(bool release_controller) {
         if (result) { check(::close(result->fd) == 0, "consumed result cleanup"); }
     } else {
         awaitable.reset();
-        expectClosed(accepted);
+        expect_closed(accepted);
         controller.reset();
     }
     IOUringReactorTestAccess::deliver(reactor, handle, -ECANCELED, 0);
     check(!handle->arena && !handle->state, "boundary original terminal reclaims request");
 }
 
-void liveDelivery() {
+void live_delivery() {
     std::atomic<uint64_t> error{0};
     TestFd listener(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
     IOUringReactor reactor(32, error);
@@ -166,7 +166,7 @@ void liveDelivery() {
     if (!check(first.get() >= 0 && second.get() >= 0, "live fd setup")) { return; }
     IOUringReactorTestAccess::deliver(reactor, handle, first.get(), IORING_CQE_F_MORE);
     check(probe.wakes == 1, "first success wakes once");
-    check(awaitable.m_operation->state().completionReason() == CompletionReason::kReady, "first success delivered");
+    check(awaitable.m_operation->state().completion_reason() == CompletionReason::kReady, "first success delivered");
     check(handle->arena && handle->persistent, "MORE retains request");
     const int queued = second.release();
     IOUringReactorTestAccess::deliver(reactor, handle, queued, IORING_CQE_F_MORE);
@@ -181,7 +181,7 @@ void liveDelivery() {
           "second success is consumed by next typed operation");
     TestFd consumed(queued);
     // Invalidate before terminal so the synthetic stream does not auto-rearm.
-    controller.advanceSqeGeneration(IOController::READ);
+    controller.advance_sqe_generation(IOController::READ);
     IOUringReactorTestAccess::deliver(reactor, handle, -ECANCELED, 0);
     check(!handle->arena && !handle->state, "terminal recycles request");
     check(probe.wakes == 1 && error.load() == 0, "terminal does not wake again");
@@ -189,7 +189,7 @@ void liveDelivery() {
 
 enum class Invalidation { Generation, OwnerNull, Destroyed };
 
-void lateSuccess(Invalidation invalidation, bool terminal_success) {
+void late_success(Invalidation invalidation, bool terminal_success) {
     const auto before = failures;
     std::weak_ptr<SqeHandleArena> lifetime;
     {
@@ -204,7 +204,7 @@ void lateSuccess(Invalidation invalidation, bool terminal_success) {
         auto* handle = controller->m_accept_multishot_handle;
         lifetime = handle->arena;
         if (invalidation == Invalidation::Generation) {
-            controller->advanceSqeGeneration(IOController::READ);
+            controller->advance_sqe_generation(IOController::READ);
         } else if (invalidation == Invalidation::OwnerNull) {
             // Isolate the owner-null branch without also changing generation.
             handle->state->owner.store(nullptr, std::memory_order_release);
@@ -215,16 +215,16 @@ void lateSuccess(Invalidation invalidation, bool terminal_success) {
             const int accepted = ::dup(listener.get());
             if (!check(accepted >= 0, "late fd setup")) { break; }
             IOUringReactorTestAccess::deliver(reactor, handle, accepted, IORING_CQE_F_MORE);
-            expectClosed(accepted);
+            expect_closed(accepted);
             check(handle->arena && handle->persistent, "late MORE retains physical request");
         }
         const int terminal = terminal_success ? ::dup(listener.get()) : -ECANCELED;
         if (terminal_success && !check(terminal >= 0, "terminal fd setup")) { return; }
         IOUringReactorTestAccess::deliver(reactor, handle, terminal, 0);
-        if (terminal_success) { expectClosed(terminal); }
+        if (terminal_success) { expect_closed(terminal); }
         check(!handle->arena && !handle->state && !handle->persistent, "late terminal recycles once");
         check(handle->multishot_type == IOEventType::INVALID, "recycle clears result identity");
-        check(probe.wakes == 0 && !awaitable.m_operation->state().completionReason(),
+        check(probe.wakes == 0 && !awaitable.m_operation->state().completion_reason(),
               "stale CQEs do not touch awaitable");
         check(error.load() == 0, "late cleanup has no backend error");
     }
@@ -234,7 +234,7 @@ void lateSuccess(Invalidation invalidation, bool terminal_success) {
               << " failures=" << failures - before << '\n';
 }
 
-void staleRecvIsNotDescriptor() {
+void stale_recv_is_not_descriptor() {
     std::atomic<uint64_t> error{0};
     IOUringReactor reactor(32, error);
     TestFd socket(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
@@ -242,17 +242,17 @@ void staleRecvIsNotDescriptor() {
     IOController controller(GHandle{socket.get()});
     char buffer[64]{};
     RecvAwaitable awaitable(&controller, buffer, sizeof(buffer));
-    if (!check(controller.fillAwaitable(RECV, &awaitable) && reactor.addRecv(&controller) == 0,
+    if (!check(controller.fill_awaitable(RECV, &awaitable) && reactor.add_recv(&controller) == 0,
                "prepare persistent recv")) { return; }
     auto* handle = controller.m_recv_multishot_handle;
     check(handle->multishot_type == RECV, "recv identity survives owner invalidation");
-    controller.advanceSqeGeneration(IOController::READ);
+    controller.advance_sqe_generation(IOController::READ);
     IOUringReactorTestAccess::deliver(reactor, handle, socket.get(), IORING_CQE_F_MORE);
     check(::fcntl(socket.get(), F_GETFD) >= 0, "recv byte count must not close matching fd");
     IOUringReactorTestAccess::deliver(reactor, handle, -ECANCELED, 0);
     check(!handle->arena && handle->multishot_type == IOEventType::INVALID,
           "recv terminal clears identity");
-    auto* reused = controller.makeSqeRequest(IOController::READ);
+    auto* reused = controller.make_sqe_request(IOController::READ);
     if (check(reused != nullptr, "reacquire recycled request")) {
         check(reused == handle && reused->multishot_type == IOEventType::INVALID,
               "recycled request has no stale identity");
@@ -261,7 +261,7 @@ void staleRecvIsNotDescriptor() {
     check(error.load() == 0, "stale recv leaves backend error unchanged");
 }
 
-void closeOrdering(bool ready_first) {
+void close_ordering(bool ready_first) {
     std::atomic<uint64_t> error{0};
     TestFd listener(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
     IOUringReactor reactor(32, error);
@@ -276,13 +276,13 @@ void closeOrdering(bool ready_first) {
     if (ready_first) {
         IOUringReactorTestAccess::deliver(reactor, handle, first.get(), IORING_CQE_F_MORE);
     }
-    check(reactor.addClose(&controller) == 0, "logical close");
-    check(reactor.addClose(&controller) == 0, "duplicate close");
+    check(reactor.add_close(&controller) == 0, "logical close");
+    check(reactor.add_close(&controller) == 0, "duplicate close");
     // No SQEs are submitted in this test: listener remains driver-owned.
     const int late = ::dup(listener.get());
     if (!check(late >= 0, "close late fd setup")) { return; }
     IOUringReactorTestAccess::deliver(reactor, handle, late, IORING_CQE_F_MORE);
-    expectClosed(late);
+    expect_closed(late);
     // cancel acknowledgement has no original request identity; it must not
     // release that request before its own terminal CQE arrives.
     IOUringReactorTestAccess::deliver(reactor, nullptr, 0, 0);
@@ -301,7 +301,7 @@ void closeOrdering(bool ready_first) {
     check(!handle->arena && error.load() == 0, "close terminal recycles request without error");
 }
 
-void inlineOwnerDestruction(bool more) {
+void inline_owner_destruction(bool more) {
     std::atomic<uint64_t> error{0};
     TestFd listener(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
     IOUringReactor reactor(32, error);
@@ -338,7 +338,7 @@ void inlineOwnerDestruction(bool more) {
     check(!handle->arena && error.load() == 0, "inline terminal recycles old request");
 }
 
-void realKernelClose(bool acknowledgements_first) {
+void real_kernel_close(bool acknowledgements_first) {
     const auto before = failures;
     std::weak_ptr<SqeHandleArena> lifetime;
     {
@@ -364,7 +364,7 @@ void realKernelClose(bool acknowledgements_first) {
         lifetime = handle->arena;
         const int connected = ::connect(client.get(), reinterpret_cast<sockaddr*>(&address), length);
         if (!check(connected == 0 || errno == EINPROGRESS, "real connect")) { return; }
-        auto ready = IOUringReactorTestAccess::takeKernelCompletion(reactor);
+        auto ready = IOUringReactorTestAccess::take_kernel_completion(reactor);
         if (!check(ready && ready->handle == handle && ready->result >= 0 &&
                    (ready->flags & IORING_CQE_F_MORE) != 0, "real success CQE with MORE")) {
             if (ready && ready->handle == handle && ready->result >= 0) {
@@ -373,7 +373,7 @@ void realKernelClose(bool acknowledgements_first) {
             return;
         }
         TestFd accepted(ready->result);
-        check(reactor.addClose(controller.get()) == 0, "real owner close");
+        check(reactor.add_close(controller.get()) == 0, "real owner close");
         const int listener_fd = listener.release(); // Ownership now belongs to the prepared CLOSE SQE.
         const auto result = awaitable->await_resume();
         check(probe.wakes == 1 && !result &&
@@ -385,7 +385,7 @@ void realKernelClose(bool acknowledgements_first) {
         IOUringReactorTestAccess::Completion terminal{};
         bool original_done = false;
         for (unsigned i = 0; i != 8 && (!original_done || acknowledgements.size() != 2); ++i) {
-            const auto cqe = IOUringReactorTestAccess::takeKernelCompletion(reactor);
+            const auto cqe = IOUringReactorTestAccess::take_kernel_completion(reactor);
             if (!check(cqe.has_value(), "real cancel/close CQE within deadline")) { return; }
             if (cqe->handle == handle) {
                 if (!check(!original_done && cqe->result == -ECANCELED &&
@@ -407,12 +407,12 @@ void realKernelClose(bool acknowledgements_first) {
         check(handle->arena && handle->persistent, "real ack retains original request");
         const int late_fd = accepted.release();
         IOUringReactorTestAccess::deliver(reactor, handle, late_fd, ready->flags);
-        expectClosed(late_fd);
+        expect_closed(late_fd);
         check(handle->arena && handle->persistent, "real late MORE retains original request");
         IOUringReactorTestAccess::deliver(reactor, terminal.handle, terminal.result, terminal.flags);
         if (!acknowledgements_first) { deliver_acks(); }
         check(!handle->arena && !handle->state && probe.wakes == 1, "real terminal releases exactly once");
-        check(isClosed(listener_fd) && error.load() == 0, "real listener close observed");
+        check(is_closed(listener_fd) && error.load() == 0, "real listener close observed");
     }
     check(lifetime.expired(), "real CQE drain releases arena at reactor teardown");
     std::cout << "T190 real_kernel acknowledgements_first=" << acknowledgements_first
@@ -424,22 +424,22 @@ void realKernelClose(bool acknowledgements_first) {
 int main(int argc, char** argv) {
 #ifdef USE_IOURING
     if (argc == 2) {
-        logicalCompletionBoundary(std::string_view(argv[1]) == "--release-controller");
+        logical_completion_boundary(std::string_view(argv[1]) == "--release-controller");
         return failures == 0 ? 0 : 1;
     }
-    logicalCompletionBoundary(false);
-    logicalCompletionBoundary(true);
-    liveDelivery();
-    staleRecvIsNotDescriptor();
-    closeOrdering(false);
-    closeOrdering(true);
-    inlineOwnerDestruction(false);
-    inlineOwnerDestruction(true);
-    realKernelClose(false);
-    realKernelClose(true);
+    logical_completion_boundary(false);
+    logical_completion_boundary(true);
+    live_delivery();
+    stale_recv_is_not_descriptor();
+    close_ordering(false);
+    close_ordering(true);
+    inline_owner_destruction(false);
+    inline_owner_destruction(true);
+    real_kernel_close(false);
+    real_kernel_close(true);
     for (const auto mode : {Invalidation::Generation, Invalidation::OwnerNull, Invalidation::Destroyed}) {
-        lateSuccess(mode, false);
-        lateSuccess(mode, true);
+        late_success(mode, false);
+        late_success(mode, true);
     }
     std::cout << "T190 backend=io_uring failures=" << failures << '\n';
     return failures == 0 ? 0 : 1;

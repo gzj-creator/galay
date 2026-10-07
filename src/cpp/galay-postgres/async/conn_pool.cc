@@ -81,7 +81,7 @@ PostgresConnectionPool::~PostgresConnectionPool()
         }
         waiter->active.store(false, std::memory_order_release);
         waiter->client.store(nullptr, std::memory_order_release);
-        waiter->waker.wakeUp();
+        waiter->waker.wake_up();
     }
 
     AsyncPostgresClient<>* ignored = nullptr;
@@ -89,7 +89,7 @@ PostgresConnectionPool::~PostgresConnectionPool()
     while (m_disconnected_clients.try_dequeue(ignored)) {}
 }
 
-AsyncPostgresClient<>* PostgresConnectionPool::tryAcquire()
+AsyncPostgresClient<>* PostgresConnectionPool::try_acquire()
 {
     AsyncPostgresClient<>* client = nullptr;
     if (!m_idle_clients.try_dequeue(client)) {
@@ -99,7 +99,7 @@ AsyncPostgresClient<>* PostgresConnectionPool::tryAcquire()
     return client;
 }
 
-AsyncPostgresClient<>* PostgresConnectionPool::createClient()
+AsyncPostgresClient<>* PostgresConnectionPool::create_client()
 {
     AsyncPostgresClient<>* recycled = nullptr;
     if (m_disconnected_clients.try_dequeue(recycled)) {
@@ -121,23 +121,23 @@ AsyncPostgresClient<>* PostgresConnectionPool::createClient()
     return nullptr;
 }
 
-void PostgresConnectionPool::recycleDisconnected(AsyncPostgresClient<>* client)
+void PostgresConnectionPool::recycle_disconnected(AsyncPostgresClient<>* client)
 {
     if (client == nullptr) {
         return;
     }
     *client = AsyncPostgresClient<>(m_scheduler, m_async_config);
     if (!m_disconnected_clients.enqueue(client)) {
-        (void)failOneWaiter();
+        (void)fail_one_waiter();
     }
 }
 
-bool PostgresConnectionPool::enqueueWaiter(std::shared_ptr<detail::PostgresPoolWaiter> waiter)
+bool PostgresConnectionPool::enqueue_waiter(std::shared_ptr<detail::PostgresPoolWaiter> waiter)
 {
     return waiter != nullptr && m_waiters.enqueue(std::move(waiter));
 }
 
-bool PostgresConnectionPool::wakeOneWaiter()
+bool PostgresConnectionPool::wake_one_waiter()
 {
     std::shared_ptr<detail::PostgresPoolWaiter> waiter;
     while (m_idle_connections.load(std::memory_order_acquire) > 0 &&
@@ -154,24 +154,24 @@ bool PostgresConnectionPool::wakeOneWaiter()
             continue;
         }
 
-        auto* client = tryAcquire();
+        auto* client = try_acquire();
         if (client == nullptr) {
             waiter->active.store(true, std::memory_order_release);
-            if (!enqueueWaiter(waiter)) {
+            if (!enqueue_waiter(waiter)) {
                 waiter->active.store(false, std::memory_order_release);
-                waiter->waker.wakeUp();
+                waiter->waker.wake_up();
             }
             return false;
         }
 
         waiter->client.store(client, std::memory_order_release);
-        waiter->waker.wakeUp();
+        waiter->waker.wake_up();
         return true;
     }
     return false;
 }
 
-bool PostgresConnectionPool::failOneWaiter()
+bool PostgresConnectionPool::fail_one_waiter()
 {
     std::shared_ptr<detail::PostgresPoolWaiter> waiter;
     while (m_waiters.try_dequeue(waiter)) {
@@ -186,7 +186,7 @@ bool PostgresConnectionPool::failOneWaiter()
             continue;
         }
         waiter->client.store(nullptr, std::memory_order_release);
-        waiter->waker.wakeUp();
+        waiter->waker.wake_up();
         return true;
     }
     return false;
@@ -198,19 +198,19 @@ void PostgresConnectionPool::release(AsyncPostgresClient<>* client)
         return;
     }
 
-    if (client->isClosed() || client->transactionStatus() != 'I') {
-        recycleDisconnected(client);
-        (void)failOneWaiter();
+    if (client->is_closed() || client->transaction_status() != 'I') {
+        recycle_disconnected(client);
+        (void)fail_one_waiter();
         return;
     }
 
     if (!m_idle_clients.enqueue(client)) {
-        recycleDisconnected(client);
-        (void)failOneWaiter();
+        recycle_disconnected(client);
+        (void)fail_one_waiter();
         return;
     }
     m_idle_connections.fetch_add(1, std::memory_order_acq_rel);
-    (void)wakeOneWaiter();
+    (void)wake_one_waiter();
 }
 
 PostgresConnectionPool::AcquireAwaitable PostgresConnectionPool::acquire()

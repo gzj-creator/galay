@@ -46,7 +46,7 @@ struct ThreadResult
     size_t failure = 0;
 };
 
-bool closeFd(int fd, std::string_view context)
+bool close_fd(int fd, std::string_view context)
 {
     const int close_result = ::close(fd);
     if (close_result != 0) {
@@ -56,7 +56,7 @@ bool closeFd(int fd, std::string_view context)
     return true;
 }
 
-bool writeAll(int fd, const char* data, size_t size)
+bool write_all(int fd, const char* data, size_t size)
 {
     size_t written = 0;
     while (written < size) {
@@ -72,7 +72,7 @@ bool writeAll(int fd, const char* data, size_t size)
     return true;
 }
 
-bool createPayloadFile(const std::string& dir, size_t file_size)
+bool create_payload_file(const std::string& dir, size_t file_size)
 {
     const int mkdir_result = ::mkdir(dir.c_str(), 0755);
     if (mkdir_result != 0 && errno != EEXIST) {
@@ -91,8 +91,8 @@ bool createPayloadFile(const std::string& dir, size_t file_size)
     size_t remaining = file_size;
     while (remaining > 0) {
         const size_t chunk = std::min(remaining, block.size());
-        if (!writeAll(fd, block.data(), chunk)) {
-            const bool closed = closeFd(fd, "payload write failure");
+        if (!write_all(fd, block.data(), chunk)) {
+            const bool closed = close_fd(fd, "payload write failure");
             if (!closed) {
                 std::cerr << "payload close also failed after write failure\n";
             }
@@ -101,13 +101,13 @@ bool createPayloadFile(const std::string& dir, size_t file_size)
         remaining -= chunk;
     }
 
-    if (!closeFd(fd, "payload")) {
+    if (!close_fd(fd, "payload")) {
         return false;
     }
     return true;
 }
 
-uint16_t reserveFreePort()
+uint16_t reserve_free_port()
 {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -120,7 +120,7 @@ uint16_t reserveFreePort()
     addr.sin_port = 0;
     const int bind_result = ::bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
     if (bind_result != 0) {
-        const bool closed = closeFd(fd, "reserve bind failure");
+        const bool closed = close_fd(fd, "reserve bind failure");
         if (!closed) {
             std::cerr << "reserve close also failed after bind failure\n";
         }
@@ -130,7 +130,7 @@ uint16_t reserveFreePort()
     socklen_t len = sizeof(addr);
     const int name_result = ::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len);
     if (name_result != 0) {
-        const bool closed = closeFd(fd, "reserve getsockname failure");
+        const bool closed = close_fd(fd, "reserve getsockname failure");
         if (!closed) {
             std::cerr << "reserve close also failed after getsockname failure\n";
         }
@@ -138,13 +138,13 @@ uint16_t reserveFreePort()
     }
 
     const uint16_t port = ntohs(addr.sin_port);
-    if (!closeFd(fd, "reserve")) {
+    if (!close_fd(fd, "reserve")) {
         return 0;
     }
     return port;
 }
 
-int connectWithRetry(uint16_t port)
+int connect_with_retry(uint16_t port)
 {
     for (int attempt = 0; attempt < 200; ++attempt) {
         const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -158,7 +158,7 @@ int connectWithRetry(uint16_t port)
         const int rcv_result = ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
         const int snd_result = ::setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
         if (rcv_result != 0 || snd_result != 0) {
-            const bool closed = closeFd(fd, "connect setsockopt failure");
+            const bool closed = close_fd(fd, "connect setsockopt failure");
             if (!closed) {
                 std::cerr << "connect close also failed after setsockopt failure\n";
             }
@@ -174,7 +174,7 @@ int connectWithRetry(uint16_t port)
             return fd;
         }
 
-        const bool closed = closeFd(fd, "connect retry");
+        const bool closed = close_fd(fd, "connect retry");
         if (!closed) {
             return -1;
         }
@@ -183,7 +183,7 @@ int connectWithRetry(uint16_t port)
     return -1;
 }
 
-bool sendAll(int fd, std::string_view data)
+bool send_all(int fd, std::string_view data)
 {
     size_t sent = 0;
     while (sent < data.size()) {
@@ -196,7 +196,7 @@ bool sendAll(int fd, std::string_view data)
     return true;
 }
 
-bool appendBytes(std::string& output, const char* data, size_t size)
+bool append_bytes(std::string& output, const char* data, size_t size)
 {
     const size_t old_size = output.size();
     output.resize(old_size + size);
@@ -204,13 +204,13 @@ bool appendBytes(std::string& output, const char* data, size_t size)
     return copied == output.data() + old_size;
 }
 
-bool receiveResponse(int fd, std::string& response)
+bool receive_response(int fd, std::string& response)
 {
     char buffer[32 * 1024];
     while (true) {
         const ssize_t n = ::recv(fd, buffer, sizeof(buffer), 0);
         if (n > 0) {
-            if (!appendBytes(response, buffer, static_cast<size_t>(n))) {
+            if (!append_bytes(response, buffer, static_cast<size_t>(n))) {
                 return false;
             }
             continue;
@@ -225,7 +225,7 @@ bool receiveResponse(int fd, std::string& response)
     }
 }
 
-bool responseLooksComplete(const std::string& response, size_t file_size)
+bool response_looks_complete(const std::string& response, size_t file_size)
 {
     const int status_compare = response.compare(0, 12, "HTTP/1.1 200");
     if (status_compare != 0) {
@@ -250,9 +250,9 @@ bool responseLooksComplete(const std::string& response, size_t file_size)
     return true;
 }
 
-bool runSingleRequest(uint16_t port, size_t file_size, int64_t& latency_us, bool print_failure)
+bool run_single_request(uint16_t port, size_t file_size, int64_t& latency_us, bool print_failure)
 {
-    const int fd = connectWithRetry(port);
+    const int fd = connect_with_retry(port);
     if (fd < 0) {
         return false;
     }
@@ -264,8 +264,8 @@ bool runSingleRequest(uint16_t port, size_t file_size, int64_t& latency_us, bool
         "\r\n";
 
     const auto start = std::chrono::steady_clock::now();
-    if (!sendAll(fd, request)) {
-        const bool closed = closeFd(fd, "request send failure");
+    if (!send_all(fd, request)) {
+        const bool closed = close_fd(fd, "request send failure");
         if (!closed) {
             std::cerr << "request close also failed after send failure\n";
         }
@@ -274,8 +274,8 @@ bool runSingleRequest(uint16_t port, size_t file_size, int64_t& latency_us, bool
 
     std::string response;
     response.reserve(file_size + 256);
-    if (!receiveResponse(fd, response)) {
-        const bool closed = closeFd(fd, "response recv failure");
+    if (!receive_response(fd, response)) {
+        const bool closed = close_fd(fd, "response recv failure");
         if (!closed) {
             std::cerr << "response close also failed after recv failure\n";
         }
@@ -283,12 +283,12 @@ bool runSingleRequest(uint16_t port, size_t file_size, int64_t& latency_us, bool
     }
     const auto stop = std::chrono::steady_clock::now();
 
-    if (!closeFd(fd, "request")) {
+    if (!close_fd(fd, "request")) {
         return false;
     }
 
     latency_us = std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
-    const bool complete = responseLooksComplete(response, file_size);
+    const bool complete = response_looks_complete(response, file_size);
     if (!complete && print_failure) {
         const size_t sample_size = std::min<size_t>(response.size(), 256);
         const std::string sample = response.substr(0, sample_size);
@@ -298,14 +298,14 @@ bool runSingleRequest(uint16_t port, size_t file_size, int64_t& latency_us, bool
     return complete;
 }
 
-ThreadResult runWorker(uint16_t port, size_t file_size, size_t requests, bool print_first_failure)
+ThreadResult run_worker(uint16_t port, size_t file_size, size_t requests, bool print_first_failure)
 {
     ThreadResult result;
     result.latencies_us.reserve(requests);
     for (size_t i = 0; i < requests; ++i) {
         int64_t latency_us = 0;
         const bool print_failure = print_first_failure && i == 0;
-        if (runSingleRequest(port, file_size, latency_us, print_failure)) {
+        if (run_single_request(port, file_size, latency_us, print_failure)) {
             result.latencies_us.push_back(latency_us);
             ++result.success;
         } else {
@@ -326,7 +326,7 @@ int64_t percentile(std::vector<int64_t>& values, double pct)
     return values[index];
 }
 
-bool cleanupDirectory(const std::string& dir)
+bool cleanup_directory(const std::string& dir)
 {
     const std::string path = dir + "/payload.bin";
     bool ok = true;
@@ -347,7 +347,7 @@ bool cleanupDirectory(const std::string& dir)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -378,8 +378,8 @@ int main(int argc, char** argv)
     const size_t file_size = file_kib * 1024;
     const std::string dir = "/tmp/galay-http-static-memory-" +
                             std::to_string(static_cast<long long>(::getpid()));
-    if (!createPayloadFile(dir, file_size)) {
-        const bool cleaned = cleanupDirectory(dir);
+    if (!create_payload_file(dir, file_size)) {
+        const bool cleaned = cleanup_directory(dir);
         if (!cleaned) {
             std::cerr << "cleanup failed after payload creation failure\n";
         }
@@ -387,15 +387,15 @@ int main(int argc, char** argv)
     }
 
     StaticFileSetting setting;
-    setting.setTransferMode(FileTransferMode::MEMORY);
-    setting.setEnableETag(false);
+    setting.set_transfer_mode(FileTransferMode::MEMORY);
+    setting.set_enable_e_tag(false);
 
     HttpRouter router;
     router.mount("/static", dir, setting);
 
-    const uint16_t port = reserveFreePort();
+    const uint16_t port = reserve_free_port();
     if (port == 0) {
-        const bool cleaned = cleanupDirectory(dir);
+        const bool cleaned = cleanup_directory(dir);
         if (!cleaned) {
             std::cerr << "cleanup failed after port reservation failure\n";
         }
@@ -405,8 +405,8 @@ int main(int argc, char** argv)
     auto server = HttpServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .ioSchedulerCount(2)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(2)
+        .parallel_scheduler_count(1)
         .build();
     server.start(std::move(router));
 
@@ -422,7 +422,7 @@ int main(int argc, char** argv)
         const size_t worker_requests = base_requests + (i < extra_requests ? 1 : 0);
         const bool print_first_failure = i == 0;
         auto& worker = workers.emplace_back([port, file_size, worker_requests, print_first_failure, &results, i]() {
-            results[i] = runWorker(port, file_size, worker_requests, print_first_failure);
+            results[i] = run_worker(port, file_size, worker_requests, print_first_failure);
         });
         if (!worker.joinable()) {
             std::cerr << "worker thread is not joinable\n";
@@ -440,14 +440,14 @@ int main(int argc, char** argv)
 
     server.stop();
     if (worker_start_failed) {
-        const bool cleaned = cleanupDirectory(dir);
+        const bool cleaned = cleanup_directory(dir);
         if (!cleaned) {
             std::cerr << "cleanup failed after worker creation failure\n";
         }
         return 1;
     }
 
-    const bool cleaned = cleanupDirectory(dir);
+    const bool cleaned = cleanup_directory(dir);
     if (!cleaned) {
         std::cerr << "cleanup failed after benchmark\n";
         return 1;

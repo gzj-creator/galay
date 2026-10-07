@@ -9,20 +9,20 @@ namespace galay::mysql::protocol
 
 // ======================== 辅助函数实现 ========================
 
-uint16_t readUint16(const char* data)
+uint16_t read_uint16(const char* data)
 {
     return static_cast<uint8_t>(data[0]) |
            (static_cast<uint16_t>(static_cast<uint8_t>(data[1])) << 8);
 }
 
-uint32_t readUint24(const char* data)
+uint32_t read_uint24(const char* data)
 {
     return static_cast<uint8_t>(data[0]) |
            (static_cast<uint32_t>(static_cast<uint8_t>(data[1])) << 8) |
            (static_cast<uint32_t>(static_cast<uint8_t>(data[2])) << 16);
 }
 
-uint32_t readUint32(const char* data)
+uint32_t read_uint32(const char* data)
 {
     return static_cast<uint8_t>(data[0]) |
            (static_cast<uint32_t>(static_cast<uint8_t>(data[1])) << 8) |
@@ -30,27 +30,27 @@ uint32_t readUint32(const char* data)
            (static_cast<uint32_t>(static_cast<uint8_t>(data[3])) << 24);
 }
 
-uint64_t readUint64(const char* data)
+uint64_t read_uint64(const char* data)
 {
-    uint64_t lo = readUint32(data);
-    uint64_t hi = readUint32(data + 4);
+    uint64_t lo = read_uint32(data);
+    uint64_t hi = read_uint32(data + 4);
     return lo | (hi << 32);
 }
 
-void writeUint16(std::string& buf, uint16_t val)
+void write_uint16(std::string& buf, uint16_t val)
 {
     buf.push_back(static_cast<char>(val & 0xFF));
     buf.push_back(static_cast<char>((val >> 8) & 0xFF));
 }
 
-void writeUint24(std::string& buf, uint32_t val)
+void write_uint24(std::string& buf, uint32_t val)
 {
     buf.push_back(static_cast<char>(val & 0xFF));
     buf.push_back(static_cast<char>((val >> 8) & 0xFF));
     buf.push_back(static_cast<char>((val >> 16) & 0xFF));
 }
 
-void writeUint32(std::string& buf, uint32_t val)
+void write_uint32(std::string& buf, uint32_t val)
 {
     buf.push_back(static_cast<char>(val & 0xFF));
     buf.push_back(static_cast<char>((val >> 8) & 0xFF));
@@ -58,35 +58,35 @@ void writeUint32(std::string& buf, uint32_t val)
     buf.push_back(static_cast<char>((val >> 24) & 0xFF));
 }
 
-void writeUint64(std::string& buf, uint64_t val)
+void write_uint64(std::string& buf, uint64_t val)
 {
-    writeUint32(buf, static_cast<uint32_t>(val & 0xFFFFFFFF));
-    writeUint32(buf, static_cast<uint32_t>((val >> 32) & 0xFFFFFFFF));
+    write_uint32(buf, static_cast<uint32_t>(val & 0xFFFFFFFF));
+    write_uint32(buf, static_cast<uint32_t>((val >> 32) & 0xFFFFFFFF));
 }
 
-void writeLenEncInt(std::string& buf, uint64_t val)
+void write_len_enc_int(std::string& buf, uint64_t val)
 {
     if (val < 251) {
         buf.push_back(static_cast<char>(val));
     } else if (val < 0x10000) {
         buf.push_back(static_cast<char>(0xFC));
-        writeUint16(buf, static_cast<uint16_t>(val));
+        write_uint16(buf, static_cast<uint16_t>(val));
     } else if (val < 0x1000000) {
         buf.push_back(static_cast<char>(0xFD));
-        writeUint24(buf, static_cast<uint32_t>(val));
+        write_uint24(buf, static_cast<uint32_t>(val));
     } else {
         buf.push_back(static_cast<char>(0xFE));
-        writeUint64(buf, val);
+        write_uint64(buf, val);
     }
 }
 
-void writeLenEncString(std::string& buf, std::string_view str)
+void write_len_enc_string(std::string& buf, std::string_view str)
 {
-    writeLenEncInt(buf, str.size());
+    write_len_enc_int(buf, str.size());
     buf.append(str.data(), str.size());
 }
 
-std::expected<uint64_t, ParseError> readLenEncInt(const char* data, size_t len, size_t& consumed)
+std::expected<uint64_t, ParseError> read_len_enc_int(const char* data, size_t len, size_t& consumed)
 {
     if (len < 1) return std::unexpected(ParseError::Incomplete);
 
@@ -101,32 +101,32 @@ std::expected<uint64_t, ParseError> readLenEncInt(const char* data, size_t len, 
     } else if (first == 0xFC) {
         if (len < 3) return std::unexpected(ParseError::Incomplete);
         consumed = 3;
-        return readUint16(data + 1);
+        return read_uint16(data + 1);
     } else if (first == 0xFD) {
         if (len < 4) return std::unexpected(ParseError::Incomplete);
         consumed = 4;
-        return readUint24(data + 1);
+        return read_uint24(data + 1);
     } else if (first == 0xFE) {
         if (len < 9) return std::unexpected(ParseError::Incomplete);
         consumed = 9;
-        return readUint64(data + 1);
+        return read_uint64(data + 1);
     }
     return std::unexpected(ParseError::InvalidFormat);
 }
 
-std::expected<std::string, ParseError> readLenEncString(const char* data, size_t len, size_t& consumed)
+std::expected<std::string, ParseError> read_len_enc_string(const char* data, size_t len, size_t& consumed)
 {
-    auto view_result = readLenEncStringView(data, len, consumed);
+    auto view_result = read_len_enc_string_view(data, len, consumed);
     if (!view_result) return std::unexpected(view_result.error());
 
     const std::string_view view = view_result.value();
     return std::string(view.data(), view.size());
 }
 
-std::expected<std::string_view, ParseError> readLenEncStringView(const char* data, size_t len, size_t& consumed)
+std::expected<std::string_view, ParseError> read_len_enc_string_view(const char* data, size_t len, size_t& consumed)
 {
     size_t int_consumed = 0;
-    auto int_result = readLenEncInt(data, len, int_consumed);
+    auto int_result = read_len_enc_int(data, len, int_consumed);
     if (!int_result) return std::unexpected(int_result.error());
 
     uint64_t str_len = int_result.value();
@@ -143,7 +143,7 @@ std::expected<std::string_view, ParseError> readLenEncStringView(const char* dat
     return std::string_view(data + int_consumed, str_size);
 }
 
-std::expected<std::string, ParseError> readNullTermString(const char* data, size_t len, size_t& consumed)
+std::expected<std::string, ParseError> read_null_term_string(const char* data, size_t len, size_t& consumed)
 {
     const char* end = static_cast<const char*>(memchr(data, '\0', len));
     if (!end) return std::unexpected(ParseError::Incomplete);
@@ -155,22 +155,22 @@ std::expected<std::string, ParseError> readNullTermString(const char* data, size
 
 // ======================== MysqlParser 实现 ========================
 
-std::expected<PacketHeader, ParseError> MysqlParser::parseHeader(const char* data, size_t len)
+std::expected<PacketHeader, ParseError> MysqlParser::parse_header(const char* data, size_t len)
 {
     if (len < MYSQL_PACKET_HEADER_SIZE) {
         return std::unexpected(ParseError::Incomplete);
     }
 
     PacketHeader header;
-    header.length = readUint24(data);
+    header.length = read_uint24(data);
     header.sequence_id = static_cast<uint8_t>(data[3]);
     return header;
 }
 
 std::expected<MysqlParser::PacketView, ParseError>
-MysqlParser::extractPacket(const char* data, size_t len, size_t& consumed)
+MysqlParser::extract_packet(const char* data, size_t len, size_t& consumed)
 {
-    auto header_result = parseHeader(data, len);
+    auto header_result = parse_header(data, len);
     if (!header_result) return std::unexpected(header_result.error());
 
     auto& header = header_result.value();
@@ -186,7 +186,7 @@ MysqlParser::extractPacket(const char* data, size_t len, size_t& consumed)
 }
 
 std::expected<HandshakeV10, ParseError>
-MysqlParser::parseHandshake(const char* data, size_t len)
+MysqlParser::parse_handshake(const char* data, size_t len)
 {
     if (len < 1) return std::unexpected(ParseError::Incomplete);
 
@@ -201,14 +201,14 @@ MysqlParser::parseHandshake(const char* data, size_t len)
 
     // server_version (null-terminated)
     size_t consumed = 0;
-    auto sv = readNullTermString(data + pos, len - pos, consumed);
+    auto sv = read_null_term_string(data + pos, len - pos, consumed);
     if (!sv) return std::unexpected(sv.error());
     hs.server_version = std::move(sv.value());
     pos += consumed;
 
     // connection_id (4 bytes)
     if (pos + 4 > len) return std::unexpected(ParseError::Incomplete);
-    hs.connection_id = readUint32(data + pos);
+    hs.connection_id = read_uint32(data + pos);
     pos += 4;
 
     // auth_plugin_data_part_1 (8 bytes)
@@ -222,7 +222,7 @@ MysqlParser::parseHandshake(const char* data, size_t len)
 
     // capability_flags_lower (2 bytes)
     if (pos + 2 > len) return std::unexpected(ParseError::Incomplete);
-    hs.capability_flags = readUint16(data + pos);
+    hs.capability_flags = read_uint16(data + pos);
     pos += 2;
 
     if (pos >= len) {
@@ -235,12 +235,12 @@ MysqlParser::parseHandshake(const char* data, size_t len)
 
     // status_flags (2 bytes)
     if (pos + 2 > len) return std::unexpected(ParseError::Incomplete);
-    hs.status_flags = readUint16(data + pos);
+    hs.status_flags = read_uint16(data + pos);
     pos += 2;
 
     // capability_flags_upper (2 bytes)
     if (pos + 2 > len) return std::unexpected(ParseError::Incomplete);
-    hs.capability_flags |= (static_cast<uint32_t>(readUint16(data + pos)) << 16);
+    hs.capability_flags |= (static_cast<uint32_t>(read_uint16(data + pos)) << 16);
     pos += 2;
 
     // auth_plugin_data_len or 0x00 (1 byte)
@@ -266,7 +266,7 @@ MysqlParser::parseHandshake(const char* data, size_t len)
 
     // auth_plugin_name (if CLIENT_PLUGIN_AUTH)
     if (hs.capability_flags & CLIENT_PLUGIN_AUTH) {
-        auto apn = readNullTermString(data + pos, len - pos, consumed);
+        auto apn = read_null_term_string(data + pos, len - pos, consumed);
         if (apn) {
             hs.auth_plugin_name = std::move(apn.value());
             pos += consumed;
@@ -277,7 +277,7 @@ MysqlParser::parseHandshake(const char* data, size_t len)
 }
 
 std::expected<AuthSwitchRequest, ParseError>
-MysqlParser::parseAuthSwitchRequest(const char* data, size_t len)
+MysqlParser::parse_auth_switch_request(const char* data, size_t len)
 {
     if (len < 2) return std::unexpected(ParseError::Incomplete);
     if (static_cast<uint8_t>(data[0]) != 0xFE) {
@@ -285,7 +285,7 @@ MysqlParser::parseAuthSwitchRequest(const char* data, size_t len)
     }
 
     size_t consumed = 0;
-    auto plugin_name = readNullTermString(data + 1, len - 1, consumed);
+    auto plugin_name = read_null_term_string(data + 1, len - 1, consumed);
     if (!plugin_name) return std::unexpected(plugin_name.error());
 
     const size_t salt_pos = 1 + consumed;
@@ -300,7 +300,7 @@ MysqlParser::parseAuthSwitchRequest(const char* data, size_t len)
     return request;
 }
 
-ResponseType MysqlParser::identifyResponse(uint8_t first_byte, uint32_t payload_len)
+ResponseType MysqlParser::identify_response(uint8_t first_byte, uint32_t payload_len)
 {
     if (first_byte == 0x00 && payload_len >= 7) {
         return ResponseType::OK;
@@ -316,7 +316,7 @@ ResponseType MysqlParser::identifyResponse(uint8_t first_byte, uint32_t payload_
 }
 
 std::expected<OkPacket, ParseError>
-MysqlParser::parseOk(const char* data, size_t len, uint32_t capabilities)
+MysqlParser::parse_ok(const char* data, size_t len, uint32_t capabilities)
 {
     if (len < 1) return std::unexpected(ParseError::Incomplete);
 
@@ -325,13 +325,13 @@ MysqlParser::parseOk(const char* data, size_t len, uint32_t capabilities)
     size_t consumed = 0;
 
     // affected_rows (len_enc_int)
-    auto ar = readLenEncInt(data + pos, len - pos, consumed);
+    auto ar = read_len_enc_int(data + pos, len - pos, consumed);
     if (!ar) return std::unexpected(ar.error());
     ok.affected_rows = ar.value();
     pos += consumed;
 
     // last_insert_id (len_enc_int)
-    auto li = readLenEncInt(data + pos, len - pos, consumed);
+    auto li = read_len_enc_int(data + pos, len - pos, consumed);
     if (!li) return std::unexpected(li.error());
     ok.last_insert_id = li.value();
     pos += consumed;
@@ -339,9 +339,9 @@ MysqlParser::parseOk(const char* data, size_t len, uint32_t capabilities)
     // status_flags + warnings (if CLIENT_PROTOCOL_41)
     if (capabilities & CLIENT_PROTOCOL_41) {
         if (pos + 4 > len) return std::unexpected(ParseError::Incomplete);
-        ok.status_flags = readUint16(data + pos);
+        ok.status_flags = read_uint16(data + pos);
         pos += 2;
-        ok.warnings = readUint16(data + pos);
+        ok.warnings = read_uint16(data + pos);
         pos += 2;
     }
 
@@ -354,7 +354,7 @@ MysqlParser::parseOk(const char* data, size_t len, uint32_t capabilities)
 }
 
 std::expected<ErrPacket, ParseError>
-MysqlParser::parseErr(const char* data, size_t len, uint32_t capabilities)
+MysqlParser::parse_err(const char* data, size_t len, uint32_t capabilities)
 {
     if (len < 3) return std::unexpected(ParseError::Incomplete);
 
@@ -362,7 +362,7 @@ MysqlParser::parseErr(const char* data, size_t len, uint32_t capabilities)
     size_t pos = 1; // 跳过0xFF标识字节
 
     // error_code (2 bytes)
-    err.error_code = readUint16(data + pos);
+    err.error_code = read_uint16(data + pos);
     pos += 2;
 
     // sql_state_marker + sql_state (if CLIENT_PROTOCOL_41)
@@ -382,7 +382,7 @@ MysqlParser::parseErr(const char* data, size_t len, uint32_t capabilities)
 }
 
 std::expected<EofPacket, ParseError>
-MysqlParser::parseEof(const char* data, size_t len)
+MysqlParser::parse_eof(const char* data, size_t len)
 {
     if (len < 1) return std::unexpected(ParseError::Incomplete);
 
@@ -390,9 +390,9 @@ MysqlParser::parseEof(const char* data, size_t len)
     size_t pos = 1; // 跳过0xFE标识字节
 
     if (pos + 4 <= len) {
-        eof.warnings = readUint16(data + pos);
+        eof.warnings = read_uint16(data + pos);
         pos += 2;
-        eof.status_flags = readUint16(data + pos);
+        eof.status_flags = read_uint16(data + pos);
         pos += 2;
     }
 
@@ -400,44 +400,44 @@ MysqlParser::parseEof(const char* data, size_t len)
 }
 
 std::expected<ColumnDefinitionPacket, ParseError>
-MysqlParser::parseColumnDefinition(const char* data, size_t len)
+MysqlParser::parse_column_definition(const char* data, size_t len)
 {
     ColumnDefinitionPacket col;
     size_t pos = 0;
     size_t consumed = 0;
 
     // catalog (len_enc_string)
-    auto cat = readLenEncString(data + pos, len - pos, consumed);
+    auto cat = read_len_enc_string(data + pos, len - pos, consumed);
     if (!cat) return std::unexpected(cat.error());
     col.catalog = std::move(cat.value());
     pos += consumed;
 
     // schema
-    auto sch = readLenEncString(data + pos, len - pos, consumed);
+    auto sch = read_len_enc_string(data + pos, len - pos, consumed);
     if (!sch) return std::unexpected(sch.error());
     col.schema = std::move(sch.value());
     pos += consumed;
 
     // table
-    auto tbl = readLenEncString(data + pos, len - pos, consumed);
+    auto tbl = read_len_enc_string(data + pos, len - pos, consumed);
     if (!tbl) return std::unexpected(tbl.error());
     col.table = std::move(tbl.value());
     pos += consumed;
 
     // org_table
-    auto otbl = readLenEncString(data + pos, len - pos, consumed);
+    auto otbl = read_len_enc_string(data + pos, len - pos, consumed);
     if (!otbl) return std::unexpected(otbl.error());
     col.org_table = std::move(otbl.value());
     pos += consumed;
 
     // name
-    auto nm = readLenEncString(data + pos, len - pos, consumed);
+    auto nm = read_len_enc_string(data + pos, len - pos, consumed);
     if (!nm) return std::unexpected(nm.error());
     col.name = std::move(nm.value());
     pos += consumed;
 
     // org_name
-    auto onm = readLenEncString(data + pos, len - pos, consumed);
+    auto onm = read_len_enc_string(data + pos, len - pos, consumed);
     if (!onm) return std::unexpected(onm.error());
     col.org_name = std::move(onm.value());
     pos += consumed;
@@ -447,10 +447,10 @@ MysqlParser::parseColumnDefinition(const char* data, size_t len)
     pos += 1; // skip length of fixed-length fields (0x0c)
 
     if (pos + 12 > len) return std::unexpected(ParseError::Incomplete);
-    col.character_set = readUint16(data + pos); pos += 2;
-    col.column_length = readUint32(data + pos); pos += 4;
+    col.character_set = read_uint16(data + pos); pos += 2;
+    col.column_length = read_uint32(data + pos); pos += 4;
     col.column_type = static_cast<uint8_t>(data[pos]); pos += 1;
-    col.flags = readUint16(data + pos); pos += 2;
+    col.flags = read_uint16(data + pos); pos += 2;
     col.decimals = static_cast<uint8_t>(data[pos]); pos += 1;
     pos += 2; // filler
 
@@ -458,7 +458,7 @@ MysqlParser::parseColumnDefinition(const char* data, size_t len)
 }
 
 std::expected<std::vector<std::optional<std::string>>, ParseError>
-MysqlParser::parseTextRow(const char* data, size_t len, size_t column_count)
+MysqlParser::parse_text_row(const char* data, size_t len, size_t column_count)
 {
     std::vector<std::optional<std::string>> row;
     row.reserve(column_count);
@@ -473,7 +473,7 @@ MysqlParser::parseTextRow(const char* data, size_t len, size_t column_count)
             pos += 1;
         } else {
             size_t consumed = 0;
-            auto val = readLenEncStringView(data + pos, len - pos, consumed);
+            auto val = read_len_enc_string_view(data + pos, len - pos, consumed);
             if (!val) return std::unexpected(val.error());
             const std::string_view view = val.value();
             row.emplace_back(std::string(view.data(), view.size()));
@@ -485,7 +485,7 @@ MysqlParser::parseTextRow(const char* data, size_t len, size_t column_count)
 }
 
 std::expected<std::vector<std::optional<std::string_view>>, ParseError>
-MysqlParser::parseTextRowView(const char* data, size_t len, size_t column_count)
+MysqlParser::parse_text_row_view(const char* data, size_t len, size_t column_count)
 {
     std::vector<std::optional<std::string_view>> row;
     row.reserve(column_count);
@@ -500,7 +500,7 @@ MysqlParser::parseTextRowView(const char* data, size_t len, size_t column_count)
             pos += 1;
         } else {
             size_t consumed = 0;
-            auto val = readLenEncStringView(data + pos, len - pos, consumed);
+            auto val = read_len_enc_string_view(data + pos, len - pos, consumed);
             if (!val) return std::unexpected(val.error());
             row.push_back(val.value());
             pos += consumed;
@@ -511,18 +511,18 @@ MysqlParser::parseTextRowView(const char* data, size_t len, size_t column_count)
 }
 
 std::expected<StmtPrepareOkPacket, ParseError>
-MysqlParser::parseStmtPrepareOk(const char* data, size_t len)
+MysqlParser::parse_stmt_prepare_ok(const char* data, size_t len)
 {
     if (len < 12) return std::unexpected(ParseError::Incomplete);
 
     StmtPrepareOkPacket pkt;
     size_t pos = 1; // 跳过0x00标识字节
 
-    pkt.statement_id = readUint32(data + pos); pos += 4;
-    pkt.num_columns = readUint16(data + pos); pos += 2;
-    pkt.num_params = readUint16(data + pos); pos += 2;
+    pkt.statement_id = read_uint32(data + pos); pos += 4;
+    pkt.num_columns = read_uint16(data + pos); pos += 2;
+    pkt.num_params = read_uint16(data + pos); pos += 2;
     pos += 1; // filler
-    pkt.warning_count = readUint16(data + pos); pos += 2;
+    pkt.warning_count = read_uint16(data + pos); pos += 2;
 
     return pkt;
 }
@@ -540,7 +540,7 @@ concept StmtExecuteParamSpan = requires(const ParamSpan& params, size_t i) {
 };
 
 template<StmtExecuteParamSpan ParamSpan>
-std::string encodeStmtExecuteImpl(uint32_t stmt_id,
+std::string encode_stmt_execute_impl(uint32_t stmt_id,
                                   ParamSpan params,
                                   std::span<const uint8_t> param_types,
                                   uint8_t sequence_id)
@@ -569,13 +569,13 @@ std::string encodeStmtExecuteImpl(uint32_t stmt_id,
     payload.push_back(static_cast<char>(CommandType::COM_STMT_EXECUTE));
 
     // statement_id (4 bytes)
-    writeUint32(payload, stmt_id);
+    write_uint32(payload, stmt_id);
 
     // flags (1 byte) - CURSOR_TYPE_NO_CURSOR
     payload.push_back(0x00);
 
     // iteration_count (4 bytes) - always 1
-    writeUint32(payload, 1);
+    write_uint32(payload, 1);
 
     if (!params.empty()) {
         // NULL bitmap
@@ -604,7 +604,7 @@ std::string encodeStmtExecuteImpl(uint32_t stmt_id,
         // parameter values
         for (const auto& param : params) {
             if (param.has_value()) {
-                writeLenEncString(payload, std::string_view(*param));
+                write_len_enc_string(payload, std::string_view(*param));
             }
         }
     }
@@ -615,7 +615,7 @@ std::string encodeStmtExecuteImpl(uint32_t stmt_id,
 
     std::string packet;
     packet.reserve(MYSQL_PACKET_HEADER_SIZE + payload.size());
-    writeUint24(packet, static_cast<uint32_t>(payload.size()));
+    write_uint24(packet, static_cast<uint32_t>(payload.size()));
     packet.push_back(static_cast<char>(sequence_id));
     packet.append(payload.data(), payload.size());
     return packet;
@@ -623,7 +623,7 @@ std::string encodeStmtExecuteImpl(uint32_t stmt_id,
 
 } // namespace
 
-std::string MysqlEncoder::wrapPacket(std::string_view payload, uint8_t sequence_id)
+std::string MysqlEncoder::wrap_packet(std::string_view payload, uint8_t sequence_id)
 {
     if (payload.size() > MYSQL_MAX_PACKET_SIZE) {
         return {};
@@ -631,13 +631,13 @@ std::string MysqlEncoder::wrapPacket(std::string_view payload, uint8_t sequence_
 
     std::string packet;
     packet.reserve(MYSQL_PACKET_HEADER_SIZE + payload.size());
-    writeUint24(packet, static_cast<uint32_t>(payload.size()));
+    write_uint24(packet, static_cast<uint32_t>(payload.size()));
     packet.push_back(static_cast<char>(sequence_id));
     packet.append(payload.data(), payload.size());
     return packet;
 }
 
-std::string MysqlEncoder::encodeSimpleCommand(CommandType cmd, std::string_view payload, uint8_t sequence_id)
+std::string MysqlEncoder::encode_simple_command(CommandType cmd, std::string_view payload, uint8_t sequence_id)
 {
     if (payload.size() > MYSQL_MAX_PACKET_SIZE - 1U) {
         return {};
@@ -646,23 +646,23 @@ std::string MysqlEncoder::encodeSimpleCommand(CommandType cmd, std::string_view 
     const uint32_t payload_len = 1U + static_cast<uint32_t>(payload.size());
     std::string packet;
     packet.reserve(MYSQL_PACKET_HEADER_SIZE + payload_len);
-    writeUint24(packet, payload_len);
+    write_uint24(packet, payload_len);
     packet.push_back(static_cast<char>(sequence_id));
     packet.push_back(static_cast<char>(cmd));
     packet.append(payload.data(), payload.size());
     return packet;
 }
 
-std::string MysqlEncoder::encodeHandshakeResponse(const HandshakeResponse41& resp, uint8_t sequence_id)
+std::string MysqlEncoder::encode_handshake_response(const HandshakeResponse41& resp, uint8_t sequence_id)
 {
     std::string payload;
     payload.reserve(128);
 
     // capability_flags (4 bytes)
-    writeUint32(payload, resp.capability_flags);
+    write_uint32(payload, resp.capability_flags);
 
     // max_packet_size (4 bytes)
-    writeUint32(payload, resp.max_packet_size);
+    write_uint32(payload, resp.max_packet_size);
 
     // character_set (1 byte)
     payload.push_back(static_cast<char>(resp.character_set));
@@ -676,7 +676,7 @@ std::string MysqlEncoder::encodeHandshakeResponse(const HandshakeResponse41& res
 
     // auth_response
     if (resp.capability_flags & CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) {
-        writeLenEncString(payload, resp.auth_response);
+        write_len_enc_string(payload, resp.auth_response);
     } else if (resp.capability_flags & CLIENT_SECURE_CONNECTION) {
         payload.push_back(static_cast<char>(resp.auth_response.size()));
         payload.append(resp.auth_response);
@@ -697,61 +697,61 @@ std::string MysqlEncoder::encodeHandshakeResponse(const HandshakeResponse41& res
         payload.push_back('\0');
     }
 
-    return wrapPacket(payload, sequence_id);
+    return wrap_packet(payload, sequence_id);
 }
 
-std::string MysqlEncoder::encodeQuery(std::string_view sql, uint8_t sequence_id)
+std::string MysqlEncoder::encode_query(std::string_view sql, uint8_t sequence_id)
 {
-    return encodeSimpleCommand(CommandType::COM_QUERY, sql, sequence_id);
+    return encode_simple_command(CommandType::COM_QUERY, sql, sequence_id);
 }
 
-std::string MysqlEncoder::encodeStmtPrepare(std::string_view sql, uint8_t sequence_id)
+std::string MysqlEncoder::encode_stmt_prepare(std::string_view sql, uint8_t sequence_id)
 {
-    return encodeSimpleCommand(CommandType::COM_STMT_PREPARE, sql, sequence_id);
+    return encode_simple_command(CommandType::COM_STMT_PREPARE, sql, sequence_id);
 }
 
-std::string MysqlEncoder::encodeStmtExecute(uint32_t stmt_id,
+std::string MysqlEncoder::encode_stmt_execute(uint32_t stmt_id,
                                              std::span<const std::optional<std::string>> params,
                                              std::span<const uint8_t> param_types,
                                              uint8_t sequence_id)
 {
-    return encodeStmtExecuteImpl(stmt_id, params, param_types, sequence_id);
+    return encode_stmt_execute_impl(stmt_id, params, param_types, sequence_id);
 }
 
-std::string MysqlEncoder::encodeStmtExecute(uint32_t stmt_id,
+std::string MysqlEncoder::encode_stmt_execute(uint32_t stmt_id,
                                              std::span<const std::optional<std::string_view>> params,
                                              std::span<const uint8_t> param_types,
                                              uint8_t sequence_id)
 {
-    return encodeStmtExecuteImpl(stmt_id, params, param_types, sequence_id);
+    return encode_stmt_execute_impl(stmt_id, params, param_types, sequence_id);
 }
 
-std::string MysqlEncoder::encodeStmtClose(uint32_t stmt_id, uint8_t sequence_id)
+std::string MysqlEncoder::encode_stmt_close(uint32_t stmt_id, uint8_t sequence_id)
 {
     std::string payload;
     payload.push_back(static_cast<char>(CommandType::COM_STMT_CLOSE));
-    writeUint32(payload, stmt_id);
-    return wrapPacket(payload, sequence_id);
+    write_uint32(payload, stmt_id);
+    return wrap_packet(payload, sequence_id);
 }
 
-std::string MysqlEncoder::encodeQuit(uint8_t sequence_id)
+std::string MysqlEncoder::encode_quit(uint8_t sequence_id)
 {
-    return encodeSimpleCommand(CommandType::COM_QUIT, "", sequence_id);
+    return encode_simple_command(CommandType::COM_QUIT, "", sequence_id);
 }
 
-std::string MysqlEncoder::encodePing(uint8_t sequence_id)
+std::string MysqlEncoder::encode_ping(uint8_t sequence_id)
 {
-    return encodeSimpleCommand(CommandType::COM_PING, "", sequence_id);
+    return encode_simple_command(CommandType::COM_PING, "", sequence_id);
 }
 
-std::string MysqlEncoder::encodeInitDb(std::string_view database, uint8_t sequence_id)
+std::string MysqlEncoder::encode_init_db(std::string_view database, uint8_t sequence_id)
 {
-    return encodeSimpleCommand(CommandType::COM_INIT_DB, database, sequence_id);
+    return encode_simple_command(CommandType::COM_INIT_DB, database, sequence_id);
 }
 
-std::string MysqlEncoder::encodeResetConnection(uint8_t sequence_id)
+std::string MysqlEncoder::encode_reset_connection(uint8_t sequence_id)
 {
-    return encodeSimpleCommand(CommandType::COM_RESET_CONNECTION, "", sequence_id);
+    return encode_simple_command(CommandType::COM_RESET_CONNECTION, "", sequence_id);
 }
 
 } // namespace galay::mysql::protocol

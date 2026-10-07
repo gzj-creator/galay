@@ -76,17 +76,17 @@ public:
 
     /**
      * @brief 设置 Content-Type
-     * @param contentType 内容类型
+     * @param content_type 内容类型
      * @return 返回自身引用，支持链式调用
      */
-    Http1_1RequestBuilder& contentType(const std::string& contentType);
+    Http1_1RequestBuilder& content_type(const std::string& content_type);
 
     /**
      * @brief 设置 User-Agent
-     * @param userAgent 用户代理
+     * @param user_agent 用户代理
      * @return 返回自身引用，支持链式调用
      */
-    Http1_1RequestBuilder& userAgent(const std::string& userAgent);
+    Http1_1RequestBuilder& user_agent(const std::string& user_agent);
 
     /**
      * @brief 设置 Connection 头
@@ -133,7 +133,7 @@ public:
      * @brief 构建 HttpRequest 对象（移动语义）
      * @return HttpRequest 对象
      */
-    HttpRequest buildMove();
+    HttpRequest build_move();
 
     static Http1_1RequestBuilder get(const std::string& uri, HeaderPair::Mode mode = HeaderPair::Mode::ClientSide);
     static Http1_1RequestBuilder post(const std::string& uri, HeaderPair::Mode mode = HeaderPair::Mode::ClientSide);
@@ -202,10 +202,10 @@ public:
 
     /**
      * @brief 设置 Content-Type
-     * @param contentType 内容类型
+     * @param content_type 内容类型
      * @return 返回自身引用，支持链式调用
      */
-    Http1_1ResponseBuilder& contentType(const std::string& contentType);
+    Http1_1ResponseBuilder& content_type(const std::string& content_type);
 
     /**
      * @brief 设置响应体
@@ -252,7 +252,7 @@ public:
      * @brief 构建 HttpResponse 对象（移动语义）
      * @return HttpResponse 对象
      */
-    HttpResponse buildMove();
+    HttpResponse build_move();
 
     /**
      * @brief 创建 200 OK 响应
@@ -270,13 +270,13 @@ public:
      * @brief 创建 204 No Content 响应
      * @return Builder 对象
      */
-    static Http1_1ResponseBuilder noContent();
+    static Http1_1ResponseBuilder no_content();
 
     /**
      * @brief 创建 400 Bad Request 响应
      * @return Builder 对象
      */
-    static Http1_1ResponseBuilder badRequest();
+    static Http1_1ResponseBuilder bad_request();
 
     /**
      * @brief 创建 401 Unauthorized 响应
@@ -294,13 +294,13 @@ public:
      * @brief 创建 404 Not Found 响应
      * @return Builder 对象
      */
-    static Http1_1ResponseBuilder notFound();
+    static Http1_1ResponseBuilder not_found();
 
     /**
      * @brief 创建 500 Internal Server Error 响应
      * @return Builder 对象
      */
-    static Http1_1ResponseBuilder internalServerError();
+    static Http1_1ResponseBuilder internal_server_error();
 
 private:
     Http1_1ResponseBuilder(const Http1_1ResponseBuilder&) = delete;

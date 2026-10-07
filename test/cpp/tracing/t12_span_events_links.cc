@@ -12,70 +12,70 @@
 
 namespace {
 
-galay::tracing::TraceContext makeContext(std::string_view span_id = "00f067aa0ba902b7") {
+galay::tracing::TraceContext make_context(std::string_view span_id = "00f067aa0ba902b7") {
     return galay::tracing::TraceContext(
-        galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
-        galay::tracing::SpanId::fromHex(span_id),
+        galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"),
+        galay::tracing::SpanId::from_hex(span_id),
         0x01,
         "vendor=value");
 }
 
-galay::tracing::SpanContext makeLinkedContext() {
-    return galay::tracing::SpanContext(makeContext("1111111111111111"));
+galay::tracing::SpanContext make_linked_context() {
+    return galay::tracing::SpanContext(make_context("1111111111111111"));
 }
 
-void spanStoresBoundedEventsWithAttributes() {
-    galay::tracing::Span span("events", makeContext());
+void span_stores_bounded_events_with_attributes() {
+    galay::tracing::Span span("events", make_context());
 
     std::vector<galay::tracing::SpanAttribute> attributes;
     for (std::size_t i = 0; i < galay::tracing::Span::kMaxEventAttributes; ++i) {
-        attributes.push_back(galay::tracing::spanAttribute("event.attr", static_cast<int>(i)));
+        attributes.push_back(galay::tracing::span_attribute("event.attr", static_cast<int>(i)));
     }
-    attributes.push_back(galay::tracing::spanAttribute("overflow", true));
+    attributes.push_back(galay::tracing::span_attribute("overflow", true));
 
-    assert(span.addEvent("cache.miss", attributes));
+    assert(span.add_event("cache.miss", attributes));
     assert(span.events().size() == 1);
     assert(span.events()[0].name == "cache.miss");
     assert(span.events()[0].attributes.size() == galay::tracing::Span::kMaxEventAttributes);
     assert(span.events()[0].attributes.back().name == "event.attr");
 
     for (std::size_t i = 1; i < galay::tracing::Span::kMaxEvents; ++i) {
-        assert(span.addEvent("bounded"));
+        assert(span.add_event("bounded"));
     }
-    assert(!span.addEvent("dropped"));
+    assert(!span.add_event("dropped"));
     assert(span.events().size() == galay::tracing::Span::kMaxEvents);
 
     std::span<const galay::tracing::SpanEvent> readonly_events = span.events();
     assert(readonly_events.front().name == "cache.miss");
 }
 
-void spanStoresBoundedLinksWithAttributes() {
-    galay::tracing::Span span("links", makeContext());
+void span_stores_bounded_links_with_attributes() {
+    galay::tracing::Span span("links", make_context());
 
     std::vector<galay::tracing::SpanAttribute> attributes;
     for (std::size_t i = 0; i < galay::tracing::Span::kMaxLinkAttributes; ++i) {
-        attributes.push_back(galay::tracing::spanAttribute("link.attr", static_cast<int>(i)));
+        attributes.push_back(galay::tracing::span_attribute("link.attr", static_cast<int>(i)));
     }
-    attributes.push_back(galay::tracing::spanAttribute("overflow", false));
+    attributes.push_back(galay::tracing::span_attribute("overflow", false));
 
-    assert(span.addLink(makeLinkedContext(), "linkstate=1", attributes));
+    assert(span.add_link(make_linked_context(), "linkstate=1", attributes));
     assert(span.links().size() == 1);
-    assert(span.links()[0].context.spanId().toHex() == "1111111111111111");
+    assert(span.links()[0].context.span_id().to_hex() == "1111111111111111");
     assert(span.links()[0].tracestate == "linkstate=1");
     assert(span.links()[0].attributes.size() == galay::tracing::Span::kMaxLinkAttributes);
     assert(span.links()[0].attributes.back().name == "link.attr");
 
     for (std::size_t i = 1; i < galay::tracing::Span::kMaxLinks; ++i) {
-        assert(span.addLink(makeLinkedContext()));
+        assert(span.add_link(make_linked_context()));
     }
-    assert(!span.addLink(makeLinkedContext()));
+    assert(!span.add_link(make_linked_context()));
     assert(span.links().size() == galay::tracing::Span::kMaxLinks);
 
     std::span<const galay::tracing::SpanLink> readonly_links = span.links();
-    assert(readonly_links.front().context.traceId().toHex() == "4bf92f3577b34da6a3ce929d0e0e4736");
+    assert(readonly_links.front().context.trace_id().to_hex() == "4bf92f3577b34da6a3ce929d0e0e4736");
 }
 
-void otlpJsonExporterEncodesEventsAndLinks() {
+void otlp_json_exporter_encodes_events_and_links() {
     bool captured = false;
     auto transport = [&](galay::tracing::OtlpHttpRequest request) {
         captured = true;
@@ -89,36 +89,36 @@ void otlpJsonExporterEncodesEventsAndLinks() {
         return galay::tracing::OtlpHttpResponse{.status_code = 200};
     };
 
-    galay::tracing::Span span("export", makeContext());
-    assert(span.addEvent("cache.miss", {galay::tracing::spanAttribute("cache.key", "user:42")}));
-    assert(span.addLink(
-        makeLinkedContext(),
+    galay::tracing::Span span("export", make_context());
+    assert(span.add_event("cache.miss", {galay::tracing::span_attribute("cache.key", "user:42")}));
+    assert(span.add_link(
+        make_linked_context(),
         "linkstate=1",
-        {galay::tracing::spanAttribute("link.type", "batch")}));
+        {galay::tracing::span_attribute("link.type", "batch")}));
     span.end();
 
     galay::tracing::OtlpHttpExporter exporter({}, transport);
     std::vector<galay::tracing::Span> spans;
     spans.push_back(std::move(span));
-    assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
+    assert(exporter.export_spans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
     assert(captured);
 }
 
-void fileExporterEncodesEventsAndLinks() {
+void file_exporter_encodes_events_and_links() {
     const auto path = std::filesystem::temp_directory_path() / "galay-tracing-t12-events-links.jsonl";
     std::filesystem::remove(path);
 
-    galay::tracing::Span span("file", makeContext());
-    assert(span.addEvent("file.event", {galay::tracing::spanAttribute("file.attr", 7)}));
-    assert(span.addLink(makeLinkedContext(), {}, {galay::tracing::spanAttribute("link.attr", true)}));
+    galay::tracing::Span span("file", make_context());
+    assert(span.add_event("file.event", {galay::tracing::span_attribute("file.attr", 7)}));
+    assert(span.add_link(make_linked_context(), {}, {galay::tracing::span_attribute("link.attr", true)}));
     span.end();
 
     {
         galay::tracing::FileSpanExporter exporter(path);
         std::vector<galay::tracing::Span> spans;
         spans.push_back(std::move(span));
-        assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
-        assert(exporter.forceFlush(std::chrono::milliseconds(0)));
+        assert(exporter.export_spans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
+        assert(exporter.force_flush(std::chrono::milliseconds(0)));
     }
 
     std::ifstream in(path);
@@ -132,20 +132,20 @@ void fileExporterEncodesEventsAndLinks() {
     std::filesystem::remove(path);
 }
 
-void fileExporterEscapesJsonlControlCharacters() {
+void file_exporter_escapes_jsonl_control_characters() {
     const auto path = std::filesystem::temp_directory_path() / "galay-tracing-t12-control-chars.jsonl";
     std::filesystem::remove(path);
 
-    galay::tracing::Span span("line\nname", makeContext());
-    assert(span.addEvent("tab\tand\x01" "control", {galay::tracing::spanAttribute("attr\nkey", "value\r\nnext")}));
+    galay::tracing::Span span("line\nname", make_context());
+    assert(span.add_event("tab\tand\x01" "control", {galay::tracing::span_attribute("attr\nkey", "value\r\nnext")}));
     span.end();
 
     {
         galay::tracing::FileSpanExporter exporter(path);
         std::vector<galay::tracing::Span> spans;
         spans.push_back(std::move(span));
-        assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
-        assert(exporter.forceFlush(std::chrono::milliseconds(0)));
+        assert(exporter.export_spans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
+        assert(exporter.force_flush(std::chrono::milliseconds(0)));
     }
 
     std::ifstream in(path, std::ios::binary);
@@ -162,9 +162,9 @@ void fileExporterEscapesJsonlControlCharacters() {
 } // namespace
 
 int main() {
-    spanStoresBoundedEventsWithAttributes();
-    spanStoresBoundedLinksWithAttributes();
-    otlpJsonExporterEncodesEventsAndLinks();
-    fileExporterEncodesEventsAndLinks();
-    fileExporterEscapesJsonlControlCharacters();
+    span_stores_bounded_events_with_attributes();
+    span_stores_bounded_links_with_attributes();
+    otlp_json_exporter_encodes_events_and_links();
+    file_exporter_encodes_events_and_links();
+    file_exporter_escapes_jsonl_control_characters();
 }

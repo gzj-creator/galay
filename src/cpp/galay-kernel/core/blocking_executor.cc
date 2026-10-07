@@ -27,7 +27,7 @@ constexpr auto kDefaultBlockingKeepAlive = std::chrono::milliseconds(5000);
  * @brief 使用默认线程数和保活超时构造
  */
 BlockingExecutor::BlockingExecutor()
-    : BlockingExecutor(0, defaultMaxWorkers(), kDefaultBlockingKeepAlive)
+    : BlockingExecutor(0, default_max_workers(), kDefaultBlockingKeepAlive)
 {
 }
 
@@ -36,7 +36,7 @@ BlockingExecutor::BlockingExecutor()
  *
  * @param minWorkers  最少保留的工作线程数
  * @param maxWorkers  允许的最大工作线程数
- * @param keepAlive   多余线程的空闲超时时间
+ * @param keep_alive   多余线程的空闲超时时间
  */
 BlockingExecutor::BlockingExecutor(size_t minWorkers,
                                    size_t maxWorkers,
@@ -74,7 +74,7 @@ void BlockingExecutor::stop() noexcept
  *
  * @return 可用 CPU 核心数，无法确定时返回 4
  */
-size_t BlockingExecutor::defaultMaxWorkers()
+size_t BlockingExecutor::default_max_workers()
 {
     const size_t hardware = std::thread::hardware_concurrency();
     return hardware > 0 ? hardware : 4;
@@ -126,8 +126,8 @@ std::expected<void, BlockingExecutorError> BlockingExecutor::submit(std::functio
         return {};
     }
 
-    std::thread([this, initialTask = std::move(task)]() mutable {
-        workerLoop(std::move(initialTask));
+    std::thread([this, initial_task = std::move(task)]() mutable {
+        worker_loop(std::move(initial_task));
     }).detach();
     return {};
 }
@@ -139,11 +139,11 @@ std::expected<void, BlockingExecutorError> BlockingExecutor::submit(std::functio
  * 超过最小线程数的空闲线程在保活超时后退出。
  * 关闭时排空剩余任务后退出。
  *
- * @param initialTask  首个执行的任务（来自创建该线程的 submit() 调用）
+ * @param initial_task  首个执行的任务（来自创建该线程的 submit() 调用）
  */
-void BlockingExecutor::workerLoop(std::function<void()> initialTask)
+void BlockingExecutor::worker_loop(std::function<void()> initial_task)
 {
-    std::function<void()> task = std::move(initialTask);
+    std::function<void()> task = std::move(initial_task);
 
     for (;;) {
         if (task) {
@@ -170,13 +170,13 @@ void BlockingExecutor::workerLoop(std::function<void()> initialTask)
             --m_idleWorkers;
 
             if (!ready && m_tasks.empty() && m_workerCount > m_minWorkers) {
-                retireWorkerLocked();
+                retire_worker_locked();
                 return;
             }
         }
 
         if (m_stopping && m_tasks.empty()) {
-            retireWorkerLocked();
+            retire_worker_locked();
             return;
         }
 
@@ -194,7 +194,7 @@ void BlockingExecutor::workerLoop(std::function<void()> initialTask)
  *
  * @note 必须在持有 m_mutex 时调用
  */
-void BlockingExecutor::retireWorkerLocked()
+void BlockingExecutor::retire_worker_locked()
 {
     --m_workerCount;
     if (m_stopping && m_workerCount == 0) {

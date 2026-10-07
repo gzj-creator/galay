@@ -36,34 +36,34 @@ public:
      * @param path 文件路径
      * @return 解析成功返回 true
      */
-    virtual bool parseFile(const std::string& path) = 0;
+    virtual bool parse_file(const std::string& path) = 0;
 
     /**
      * @brief 从字符串解析配置内容
      * @param content 配置文本
      * @return 解析成功返回 true
      */
-    virtual bool parseString(const std::string& content) = 0;
+    virtual bool parse_string(const std::string& content) = 0;
 
     /**
      * @brief 获取键对应的字符串值
      * @param key 键名（支持点分节表示法）
      * @return 值字符串，不存在时返回 std::nullopt
      */
-    virtual std::optional<std::string> getValue(const std::string& key) const = 0;
+    virtual std::optional<std::string> get_value(const std::string& key) const = 0;
 
     /**
      * @brief 检查键是否存在
      * @param key 键名
      * @return 存在返回 true
      */
-    virtual bool hasKey(const std::string& key) const = 0;
+    virtual bool has_key(const std::string& key) const = 0;
 
     /**
      * @brief 获取所有键名
      * @return 键名列表（顺序未定义）
      */
-    virtual std::vector<std::string> getKeys() const = 0;
+    virtual std::vector<std::string> get_keys() const = 0;
 
     /**
      * @brief 获取键值并转换为指定类型
@@ -73,8 +73,8 @@ public:
      * @return 转换后的值或默认值
      */
     template<typename T>
-    T getValueAs(const std::string& key, T defaultValue = T{}) const {
-        auto value = getValue(key);
+    T get_value_as(const std::string& key, T defaultValue = T{}) const {
+        auto value = get_value(key);
         if (!value) {
             return defaultValue;
         }
@@ -91,10 +91,10 @@ public:
      * @brief 获取最后一次解析或文件错误
      * @return 错误信息字符串，无错误时为空
      */
-    const std::string& lastError() const { return m_last_error; }
+    const std::string& last_error() const { return m_last_error; }
 
 protected:
-    bool parseFileContent(const std::string& path) {
+    bool parse_file_content(const std::string& path) {
         std::ifstream file(path);
         if (!file) {
             m_last_error = "Failed to open file: " + path;
@@ -103,7 +103,7 @@ protected:
 
         std::ostringstream output;
         output << file.rdbuf();
-        return parseString(output.str());
+        return parse_string(output.str());
     }
 
     std::string m_last_error;

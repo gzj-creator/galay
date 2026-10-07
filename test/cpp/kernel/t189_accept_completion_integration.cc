@@ -41,7 +41,7 @@ struct EpollReactorTestAccess {
         result.data.ptr = reactor.m_registration_entries.at(fd).get();
         return result;
     }
-    static void deliver(EpollReactor& reactor, epoll_event event) { reactor.processEvent(event); }
+    static void deliver(EpollReactor& reactor, epoll_event event) { reactor.process_event(event); }
     static void generation(EpollReactor& reactor, uint32_t value) {
         reactor.m_next_accept_generation = value;
     }
@@ -57,20 +57,20 @@ class ManualScheduler final : public EpollScheduler {
 public:
     bool initialize() {
         const auto started = m_reactor.start();
-        if (!started || !m_worker.reopenResumeAdmission()) {
+        if (!started || !m_worker.reopen_resume_admission()) {
             return false;
         }
         m_threadId = std::this_thread::get_id();
         return true;
     }
 
-    bool flush() { return m_reactor.flushPendingChanges() == 0; }
+    bool flush() { return m_reactor.flush_pending_changes() == 0; }
 
-    bool pollOnce() {
+    bool poll_once() {
         m_reactor.poll(0, m_wake_coordinator);
-        return !lastError();
+        return !last_error();
     }
-    GHandle pollHandle() const { return m_reactor.getPollHandle(); }
+    GHandle poll_handle() const { return m_reactor.get_poll_handle(); }
     epoll_event event(int fd) { return EpollReactorTestAccess::event(m_reactor, fd); }
     void deliver(epoll_event event) { EpollReactorTestAccess::deliver(m_reactor, event); }
     void generation(uint32_t value) { EpollReactorTestAccess::generation(m_reactor, value); }
@@ -80,10 +80,10 @@ public:
     size_t dispatch() {
         size_t count = 0;
         // Bounded so a broken completion loop reports failure instead of hanging.
-        for (unsigned pass = 0; pass != 8 && m_core.hasPendingWork(); ++pass) {
-            const auto ran = m_core.runReadyPass(
+        for (unsigned pass = 0; pass != 8 && m_core.has_pending_work(); ++pass) {
+            const auto ran = m_core.run_ready_pass(
                 [this, &count](TaskRef& task) { ++count; resume(task); },
-                [this](size_t drained) { m_wake_coordinator.onRemoteCollected(drained); });
+                [this](size_t drained) { m_wake_coordinator.on_remote_collected(drained); });
             if (ran == 0) {
                 break;
             }
@@ -138,11 +138,11 @@ private:
     Trace& m_trace;
 };
 
-Task<void> acceptOnce(IOController* controller, Trace* trace, bool timed) {
+Task<void> accept_once(IOController* controller, Trace* trace, bool timed) {
     FrameProbe frame(*trace);
     if (timed) {
         auto awaitable = AcceptAwaitable(controller, trace->null_peer ? nullptr : &trace->peer).timeout(1h);
-        awaitable.ensureTimer();
+        awaitable.ensure_timer();
         trace->awaitable = &awaitable;
         trace->timer = awaitable.m_timer;
         trace->result.emplace(co_await awaitable);
@@ -173,7 +173,7 @@ constexpr std::array kScenarios{
     Scenario{"ready-timeout", Event::kReady, Event::kTimeout, true, kNotReady},
 };
 
-bool connectClient(int fd, const sockaddr_in& address) {
+bool connect_client(int fd, const sockaddr_in& address) {
     if (::connect(fd, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0) {
         return true;
     }
@@ -190,7 +190,7 @@ bool connectClient(int fd, const sockaddr_in& address) {
            ::getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &size) == 0 && error == 0;
 }
 
-bool runScenario(const Scenario& scenario, bool release_controller) {
+bool run_scenario(const Scenario& scenario, bool release_controller) {
     bool ok = true;
     const auto check = [&](bool value, std::string_view contract) {
         if (!value) {
@@ -220,9 +220,9 @@ bool runScenario(const Scenario& scenario, bool release_controller) {
     auto controller = std::make_unique<IOController>(GHandle{.fd = listener.get()});
     Trace trace;
     const bool timed = scenario.first == Event::kTimeout || scenario.second == Event::kTimeout;
-    auto task = acceptOnce(controller.get(), &trace, timed);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
-    if (!check(scheduleTask(scheduler, std::move(task)), "task submission") ||
+    auto task = accept_once(controller.get(), &trace, timed);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
+    if (!check(schedule_task(scheduler, std::move(task)), "task submission") ||
         !check(scheduler.dispatch() == 1 && trace.resumes == 0, "one initial suspension") ||
         !check(scheduler.flush(), "register accept in epoll") ||
         !check(trace.awaitable && controller->m_awaitable[IOController::READ] == trace.awaitable &&
@@ -236,7 +236,7 @@ bool runScenario(const Scenario& scenario, bool release_controller) {
     IOController** registration = controller->m_registration_owner_slot;
     bool attached = true;
     unsigned observed_detaches = 0;
-    const auto observeDetach = [&] {
+    const auto observe_detach = [&] {
         const bool now_attached = *registration != nullptr;
         if (attached && !now_attached) {
             ++observed_detaches;
@@ -249,7 +249,7 @@ bool runScenario(const Scenario& scenario, bool release_controller) {
     // reactor only afterwards. This covers kernel-queued readiness, not replay
     // of an already copied epoll batch (that needs an adapter-level key test).
     if (scenario.first == Event::kReady || scenario.second == Event::kReady) {
-        if (!check(client.get() >= 0 && connectClient(client.get(), address), "client connect barrier")) {
+        if (!check(client.get() >= 0 && connect_client(client.get(), address), "client connect barrier")) {
             return false;
         }
     }
@@ -257,19 +257,19 @@ bool runScenario(const Scenario& scenario, bool release_controller) {
     const auto deliver = [&](Event event) {
         switch (event) {
         case Event::kReady:
-            check(scheduler.pollOnce(), "ready dispatch");
+            check(scheduler.poll_once(), "ready dispatch");
             break;
         case Event::kClose:
-            if (check(scheduler.addClose(controller.get()) == 0, "listener close")) {
+            if (check(scheduler.add_close(controller.get()) == 0, "listener close")) {
                 const int transferred = listener.release();
                 check(transferred >= 0, "listener fd closed once");
             }
             break;
         case Event::kTimeout:
-            trace.timer->handleTimeout(); // Deterministic owner-thread delivery.
+            trace.timer->handle_timeout(); // Deterministic owner-thread delivery.
             break;
         }
-        observeDetach();
+        observe_detach();
     };
 
     deliver(scenario.first);
@@ -277,11 +277,11 @@ bool runScenario(const Scenario& scenario, bool release_controller) {
     check(controller->m_awaitable[IOController::READ] == nullptr && !attached,
           "winner must detach registration before resume admission");
     check(trace.awaitable->m_controller == nullptr, "winner must end the awaiter's controller borrow");
-    check(trace.awaitable->m_operation->state().physicalReferenceCount() == 0 &&
+    check(trace.awaitable->m_operation->state().physical_reference_count() == 0 &&
           trace.awaitable->m_operation->state().phase() == OperationPhase::kResumeIssued,
           "physical drain precedes resume admission");
     const auto key = trace.awaitable->m_operation->state().key();
-    check(key.isValid(), "submitted operation has a valid key");
+    check(key.is_valid(), "submitted operation has a valid key");
     deliver(scenario.second);
     check(observed_detaches == 1 && !attached, "one observed registration detach; loser cannot reattach");
 
@@ -301,10 +301,10 @@ bool runScenario(const Scenario& scenario, bool release_controller) {
         }
     }
     if (trace.timer) {
-        trace.timer->handleTimeout(); // Late callback after frame destruction.
+        trace.timer->handle_timeout(); // Late callback after frame destruction.
         trace.timer.reset();
     }
-    check(scheduler.pollOnce() && scheduler.dispatch() == 0, "late events cannot resume the task again");
+    check(scheduler.poll_once() && scheduler.dispatch() == 0, "late events cannot resume the task again");
     check(trace.resumes == 1 && trace.scope_destroys == 1, "late events cannot destroy the frame again");
     check(client.close() && listener.close(), "driver descriptor cleanup");
     std::cout << "T189 " << scenario.name << (ok ? " PASS" : " FAIL")
@@ -313,7 +313,7 @@ bool runScenario(const Scenario& scenario, bool release_controller) {
     return ok;
 }
 
-bool runBoundaries() {
+bool run_boundaries() {
     ManualScheduler scheduler;
     if (!scheduler.initialize()) { return false; }
     TestFd listener(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
@@ -329,28 +329,28 @@ bool runBoundaries() {
     }
     auto controller = std::make_unique<IOController>(GHandle{.fd = listener.get()});
     Trace first;
-    auto first_task = acceptOnce(controller.get(), &first, true);
-    if (!scheduleTask(scheduler, std::move(first_task)) || scheduler.dispatch() != 1 || !scheduler.flush()) {
+    auto first_task = accept_once(controller.get(), &first, true);
+    if (!schedule_task(scheduler, std::move(first_task)) || scheduler.dispatch() != 1 || !scheduler.flush()) {
         return false;
     }
     const auto first_key = first.awaitable->m_operation->state().key();
     const auto old_event = scheduler.event(listener.get());
     Trace duplicate;
-    if (!scheduleTask(scheduler, acceptOnce(controller.get(), &duplicate, false)) ||
+    if (!schedule_task(scheduler, accept_once(controller.get(), &duplicate, false)) ||
         scheduler.dispatch() != 1 || !duplicate.result || *duplicate.result ||
         !IOError::contains(duplicate.result->error().code(), kNotReady) ||
         controller->m_awaitable[IOController::READ] != first.awaitable) {
         return false;
     }
-    first.timer->handleTimeout();
+    first.timer->handle_timeout();
     if (scheduler.dispatch() != 1 || first.resumes != 1) { return false; }
     Trace next;
-    if (!scheduleTask(scheduler, acceptOnce(controller.get(), &next, false)) ||
+    if (!schedule_task(scheduler, accept_once(controller.get(), &next, false)) ||
         scheduler.dispatch() != 1 || !scheduler.flush()) { return false; }
     const auto next_key = next.awaitable->m_operation->state().key();
     TestFd next_client(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
-    if (!connectClient(next_client.get(), address)) { return false; }
-    first.timer->handleTimeout(); // 旧 timer 不能取消同资源上的新 operation。
+    if (!connect_client(next_client.get(), address)) { return false; }
+    first.timer->handle_timeout(); // 旧 timer 不能取消同资源上的新 operation。
     scheduler.deliver(old_event); // 已拷贝的旧 event 不能访问新 operation。
     if (first_key == next_key || next.resumes != 0 || scheduler.dispatch() != 0) { return false; }
     // 只转移拥有者，controller 地址及 pending accept 的注册入口必须保持稳定。
@@ -363,14 +363,14 @@ bool runBoundaries() {
         transferred->m_awaitable[IOController::READ] != next.awaitable) {
         return false;
     }
-    if (scheduler.addClose(transferred.get()) != 0) { return false; }
+    if (scheduler.add_close(transferred.get()) != 0) { return false; }
     const int closed_fd = listener.release();
     if (closed_fd < 0) { return false; }
     transferred.reset();
     if (scheduler.dispatch() != 1 || next.resumes != 1 || next.scope_destroys != 1) { return false; }
     scheduler.deliver(old_event); // controller/frame 释放后同一 event 仍可安全丢弃。
     Trace invalid;
-    if (!scheduleTask(scheduler, acceptOnce(nullptr, &invalid, false)) || scheduler.dispatch() != 1 ||
+    if (!schedule_task(scheduler, accept_once(nullptr, &invalid, false)) || scheduler.dispatch() != 1 ||
         !invalid.result || *invalid.result || !IOError::contains(invalid.result->error().code(), kClosed)) {
         return false;
     }
@@ -394,8 +394,8 @@ bool runBoundaries() {
     TestFd client(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
     IOController immediate_controller(GHandle{.fd = reused_listener.get()});
     Trace reused;
-    if (!scheduleTask(scheduler, acceptOnce(&immediate_controller, &reused, false)) ||
-        scheduler.dispatch() != 1 || !scheduler.flush() || !connectClient(client.get(), address)) { return false; }
+    if (!schedule_task(scheduler, accept_once(&immediate_controller, &reused, false)) ||
+        scheduler.dispatch() != 1 || !scheduler.flush() || !connect_client(client.get(), address)) { return false; }
     scheduler.deliver(old_event);
     if (scheduler.dispatch() != 0 || reused.resumes != 0) { return false; }
     scheduler.deliver(scheduler.event(closed_fd));
@@ -405,11 +405,11 @@ bool runBoundaries() {
     TestFd immediate_client(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
     Trace immediate;
     immediate.null_peer = true;
-    if (!connectClient(immediate_client.get(), address) ||
-        !scheduleTask(scheduler, acceptOnce(&immediate_controller, &immediate, true)) ||
+    if (!connect_client(immediate_client.get(), address) ||
+        !schedule_task(scheduler, accept_once(&immediate_controller, &immediate, true)) ||
         scheduler.dispatch() != 1 || !immediate.result || !*immediate.result) { return false; }
     TestFd accepted(immediate.result->value().fd);
-    immediate.timer->handleTimeout();
+    immediate.timer->handle_timeout();
     const bool ok = scheduler.dispatch() == 0 && immediate.resumes == 1 &&
         immediate.scope_destroys == 1 && accepted.close();
     std::cout << "T189 duplicate/key-reuse/owner-transfer/fd-reuse/late-timer/invalid/synchronous/null-peer "
@@ -417,7 +417,7 @@ bool runBoundaries() {
     return ok;
 }
 
-bool runRegistrationFailure() {
+bool run_registration_failure() {
     TestFd listener(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
     sockaddr_in address{};
     address.sin_family = AF_INET;
@@ -429,7 +429,7 @@ bool runRegistrationFailure() {
     if (!scheduler.initialize()) { return false; }
     auto controller = std::make_unique<IOController>(GHandle{.fd = listener.get()});
     Trace trace;
-    if (!scheduleTask(scheduler, acceptOnce(controller.get(), &trace, true)) ||
+    if (!schedule_task(scheduler, accept_once(controller.get(), &trace, true)) ||
         scheduler.dispatch() != 1 || !trace.awaitable) { return false; }
     // 故意使 deferred EPOLL_CTL_ADD 在 flush 时失败；不能留下永久 pending。
     if (!listener.close() || scheduler.flush()) { return false; }
@@ -438,12 +438,12 @@ bool runRegistrationFailure() {
     const bool error = trace.result && !*trace.result &&
         IOError::contains(trace.result->error().code(), kAcceptFailed) &&
         (trace.result->error().code() >> 32) == EBADF;
-    if (trace.timer) { trace.timer->handleTimeout(); }
+    if (trace.timer) { trace.timer->handle_timeout(); }
     std::cout << "T189 deferred-registration-failure " << (resumed && error ? "PASS" : "FAIL") << '\n';
     return resumed && error;
 }
 
-bool runMixedRegistrationFailure() {
+bool run_mixed_registration_failure() {
     ManualScheduler scheduler;
     if (!scheduler.initialize()) { return false; }
     TestFd failed_fd(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
@@ -460,9 +460,9 @@ bool runMixedRegistrationFailure() {
     IOController valid(GHandle{.fd = valid_fd.get()});
     Trace failure;
     Trace pending;
-    if (!scheduleTask(scheduler, acceptOnce(&failed, &failure, false)) ||
+    if (!schedule_task(scheduler, accept_once(&failed, &failure, false)) ||
         scheduler.dispatch() != 1 ||
-        !scheduleTask(scheduler, acceptOnce(&valid, &pending, false)) ||
+        !schedule_task(scheduler, accept_once(&valid, &pending, false)) ||
         scheduler.dispatch() != 1 || !failed_fd.close()) { return false; }
 
     // 删除失败 ADD 后，swap-and-pop 换入同一索引的有效 ADD 仍必须提交。
@@ -474,7 +474,7 @@ bool runMixedRegistrationFailure() {
         IOError::contains(failure.result->error().code(), kAcceptFailed) &&
         (failure.result->error().code() >> 32) == EBADF && pending.resumes == 0;
 
-    const bool closed = scheduler.addClose(&valid) == 0;
+    const bool closed = scheduler.add_close(&valid) == 0;
     const int closed_fd = valid_fd.release();
     const bool drained = scheduler.dispatch() == 1 && pending.resumes == 1 &&
         pending.scope_destroys == 1 && pending.result && !*pending.result &&
@@ -485,7 +485,7 @@ bool runMixedRegistrationFailure() {
     return ok;
 }
 
-bool runExpiredTimerDuringSubmit() {
+bool run_expired_timer_during_submit() {
     ManualScheduler scheduler;
     if (!scheduler.initialize()) { return false; }
     TestFd listener(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
@@ -513,18 +513,18 @@ bool runExpiredTimerDuringSubmit() {
     // The real wheel calls an expired timer inline from push(). Publishing a
     // resume while suspend() still owns the operation would permit frame UAF.
     const bool suspended = operation.suspend(
-        Waker(detail::ResumeToken::fromNonOwningCCoroutine(&probe)));
+        Waker(detail::ResumeToken::from_non_owning_c_coroutine(&probe)));
     const auto result = operation.await_resume();
     const bool ok = !suspended && probe.resumes == 0 && !result &&
         IOError::contains(result.error().code(), kTimeout) &&
         controller.m_awaitable[IOController::READ] == nullptr &&
-        operation.m_operation->state().physicalReferenceCount() == 0;
+        operation.m_operation->state().physical_reference_count() == 0;
     std::cout << "T189 expired-timer-during-submit " << (ok ? "PASS" : "FAIL")
               << " suspended=" << suspended << " resumes=" << probe.resumes << '\n';
     return ok;
 }
 
-bool runReentrantRegistrationFailure() {
+bool run_reentrant_registration_failure() {
     ManualScheduler scheduler;
     if (!scheduler.initialize()) { return false; }
     auto listener = [] {
@@ -542,7 +542,7 @@ bool runReentrantRegistrationFailure() {
     auto first = std::make_unique<IOController>(GHandle{.fd = first_fd.get()});
     IOController failed(GHandle{.fd = failed_fd.get()});
     Trace trace;
-    if (!scheduleTask(scheduler, acceptOnce(first.get(), &trace, true)) ||
+    if (!schedule_task(scheduler, accept_once(first.get(), &trace, true)) ||
         scheduler.dispatch() != 1 || !scheduler.flush()) { return false; }
     struct Probe {
         detail::ResumeTokenHeader header;
@@ -558,18 +558,18 @@ bool runReentrantRegistrationFailure() {
         .request_resume = [](void* state) noexcept {
             auto& probe = *static_cast<Probe*>(state);
             ++probe.resumes;
-            probe.closed = probe.scheduler->addClose(probe.other->get()) == 0;
+            probe.closed = probe.scheduler->add_close(probe.other->get()) == 0;
             probe.other->reset(); // Another completion may destroy the resource inline.
             return true;
         },
     };
     probe.header.hooks = &hooks;
     AcceptAwaitable operation(&failed, nullptr);
-    if (!operation.suspend(Waker(detail::ResumeToken::fromNonOwningCCoroutine(&probe))) ||
+    if (!operation.suspend(Waker(detail::ResumeToken::from_non_owning_c_coroutine(&probe))) ||
         !failed_fd.close()) { return false; }
     // Detaching the first operation flushes the second operation's failed ADD.
     // Its inline recovery closes and frees the first controller during flush.
-    trace.timer->handleTimeout();
+    trace.timer->handle_timeout();
     // A non-reentrant detach may leave the unrelated ADD for the next flush.
     if (probe.resumes == 0 && scheduler.flush()) { return false; }
     if (!probe.closed || first || probe.resumes != 1) { return false; }
@@ -584,7 +584,7 @@ bool runReentrantRegistrationFailure() {
     return ok;
 }
 
-bool runInlineRecoveryAndResultOwnership() {
+bool run_inline_recovery_and_result_ownership() {
     for (bool consume : {false, true}) {
         ManualScheduler scheduler;
         if (!scheduler.initialize()) { return false; }
@@ -619,17 +619,17 @@ bool runInlineRecoveryAndResultOwnership() {
                     if (result) { probe.accepted = result->fd; }
                 }
                 probe.operation->reset(); // Unconsumed success must close its fd.
-                probe.closed = probe.scheduler->addClose(probe.controller->get()) == 0;
+                probe.closed = probe.scheduler->add_close(probe.controller->get()) == 0;
                 probe.controller->reset();
                 return true;
             },
         };
         probe.header.hooks = &hooks;
-        if (!operation->suspend(Waker(detail::ResumeToken::fromNonOwningCCoroutine(&probe))) ||
+        if (!operation->suspend(Waker(detail::ResumeToken::from_non_owning_c_coroutine(&probe))) ||
             !scheduler.flush()) { return false; }
         const auto stale = scheduler.event(listener.get());
         TestFd client(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
-        if (!connectClient(client.get(), address)) { return false; }
+        if (!connect_client(client.get(), address)) { return false; }
         scheduler.deliver(stale);
         if (!probe.closed || operation || controller || probe.resumes != 1) { return false; }
         const int closed = listener.release();
@@ -648,7 +648,7 @@ bool runInlineRecoveryAndResultOwnership() {
     return true;
 }
 
-bool runGenerationExhaustionAndWheel() {
+bool run_generation_exhaustion_and_wheel() {
     ManualScheduler scheduler;
     if (!scheduler.initialize()) { return false; }
     TestFd listener(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
@@ -670,7 +670,7 @@ bool runGenerationExhaustionAndWheel() {
         trace->awaitable = nullptr;
         ++trace->resumes;
     };
-    if (!scheduleTask(scheduler, timed(&controller, &last)) || scheduler.dispatch() != 1 ||
+    if (!schedule_task(scheduler, timed(&controller, &last)) || scheduler.dispatch() != 1 ||
         !scheduler.flush() || !last.awaitable ||
         last.awaitable->m_operation->state().key().generation != UINT32_MAX || scheduler.timers() != 1) { return false; }
     const auto deadline = std::chrono::steady_clock::now() + 2s;
@@ -681,14 +681,14 @@ bool runGenerationExhaustionAndWheel() {
     if (scheduler.timers() != 0 || scheduler.dispatch() != 1 || last.resumes != 1 ||
         !last.result || *last.result || !IOError::contains(last.result->error().code(), kTimeout)) { return false; }
     Trace exhausted;
-    if (!scheduleTask(scheduler, acceptOnce(&controller, &exhausted, false)) || scheduler.dispatch() != 1 ||
+    if (!schedule_task(scheduler, accept_once(&controller, &exhausted, false)) || scheduler.dispatch() != 1 ||
         !exhausted.result || *exhausted.result ||
         (exhausted.result->error().code() >> 32) != EOVERFLOW || controller.m_registration_owner_slot) { return false; }
     std::cout << "T189 generation-exhaustion/real-wheel PASS\n";
     return true;
 }
 
-bool runSubmitDoesNotDispatchOtherOperations() {
+bool run_submit_does_not_dispatch_other_operations() {
     ManualScheduler scheduler;
     if (!scheduler.initialize()) { return false; }
     std::array<std::unique_ptr<IOController>, 32> controllers;
@@ -715,19 +715,19 @@ bool runSubmitDoesNotDispatchOtherOperations() {
         .request_resume = [](void* state) noexcept {
             auto& probe = *static_cast<Probe*>(state);
             ++probe.resumes;
-            probe.closed = probe.scheduler->addClose(probe.target->get()) == 0;
+            probe.closed = probe.scheduler->add_close(probe.target->get()) == 0;
             probe.target->reset();
             return true;
         },
     };
     probe.header.hooks = &hooks;
-    if (!operations[0]->suspend(Waker(detail::ResumeToken::fromNonOwningCCoroutine(&probe)))) { return false; }
+    if (!operations[0]->suspend(Waker(detail::ResumeToken::from_non_owning_c_coroutine(&probe)))) { return false; }
     // Invalidate the first pending ADD. The 32nd accept must not flush it while
     // still submitting: its recovery can close/free the currently used resource.
     if (::close(controllers[0]->m_handle.fd) != 0) { return false; }
     bool all_suspended = true;
     for (unsigned i = 1; i != controllers.size(); ++i) {
-        all_suspended = scheduler.submitAccept(*operations[i], Waker{}) && all_suspended;
+        all_suspended = scheduler.submit_accept(*operations[i], Waker{}) && all_suspended;
     }
     const bool deferred = probe.resumes == 0;
     if (deferred && scheduler.flush()) { return false; }
@@ -736,7 +736,7 @@ bool runSubmitDoesNotDispatchOtherOperations() {
         IOError::contains(result.error().code(), kClosed);
     controllers[0]->m_handle = GHandle::invalid();
     for (unsigned i = 1; i + 1 != controllers.size(); ++i) {
-        ok = scheduler.addClose(controllers[i].get()) == 0 && ok;
+        ok = scheduler.add_close(controllers[i].get()) == 0 && ok;
     }
     std::cout << "T189 submit-does-not-dispatch-other-operations " << (ok ? "PASS" : "FAIL")
               << " all_suspended=" << all_suspended << " deferred=" << deferred << '\n';
@@ -764,7 +764,7 @@ int main(int argc, char** argv) {
     unsigned ran = 0;
     for (const auto& scenario : kScenarios) {
         if (selected.empty() || selected == scenario.name) {
-            ok = runScenario(scenario, release_controller) && ok;
+            ok = run_scenario(scenario, release_controller) && ok;
             ++ran;
         }
     }
@@ -773,14 +773,14 @@ int main(int argc, char** argv) {
         return 2;
     }
     if (selected.empty()) {
-        ok = runBoundaries() && ok;
-        ok = runRegistrationFailure() && ok;
-        ok = runMixedRegistrationFailure() && ok;
-        ok = runExpiredTimerDuringSubmit() && ok;
-        ok = runReentrantRegistrationFailure() && ok;
-        ok = runInlineRecoveryAndResultOwnership() && ok;
-        ok = runGenerationExhaustionAndWheel() && ok;
-        ok = runSubmitDoesNotDispatchOtherOperations() && ok;
+        ok = run_boundaries() && ok;
+        ok = run_registration_failure() && ok;
+        ok = run_mixed_registration_failure() && ok;
+        ok = run_expired_timer_during_submit() && ok;
+        ok = run_reentrant_registration_failure() && ok;
+        ok = run_inline_recovery_and_result_ownership() && ok;
+        ok = run_generation_exhaustion_and_wheel() && ok;
+        ok = run_submit_does_not_dispatch_other_operations() && ok;
     }
     return ok ? 0 : 1;
 #endif

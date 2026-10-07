@@ -27,19 +27,19 @@ void test_object_pool_lease_can_outlive_pool()
 
 void test_base64_short_malformed_reports_decode_error()
 {
-    assert(!galay::utils::Base64Util::Base64CanDecode("A"));
-    assert(galay::utils::Base64Util::Base64Decode("A").empty());
+    assert(!galay::utils::Base64Util::base64_can_decode("A"));
+    assert(galay::utils::Base64Util::base64_decode("A").empty());
 }
 
 void test_base64_crlf_whitespace_decode()
 {
-    assert(galay::utils::Base64Util::Base64CanDecode("SGVs\r\n bG8=\t", true));
-    assert(!galay::utils::Base64Util::Base64CanDecode("SGVs\r\n bG8=\t", false));
-    const std::string decoded = galay::utils::Base64Util::Base64Decode("SGVs\r\n bG8=\t", true);
+    assert(galay::utils::Base64Util::base64_can_decode("SGVs\r\n bG8=\t", true));
+    assert(!galay::utils::Base64Util::base64_can_decode("SGVs\r\n bG8=\t", false));
+    const std::string decoded = galay::utils::Base64Util::base64_decode("SGVs\r\n bG8=\t", true);
     assert(decoded == "Hello");
-    assert(galay::utils::Base64Util::Base64CanDecode("\r\n\t ", true));
-    assert(!galay::utils::Base64Util::Base64CanDecode("\r\n\t ", false));
-    assert(galay::utils::Base64Util::Base64Decode("\r\n\t ", true).empty());
+    assert(galay::utils::Base64Util::base64_can_decode("\r\n\t ", true));
+    assert(!galay::utils::Base64Util::base64_can_decode("\r\n\t ", false));
+    assert(galay::utils::Base64Util::base64_decode("\r\n\t ", true).empty());
 }
 
 void test_bytes_owned_c_str_is_nul_terminated()

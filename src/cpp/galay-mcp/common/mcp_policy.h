@@ -42,8 +42,8 @@ struct McpTimeoutPolicy {
     std::chrono::milliseconds request_timeout{0}; ///< 普通请求超时，0表示禁用
     std::chrono::milliseconds initialize_timeout{0}; ///< initialize请求超时，0表示禁用
 
-    bool requestTimeoutEnabled() const noexcept { return request_timeout > std::chrono::milliseconds::zero(); }
-    bool initializeTimeoutEnabled() const noexcept { return initialize_timeout > std::chrono::milliseconds::zero(); }
+    bool request_timeout_enabled() const noexcept { return request_timeout > std::chrono::milliseconds::zero(); }
+    bool initialize_timeout_enabled() const noexcept { return initialize_timeout > std::chrono::milliseconds::zero(); }
 };
 
 /**

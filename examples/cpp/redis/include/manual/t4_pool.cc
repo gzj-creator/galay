@@ -39,7 +39,7 @@ Task<void> test_basic_connection_pool(IOScheduler* scheduler)
     std::cout << "   [PASSED] Pool initialized" << std::endl;
 
     // 获取统计信息
-    auto stats = pool.getStats();
+    auto stats = pool.get_stats();
     std::cout << "   Initial stats: total=" << stats.total_connections
               << ", available=" << stats.available_connections << std::endl;
 
@@ -69,8 +69,8 @@ Task<void> test_basic_connection_pool(IOScheduler* scheduler)
     auto ping_result = co_await redis_client->command(command_builder.ping());
     if (ping_result && ping_result.value()) {
         auto& values = ping_result.value().value();
-        if (!values.empty() && values[0].isString()) {
-            std::cout << "   [PASSED] PING response: " << values[0].toString() << std::endl;
+        if (!values.empty() && values[0].is_string()) {
+            std::cout << "   [PASSED] PING response: " << values[0].to_string() << std::endl;
         }
     } else {
         std::cerr << "   [FAILED] PING failed" << std::endl;
@@ -81,7 +81,7 @@ Task<void> test_basic_connection_pool(IOScheduler* scheduler)
     pool.release(conn);
     std::cout << "   [PASSED] Connection released" << std::endl;
 
-    stats = pool.getStats();
+    stats = pool.get_stats();
     std::cout << "   After release: total=" << stats.total_connections
               << ", available=" << stats.available_connections << std::endl;
 
@@ -132,13 +132,13 @@ Task<void> test_scoped_connection(IOScheduler* scheduler)
             std::cout << "   [PASSED] SET command succeeded" << std::endl;
         }
 
-        auto stats = pool.getStats();
+        auto stats = pool.get_stats();
         std::cout << "   Inside scope: available=" << stats.available_connections << std::endl;
 
         // 离开作用域，连接自动归还
     }
 
-    auto stats = pool.getStats();
+    auto stats = pool.get_stats();
     std::cout << "   After scope: available=" << stats.available_connections << std::endl;
     std::cout << "   [PASSED] Connection auto-released" << std::endl;
 
@@ -214,7 +214,7 @@ Task<void> test_concurrency(IOScheduler* scheduler)
 
     // 启动多个并发客户端
     for (int i = 0; i < kConcurrentClients; ++i) {
-        scheduleTask(scheduler,
+        schedule_task(scheduler,
                      test_concurrent_acquire(scheduler, i, pool, failure_count, remaining, done_waiter));
     }
 
@@ -225,7 +225,7 @@ Task<void> test_concurrency(IOScheduler* scheduler)
         co_return;
     }
 
-    auto stats = pool.getStats();
+    auto stats = pool.get_stats();
     std::cout << "\n2. Final statistics:" << std::endl;
     std::cout << "   Total connections: " << stats.total_connections << std::endl;
     std::cout << "   Available: " << stats.available_connections << std::endl;
@@ -266,7 +266,7 @@ Task<void> test_pool_expansion(IOScheduler* scheduler)
         co_return;
     }
 
-    auto stats = pool.getStats();
+    auto stats = pool.get_stats();
     std::cout << "1. Initial pool size: " << stats.total_connections << std::endl;
 
     // 获取多个连接，触发扩容
@@ -277,13 +277,13 @@ Task<void> test_pool_expansion(IOScheduler* scheduler)
         auto conn_result = co_await pool.acquire();
         if (conn_result) {
             connections.push_back(conn_result.value());
-            stats = pool.getStats();
+            stats = pool.get_stats();
             std::cout << "   Acquired connection " << (i + 1)
                       << ", pool size: " << stats.total_connections << std::endl;
         }
     }
 
-    stats = pool.getStats();
+    stats = pool.get_stats();
     std::cout << "\n3. After expansion:" << std::endl;
     std::cout << "   Total connections: " << stats.total_connections << std::endl;
     std::cout << "   Available: " << stats.available_connections << std::endl;
@@ -301,7 +301,7 @@ Task<void> test_pool_expansion(IOScheduler* scheduler)
         pool.release(conn);
     }
 
-    stats = pool.getStats();
+    stats = pool.get_stats();
     std::cout << "   After release: available=" << stats.available_connections << std::endl;
 
     pool.shutdown();
@@ -333,7 +333,7 @@ Task<void> test_health_check(IOScheduler* scheduler)
     }
 
     std::cout << "1. Starting health check task..." << std::endl;
-    pool.triggerHealthCheck();
+    pool.trigger_health_check();
 
     // 等待健康检查运行（使用简单的循环代替 sleep）
     std::cout << "2. Waiting for health checks..." << std::endl;
@@ -341,7 +341,7 @@ Task<void> test_health_check(IOScheduler* scheduler)
         // 简单的延迟
     }
 
-    auto stats = pool.getStats();
+    auto stats = pool.get_stats();
     std::cout << "\n3. Health check statistics:" << std::endl;
     std::cout << "   Total connections: " << stats.total_connections << std::endl;
     std::cout << "   Health check failures: " << stats.health_check_failures << std::endl;
@@ -390,7 +390,7 @@ Task<void> test_statistics(IOScheduler* scheduler)
         }
     }
 
-    auto stats = pool.getStats();
+    auto stats = pool.get_stats();
     std::cout << "\n2. Final statistics:" << std::endl;
     std::cout << "   ┌─────────────────────────────────────┐" << std::endl;
     std::cout << "   │ Connection Pool Statistics          │" << std::endl;
@@ -416,7 +416,7 @@ Task<void> test_statistics(IOScheduler* scheduler)
     std::cout << "========================================\n" << std::endl;
 }
 
-Task<void> runAllConnectionPoolTests(IOScheduler* scheduler, std::promise<void>* all_done)
+Task<void> run_all_connection_pool_tests(IOScheduler* scheduler, std::promise<void>* all_done)
 {
     co_await test_basic_connection_pool(scheduler);
     co_await test_scoped_connection(scheduler);
@@ -438,7 +438,7 @@ int main()
         Runtime runtime;
         runtime.start();
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             std::cerr << "Failed to get IO scheduler" << std::endl;
             return 1;
@@ -447,7 +447,7 @@ int main()
         std::promise<void> all_done_promise;
         auto all_done_future = all_done_promise.get_future();
 
-        scheduleTask(scheduler, runAllConnectionPoolTests(scheduler, &all_done_promise));
+        schedule_task(scheduler, run_all_connection_pool_tests(scheduler, &all_done_promise));
         auto wait_status = all_done_future.wait_for(std::chrono::seconds(90));
         if (wait_status != std::future_status::ready) {
             std::cerr << "Connection pool tests timed out" << std::endl;

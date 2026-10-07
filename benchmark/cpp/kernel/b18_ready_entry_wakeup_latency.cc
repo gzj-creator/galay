@@ -40,12 +40,12 @@ namespace {
 constexpr int kWarmupSamples = 512;
 constexpr int kMeasuredSamples = 5000;
 
-int64_t nowNanoseconds() {
+int64_t now_nanoseconds() {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-bool waitUntil(auto&& predicate,
+bool wait_until(auto&& predicate,
                std::chrono::milliseconds timeout = 2000ms,
                std::chrono::milliseconds step = 1ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -122,8 +122,8 @@ private:
                 pending_ = nullptr;
             }
 
-            state->submitted_ns.store(nowNanoseconds(), std::memory_order_release);
-            state->waker.wakeUp();
+            state->submitted_ns.store(now_nanoseconds(), std::memory_order_release);
+            state->waker.wake_up();
         }
     }
 
@@ -149,15 +149,15 @@ struct ManualSuspendAwaitable {
     void await_resume() const noexcept {}
 };
 
-Task<void> measuredWakeTask(SampleState* state) {
+Task<void> measured_wake_task(SampleState* state) {
     co_await ManualSuspendAwaitable{state};
     const int64_t submitted = state->submitted_ns.load(std::memory_order_acquire);
-    state->latency_ns.store(nowNanoseconds() - submitted, std::memory_order_release);
+    state->latency_ns.store(now_nanoseconds() - submitted, std::memory_order_release);
     state->done.store(true, std::memory_order_release);
     co_return;
 }
 
-double percentileMicros(const std::vector<int64_t>& sorted_ns, double percentile) {
+double percentile_micros(const std::vector<int64_t>& sorted_ns, double percentile) {
     if (sorted_ns.empty()) {
         return 0.0;
     }
@@ -166,17 +166,17 @@ double percentileMicros(const std::vector<int64_t>& sorted_ns, double percentile
     return static_cast<double>(sorted_ns[index]) / 1000.0;
 }
 
-bool runSamples(IOScheduler* scheduler,
+bool run_samples(IOScheduler* scheduler,
                 ReusableWakeProducer& producer,
                 int samples,
                 std::vector<int64_t>* latencies) {
     for (int i = 0; i < samples; ++i) {
         SampleState state;
-        if (!scheduleTask(*scheduler, measuredWakeTask(&state))) {
+        if (!schedule_task(*scheduler, measured_wake_task(&state))) {
             std::cerr << "[B18] failed to schedule sample task\n";
             return false;
         }
-        if (!waitUntil([&]() { return state.armed.load(std::memory_order_acquire); })) {
+        if (!wait_until([&]() { return state.armed.load(std::memory_order_acquire); })) {
             std::cerr << "[B18] sample task did not arm waker\n";
             return false;
         }
@@ -186,7 +186,7 @@ bool runSamples(IOScheduler* scheduler,
             return false;
         }
 
-        if (!waitUntil([&]() { return state.done.load(std::memory_order_acquire); })) {
+        if (!wait_until([&]() { return state.done.load(std::memory_order_acquire); })) {
             std::cerr << "[B18] sample task did not resume\n";
             return false;
         }
@@ -200,7 +200,7 @@ bool runSamples(IOScheduler* scheduler,
 }  // namespace
 
 int main() {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -215,7 +215,7 @@ int main() {
     return 0;
 #endif
 
-    auto runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    auto runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
 
     auto started = runtime.start();
     if (!started.has_value()) {
@@ -223,9 +223,9 @@ int main() {
         return 1;
     }
 
-    auto* scheduler_ptr = runtime.getIOScheduler(0);
+    auto* scheduler_ptr = runtime.get_io_scheduler(0);
     ReusableWakeProducer producer;
-    if (!runSamples(scheduler_ptr, producer, kWarmupSamples, nullptr)) {
+    if (!run_samples(scheduler_ptr, producer, kWarmupSamples, nullptr)) {
         runtime.stop();
         return 1;
     }
@@ -233,7 +233,7 @@ int main() {
     std::vector<int64_t> latencies;
     latencies.reserve(kMeasuredSamples);
     const auto bench_start = std::chrono::steady_clock::now();
-    if (!runSamples(scheduler_ptr, producer, kMeasuredSamples, &latencies)) {
+    if (!run_samples(scheduler_ptr, producer, kMeasuredSamples, &latencies)) {
         runtime.stop();
         return 1;
     }
@@ -259,9 +259,9 @@ int main() {
     std::cout << std::fixed << std::setprecision(2)
               << "[ReadyEntryWakeupLatency] samples=" << latencies.size()
               << ", avg=" << avg_us << "us"
-              << ", p50=" << percentileMicros(latencies, 50.0) << "us"
-              << ", p90=" << percentileMicros(latencies, 90.0) << "us"
-              << ", p99=" << percentileMicros(latencies, 99.0) << "us"
+              << ", p50=" << percentile_micros(latencies, 50.0) << "us"
+              << ", p90=" << percentile_micros(latencies, 90.0) << "us"
+              << ", p99=" << percentile_micros(latencies, 99.0) << "us"
               << ", sampled_wakes_per_sec=" << std::setprecision(0)
               << sampled_wakes_per_sec << "\n";
     return 0;

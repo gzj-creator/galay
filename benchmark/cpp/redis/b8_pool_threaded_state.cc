@@ -29,7 +29,7 @@ constexpr int kIterationsPerWorker = 2000;
 constexpr size_t kSeedConnections = 64;
 
 template <typename T>
-void addCounter(std::atomic<T>& counter, T delta = T{1}) noexcept
+void add_counter(std::atomic<T>& counter, T delta = T{1}) noexcept
 requires std::is_integral_v<T>
 {
     const T previous = counter.fetch_add(delta, std::memory_order_acq_rel);
@@ -52,7 +52,7 @@ struct BenchmarkResult {
     int notify_failures = 0;
 };
 
-Task<void> poolWorker(RedisConnectionPool* pool,
+Task<void> pool_worker(RedisConnectionPool* pool,
                       BenchmarkState* state,
                       std::shared_ptr<std::atomic<int>> remaining,
                       std::shared_ptr<AsyncWaiter<void>> done_waiter)
@@ -68,7 +68,7 @@ Task<void> poolWorker(RedisConnectionPool* pool,
         }
 
         auto conn = acquired.value();
-        if (!conn || conn->isClosed() || !conn->isHealthy()) {
+        if (!conn || conn->is_closed() || !conn->is_healthy()) {
             ++local_failures;
         } else {
             ++local_completed_ops;
@@ -76,20 +76,20 @@ Task<void> poolWorker(RedisConnectionPool* pool,
         pool->release(conn);
     }
 
-    addCounter(state->failures, local_failures);
-    addCounter(state->completed_ops, local_completed_ops);
+    add_counter(state->failures, local_failures);
+    add_counter(state->completed_ops, local_completed_ops);
 
     const int previous = remaining->fetch_sub(1, std::memory_order_acq_rel);
     if (previous == 1) {
         const bool notified = done_waiter->notify();
         if (!notified) {
-            addCounter(state->notify_failures);
+            add_counter(state->notify_failures);
         }
     }
     co_return;
 }
 
-Task<void> runBenchmark(IOScheduler** schedulers,
+Task<void> run_benchmark(IOScheduler** schedulers,
                         std::promise<std::expected<BenchmarkResult, std::string>>* result_promise)
 {
     ConnectionPoolConfig config = ConnectionPoolConfig::create("127.0.0.1", 6379, 0, kSeedConnections);
@@ -104,13 +104,13 @@ Task<void> runBenchmark(IOScheduler** schedulers,
     }
 
     for (size_t i = 0; i < kSeedConnections; ++i) {
-        auto conn = pool.createConnectionSlot();
+        auto conn = pool.create_connection_slot();
         if (!conn) {
             result_promise->set_value(std::unexpected("failed to create seeded pool connection"));
             co_return;
         }
-        conn->setHealthy(true);
-        const bool returned = pool.returnToAvailable(conn);
+        conn->set_healthy(true);
+        const bool returned = pool.return_to_available(conn);
         if (!returned) {
             result_promise->set_value(std::unexpected("failed to seed pool idle queue"));
             co_return;
@@ -128,9 +128,9 @@ Task<void> runBenchmark(IOScheduler** schedulers,
             result_promise->set_value(std::unexpected("missing scheduler for worker"));
             co_return;
         }
-        const bool scheduled = scheduleTask(
+        const bool scheduled = schedule_task(
             scheduler,
-            poolWorker(&pool, &state, remaining, done_waiter));
+            pool_worker(&pool, &state, remaining, done_waiter));
         if (!scheduled) {
             result_promise->set_value(std::unexpected("failed to schedule pool worker"));
             co_return;
@@ -145,7 +145,7 @@ Task<void> runBenchmark(IOScheduler** schedulers,
     }
 
     BenchmarkResult result;
-    result.stats = pool.getStats();
+    result.stats = pool.get_stats();
     result.elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(finished - started);
     result.completed_ops = state.completed_ops.load(std::memory_order_acquire);
     result.failures = state.failures.load(std::memory_order_acquire);
@@ -159,13 +159,13 @@ Task<void> runBenchmark(IOScheduler** schedulers,
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(kSchedulerCount)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(kSchedulerCount)
+        .parallel_scheduler_count(0)
         .build();
     auto started = runtime.start();
     if (!started) {
@@ -175,7 +175,7 @@ int main()
 
     IOScheduler* schedulers[kSchedulerCount] = {};
     for (int i = 0; i < kSchedulerCount; ++i) {
-        schedulers[i] = runtime.getNextIOScheduler();
+        schedulers[i] = runtime.get_next_io_scheduler();
         if (schedulers[i] == nullptr) {
             runtime.stop();
             std::cerr << "failed to get IO scheduler\n";
@@ -185,7 +185,7 @@ int main()
 
     std::promise<std::expected<BenchmarkResult, std::string>> result_promise;
     auto result_future = result_promise.get_future();
-    const bool scheduled = scheduleTask(schedulers[0], runBenchmark(schedulers, &result_promise));
+    const bool scheduled = schedule_task(schedulers[0], run_benchmark(schedulers, &result_promise));
     if (!scheduled) {
         runtime.stop();
         std::cerr << "failed to schedule benchmark\n";

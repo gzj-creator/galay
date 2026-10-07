@@ -43,10 +43,10 @@ struct AsyncBenchmarkResult
 };
 
 [[nodiscard]] std::expected<AsyncBenchmarkResult, std::string>
-runAsyncBenchmark(const AsyncBenchmarkArgs& args);
+run_async_benchmark(const AsyncBenchmarkArgs& args);
 
-[[nodiscard]] const char* toString(AsyncBenchmarkMode mode) noexcept;
-[[nodiscard]] std::expected<AsyncBenchmarkMode, std::string> parseAsyncBenchmarkMode(const std::string& value);
+[[nodiscard]] const char* to_string(AsyncBenchmarkMode mode) noexcept;
+[[nodiscard]] std::expected<AsyncBenchmarkMode, std::string> parse_async_benchmark_mode(const std::string& value);
 [[nodiscard]] double percentile(std::vector<int64_t> samples_us, double p);
 
 } // namespace galay::etcd::benchmark

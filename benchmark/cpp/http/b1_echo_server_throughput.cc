@@ -34,29 +34,29 @@ static constexpr std::string_view kPlainTextOkResponse =
     "\r\n"
     "OK";
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
 /**
  * @brief HTTP 请求处理器 - 简单的 OK 响应
  */
-Task<void> handleHttpRequest(HttpConn conn) {
-    auto reader = conn.getReader();
-    auto writer = conn.getWriter();
+Task<void> handle_http_request(HttpConn conn) {
+    auto reader = conn.get_reader();
+    auto writer = conn.get_writer();
 
     while(true) {
         HttpRequest request;
 
         while (true) {
-            auto read_result = co_await reader.getRequest(request);
+            auto read_result = co_await reader.get_request(request);
             if (!read_result) {
                 co_return;
             }
             if (read_result.value()) break;
         }
 
-        auto result = co_await writer.sendView(kPlainTextOkResponse);
+        auto result = co_await writer.send_view(kPlainTextOkResponse);
         if (!result) {
             co_return;
         }
@@ -66,7 +66,7 @@ Task<void> handleHttpRequest(HttpConn conn) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -94,19 +94,19 @@ int main(int argc, char* argv[]) {
     std::cout << "\nPress Ctrl+C to stop\n";
     std::cout << "========================================\n\n";
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     try {
         HttpServer server(HttpServerBuilder()
             .host("0.0.0.0")
             .port(port)
-            .ioSchedulerCount(static_cast<size_t>(io_threads))
-            .parallelSchedulerCount(0)
+            .io_scheduler_count(static_cast<size_t>(io_threads))
+            .parallel_scheduler_count(0)
             .build());
 
 
-        server.start(handleHttpRequest);
+        server.start(handle_http_request);
 
         std::cout << "Server started successfully!\n";
         std::cout << "Waiting for requests...\n\n";

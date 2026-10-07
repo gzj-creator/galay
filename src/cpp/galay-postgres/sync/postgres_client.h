@@ -70,21 +70,21 @@ public:
         std::span<const uint32_t> parameter_types = {});
     PostgresResult execute(std::string_view name,
                            const std::vector<std::optional<std::string>>& params);
-    PostgresVoidResult closePrepared(std::string_view name);
+    PostgresVoidResult close_prepared(std::string_view name);
 
-    PostgresVoidResult beginTransaction();
+    PostgresVoidResult begin_transaction();
     PostgresVoidResult commit();
     PostgresVoidResult rollback();
     PostgresVoidResult ping();
 
     void close() noexcept;
-    [[nodiscard]] bool isConnected() const noexcept { return m_connected; }
-    [[nodiscard]] char transactionStatus() const noexcept { return m_transaction_status; }
-    [[nodiscard]] const std::unordered_map<std::string, std::string>& serverParameters() const noexcept
+    [[nodiscard]] bool is_connected() const noexcept { return m_connected; }
+    [[nodiscard]] char transaction_status() const noexcept { return m_transaction_status; }
+    [[nodiscard]] const std::unordered_map<std::string, std::string>& server_parameters() const noexcept
     {
         return m_server_parameters;
     }
-    [[nodiscard]] const std::optional<protocol::BackendKeyDataInfo>& backendKeyData() const noexcept
+    [[nodiscard]] const std::optional<protocol::BackendKeyDataInfo>& backend_key_data() const noexcept
     {
         return m_backend_key_data;
     }
@@ -98,18 +98,18 @@ private:
 
     static constexpr size_t kRecvBufferCapacity = 256 * 1024;
 
-    PostgresVoidResult connectSocket(const std::string& host,
+    PostgresVoidResult connect_socket(const std::string& host,
                                      uint16_t port,
                                      uint32_t timeout_ms,
                                      bool tcp_no_delay);
-    void closeSocket() noexcept;
-    PostgresVoidResult sendAll(std::string_view data);
-    PostgresVoidResult sendAllv(std::span<const struct iovec> iovecs);
-    PostgresVoidResult recvIntoRingBuffer();
-    std::expected<std::optional<Message>, PostgresError> tryExtractMessage();
-    std::expected<Message, PostgresError> recvMessage();
-    PostgresResult receiveResultUntilReady();
-    PostgresVoidResult runSimpleStatement(std::string_view sql);
+    void close_socket() noexcept;
+    PostgresVoidResult send_all(std::string_view data);
+    PostgresVoidResult send_allv(std::span<const struct iovec> iovecs);
+    PostgresVoidResult recv_into_ring_buffer();
+    std::expected<std::optional<Message>, PostgresError> try_extract_message();
+    std::expected<Message, PostgresError> recv_message();
+    PostgresResult receive_result_until_ready();
+    PostgresVoidResult run_simple_statement(std::string_view sql);
 
     galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap,
                              std::dynamic_extent> m_recv_ring_buffer;

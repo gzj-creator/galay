@@ -1,7 +1,7 @@
 /**
  * @file t70_smbridge.cc
  * @brief 用途：验证 builder 的状态机入口与链式 build 桥接都能落到共享状态机内核。
- * 关键覆盖点：`AwaitableBuilder<ResultT>::fromStateMachine(...).build()`、
+ * 关键覆盖点：`AwaitableBuilder<ResultT>::from_state_machine(...).build()`、
  * 链式 `recv.parse.send.build()` 不再直接返回旧 `SequenceAwaitable` 路径。
  * 通过条件：状态机入口运行成功，且链式 build 的类型桥接静态断言成立。
  */
@@ -45,10 +45,10 @@ struct ReadOnceMachine {
         if (m_result.has_value()) {
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
-        return MachineAction<result_type>::waitRead(m_buffer, sizeof(m_buffer));
+        return MachineAction<result_type>::wait_read(m_buffer, sizeof(m_buffer));
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
             m_result = std::unexpected(result.error());
             return;
@@ -56,7 +56,7 @@ struct ReadOnceMachine {
         m_result = std::string(m_buffer, result.value());
     }
 
-    void onWrite(std::expected<size_t, IOError>) {}
+    void on_write(std::expected<size_t, IOError>) {}
 
 private:
     char m_buffer[8]{};
@@ -67,22 +67,22 @@ struct ChainSurfaceFlow {
     std::array<char, 8> scratch{};
     std::array<char, 4> reply{'p', 'o', 'n', 'g'};
 
-    void onRecv(SequenceOps<BuilderResult, 4>&, RecvIOContext&) {}
+    void on_recv(SequenceOps<BuilderResult, 4>&, RecvIOContext&) {}
 
-    ParseStatus onParse(SequenceOps<BuilderResult, 4>&) {
+    ParseStatus on_parse(SequenceOps<BuilderResult, 4>&) {
         return ParseStatus::kCompleted;
     }
 
-    void onSend(SequenceOps<BuilderResult, 4>& ops, SendIOContext&) {
+    void on_send(SequenceOps<BuilderResult, 4>& ops, SendIOContext&) {
         ops.complete(std::string("pong"));
     }
 };
 
 using ChainedAwaitableT = decltype(
     std::declval<AwaitableBuilder<BuilderResult, 4, ChainSurfaceFlow>&>()
-        .template recv<&ChainSurfaceFlow::onRecv>(std::declval<char*>(), std::declval<size_t>())
-        .template parse<&ChainSurfaceFlow::onParse>()
-        .template send<&ChainSurfaceFlow::onSend>(std::declval<const char*>(), std::declval<size_t>())
+        .template recv<&ChainSurfaceFlow::on_recv>(std::declval<char*>(), std::declval<size_t>())
+        .template parse<&ChainSurfaceFlow::on_parse>()
+        .template send<&ChainSurfaceFlow::on_send>(std::declval<const char*>(), std::declval<size_t>())
         .build()
 );
 
@@ -96,9 +96,9 @@ struct TestState {
     std::atomic<bool> success{false};
 };
 
-Task<void> builderTask(TestState* state, int fd) {
+Task<void> builder_task(TestState* state, int fd) {
     IOController controller(GHandle{.fd = fd});
-    auto awaitable = AwaitableBuilder<BuilderResult>::fromStateMachine(
+    auto awaitable = AwaitableBuilder<BuilderResult>::from_state_machine(
         &controller,
         ReadOnceMachine{}
     ).build();
@@ -108,20 +108,20 @@ Task<void> builderTask(TestState* state, int fd) {
     state->done.store(true, std::memory_order_release);
 }
 
-[[maybe_unused]] Task<void> chainedBuilderSurfaceTask(int fd) {
+[[maybe_unused]] Task<void> chained_builder_surface_task(int fd) {
     IOController controller(GHandle{.fd = fd});
     ChainSurfaceFlow flow;
     auto awaitable = AwaitableBuilder<BuilderResult, 4, ChainSurfaceFlow>(&controller, flow)
-        .recv<&ChainSurfaceFlow::onRecv>(flow.scratch.data(), flow.scratch.size())
-        .parse<&ChainSurfaceFlow::onParse>()
-        .send<&ChainSurfaceFlow::onSend>(flow.reply.data(), flow.reply.size())
+        .recv<&ChainSurfaceFlow::on_recv>(flow.scratch.data(), flow.scratch.size())
+        .parse<&ChainSurfaceFlow::on_parse>()
+        .send<&ChainSurfaceFlow::on_send>(flow.reply.data(), flow.reply.size())
         .build();
 
     auto result = co_await awaitable;
     (void)result;
 }
 
-bool waitUntil(const std::atomic<bool>& flag,
+bool wait_until(const std::atomic<bool>& flag,
                std::chrono::milliseconds timeout = 1000ms,
                std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -147,11 +147,11 @@ int main() {
     scheduler.start();
 
     TestState state;
-    scheduleTask(scheduler, builderTask(&state, fds[0]));
+    schedule_task(scheduler, builder_task(&state, fds[0]));
     constexpr char payload[] = "hello";
     ::send(fds[1], payload, sizeof(payload) - 1, 0);
 
-    const bool completed = waitUntil(state.done);
+    const bool completed = wait_until(state.done);
     scheduler.stop();
     close(fds[0]);
     close(fds[1]);

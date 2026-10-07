@@ -10,7 +10,7 @@
 using namespace galay::http;
 using namespace galay::kernel;
 
-static std::string normalizeMountPrefix(std::string prefix) {
+static std::string normalize_mount_prefix(std::string prefix) {
     if (prefix.empty()) {
         return "/static";
     }
@@ -57,17 +57,17 @@ int main(int argc, char* argv[]) {
     bool mount_enabled = !(mount_prefix == "off" || mount_prefix == "none" ||
                            mount_dir == "off" || mount_dir == "none");
     if (mount_enabled) {
-        mount_prefix = normalizeMountPrefix(mount_prefix);
+        mount_prefix = normalize_mount_prefix(mount_prefix);
     }
 
     HttpRouter router;
     if (mount_enabled) {
         if (use_nginx_try_files) {
-            router.tryFiles(mount_prefix, mount_dir, upstream_host, upstream_port,
+            router.try_files(mount_prefix, mount_dir, upstream_host, upstream_port,
                             StaticFileSetting(),
                             use_raw_proxy ? ProxyMode::Raw : ProxyMode::Http);
         } else if (use_mount_hardly) {
-            router.mountHardly(mount_prefix, mount_dir);
+            router.mount_hardly(mount_prefix, mount_dir);
         } else {
             router.mount(mount_prefix, mount_dir);
         }
@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
     HttpServer server(HttpServerBuilder()
         .host("0.0.0.0")
         .port(listen_port)
-        .ioSchedulerCount(2)
+        .io_scheduler_count(2)
         .build());
     std::cout << "Proxy listen : http://127.0.0.1:" << listen_port << "\n";
     std::cout << "Proxy target : http://" << upstream_host << ":" << upstream_port << "\n";
@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
     }
     server.start(std::move(router));
 
-    while (server.isRunning()) {
+    while (server.is_running()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 

@@ -47,30 +47,30 @@ struct ServerStartupState {
     std::atomic<int> failed{0};
 };
 
-bool configureBenchmarkTlsContext(SslContext& ctx) {
-    ctx.disableSessionCache();
-    ctx.setSessionTimeout(0);
-    ctx.disableSessionTickets();
-    return ctx.setCiphersuites("TLS_AES_128_GCM_SHA256").has_value();
+bool configure_benchmark_tls_context(SslContext& ctx) {
+    ctx.disable_session_cache();
+    ctx.set_session_timeout(0);
+    ctx.disable_session_tickets();
+    return ctx.set_ciphersuites("TLS_AES_128_GCM_SHA256").has_value();
 }
 
-std::unique_ptr<SslContext> createBenchmarkServerContext(const std::string& certFile,
+std::unique_ptr<SslContext> create_benchmark_server_context(const std::string& certFile,
                                                          const std::string& keyFile) {
     auto ctx = std::make_unique<SslContext>(SslMethod::TLS_1_3_Server);
-    if (!ctx->isValid()) {
+    if (!ctx->is_valid()) {
         return nullptr;
     }
 
-    if (!configureBenchmarkTlsContext(*ctx)) {
+    if (!configure_benchmark_tls_context(*ctx)) {
         return nullptr;
     }
 
-    auto certResult = ctx->loadCertificate(certFile);
+    auto certResult = ctx->load_certificate(certFile);
     if (!certResult) {
         return nullptr;
     }
 
-    auto keyResult = ctx->loadPrivateKey(keyFile);
+    auto keyResult = ctx->load_private_key(keyFile);
     if (!keyResult) {
         return nullptr;
     }
@@ -78,7 +78,7 @@ std::unique_ptr<SslContext> createBenchmarkServerContext(const std::string& cert
     return ctx;
 }
 
-bool parseInt(const char* text, int minValue, int* value) {
+bool parse_int(const char* text, int minValue, int* value) {
     int parsed = 0;
     const char* end = text + std::char_traits<char>::length(text);
     auto result = std::from_chars(text, end, parsed);
@@ -89,16 +89,16 @@ bool parseInt(const char* text, int minValue, int* value) {
     return true;
 }
 
-bool parsePort(const char* text, uint16_t* value) {
+bool parse_port(const char* text, uint16_t* value) {
     int parsed = 0;
-    if (!parseInt(text, 1, &parsed) || parsed > std::numeric_limits<uint16_t>::max()) {
+    if (!parse_int(text, 1, &parsed) || parsed > std::numeric_limits<uint16_t>::max()) {
         return false;
     }
     *value = static_cast<uint16_t>(parsed);
     return true;
 }
 
-void printUsage(const char* program) {
+void print_usage(const char* program) {
     std::cerr << "Usage: " << program
               << " <port> <cert_file> <key_file> [backlog] [worker_count]\n";
     std::cerr << "LONG_RUNNING: stop with SIGINT or SIGTERM after the matching client finishes.\n";
@@ -106,17 +106,17 @@ void printUsage(const char* program) {
 
 } // namespace
 
-void logErrno(const char* prefix) {
+void log_errno(const char* prefix) {
     std::cerr << prefix << ": errno=" << errno << " (" << std::strerror(errno) << ")" << std::endl;
 }
 
-void signalHandler(int) {
+void signal_handler(int) {
     g_running = false;
 }
 
-Task<void> handleClient(SslContext* ctx, GHandle handle) {
+Task<void> handle_client(SslContext* ctx, GHandle handle) {
     SslSocket client(ctx, handle);
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     auto handshakeResult = co_await client.handshake();
     if (!handshakeResult) {
@@ -152,7 +152,7 @@ Task<void> handleClient(SslContext* ctx, GHandle handle) {
     co_await client.close();
 }
 
-Task<void> sslServer(IOScheduler* scheduler,
+Task<void> ssl_server(IOScheduler* scheduler,
                      SslContext* ctx,
                      uint16_t port,
                      int backlog,
@@ -161,27 +161,27 @@ Task<void> sslServer(IOScheduler* scheduler,
                      ServerStartupState* startup) {
     SslSocket listener(ctx);
 
-    if (!listener.isValid()) {
+    if (!listener.is_valid()) {
         startup->failed.fetch_add(1, std::memory_order_relaxed);
         co_return;
     }
 
-    listener.option().handleReuseAddr();
+    listener.option().handle_reuse_addr();
     if (workerCount > 1) {
-        listener.option().handleReusePort();
+        listener.option().handle_reuse_port();
     }
-    listener.option().handleNonBlock();
+    listener.option().handle_non_block();
 
     auto bindResult = listener.bind(Host(IPType::IPV4, "0.0.0.0", port));
     if (!bindResult) {
-        logErrno("bind failed");
+        log_errno("bind failed");
         startup->failed.fetch_add(1, std::memory_order_relaxed);
         co_return;
     }
 
     auto listenResult = listener.listen(backlog);
     if (!listenResult) {
-        logErrno("listen failed");
+        log_errno("listen failed");
         startup->failed.fetch_add(1, std::memory_order_relaxed);
         co_return;
     }
@@ -194,10 +194,10 @@ Task<void> sslServer(IOScheduler* scheduler,
         Host clientHost;
         auto acceptResult = co_await listener.accept(&clientHost);
         if (!acceptResult) {
-            logErrno("accept failed");
+            log_errno("accept failed");
             continue;
         }
-        if (!scheduleTask(scheduler, handleClient(ctx, acceptResult.value()))) {
+        if (!schedule_task(scheduler, handle_client(ctx, acceptResult.value()))) {
             std::cerr << "spawn failed for client handler" << std::endl;
         }
     }
@@ -206,43 +206,43 @@ Task<void> sslServer(IOScheduler* scheduler,
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
-        printUsage(argv[0]);
+        print_usage(argv[0]);
         return 0;
     }
     if (argc < 4) {
-        printUsage(argv[0]);
+        print_usage(argv[0]);
         return 1;
     }
 
     uint16_t port = 0;
-    if (!parsePort(argv[1], &port)) {
-        printUsage(argv[0]);
+    if (!parse_port(argv[1], &port)) {
+        print_usage(argv[0]);
         return 1;
     }
     std::string certFile = argv[2];
     std::string keyFile = argv[3];
     int backlog = 4096;
     if (argc >= 5) {
-        if (!parseInt(argv[4], 128, &backlog)) {
-            printUsage(argv[0]);
+        if (!parse_int(argv[4], 128, &backlog)) {
+            print_usage(argv[0]);
             return 1;
         }
     }
     int workerCount = 1;
     if (argc >= 6) {
-        if (!parseInt(argv[5], 1, &workerCount)) {
-            printUsage(argv[0]);
+        if (!parse_int(argv[5], 1, &workerCount)) {
+            print_usage(argv[0]);
             return 1;
         }
     }
 
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
     signal(SIGPIPE, SIG_IGN);
 
     struct BenchWorker {
@@ -254,7 +254,7 @@ int main(int argc, char* argv[]) {
     workers.reserve(workerCount);
 
     for (int i = 0; i < workerCount; ++i) {
-        auto ctx = createBenchmarkServerContext(certFile, keyFile);
+        auto ctx = create_benchmark_server_context(certFile, keyFile);
         if (!ctx) {
             return 1;
         }
@@ -272,8 +272,8 @@ int main(int argc, char* argv[]) {
     int exit_code = 0;
     for (int i = 0; i < workerCount; ++i) {
         workers[static_cast<size_t>(i)].scheduler->start();
-        if (!scheduleTask(*workers[static_cast<size_t>(i)].scheduler,
-                          sslServer(workers[static_cast<size_t>(i)].scheduler.get(),
+        if (!schedule_task(*workers[static_cast<size_t>(i)].scheduler,
+                          ssl_server(workers[static_cast<size_t>(i)].scheduler.get(),
                                     workers[static_cast<size_t>(i)].ctx.get(),
                                     port,
                                     backlog,

@@ -33,14 +33,14 @@ struct Measurement
     bool sendOk = false;
 };
 
-Measurement runSample(size_t prefetchLimit, int producerCount)
+Measurement run_sample(size_t prefetchLimit, int producerCount)
 {
     using Channel = galay::mpsc::UnboundedChannel<int64_t>;
     Channel channel(Channel::DEFAULT_BATCH_SIZE, prefetchLimit);
     std::vector<Channel::ProducerToken> tokens;
     tokens.reserve(static_cast<size_t>(producerCount));
     for (int producer = 0; producer < producerCount; ++producer) {
-        auto token = channel.makeProducerToken();
+        auto token = channel.make_producer_token();
         if (!token.valid()) {
             return {};
         }
@@ -81,7 +81,7 @@ Measurement runSample(size_t prefetchLimit, int producerCount)
         uint64_t localEmptyRetries = 0;
         while (localReceived < kMessages &&
                !sendFailed.load(std::memory_order_acquire)) {
-            auto value = channel.tryRecv();
+            auto value = channel.try_recv();
             if (value.has_value()) {
                 ++localReceived;
                 localSum += *value;
@@ -123,10 +123,10 @@ bool valid(const Measurement& measurement)
         measurement.sendOk;
 }
 
-bool runCase(size_t prefetchLimit, int producerCount)
+bool run_case(size_t prefetchLimit, int producerCount)
 {
     for (int warmup = 0; warmup < kWarmupSamples; ++warmup) {
-        if (!valid(runSample(prefetchLimit, producerCount))) {
+        if (!valid(run_sample(prefetchLimit, producerCount))) {
             std::cerr << "mpsc prefetch warmup failed: producers=" << producerCount
                       << " prefetch=" << prefetchLimit << '\n';
             return false;
@@ -138,7 +138,7 @@ bool runCase(size_t prefetchLimit, int producerCount)
     throughput.reserve(kSamples);
     emptyRetries.reserve(kSamples);
     for (int sample = 0; sample < kSamples; ++sample) {
-        const Measurement measurement = runSample(prefetchLimit, producerCount);
+        const Measurement measurement = run_sample(prefetchLimit, producerCount);
         if (!valid(measurement)) {
             std::cerr << "mpsc prefetch sample failed: producers=" << producerCount
                       << " prefetch=" << prefetchLimit
@@ -156,9 +156,9 @@ bool runCase(size_t prefetchLimit, int producerCount)
               << " messages=" << kMessages
               << " samples=" << kSamples
               << " median_msg_s="
-              << galay::benchmark::medianElement(std::move(throughput))
+              << galay::benchmark::median_element(std::move(throughput))
               << " median_empty_retries="
-              << galay::benchmark::medianElement(std::move(emptyRetries))
+              << galay::benchmark::median_element(std::move(emptyRetries))
               << '\n';
     return true;
 }
@@ -167,7 +167,7 @@ bool runCase(size_t prefetchLimit, int producerCount)
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -175,7 +175,7 @@ int main()
     constexpr std::array<int, 2> kProducerCounts{2, 4};
     for (const int producerCount : kProducerCounts) {
         for (const size_t prefetchLimit : kPrefetchLimits) {
-            if (!runCase(prefetchLimit, producerCount)) {
+            if (!run_case(prefetchLimit, producerCount)) {
                 return 1;
             }
         }

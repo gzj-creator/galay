@@ -14,8 +14,8 @@ void test_parser() {
     {
         const char* data = "+OK\r\n";
         auto result = parser.parse(data, strlen(data));
-        if (result && result->second.isSimpleString()) {
-            std::cout << "✓ Simple String: " << result->second.asString() << std::endl;
+        if (result && result->second.is_simple_string()) {
+            std::cout << "✓ Simple String: " << result->second.as_string() << std::endl;
         } else {
             std::cout << "✗ Simple String test failed" << std::endl;
         }
@@ -25,8 +25,8 @@ void test_parser() {
     {
         const char* data = "-ERR unknown command\r\n";
         auto result = parser.parse(data, strlen(data));
-        if (result && result->second.isError()) {
-            std::cout << "✓ Error: " << result->second.asString() << std::endl;
+        if (result && result->second.is_error()) {
+            std::cout << "✓ Error: " << result->second.as_string() << std::endl;
         } else {
             std::cout << "✗ Error test failed" << std::endl;
         }
@@ -36,8 +36,8 @@ void test_parser() {
     {
         const char* data = ":1000\r\n";
         auto result = parser.parse(data, strlen(data));
-        if (result && result->second.isInteger()) {
-            std::cout << "✓ Integer: " << result->second.asInteger() << std::endl;
+        if (result && result->second.is_integer()) {
+            std::cout << "✓ Integer: " << result->second.as_integer() << std::endl;
         } else {
             std::cout << "✗ Integer test failed" << std::endl;
         }
@@ -47,8 +47,8 @@ void test_parser() {
     {
         const char* data = "$6\r\nfoobar\r\n";
         auto result = parser.parse(data, strlen(data));
-        if (result && result->second.isBulkString()) {
-            std::cout << "✓ Bulk String: " << result->second.asString() << std::endl;
+        if (result && result->second.is_bulk_string()) {
+            std::cout << "✓ Bulk String: " << result->second.as_string() << std::endl;
         } else {
             std::cout << "✗ Bulk String test failed" << std::endl;
         }
@@ -58,7 +58,7 @@ void test_parser() {
     {
         const char* data = "$-1\r\n";
         auto result = parser.parse(data, strlen(data));
-        if (result && result->second.isNull()) {
+        if (result && result->second.is_null()) {
             std::cout << "✓ Null value parsed correctly" << std::endl;
         } else {
             std::cout << "✗ Null value test failed" << std::endl;
@@ -69,12 +69,12 @@ void test_parser() {
     {
         const char* data = "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n";
         auto result = parser.parse(data, strlen(data));
-        if (result && result->second.isArray()) {
-            auto& arr = result->second.asArray();
+        if (result && result->second.is_array()) {
+            auto& arr = result->second.as_array();
             std::cout << "✓ Array with " << arr.size() << " elements:" << std::endl;
             for (const auto& elem : arr) {
-                if (elem.isBulkString()) {
-                    std::cout << "  - " << elem.asString() << std::endl;
+                if (elem.is_bulk_string()) {
+                    std::cout << "  - " << elem.as_string() << std::endl;
                 }
             }
         } else {
@@ -86,7 +86,7 @@ void test_parser() {
     {
         const char* data = "*2\r\n*2\r\n:1\r\n:2\r\n*2\r\n:3\r\n:4\r\n";
         auto result = parser.parse(data, strlen(data));
-        if (result && result->second.isArray()) {
+        if (result && result->second.is_array()) {
             std::cout << "✓ Nested array parsed correctly" << std::endl;
         } else {
             std::cout << "✗ Nested array test failed" << std::endl;
@@ -97,8 +97,8 @@ void test_parser() {
     {
         const char* data = "#t\r\n";
         auto result = parser.parse(data, strlen(data));
-        if (result && result->second.isBoolean()) {
-            std::cout << "✓ Boolean: " << (result->second.asBoolean() ? "true" : "false") << std::endl;
+        if (result && result->second.is_boolean()) {
+            std::cout << "✓ Boolean: " << (result->second.as_boolean() ? "true" : "false") << std::endl;
         } else {
             std::cout << "✗ Boolean test failed" << std::endl;
         }
@@ -108,8 +108,8 @@ void test_parser() {
     {
         const char* data = ",1.23\r\n";
         auto result = parser.parse(data, strlen(data));
-        if (result && result->second.isDouble()) {
-            std::cout << "✓ Double: " << result->second.asDouble() << std::endl;
+        if (result && result->second.is_double()) {
+            std::cout << "✓ Double: " << result->second.as_double() << std::endl;
         } else {
             std::cout << "✗ Double test failed" << std::endl;
         }
@@ -126,44 +126,44 @@ void test_encoder() {
 
     // 测试简单字符串
     {
-        std::string result = encoder.encodeSimpleString("OK");
+        std::string result = encoder.encode_simple_string("OK");
         std::cout << "Simple String: " << result;
     }
 
     // 测试错误
     {
-        std::string result = encoder.encodeError("ERR unknown command");
+        std::string result = encoder.encode_error("ERR unknown command");
         std::cout << "Error: " << result;
     }
 
     // 测试整数
     {
-        std::string result = encoder.encodeInteger(1000);
+        std::string result = encoder.encode_integer(1000);
         std::cout << "Integer: " << result;
     }
 
     // 测试批量字符串
     {
-        std::string result = encoder.encodeBulkString("foobar");
+        std::string result = encoder.encode_bulk_string("foobar");
         std::cout << "Bulk String: " << result;
     }
 
     // 测试空值
     {
-        std::string result = encoder.encodeNull();
+        std::string result = encoder.encode_null();
         std::cout << "Null: " << result;
     }
 
     // 测试数组
     {
         std::vector<std::string> arr = {"foo", "bar", "baz"};
-        std::string result = encoder.encodeArray(arr);
+        std::string result = encoder.encode_array(arr);
         std::cout << "Array: " << result;
     }
 
     // 测试命令
     {
-        std::string result = encoder.encodeCommand("SET", {"mykey", "myvalue"});
+        std::string result = encoder.encode_command("SET", {"mykey", "myvalue"});
         std::cout << "Command: " << result;
     }
 
@@ -180,10 +180,10 @@ void test_round_trip() {
     // 测试字符串往返
     {
         std::string original = "Hello, Redis!";
-        std::string encoded = encoder.encodeBulkString(original);
+        std::string encoded = encoder.encode_bulk_string(original);
         auto result = parser.parse(encoded.c_str(), encoded.length());
 
-        if (result && result->second.isBulkString() && result->second.asString() == original) {
+        if (result && result->second.is_bulk_string() && result->second.as_string() == original) {
             std::cout << "✓ String round trip successful" << std::endl;
         } else {
             std::cout << "✗ String round trip failed" << std::endl;
@@ -193,10 +193,10 @@ void test_round_trip() {
     // 测试整数往返
     {
         int64_t original = 12345;
-        std::string encoded = encoder.encodeInteger(original);
+        std::string encoded = encoder.encode_integer(original);
         auto result = parser.parse(encoded.c_str(), encoded.length());
 
-        if (result && result->second.isInteger() && result->second.asInteger() == original) {
+        if (result && result->second.is_integer() && result->second.as_integer() == original) {
             std::cout << "✓ Integer round trip successful" << std::endl;
         } else {
             std::cout << "✗ Integer round trip failed" << std::endl;
@@ -205,10 +205,10 @@ void test_round_trip() {
 
     // 测试命令编码后可以被解析
     {
-        std::string cmd = encoder.encodeCommand("GET", {"mykey"});
+        std::string cmd = encoder.encode_command("GET", {"mykey"});
         auto result = parser.parse(cmd.c_str(), cmd.length());
 
-        if (result && result->second.isArray() && result->second.asArray().size() == 2) {
+        if (result && result->second.is_array() && result->second.as_array().size() == 2) {
             std::cout << "✓ Command round trip successful" << std::endl;
         } else {
             std::cout << "✗ Command round trip failed" << std::endl;

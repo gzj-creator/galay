@@ -1,7 +1,7 @@
 /**
  * @file t106_epolllazysrc.cc
  * @brief 用途：锁定 epoll lazy registration 的源码边界。
- * 关键覆盖点：pending queue、flush 接口、`applyEvents(...)` 不直接 `epoll_ctl`。
+ * 关键覆盖点：pending queue、flush 接口、`apply_events(...)` 不直接 `epoll_ctl`。
  * 通过条件：源码包含延迟注册 token，且 event loop 会在稳定时机 flush。
  */
 
@@ -12,11 +12,11 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -25,11 +25,11 @@ std::string readAll(const std::filesystem::path& path) {
                        std::istreambuf_iterator<char>());
 }
 
-bool containsText(const std::string& haystack, const std::string& needle) {
+bool contains_text(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
-std::string extractFunction(const std::string& content,
+std::string extract_function(const std::string& content,
                             const std::string& signature) {
     const auto begin_pos = content.find(signature);
     if (begin_pos == std::string::npos) {
@@ -57,67 +57,67 @@ std::string extractFunction(const std::string& content,
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
+    const auto root = project_root();
     const auto epoll_header = root / "galay-kernel" / "core" / "epoll_reactor.h";
     const auto epoll_source = root / "galay-kernel" / "core" / "epoll_reactor.cc";
     const auto epoll_scheduler = root / "galay-kernel" / "core" / "epoll_scheduler.cc";
 
-    const std::string epoll_header_text = readAll(epoll_header);
-    const std::string epoll_source_text = readAll(epoll_source);
-    const std::string epoll_scheduler_text = readAll(epoll_scheduler);
+    const std::string epoll_header_text = read_all(epoll_header);
+    const std::string epoll_source_text = read_all(epoll_source);
+    const std::string epoll_scheduler_text = read_all(epoll_scheduler);
     if (epoll_header_text.empty() || epoll_source_text.empty() || epoll_scheduler_text.empty()) {
         std::cerr << "[T106] failed to read epoll source files\n";
         return 1;
     }
 
-    if (!containsText(epoll_header_text, "struct PendingChange")) {
+    if (!contains_text(epoll_header_text, "struct PendingChange")) {
         std::cerr << "[T106] expected EpollReactor to define PendingChange\n";
         return 1;
     }
-    if (!containsText(epoll_header_text, "int flushPendingChanges()")) {
-        std::cerr << "[T106] expected EpollReactor to expose flushPendingChanges()\n";
+    if (!contains_text(epoll_header_text, "int flush_pending_changes()")) {
+        std::cerr << "[T106] expected EpollReactor to expose flush_pending_changes()\n";
         return 1;
     }
-    if (!containsText(epoll_header_text, "std::vector<PendingChange> m_pending_changes")) {
+    if (!contains_text(epoll_header_text, "std::vector<PendingChange> m_pending_changes")) {
         std::cerr << "[T106] expected EpollReactor to keep pending change queue\n";
         return 1;
     }
-    if (!containsText(epoll_header_text, "BATCH_THRESHOLD")) {
+    if (!contains_text(epoll_header_text, "BATCH_THRESHOLD")) {
         std::cerr << "[T106] expected EpollReactor to keep a batch threshold\n";
         return 1;
     }
 
-    const std::string apply_events = extractFunction(
+    const std::string apply_events = extract_function(
         epoll_source_text,
-        "int EpollReactor::applyEvents(");
+        "int EpollReactor::apply_events(");
     if (apply_events.empty()) {
-        std::cerr << "[T106] failed to isolate EpollReactor::applyEvents\n";
+        std::cerr << "[T106] failed to isolate EpollReactor::apply_events\n";
         return 1;
     }
-    if (containsText(apply_events, "epoll_ctl(")) {
-        std::cerr << "[T106] expected applyEvents to stop calling epoll_ctl directly\n";
+    if (contains_text(apply_events, "epoll_ctl(")) {
+        std::cerr << "[T106] expected apply_events to stop calling epoll_ctl directly\n";
         return 1;
     }
-    if (!containsText(apply_events, "m_pending_changes.push_back")) {
-        std::cerr << "[T106] expected applyEvents to enqueue pending changes\n";
+    if (!contains_text(apply_events, "m_pending_changes.push_back")) {
+        std::cerr << "[T106] expected apply_events to enqueue pending changes\n";
         return 1;
     }
 
-    if (!containsText(epoll_source_text, "int EpollReactor::flushPendingChanges()")) {
-        std::cerr << "[T106] expected EpollReactor to implement flushPendingChanges()\n";
+    if (!contains_text(epoll_source_text, "int EpollReactor::flush_pending_changes()")) {
+        std::cerr << "[T106] expected EpollReactor to implement flush_pending_changes()\n";
         return 1;
     }
-    if (!containsText(epoll_source_text, "if (flushPendingChanges() < 0)")) {
+    if (!contains_text(epoll_source_text, "if (flush_pending_changes() < 0)")) {
         std::cerr << "[T106] expected poll() to flush pending changes before epoll_wait\n";
         return 1;
     }
-    if (!containsText(epoll_source_text, "erasePendingChange(index);")) {
+    if (!contains_text(epoll_source_text, "erase_pending_change(index);")) {
         std::cerr << "[T106] expected flush path to erase completed pending changes\n";
         return 1;
     }
 
-    if (!containsText(epoll_scheduler_text, "void EpollSchedulerBackend::flushBackend()") ||
-        !containsText(epoll_scheduler_text, "(void)m_reactor.flushPendingChanges();")) {
+    if (!contains_text(epoll_scheduler_text, "void EpollSchedulerBackend::flush_backend()") ||
+        !contains_text(epoll_scheduler_text, "(void)m_reactor.flush_pending_changes();")) {
         std::cerr << "[T106] expected EpollScheduler event loop to flush pending changes post-pass\n";
         return 1;
     }

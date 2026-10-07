@@ -42,7 +42,7 @@ inline Snapshot snapshot()
 }
 } // namespace alloc_stats
 
-size_t parsePositiveSize(const char* text, size_t fallback)
+size_t parse_positive_size(const char* text, size_t fallback)
 {
     if (text == nullptr || text[0] == '\0') {
         return fallback;
@@ -55,24 +55,24 @@ size_t parsePositiveSize(const char* text, size_t fallback)
     }
 }
 
-size_t loadAsyncFanout(int argc, char** argv)
+size_t load_async_fanout(int argc, char** argv)
 {
-    size_t fanout = parsePositiveSize(std::getenv("GALAY_MONGO_BENCH_ASYNC_FANOUT"), 1);
+    size_t fanout = parse_positive_size(std::getenv("GALAY_MONGO_BENCH_ASYNC_FANOUT"), 1);
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
         constexpr std::string_view prefix = "--fanout=";
         if (arg.rfind(prefix, 0) == 0) {
             const std::string value(arg.substr(prefix.size()));
-            fanout = parsePositiveSize(value.c_str(), fanout);
+            fanout = parse_positive_size(value.c_str(), fanout);
         }
     }
     if (argc > 9 && argv[9] != nullptr && argv[9][0] != '\0') {
-        fanout = parsePositiveSize(argv[9], fanout);
+        fanout = parse_positive_size(argv[9], fanout);
     }
     return fanout;
 }
 
-bool isFanoutArg(const char* arg)
+bool is_fanout_arg(const char* arg)
 {
     if (arg == nullptr) {
         return false;
@@ -136,7 +136,7 @@ struct AsyncBenchState
     std::mutex error_mutex;
     std::string first_error;
 
-    void setFirstError(std::string message)
+    void set_first_error(std::string message)
     {
         std::lock_guard<std::mutex> lock(error_mutex);
         if (first_error.empty()) {
@@ -145,26 +145,26 @@ struct AsyncBenchState
     }
 };
 
-Task<void> runWorker(IOScheduler* scheduler,
+Task<void> run_worker(IOScheduler* scheduler,
                      AsyncBenchState* state,
                      mongo_bench::BenchConfig cfg,
                      size_t worker_count)
 {
     auto client = AsyncMongoClientBuilder()
         .scheduler(scheduler)
-        .bufferSize(cfg.buffer_size)
+        .buffer_size(cfg.buffer_size)
         .build();
 
     std::vector<double> local_lat;
     local_lat.reserve((cfg.total_requests / worker_count) + 8);
 
     const std::expected<bool, MongoError> conn_result =
-        mongo_bench::unwrapMongoTaskResult(
-            co_await client.connect(mongo_bench::toMongoConfig(cfg)),
+        mongo_bench::unwrap_mongo_task_result(
+            co_await client.connect(mongo_bench::to_mongo_config(cfg)),
             MONGO_ERROR_CONNECTION);
     if (!conn_result) {
         state->error.fetch_add(1, std::memory_order_relaxed);
-        state->setFirstError("connect failed: " + conn_result.error().message());
+        state->set_first_error("connect failed: " + conn_result.error().message());
         state->done_workers.fetch_add(1, std::memory_order_release);
         co_return;
     }
@@ -178,7 +178,7 @@ Task<void> runWorker(IOScheduler* scheduler,
     if (cfg.mode == mongo_bench::BenchMode::Pipeline) {
         full_pipeline_builder.reserve(cfg.batch_size);
         for (size_t i = 0; i < cfg.batch_size; ++i) {
-            full_pipeline_builder.appendPing();
+            full_pipeline_builder.append_ping();
         }
         full_pipeline_commands = full_pipeline_builder.commands();
 
@@ -186,7 +186,7 @@ Task<void> runWorker(IOScheduler* scheduler,
         if (tail_batch_size > 0) {
             tail_pipeline_builder.reserve(tail_batch_size);
             for (size_t i = 0; i < tail_batch_size; ++i) {
-                tail_pipeline_builder.appendPing();
+                tail_pipeline_builder.append_ping();
             }
             tail_pipeline_commands = tail_pipeline_builder.commands();
         }
@@ -214,7 +214,7 @@ Task<void> runWorker(IOScheduler* scheduler,
                 : alloc_stats::Snapshot{};
             const auto t0 = std::chrono::steady_clock::now();
             const std::expected<MongoReply, MongoError> cmd_result =
-                mongo_bench::unwrapMongoTaskResult(co_await client.ping(cfg.database),
+                mongo_bench::unwrap_mongo_task_result(co_await client.ping(cfg.database),
                                                    MONGO_ERROR_COMMAND);
             const auto t1 = std::chrono::steady_clock::now();
             const auto alloc_after = cfg.alloc_stats
@@ -227,7 +227,7 @@ Task<void> runWorker(IOScheduler* scheduler,
 
             if (!cmd_result) {
                 ++local_error;
-                state->setFirstError("command failed: " + cmd_result.error().message());
+                state->set_first_error("command failed: " + cmd_result.error().message());
             } else {
                 ++local_ok;
             }
@@ -248,7 +248,7 @@ Task<void> runWorker(IOScheduler* scheduler,
         } else {
             dynamic_pipeline_builder.reserve(actual_batch);
             for (size_t i = 0; i < actual_batch; ++i) {
-                dynamic_pipeline_builder.appendPing();
+                dynamic_pipeline_builder.append_ping();
             }
             pipeline_commands = dynamic_pipeline_builder.commands();
         }
@@ -258,7 +258,7 @@ Task<void> runWorker(IOScheduler* scheduler,
             : alloc_stats::Snapshot{};
         const auto t0 = std::chrono::steady_clock::now();
         const std::expected<std::vector<MongoPipelineResponse>, MongoError> pipe_result =
-            mongo_bench::unwrapMongoTaskResult(
+            mongo_bench::unwrap_mongo_task_result(
                 co_await client.pipeline(cfg.database, pipeline_commands),
                 MONGO_ERROR_COMMAND);
         const auto t1 = std::chrono::steady_clock::now();
@@ -275,10 +275,10 @@ Task<void> runWorker(IOScheduler* scheduler,
 
         if (!pipe_result) {
             local_error += actual_batch;
-            state->setFirstError("pipeline failed: " + pipe_result.error().message());
+            state->set_first_error("pipeline failed: " + pipe_result.error().message());
         } else if (pipe_result->size() != actual_batch) {
             local_error += actual_batch;
-            state->setFirstError("pipeline response size mismatch");
+            state->set_first_error("pipeline response size mismatch");
         } else {
             for (const auto& item : *pipe_result) {
                 if (item.ok()) {
@@ -286,7 +286,7 @@ Task<void> runWorker(IOScheduler* scheduler,
                 } else {
                     ++local_error;
                     if (item.error.has_value()) {
-                        state->setFirstError("pipeline item failed: " + item.error->message());
+                        state->set_first_error("pipeline item failed: " + item.error->message());
                     }
                 }
             }
@@ -316,12 +316,12 @@ Task<void> runWorker(IOScheduler* scheduler,
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     if (argc > 1 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help")) {
-        mongo_bench::printUsage(argv[0]);
+        mongo_bench::print_usage(argv[0]);
         std::cout << "Async extra: --fanout=N or env GALAY_MONGO_BENCH_ASYNC_FANOUT (default 1)\n";
         return 0;
     }
@@ -330,27 +330,27 @@ int main(int argc, char** argv)
     filtered_argv.reserve(static_cast<size_t>(argc));
     filtered_argv.push_back(argv[0]);
     for (int i = 1; i < argc; ++i) {
-        if (isFanoutArg(argv[i])) {
+        if (is_fanout_arg(argv[i])) {
             continue;
         }
         filtered_argv.push_back(argv[i]);
     }
 
-    auto cfg = mongo_bench::loadBenchConfig();
-    if (!mongo_bench::parseArgs(
+    auto cfg = mongo_bench::load_bench_config();
+    if (!mongo_bench::parse_args(
             cfg,
             static_cast<int>(filtered_argv.size()),
             filtered_argv.data(),
             std::cerr)) {
-        mongo_bench::printUsage(argv[0]);
+        mongo_bench::print_usage(argv[0]);
         return 2;
     }
     if (cfg.batch_size == 0) {
         cfg.batch_size = 1;
     }
 
-    mongo_bench::printBenchConfig("B2-AsyncPingBench", cfg);
-    const size_t async_fanout = loadAsyncFanout(argc, argv);
+    mongo_bench::print_bench_config("B2-AsyncPingBench", cfg);
+    const size_t async_fanout = load_async_fanout(argc, argv);
     const size_t worker_count = cfg.concurrency * async_fanout;
     std::cout << "[B2-AsyncPingBench]"
               << " async_fanout=" << async_fanout
@@ -366,13 +366,13 @@ int main(int argc, char** argv)
     const auto start = std::chrono::steady_clock::now();
 
     for (size_t i = 0; i < worker_count; ++i) {
-        IOScheduler* scheduler = runtime.getNextIOScheduler();
+        IOScheduler* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             runtime.stop();
             std::cerr << "failed to get IO scheduler" << std::endl;
             return 1;
         }
-        if (!scheduleTask(scheduler, runWorker(scheduler, &state, cfg, worker_count))) {
+        if (!schedule_task(scheduler, run_worker(scheduler, &state, cfg, worker_count))) {
             runtime.stop();
             std::cerr << "failed to schedule benchmark worker" << std::endl;
             return 1;
@@ -397,7 +397,7 @@ int main(int argc, char** argv)
     const size_t err_count = state.error.load(std::memory_order_relaxed);
     const size_t attempted = state.attempted.load(std::memory_order_relaxed);
 
-    mongo_bench::printBenchReport(attempted,
+    mongo_bench::print_bench_report(attempted,
                                   ok_count,
                                   err_count,
                                   duration_ms,

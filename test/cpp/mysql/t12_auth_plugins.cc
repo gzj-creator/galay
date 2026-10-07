@@ -45,26 +45,26 @@ struct AsyncState {
     std::string message;
 };
 
-AuthMatrixConfig loadAuthMatrixConfig()
+AuthMatrixConfig load_auth_matrix_config()
 {
     AuthMatrixConfig cfg;
-    cfg.host = mysql_test::getEnvOrDefault("GALAY_MYSQL_AUTH_HOST", "GALAY_MYSQL_HOST", cfg.host);
-    cfg.port = mysql_test::getEnvPortOrDefault("GALAY_MYSQL_AUTH_PORT", "GALAY_MYSQL_PORT", cfg.port);
-    cfg.database = mysql_test::getEnvOrDefault("GALAY_MYSQL_AUTH_DB", "GALAY_MYSQL_DB", cfg.database);
-    cfg.password = mysql_test::getEnvOrDefault("GALAY_MYSQL_AUTH_PASSWORD", "GALAY_MYSQL_PASSWORD", cfg.password);
-    cfg.native_user = mysql_test::getEnvOrDefault("GALAY_MYSQL_AUTH_NATIVE_USER",
+    cfg.host = mysql_test::get_env_or_default("GALAY_MYSQL_AUTH_HOST", "GALAY_MYSQL_HOST", cfg.host);
+    cfg.port = mysql_test::get_env_port_or_default("GALAY_MYSQL_AUTH_PORT", "GALAY_MYSQL_PORT", cfg.port);
+    cfg.database = mysql_test::get_env_or_default("GALAY_MYSQL_AUTH_DB", "GALAY_MYSQL_DB", cfg.database);
+    cfg.password = mysql_test::get_env_or_default("GALAY_MYSQL_AUTH_PASSWORD", "GALAY_MYSQL_PASSWORD", cfg.password);
+    cfg.native_user = mysql_test::get_env_or_default("GALAY_MYSQL_AUTH_NATIVE_USER",
                                                   "MYSQL_AUTH_NATIVE_USER",
                                                   cfg.native_user);
-    cfg.caching_user = mysql_test::getEnvOrDefault("GALAY_MYSQL_AUTH_CACHING_USER",
+    cfg.caching_user = mysql_test::get_env_or_default("GALAY_MYSQL_AUTH_CACHING_USER",
                                                    "MYSQL_AUTH_CACHING_USER",
                                                    cfg.caching_user);
-    cfg.sha256_user = mysql_test::getEnvOrDefault("GALAY_MYSQL_AUTH_SHA256_USER",
+    cfg.sha256_user = mysql_test::get_env_or_default("GALAY_MYSQL_AUTH_SHA256_USER",
                                                   "MYSQL_AUTH_SHA256_USER",
                                                   cfg.sha256_user);
     return cfg;
 }
 
-int requireAuthMatrixConfigOrSkip(const AuthMatrixConfig& cfg)
+int require_auth_matrix_config_or_skip(const AuthMatrixConfig& cfg)
 {
     if (!cfg.host.empty() && !cfg.database.empty() && !cfg.password.empty()) {
         return 0;
@@ -78,7 +78,7 @@ int requireAuthMatrixConfigOrSkip(const AuthMatrixConfig& cfg)
     return mysql_test::kMysqlTestSkippedExitCode;
 }
 
-MysqlConfig makeConfig(const AuthMatrixConfig& cfg,
+MysqlConfig make_config(const AuthMatrixConfig& cfg,
                        const std::string& user,
                        const std::string& password)
 {
@@ -97,33 +97,33 @@ bool contains(std::string_view haystack, std::string_view needle)
     return haystack.find(needle) != std::string_view::npos;
 }
 
-bool verifySelectOne(MysqlClient& client, std::string_view label)
+bool verify_select_one(MysqlClient& client, std::string_view label)
 {
     auto result = client.query("SELECT 1");
     if (!result) {
         std::cerr << label << " SELECT failed: " << result.error().message() << std::endl;
         return false;
     }
-    if (result->rowCount() != 1 || result->row(0).getInt64(0, -1) != 1) {
+    if (result->row_count() != 1 || result->row(0).get_int64(0, -1) != 1) {
         std::cerr << label << " SELECT returned unexpected result" << std::endl;
         return false;
     }
     return true;
 }
 
-bool expectSyncConnectSuccess(const AuthMatrixConfig& cfg, const AuthCase& auth)
+bool expect_sync_connect_success(const AuthMatrixConfig& cfg, const AuthCase& auth)
 {
     std::cout << "Sync supported auth plugin case: " << auth.label
               << " user=" << auth.user << std::endl;
 
     MysqlClient client;
-    auto connect_result = client.connect(makeConfig(cfg, auth.user, cfg.password));
+    auto connect_result = client.connect(make_config(cfg, auth.user, cfg.password));
     if (!connect_result) {
         std::cerr << auth.label << " connect failed: " << connect_result.error().message() << std::endl;
         return false;
     }
 
-    if (!verifySelectOne(client, auth.label)) {
+    if (!verify_select_one(client, auth.label)) {
         client.close();
         return false;
     }
@@ -137,7 +137,7 @@ bool expectSyncConnectSuccess(const AuthMatrixConfig& cfg, const AuthCase& auth)
     client.close();
 
     MysqlClient reconnect_client;
-    auto reconnect_result = reconnect_client.connect(makeConfig(cfg, auth.user, cfg.password));
+    auto reconnect_result = reconnect_client.connect(make_config(cfg, auth.user, cfg.password));
     if (!reconnect_result) {
         std::cerr << auth.label << " reconnect failed: " << reconnect_result.error().message() << std::endl;
         return false;
@@ -146,12 +146,12 @@ bool expectSyncConnectSuccess(const AuthMatrixConfig& cfg, const AuthCase& auth)
     return true;
 }
 
-bool expectSyncWrongPasswordFailure(const AuthMatrixConfig& cfg, const AuthCase& auth)
+bool expect_sync_wrong_password_failure(const AuthMatrixConfig& cfg, const AuthCase& auth)
 {
     std::cout << "Sync wrong password case: " << auth.label << std::endl;
 
     MysqlClient client;
-    auto connect_result = client.connect(makeConfig(cfg, auth.user, cfg.password + "_wrong"));
+    auto connect_result = client.connect(make_config(cfg, auth.user, cfg.password + "_wrong"));
     if (connect_result) {
         std::cerr << auth.label << " wrong password unexpectedly connected" << std::endl;
         client.close();
@@ -165,13 +165,13 @@ bool expectSyncWrongPasswordFailure(const AuthMatrixConfig& cfg, const AuthCase&
     return true;
 }
 
-bool expectSyncUnsupportedPlugin(const AuthMatrixConfig& cfg, const AuthCase& auth)
+bool expect_sync_unsupported_plugin(const AuthMatrixConfig& cfg, const AuthCase& auth)
 {
     std::cout << "Sync unsupported auth plugin case: " << auth.label
               << " user=" << auth.user << std::endl;
 
     MysqlClient client;
-    auto connect_result = client.connect(makeConfig(cfg, auth.user, cfg.password));
+    auto connect_result = client.connect(make_config(cfg, auth.user, cfg.password));
     if (connect_result) {
         std::cerr << auth.label << " unexpectedly connected successfully" << std::endl;
         client.close();
@@ -200,7 +200,7 @@ void finish(AsyncState& state, bool ok, std::string message)
     state.cv.notify_one();
 }
 
-Task<void> runAsyncMatrix(IOScheduler* scheduler,
+Task<void> run_async_matrix(IOScheduler* scheduler,
                           AsyncState* state,
                           AuthMatrixConfig cfg,
                           std::vector<AuthCase> auth_cases)
@@ -210,7 +210,7 @@ Task<void> runAsyncMatrix(IOScheduler* scheduler,
                   << " user=" << auth.user << std::endl;
 
         auto client = AsyncMysqlClientBuilder().scheduler(scheduler).build();
-        auto connect_result = co_await client.connect(makeConfig(cfg, auth.user, cfg.password));
+        auto connect_result = co_await client.connect(make_config(cfg, auth.user, cfg.password));
         if (auth.supported) {
             if (!connect_result) {
                 finish(*state,
@@ -231,8 +231,8 @@ Task<void> runAsyncMatrix(IOScheduler* scheduler,
                 co_return;
             }
             if (!result->has_value() ||
-                result->value().rowCount() != 1 ||
-                result->value().row(0).getInt64(0, -1) != 1) {
+                result->value().row_count() != 1 ||
+                result->value().row(0).get_int64(0, -1) != 1) {
                 finish(*state, false, auth.label + " async SELECT returned unexpected result");
                 co_return;
             }
@@ -263,15 +263,15 @@ Task<void> runAsyncMatrix(IOScheduler* scheduler,
     finish(*state, true, "async auth matrix passed");
 }
 
-bool runAsyncCases(const AuthMatrixConfig& cfg, const std::vector<AuthCase>& auth_cases)
+bool run_async_cases(const AuthMatrixConfig& cfg, const std::vector<AuthCase>& auth_cases)
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(1)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(1)
         .build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         std::cerr << "failed to get IO scheduler" << std::endl;
         runtime.stop();
@@ -279,7 +279,7 @@ bool runAsyncCases(const AuthMatrixConfig& cfg, const std::vector<AuthCase>& aut
     }
 
     AsyncState state;
-    if (!scheduleTask(scheduler, runAsyncMatrix(scheduler, &state, cfg, auth_cases))) {
+    if (!schedule_task(scheduler, run_async_matrix(scheduler, &state, cfg, auth_cases))) {
         std::cerr << "failed to schedule async auth matrix" << std::endl;
         runtime.stop();
         return false;
@@ -311,13 +311,13 @@ int main()
 {
     std::cout << "=== T11: MySQL Auth Plugin Matrix ===" << std::endl;
 
-    if (const int skip_code = mysql_test::requireIntegrationEnabledOrSkip("T11-MySQLAuthPlugins");
+    if (const int skip_code = mysql_test::require_integration_enabled_or_skip("T11-MySQLAuthPlugins");
         skip_code != 0) {
         return skip_code;
     }
 
-    const auto cfg = loadAuthMatrixConfig();
-    if (const int skip_code = requireAuthMatrixConfigOrSkip(cfg); skip_code != 0) {
+    const auto cfg = load_auth_matrix_config();
+    if (const int skip_code = require_auth_matrix_config_or_skip(cfg); skip_code != 0) {
         return skip_code;
     }
 
@@ -336,18 +336,18 @@ int main()
 
     for (const auto& auth : auth_cases) {
         if (auth.supported) {
-            if (!expectSyncConnectSuccess(cfg, auth)) {
+            if (!expect_sync_connect_success(cfg, auth)) {
                 return 1;
             }
-            if (!expectSyncWrongPasswordFailure(cfg, auth)) {
+            if (!expect_sync_wrong_password_failure(cfg, auth)) {
                 return 1;
             }
-        } else if (!expectSyncUnsupportedPlugin(cfg, auth)) {
+        } else if (!expect_sync_unsupported_plugin(cfg, auth)) {
             return 1;
         }
     }
 
-    if (!runAsyncCases(cfg, auth_cases)) {
+    if (!run_async_cases(cfg, auth_cases)) {
         return 1;
     }
 

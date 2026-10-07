@@ -20,13 +20,13 @@ int main() {
     static_assert(std::is_constructible_v<WsError, const galay::ssl::SslError&>);
 
     galay::ssl::SslSocket socket(nullptr);
-    WsWriterImpl<galay::ssl::SslSocket> writer(WsWriterSetting::byServer(), socket);
+    WsWriterImpl<galay::ssl::SslSocket> writer(WsWriterSetting::by_server(), socket);
 
     constexpr std::string_view first_payload = "first-frame";
-    (void) writer.sendText(std::string(first_payload));
+    (void) writer.send_text(std::string(first_payload));
     const auto first_expected =
-        WsFrameParser::toBytes(WsFrameParser::createTextFrame(std::string(first_payload)), false);
-    if (std::string(writer.bufferData(), writer.getRemainingBytes()) != first_expected) {
+        WsFrameParser::to_bytes(WsFrameParser::create_text_frame(std::string(first_payload)), false);
+    if (std::string(writer.buffer_data(), writer.get_remaining_bytes()) != first_expected) {
         std::cerr << "[T55] ssl text send should encode directly into expected steady-state buffer\n";
         return 1;
     }
@@ -36,12 +36,12 @@ int main() {
     assert(first.signal == galay::ssl::SslMachineSignal::kSend);
     assert(first.write_length == first_expected.size());
 
-    machine.onSend(std::expected<size_t, galay::ssl::SslError>(first.write_length - 2));
+    machine.on_send(std::expected<size_t, galay::ssl::SslError>(first.write_length - 2));
     auto resumed = machine.advance();
     assert(resumed.signal == galay::ssl::SslMachineSignal::kSend);
     assert(resumed.write_length == 2);
 
-    machine.onSend(std::expected<size_t, galay::ssl::SslError>(0));
+    machine.on_send(std::expected<size_t, galay::ssl::SslError>(0));
     auto failed = machine.advance();
     if (failed.signal != galay::ssl::SslMachineSignal::kComplete ||
         !failed.result.has_value() ||
@@ -55,28 +55,28 @@ int main() {
         return 1;
     }
 
-    if (writer.getRemainingBytes() != 0 || writer.sentBytes() != 0) {
+    if (writer.get_remaining_bytes() != 0 || writer.sent_bytes() != 0) {
         std::cerr << "[T55] failed SSL send should clear buffered steady-state before next frame\n";
         return 1;
     }
 
     constexpr std::string_view second_payload = "second-frame";
-    (void) writer.sendText(std::string(second_payload));
+    (void) writer.send_text(std::string(second_payload));
     const auto second_expected =
-        WsFrameParser::toBytes(WsFrameParser::createTextFrame(std::string(second_payload)), false);
+        WsFrameParser::to_bytes(WsFrameParser::create_text_frame(std::string(second_payload)), false);
     auto next = galay::websocket::detail::WsSslSendMachine<galay::ssl::SslSocket>(&writer).advance();
     assert(next.signal == galay::ssl::SslMachineSignal::kSend);
     assert(next.write_length == second_expected.size());
 
-    WsWriterImpl<galay::ssl::SslSocket> client_writer(WsWriterSetting::byClient(), socket);
+    WsWriterImpl<galay::ssl::SslSocket> client_writer(WsWriterSetting::by_client(), socket);
     constexpr std::string_view masked_payload = "masked-client-frame";
-    (void) client_writer.sendText(std::string(masked_payload));
+    (void) client_writer.send_text(std::string(masked_payload));
     iovec masked_iov {
-        const_cast<char*>(client_writer.bufferData()),
-        client_writer.getRemainingBytes(),
+        const_cast<char*>(client_writer.buffer_data()),
+        client_writer.get_remaining_bytes(),
     };
     WsFrame masked_frame;
-    auto masked_result = WsFrameParser::fromIOVec(&masked_iov, 1, masked_frame, true);
+    auto masked_result = WsFrameParser::from_io_vec(&masked_iov, 1, masked_frame, true);
     if (!masked_result.has_value()) {
         std::cerr << "[T55] masked ssl text send should remain decodable as a client frame\n";
         return 1;
@@ -86,12 +86,12 @@ int main() {
         return 1;
     }
 
-    WsWriterImpl<galay::ssl::SslSocket> moved_writer(WsWriterSetting::byServer(), socket);
+    WsWriterImpl<galay::ssl::SslSocket> moved_writer(WsWriterSetting::by_server(), socket);
     std::string moved_payload(512, 'x');
     moved_payload.reserve(moved_payload.size() + 32);
     const char* moved_data = moved_payload.data();
-    (void) moved_writer.sendText(std::move(moved_payload));
-    if (moved_writer.bufferData() != moved_data) {
+    (void) moved_writer.send_text(std::move(moved_payload));
+    if (moved_writer.buffer_data() != moved_data) {
         std::cerr << "[T55] ssl rvalue text send should reuse caller payload storage when capacity allows\n";
         return 1;
     }

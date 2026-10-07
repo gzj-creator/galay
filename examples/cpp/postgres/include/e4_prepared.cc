@@ -9,7 +9,7 @@
 
 int main()
 {
-    const auto config = postgres_example::loadConfig();
+    const auto config = postgres_example::load_config();
     galay::postgres::PostgresClient client;
     auto connected = client.connect(config.host, config.port, config.user,
                                     config.password, config.database);
@@ -24,11 +24,11 @@ int main()
     }
     const std::vector<std::optional<std::string>> parameters{std::string("20"), std::string("22")};
     auto result = client.execute("galay_add", parameters);
-    if (!result || result->rowCount() == 0) {
+    if (!result || result->row_count() == 0) {
         std::cerr << (result ? "empty result" : result.error().message()) << '\n';
         return 1;
     }
-    std::cout << "20 + 22 = " << result->row(0).getString(0) << '\n';
-    auto closed = client.closePrepared("galay_add");
+    std::cout << "20 + 22 = " << result->row(0).get_string(0) << '\n';
+    auto closed = client.close_prepared("galay_add");
     return closed ? 0 : 1;
 }

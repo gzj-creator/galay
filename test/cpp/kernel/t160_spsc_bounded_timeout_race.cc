@@ -32,17 +32,17 @@ void pause(const void* waiter) noexcept;
 }
 
 namespace bounded_waiter_lease_test {
-void pauseDequeued(const void* waiter) noexcept;
-void observeReclaim(const void* waiter) noexcept;
+void pause_dequeued(const void* waiter) noexcept;
+void observe_reclaim(const void* waiter) noexcept;
 }
 
 // 精确停在 waiter 的 retry 最终检查与 timeout abort 之间，重放当前交错。
 #define GALAY_SPSC_BOUNDED_TIMEOUT_ABORT_TEST_POINT(waiter) \
     ::bounded_timeout_abort_test::pause(static_cast<const void*>(waiter))
 #define GALAY_SPSC_BOUNDED_DEQUEUE_TEST_POINT(waiter) \
-    ::bounded_waiter_lease_test::pauseDequeued(static_cast<const void*>(waiter))
+    ::bounded_waiter_lease_test::pause_dequeued(static_cast<const void*>(waiter))
 #define GALAY_SPSC_BOUNDED_RECLAIM_TEST_POINT(waiter) \
-    ::bounded_waiter_lease_test::observeReclaim(static_cast<const void*>(waiter))
+    ::bounded_waiter_lease_test::observe_reclaim(static_cast<const void*>(waiter))
 #define private public
 #include <galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h>
 #undef private
@@ -185,7 +185,7 @@ void release() noexcept
     gate.proceed.store(true, std::memory_order_release);
 }
 
-void pauseDequeued(const void*) noexcept
+void pause_dequeued(const void*) noexcept
 {
     if (!gate.enabled.load(std::memory_order_acquire)) {
         return;
@@ -196,7 +196,7 @@ void pauseDequeued(const void*) noexcept
     }
 }
 
-void observeReclaim(const void*) noexcept
+void observe_reclaim(const void*) noexcept
 {
     if (gate.enabled.load(std::memory_order_acquire)) {
         gate.reclaiming.store(true, std::memory_order_release);
@@ -246,10 +246,10 @@ static_assert(std::same_as<
               decltype(std::declval<StaticBoundedChannel&>().recv()),
               galay::spsc::BoundedRecvAwaitable<int, 4>>);
 static_assert(std::same_as<
-              decltype(std::declval<StaticBoundedChannel&>().recvBatch(2)),
+              decltype(std::declval<StaticBoundedChannel&>().recv_batch(2)),
               galay::spsc::BoundedRecvBatchAwaitable<int, 4>>);
 static_assert(std::same_as<
-              decltype(std::declval<StaticBoundedChannel&>().recvBatchTo(
+              decltype(std::declval<StaticBoundedChannel&>().recv_batch_to(
                   std::declval<std::span<int>>())),
               galay::spsc::BoundedRecvBatchToAwaitable<int, 4>>);
 
@@ -260,7 +260,7 @@ constexpr std::array<AwaitKind, 4> kAwaitKinds{
     AwaitKind::kRecvBatchTo,
 };
 
-const char* awaitKindName(AwaitKind kind) noexcept
+const char* await_kind_name(AwaitKind kind) noexcept
 {
     switch (kind) {
     case AwaitKind::kSend:
@@ -290,7 +290,7 @@ struct AwaitState
     std::atomic<size_t> awaitAllocationCount{0};
 };
 
-bool waitForFlag(const std::atomic<bool>& flag,
+bool wait_for_flag(const std::atomic<bool>& flag,
                  std::chrono::milliseconds timeout = 5s)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -325,7 +325,7 @@ struct BlockingMove
     BlockingMove(BlockingMove&& other) noexcept
         : value(other.value), control(other.control)
     {
-        waitForMovePermission();
+        wait_for_move_permission();
         other.control = nullptr;
     }
 
@@ -333,13 +333,13 @@ struct BlockingMove
     {
         value = other.value;
         control = other.control;
-        waitForMovePermission();
+        wait_for_move_permission();
         other.control = nullptr;
         return *this;
     }
 
 private:
-    void waitForMovePermission() const noexcept
+    void wait_for_move_permission() const noexcept
     {
         if (control == nullptr) {
             return;
@@ -359,22 +359,22 @@ struct BlockingRecvState
     int value = 0;
 };
 
-bool prepareChannel(galay::spsc::BoundedChannel<int>& channel, AwaitKind kind)
+bool prepare_channel(galay::spsc::BoundedChannel<int>& channel, AwaitKind kind)
 {
     if (kind != AwaitKind::kSend) {
         return true;
     }
-    return channel.trySend(11) && channel.trySend(12) && channel.full();
+    return channel.try_send(11) && channel.try_send(12) && channel.full();
 }
 
-bool completeWaitingOperation(galay::spsc::BoundedChannel<int>& channel,
+bool complete_waiting_operation(galay::spsc::BoundedChannel<int>& channel,
                               AwaitKind kind)
 {
     if (kind == AwaitKind::kSend) {
-        auto value = channel.tryRecv();
+        auto value = channel.try_recv();
         return value.has_value() && *value == 11;
     }
-    return channel.trySend(73);
+    return channel.try_send(73);
 }
 
 class ImmediateRaceScheduler final : public detail::SchedulerTestAdapter<ImmediateRaceScheduler>
@@ -392,7 +392,7 @@ public:
 
     bool schedule(TaskRef task) noexcept
     {
-        if (!bindTask(task)) {
+        if (!bind_task(task)) {
             return false;
         }
         [[maybe_unused]] const int previousScheduleCalls =
@@ -402,51 +402,51 @@ public:
     }
 
     // 兼容尚未提供专用 resume admission 的 Scheduler；新接口存在时仍会隐式覆盖。
-    bool scheduleResume(TaskRef task) noexcept
+    bool schedule_resume(TaskRef task) noexcept
     {
         return schedule(std::move(task));
     }
 
-    bool scheduleDeferred(TaskRef task) noexcept
+    bool schedule_deferred(TaskRef task) noexcept
     {
         return schedule(std::move(task));
     }
 
-    bool scheduleImmediately(TaskRef task) noexcept
+    bool schedule_immediately(TaskRef task) noexcept
     {
-        if (!bindTask(task)) {
+        if (!bind_task(task)) {
             return false;
         }
         resume(task);
         return true;
     }
 
-    bool addTimer(Timer::ptr timer)
+    bool add_timer(Timer::ptr timer)
     {
         [[maybe_unused]] const int previousAddTimerCalls =
             m_addTimerCalls.fetch_add(1, std::memory_order_relaxed);
         if (m_completeOperation) {
             m_actionSucceeded.store(
-                completeWaitingOperation(*m_channel, m_kind),
+                complete_waiting_operation(*m_channel, m_kind),
                 std::memory_order_release);
         }
-        // 强制 WithTimeout 走 timeoutNow()，覆盖 inner 发布后的同步恢复窗口。
+        // 强制 WithTimeout 走 timeout_now()，覆盖 inner 发布后的同步恢复窗口。
         return false;
     }
 
     SchedulerType type() { return kParallelScheduler; }
 
-    int scheduleCalls() const noexcept
+    int schedule_calls() const noexcept
     {
         return m_scheduleCalls.load(std::memory_order_acquire);
     }
 
-    int addTimerCalls() const noexcept
+    int add_timer_calls() const noexcept
     {
         return m_addTimerCalls.load(std::memory_order_acquire);
     }
 
-    bool actionSucceeded() const noexcept
+    bool action_succeeded() const noexcept
     {
         return m_actionSucceeded.load(std::memory_order_acquire);
     }
@@ -468,7 +468,7 @@ public:
 
     bool schedule(TaskRef task) noexcept
     {
-        if (!bindTask(task)) {
+        if (!bind_task(task)) {
             return false;
         }
         m_ready.push_back(std::move(task));
@@ -476,26 +476,26 @@ public:
     }
 
     // 兼容尚未提供专用 resume admission 的 Scheduler；新接口存在时仍会隐式覆盖。
-    bool scheduleResume(TaskRef task) noexcept
+    bool schedule_resume(TaskRef task) noexcept
     {
         return schedule(std::move(task));
     }
 
-    bool scheduleDeferred(TaskRef task) noexcept
+    bool schedule_deferred(TaskRef task) noexcept
     {
         return schedule(std::move(task));
     }
 
-    bool scheduleImmediately(TaskRef task) noexcept
+    bool schedule_immediately(TaskRef task) noexcept
     {
-        if (!bindTask(task)) {
+        if (!bind_task(task)) {
             return false;
         }
         resume(task);
         return true;
     }
 
-    bool addTimer(Timer::ptr timer)
+    bool add_timer(Timer::ptr timer)
     {
         m_timer = std::move(timer);
         return true;
@@ -503,20 +503,20 @@ public:
 
     SchedulerType type() { return kParallelScheduler; }
 
-    bool bindForTest(TaskRef& task) { return bindTask(task); }
+    bool bind_for_test(TaskRef& task) { return bind_task(task); }
 
-    bool hasSingleReadyTask() const noexcept { return m_ready.size() == 1; }
+    bool has_single_ready_task() const noexcept { return m_ready.size() == 1; }
 
-    bool fireTimer()
+    bool fire_timer()
     {
         if (!m_timer) {
             return false;
         }
-        m_timer->handleTimeout();
+        m_timer->handle_timeout();
         return true;
     }
 
-    bool runOne()
+    bool run_one()
     {
         if (m_ready.empty()) {
             return false;
@@ -527,7 +527,7 @@ public:
         return true;
     }
 
-    bool resumeWithTimerInDequeueGap()
+    bool resume_with_timer_in_dequeue_gap()
     {
         if (m_ready.empty() || !m_timer) {
             return false;
@@ -540,16 +540,16 @@ public:
             return false;
         }
 
-        // 精确模拟 resumeTaskState() 在 dequeue 后、handle.resume() 前的窗口。
+        // 精确模拟 resume_task_state() 在 dequeue 后、handle.resume() 前的窗口。
         state->m_queued.store(false, std::memory_order_relaxed);
         state->m_resume_owner_only.store(false, std::memory_order_relaxed);
-        m_timer->handleTimeout();
+        m_timer->handle_timeout();
         const bool noDuplicateWake = m_ready.empty();
         state->m_handle.resume();
         return noDuplicateWake;
     }
 
-    void releaseRetainedState()
+    void release_retained_state()
     {
         m_ready.clear();
         m_timer.reset();
@@ -560,12 +560,12 @@ private:
     Timer::ptr m_timer;
 };
 
-Task<void> publicationTarget()
+Task<void> publication_target()
 {
     co_return;
 }
 
-Task<void> receiveFromStaticChannel(StaticBoundedChannel* channel,
+Task<void> receive_from_static_channel(StaticBoundedChannel* channel,
                                     AwaitState* state)
 {
     auto result = co_await channel->recv();
@@ -579,7 +579,7 @@ Task<void> receiveFromStaticChannel(StaticBoundedChannel* channel,
     co_return;
 }
 
-bool runStaticCapacityChannel()
+bool run_static_capacity_channel()
 {
     const size_t allocationsBefore =
         g_allocationCount.load(std::memory_order_relaxed);
@@ -597,14 +597,14 @@ bool runStaticCapacityChannel()
 
     QueuedRaceScheduler scheduler;
     AwaitState state;
-    auto task = receiveFromStaticChannel(&channel, &state);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
-    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
-    if (!scheduler.scheduleImmediately(std::move(scheduled)) ||
+    auto task = receive_from_static_channel(&channel, &state);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
+    TaskRef scheduled = detail::TaskAccess::detach_task(std::move(task));
+    if (!scheduler.schedule_immediately(std::move(scheduled)) ||
         state.completed.load(std::memory_order_acquire) ||
-        !channel.trySend(73) || !scheduler.hasSingleReadyTask() ||
-        !scheduler.runOne()) {
-        scheduler.releaseRetainedState();
+        !channel.try_send(73) || !scheduler.has_single_ready_task() ||
+        !scheduler.run_one()) {
+        scheduler.release_retained_state();
         return false;
     }
 
@@ -614,17 +614,17 @@ bool runStaticCapacityChannel()
         state.valueSum.load(std::memory_order_acquire) == 73 &&
         state.resumeCount.load(std::memory_order_acquire) == 1 &&
         state.completed.load(std::memory_order_acquire) && channel.empty();
-    scheduler.releaseRetainedState();
+    scheduler.release_retained_state();
     return completed;
 }
 
-bool runPeerCompletionBeforeArmed(AwaitKind kind)
+bool run_peer_completion_before_armed(AwaitKind kind)
 {
     galay::spsc::BoundedChannel<int> channel(2);
     QueuedRaceScheduler scheduler;
-    auto target = publicationTarget();
-    TaskRef keeper = detail::TaskAccess::taskRef(target);
-    if (!scheduler.bindForTest(keeper)) {
+    auto target = publication_target();
+    TaskRef keeper = detail::TaskAccess::task_ref(target);
+    if (!scheduler.bind_for_test(keeper)) {
         return false;
     }
 
@@ -648,53 +648,53 @@ bool runPeerCompletionBeforeArmed(AwaitKind kind)
     bool channelStateCorrect = false;
 
     if (kind == AwaitKind::kSend) {
-        if (!channel.trySend(11) || !channel.trySend(12)) {
+        if (!channel.try_send(11) || !channel.try_send(12)) {
             return false;
         }
-        if (!channel.enqueueWaiter(channel.m_sendWaiters, waiter)) {
+        if (!channel.enqueue_waiter(channel.m_sendWaiters, waiter)) {
             return false;
         }
         int released = 0;
-        if (!channel.ringDequeueTo([&released](int&& value) {
+        if (!channel.ring_dequeue_to([&released](int&& value) {
                 released = value;
             })) {
             return false;
         }
-        progress = channel.tryCompleteSendWaiter(waiter, true, pendingWakes);
-        auto first = channel.tryRecv();
-        auto second = channel.tryRecv();
+        progress = channel.try_complete_send_waiter(waiter, true, pendingWakes);
+        auto first = channel.try_recv();
+        auto second = channel.try_recv();
         channelStateCorrect = released == 11 && first.has_value() && *first == 12 &&
             second.has_value() && *second == 73 && channel.empty();
     } else {
-        if (!channel.enqueueWaiter(channel.m_recvWaiters, waiter)) {
+        if (!channel.enqueue_waiter(channel.m_recvWaiters, waiter)) {
             return false;
         }
         int value = 73;
-        if (channel.ringEnqueue(std::move(value)) !=
+        if (channel.ring_enqueue(std::move(value)) !=
             galay::spsc::BoundedChannel<int>::RingEnqueueResult::kPublished) {
             return false;
         }
-        progress = channel.tryCompleteRecvWaiter(waiter, true, pendingWakes);
+        progress = channel.try_complete_recv_waiter(waiter, true, pendingWakes);
         channelStateCorrect = recvValue.has_value() && *recvValue == 73 &&
             channel.empty();
     }
 
     // 这里精确对应 await_suspend 已入队、但尚未执行最终 Armed 发布的窗口。
     // 对端可以提交结果，但不得恢复仍在 await_suspend 栈上的协程。
-    const bool wakeDeferred = !scheduler.hasSingleReadyTask();
-    const bool ownerContinuesSynchronously = !waiter->finishArming();
-    pendingWakes.wakeAll();
+    const bool wakeDeferred = !scheduler.has_single_ready_task();
+    const bool ownerContinuesSynchronously = !waiter->finish_arming();
+    pendingWakes.wake_all();
     const bool reclaimed = kind == AwaitKind::kSend
-        ? channel.reclaimWaiter(channel.m_sendWaiters, *waiter, waiterGeneration)
-        : channel.reclaimWaiter(channel.m_recvWaiters, *waiter, waiterGeneration);
-    scheduler.releaseRetainedState();
+        ? channel.reclaim_waiter(channel.m_sendWaiters, *waiter, waiterGeneration)
+        : channel.reclaim_waiter(channel.m_recvWaiters, *waiter, waiterGeneration);
+    scheduler.release_retained_state();
     return progress == galay::spsc::BoundedWaiterProgress::kCompleted &&
         waiter->state.load(std::memory_order_acquire) ==
             galay::spsc::BoundedWaiterState::kIdle &&
         wakeDeferred && ownerContinuesSynchronously && channelStateCorrect && reclaimed;
 }
 
-Task<void> awaitWithTimeout(galay::spsc::BoundedChannel<int>* channel,
+Task<void> await_with_timeout(galay::spsc::BoundedChannel<int>* channel,
                             AwaitKind kind,
                             AwaitState* state)
 {
@@ -724,7 +724,7 @@ Task<void> awaitWithTimeout(galay::spsc::BoundedChannel<int>* channel,
                 std::memory_order_release);
         }
     } else if (kind == AwaitKind::kRecvBatch) {
-        auto result = co_await channel->recvBatch(2).timeout(1h);
+        auto result = co_await channel->recv_batch(2).timeout(1h);
         if (result.has_value()) {
             int sum = 0;
             for (int value : *result) {
@@ -745,7 +745,7 @@ Task<void> awaitWithTimeout(galay::spsc::BoundedChannel<int>* channel,
         constexpr int kFirstSentinel = -7001;
         constexpr int kSecondSentinel = -7002;
         std::array<int, 2> output{kFirstSentinel, kSecondSentinel};
-        auto result = co_await channel->recvBatchTo(std::span<int>(output)).timeout(1h);
+        auto result = co_await channel->recv_batch_to(std::span<int>(output)).timeout(1h);
         if (result.has_value()) {
             const size_t count = *result;
             int sum = 0;
@@ -778,7 +778,7 @@ Task<void> awaitWithTimeout(galay::spsc::BoundedChannel<int>* channel,
     co_return;
 }
 
-Task<void> awaitWithoutTimeout(galay::spsc::BoundedChannel<int>* channel,
+Task<void> await_without_timeout(galay::spsc::BoundedChannel<int>* channel,
                                AwaitKind kind,
                                AwaitState* state)
 {
@@ -808,7 +808,7 @@ Task<void> awaitWithoutTimeout(galay::spsc::BoundedChannel<int>* channel,
                 std::memory_order_release);
         }
     } else if (kind == AwaitKind::kRecvBatch) {
-        auto result = co_await channel->recvBatch(2);
+        auto result = co_await channel->recv_batch(2);
         if (result.has_value()) {
             int sum = 0;
             for (int value : *result) {
@@ -831,7 +831,7 @@ Task<void> awaitWithoutTimeout(galay::spsc::BoundedChannel<int>* channel,
         std::array<int, 2> output{kFirstSentinel, kSecondSentinel};
         const size_t allocationsBefore =
             g_allocationCount.load(std::memory_order_relaxed);
-        auto result = co_await channel->recvBatchTo(std::span<int>(output));
+        auto result = co_await channel->recv_batch_to(std::span<int>(output));
         const size_t allocationsAfter =
             g_allocationCount.load(std::memory_order_relaxed);
         state->awaitAllocationCount.store(
@@ -868,7 +868,7 @@ Task<void> awaitWithoutTimeout(galay::spsc::BoundedChannel<int>* channel,
     co_return;
 }
 
-Task<void> receiveBlockingMove(
+Task<void> receive_blocking_move(
     galay::spsc::BoundedChannel<BlockingMove>* channel,
     BlockingRecvState* state)
 {
@@ -883,7 +883,7 @@ Task<void> receiveBlockingMove(
     co_return;
 }
 
-Task<void> receiveClosedAndDestroy(
+Task<void> receive_closed_and_destroy(
     std::unique_ptr<galay::spsc::BoundedChannel<int>>* owner,
     AwaitState* state)
 {
@@ -897,7 +897,7 @@ Task<void> receiveClosedAndDestroy(
     co_return;
 }
 
-bool hasExpectedSuccess(const AwaitState& state, AwaitKind kind) noexcept
+bool has_expected_success(const AwaitState& state, AwaitKind kind) noexcept
 {
     if (!state.operationSucceeded.load(std::memory_order_acquire) ||
         state.receivedTimeout.load(std::memory_order_acquire) ||
@@ -912,7 +912,7 @@ bool hasExpectedSuccess(const AwaitState& state, AwaitKind kind) noexcept
         state.valueSum.load(std::memory_order_acquire) == 73;
 }
 
-bool hasExpectedTimeout(const AwaitState& state) noexcept
+bool has_expected_timeout(const AwaitState& state) noexcept
 {
     return !state.operationSucceeded.load(std::memory_order_acquire) &&
         state.receivedTimeout.load(std::memory_order_acquire) &&
@@ -921,7 +921,7 @@ bool hasExpectedTimeout(const AwaitState& state) noexcept
         state.valueCount.load(std::memory_order_acquire) == 0;
 }
 
-bool hasExpectedClose(const AwaitState& state) noexcept
+bool has_expected_close(const AwaitState& state) noexcept
 {
     return !state.operationSucceeded.load(std::memory_order_acquire) &&
         !state.receivedTimeout.load(std::memory_order_acquire) &&
@@ -930,15 +930,15 @@ bool hasExpectedClose(const AwaitState& state) noexcept
         state.valueCount.load(std::memory_order_acquire) == 0;
 }
 
-bool ringMatches(galay::spsc::BoundedChannel<int>& channel,
+bool ring_matches(galay::spsc::BoundedChannel<int>& channel,
                  AwaitKind kind,
                  bool operationWon,
                  bool counterpartRan)
 {
     if (kind == AwaitKind::kSend) {
-        auto first = channel.tryRecv();
-        auto second = channel.tryRecv();
-        auto third = channel.tryRecv();
+        auto first = channel.try_recv();
+        auto second = channel.try_recv();
+        auto third = channel.try_recv();
         if (operationWon) {
             return first.has_value() && *first == 12 && second.has_value() &&
                 *second == 73 && !third.has_value();
@@ -951,8 +951,8 @@ bool ringMatches(galay::spsc::BoundedChannel<int>& channel,
             !third.has_value();
     }
 
-    auto retained = channel.tryRecv();
-    auto extra = channel.tryRecv();
+    auto retained = channel.try_recv();
+    auto extra = channel.try_recv();
     if (operationWon) {
         return !retained.has_value() && !extra.has_value();
     }
@@ -962,123 +962,123 @@ bool ringMatches(galay::spsc::BoundedChannel<int>& channel,
     return retained.has_value() && *retained == 73 && !extra.has_value();
 }
 
-bool runAddTimerFailure(AwaitKind kind, bool completeOperation)
+bool run_add_timer_failure(AwaitKind kind, bool completeOperation)
 {
     galay::spsc::BoundedChannel<int> channel(2);
-    if (!prepareChannel(channel, kind)) {
+    if (!prepare_channel(channel, kind)) {
         return false;
     }
     ImmediateRaceScheduler scheduler(&channel, kind, completeOperation);
     AwaitState state;
 
-    auto task = awaitWithTimeout(&channel, kind, &state);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
+    auto task = await_with_timeout(&channel, kind, &state);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
     TaskState* taskState = keeper.state();
     if (taskState == nullptr) {
         return false;
     }
 
-    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
-    const bool started = scheduler.scheduleImmediately(std::move(scheduled));
+    TaskRef scheduled = detail::TaskAccess::detach_task(std::move(task));
+    const bool started = scheduler.schedule_immediately(std::move(scheduled));
     const bool resultCorrect = completeOperation
-        ? hasExpectedSuccess(state, kind)
-        : hasExpectedTimeout(state);
+        ? has_expected_success(state, kind)
+        : has_expected_timeout(state);
     const bool ringCorrect =
-        ringMatches(channel, kind, completeOperation, completeOperation);
+        ring_matches(channel, kind, completeOperation, completeOperation);
     // timeout 在外层 DeferredWaker arm 前获胜时由当前栈同步继续，不会额外入队。
     const int expectedScheduleCalls = completeOperation ? 1 : 0;
 
     return started && state.completed.load(std::memory_order_acquire) &&
         state.resumeCount.load(std::memory_order_acquire) == 1 && resultCorrect &&
-        ringCorrect && scheduler.addTimerCalls() == 1 &&
-        scheduler.scheduleCalls() == expectedScheduleCalls &&
-        (!completeOperation || scheduler.actionSucceeded()) &&
+        ringCorrect && scheduler.add_timer_calls() == 1 &&
+        scheduler.schedule_calls() == expectedScheduleCalls &&
+        (!completeOperation || scheduler.action_succeeded()) &&
         taskState->m_refs.load(std::memory_order_acquire) == 1;
 }
 
-bool runTimedOutWaiterDoesNotBlockNext(AwaitKind kind)
+bool run_timed_out_waiter_does_not_block_next(AwaitKind kind)
 {
     galay::spsc::BoundedChannel<int> channel(2);
-    if (!prepareChannel(channel, kind)) {
+    if (!prepare_channel(channel, kind)) {
         return false;
     }
     QueuedRaceScheduler scheduler;
     AwaitState timedOutState;
     AwaitState liveState;
 
-    auto timedOutTask = awaitWithTimeout(&channel, kind, &timedOutState);
-    TaskRef timedOutKeeper = detail::TaskAccess::taskRef(timedOutTask);
+    auto timedOutTask = await_with_timeout(&channel, kind, &timedOutState);
+    TaskRef timedOutKeeper = detail::TaskAccess::task_ref(timedOutTask);
     TaskState* timedOutTaskState = timedOutKeeper.state();
     if (timedOutTaskState == nullptr) {
         return false;
     }
-    TaskRef timedOutScheduled = detail::TaskAccess::detachTask(std::move(timedOutTask));
-    if (!scheduler.scheduleImmediately(std::move(timedOutScheduled)) ||
-        !scheduler.fireTimer() || !scheduler.hasSingleReadyTask() ||
-        !scheduler.runOne() || !hasExpectedTimeout(timedOutState)) {
-        scheduler.releaseRetainedState();
+    TaskRef timedOutScheduled = detail::TaskAccess::detach_task(std::move(timedOutTask));
+    if (!scheduler.schedule_immediately(std::move(timedOutScheduled)) ||
+        !scheduler.fire_timer() || !scheduler.has_single_ready_task() ||
+        !scheduler.run_one() || !has_expected_timeout(timedOutState)) {
+        scheduler.release_retained_state();
         return false;
     }
 
-    auto liveTask = awaitWithTimeout(&channel, kind, &liveState);
-    TaskRef liveKeeper = detail::TaskAccess::taskRef(liveTask);
+    auto liveTask = await_with_timeout(&channel, kind, &liveState);
+    TaskRef liveKeeper = detail::TaskAccess::task_ref(liveTask);
     TaskState* liveTaskState = liveKeeper.state();
     if (liveTaskState == nullptr) {
-        scheduler.releaseRetainedState();
+        scheduler.release_retained_state();
         return false;
     }
-    TaskRef liveScheduled = detail::TaskAccess::detachTask(std::move(liveTask));
-    const bool liveStarted = scheduler.scheduleImmediately(std::move(liveScheduled));
-    const bool counterpartCompleted = completeWaitingOperation(channel, kind);
-    const bool oneLiveWake = scheduler.hasSingleReadyTask();
-    const bool liveResumed = scheduler.runOne();
-    const bool liveCompleted = hasExpectedSuccess(liveState, kind) &&
+    TaskRef liveScheduled = detail::TaskAccess::detach_task(std::move(liveTask));
+    const bool liveStarted = scheduler.schedule_immediately(std::move(liveScheduled));
+    const bool counterpartCompleted = complete_waiting_operation(channel, kind);
+    const bool oneLiveWake = scheduler.has_single_ready_task();
+    const bool liveResumed = scheduler.run_one();
+    const bool liveCompleted = has_expected_success(liveState, kind) &&
         liveState.resumeCount.load(std::memory_order_acquire) == 1;
-    const bool ringCorrect = ringMatches(channel, kind, true, true);
+    const bool ringCorrect = ring_matches(channel, kind, true, true);
 
-    scheduler.releaseRetainedState();
+    scheduler.release_retained_state();
     return liveStarted && counterpartCompleted && oneLiveWake && liveResumed &&
         liveCompleted && ringCorrect &&
         timedOutTaskState->m_refs.load(std::memory_order_acquire) == 1 &&
         liveTaskState->m_refs.load(std::memory_order_acquire) == 1;
 }
 
-bool runTimeoutWhilePeerHoldsWaiterLease(AwaitKind kind)
+bool run_timeout_while_peer_holds_waiter_lease(AwaitKind kind)
 {
     galay::spsc::BoundedChannel<int> channel(2);
-    if (!prepareChannel(channel, kind)) {
+    if (!prepare_channel(channel, kind)) {
         return false;
     }
     QueuedRaceScheduler scheduler;
     AwaitState timedOutState;
 
-    auto timedOutTask = awaitWithTimeout(&channel, kind, &timedOutState);
-    TaskRef timedOutKeeper = detail::TaskAccess::taskRef(timedOutTask);
-    TaskRef timedOutScheduled = detail::TaskAccess::detachTask(std::move(timedOutTask));
-    if (!scheduler.scheduleImmediately(std::move(timedOutScheduled))) {
+    auto timedOutTask = await_with_timeout(&channel, kind, &timedOutState);
+    TaskRef timedOutKeeper = detail::TaskAccess::task_ref(timedOutTask);
+    TaskRef timedOutScheduled = detail::TaskAccess::detach_task(std::move(timedOutTask));
+    if (!scheduler.schedule_immediately(std::move(timedOutScheduled))) {
         return false;
     }
 
     bounded_waiter_lease_test::reset();
     std::atomic<bool> counterpartCompleted{false};
     std::thread counterpart([&]() {
-        counterpartCompleted.store(completeWaitingOperation(channel, kind),
+        counterpartCompleted.store(complete_waiting_operation(channel, kind),
                                    std::memory_order_release);
     });
 
-    const bool dequeued = waitForFlag(bounded_waiter_lease_test::gate.dequeued);
-    const bool timerFired = dequeued && scheduler.fireTimer();
-    const bool oneTimerWake = timerFired && scheduler.hasSingleReadyTask();
+    const bool dequeued = wait_for_flag(bounded_waiter_lease_test::gate.dequeued);
+    const bool timerFired = dequeued && scheduler.fire_timer();
+    const bool oneTimerWake = timerFired && scheduler.has_single_ready_task();
     std::atomic<bool> resumed{false};
     std::thread resumeThread;
     if (oneTimerWake) {
         resumeThread = std::thread([&]() {
-            resumed.store(scheduler.runOne(), std::memory_order_release);
+            resumed.store(scheduler.run_one(), std::memory_order_release);
         });
     }
 
     const bool reclaimWaitedForLease = oneTimerWake &&
-        waitForFlag(bounded_waiter_lease_test::gate.reclaiming);
+        wait_for_flag(bounded_waiter_lease_test::gate.reclaiming);
     bounded_waiter_lease_test::release();
     counterpart.join();
     if (resumeThread.joinable()) {
@@ -1086,45 +1086,45 @@ bool runTimeoutWhilePeerHoldsWaiterLease(AwaitKind kind)
     }
 
     const bool timeoutCompleted = resumed.load(std::memory_order_acquire) &&
-        hasExpectedTimeout(timedOutState) &&
+        has_expected_timeout(timedOutState) &&
         timedOutState.resumeCount.load(std::memory_order_acquire) == 1;
 
     bool normalized = false;
     if (kind == AwaitKind::kSend) {
-        normalized = channel.trySend(99) && channel.full();
+        normalized = channel.try_send(99) && channel.full();
     } else {
-        auto retained = channel.tryRecv();
-        auto extra = channel.tryRecv();
+        auto retained = channel.try_recv();
+        auto extra = channel.try_recv();
         normalized = retained.has_value() && *retained == 73 && !extra.has_value();
     }
 
     AwaitState liveState;
-    auto liveTask = awaitWithoutTimeout(&channel, kind, &liveState);
-    TaskRef liveKeeper = detail::TaskAccess::taskRef(liveTask);
-    TaskRef liveScheduled = detail::TaskAccess::detachTask(std::move(liveTask));
+    auto liveTask = await_without_timeout(&channel, kind, &liveState);
+    TaskRef liveKeeper = detail::TaskAccess::task_ref(liveTask);
+    TaskRef liveScheduled = detail::TaskAccess::detach_task(std::move(liveTask));
     const bool liveStarted = normalized &&
-        scheduler.scheduleImmediately(std::move(liveScheduled));
+        scheduler.schedule_immediately(std::move(liveScheduled));
     const bool liveSuspended = liveStarted &&
         !liveState.completed.load(std::memory_order_acquire);
     bool liveCounterpartCompleted = false;
     if (liveSuspended && kind == AwaitKind::kSend) {
-        auto released = channel.tryRecv();
+        auto released = channel.try_recv();
         liveCounterpartCompleted = released.has_value() && *released == 12;
     } else if (liveSuspended) {
-        liveCounterpartCompleted = channel.trySend(73);
+        liveCounterpartCompleted = channel.try_send(73);
     }
-    const bool oneLiveWake = liveCounterpartCompleted && scheduler.hasSingleReadyTask();
-    const bool liveResumed = oneLiveWake && scheduler.runOne();
-    const bool liveCompleted = liveResumed && hasExpectedSuccess(liveState, kind) &&
+    const bool oneLiveWake = liveCounterpartCompleted && scheduler.has_single_ready_task();
+    const bool liveResumed = oneLiveWake && scheduler.run_one();
+    const bool liveCompleted = liveResumed && has_expected_success(liveState, kind) &&
         liveState.resumeCount.load(std::memory_order_acquire) == 1;
 
-    scheduler.releaseRetainedState();
+    scheduler.release_retained_state();
     const bool passed = dequeued && timerFired && oneTimerWake && reclaimWaitedForLease &&
         counterpartCompleted.load(std::memory_order_acquire) && timeoutCompleted &&
         normalized && liveSuspended && liveCounterpartCompleted && oneLiveWake &&
         liveCompleted;
     if (!passed) {
-        std::cerr << "[T160] pinned lease detail kind=" << awaitKindName(kind)
+        std::cerr << "[T160] pinned lease detail kind=" << await_kind_name(kind)
                   << " dequeued=" << dequeued
                   << " timer=" << timerFired
                   << " timer_wake=" << oneTimerWake
@@ -1141,64 +1141,64 @@ bool runTimeoutWhilePeerHoldsWaiterLease(AwaitKind kind)
     return passed;
 }
 
-bool runWaiterPathUsesNoAllocation(AwaitKind kind)
+bool run_waiter_path_uses_no_allocation(AwaitKind kind)
 {
     galay::spsc::BoundedChannel<int> channel(2);
-    if (!prepareChannel(channel, kind)) {
+    if (!prepare_channel(channel, kind)) {
         return false;
     }
     QueuedRaceScheduler scheduler;
     AwaitState state;
 
-    auto task = awaitWithoutTimeout(&channel, kind, &state);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
-    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
+    auto task = await_without_timeout(&channel, kind, &state);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
+    TaskRef scheduled = detail::TaskAccess::detach_task(std::move(task));
     const size_t allocationsBefore =
         g_allocationCount.load(std::memory_order_relaxed);
-    const bool started = scheduler.scheduleImmediately(std::move(scheduled));
+    const bool started = scheduler.schedule_immediately(std::move(scheduled));
     const size_t allocationsAfter =
         g_allocationCount.load(std::memory_order_relaxed);
     const bool suspended = started && !state.completed.load(std::memory_order_acquire);
 
-    const bool counterpartCompleted = completeWaitingOperation(channel, kind);
-    const bool oneWake = scheduler.hasSingleReadyTask();
-    const bool resumed = scheduler.runOne();
-    const bool completed = hasExpectedSuccess(state, kind);
-    scheduler.releaseRetainedState();
+    const bool counterpartCompleted = complete_waiting_operation(channel, kind);
+    const bool oneWake = scheduler.has_single_ready_task();
+    const bool resumed = scheduler.run_one();
+    const bool completed = has_expected_success(state, kind);
+    scheduler.release_retained_state();
     return suspended && counterpartCompleted && oneWake && resumed && completed &&
         allocationsAfter == allocationsBefore;
 }
 
-bool runConstructionOomIsRecoverable(AwaitKind kind)
+bool run_construction_oom_is_recoverable(AwaitKind kind)
 {
     g_failAllocation.store(true, std::memory_order_release);
     galay::spsc::BoundedChannel<int> channel(2);
     g_failAllocation.store(false, std::memory_order_release);
     if (channel.error() != galay::spsc::RingError::kAllocationFailed ||
-        channel.capacity() != 0 || channel.trySend(73)) {
+        channel.capacity() != 0 || channel.try_send(73)) {
         return false;
     }
 
     QueuedRaceScheduler scheduler;
     AwaitState state;
-    auto task = awaitWithoutTimeout(&channel, kind, &state);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
+    auto task = await_without_timeout(&channel, kind, &state);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
     TaskState* taskState = keeper.state();
-    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
-    const bool started = scheduler.scheduleImmediately(std::move(scheduled));
+    TaskRef scheduled = detail::TaskAccess::detach_task(std::move(task));
+    const bool started = scheduler.schedule_immediately(std::move(scheduled));
     const bool completed = started &&
         state.completed.load(std::memory_order_acquire) &&
         state.resumeCount.load(std::memory_order_acquire) == 1 &&
         state.receivedOutOfMemory.load(std::memory_order_acquire) &&
         !state.receivedNotReady.load(std::memory_order_acquire) &&
         !state.operationSucceeded.load(std::memory_order_acquire) &&
-        !scheduler.hasSingleReadyTask();
-    scheduler.releaseRetainedState();
+        !scheduler.has_single_ready_task();
+    scheduler.release_retained_state();
     return completed && taskState != nullptr &&
         taskState->m_refs.load(std::memory_order_acquire) == 1;
 }
 
-bool runDynamicCapacityByteBound()
+bool run_dynamic_capacity_byte_bound()
 {
     constexpr size_t kCursorHalf = size_t{1} <<
         (std::numeric_limits<size_t>::digits - 1U);
@@ -1207,7 +1207,7 @@ bool runDynamicCapacityByteBound()
         channel.capacity() == 0;
 }
 
-bool runInvalidCapacityErrorPropagation()
+bool run_invalid_capacity_error_propagation()
 {
     galay::spsc::BoundedChannel<int> channel(
         std::numeric_limits<size_t>::max());
@@ -1216,32 +1216,32 @@ bool runInvalidCapacityErrorPropagation()
         return false;
     }
 
-    const auto isParamInvalid = [](const auto& result) {
+    const auto is_param_invalid = [](const auto& result) {
         return !result.has_value() && IOError::contains(
             result.error().code(), kParamInvalid);
     };
 
     auto send = channel.send(73);
-    if (!send.await_ready() || !isParamInvalid(send.await_resume())) {
+    if (!send.await_ready() || !is_param_invalid(send.await_resume())) {
         return false;
     }
 
     auto recv = channel.recv();
-    if (!recv.await_ready() || !isParamInvalid(recv.await_resume())) {
+    if (!recv.await_ready() || !is_param_invalid(recv.await_resume())) {
         return false;
     }
 
-    auto batch = channel.recvBatch(1);
-    if (!batch.await_ready() || !isParamInvalid(batch.await_resume())) {
+    auto batch = channel.recv_batch(1);
+    if (!batch.await_ready() || !is_param_invalid(batch.await_resume())) {
         return false;
     }
 
     std::array<int, 1> output{};
-    auto batchTo = channel.recvBatchTo(std::span<int>(output));
-    return batchTo.await_ready() && isParamInvalid(batchTo.await_resume());
+    auto batchTo = channel.recv_batch_to(std::span<int>(output));
+    return batchTo.await_ready() && is_param_invalid(batchTo.await_resume());
 }
 
-bool runDiagnosticSizeAcrossCursorWrap()
+bool run_diagnostic_size_across_cursor_wrap()
 {
     galay::spsc::BoundedChannel<int> channel(4);
     if (channel.error() != galay::spsc::RingError::kNone) {
@@ -1253,131 +1253,131 @@ bool runDiagnosticSizeAcrossCursorWrap()
     return channel.size() == 3 && !channel.empty() && !channel.full();
 }
 
-bool runRecvBatchToReadyPathUsesNoAllocation()
+bool run_recv_batch_to_ready_path_uses_no_allocation()
 {
     galay::spsc::BoundedChannel<int> channel(2);
-    if (!channel.trySend(73)) {
+    if (!channel.try_send(73)) {
         return false;
     }
     QueuedRaceScheduler scheduler;
     AwaitState state;
 
-    auto task = awaitWithoutTimeout(&channel, AwaitKind::kRecvBatchTo, &state);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
-    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
+    auto task = await_without_timeout(&channel, AwaitKind::kRecvBatchTo, &state);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
+    TaskRef scheduled = detail::TaskAccess::detach_task(std::move(task));
     const size_t allocationsBefore =
         g_allocationCount.load(std::memory_order_relaxed);
-    const bool started = scheduler.scheduleImmediately(std::move(scheduled));
+    const bool started = scheduler.schedule_immediately(std::move(scheduled));
     const size_t allocationsAfter =
         g_allocationCount.load(std::memory_order_relaxed);
     const bool completed = state.completed.load(std::memory_order_acquire) &&
         state.resumeCount.load(std::memory_order_acquire) == 1 &&
-        hasExpectedSuccess(state, AwaitKind::kRecvBatchTo);
-    scheduler.releaseRetainedState();
+        has_expected_success(state, AwaitKind::kRecvBatchTo);
+    scheduler.release_retained_state();
     return started && completed && allocationsAfter == allocationsBefore &&
         state.awaitAllocationCount.load(std::memory_order_acquire) == 0;
 }
 
-bool runSameSideDoubleRegistrationRejected()
+bool run_same_side_double_registration_rejected()
 {
     galay::spsc::BoundedChannel<int> channel(2);
     QueuedRaceScheduler scheduler;
     AwaitState firstState;
     AwaitState secondState;
 
-    auto firstTask = awaitWithoutTimeout(&channel, AwaitKind::kRecv, &firstState);
-    TaskRef firstKeeper = detail::TaskAccess::taskRef(firstTask);
-    TaskRef firstScheduled = detail::TaskAccess::detachTask(std::move(firstTask));
-    if (!scheduler.scheduleImmediately(std::move(firstScheduled)) ||
+    auto firstTask = await_without_timeout(&channel, AwaitKind::kRecv, &firstState);
+    TaskRef firstKeeper = detail::TaskAccess::task_ref(firstTask);
+    TaskRef firstScheduled = detail::TaskAccess::detach_task(std::move(firstTask));
+    if (!scheduler.schedule_immediately(std::move(firstScheduled)) ||
         firstState.completed.load(std::memory_order_acquire)) {
-        scheduler.releaseRetainedState();
+        scheduler.release_retained_state();
         return false;
     }
 
     auto secondTask =
-        awaitWithoutTimeout(&channel, AwaitKind::kRecvBatchTo, &secondState);
-    TaskRef secondKeeper = detail::TaskAccess::taskRef(secondTask);
-    TaskRef secondScheduled = detail::TaskAccess::detachTask(std::move(secondTask));
-    const bool secondStarted = scheduler.scheduleImmediately(std::move(secondScheduled));
+        await_without_timeout(&channel, AwaitKind::kRecvBatchTo, &secondState);
+    TaskRef secondKeeper = detail::TaskAccess::task_ref(secondTask);
+    TaskRef secondScheduled = detail::TaskAccess::detach_task(std::move(secondTask));
+    const bool secondStarted = scheduler.schedule_immediately(std::move(secondScheduled));
     const bool secondRejected = secondState.completed.load(std::memory_order_acquire) &&
         secondState.receivedNotReady.load(std::memory_order_acquire) &&
         secondState.callerBufferContractOk.load(std::memory_order_acquire) &&
         secondState.resumeCount.load(std::memory_order_acquire) == 1;
 
-    const bool sent = channel.trySend(73);
-    const bool oneWake = scheduler.hasSingleReadyTask();
-    const bool firstResumed = scheduler.runOne();
-    const bool firstCompleted = hasExpectedSuccess(firstState, AwaitKind::kRecv) &&
+    const bool sent = channel.try_send(73);
+    const bool oneWake = scheduler.has_single_ready_task();
+    const bool firstResumed = scheduler.run_one();
+    const bool firstCompleted = has_expected_success(firstState, AwaitKind::kRecv) &&
         firstState.resumeCount.load(std::memory_order_acquire) == 1;
-    scheduler.releaseRetainedState();
+    scheduler.release_retained_state();
     return secondStarted && secondRejected && sent && oneWake && firstResumed &&
         firstCompleted;
 }
 
-bool runRetryArrivesBeforeTimeoutAbort(AwaitKind kind)
+bool run_retry_arrives_before_timeout_abort(AwaitKind kind)
 {
     galay::spsc::BoundedChannel<int> channel(2);
-    if (!prepareChannel(channel, kind)) {
+    if (!prepare_channel(channel, kind)) {
         return false;
     }
     QueuedRaceScheduler scheduler;
     AwaitState state;
 
-    auto task = awaitWithTimeout(&channel, kind, &state);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
+    auto task = await_with_timeout(&channel, kind, &state);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
     TaskState* taskState = keeper.state();
     if (taskState == nullptr) {
         return false;
     }
-    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
+    TaskRef scheduled = detail::TaskAccess::detach_task(std::move(task));
     std::atomic<bool> started{false};
 
     bounded_timeout_abort_test::reset();
     std::thread owner([&]() {
         started.store(
-            scheduler.scheduleImmediately(std::move(scheduled)),
+            scheduler.schedule_immediately(std::move(scheduled)),
             std::memory_order_release);
     });
 
     const bool ownerReachedAbort =
-        waitForFlag(bounded_timeout_abort_test::gate.arrived);
+        wait_for_flag(bounded_timeout_abort_test::gate.arrived);
     const bool counterpartCompleted =
-        ownerReachedAbort && completeWaitingOperation(channel, kind);
+        ownerReachedAbort && complete_waiting_operation(channel, kind);
     bounded_timeout_abort_test::release();
     owner.join();
 
     const bool completedBeforeCleanup =
         state.completed.load(std::memory_order_acquire) &&
         state.resumeCount.load(std::memory_order_acquire) == 1 &&
-        hasExpectedSuccess(state, kind) &&
-        ringMatches(channel, kind, true, true);
+        has_expected_success(state, kind) &&
+        ring_matches(channel, kind, true, true);
 
     if (!state.completed.load(std::memory_order_acquire)) {
-        if (scheduler.fireTimer() && scheduler.hasSingleReadyTask()) {
-            [[maybe_unused]] const bool resumed = scheduler.runOne();
+        if (scheduler.fire_timer() && scheduler.has_single_ready_task()) {
+            [[maybe_unused]] const bool resumed = scheduler.run_one();
         }
     }
-    scheduler.releaseRetainedState();
+    scheduler.release_retained_state();
     return started.load(std::memory_order_acquire) && ownerReachedAbort &&
         counterpartCompleted && completedBeforeCleanup &&
         taskState->m_refs.load(std::memory_order_acquire) == 1;
 }
 
-bool runCloseWaitsForStartedSendPublication()
+bool run_close_waits_for_started_send_publication()
 {
     using Channel = galay::spsc::BoundedChannel<BlockingMove>;
     Channel channel(2);
     QueuedRaceScheduler scheduler;
     BlockingRecvState recvState;
 
-    auto recvTask = receiveBlockingMove(&channel, &recvState);
-    TaskRef recvKeeper = detail::TaskAccess::taskRef(recvTask);
+    auto recvTask = receive_blocking_move(&channel, &recvState);
+    TaskRef recvKeeper = detail::TaskAccess::task_ref(recvTask);
     TaskState* recvTaskState = recvKeeper.state();
     if (recvTaskState == nullptr) {
         return false;
     }
-    TaskRef recvScheduled = detail::TaskAccess::detachTask(std::move(recvTask));
-    if (!scheduler.scheduleImmediately(std::move(recvScheduled))) {
+    TaskRef recvScheduled = detail::TaskAccess::detach_task(std::move(recvTask));
+    if (!scheduler.schedule_immediately(std::move(recvScheduled))) {
         return false;
     }
 
@@ -1385,44 +1385,44 @@ bool runCloseWaitsForStartedSendPublication()
     std::atomic<bool> sendSucceeded{false};
     std::thread producer([&]() {
         BlockingMove value(91, &control);
-        sendSucceeded.store(channel.trySend(std::move(value)),
+        sendSucceeded.store(channel.try_send(std::move(value)),
                             std::memory_order_release);
     });
-    const bool moveStarted = waitForFlag(control.moveStarted);
+    const bool moveStarted = wait_for_flag(control.moveStarted);
     if (moveStarted) {
         channel.close();
     }
-    const bool closeDeferred = moveStarted && !scheduler.hasSingleReadyTask();
+    const bool closeDeferred = moveStarted && !scheduler.has_single_ready_task();
     control.allowMove.store(true, std::memory_order_release);
     producer.join();
 
-    const bool oneValueWake = scheduler.hasSingleReadyTask();
-    const bool recvResumed = scheduler.runOne();
+    const bool oneValueWake = scheduler.has_single_ready_task();
+    const bool recvResumed = scheduler.run_one();
     const bool recvCompleted = recvState.completed.load(std::memory_order_acquire) &&
         recvState.succeeded && !recvState.receivedClosed && recvState.value == 91;
     const bool drained = channel.empty();
 
-    scheduler.releaseRetainedState();
+    scheduler.release_retained_state();
     return moveStarted && closeDeferred &&
         sendSucceeded.load(std::memory_order_acquire) && oneValueWake &&
-        recvResumed && recvCompleted && drained && channel.isClosed() &&
+        recvResumed && recvCompleted && drained && channel.is_closed() &&
         recvTaskState->m_refs.load(std::memory_order_acquire) == 1;
 }
 
-bool runSynchronousCloseWakeCanDestroyChannel()
+bool run_synchronous_close_wake_can_destroy_channel()
 {
     auto channel = std::make_unique<galay::spsc::BoundedChannel<int>>(2);
     ImmediateRaceScheduler scheduler(nullptr, AwaitKind::kRecv, false);
     AwaitState state;
 
-    auto task = receiveClosedAndDestroy(&channel, &state);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
+    auto task = receive_closed_and_destroy(&channel, &state);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
     TaskState* taskState = keeper.state();
     if (taskState == nullptr) {
         return false;
     }
-    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
-    if (!scheduler.scheduleImmediately(std::move(scheduled))) {
+    TaskRef scheduled = detail::TaskAccess::detach_task(std::move(task));
+    if (!scheduler.schedule_immediately(std::move(scheduled))) {
         return false;
     }
 
@@ -1431,116 +1431,116 @@ bool runSynchronousCloseWakeCanDestroyChannel()
     return channel == nullptr && state.completed.load(std::memory_order_acquire) &&
         state.receivedClosed.load(std::memory_order_acquire) &&
         state.resumeCount.load(std::memory_order_acquire) == 1 &&
-        scheduler.scheduleCalls() == 1 &&
+        scheduler.schedule_calls() == 1 &&
         taskState->m_refs.load(std::memory_order_acquire) == 1;
 }
 
-bool runOperationFirst(AwaitKind kind)
+bool run_operation_first(AwaitKind kind)
 {
     galay::spsc::BoundedChannel<int> channel(2);
-    if (!prepareChannel(channel, kind)) {
+    if (!prepare_channel(channel, kind)) {
         return false;
     }
     QueuedRaceScheduler scheduler;
     AwaitState state;
 
-    auto task = awaitWithTimeout(&channel, kind, &state);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
+    auto task = await_with_timeout(&channel, kind, &state);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
     TaskState* taskState = keeper.state();
     if (taskState == nullptr) {
         return false;
     }
 
-    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
-    const bool started = scheduler.scheduleImmediately(std::move(scheduled));
-    const bool operationCompleted = completeWaitingOperation(channel, kind);
-    const bool oneOperationWake = scheduler.hasSingleReadyTask();
-    const bool noDuplicateWake = scheduler.resumeWithTimerInDequeueGap();
+    TaskRef scheduled = detail::TaskAccess::detach_task(std::move(task));
+    const bool started = scheduler.schedule_immediately(std::move(scheduled));
+    const bool operationCompleted = complete_waiting_operation(channel, kind);
+    const bool oneOperationWake = scheduler.has_single_ready_task();
+    const bool noDuplicateWake = scheduler.resume_with_timer_in_dequeue_gap();
     const bool completed = state.completed.load(std::memory_order_acquire) &&
         state.resumeCount.load(std::memory_order_acquire) == 1 &&
-        hasExpectedSuccess(state, kind);
-    const bool ringCorrect = ringMatches(channel, kind, true, true);
+        has_expected_success(state, kind);
+    const bool ringCorrect = ring_matches(channel, kind, true, true);
 
-    scheduler.releaseRetainedState();
+    scheduler.release_retained_state();
     return started && operationCompleted && oneOperationWake && noDuplicateWake &&
         completed && ringCorrect &&
         taskState->m_refs.load(std::memory_order_acquire) == 1;
 }
 
-bool runTimerFirst(AwaitKind kind)
+bool run_timer_first(AwaitKind kind)
 {
     galay::spsc::BoundedChannel<int> channel(2);
-    if (!prepareChannel(channel, kind)) {
+    if (!prepare_channel(channel, kind)) {
         return false;
     }
     QueuedRaceScheduler scheduler;
     AwaitState state;
 
-    auto task = awaitWithTimeout(&channel, kind, &state);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
+    auto task = await_with_timeout(&channel, kind, &state);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
     TaskState* taskState = keeper.state();
     if (taskState == nullptr) {
         return false;
     }
 
-    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
-    const bool started = scheduler.scheduleImmediately(std::move(scheduled));
-    const bool timerFired = scheduler.fireTimer();
-    const bool oneTimerWake = scheduler.hasSingleReadyTask();
-    const bool counterpartCompleted = completeWaitingOperation(channel, kind);
-    const bool stillOneWake = scheduler.hasSingleReadyTask();
-    const bool resumed = scheduler.runOne();
+    TaskRef scheduled = detail::TaskAccess::detach_task(std::move(task));
+    const bool started = scheduler.schedule_immediately(std::move(scheduled));
+    const bool timerFired = scheduler.fire_timer();
+    const bool oneTimerWake = scheduler.has_single_ready_task();
+    const bool counterpartCompleted = complete_waiting_operation(channel, kind);
+    const bool stillOneWake = scheduler.has_single_ready_task();
+    const bool resumed = scheduler.run_one();
     const bool timedOut = state.completed.load(std::memory_order_acquire) &&
         state.resumeCount.load(std::memory_order_acquire) == 1 &&
-        hasExpectedTimeout(state);
-    const bool ringCorrect = ringMatches(channel, kind, false, true);
+        has_expected_timeout(state);
+    const bool ringCorrect = ring_matches(channel, kind, false, true);
 
-    scheduler.releaseRetainedState();
+    scheduler.release_retained_state();
     return started && timerFired && oneTimerWake && counterpartCompleted &&
         stillOneWake && resumed && timedOut && ringCorrect &&
         taskState->m_refs.load(std::memory_order_acquire) == 1;
 }
 
-bool runCloseTimerArbitration(AwaitKind kind, bool closeFirst)
+bool run_close_timer_arbitration(AwaitKind kind, bool closeFirst)
 {
     galay::spsc::BoundedChannel<int> channel(2);
-    if (!prepareChannel(channel, kind)) {
+    if (!prepare_channel(channel, kind)) {
         return false;
     }
     QueuedRaceScheduler scheduler;
     AwaitState state;
 
-    auto task = awaitWithTimeout(&channel, kind, &state);
-    TaskRef keeper = detail::TaskAccess::taskRef(task);
+    auto task = await_with_timeout(&channel, kind, &state);
+    TaskRef keeper = detail::TaskAccess::task_ref(task);
     TaskState* taskState = keeper.state();
     if (taskState == nullptr) {
         return false;
     }
 
-    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
-    const bool started = scheduler.scheduleImmediately(std::move(scheduled));
+    TaskRef scheduled = detail::TaskAccess::detach_task(std::move(task));
+    const bool started = scheduler.schedule_immediately(std::move(scheduled));
     bool oneWake = false;
     bool noDuplicateWake = false;
     bool resumed = false;
     if (closeFirst) {
         channel.close();
-        oneWake = scheduler.hasSingleReadyTask();
-        noDuplicateWake = scheduler.resumeWithTimerInDequeueGap();
+        oneWake = scheduler.has_single_ready_task();
+        noDuplicateWake = scheduler.resume_with_timer_in_dequeue_gap();
         resumed = true;
     } else {
-        const bool timerFired = scheduler.fireTimer();
-        oneWake = timerFired && scheduler.hasSingleReadyTask();
+        const bool timerFired = scheduler.fire_timer();
+        oneWake = timerFired && scheduler.has_single_ready_task();
         channel.close();
-        noDuplicateWake = scheduler.hasSingleReadyTask();
-        resumed = scheduler.runOne();
+        noDuplicateWake = scheduler.has_single_ready_task();
+        resumed = scheduler.run_one();
     }
 
     const bool completed = state.completed.load(std::memory_order_acquire) &&
         state.resumeCount.load(std::memory_order_acquire) == 1 &&
-        (closeFirst ? hasExpectedClose(state) : hasExpectedTimeout(state));
-    const bool ringCorrect = ringMatches(channel, kind, false, false);
+        (closeFirst ? has_expected_close(state) : has_expected_timeout(state));
+    const bool ringCorrect = ring_matches(channel, kind, false, false);
 
-    scheduler.releaseRetainedState();
+    scheduler.release_retained_state();
     return started && oneWake && noDuplicateWake && resumed && completed &&
         ringCorrect && taskState->m_refs.load(std::memory_order_acquire) == 1;
 }
@@ -1549,101 +1549,101 @@ bool runCloseTimerArbitration(AwaitKind kind, bool closeFirst)
 
 int main()
 {
-    if (!runDynamicCapacityByteBound()) {
+    if (!run_dynamic_capacity_byte_bound()) {
         std::cerr << "[T160] dynamic capacity ignored slot byte-size bound\n";
         return 1;
     }
-    if (!runInvalidCapacityErrorPropagation()) {
+    if (!run_invalid_capacity_error_propagation()) {
         std::cerr << "[T160] invalid capacity error was not propagated\n";
         return 1;
     }
-    if (!runDiagnosticSizeAcrossCursorWrap()) {
+    if (!run_diagnostic_size_across_cursor_wrap()) {
         std::cerr << "[T160] diagnostic size failed across cursor wrap\n";
         return 1;
     }
-    if (!runStaticCapacityChannel()) {
+    if (!run_static_capacity_channel()) {
         std::cerr << "[T160] static-capacity bounded channel failed\n";
         return 1;
     }
 
     for (AwaitKind kind : kAwaitKinds) {
-        if (!runConstructionOomIsRecoverable(kind)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_construction_oom_is_recoverable(kind)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " construction OOM was not propagated\n";
             return 1;
         }
-        if (!runWaiterPathUsesNoAllocation(kind)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_waiter_path_uses_no_allocation(kind)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " waiter suspension performed a global allocation\n";
             return 1;
         }
-        if (!runRetryArrivesBeforeTimeoutAbort(kind)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_retry_arrives_before_timeout_abort(kind)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " retry between final check and timeout abort was lost\n";
             return 1;
         }
-        if (!runPeerCompletionBeforeArmed(kind)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_peer_completion_before_armed(kind)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " peer completion escaped the await_suspend arming window\n";
             return 1;
         }
-        if (!runTimedOutWaiterDoesNotBlockNext(kind)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_timed_out_waiter_does_not_block_next(kind)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " timeout tombstone blocked the next live waiter\n";
             return 1;
         }
-        if (!runTimeoutWhilePeerHoldsWaiterLease(kind)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_timeout_while_peer_holds_waiter_lease(kind)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " pinned waiter was reused before peer release\n";
             return 1;
         }
-        if (!runAddTimerFailure(kind, true)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_add_timer_failure(kind, true)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " addTimer=false operation-first failed\n";
             return 1;
         }
-        if (!runAddTimerFailure(kind, false)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_add_timer_failure(kind, false)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " addTimer=false timeout-first failed\n";
             return 1;
         }
-        if (!runOperationFirst(kind)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_operation_first(kind)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " operation-first dequeue-gap failed\n";
             return 1;
         }
-        if (!runTimerFirst(kind)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_timer_first(kind)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " timer-first retention/non-send failed\n";
             return 1;
         }
-        if (!runCloseTimerArbitration(kind, true)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_close_timer_arbitration(kind, true)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " close-first arbitration failed\n";
             return 1;
         }
-        if (!runCloseTimerArbitration(kind, false)) {
-            std::cerr << "[T160] " << awaitKindName(kind)
+        if (!run_close_timer_arbitration(kind, false)) {
+            std::cerr << "[T160] " << await_kind_name(kind)
                       << " timer-first close arbitration failed\n";
             return 1;
         }
     }
 
-    if (!runRecvBatchToReadyPathUsesNoAllocation()) {
+    if (!run_recv_batch_to_ready_path_uses_no_allocation()) {
         std::cerr << "[T160] recvBatchTo ready path performed a global allocation\n";
         return 1;
     }
 
-    if (!runSameSideDoubleRegistrationRejected()) {
+    if (!run_same_side_double_registration_rejected()) {
         std::cerr << "[T160] same-side double waiter registration was not rejected\n";
         return 1;
     }
 
-    if (!runCloseWaitsForStartedSendPublication()) {
+    if (!run_close_waits_for_started_send_publication()) {
         std::cerr << "[T160] close overtook an already-started SPSC send\n";
         return 1;
     }
-    if (!runSynchronousCloseWakeCanDestroyChannel()) {
+    if (!run_synchronous_close_wake_can_destroy_channel()) {
         std::cerr << "[T160] synchronous close wake lifetime failed\n";
         return 1;
     }

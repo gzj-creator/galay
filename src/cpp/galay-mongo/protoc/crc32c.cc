@@ -11,7 +11,7 @@ namespace
 constexpr uint32_t kInitialCrc32c = 0xFFFFFFFFu;
 constexpr uint32_t kCastagnoliReflectedPolynomial = 0x82F63B78u;
 
-constexpr std::array<uint32_t, 256> makeCrc32cTable()
+constexpr std::array<uint32_t, 256> make_crc32c_table()
 {
     std::array<uint32_t, 256> table{};
     for (uint32_t i = 0; i < table.size(); ++i) {
@@ -25,7 +25,7 @@ constexpr std::array<uint32_t, 256> makeCrc32cTable()
     return table;
 }
 
-constexpr auto kCrc32cTable = makeCrc32cTable();
+constexpr auto kCrc32cTable = make_crc32c_table();
 
 } // namespace
 

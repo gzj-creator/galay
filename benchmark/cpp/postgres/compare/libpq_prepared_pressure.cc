@@ -57,7 +57,7 @@ PGconn* connect(const postgres_benchmark::Config& config)
     return connection;
 }
 
-bool executePrepared(PGconn* connection, size_t value, uint64_t* result_value)
+bool execute_prepared(PGconn* connection, size_t value, uint64_t* result_value)
 {
     const std::string parameter = std::to_string(value);
     const char* parameters[] = {parameter.c_str()};
@@ -91,7 +91,7 @@ bool executePrepared(PGconn* connection, size_t value, uint64_t* result_value)
     return true;
 }
 
-void runWorker(const postgres_benchmark::Config* config,
+void run_worker(const postgres_benchmark::Config* config,
                BenchmarkState* state,
                std::barrier<>* ready_barrier,
                std::barrier<>* start_barrier,
@@ -113,7 +113,7 @@ void runWorker(const postgres_benchmark::Config* config,
     if (ready) {
         for (size_t index = 0; index < kWarmupQueries; ++index) {
             uint64_t result_value = 0;
-            if (!executePrepared(connection, index, &result_value)) {
+            if (!execute_prepared(connection, index, &result_value)) {
                 ready = false;
                 break;
             }
@@ -139,7 +139,7 @@ void runWorker(const postgres_benchmark::Config* config,
     for (size_t iteration = 0; iteration < config->queries; ++iteration) {
         uint64_t result_value = 0;
         const auto started = std::chrono::steady_clock::now();
-        if (!executePrepared(connection, iteration, &result_value)) {
+        if (!execute_prepared(connection, iteration, &result_value)) {
             const auto finished = std::chrono::steady_clock::now();
             local_samples.push_back(static_cast<uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(finished - started).count()));
@@ -169,12 +169,12 @@ void runWorker(const postgres_benchmark::Config* config,
 
 int main(int argc, char** argv)
 {
-    auto config = postgres_benchmark::loadConfig();
-    if (!postgres_benchmark::parseArgs(config, argc, argv)) {
-        postgres_benchmark::printUsage(argv[0]);
+    auto config = postgres_benchmark::load_config();
+    if (!postgres_benchmark::parse_args(config, argc, argv)) {
+        postgres_benchmark::print_usage(argv[0]);
         return 2;
     }
-    postgres_benchmark::printConfig(config);
+    postgres_benchmark::print_config(config);
 
     BenchmarkState state;
     std::barrier ready_barrier(static_cast<std::ptrdiff_t>(config.clients + 1));
@@ -183,7 +183,7 @@ int main(int argc, char** argv)
     std::vector<std::thread> workers;
     workers.reserve(config.clients);
     for (size_t index = 0; index < config.clients; ++index) {
-        workers.emplace_back(runWorker,
+        workers.emplace_back(run_worker,
                              &config,
                              &state,
                              &ready_barrier,

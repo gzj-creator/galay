@@ -63,7 +63,7 @@ public:
     /**
      * @brief 构造对象池
      * @param initialSize 初始预创建的对象数量
-     * @param maxSize 最大池容量（0 表示无限制）
+     * @param max_size 最大池容量（0 表示无限制）
      * @param creator 自定义创建函数
      * @param destroyer 自定义销毁函数
      */
@@ -121,7 +121,7 @@ public:
      * @brief 尝试获取对象（池为空时返回 nullptr）
      * @return RAII 包装的对象指针，或 nullptr
      */
-    Ptr tryAcquire() {
+    Ptr try_acquire() {
         T* obj = nullptr;
 
         {
@@ -161,7 +161,7 @@ public:
      * @brief 获取总共创建的对象数量
      * @return 总创建数量
      */
-    size_t totalCreated() const {
+    size_t total_created() const {
         return m_state->totalCreated.load();
     }
 
@@ -305,7 +305,7 @@ public:
      * @return RAII 包装的对象指针，超时返回 nullptr
      */
     template<typename Rep, typename Period>
-    Ptr tryAcquireFor(const std::chrono::duration<Rep, Period>& timeout) {
+    Ptr try_acquire_for(const std::chrono::duration<Rep, Period>& timeout) {
         std::unique_lock<std::mutex> lock(m_mutex);
         if (!m_cv.wait_for(lock, timeout, [this] { return !m_pool.empty(); })) {
             return nullptr;

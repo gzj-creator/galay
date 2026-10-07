@@ -45,7 +45,7 @@ inline constexpr int kSendNoSignalFlag =
     0;
 #endif
 
-inline std::pair<std::expected<GHandle, IOError>, Host> handleAccept(GHandle listen_handle)
+inline std::pair<std::expected<GHandle, IOError>, Host> handle_accept(GHandle listen_handle)
 {
     sockaddr_storage addr{};
     socklen_t addr_len = sizeof(addr);
@@ -65,7 +65,7 @@ inline std::pair<std::expected<GHandle, IOError>, Host> handleAccept(GHandle lis
         }
         return {std::unexpected(IOError(kAcceptFailed, static_cast<uint32_t>(errno))), Host{}};
     }
-    auto no_sigpipe = HandleOption(handle).handleNoSigPipe();
+    auto no_sigpipe = HandleOption(handle).handle_no_sig_pipe();
     if (!no_sigpipe) {
         const auto option_error = no_sigpipe.error();
         if (galay_close(handle.fd) != 0) {
@@ -73,11 +73,11 @@ inline std::pair<std::expected<GHandle, IOError>, Host> handleAccept(GHandle lis
         }
         return {std::unexpected(option_error), Host{}};
     }
-    Host host = Host::fromSockAddr(addr);
+    Host host = Host::from_sock_addr(addr);
     return {handle, std::move(host)};
 }
 
-inline std::expected<size_t, IOError> handleRecv(GHandle handle, char* buffer, size_t length)
+inline std::expected<size_t, IOError> handle_recv(GHandle handle, char* buffer, size_t length)
 {
     ssize_t recvBytes = recv(handle.fd, buffer, length, 0);
     if (recvBytes >= 0) {
@@ -90,7 +90,7 @@ inline std::expected<size_t, IOError> handleRecv(GHandle handle, char* buffer, s
     }
 }
 
-inline std::expected<size_t, IOError> handleSend(GHandle handle, const char* buffer, size_t length)
+inline std::expected<size_t, IOError> handle_send(GHandle handle, const char* buffer, size_t length)
 {
     ssize_t sentBytes = send(handle.fd, buffer, length, kSendNoSignalFlag);
     if (sentBytes >= 0) {
@@ -103,7 +103,7 @@ inline std::expected<size_t, IOError> handleSend(GHandle handle, const char* buf
     }
 }
 
-inline std::expected<size_t, IOError> handleReadv(GHandle handle, struct iovec* iovecs, int iovcnt)
+inline std::expected<size_t, IOError> handle_readv(GHandle handle, struct iovec* iovecs, int iovcnt)
 {
     ssize_t readBytes = readv(handle.fd, iovecs, iovcnt);
     if (readBytes > 0) {
@@ -118,7 +118,7 @@ inline std::expected<size_t, IOError> handleReadv(GHandle handle, struct iovec* 
     }
 }
 
-inline std::expected<size_t, IOError> handleWritev(GHandle handle, struct iovec* iovecs, int iovcnt)
+inline std::expected<size_t, IOError> handle_writev(GHandle handle, struct iovec* iovecs, int iovcnt)
 {
     struct msghdr msg{};
     msg.msg_iov = iovecs;
@@ -134,9 +134,9 @@ inline std::expected<size_t, IOError> handleWritev(GHandle handle, struct iovec*
     }
 }
 
-inline std::expected<void, IOError> handleConnect(GHandle handle, const Host& host)
+inline std::expected<void, IOError> handle_connect(GHandle handle, const Host& host)
 {
-    int result = ::connect(handle.fd, host.sockAddr(), host.addrLen());
+    int result = ::connect(handle.fd, host.sock_addr(), host.addr_len());
     if (result == 0) {
         return {};
     } else if (errno == EINPROGRESS) {
@@ -148,13 +148,13 @@ inline std::expected<void, IOError> handleConnect(GHandle handle, const Host& ho
     }
 }
 
-inline std::pair<std::expected<size_t, IOError>, Host> handleRecvFrom(GHandle handle, char* buffer, size_t length)
+inline std::pair<std::expected<size_t, IOError>, Host> handle_recv_from(GHandle handle, char* buffer, size_t length)
 {
     sockaddr_storage addr{};
     socklen_t addr_len = sizeof(addr);
     ssize_t recvBytes = recvfrom(handle.fd, buffer, length, 0, reinterpret_cast<sockaddr*>(&addr), &addr_len);
     if (recvBytes >= 0) {
-        Host host = Host::fromSockAddr(addr);
+        Host host = Host::from_sock_addr(addr);
         return {static_cast<size_t>(recvBytes), std::move(host)};
     } else {
         if (static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR) {
@@ -164,9 +164,9 @@ inline std::pair<std::expected<size_t, IOError>, Host> handleRecvFrom(GHandle ha
     }
 }
 
-inline std::expected<size_t, IOError> handleSendTo(GHandle handle, const char* buffer, size_t length, const Host& to)
+inline std::expected<size_t, IOError> handle_send_to(GHandle handle, const char* buffer, size_t length, const Host& to)
 {
-    ssize_t sentBytes = sendto(handle.fd, buffer, length, kSendNoSignalFlag, to.sockAddr(), to.addrLen());
+    ssize_t sentBytes = sendto(handle.fd, buffer, length, kSendNoSignalFlag, to.sock_addr(), to.addr_len());
     if (sentBytes >= 0) {
         return static_cast<size_t>(sentBytes);
     } else {
@@ -177,7 +177,7 @@ inline std::expected<size_t, IOError> handleSendTo(GHandle handle, const char* b
     }
 }
 
-inline std::expected<size_t, IOError> handleFileRead(GHandle handle, char* buffer, size_t length, off_t offset)
+inline std::expected<size_t, IOError> handle_file_read(GHandle handle, char* buffer, size_t length, off_t offset)
 {
     ssize_t readBytes = pread(handle.fd, buffer, length, offset);
     if (readBytes >= 0) {
@@ -190,7 +190,7 @@ inline std::expected<size_t, IOError> handleFileRead(GHandle handle, char* buffe
     }
 }
 
-inline std::expected<size_t, IOError> handleFileWrite(GHandle handle, const char* buffer, size_t length, off_t offset)
+inline std::expected<size_t, IOError> handle_file_write(GHandle handle, const char* buffer, size_t length, off_t offset)
 {
     ssize_t writtenBytes = pwrite(handle.fd, buffer, length, offset);
     if (writtenBytes >= 0) {
@@ -203,7 +203,7 @@ inline std::expected<size_t, IOError> handleFileWrite(GHandle handle, const char
     }
 }
 
-inline std::expected<size_t, IOError> handleSendFile(GHandle socket_handle, int file_fd, off_t offset, size_t count)
+inline std::expected<size_t, IOError> handle_send_file(GHandle socket_handle, int file_fd, off_t offset, size_t count)
 {
 #ifdef USE_KQUEUE
     // macOS: sendfile(in_fd, out_fd, offset, &len, hdtr, flags)
@@ -235,7 +235,7 @@ inline std::expected<size_t, IOError> handleSendFile(GHandle socket_handle, int 
 }
 
 #ifdef USE_EPOLL
-inline FileWatchResult makeInotifyWatchResult(const struct inotify_event& event)
+inline FileWatchResult make_inotify_watch_result(const struct inotify_event& event)
 {
     FileWatchResult result{};
     result.isDir = (event.mask & IN_ISDIR) != 0;
@@ -259,7 +259,7 @@ inline FileWatchResult makeInotifyWatchResult(const struct inotify_event& event)
     return result;
 }
 
-inline std::expected<FileWatchResult, IOError> parseInotifyEvents(
+inline std::expected<FileWatchResult, IOError> parse_inotify_events(
     const char* buffer,
     size_t length,
     std::deque<FileWatchResult>* ready_events)
@@ -274,7 +274,7 @@ inline std::expected<FileWatchResult, IOError> parseInotifyEvents(
         if (event_size == 0 || offset + event_size > length) {
             break;
         }
-        auto result = makeInotifyWatchResult(*event);
+        auto result = make_inotify_watch_result(*event);
         if (!has_first) {
             first = std::move(result);
             has_first = true;
@@ -312,7 +312,7 @@ inline std::expected<FileWatchResult, IOError> parseInotifyEvents(
 namespace galay::kernel::io
 {
 
-inline std::expected<GHandle, IOError> handleAccept(struct io_uring_cqe* cqe)
+inline std::expected<GHandle, IOError> handle_accept(struct io_uring_cqe* cqe)
 {
     int res = cqe->res;
     if (res >= 0) {
@@ -324,7 +324,7 @@ inline std::expected<GHandle, IOError> handleAccept(struct io_uring_cqe* cqe)
     return std::unexpected(IOError(kAcceptFailed, static_cast<uint32_t>(-res)));
 }
 
-inline std::expected<size_t, IOError> handleRecv(struct io_uring_cqe* cqe,
+inline std::expected<size_t, IOError> handle_recv(struct io_uring_cqe* cqe,
                                                 [[maybe_unused]] char* buffer)
 {
     int res = cqe->res;
@@ -337,7 +337,7 @@ inline std::expected<size_t, IOError> handleRecv(struct io_uring_cqe* cqe,
     return std::unexpected(IOError(kRecvFailed, static_cast<uint32_t>(-res)));
 }
 
-inline std::expected<size_t, IOError> handleSend(struct io_uring_cqe* cqe)
+inline std::expected<size_t, IOError> handle_send(struct io_uring_cqe* cqe)
 {
     int res = cqe->res;
     if (res >= 0) {
@@ -349,7 +349,7 @@ inline std::expected<size_t, IOError> handleSend(struct io_uring_cqe* cqe)
     return std::unexpected(IOError(kSendFailed, static_cast<uint32_t>(-res)));
 }
 
-inline std::expected<size_t, IOError> handleReadv(struct io_uring_cqe* cqe)
+inline std::expected<size_t, IOError> handle_readv(struct io_uring_cqe* cqe)
 {
     int res = cqe->res;
     if (res > 0) {
@@ -363,7 +363,7 @@ inline std::expected<size_t, IOError> handleReadv(struct io_uring_cqe* cqe)
     return std::unexpected(IOError(kRecvFailed, static_cast<uint32_t>(-res)));
 }
 
-inline std::expected<size_t, IOError> handleWritev(struct io_uring_cqe* cqe)
+inline std::expected<size_t, IOError> handle_writev(struct io_uring_cqe* cqe)
 {
     int res = cqe->res;
     if (res >= 0) {
@@ -375,7 +375,7 @@ inline std::expected<size_t, IOError> handleWritev(struct io_uring_cqe* cqe)
     return std::unexpected(IOError(kSendFailed, static_cast<uint32_t>(-res)));
 }
 
-inline std::expected<void, IOError> handleConnect(struct io_uring_cqe* cqe)
+inline std::expected<void, IOError> handle_connect(struct io_uring_cqe* cqe)
 {
     int res = cqe->res;
     if (res == 0 || -res == EISCONN) {
@@ -387,14 +387,14 @@ inline std::expected<void, IOError> handleConnect(struct io_uring_cqe* cqe)
     return std::unexpected(IOError(kConnectFailed, static_cast<uint32_t>(-res)));
 }
 
-inline std::pair<std::expected<size_t, IOError>, Host> handleRecvFrom(
+inline std::pair<std::expected<size_t, IOError>, Host> handle_recv_from(
     struct io_uring_cqe* cqe,
     [[maybe_unused]] char* buffer,
     const sockaddr_storage& addr)
 {
     int res = cqe->res;
     if (res >= 0) {
-        Host host = Host::fromSockAddr(addr);
+        Host host = Host::from_sock_addr(addr);
         return {static_cast<size_t>(res), std::move(host)};
     }
     if (-res == EAGAIN || -res == EWOULDBLOCK || -res == EINTR) {
@@ -403,7 +403,7 @@ inline std::pair<std::expected<size_t, IOError>, Host> handleRecvFrom(
     return {std::unexpected(IOError(kRecvFailed, static_cast<uint32_t>(-res))), Host{}};
 }
 
-inline std::expected<size_t, IOError> handleSendTo(struct io_uring_cqe* cqe)
+inline std::expected<size_t, IOError> handle_send_to(struct io_uring_cqe* cqe)
 {
     int res = cqe->res;
     if (res >= 0) {
@@ -415,7 +415,7 @@ inline std::expected<size_t, IOError> handleSendTo(struct io_uring_cqe* cqe)
     return std::unexpected(IOError(kSendFailed, static_cast<uint32_t>(-res)));
 }
 
-inline std::expected<size_t, IOError> handleFileRead(struct io_uring_cqe* cqe,
+inline std::expected<size_t, IOError> handle_file_read(struct io_uring_cqe* cqe,
                                                      [[maybe_unused]] char* buffer)
 {
     int res = cqe->res;
@@ -428,7 +428,7 @@ inline std::expected<size_t, IOError> handleFileRead(struct io_uring_cqe* cqe,
     return std::unexpected(IOError(kReadFailed, static_cast<uint32_t>(-res)));
 }
 
-inline std::expected<size_t, IOError> handleFileWrite(struct io_uring_cqe* cqe)
+inline std::expected<size_t, IOError> handle_file_write(struct io_uring_cqe* cqe)
 {
     int res = cqe->res;
     if (res >= 0) {
@@ -440,7 +440,7 @@ inline std::expected<size_t, IOError> handleFileWrite(struct io_uring_cqe* cqe)
     return std::unexpected(IOError(kWriteFailed, static_cast<uint32_t>(-res)));
 }
 
-inline FileWatchResult makeInotifyWatchResult(const struct inotify_event& event)
+inline FileWatchResult make_inotify_watch_result(const struct inotify_event& event)
 {
     FileWatchResult result{};
     result.isDir = (event.mask & IN_ISDIR) != 0;
@@ -464,7 +464,7 @@ inline FileWatchResult makeInotifyWatchResult(const struct inotify_event& event)
     return result;
 }
 
-inline std::expected<FileWatchResult, IOError> parseInotifyEvents(
+inline std::expected<FileWatchResult, IOError> parse_inotify_events(
     const char* buffer,
     size_t length,
     std::deque<FileWatchResult>* ready_events)
@@ -479,7 +479,7 @@ inline std::expected<FileWatchResult, IOError> parseInotifyEvents(
         if (event_size == 0 || offset + event_size > length) {
             break;
         }
-        auto result = makeInotifyWatchResult(*event);
+        auto result = make_inotify_watch_result(*event);
         if (!has_first) {
             first = std::move(result);
             has_first = true;
@@ -494,14 +494,14 @@ inline std::expected<FileWatchResult, IOError> parseInotifyEvents(
     return first;
 }
 
-inline std::expected<FileWatchResult, IOError> handleFileWatch(
+inline std::expected<FileWatchResult, IOError> handle_file_watch(
     struct io_uring_cqe* cqe,
     char* buffer,
     std::deque<FileWatchResult>* ready_events)
 {
     int res = cqe->res;
     if (res > 0) {
-        return parseInotifyEvents(buffer, static_cast<size_t>(res), ready_events);
+        return parse_inotify_events(buffer, static_cast<size_t>(res), ready_events);
     } else if (res == 0) {
         return std::unexpected(IOError(kReadFailed, 0));
     }
@@ -511,7 +511,7 @@ inline std::expected<FileWatchResult, IOError> handleFileWatch(
     return std::unexpected(IOError(kReadFailed, static_cast<uint32_t>(-res)));
 }
 
-inline std::expected<size_t, IOError> handleSendFile(struct io_uring_cqe* cqe, GHandle socket_handle, int file_fd, off_t offset, size_t count)
+inline std::expected<size_t, IOError> handle_send_file(struct io_uring_cqe* cqe, GHandle socket_handle, int file_fd, off_t offset, size_t count)
 {
     int res = cqe->res;
     if (res < 0) {

@@ -104,7 +104,7 @@ template <typename Channel, typename Token, typename Values>
 concept HasCopyBatch = requires(Channel& channel,
                                 Token& token,
                                 const Values& values) {
-    channel.sendBatch(token, values);
+    channel.send_batch(token, values);
 };
 
 using ThrowingCopyChannel = galay::mpsc::UnboundedChannel<ThrowingCopy>;
@@ -112,11 +112,11 @@ static_assert(!HasCopyBatch<ThrowingCopyChannel,
                            ThrowingCopyChannel::ProducerToken,
                            std::vector<ThrowingCopy>>);
 
-bool testMoveOnlyAcrossBlocks()
+bool test_move_only_across_blocks()
 {
     constexpr uint64_t kMessages = 20'000;
     galay::mpsc::UnboundedChannel<NonDefaultMoveOnly> channel;
-    auto token = channel.makeProducerToken();
+    auto token = channel.make_producer_token();
     if (!token.valid()) {
         return false;
     }
@@ -126,13 +126,13 @@ bool testMoveOnlyAcrossBlocks()
     for (uint64_t value = 0; value < kMessages; ++value) {
         values.emplace_back(value);
     }
-    if (!channel.sendBatch(token, std::move(values))) {
+    if (!channel.send_batch(token, std::move(values))) {
         return false;
     }
 
     uint64_t expected = 0;
     while (expected < kMessages) {
-        auto batch = channel.tryRecvBatch(777);
+        auto batch = channel.try_recv_batch(777);
         if (!batch.has_value()) {
             return false;
         }
@@ -146,7 +146,7 @@ bool testMoveOnlyAcrossBlocks()
     return channel.empty() && channel.size() == 0;
 }
 
-bool testNonTrivialValueLifetimeAcrossRecycleAndDestruction()
+bool test_non_trivial_value_lifetime_across_recycle_and_destruction()
 {
     using Channel = galay::mpsc::UnboundedChannel<LifetimeTracked>;
     constexpr uint64_t kInitial = 4'096;
@@ -157,7 +157,7 @@ bool testNonTrivialValueLifetimeAcrossRecycleAndDestruction()
     bool passed = true;
     {
         Channel channel;
-        auto token = channel.makeProducerToken();
+        auto token = channel.make_producer_token();
         if (!token.valid()) {
             passed = false;
         }
@@ -169,19 +169,19 @@ bool testNonTrivialValueLifetimeAcrossRecycleAndDestruction()
             }
         }
         if (passed &&
-            galay::mpsc::UnboundedChannelTestAccess::allocatedBlockCount(channel) <
+            galay::mpsc::UnboundedChannelTestAccess::allocated_block_count(channel) <
                 2) {
             passed = false;
         }
 
         for (uint64_t sequence = 0; passed && sequence < kDrained; ++sequence) {
-            auto received = channel.tryRecv();
+            auto received = channel.try_recv();
             if (!received.has_value() || received->value != sequence) {
                 passed = false;
             }
         }
         if (passed &&
-            galay::mpsc::UnboundedChannelTestAccess::recycledBlockCount(channel) ==
+            galay::mpsc::UnboundedChannelTestAccess::recycled_block_count(channel) ==
                 0) {
             passed = false;
         }
@@ -207,7 +207,7 @@ bool testNonTrivialValueLifetimeAcrossRecycleAndDestruction()
         LifetimeTracked::moves.load(std::memory_order_relaxed) != 0;
 }
 
-bool runPerProducerFifo(bool useTokens)
+bool run_per_producer_fifo(bool useTokens)
 {
     constexpr uint32_t kProducerCount = 4;
     constexpr uint64_t kMessagesPerProducer = 50'000;
@@ -219,7 +219,7 @@ bool runPerProducerFifo(bool useTokens)
     if (useTokens) {
         tokens.reserve(kProducerCount);
         for (uint32_t producer = 0; producer < kProducerCount; ++producer) {
-            auto token = channel.makeProducerToken();
+            auto token = channel.make_producer_token();
             if (!token.valid()) {
                 return false;
             }
@@ -258,7 +258,7 @@ bool runPerProducerFifo(bool useTokens)
         uint64_t received = 0;
         const auto deadline = std::chrono::steady_clock::now() + 15s;
         while (received < kTotal && !failed.load(std::memory_order_acquire)) {
-            auto value = channel.tryRecv();
+            auto value = channel.try_recv();
             if (!value.has_value()) {
                 if (std::chrono::steady_clock::now() >= deadline) {
                     failed.store(true, std::memory_order_release);
@@ -283,7 +283,7 @@ bool runPerProducerFifo(bool useTokens)
         }
     });
 
-    if (!ready.waitFor(2s)) {
+    if (!ready.wait_for(2s)) {
         failed.store(true, std::memory_order_release);
     }
     start.open();
@@ -294,12 +294,12 @@ bool runPerProducerFifo(bool useTokens)
     return !failed.load(std::memory_order_acquire) && channel.empty();
 }
 
-bool testFairConsumerRotation()
+bool test_fair_consumer_rotation()
 {
     using Channel = galay::mpsc::UnboundedChannel<Message>;
     Channel channel;
-    auto sparse = channel.makeProducerToken();
-    auto hot = channel.makeProducerToken();
+    auto sparse = channel.make_producer_token();
+    auto hot = channel.make_producer_token();
     if (!sparse.valid() || !hot.valid()) {
         return false;
     }
@@ -317,7 +317,7 @@ bool testFairConsumerRotation()
 
     size_t beforeSentinel = 0;
     while (beforeSentinel <= 256) {
-        auto value = channel.tryRecv();
+        auto value = channel.try_recv();
         if (!value.has_value()) {
             return false;
         }
@@ -329,12 +329,12 @@ bool testFairConsumerRotation()
     return false;
 }
 
-bool testInactiveToActiveHandoff()
+bool test_inactive_to_active_handoff()
 {
     constexpr uint64_t kIterations = 100'000;
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     Channel channel(Channel::DEFAULT_BATCH_SIZE, 0);
-    auto token = channel.makeProducerToken();
+    auto token = channel.make_producer_token();
     if (!token.valid()) {
         return false;
     }
@@ -359,7 +359,7 @@ bool testInactiveToActiveHandoff()
          expected <= kIterations && !failed.load(std::memory_order_acquire);
          ++expected) {
         std::optional<uint64_t> value;
-        while (!(value = channel.tryRecv()).has_value()) {
+        while (!(value = channel.try_recv()).has_value()) {
             if (std::chrono::steady_clock::now() >= deadline) {
                 failed.store(true, std::memory_order_release);
                 break;
@@ -377,11 +377,11 @@ bool testInactiveToActiveHandoff()
     return !failed.load(std::memory_order_acquire) &&
         consumed.load(std::memory_order_acquire) == kIterations &&
         channel.empty() &&
-        galay::mpsc::UnboundedChannelTestAccess::allocatedBlockCount(channel) <= 2 &&
-        galay::mpsc::UnboundedChannelTestAccess::recycledBlockCount(channel) >= 1;
+        galay::mpsc::UnboundedChannelTestAccess::allocated_block_count(channel) <= 2 &&
+        galay::mpsc::UnboundedChannelTestAccess::recycled_block_count(channel) >= 1;
 }
 
-bool testTokenReleaseReacquireHandoffWhileConsuming()
+bool test_token_release_reacquire_handoff_while_consuming()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     constexpr uint64_t kMessages = 50'000;
@@ -423,7 +423,7 @@ bool testTokenReleaseReacquireHandoffWhileConsuming()
                 }
 
                 {
-                    auto token = channel.makeProducerToken();
+                    auto token = channel.make_producer_token();
                     if (!token.valid()) {
                         fail();
                         return;
@@ -467,7 +467,7 @@ bool testTokenReleaseReacquireHandoffWhileConsuming()
         const auto deadline = std::chrono::steady_clock::now() + 15s;
         for (uint64_t expected = 0; expected < kMessages; ++expected) {
             std::optional<uint64_t> received;
-            while (!(received = channel.tryRecv()).has_value()) {
+            while (!(received = channel.try_recv()).has_value()) {
                 if (failed.load(std::memory_order_acquire) ||
                     std::chrono::steady_clock::now() >= deadline) {
                     fail();
@@ -484,7 +484,7 @@ bool testTokenReleaseReacquireHandoffWhileConsuming()
         }
     });
 
-    if (!ready.waitFor(2s)) {
+    if (!ready.wait_for(2s)) {
         fail();
     }
     start.open();
@@ -494,16 +494,16 @@ bool testTokenReleaseReacquireHandoffWhileConsuming()
     consumer.join();
 
     return !failed.load(std::memory_order_acquire) && channel.empty() &&
-        galay::mpsc::UnboundedChannelTestAccess::allocatedStreamCount(channel) ==
+        galay::mpsc::UnboundedChannelTestAccess::allocated_stream_count(channel) ==
             1;
 }
 
-bool testTokenAndTlsLifetime()
+bool test_token_and_tls_lifetime()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     Channel channel;
     {
-        auto token = channel.makeProducerToken();
+        auto token = channel.make_producer_token();
         if (!token.valid() || !channel.send(token, 1)) {
             return false;
         }
@@ -517,8 +517,8 @@ bool testTokenAndTlsLifetime()
         }
     }
 
-    auto first = channel.tryRecv();
-    auto second = channel.tryRecv();
+    auto first = channel.try_recv();
+    auto second = channel.try_recv();
     if (!first.has_value() || !second.has_value() || *first != 1 || *second != 2) {
         return false;
     }
@@ -529,7 +529,7 @@ bool testTokenAndTlsLifetime()
         std::destroy_at(original);
         return false;
     }
-    auto originalValue = original->tryRecv();
+    auto originalValue = original->try_recv();
     const bool originalOk = originalValue.has_value() && *originalValue == 11;
     std::destroy_at(original);
     if (!originalOk) {
@@ -538,53 +538,53 @@ bool testTokenAndTlsLifetime()
 
     Channel* replacement = std::construct_at(reinterpret_cast<Channel*>(storage));
     const bool sent = replacement->send(12);
-    auto replacementValue = replacement->tryRecv();
+    auto replacementValue = replacement->try_recv();
     const bool replacementOk = sent && replacementValue.has_value() &&
         *replacementValue == 12 && replacement->empty();
     std::destroy_at(replacement);
     return replacementOk;
 }
 
-bool testExplicitProducerStreamsAreReused()
+bool test_explicit_producer_streams_are_reused()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     constexpr uint64_t kIterations = 4'096;
     Channel channel;
     for (uint64_t value = 0; value < kIterations; ++value) {
-        auto token = channel.makeProducerToken();
+        auto token = channel.make_producer_token();
         if (!token.valid() || !channel.send(token, value)) {
             return false;
         }
     }
-    if (galay::mpsc::UnboundedChannelTestAccess::allocatedStreamCount(channel) != 1) {
+    if (galay::mpsc::UnboundedChannelTestAccess::allocated_stream_count(channel) != 1) {
         return false;
     }
     for (uint64_t value = 0; value < kIterations; ++value) {
-        auto received = channel.tryRecv();
+        auto received = channel.try_recv();
         if (!received.has_value() || *received != value) {
             return false;
         }
     }
-    return !channel.tryRecv().has_value();
+    return !channel.try_recv().has_value();
 }
 
-bool testTokenMoveAssignmentReleasesPreviousStream()
+bool test_token_move_assignment_releases_previous_stream()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     Channel channel;
-    auto first = channel.makeProducerToken();
-    auto second = channel.makeProducerToken();
+    auto first = channel.make_producer_token();
+    auto second = channel.make_producer_token();
     if (!first.valid() || !second.valid()) {
         return false;
     }
 
     first = std::move(second);
-    auto third = channel.makeProducerToken();
+    auto third = channel.make_producer_token();
     return first.valid() && !second.valid() && third.valid() &&
-        galay::mpsc::UnboundedChannelTestAccess::allocatedStreamCount(channel) <= 2;
+        galay::mpsc::UnboundedChannelTestAccess::allocated_stream_count(channel) <= 2;
 }
 
-bool testTlsProducerStreamsAreReusedAfterThreadExit()
+bool test_tls_producer_streams_are_reused_after_thread_exit()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     constexpr uint64_t kIterations = 512;
@@ -599,19 +599,19 @@ bool testTlsProducerStreamsAreReusedAfterThreadExit()
             return false;
         }
     }
-    if (galay::mpsc::UnboundedChannelTestAccess::allocatedStreamCount(channel) != 1) {
+    if (galay::mpsc::UnboundedChannelTestAccess::allocated_stream_count(channel) != 1) {
         return false;
     }
     for (uint64_t value = 0; value < kIterations; ++value) {
-        auto received = channel.tryRecv();
+        auto received = channel.try_recv();
         if (!received.has_value() || *received != value) {
             return false;
         }
     }
-    return !channel.tryRecv().has_value();
+    return !channel.try_recv().has_value();
 }
 
-bool testTlsCacheCanOutliveChannel()
+bool test_tls_cache_can_outlive_channel()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     alignas(Channel) std::byte storage[sizeof(Channel)];
@@ -627,7 +627,7 @@ bool testTlsCacheCanOutliveChannel()
     });
 
     ready.wait(false, std::memory_order_acquire);
-    auto received = channel->tryRecv();
+    auto received = channel->try_recv();
     const bool passed = sent.load(std::memory_order_acquire) &&
         received.has_value() && *received == 77;
     std::destroy_at(channel);
@@ -637,12 +637,12 @@ bool testTlsCacheCanOutliveChannel()
     return passed;
 }
 
-bool testDetachedTokenReportsInvalid()
+bool test_detached_token_reports_invalid()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     alignas(Channel) std::byte storage[sizeof(Channel)];
     Channel* channel = std::construct_at(reinterpret_cast<Channel*>(storage));
-    auto token = channel->makeProducerToken();
+    auto token = channel->make_producer_token();
     const bool validBeforeDestroy = token.valid();
     std::destroy_at(channel);
     const bool invalidAfterDestroy = !token.valid();
@@ -655,7 +655,7 @@ bool testDetachedTokenReportsInvalid()
     return validBeforeDestroy && invalidAfterDestroy && staleTokenRejected;
 }
 
-bool testConcurrentProducerClaimsRespectHighWater()
+bool test_concurrent_producer_claims_respect_high_water()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     constexpr size_t kProducerCount = 8;
@@ -673,7 +673,7 @@ bool testConcurrentProducerClaimsRespectHighWater()
         producers.emplace_back([&, producer]() {
             for (size_t round = 0; round < kRounds; ++round) {
                 {
-                    auto token = channel.makeProducerToken();
+                    auto token = channel.make_producer_token();
                     const bool valid = token.valid();
                     if (!valid) {
                         failed.store(true, std::memory_order_release);
@@ -695,20 +695,20 @@ bool testConcurrentProducerClaimsRespectHighWater()
         producer.join();
     }
     if (failed.load(std::memory_order_acquire) ||
-        galay::mpsc::UnboundedChannelTestAccess::allocatedStreamCount(channel) !=
+        galay::mpsc::UnboundedChannelTestAccess::allocated_stream_count(channel) !=
             kProducerCount) {
         return false;
     }
 
     std::vector<bool> seen(kTotal, false);
     for (size_t count = 0; count < kTotal; ++count) {
-        auto value = channel.tryRecv();
+        auto value = channel.try_recv();
         if (!value.has_value() || *value >= kTotal || seen[*value]) {
             return false;
         }
         seen[*value] = true;
     }
-    return !channel.tryRecv().has_value();
+    return !channel.try_recv().has_value();
 }
 
 } // namespace
@@ -716,7 +716,7 @@ bool testConcurrentProducerClaimsRespectHighWater()
 int main()
 {
     galay::test::TestResultWriter writer("t155_mpsc_unbounded_streams");
-    writer.addTest();
+    writer.add_test();
 
     bool passed = true;
     const auto check = [&passed](bool result, const char* name) {
@@ -725,36 +725,36 @@ int main()
             passed = false;
         }
     };
-    check(testMoveOnlyAcrossBlocks(), "move-only across blocks");
-    check(testNonTrivialValueLifetimeAcrossRecycleAndDestruction(),
+    check(test_move_only_across_blocks(), "move-only across blocks");
+    check(test_non_trivial_value_lifetime_across_recycle_and_destruction(),
           "non-trivial value lifetime across recycle and destruction");
-    check(runPerProducerFifo(true), "token per-producer FIFO");
-    check(runPerProducerFifo(false), "TLS per-producer FIFO");
-    check(testFairConsumerRotation(), "fair consumer rotation");
-    check(testInactiveToActiveHandoff(), "inactive-to-active handoff");
-    check(testTokenReleaseReacquireHandoffWhileConsuming(),
+    check(run_per_producer_fifo(true), "token per-producer FIFO");
+    check(run_per_producer_fifo(false), "TLS per-producer FIFO");
+    check(test_fair_consumer_rotation(), "fair consumer rotation");
+    check(test_inactive_to_active_handoff(), "inactive-to-active handoff");
+    check(test_token_release_reacquire_handoff_while_consuming(),
           "token release/reacquire handoff while consuming");
-    check(testTokenAndTlsLifetime(), "token and TLS lifetime");
-    check(testExplicitProducerStreamsAreReused(),
+    check(test_token_and_tls_lifetime(), "token and TLS lifetime");
+    check(test_explicit_producer_streams_are_reused(),
           "explicit producer streams are reused");
-    check(testTokenMoveAssignmentReleasesPreviousStream(),
+    check(test_token_move_assignment_releases_previous_stream(),
           "token move assignment releases previous stream");
-    check(testTlsProducerStreamsAreReusedAfterThreadExit(),
+    check(test_tls_producer_streams_are_reused_after_thread_exit(),
           "TLS producer streams are reused after thread exit");
-    check(testTlsCacheCanOutliveChannel(), "TLS cache can outlive channel");
-    check(testDetachedTokenReportsInvalid(),
+    check(test_tls_cache_can_outlive_channel(), "TLS cache can outlive channel");
+    check(test_detached_token_reports_invalid(),
           "detached token reports invalid");
-    check(testConcurrentProducerClaimsRespectHighWater(),
+    check(test_concurrent_producer_claims_respect_high_water(),
           "concurrent producer claims respect high water");
     if (!passed) {
         std::cerr << "MPSC unbounded stream test failed\n";
-        writer.addFailed();
-        writer.writeResult();
+        writer.add_failed();
+        writer.write_result();
         return 1;
     }
 
-    writer.addPassed();
-    writer.writeResult();
+    writer.add_passed();
+    writer.write_result();
     std::cout << "t155_mpsc_unbounded_streams PASS\n";
     return 0;
 }

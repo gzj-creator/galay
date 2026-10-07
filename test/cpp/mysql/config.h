@@ -20,7 +20,7 @@ struct DbTestConfig {
 
 inline constexpr int kMysqlTestSkippedExitCode = 125;
 
-inline const char* getEnvNonEmpty(const char* key)
+inline const char* get_env_non_empty(const char* key)
 {
     const char* value = std::getenv(key);
     if (value == nullptr || value[0] == '\0') {
@@ -29,18 +29,18 @@ inline const char* getEnvNonEmpty(const char* key)
     return value;
 }
 
-inline std::string getEnvOrDefault(const char* key1, const char* key2, const std::string& default_value)
+inline std::string get_env_or_default(const char* key1, const char* key2, const std::string& default_value)
 {
-    if (const char* value = getEnvNonEmpty(key1)) {
+    if (const char* value = get_env_non_empty(key1)) {
         return value;
     }
-    if (const char* value = getEnvNonEmpty(key2)) {
+    if (const char* value = get_env_non_empty(key2)) {
         return value;
     }
     return default_value;
 }
 
-inline uint16_t parsePortOrDefault(const char* value, uint16_t default_value)
+inline uint16_t parse_port_or_default(const char* value, uint16_t default_value)
 {
     if (value == nullptr || value[0] == '\0') {
         return default_value;
@@ -55,38 +55,38 @@ inline uint16_t parsePortOrDefault(const char* value, uint16_t default_value)
     return static_cast<uint16_t>(parsed);
 }
 
-inline uint16_t getEnvPortOrDefault(const char* key1, const char* key2, uint16_t default_value)
+inline uint16_t get_env_port_or_default(const char* key1, const char* key2, uint16_t default_value)
 {
-    if (const char* value = getEnvNonEmpty(key1)) {
-        return parsePortOrDefault(value, default_value);
+    if (const char* value = get_env_non_empty(key1)) {
+        return parse_port_or_default(value, default_value);
     }
-    if (const char* value = getEnvNonEmpty(key2)) {
-        return parsePortOrDefault(value, default_value);
+    if (const char* value = get_env_non_empty(key2)) {
+        return parse_port_or_default(value, default_value);
     }
     return default_value;
 }
 
-inline DbTestConfig loadDbTestConfig()
+inline DbTestConfig load_db_test_config()
 {
     DbTestConfig cfg;
-    cfg.host = getEnvOrDefault("GALAY_MYSQL_HOST", "MYSQL_HOST", cfg.host);
-    cfg.port = getEnvPortOrDefault("GALAY_MYSQL_PORT", "MYSQL_PORT", cfg.port);
-    cfg.user = getEnvOrDefault("GALAY_MYSQL_USER", "MYSQL_USER", cfg.user);
-    cfg.password = getEnvOrDefault("GALAY_MYSQL_PASSWORD", "MYSQL_PASSWORD", cfg.password);
-    cfg.database = getEnvOrDefault("GALAY_MYSQL_DB", "MYSQL_DATABASE", cfg.database);
+    cfg.host = get_env_or_default("GALAY_MYSQL_HOST", "MYSQL_HOST", cfg.host);
+    cfg.port = get_env_port_or_default("GALAY_MYSQL_PORT", "MYSQL_PORT", cfg.port);
+    cfg.user = get_env_or_default("GALAY_MYSQL_USER", "MYSQL_USER", cfg.user);
+    cfg.password = get_env_or_default("GALAY_MYSQL_PASSWORD", "MYSQL_PASSWORD", cfg.password);
+    cfg.database = get_env_or_default("GALAY_MYSQL_DB", "MYSQL_DATABASE", cfg.database);
     return cfg;
 }
 
-inline bool hasRequiredDbTestConfig(const DbTestConfig& cfg)
+inline bool has_required_db_test_config(const DbTestConfig& cfg)
 {
     return !cfg.host.empty()
         && !cfg.user.empty()
         && !cfg.database.empty();
 }
 
-inline bool isIntegrationEnabled()
+inline bool is_integration_enabled()
 {
-    const char* value = getEnvNonEmpty("GALAY_IT_ENABLE");
+    const char* value = get_env_non_empty("GALAY_IT_ENABLE");
     if (value == nullptr) {
         return false;
     }
@@ -99,9 +99,9 @@ inline bool isIntegrationEnabled()
         || enabled_value == "YES";
 }
 
-inline int requireIntegrationEnabledOrSkip(const char* test_name)
+inline int require_integration_enabled_or_skip(const char* test_name)
 {
-    if (isIntegrationEnabled()) {
+    if (is_integration_enabled()) {
         return 0;
     }
 
@@ -111,9 +111,9 @@ inline int requireIntegrationEnabledOrSkip(const char* test_name)
     return kMysqlTestSkippedExitCode;
 }
 
-inline int requireDbTestConfigOrSkip(const DbTestConfig& cfg, const char* test_name)
+inline int require_db_test_config_or_skip(const DbTestConfig& cfg, const char* test_name)
 {
-    if (hasRequiredDbTestConfig(cfg)) {
+    if (has_required_db_test_config(cfg)) {
         return 0;
     }
 
@@ -124,7 +124,7 @@ inline int requireDbTestConfigOrSkip(const DbTestConfig& cfg, const char* test_n
     return kMysqlTestSkippedExitCode;
 }
 
-inline void printDbTestConfig(const DbTestConfig& cfg)
+inline void print_db_test_config(const DbTestConfig& cfg)
 {
     std::cout << "MySQL config: host=" << cfg.host
               << ", port=" << cfg.port

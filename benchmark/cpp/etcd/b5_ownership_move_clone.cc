@@ -14,7 +14,7 @@
 namespace
 {
 
-galay::etcd::EtcdProductionConfig makeProduction(int64_t retry_attempts)
+galay::etcd::EtcdProductionConfig make_production(int64_t retry_attempts)
 {
     galay::etcd::EtcdProductionConfig production;
     production.endpoints = {
@@ -31,7 +31,7 @@ galay::etcd::EtcdProductionConfig makeProduction(int64_t retry_attempts)
     return production;
 }
 
-int64_t parseIterations(int argc, char** argv)
+int64_t parse_iterations(int argc, char** argv)
 {
     constexpr int64_t kDefaultIterations = 100000;
     if (argc < 2) {
@@ -50,18 +50,18 @@ int64_t parseIterations(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
-    const int64_t iterations = parseIterations(argc, argv);
+    const int64_t iterations = parse_iterations(argc, argv);
     uint64_t checksum = 0;
 
     const auto pipeline_begin = std::chrono::steady_clock::now();
     std::vector<galay::etcd::PipelineOp> moved_ops;
     moved_ops.reserve(static_cast<size_t>(iterations));
     for (int64_t i = 0; i < iterations; ++i) {
-        auto op = galay::etcd::PipelineOp::Put(
+        auto op = galay::etcd::PipelineOp::put(
             "key-" + std::to_string(i),
             "value-" + std::to_string(i),
             i);
@@ -73,25 +73,25 @@ int main(int argc, char** argv)
     const auto pipeline_end = std::chrono::steady_clock::now();
 
     const auto state_begin = std::chrono::steady_clock::now();
-    galay::etcd::EtcdClusterState state(makeProduction(iterations + 4));
+    galay::etcd::EtcdClusterState state(make_production(iterations + 4));
     for (int64_t i = 0; i < iterations; ++i) {
-        state.recordRequest();
-        auto selected = state.selectEndpoint();
+        state.record_request();
+        auto selected = state.select_endpoint();
         if (!selected.has_value()) {
             std::cerr << "selectEndpoint failed\n";
             return 1;
         }
         if ((i % 5) == 0) {
-            state.markFailure(
+            state.mark_failure(
                 *selected,
                 galay::etcd::EtcdError(galay::etcd::EtcdErrorType::Connection, "bench"),
                 true);
         } else {
-            state.markSuccess(*selected);
+            state.mark_success(*selected);
         }
 
         auto clone = state.clone();
-        auto clone_selected = clone.selectEndpoint();
+        auto clone_selected = clone.select_endpoint();
         if (!clone_selected.has_value()) {
             std::cerr << "clone selectEndpoint failed\n";
             return 1;
@@ -102,10 +102,10 @@ int main(int argc, char** argv)
 
     const auto async_begin = std::chrono::steady_clock::now();
     auto async_cluster = galay::etcd::AsyncEtcdClusterClientBuilder()
-        .productionConfig(makeProduction(iterations + 4))
+        .production_config(make_production(iterations + 4))
         .build();
     for (int64_t i = 0; i < iterations; ++i) {
-        auto lease = async_cluster.tryAcquire();
+        auto lease = async_cluster.try_acquire();
         if (!lease.has_value()) {
             std::cerr << "async pool acquire failed: " << lease.error().message() << '\n';
             return 1;

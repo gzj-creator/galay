@@ -52,7 +52,7 @@ enum class OperationError : uint8_t {
  *
  * 地址从构造至最后一次完成/消费保持稳定，禁止 copy/move。若 awaiter
  * 在挂起前需要移动，应在最终存储位置构造状态，而非移动已发布 attachment。
- * 无 backend 的同步完成可使用无效 key；markSubmitted() 要求有效 key。
+ * 无 backend 的同步完成可使用无效 key；mark_submitted() 要求有效 key。
  * 析构不是取消 API，也不会等待 backend、唤醒任务或回收 native resource。
  */
 class OperationState final {
@@ -63,24 +63,24 @@ public:
 
     [[nodiscard]] OperationKey key() const noexcept { return m_key; }
     [[nodiscard]] OperationPhase phase() const noexcept { return m_phase; }
-    [[nodiscard]] uint32_t physicalReferenceCount() const noexcept { return m_physical_refs; }
+    [[nodiscard]] uint32_t physical_reference_count() const noexcept { return m_physical_refs; }
 
     /** @brief 未选出 winner 时返回 nullopt，不暴露虚假的默认完成原因。 */
-    [[nodiscard]] std::optional<CompletionReason> completionReason() const noexcept {
-        return hasCompleted() ? std::optional(m_reason) : std::nullopt;
+    [[nodiscard]] std::optional<CompletionReason> completion_reason() const noexcept {
+        return has_completed() ? std::optional(m_reason) : std::nullopt;
     }
 
     /** @brief 仅首次有效 key 的 Created -> Submitted 成功；失败不改变状态。 */
-    [[nodiscard]] bool markSubmitted() noexcept {
-        if (m_phase != OperationPhase::kCreated || !m_key.isValid()) {
+    [[nodiscard]] bool mark_submitted() noexcept {
+        if (m_phase != OperationPhase::kCreated || !m_key.is_valid()) {
             return false;
         }
         m_phase = OperationPhase::kSubmitted;
         return true;
     }
 
-    /** @brief 仅记录首次取消请求；完成裁决仍由 tryComplete() 执行。 */
-    [[nodiscard]] bool requestCancel() noexcept {
+    /** @brief 仅记录首次取消请求；完成裁决仍由 try_complete() 执行。 */
+    [[nodiscard]] bool request_cancel() noexcept {
         if (m_phase != OperationPhase::kCreated && m_phase != OperationPhase::kSubmitted) {
             return false;
         }
@@ -94,8 +94,8 @@ public:
      * @note cancel SQE 等 drain 所需 attachment 必须在选出 winner 前登记；
      *       不允许在 SafeToResume 之后重新进入 Draining。
      */
-    [[nodiscard]] std::expected<void, OperationError> addPhysicalReference() noexcept {
-        if (hasCompleted()) {
+    [[nodiscard]] std::expected<void, OperationError> add_physical_reference() noexcept {
+        if (has_completed()) {
             return std::unexpected(OperationError::kAlreadyCompleted);
         }
         if (m_physical_refs == UINT32_MAX) {
@@ -110,7 +110,7 @@ public:
      * @return true 仅表示本次从 Draining 进入 SafeToResume；false 表示仍需
      *         完成或 drain。无引用可释放时返回错误，绝不下溢。
      */
-    [[nodiscard]] std::expected<bool, OperationError> releasePhysicalReference() noexcept {
+    [[nodiscard]] std::expected<bool, OperationError> release_physical_reference() noexcept {
         if (m_physical_refs == 0) {
             return std::unexpected(OperationError::kNoPhysicalReference);
         }
@@ -123,8 +123,8 @@ public:
     }
 
     /** @brief 首个候选获胜；败者不得再修改结果、调用回调或唤醒任务。 */
-    [[nodiscard]] bool tryComplete(CompletionReason reason) noexcept {
-        if (hasCompleted()) {
+    [[nodiscard]] bool try_complete(CompletionReason reason) noexcept {
+        if (has_completed()) {
             return false;
         }
         m_reason = reason;
@@ -134,7 +134,7 @@ public:
     }
 
     /** @brief SafeToResume 后只移交一次恢复权；这不是 storage 已析构的标记。 */
-    [[nodiscard]] bool markResumeIssued() noexcept {
+    [[nodiscard]] bool mark_resume_issued() noexcept {
         if (m_phase != OperationPhase::kSafeToResume) {
             return false;
         }
@@ -146,7 +146,7 @@ private:
     OperationState(const OperationState&) = delete;
     OperationState& operator=(const OperationState&) = delete;
 
-    [[nodiscard]] bool hasCompleted() const noexcept {
+    [[nodiscard]] bool has_completed() const noexcept {
         return m_phase == OperationPhase::kDraining ||
                m_phase == OperationPhase::kSafeToResume ||
                m_phase == OperationPhase::kResumeIssued;

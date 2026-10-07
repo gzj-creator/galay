@@ -30,29 +30,29 @@ public:
     McpStdioServer(const McpStdioServer&) = delete;
     McpStdioServer& operator=(const McpStdioServer&) = delete;
 
-    void setServerInfo(std::string name, std::string version);
-    void setProductionPolicy(McpProductionPolicy policy);
-    void setStreams(std::istream& input, std::ostream& output) noexcept;
-    void addTool(std::string name, std::string description, std::string inputSchema,
+    void set_server_info(std::string name, std::string version);
+    void set_production_policy(McpProductionPolicy policy);
+    void set_streams(std::istream& input, std::ostream& output) noexcept;
+    void add_tool(std::string name, std::string description, std::string inputSchema,
                  ToolHandler handler);
-    void addResource(std::string uri, std::string name, std::string description,
+    void add_resource(std::string uri, std::string name, std::string description,
                      std::string mimeType, ResourceReader reader);
-    void addPrompt(std::string name, std::string description,
+    void add_prompt(std::string name, std::string description,
                    std::vector<PromptArgument> arguments, PromptGetter getter);
     void run();
     void stop() noexcept;
-    bool isRunning() const noexcept;
+    bool is_running() const noexcept;
 
 private:
     struct ToolEntry { Tool tool; ToolHandler handler; };
     struct ResourceEntry { Resource resource; ResourceReader reader; };
     struct PromptEntry { Prompt prompt; PromptGetter getter; };
 
-    std::expected<std::string, McpError> readMessage();
-    std::expected<void, McpError> writeMessage(std::string_view message);
+    std::expected<std::string, McpError> read_message();
+    std::expected<void, McpError> write_message(std::string_view message);
     std::string dispatch(const ParsedRequest& request);
-    std::string makeList(std::string_view field, const std::vector<std::string>& items) const;
-    std::string normalizePromptResult(std::string_view resultJson) const;
+    std::string make_list(std::string_view field, const std::vector<std::string>& items) const;
+    std::string normalize_prompt_result(std::string_view resultJson) const;
     std::string error(const RequestId& id, const McpError& errorValue) const;
     std::string error(const RequestId& id, int code, std::string_view message,
                      std::optional<std::string_view> data = std::nullopt) const;

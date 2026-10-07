@@ -15,7 +15,7 @@ enum class ReadError {
     kClose,
 };
 
-std::expected<std::string, ReadError> readFile(const char* path)
+std::expected<std::string, ReadError> read_file(const char* path)
 {
     const int fd = ::open(path, O_RDONLY);
     if (fd < 0) {
@@ -53,7 +53,7 @@ std::expected<std::string, ReadError> readFile(const char* path)
     return content;
 }
 
-int requireContains(std::string_view haystack, std::string_view needle, const char* message)
+int require_contains(std::string_view haystack, std::string_view needle, const char* message)
 {
     const size_t found = haystack.find(needle);
     if (found == std::string_view::npos) {
@@ -63,7 +63,7 @@ int requireContains(std::string_view haystack, std::string_view needle, const ch
     return 0;
 }
 
-int requireNotContains(std::string_view haystack, std::string_view needle, const char* message)
+int require_not_contains(std::string_view haystack, std::string_view needle, const char* message)
 {
     const size_t found = haystack.find(needle);
     if (found != std::string_view::npos) {
@@ -78,39 +78,39 @@ int requireNotContains(std::string_view haystack, std::string_view needle, const
 int main()
 {
     const char* server_path = "src/cpp/galay-http/server/http_server.h";
-    auto source = readFile(server_path);
+    auto source = read_file(server_path);
     if (!source.has_value()) {
         std::cerr << "failed to read " << server_path << "\n";
         return 1;
     }
 
-    if (const int rc = requireContains(*source,
-                                       "scheduleRuntimeTask",
+    if (const int rc = require_contains(*source,
+                                       "schedule_runtime_task",
                                        "HTTP server root tasks must use a runtime-binding scheduler helper")) {
         return rc;
     }
-    if (const int rc = requireContains(*source,
-                                       "detail::setTaskRuntime",
+    if (const int rc = require_contains(*source,
+                                       "detail::set_task_runtime",
                                        "HTTP server root task helper must bind m_runtime into Task state")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*source,
+    if (const int rc = require_not_contains(*source,
                                           "\n        m_runtime.start();",
                                           "HTTP server must check Runtime::start() return value")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*source,
-                                          "scheduleTask(scheduler, serverLoop",
+    if (const int rc = require_not_contains(*source,
+                                          "schedule_task(scheduler, server_loop",
                                           "HTTP server must check and runtime-bind serverLoop scheduling")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*source,
-                                          "scheduleTask(scheduler, m_handler",
+    if (const int rc = require_not_contains(*source,
+                                          "schedule_task(scheduler, m_handler",
                                           "HTTP server must check and runtime-bind connection handler scheduling")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*source,
-                                          "scheduleTask(target_scheduler",
+    if (const int rc = require_not_contains(*source,
+                                          "schedule_task(target_scheduler",
                                           "HTTPS server must check and runtime-bind TLS handler scheduling")) {
         return rc;
     }

@@ -18,7 +18,7 @@ using namespace galay::utils;
 // 简单的 SHA-1 实现（用于 WebSocket 握手）
 namespace {
 
-std::string_view trimAscii(std::string_view value)
+std::string_view trim_ascii(std::string_view value)
 {
     size_t begin = 0;
     size_t end = value.size();
@@ -31,7 +31,7 @@ std::string_view trimAscii(std::string_view value)
     return value.substr(begin, end - begin);
 }
 
-bool isBase64Char(char ch)
+bool is_base64_char(char ch)
 {
     return (ch >= 'A' && ch <= 'Z') ||
            (ch >= 'a' && ch <= 'z') ||
@@ -40,15 +40,15 @@ bool isBase64Char(char ch)
            ch == '/';
 }
 
-bool isWebSocketKey16ByteBase64(std::string_view key)
+bool is_web_socket_key16_byte_base64(std::string_view key)
 {
-    key = trimAscii(key);
+    key = trim_ascii(key);
     if (key.size() != 24 || key[22] != '=' || key[23] != '=') {
         return false;
     }
 
     for (size_t i = 0; i < 22; ++i) {
-        if (!isBase64Char(key[i])) {
+        if (!is_base64_char(key[i])) {
             return false;
         }
     }
@@ -142,7 +142,7 @@ static void sha1(const unsigned char* data, size_t length, unsigned char* hash)
     }
 }
 
-std::string WsUpgrade::generateAcceptKey(const std::string& key)
+std::string WsUpgrade::generate_accept_key(const std::string& key)
 {
     // 1. 拼接 key 和魔术字符串
     std::string combined = key + WEBSOCKET_MAGIC_STRING;
@@ -154,10 +154,10 @@ std::string WsUpgrade::generateAcceptKey(const std::string& key)
          hash);
 
     // 3. 使用 galay-utils 的 Base64 编码
-    return Base64Util::Base64Encode(hash, 20);
+    return Base64Util::base64_encode(hash, 20);
 }
 
-std::pair<bool, std::string> WsUpgrade::validateUpgradeRequest(HttpRequest& request)
+std::pair<bool, std::string> WsUpgrade::validate_upgrade_request(HttpRequest& request)
 {
     // 检查 HTTP 方法必须是 GET
     if (request.header().method() != HttpMethod::GET) {
@@ -165,54 +165,54 @@ std::pair<bool, std::string> WsUpgrade::validateUpgradeRequest(HttpRequest& requ
     }
 
     // 检查 Connection 头
-    if (!request.header().headerPairs().hasKey("Connection")) {
+    if (!request.header().header_pairs().has_key("Connection")) {
         return {false, "Missing Connection header"};
     }
 
-    std::string connection = request.header().headerPairs().getValue("Connection");
+    std::string connection = request.header().header_pairs().get_value("Connection");
     std::transform(connection.begin(), connection.end(), connection.begin(), ::tolower);
     if (connection.find("upgrade") == std::string::npos) {
         return {false, "Connection header must contain 'Upgrade'"};
     }
 
     // 检查 Upgrade 头
-    if (!request.header().headerPairs().hasKey("Upgrade")) {
+    if (!request.header().header_pairs().has_key("Upgrade")) {
         return {false, "Missing Upgrade header"};
     }
 
-    std::string upgrade = request.header().headerPairs().getValue("Upgrade");
+    std::string upgrade = request.header().header_pairs().get_value("Upgrade");
     std::transform(upgrade.begin(), upgrade.end(), upgrade.begin(), ::tolower);
     if (upgrade != "websocket") {
         return {false, "Upgrade header must be 'websocket'"};
     }
 
     // 检查 Sec-WebSocket-Version
-    if (!request.header().headerPairs().hasKey("Sec-WebSocket-Version")) {
+    if (!request.header().header_pairs().has_key("Sec-WebSocket-Version")) {
         return {false, "Missing Sec-WebSocket-Version header"};
     }
 
-    std::string version = request.header().headerPairs().getValue("Sec-WebSocket-Version");
+    std::string version = request.header().header_pairs().get_value("Sec-WebSocket-Version");
     if (version != "13") {
         return {false, "Only WebSocket version 13 is supported"};
     }
 
     // 检查 Sec-WebSocket-Key
-    if (!request.header().headerPairs().hasKey("Sec-WebSocket-Key")) {
+    if (!request.header().header_pairs().has_key("Sec-WebSocket-Key")) {
         return {false, "Missing Sec-WebSocket-Key header"};
     }
 
-    std::string key = request.header().headerPairs().getValue("Sec-WebSocket-Key");
+    std::string key = request.header().header_pairs().get_value("Sec-WebSocket-Key");
     if (key.empty()) {
         return {false, "Sec-WebSocket-Key cannot be empty"};
     }
-    if (!isWebSocketKey16ByteBase64(key)) {
+    if (!is_web_socket_key16_byte_base64(key)) {
         return {false, "Sec-WebSocket-Key must decode to 16 bytes"};
     }
 
     return {true, ""};
 }
 
-HttpResponse WsUpgrade::createUpgradeResponse(
+HttpResponse WsUpgrade::create_upgrade_response(
     const std::string& accept_key,
     const std::string& subprotocol)
 {
@@ -221,27 +221,27 @@ HttpResponse WsUpgrade::createUpgradeResponse(
         .header("Upgrade", "websocket")
         .header("Connection", "Upgrade")
         .header("Sec-WebSocket-Accept", accept_key)
-        .buildMove();
+        .build_move();
 
     if (!subprotocol.empty()) {
-        response.header().headerPairs().addHeaderPair("Sec-WebSocket-Protocol", subprotocol);
+        response.header().header_pairs().add_header_pair("Sec-WebSocket-Protocol", subprotocol);
     }
 
     return response;
 }
 
-WsUpgradeResult WsUpgrade::handleUpgrade(HttpRequest& request)
+WsUpgradeResult WsUpgrade::handle_upgrade(HttpRequest& request)
 {
     WsUpgradeResult result;
 
     // 验证请求
-    auto [valid, error_msg] = validateUpgradeRequest(request);
+    auto [valid, error_msg] = validate_upgrade_request(request);
     if (!valid) {
         result.success = false;
         result.error_message = error_msg;
 
         // 返回 400 Bad Request
-        result.response = Http1_1ResponseBuilder::badRequest()
+        result.response = Http1_1ResponseBuilder::bad_request()
             .text("WebSocket upgrade failed: " + error_msg)
             .build();
 
@@ -249,22 +249,22 @@ WsUpgradeResult WsUpgrade::handleUpgrade(HttpRequest& request)
     }
 
     // 获取 Sec-WebSocket-Key
-    std::string key = request.header().headerPairs().getValue("Sec-WebSocket-Key");
-    const std::string_view trimmed_key = trimAscii(key);
+    std::string key = request.header().header_pairs().get_value("Sec-WebSocket-Key");
+    const std::string_view trimmed_key = trim_ascii(key);
 
     // 生成 Sec-WebSocket-Accept
-    std::string accept_key = generateAcceptKey(std::string(trimmed_key));
+    std::string accept_key = generate_accept_key(std::string(trimmed_key));
 
     // 检查是否有子协议请求
     std::string subprotocol;
-    if (request.header().headerPairs().hasKey("Sec-WebSocket-Protocol")) {
-        subprotocol = request.header().headerPairs().getValue("Sec-WebSocket-Protocol");
+    if (request.header().header_pairs().has_key("Sec-WebSocket-Protocol")) {
+        subprotocol = request.header().header_pairs().get_value("Sec-WebSocket-Protocol");
         // TODO: 验证子协议是否支持
     }
 
     // 创建 101 响应
     result.success = true;
-    result.response = createUpgradeResponse(accept_key, subprotocol);
+    result.response = create_upgrade_response(accept_key, subprotocol);
 
     return result;
 }

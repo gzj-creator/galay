@@ -12,7 +12,7 @@
 
 namespace {
 
-bool equalsIgnoreCaseAscii(std::string_view lhs, std::string_view rhs) {
+bool equals_ignore_case_ascii(std::string_view lhs, std::string_view rhs) {
     if (lhs.size() != rhs.size()) {
         return false;
     }
@@ -25,87 +25,87 @@ bool equalsIgnoreCaseAscii(std::string_view lhs, std::string_view rhs) {
     return true;
 }
 
-std::optional<std::string_view> getHeader(const galay::http::HeaderPair& headers, std::string_view name) {
-    if (const auto* value = headers.getValuePtr(std::string(name)); value != nullptr) {
+std::optional<std::string_view> get_header(const galay::http::HeaderPair& headers, std::string_view name) {
+    if (const auto* value = headers.get_value_ptr(std::string(name)); value != nullptr) {
         return std::string_view(*value);
     }
 
     std::optional<std::string_view> found;
-    headers.forEachHeader([&](std::string_view key, std::string_view value) {
-        if (!found.has_value() && equalsIgnoreCaseAscii(key, name)) {
+    headers.for_each_header([&](std::string_view key, std::string_view value) {
+        if (!found.has_value() && equals_ignore_case_ascii(key, name)) {
             found = value;
         }
     });
     return found;
 }
 
-void setHeader(galay::http::HeaderPair& headers, std::string_view name, std::string value) {
-    const auto error = headers.addHeaderPair(std::string(name), value);
+void set_header(galay::http::HeaderPair& headers, std::string_view name, std::string value) {
+    const auto error = headers.add_header_pair(std::string(name), value);
     assert(error == galay::http::HttpErrorCode::kNoError);
 }
 
-galay::tracing::TraceContext makeContext() {
+galay::tracing::TraceContext make_context() {
     return galay::tracing::TraceContext(
-        galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
-        galay::tracing::SpanId::fromHex("00f067aa0ba902b7"),
+        galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"),
+        galay::tracing::SpanId::from_hex("00f067aa0ba902b7"),
         0x01,
         "vendor=value");
 }
 
-void extractsFromServerSideHeaderPair() {
+void extracts_from_server_side_header_pair() {
     galay::http::HeaderPair headers(galay::http::HeaderPair::Mode::ServerSide);
-    headers.addHeaderPair("TraceParent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
-    headers.addHeaderPair("TraceState", "vendor=value");
+    headers.add_header_pair("TraceParent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+    headers.add_header_pair("TraceState", "vendor=value");
 
-    auto context = galay::tracing::extractTraceContextFromHeaders([&](std::string_view name) {
-        return getHeader(headers, name);
+    auto context = galay::tracing::extract_trace_context_from_headers([&](std::string_view name) {
+        return get_header(headers, name);
     });
 
     assert(context.has_value());
-    assert(context->traceId() == galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"));
-    assert(context->spanId() == galay::tracing::SpanId::fromHex("00f067aa0ba902b7"));
+    assert(context->trace_id() == galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"));
+    assert(context->span_id() == galay::tracing::SpanId::from_hex("00f067aa0ba902b7"));
     assert(context->sampled());
     assert(context->tracestate() == "vendor=value");
 }
 
-void injectsIntoClientSideHeaderPair() {
+void injects_into_client_side_header_pair() {
     galay::http::HeaderPair headers(galay::http::HeaderPair::Mode::ClientSide);
-    const auto context = makeContext();
+    const auto context = make_context();
 
-    const bool injected = galay::tracing::injectTraceContextToHeaders(context, [&](std::string_view name, std::string value) {
-        setHeader(headers, name, std::move(value));
+    const bool injected = galay::tracing::inject_trace_context_to_headers(context, [&](std::string_view name, std::string value) {
+        set_header(headers, name, std::move(value));
     });
 
     assert(injected);
-    assert(headers.getValue("Traceparent") == "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
-    assert(headers.getValue("Tracestate") == "vendor=value");
+    assert(headers.get_value("Traceparent") == "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+    assert(headers.get_value("Tracestate") == "vendor=value");
 }
 
-void roundTripsThroughHttpRequestBuilderHeaders() {
+void round_trips_through_http_request_builder_headers() {
     auto request = galay::http::Http1_1RequestBuilder::get("/orders", galay::http::HeaderPair::Mode::ClientSide)
         .host("example.test")
-        .buildMove();
+        .build_move();
 
-    const auto context = makeContext();
-    const bool injected = galay::tracing::injectTraceContextToHeaders(context, [&](std::string_view name, std::string value) {
-        setHeader(request.header().headerPairs(), name, std::move(value));
+    const auto context = make_context();
+    const bool injected = galay::tracing::inject_trace_context_to_headers(context, [&](std::string_view name, std::string value) {
+        set_header(request.header().header_pairs(), name, std::move(value));
     });
     assert(injected);
 
-    auto extracted = galay::tracing::extractTraceContextFromHeaders([&](std::string_view name) {
-        return getHeader(request.header().headerPairs(), name);
+    auto extracted = galay::tracing::extract_trace_context_from_headers([&](std::string_view name) {
+        return get_header(request.header().header_pairs(), name);
     });
 
     assert(extracted.has_value());
-    assert(extracted->traceId() == context.traceId());
-    assert(extracted->spanId() == context.spanId());
+    assert(extracted->trace_id() == context.trace_id());
+    assert(extracted->span_id() == context.span_id());
     assert(extracted->tracestate() == context.tracestate());
 }
 
 } // namespace
 
 int main() {
-    extractsFromServerSideHeaderPair();
-    injectsIntoClientSideHeaderPair();
-    roundTripsThroughHttpRequestBuilderHeaders();
+    extracts_from_server_side_header_pair();
+    injects_into_client_side_header_pair();
+    round_trips_through_http_request_builder_headers();
 }

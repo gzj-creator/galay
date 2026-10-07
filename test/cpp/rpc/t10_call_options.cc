@@ -11,7 +11,7 @@ using namespace galay::rpc;
 namespace {
 
 bool expect(test::TestResultWriter& writer, bool condition, const char* message) {
-    writer.writeTestCase(message, condition);
+    writer.write_test_case(message, condition);
     return condition;
 }
 
@@ -29,14 +29,14 @@ int main() {
     if (!expect(writer, !defaults.idempotent(), "default options should not be idempotent")) {
         return 1;
     }
-    if (!expect(writer, !defaults.maxAttempts().has_value(), "default options should not override max attempts")) {
+    if (!expect(writer, !defaults.max_attempts().has_value(), "default options should not override max attempts")) {
         return 1;
     }
 
     auto base = RpcClock::now();
     RpcCallOptions relative;
     relative.timeout(250ms);
-    auto relative_deadline = relative.effectiveDeadline(base);
+    auto relative_deadline = relative.effective_deadline(base);
     if (!expect(writer, relative_deadline.has_value(), "relative timeout should produce an effective deadline")) {
         return 1;
     }
@@ -47,7 +47,7 @@ int main() {
     RpcCallOptions absolute;
     absolute.timeout(250ms);
     absolute.deadline(base + 1s);
-    auto absolute_deadline = absolute.effectiveDeadline(base);
+    auto absolute_deadline = absolute.effective_deadline(base);
     if (!expect(writer, absolute_deadline.has_value(), "absolute deadline should produce an effective deadline")) {
         return 1;
     }
@@ -93,12 +93,12 @@ int main() {
     }
 
     RpcCallOptions configured;
-    configured.idempotent(true).maxAttempts(3);
+    configured.idempotent(true).max_attempts(3);
     configured.metadata().insert("x-request-id", "42");
     if (!expect(writer, configured.idempotent(), "idempotent flag should be configurable")) {
         return 1;
     }
-    if (!expect(writer, configured.maxAttempts().has_value() && *configured.maxAttempts() == 3,
+    if (!expect(writer, configured.max_attempts().has_value() && *configured.max_attempts() == 3,
                 "max attempts override should be configurable")) {
         return 1;
     }
@@ -107,6 +107,6 @@ int main() {
         return 1;
     }
 
-    writer.writeSummary();
+    writer.write_summary();
     return 0;
 }

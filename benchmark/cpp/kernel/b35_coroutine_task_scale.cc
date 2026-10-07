@@ -21,24 +21,24 @@ using galay::kernel::Task;
 
 namespace {
 
-Task<void> completedTask() {
+Task<void> completed_task() {
     co_return;
 }
 
-Task<void> suspendedTask() {
+Task<void> suspended_task() {
     co_await std::suspend_always{};
 }
 
-bool runChurn(std::size_t count) {
+bool run_churn(std::size_t count) {
     std::size_t completed = 0;
     const auto begin = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < count; ++i) {
-        auto task = completedTask();
-        if (!task.isValid()) {
+        auto task = completed_task();
+        if (!task.is_valid()) {
             std::cerr << "task_scale allocation failed at=" << i << '\n';
             return false;
         }
-        auto* state = galay::kernel::detail::TaskAccess::taskRef(task).state();
+        auto* state = galay::kernel::detail::TaskAccess::task_ref(task).state();
         if (state == nullptr || state->m_handle == nullptr) {
             std::cerr << "task_scale missing frame handle at=" << i << '\n';
             return false;
@@ -61,13 +61,13 @@ bool runChurn(std::size_t count) {
     return completed == count;
 }
 
-bool runLive(std::size_t count) {
+bool run_live(std::size_t count) {
     std::vector<Task<void>> tasks;
     tasks.reserve(count);
     const auto begin = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < count; ++i) {
-        auto task = suspendedTask();
-        if (!task.isValid()) {
+        auto task = suspended_task();
+        if (!task.is_valid()) {
             std::cerr << "task_scale allocation failed at=" << i << '\n';
             return false;
         }
@@ -90,7 +90,7 @@ bool runLive(std::size_t count) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -103,10 +103,10 @@ int main(int argc, char** argv) {
         return 1;
     }
     if (mode == "churn") {
-        return runChurn(count) ? 0 : 1;
+        return run_churn(count) ? 0 : 1;
     }
     if (mode == "live") {
-        return runLive(count) ? 0 : 1;
+        return run_live(count) ? 0 : 1;
     }
     std::cerr << "task_scale mode must be churn or live\n";
     return 1;

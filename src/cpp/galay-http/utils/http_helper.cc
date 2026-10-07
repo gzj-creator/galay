@@ -13,574 +13,574 @@ namespace galay::http
 {
 namespace {
 
-HttpResponse buildHtmlResponse(HttpStatusCode code, std::string body)
+HttpResponse build_html_response(HttpStatusCode code, std::string body)
 {
     return Http1_1ResponseBuilder()
         .status(code)
         .header("Server", GALAY_SERVER)
         .header("Content-Type", "text/html")
         .body(std::move(body))
-        .buildMove();
+        .build_move();
 }
 
 } // namespace
 
-    HttpRequest HttpHelper::defaultGet(std::string_view uri)
+    HttpRequest HttpHelper::default_get(std::string_view uri)
     {
         return Http1_1RequestBuilder::get(std::string(uri))
-            .userAgent(SERVER_NAME)
+            .user_agent(SERVER_NAME)
             .header("Accept", "*/*")
-            .buildMove();
+            .build_move();
     }
 
-    HttpRequest HttpHelper::defaultPost(std::string_view uri, std::string&& body)
+    HttpRequest HttpHelper::default_post(std::string_view uri, std::string&& body)
     {
         auto builder = Http1_1RequestBuilder::post(std::string(uri));
-        builder.userAgent(SERVER_NAME).header("Accept", "*/*");
+        builder.user_agent(SERVER_NAME).header("Accept", "*/*");
         if (!body.empty()) {
-            builder.contentType("application/x-www-form-urlencoded").body(std::move(body));
+            builder.content_type("application/x-www-form-urlencoded").body(std::move(body));
         }
-        return builder.buildMove();
+        return builder.build_move();
     }
 
-    HttpRequest HttpHelper::defaultPut(std::string_view uri, std::string&& body)
+    HttpRequest HttpHelper::default_put(std::string_view uri, std::string&& body)
     {
         auto builder = Http1_1RequestBuilder::put(std::string(uri));
-        builder.userAgent(SERVER_NAME).header("Accept", "*/*");
+        builder.user_agent(SERVER_NAME).header("Accept", "*/*");
         if (!body.empty()) {
-            builder.contentType("application/x-www-form-urlencoded").body(std::move(body));
+            builder.content_type("application/x-www-form-urlencoded").body(std::move(body));
         }
-        return builder.buildMove();
+        return builder.build_move();
     }
 
-    HttpRequest HttpHelper::defaultDelete(std::string_view uri)
+    HttpRequest HttpHelper::default_delete(std::string_view uri)
     {
         return Http1_1RequestBuilder::del(std::string(uri))
-            .userAgent(SERVER_NAME)
+            .user_agent(SERVER_NAME)
             .header("Accept", "*/*")
-            .buildMove();
+            .build_move();
     }
 
-    HttpRequest HttpHelper::defaultPatch(std::string_view uri, std::string&& body)
+    HttpRequest HttpHelper::default_patch(std::string_view uri, std::string&& body)
     {
         auto builder = Http1_1RequestBuilder::patch(std::string(uri));
-        builder.userAgent(SERVER_NAME).header("Accept", "*/*");
+        builder.user_agent(SERVER_NAME).header("Accept", "*/*");
         if (!body.empty()) {
-            builder.contentType("application/x-www-form-urlencoded").body(std::move(body));
+            builder.content_type("application/x-www-form-urlencoded").body(std::move(body));
         }
-        return builder.buildMove();
+        return builder.build_move();
     }
 
-    HttpRequest HttpHelper::defaultHead(std::string_view uri)
+    HttpRequest HttpHelper::default_head(std::string_view uri)
     {
         return Http1_1RequestBuilder::head(std::string(uri))
-            .userAgent(SERVER_NAME)
+            .user_agent(SERVER_NAME)
             .header("Accept", "*/*")
-            .buildMove();
+            .build_move();
     }
 
-    HttpRequest HttpHelper::defaultOptions(std::string_view uri)
+    HttpRequest HttpHelper::default_options(std::string_view uri)
     {
         return Http1_1RequestBuilder::options(std::string(uri))
-            .userAgent(SERVER_NAME)
+            .user_agent(SERVER_NAME)
             .header("Accept", "*/*")
-            .buildMove();
+            .build_move();
     }
 
-    HttpResponse HttpHelper::defaultBadRequest()
+    HttpResponse HttpHelper::default_bad_request()
     {
-        return buildHtmlResponse(HttpStatusCode::BadRequest_400, "<html><body><h1>400 Bad Request</h1></body></html>");
+        return build_html_response(HttpStatusCode::BadRequest_400, "<html><body><h1>400 Bad Request</h1></body></html>");
     }
 
     
-    HttpResponse HttpHelper::defaultInternalServerError()
+    HttpResponse HttpHelper::default_internal_server_error()
     {
-        return buildHtmlResponse(HttpStatusCode::InternalServerError_500, "<html><body><h1>500 Internal Server Error</h1></body></html>");
+        return build_html_response(HttpStatusCode::InternalServerError_500, "<html><body><h1>500 Internal Server Error</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultNotFound()
+    HttpResponse HttpHelper::default_not_found()
     {
-        return buildHtmlResponse(HttpStatusCode::NotFound_404, "<html><body><h1>404 Not Found</h1></body></html>");
+        return build_html_response(HttpStatusCode::NotFound_404, "<html><body><h1>404 Not Found</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultMethodNotAllowed()
+    HttpResponse HttpHelper::default_method_not_allowed()
     {
-        return buildHtmlResponse(HttpStatusCode::MethodNotAllowed_405, "<html><body><h1>405 Method Not Allowed</h1></body></html>");
+        return build_html_response(HttpStatusCode::MethodNotAllowed_405, "<html><body><h1>405 Method Not Allowed</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultRequestTimeout()
+    HttpResponse HttpHelper::default_request_timeout()
     {
-        return buildHtmlResponse(HttpStatusCode::RequestTimeout_408, "<html><body><h1>408 Request Timeout</h1></body></html>");
+        return build_html_response(HttpStatusCode::RequestTimeout_408, "<html><body><h1>408 Request Timeout</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultTooManyRequests()
+    HttpResponse HttpHelper::default_too_many_requests()
     {
-        return buildHtmlResponse(HttpStatusCode::TooManyRequests_429, "<html><body><h1>429 Too Many Requests</h1></body></html>");
+        return build_html_response(HttpStatusCode::TooManyRequests_429, "<html><body><h1>429 Too Many Requests</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultNotImplemented()
+    HttpResponse HttpHelper::default_not_implemented()
     {
-        return buildHtmlResponse(HttpStatusCode::NotImplemented_501, "<html><body><h1>501 Not Implemented</h1></body></html>");
+        return build_html_response(HttpStatusCode::NotImplemented_501, "<html><body><h1>501 Not Implemented</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultServiceUnavailable()
+    HttpResponse HttpHelper::default_service_unavailable()
     {
-        return buildHtmlResponse(HttpStatusCode::ServiceUnavailable_503, "<html><body><h1>503 Service Unavailable</h1></body></html>");
+        return build_html_response(HttpStatusCode::ServiceUnavailable_503, "<html><body><h1>503 Service Unavailable</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultContinue()
+    HttpResponse HttpHelper::default_continue()
     {
-        return buildHtmlResponse(HttpStatusCode::Continue_100, "<html><body><h1>100 Continue</h1></body></html>");
+        return build_html_response(HttpStatusCode::Continue_100, "<html><body><h1>100 Continue</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultSwitchingProtocol()
+    HttpResponse HttpHelper::default_switching_protocol()
     {
-        return buildHtmlResponse(HttpStatusCode::SwitchingProtocol_101, "<html><body><h1>101 Switching Protocol</h1></body></html>");
+        return build_html_response(HttpStatusCode::SwitchingProtocol_101, "<html><body><h1>101 Switching Protocol</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultProcessing()
+    HttpResponse HttpHelper::default_processing()
     {
-        return buildHtmlResponse(HttpStatusCode::Processing_102, "<html><body><h1>102 Processing</h1></body></html>");
+        return build_html_response(HttpStatusCode::Processing_102, "<html><body><h1>102 Processing</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultEarlyHints()
+    HttpResponse HttpHelper::default_early_hints()
     {
-        return buildHtmlResponse(HttpStatusCode::EarlyHints_103, "<html><body><h1>103 Early Hints</h1></body></html>");
+        return build_html_response(HttpStatusCode::EarlyHints_103, "<html><body><h1>103 Early Hints</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultCreated()
+    HttpResponse HttpHelper::default_created()
     {
-        return buildHtmlResponse(HttpStatusCode::Created_201, "<html><body><h1>201 Created</h1></body></html>");
+        return build_html_response(HttpStatusCode::Created_201, "<html><body><h1>201 Created</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultAccepted()
+    HttpResponse HttpHelper::default_accepted()
     {
-        return buildHtmlResponse(HttpStatusCode::Accepted_202, "<html><body><h1>202 Accepted</h1></body></html>");
+        return build_html_response(HttpStatusCode::Accepted_202, "<html><body><h1>202 Accepted</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultNonAuthoritativeInformation()
+    HttpResponse HttpHelper::default_non_authoritative_information()
     {
-        return buildHtmlResponse(HttpStatusCode::NonAuthoritativeInformation_203, "<html><body><h1>203 Non-Authoritative Information</h1></body></html>");
+        return build_html_response(HttpStatusCode::NonAuthoritativeInformation_203, "<html><body><h1>203 Non-Authoritative Information</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultNoContent()
+    HttpResponse HttpHelper::default_no_content()
     {
-        return buildHtmlResponse(HttpStatusCode::NoContent_204, "<html><body><h1>204 No Content</h1></body></html>");
+        return build_html_response(HttpStatusCode::NoContent_204, "<html><body><h1>204 No Content</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultResetContent()
+    HttpResponse HttpHelper::default_reset_content()
     {
-        return buildHtmlResponse(HttpStatusCode::ResetContent_205, "<html><body><h1>205 Reset Content</h1></body></html>");
+        return build_html_response(HttpStatusCode::ResetContent_205, "<html><body><h1>205 Reset Content</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultPartialContent()
+    HttpResponse HttpHelper::default_partial_content()
     {
-        return buildHtmlResponse(HttpStatusCode::PartialContent_206, "<html><body><h1>206 Partial Content</h1></body></html>");
+        return build_html_response(HttpStatusCode::PartialContent_206, "<html><body><h1>206 Partial Content</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultMultiStatus()
+    HttpResponse HttpHelper::default_multi_status()
     {
-        return buildHtmlResponse(HttpStatusCode::MultiStatus_207, "<html><body><h1>207 Multi-Status</h1></body></html>");
+        return build_html_response(HttpStatusCode::MultiStatus_207, "<html><body><h1>207 Multi-Status</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultAlreadyReported()
+    HttpResponse HttpHelper::default_already_reported()
     {
-        return buildHtmlResponse(HttpStatusCode::AlreadyReported_208, "<html><body><h1>208 Already Reported</h1></body></html>");
+        return build_html_response(HttpStatusCode::AlreadyReported_208, "<html><body><h1>208 Already Reported</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultIMUsed()
+    HttpResponse HttpHelper::default_im_used()
     {
-        return buildHtmlResponse(HttpStatusCode::IMUsed_226, "<html><body><h1>226 IM Used</h1></body></html>");
+        return build_html_response(HttpStatusCode::IMUsed_226, "<html><body><h1>226 IM Used</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultMultipleChoices()
+    HttpResponse HttpHelper::default_multiple_choices()
     {
-        return buildHtmlResponse(HttpStatusCode::MultipleChoices_300, "<html><body><h1>300 Multiple Choices</h1></body></html>");
+        return build_html_response(HttpStatusCode::MultipleChoices_300, "<html><body><h1>300 Multiple Choices</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultMovedPermanently()
+    HttpResponse HttpHelper::default_moved_permanently()
     {
-        return buildHtmlResponse(HttpStatusCode::MovedPermanently_301, "<html><body><h1>301 Moved Permanently</h1></body></html>");
+        return build_html_response(HttpStatusCode::MovedPermanently_301, "<html><body><h1>301 Moved Permanently</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultFound()
+    HttpResponse HttpHelper::default_found()
     {
-        return buildHtmlResponse(HttpStatusCode::Found_302, "<html><body><h1>302 Found</h1></body></html>");
+        return build_html_response(HttpStatusCode::Found_302, "<html><body><h1>302 Found</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultSeeOther()
+    HttpResponse HttpHelper::default_see_other()
     {
-        return buildHtmlResponse(HttpStatusCode::SeeOther_303, "<html><body><h1>303 See Other</h1></body></html>");
+        return build_html_response(HttpStatusCode::SeeOther_303, "<html><body><h1>303 See Other</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultNotModified()
+    HttpResponse HttpHelper::default_not_modified()
     {
-        return buildHtmlResponse(HttpStatusCode::NotModified_304, "<html><body><h1>304 Not Modified</h1></body></html>");
+        return build_html_response(HttpStatusCode::NotModified_304, "<html><body><h1>304 Not Modified</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultUseProxy()
+    HttpResponse HttpHelper::default_use_proxy()
     {
-        return buildHtmlResponse(HttpStatusCode::UseProxy_305, "<html><body><h1>305 Use Proxy</h1></body></html>");
+        return build_html_response(HttpStatusCode::UseProxy_305, "<html><body><h1>305 Use Proxy</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultUnused()
+    HttpResponse HttpHelper::default_unused()
     {
-        return buildHtmlResponse(HttpStatusCode::Unused_306, "<html><body><h1>306 unused</h1></body></html>");
+        return build_html_response(HttpStatusCode::Unused_306, "<html><body><h1>306 unused</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultTemporaryRedirect()
+    HttpResponse HttpHelper::default_temporary_redirect()
     {
-        return buildHtmlResponse(HttpStatusCode::TemporaryRedirect_307, "<html><body><h1>307 Temporary Redirect</h1></body></html>");
+        return build_html_response(HttpStatusCode::TemporaryRedirect_307, "<html><body><h1>307 Temporary Redirect</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultPermanentRedirect()
+    HttpResponse HttpHelper::default_permanent_redirect()
     {
-        return buildHtmlResponse(HttpStatusCode::PermanentRedirect_308, "<html><body><h1>308 Permanent Redirect</h1></body></html>");
+        return build_html_response(HttpStatusCode::PermanentRedirect_308, "<html><body><h1>308 Permanent Redirect</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultUnauthorized()
+    HttpResponse HttpHelper::default_unauthorized()
     {
-        return buildHtmlResponse(HttpStatusCode::Unauthorized_401, "<html><body><h1>401 Unauthorized</h1></body></html>");
+        return build_html_response(HttpStatusCode::Unauthorized_401, "<html><body><h1>401 Unauthorized</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultPaymentRequired()
+    HttpResponse HttpHelper::default_payment_required()
     {
-        return buildHtmlResponse(HttpStatusCode::PaymentRequired_402, "<html><body><h1>402 Payment Required</h1></body></html>");
+        return build_html_response(HttpStatusCode::PaymentRequired_402, "<html><body><h1>402 Payment Required</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultForbidden()
+    HttpResponse HttpHelper::default_forbidden()
     {
-        return buildHtmlResponse(HttpStatusCode::Forbidden_403, "<html><body><h1>403 Forbidden</h1></body></html>");
+        return build_html_response(HttpStatusCode::Forbidden_403, "<html><body><h1>403 Forbidden</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultConflict()
+    HttpResponse HttpHelper::default_conflict()
     {
-        return buildHtmlResponse(HttpStatusCode::Conflict_409, "<html><body><h1>409 Conflict</h1></body></html>");
+        return build_html_response(HttpStatusCode::Conflict_409, "<html><body><h1>409 Conflict</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultNotAcceptable()
+    HttpResponse HttpHelper::default_not_acceptable()
     {
-        return buildHtmlResponse(HttpStatusCode::NotAcceptable_406, "<html><body><h1>406 Not Acceptable</h1></body></html>");
+        return build_html_response(HttpStatusCode::NotAcceptable_406, "<html><body><h1>406 Not Acceptable</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultProxyAuthenticationRequired()
+    HttpResponse HttpHelper::default_proxy_authentication_required()
     {
-        return buildHtmlResponse(HttpStatusCode::ProxyAuthenticationRequired_407, "<html><body><h1>407 Proxy Authentication Required</h1></body></html>");
+        return build_html_response(HttpStatusCode::ProxyAuthenticationRequired_407, "<html><body><h1>407 Proxy Authentication Required</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultGone()
+    HttpResponse HttpHelper::default_gone()
     {
-        return buildHtmlResponse(HttpStatusCode::Gone_410, "<html><body><h1>410 Gone</h1></body></html>");
+        return build_html_response(HttpStatusCode::Gone_410, "<html><body><h1>410 Gone</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultLengthRequired()
+    HttpResponse HttpHelper::default_length_required()
     {
-        return buildHtmlResponse(HttpStatusCode::LengthRequired_411, "<html><body><h1>411 Length Required</h1></body></html>");
+        return build_html_response(HttpStatusCode::LengthRequired_411, "<html><body><h1>411 Length Required</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultPreconditionFailed()
+    HttpResponse HttpHelper::default_precondition_failed()
     {
-        return buildHtmlResponse(HttpStatusCode::PreconditionFailed_412, "<html><body><h1>412 Precondition Failed</h1></body></html>");
+        return build_html_response(HttpStatusCode::PreconditionFailed_412, "<html><body><h1>412 Precondition Failed</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultPayloadTooLarge()
+    HttpResponse HttpHelper::default_payload_too_large()
     {
-        return buildHtmlResponse(HttpStatusCode::PayloadTooLarge_413, "<html><body><h1>413 Payload Too Large</h1></body></html>");
+        return build_html_response(HttpStatusCode::PayloadTooLarge_413, "<html><body><h1>413 Payload Too Large</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultUriTooLong()
+    HttpResponse HttpHelper::default_uri_too_long()
     {
-        return buildHtmlResponse(HttpStatusCode::UriTooLong_414, "<html><body><h1>414 URI Too Long</h1></body></html>");
+        return build_html_response(HttpStatusCode::UriTooLong_414, "<html><body><h1>414 URI Too Long</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultUnsupportedMediaType()
+    HttpResponse HttpHelper::default_unsupported_media_type()
     {
-        return buildHtmlResponse(HttpStatusCode::UnsupportedMediaType_415, "<html><body><h1>415 Unsupported Media Type</h1></body></html>");
+        return build_html_response(HttpStatusCode::UnsupportedMediaType_415, "<html><body><h1>415 Unsupported Media Type</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultRangeNotSatisfiable()
+    HttpResponse HttpHelper::default_range_not_satisfiable()
     {
-        return buildHtmlResponse(HttpStatusCode::RangeNotSatisfiable_416, "<html><body><h1>416 Range Not Satisfiable</h1></body></html>");
+        return build_html_response(HttpStatusCode::RangeNotSatisfiable_416, "<html><body><h1>416 Range Not Satisfiable</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultExpectationFailed()
+    HttpResponse HttpHelper::default_expectation_failed()
     {
-        return buildHtmlResponse(HttpStatusCode::ExpectationFailed_417, "<html><body><h1>417 Expectation Failed</h1></body></html>");
+        return build_html_response(HttpStatusCode::ExpectationFailed_417, "<html><body><h1>417 Expectation Failed</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultImATeapot()
+    HttpResponse HttpHelper::default_im_a_teapot()
     {
-        return buildHtmlResponse(HttpStatusCode::ImATeapot_418, "<html><body><h1>418 I'm a teapot</h1></body></html>");
+        return build_html_response(HttpStatusCode::ImATeapot_418, "<html><body><h1>418 I'm a teapot</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultMisdirectedRequest()
+    HttpResponse HttpHelper::default_misdirected_request()
     {
-        return buildHtmlResponse(HttpStatusCode::MisdirectedRequest_421, "<html><body><h1>421 Misdirected Request</h1></body></html>");
+        return build_html_response(HttpStatusCode::MisdirectedRequest_421, "<html><body><h1>421 Misdirected Request</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultUnprocessableContent()
+    HttpResponse HttpHelper::default_unprocessable_content()
     {
-        return buildHtmlResponse(HttpStatusCode::UnprocessableContent_422, "<html><body><h1>422 Unprocessable Content</h1></body></html>");
+        return build_html_response(HttpStatusCode::UnprocessableContent_422, "<html><body><h1>422 Unprocessable Content</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultLocked()
+    HttpResponse HttpHelper::default_locked()
     {
-        return buildHtmlResponse(HttpStatusCode::Locked_423, "<html><body><h1>423 Locked</h1></body></html>");
+        return build_html_response(HttpStatusCode::Locked_423, "<html><body><h1>423 Locked</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultFailedDependency()
+    HttpResponse HttpHelper::default_failed_dependency()
     {
-        return buildHtmlResponse(HttpStatusCode::FailedDependency_424, "<html><body><h1>424 Failed Dependency</h1></body></html>");
+        return build_html_response(HttpStatusCode::FailedDependency_424, "<html><body><h1>424 Failed Dependency</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultTooEarly()
+    HttpResponse HttpHelper::default_too_early()
     {
-        return buildHtmlResponse(HttpStatusCode::TooEarly_425, "<html><body><h1>425 Too Early</h1></body></html>");
+        return build_html_response(HttpStatusCode::TooEarly_425, "<html><body><h1>425 Too Early</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultUpgradeRequired()
+    HttpResponse HttpHelper::default_upgrade_required()
     {
-        return buildHtmlResponse(HttpStatusCode::UpgradeRequired_426, "<html><body><h1>426 Upgrade Required</h1></body></html>");
+        return build_html_response(HttpStatusCode::UpgradeRequired_426, "<html><body><h1>426 Upgrade Required</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultPreconditionRequired()
+    HttpResponse HttpHelper::default_precondition_required()
     {
-        return buildHtmlResponse(HttpStatusCode::PreconditionRequired_428, "<html><body><h1>428 Precondition Required</h1></body></html>");
+        return build_html_response(HttpStatusCode::PreconditionRequired_428, "<html><body><h1>428 Precondition Required</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultRequestHeaderFieldsTooLarge()
+    HttpResponse HttpHelper::default_request_header_fields_too_large()
     {
-        return buildHtmlResponse(HttpStatusCode::RequestHeaderFieldsTooLarge_431, "<html><body><h1>431 Request Header Fields Too Large</h1></body></html>");
+        return build_html_response(HttpStatusCode::RequestHeaderFieldsTooLarge_431, "<html><body><h1>431 Request Header Fields Too Large</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultUnavailableForLegalReasons()
+    HttpResponse HttpHelper::default_unavailable_for_legal_reasons()
     {
-        return buildHtmlResponse(HttpStatusCode::UnavailableForLegalReasons_451, "<html><body><h1>451 Unavailable For Legal Reasons</h1></body></html>");
+        return build_html_response(HttpStatusCode::UnavailableForLegalReasons_451, "<html><body><h1>451 Unavailable For Legal Reasons</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultBadGateway()
+    HttpResponse HttpHelper::default_bad_gateway()
     {
-        return buildHtmlResponse(HttpStatusCode::BadGateway_502, "<html><body><h1>502 Bad Gateway</h1></body></html>");
+        return build_html_response(HttpStatusCode::BadGateway_502, "<html><body><h1>502 Bad Gateway</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultGatewayTimeout()
+    HttpResponse HttpHelper::default_gateway_timeout()
     {
-        return buildHtmlResponse(HttpStatusCode::GatewayTimeout_504, "<html><body><h1>504 Gateway Timeout</h1></body></html>");
+        return build_html_response(HttpStatusCode::GatewayTimeout_504, "<html><body><h1>504 Gateway Timeout</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultHttpVersionNotSupported()
+    HttpResponse HttpHelper::default_http_version_not_supported()
     {
-        return buildHtmlResponse(HttpStatusCode::HttpVersionNotSupported_505, "<html><body><h1>505 HTTP Version Not Supported</h1></body></html>");
+        return build_html_response(HttpStatusCode::HttpVersionNotSupported_505, "<html><body><h1>505 HTTP Version Not Supported</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultVariantAlsoNegotiates()
+    HttpResponse HttpHelper::default_variant_also_negotiates()
     {
-        return buildHtmlResponse(HttpStatusCode::VariantAlsoNegotiates_506, "<html><body><h1>506 Variant Also Negotiates</h1></body></html>");
+        return build_html_response(HttpStatusCode::VariantAlsoNegotiates_506, "<html><body><h1>506 Variant Also Negotiates</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultInsufficientStorage()
+    HttpResponse HttpHelper::default_insufficient_storage()
     {
-        return buildHtmlResponse(HttpStatusCode::InsufficientStorage_507, "<html><body><h1>507 Insufficient Storage</h1></body></html>");
+        return build_html_response(HttpStatusCode::InsufficientStorage_507, "<html><body><h1>507 Insufficient Storage</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultLoopDetected()
+    HttpResponse HttpHelper::default_loop_detected()
     {
-        return buildHtmlResponse(HttpStatusCode::LoopDetected_508, "<html><body><h1>508 Loop Detected</h1></body></html>");
+        return build_html_response(HttpStatusCode::LoopDetected_508, "<html><body><h1>508 Loop Detected</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultNotExtended()
+    HttpResponse HttpHelper::default_not_extended()
     {
-        return buildHtmlResponse(HttpStatusCode::NotExtended_510, "<html><body><h1>510 Not Extended</h1></body></html>");
+        return build_html_response(HttpStatusCode::NotExtended_510, "<html><body><h1>510 Not Extended</h1></body></html>");
     }
 
-    HttpResponse HttpHelper::defaultNetworkAuthenticationRequired()
+    HttpResponse HttpHelper::default_network_authentication_required()
     {
-        return buildHtmlResponse(HttpStatusCode::NetworkAuthenticationRequired_511, "<html><body><h1>511 Network Authentication Required</h1></body></html>");
+        return build_html_response(HttpStatusCode::NetworkAuthenticationRequired_511, "<html><body><h1>511 Network Authentication Required</h1></body></html>");
     }
 
     // 成功响应
-    HttpResponse HttpHelper::defaultOk(const std::string& type, std::string&& body)
+    HttpResponse HttpHelper::default_ok(const std::string& type, std::string&& body)
     {
         Http1_1ResponseBuilder builder;
         builder
             .status(HttpStatusCode::OK_200)
             .header("Server", GALAY_SERVER)
-            .header("Content-Type", MimeType::convertToMimeType(type));
+            .header("Content-Type", MimeType::convert_to_mime_type(type));
         if (!body.empty()) {
             builder.body(std::move(body));
         }
-        return builder.buildMove();
+        return builder.build_move();
     }
 
 
-    HttpResponse HttpHelper::defaultHttpResponse(HttpStatusCode code)
+    HttpResponse HttpHelper::default_http_response(HttpStatusCode code)
     {
         switch (code)
         {
             case HttpStatusCode::Continue_100:
-                return defaultContinue();
+                return default_continue();
             case HttpStatusCode::SwitchingProtocol_101:
-                return defaultSwitchingProtocol();
+                return default_switching_protocol();
             case HttpStatusCode::Processing_102:
-                return defaultProcessing();
+                return default_processing();
             case HttpStatusCode::EarlyHints_103:
-                return defaultEarlyHints();
+                return default_early_hints();
             case HttpStatusCode::OK_200:
-                return defaultOk("html", "<html><body><h1>200 OK</h1></body></html>");
+                return default_ok("html", "<html><body><h1>200 OK</h1></body></html>");
             case HttpStatusCode::Created_201:
-                return defaultCreated();
+                return default_created();
             case HttpStatusCode::Accepted_202:
-                return defaultAccepted();
+                return default_accepted();
             case HttpStatusCode::NonAuthoritativeInformation_203:
-                return defaultNonAuthoritativeInformation();
+                return default_non_authoritative_information();
             case HttpStatusCode::NoContent_204:
-                return defaultNoContent();
+                return default_no_content();
             case HttpStatusCode::ResetContent_205:
-                return defaultResetContent();
+                return default_reset_content();
             case HttpStatusCode::PartialContent_206:
-                return defaultPartialContent();
+                return default_partial_content();
             case HttpStatusCode::MultiStatus_207:
-                return defaultMultiStatus();
+                return default_multi_status();
             case HttpStatusCode::AlreadyReported_208:
-                return defaultAlreadyReported();
+                return default_already_reported();
             case HttpStatusCode::IMUsed_226:
-                return defaultIMUsed();
+                return default_im_used();
             case HttpStatusCode::MultipleChoices_300:
-                return defaultMultipleChoices();
+                return default_multiple_choices();
             case HttpStatusCode::MovedPermanently_301:
-                return defaultMovedPermanently();
+                return default_moved_permanently();
             case HttpStatusCode::Found_302:
-                return defaultFound();
+                return default_found();
             case HttpStatusCode::SeeOther_303:
-                return defaultSeeOther();
+                return default_see_other();
             case HttpStatusCode::NotModified_304:
-                return defaultNotModified();
+                return default_not_modified();
             case HttpStatusCode::UseProxy_305:
-                return defaultUseProxy();
+                return default_use_proxy();
             case HttpStatusCode::Unused_306:
-                return defaultUnused();
+                return default_unused();
             case HttpStatusCode::TemporaryRedirect_307:
-                return defaultTemporaryRedirect();
+                return default_temporary_redirect();
             case HttpStatusCode::PermanentRedirect_308:
-                return defaultPermanentRedirect();
+                return default_permanent_redirect();
             case HttpStatusCode::BadRequest_400:
-                return defaultBadRequest();
+                return default_bad_request();
             case HttpStatusCode::Unauthorized_401:
-                return defaultUnauthorized();
+                return default_unauthorized();
             case HttpStatusCode::PaymentRequired_402:
-                return defaultPaymentRequired();
+                return default_payment_required();
             case HttpStatusCode::Forbidden_403:
-                return defaultForbidden();
+                return default_forbidden();
             case HttpStatusCode::NotFound_404:
-                return defaultNotFound();
+                return default_not_found();
             case HttpStatusCode::MethodNotAllowed_405:
-                return defaultMethodNotAllowed();
+                return default_method_not_allowed();
             case HttpStatusCode::NotAcceptable_406:
-                return defaultNotAcceptable();
+                return default_not_acceptable();
             case HttpStatusCode::ProxyAuthenticationRequired_407:
-                return defaultProxyAuthenticationRequired();
+                return default_proxy_authentication_required();
             case HttpStatusCode::RequestTimeout_408:
-                return defaultRequestTimeout();
+                return default_request_timeout();
             case HttpStatusCode::Conflict_409:
-                return defaultConflict();
+                return default_conflict();
             case HttpStatusCode::Gone_410:
-                return defaultGone();
+                return default_gone();
             case HttpStatusCode::LengthRequired_411:
-                return defaultLengthRequired();
+                return default_length_required();
             case HttpStatusCode::PreconditionFailed_412:
-                return defaultPreconditionFailed();
+                return default_precondition_failed();
             case HttpStatusCode::PayloadTooLarge_413:
-                return defaultPayloadTooLarge();
+                return default_payload_too_large();
             case HttpStatusCode::UriTooLong_414:
-                return defaultUriTooLong();
+                return default_uri_too_long();
             case HttpStatusCode::UnsupportedMediaType_415:
-                return defaultUnsupportedMediaType();
+                return default_unsupported_media_type();
             case HttpStatusCode::RangeNotSatisfiable_416:
-                return defaultRangeNotSatisfiable();
+                return default_range_not_satisfiable();
             case HttpStatusCode::ExpectationFailed_417:
-                return defaultExpectationFailed();
+                return default_expectation_failed();
             case HttpStatusCode::ImATeapot_418:
-                return defaultImATeapot();
+                return default_im_a_teapot();
             case HttpStatusCode::MisdirectedRequest_421:
-                return defaultMisdirectedRequest();
+                return default_misdirected_request();
             case HttpStatusCode::UnprocessableContent_422:
-                return defaultUnprocessableContent();
+                return default_unprocessable_content();
             case HttpStatusCode::Locked_423:
-                return defaultLocked();
+                return default_locked();
             case HttpStatusCode::FailedDependency_424:
-                return defaultFailedDependency();
+                return default_failed_dependency();
             case HttpStatusCode::TooEarly_425:
-                return defaultTooEarly();
+                return default_too_early();
             case HttpStatusCode::UpgradeRequired_426:
-                return defaultUpgradeRequired();
+                return default_upgrade_required();
             case HttpStatusCode::PreconditionRequired_428:
-                return defaultPreconditionRequired();
+                return default_precondition_required();
             case HttpStatusCode::TooManyRequests_429:
-                return defaultTooManyRequests();
+                return default_too_many_requests();
             case HttpStatusCode::RequestHeaderFieldsTooLarge_431:
-                return defaultRequestHeaderFieldsTooLarge();
+                return default_request_header_fields_too_large();
             case HttpStatusCode::UnavailableForLegalReasons_451:
-                return defaultUnavailableForLegalReasons();
+                return default_unavailable_for_legal_reasons();
             case HttpStatusCode::InternalServerError_500:
-                return defaultInternalServerError();
+                return default_internal_server_error();
             case HttpStatusCode::NotImplemented_501:
-                return defaultNotImplemented();
+                return default_not_implemented();
             case HttpStatusCode::BadGateway_502:
-                return defaultBadGateway();
+                return default_bad_gateway();
             case HttpStatusCode::ServiceUnavailable_503:
-                return defaultServiceUnavailable();
+                return default_service_unavailable();
             case HttpStatusCode::GatewayTimeout_504:
-                return defaultGatewayTimeout();
+                return default_gateway_timeout();
             case HttpStatusCode::HttpVersionNotSupported_505:
-                return defaultHttpVersionNotSupported();
+                return default_http_version_not_supported();
             case HttpStatusCode::VariantAlsoNegotiates_506:
-                return defaultVariantAlsoNegotiates();
+                return default_variant_also_negotiates();
             case HttpStatusCode::InsufficientStorage_507:
-                return defaultInsufficientStorage();
+                return default_insufficient_storage();
             case HttpStatusCode::LoopDetected_508:
-                return defaultLoopDetected();
+                return default_loop_detected();
             case HttpStatusCode::NotExtended_510:
-                return defaultNotExtended();
+                return default_not_extended();
             case HttpStatusCode::NetworkAuthenticationRequired_511:
-                return defaultNetworkAuthenticationRequired();
+                return default_network_authentication_required();
             default:
-                return defaultInternalServerError();
+                return default_internal_server_error();
         }
     }
 
 #ifdef ENABLE_WEBSOCKET
     // WebSocket 相关实现
-    std::string HttpHelper::generateWebSocketAcceptKey(const std::string& clientKey)
+    std::string HttpHelper::generate_web_socket_accept_key(const std::string& clientKey)
     {
         const std::string combined = clientKey + WS_MAGIC_STRING;
         const auto digest = galay::utils::SHA1::hash(
             reinterpret_cast<const uint8_t*>(combined.data()), combined.size());
-        return galay::utils::Base64Util::Base64Encode(
+        return galay::utils::Base64Util::base64_encode(
             reinterpret_cast<const unsigned char*>(digest.data()), digest.size());
     }
 
-    HttpResponse HttpHelper::createWebSocketUpgradeResponse(const std::string& clientKey)
+    HttpResponse HttpHelper::create_web_socket_upgrade_response(const std::string& clientKey)
     {
         return Http1_1ResponseBuilder()
             .status(HttpStatusCode::SwitchingProtocol_101)
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
-            .header("Sec-WebSocket-Accept", generateWebSocketAcceptKey(clientKey))
+            .header("Sec-WebSocket-Accept", generate_web_socket_accept_key(clientKey))
             .header("Server", GALAY_SERVER)
-            .buildMove();
+            .build_move();
     }
 #else
     // WebSocket 功能禁用时的占位实现
-    std::string HttpHelper::generateWebSocketAcceptKey(const std::string& clientKey)
+    std::string HttpHelper::generate_web_socket_accept_key(const std::string& clientKey)
     {
         (void)clientKey;
         return "";
     }
 
-    HttpResponse HttpHelper::createWebSocketUpgradeResponse(const std::string& clientKey)
+    HttpResponse HttpHelper::create_web_socket_upgrade_response(const std::string& clientKey)
     {
         (void)clientKey;
-        return defaultNotImplemented();
+        return default_not_implemented();
     }
 #endif
 }

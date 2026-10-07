@@ -31,19 +31,19 @@ struct RoundResult {
 };
 
 template <typename Producer, typename Consumer>
-[[nodiscard]] RoundResult runRound(Producer& producer,
+[[nodiscard]] RoundResult run_round(Producer& producer,
                                    Consumer& consumer,
                                    uint64_t iterations) noexcept
 {
     RoundResult result;
     for (uint64_t sequence = 0; sequence < iterations; ++sequence) {
         uint64_t pending = sequence;
-        if (!producer.tryWrite(std::move(pending))) {
+        if (!producer.try_write(std::move(pending))) {
             result.valid = false;
             break;
         }
         uint64_t value = 0;
-        if (!consumer.tryRead(value)) {
+        if (!consumer.try_read(value)) {
             result.valid = false;
             break;
         }
@@ -52,7 +52,7 @@ template <typename Producer, typename Consumer>
     return result;
 }
 
-[[nodiscard]] uint64_t expectedChecksum(uint64_t iterations) noexcept
+[[nodiscard]] uint64_t expected_checksum(uint64_t iterations) noexcept
 {
     return (iterations & 1U) == 0
         ? (iterations / 2) * (iterations - 1)
@@ -63,21 +63,21 @@ template <typename Producer, typename Consumer>
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     galay::spsc::Ring<uint64_t> ring(kCapacity);
     if (ring.error() != galay::spsc::RingError::kNone) {
         std::cerr << "failed to construct SPSC ring: "
-                  << galay::spsc::ringErrorString(ring.error()) << '\n';
+                  << galay::spsc::ring_error_string(ring.error()) << '\n';
         return std::cerr.good() ? 2 : 3;
     }
     auto endpoints = ring.split();
 
-    const RoundResult warmup = runRound(
+    const RoundResult warmup = run_round(
         endpoints.producer, endpoints.consumer, kWarmupIterations);
-    if (!warmup.valid || warmup.checksum != expectedChecksum(kWarmupIterations)) {
+    if (!warmup.valid || warmup.checksum != expected_checksum(kWarmupIterations)) {
         std::cerr << "SPSC ring ping-pong warmup validation failed\n";
         return std::cerr.good() ? 1 : 3;
     }
@@ -87,13 +87,13 @@ int main()
     bool valid = true;
     for (size_t round = 0; round < kRounds; ++round) {
         const auto begin = std::chrono::steady_clock::now();
-        const RoundResult result = runRound(
+        const RoundResult result = run_round(
             endpoints.producer, endpoints.consumer, kMeasuredIterations);
         const auto elapsed = std::chrono::steady_clock::now() - begin;
         const auto elapsedNs =
             std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
         valid = valid && result.valid && elapsedNs > 0 &&
-            result.checksum == expectedChecksum(kMeasuredIterations);
+            result.checksum == expected_checksum(kMeasuredIterations);
         if (elapsedNs <= 0) {
             continue;
         }

@@ -30,7 +30,7 @@ struct MongoReplicaSetItConfig
     uint32_t server_selection_timeout_ms = 30000;
 };
 
-inline bool parseItBool(const char* value, bool fallback = false)
+inline bool parse_it_bool(const char* value, bool fallback = false)
 {
     if (value == nullptr) {
         return fallback;
@@ -45,7 +45,7 @@ inline bool parseItBool(const char* value, bool fallback = false)
            normalized == "yes" || normalized == "on";
 }
 
-inline std::optional<MongoItEndpoint> parseItEndpoint(std::string token)
+inline std::optional<MongoItEndpoint> parse_it_endpoint(std::string token)
 {
     const auto trim = [](std::string& value) {
         const auto begin = value.find_first_not_of(" \t\r\n");
@@ -84,7 +84,7 @@ inline std::optional<MongoItEndpoint> parseItEndpoint(std::string token)
     return endpoint;
 }
 
-inline std::vector<MongoItEndpoint> parseItSeedList(const char* value)
+inline std::vector<MongoItEndpoint> parse_it_seed_list(const char* value)
 {
     std::vector<MongoItEndpoint> seeds;
     if (value == nullptr) {
@@ -94,7 +94,7 @@ inline std::vector<MongoItEndpoint> parseItSeedList(const char* value)
     std::stringstream stream(value);
     std::string token;
     while (std::getline(stream, token, ',')) {
-        auto endpoint = parseItEndpoint(std::move(token));
+        auto endpoint = parse_it_endpoint(std::move(token));
         if (endpoint) {
             seeds.push_back(std::move(*endpoint));
         }
@@ -102,20 +102,20 @@ inline std::vector<MongoItEndpoint> parseItSeedList(const char* value)
     return seeds;
 }
 
-inline MongoReplicaSetItConfig loadMongoReplicaSetItConfig()
+inline MongoReplicaSetItConfig load_mongo_replica_set_it_config()
 {
     MongoReplicaSetItConfig cfg;
-    cfg.enabled = parseItBool(std::getenv("GALAY_IT_ENABLE"), false);
-    cfg.seeds = parseItSeedList(std::getenv("GALAY_MONGO_RS_SEEDS"));
-    cfg.replica_set_name = envOrDefault("GALAY_MONGO_RS_NAME", "");
-    cfg.mongo = loadMongoTestConfig();
+    cfg.enabled = parse_it_bool(std::getenv("GALAY_IT_ENABLE"), false);
+    cfg.seeds = parse_it_seed_list(std::getenv("GALAY_MONGO_RS_SEEDS"));
+    cfg.replica_set_name = env_or_default("GALAY_MONGO_RS_NAME", "");
+    cfg.mongo = load_mongo_test_config();
     cfg.server_selection_timeout_ms =
-        envUint32OrDefault("GALAY_MONGO_SERVER_SELECTION_TIMEOUT_MS",
+        env_uint32_or_default("GALAY_MONGO_SERVER_SELECTION_TIMEOUT_MS",
                            cfg.server_selection_timeout_ms);
     return cfg;
 }
 
-inline bool shouldSkipReplicaSetIt(const MongoReplicaSetItConfig& cfg, std::string* reason)
+inline bool should_skip_replica_set_it(const MongoReplicaSetItConfig& cfg, std::string* reason)
 {
     if (!cfg.enabled) {
         if (reason != nullptr) {

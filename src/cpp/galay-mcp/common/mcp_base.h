@@ -76,13 +76,13 @@ struct Content {
      * @brief 序列化为JSON字符串
      * @return JSON格式字符串
      */
-    std::string toJson() const;
+    std::string to_json() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element JSON元素
      * @return 成功返回Content，失败返回McpError
      */
-    static std::expected<Content, McpError> fromJson(const json::Json& element);
+    static std::expected<Content, McpError> from_json(const json::Json& element);
 };
 
 /**
@@ -94,8 +94,8 @@ struct Tool {
     std::string description; ///< 工具描述
     std::string inputSchema; ///< 输入参数的JSON Schema
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<Tool, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<Tool, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -108,8 +108,8 @@ struct Resource {
     std::string description; ///< 资源描述
     std::string mimeType; ///< 资源MIME类型
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<Resource, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<Resource, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -121,8 +121,8 @@ struct PromptArgument {
     std::string description; ///< 参数描述
     bool required{false}; ///< 是否为必填参数
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<PromptArgument, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<PromptArgument, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -134,8 +134,8 @@ struct Prompt {
     std::string description; ///< 提示描述
     std::vector<PromptArgument> arguments; ///< 提示参数列表
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<Prompt, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<Prompt, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -146,8 +146,8 @@ struct ClientInfo {
     std::string name; ///< 客户端名称
     std::string version; ///< 客户端版本
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<ClientInfo, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<ClientInfo, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -159,8 +159,8 @@ struct ServerInfo {
     std::string version; ///< 服务器版本
     std::string capabilities; ///< 服务器能力JSON
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<ServerInfo, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<ServerInfo, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -173,8 +173,8 @@ struct ServerCapabilities {
     bool prompts = false; ///< 是否支持提示功能
     bool logging = false; ///< 是否支持日志功能
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<ServerCapabilities, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<ServerCapabilities, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -186,8 +186,8 @@ struct InitializeParams {
     ClientInfo clientInfo; ///< 客户端信息
     std::string capabilities; ///< 客户端能力JSON
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<InitializeParams, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<InitializeParams, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -199,8 +199,8 @@ struct InitializeResult {
     ServerInfo serverInfo; ///< 服务器信息
     ServerCapabilities capabilities; ///< 服务器能力
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<InitializeResult, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<InitializeResult, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -211,8 +211,8 @@ struct ToolCallParams {
     std::string name; ///< 工具名称
     std::string arguments; ///< 工具参数JSON
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<ToolCallParams, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<ToolCallParams, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -223,8 +223,8 @@ struct ToolCallResult {
     std::vector<Content> content; ///< 内容列表
     bool isError = false; ///< 是否为错误结果
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<ToolCallResult, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<ToolCallResult, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -237,7 +237,7 @@ struct JsonRpcRequest {
     std::string method; ///< 方法名称
     std::optional<std::string> params; ///< 请求参数
 
-    std::string toJson() const; ///< 序列化为JSON字符串
+    std::string to_json() const; ///< 序列化为JSON字符串
 };
 
 /**
@@ -250,8 +250,8 @@ struct JsonRpcResponse {
     std::optional<std::string> result; ///< 成功时的结果
     std::optional<std::string> error; ///< 失败时的错误信息
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<JsonRpcResponse, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<JsonRpcResponse, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**
@@ -263,7 +263,7 @@ struct JsonRpcNotification {
     std::string method; ///< 通知方法名称
     std::optional<std::string> params; ///< 通知参数
 
-    std::string toJson() const; ///< 序列化为JSON字符串
+    std::string to_json() const; ///< 序列化为JSON字符串
 };
 
 /**
@@ -275,8 +275,8 @@ struct JsonRpcError {
     std::optional<std::string> data; ///< 附加错误数据
     int code = 0; ///< 错误码
 
-    std::string toJson() const; ///< 序列化为JSON字符串
-    static std::expected<JsonRpcError, McpError> fromJson(const json::Json& element); ///< 从JSON元素反序列化
+    std::string to_json() const; ///< 序列化为JSON字符串
+    static std::expected<JsonRpcError, McpError> from_json(const json::Json& element); ///< 从JSON元素反序列化
 };
 
 /**

@@ -96,7 +96,7 @@ public:
      * @param setting HttpReaderSetting配置
      * @return HttpReaderImpl<SocketType> Reader对象
      */
-    HttpReaderImpl<SocketType> getReader(const HttpReaderSetting& setting = HttpReaderSetting()) {
+    HttpReaderImpl<SocketType> get_reader(const HttpReaderSetting& setting = HttpReaderSetting()) {
         return HttpReaderImpl<SocketType>(m_ring_buffer, setting, m_socket);
     }
 
@@ -105,7 +105,7 @@ public:
      * @param setting HttpWriterSetting配置
      * @return HttpWriterImpl<SocketType> Writer对象
      */
-    HttpWriterImpl<SocketType> getWriter() {
+    HttpWriterImpl<SocketType> get_writer() {
         return HttpWriterImpl<SocketType>(m_default_writer_setting, m_socket);
     }
 
@@ -114,7 +114,7 @@ public:
      * @param setting HttpWriterSetting配置
      * @return HttpWriterImpl<SocketType> Writer对象
      */
-    HttpWriterImpl<SocketType> getWriter(const HttpWriterSetting& setting) {
+    HttpWriterImpl<SocketType> get_writer(const HttpWriterSetting& setting) {
         return HttpWriterImpl<SocketType>(setting, m_socket);
     }
 
@@ -122,7 +122,7 @@ public:
      * @brief 设置连接级默认 HttpWriter 配置
      * @param setting 默认写入器配置
      */
-    void setDefaultWriterSetting(HttpWriterSetting setting) {
+    void set_default_writer_setting(HttpWriterSetting setting) {
         m_default_writer_setting = std::move(setting);
     }
 
@@ -130,7 +130,7 @@ public:
      * @brief 获取连接级默认 HttpWriter 配置
      * @return 默认写入器配置引用
      */
-    const HttpWriterSetting& defaultWriterSetting() const {
+    const HttpWriterSetting& default_writer_setting() const {
         return m_default_writer_setting;
     }
 
@@ -139,7 +139,7 @@ public:
      * @return SocketType 引用
      * @note 用于需要直接访问底层 socket 的场景（如 WebSocket 升级后的处理）
      */
-    SocketType& getSocket() { return m_socket; }
+    SocketType& get_socket() { return m_socket; }
 
     // 允许HttpServerImpl访问私有成员
     template<typename S>
@@ -167,7 +167,7 @@ private:
      * @brief 获取RingBuffer（私有方法，仅供友元类使用）
      * @return RingBuffer引用
      */
-    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ringBuffer() { return m_ring_buffer; }
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer() { return m_ring_buffer; }
 
     SocketType m_socket;
     RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> m_ring_buffer;

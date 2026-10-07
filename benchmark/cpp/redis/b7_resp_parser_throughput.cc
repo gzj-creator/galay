@@ -22,7 +22,7 @@ struct BenchmarkResult
     std::uint64_t checksum = 0;
 };
 
-bool parseSizeArg(std::string_view text, size_t* value)
+bool parse_size_arg(std::string_view text, size_t* value)
 {
     if (value == nullptr || text.empty()) {
         return false;
@@ -40,28 +40,28 @@ bool parseSizeArg(std::string_view text, size_t* value)
     return true;
 }
 
-std::string makeSimpleFrame(size_t payload_size)
+std::string make_simple_frame(size_t payload_size)
 {
     const std::string payload(payload_size, 's');
     return std::string("+") + payload + "\r\n";
 }
 
-std::string makeBulkFrame(size_t payload_size)
+std::string make_bulk_frame(size_t payload_size)
 {
     const std::string payload(payload_size, 'b');
     return std::string("$") + std::to_string(payload_size) + "\r\n" + payload + "\r\n";
 }
 
-std::string makeDoubleFrame()
+std::string make_double_frame()
 {
     return ",12345.6789\r\n";
 }
 
-bool verifyFrame(std::string_view frame, RespType expected_type, size_t expected_payload_size)
+bool verify_frame(std::string_view frame, RespType expected_type, size_t expected_payload_size)
 {
     RespParser parser;
     RedisReply reply;
-    auto parsed = parser.parseFast(frame.data(), frame.size(), &reply);
+    auto parsed = parser.parse_fast(frame.data(), frame.size(), &reply);
     if (!parsed) {
         std::cerr << "verify parse failed with " << static_cast<int>(parsed.error()) << "\n";
         return false;
@@ -70,18 +70,18 @@ bool verifyFrame(std::string_view frame, RespType expected_type, size_t expected
         std::cerr << "verify consumed " << parsed.value() << " of " << frame.size() << "\n";
         return false;
     }
-    if (reply.getType() != expected_type) {
+    if (reply.get_type() != expected_type) {
         std::cerr << "verify returned unexpected RESP type\n";
         return false;
     }
     if (expected_type == RespType::Double) {
-        if (reply.asDouble() != 12345.6789) {
+        if (reply.as_double() != 12345.6789) {
             std::cerr << "verify double payload mismatch\n";
             return false;
         }
         return true;
     }
-    const std::string value = reply.asString();
+    const std::string value = reply.as_string();
     if (value.size() != expected_payload_size) {
         std::cerr << "verify payload size mismatch\n";
         return false;
@@ -89,7 +89,7 @@ bool verifyFrame(std::string_view frame, RespType expected_type, size_t expected
     return true;
 }
 
-BenchmarkResult runParserLoop(std::string_view frame, RespType expected_type, size_t iterations)
+BenchmarkResult run_parser_loop(std::string_view frame, RespType expected_type, size_t iterations)
 {
     RespParser parser;
     std::uint64_t checksum = 0;
@@ -97,12 +97,12 @@ BenchmarkResult runParserLoop(std::string_view frame, RespType expected_type, si
     const auto started = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
         RedisReply reply;
-        auto parsed = parser.parseFast(frame.data(), frame.size(), &reply);
+        auto parsed = parser.parse_fast(frame.data(), frame.size(), &reply);
         if (!parsed) {
             std::cerr << "benchmark parse failed with " << static_cast<int>(parsed.error()) << "\n";
             return BenchmarkResult{};
         }
-        if (reply.getType() != expected_type) {
+        if (reply.get_type() != expected_type) {
             std::cerr << "benchmark returned unexpected RESP type\n";
             return BenchmarkResult{};
         }
@@ -113,23 +113,23 @@ BenchmarkResult runParserLoop(std::string_view frame, RespType expected_type, si
     return BenchmarkResult{true, seconds, checksum};
 }
 
-bool runScenario(const char* name,
+bool run_scenario(const char* name,
                  std::string_view frame,
                  RespType expected_type,
                  size_t payload_size,
                  size_t iterations)
 {
-    if (!verifyFrame(frame, expected_type, payload_size)) {
+    if (!verify_frame(frame, expected_type, payload_size)) {
         return false;
     }
 
     const size_t warmup_iterations = std::min<size_t>(iterations, 10000);
-    const BenchmarkResult warmup = runParserLoop(frame, expected_type, warmup_iterations);
+    const BenchmarkResult warmup = run_parser_loop(frame, expected_type, warmup_iterations);
     if (!warmup.ok) {
         return false;
     }
 
-    const BenchmarkResult measured = runParserLoop(frame, expected_type, iterations);
+    const BenchmarkResult measured = run_parser_loop(frame, expected_type, iterations);
     if (!measured.ok || measured.seconds <= 0.0) {
         return false;
     }
@@ -147,37 +147,37 @@ bool runScenario(const char* name,
 
 int main(int argc, char* argv[])
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     size_t iterations = 1000000;
     size_t bulk_payload_size = 64;
 
-    if (argc > 1 && !parseSizeArg(argv[1], &iterations)) {
+    if (argc > 1 && !parse_size_arg(argv[1], &iterations)) {
         std::cerr << "usage: " << argv[0] << " [iterations] [bulk-payload-size]\n";
         return 2;
     }
-    if (argc > 2 && !parseSizeArg(argv[2], &bulk_payload_size)) {
+    if (argc > 2 && !parse_size_arg(argv[2], &bulk_payload_size)) {
         std::cerr << "usage: " << argv[0] << " [iterations] [bulk-payload-size]\n";
         return 2;
     }
 
-    const std::string simple_frame = makeSimpleFrame(2);
-    const std::string bulk_frame = makeBulkFrame(bulk_payload_size);
-    const std::string double_frame = makeDoubleFrame();
+    const std::string simple_frame = make_simple_frame(2);
+    const std::string bulk_frame = make_bulk_frame(bulk_payload_size);
+    const std::string double_frame = make_double_frame();
 
     std::cout << "Redis RESP parser throughput\n"
               << "iterations=" << iterations
               << " bulk_payload_size=" << bulk_payload_size << "\n";
 
-    if (!runScenario("simple-string", simple_frame, RespType::SimpleString, 2, iterations)) {
+    if (!run_scenario("simple-string", simple_frame, RespType::SimpleString, 2, iterations)) {
         return 1;
     }
-    if (!runScenario("bulk-string", bulk_frame, RespType::BulkString, bulk_payload_size, iterations)) {
+    if (!run_scenario("bulk-string", bulk_frame, RespType::BulkString, bulk_payload_size, iterations)) {
         return 1;
     }
-    if (!runScenario("double", double_frame, RespType::Double, 0, iterations)) {
+    if (!run_scenario("double", double_frame, RespType::Double, 0, iterations)) {
         return 1;
     }
 

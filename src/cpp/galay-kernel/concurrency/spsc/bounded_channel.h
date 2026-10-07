@@ -71,9 +71,9 @@ using RingError = ::galay::utils::TypeRingBufferError;
  * @param error 错误枚举。
  * @return 覆盖所有公开枚举值的非空字符串。
  */
-[[nodiscard]] inline const char* ringErrorString(RingError error) noexcept
+[[nodiscard]] inline const char* ring_error_string(RingError error) noexcept
 {
-    return ::galay::utils::typeRingBufferErrorString(error);
+    return ::galay::utils::type_ring_buffer_error_string(error);
 }
 
 /**
@@ -112,7 +112,7 @@ namespace detail {
  *
  * @note 该函数不阻塞线程，也不主动把执行权交给操作系统调度器。
  */
-inline void boundedChannelCpuPause() noexcept
+inline void bounded_channel_cpu_pause() noexcept
 {
 #if defined(_MSC_VER)
     YieldProcessor();
@@ -236,7 +236,7 @@ struct BoundedChannelWaiter
      * @note 成功返回后对端可立即恢复并销毁协程帧，因此调用方不得再访问 awaiter、
      *       channel 或 waiter。
      */
-    [[nodiscard]] bool finishArming() noexcept
+    [[nodiscard]] bool finish_arming() noexcept
     {
         BoundedWaiterWakePhase expected = BoundedWaiterWakePhase::kArming;
         return wakePhase.compare_exchange_strong(
@@ -315,12 +315,12 @@ public:
      *
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
-    void markTimeout() noexcept;
+    void mark_timeout() noexcept;
 
 private:
     friend struct WithTimeout<BoundedSendAwaitable<T, Capacity>>;
 
-    void bindTimeoutTimer(const TimeoutTimer::ptr& timer) noexcept
+    void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
     }
@@ -387,12 +387,12 @@ public:
      *
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
-    void markTimeout() noexcept;
+    void mark_timeout() noexcept;
 
 private:
     friend struct WithTimeout<BoundedRecvAwaitable<T, Capacity>>;
 
-    void bindTimeoutTimer(const TimeoutTimer::ptr& timer) noexcept
+    void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
     }
@@ -412,7 +412,7 @@ private:
  * @tparam T 通道元素类型。
  * @details 等待至少一条消息，恢复时尽量补齐请求数量；不会阻塞调度器线程。
  * @note 返回 vector 的 convenience 路径可能分配，默认 allocator OOM 不经 IOError；
- *       需要显式可恢复、无分配接收时使用 BoundedChannel::recvBatchTo(std::span<T>)。
+ *       需要显式可恢复、无分配接收时使用 BoundedChannel::recv_batch_to(std::span<T>)。
  */
 template <BoundedValue T, size_t Capacity>
 class BoundedRecvBatchAwaitable
@@ -461,13 +461,13 @@ public:
      *
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
-    void markTimeout() noexcept;
+    void mark_timeout() noexcept;
 
 private:
     friend struct WithTimeout<BoundedRecvBatchAwaitable<T, Capacity>>;
 
-    bool tryReceiveNow();
-    void bindTimeoutTimer(const TimeoutTimer::ptr& timer) noexcept
+    bool try_receive_now();
+    void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
     }
@@ -542,9 +542,9 @@ private:
                                 std::span<T> output) noexcept
         : m_output(output), m_channel(channel) {}
 
-    bool tryReceiveNow() noexcept;
-    void markTimeout() noexcept;
-    void bindTimeoutTimer(const TimeoutTimer::ptr& timer) noexcept
+    bool try_receive_now() noexcept;
+    void mark_timeout() noexcept;
+    void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
     }
@@ -569,13 +569,13 @@ private:
  *
  * @details
  * - 动态容量会向上取整为不小于 2 的 2 的幂；编译期容量必须是合法的 2 次幂。
- * - trySend() / tryRecv() 不等待 Full/Empty 条件；单侧逻辑操作必须串行。
- * - send() / recv() / recvBatch() 满或空时只挂起协程，不阻塞底层线程。
+ * - try_send() / try_recv() 不等待 Full/Empty 条件；单侧逻辑操作必须串行。
+ * - send() / recv() / recv_batch() 满或空时只挂起协程，不阻塞底层线程。
  * - 单生产者与单消费者之间保持严格 FIFO。
  *
  * @note 通道是身份对象，不可复制或移动。通道必须存活到所有挂起操作完成或超时。
- * @note trySend(T&&) 只有在成功抢到 slot 后才移动参数；失败时参数保持未移动。
- *       需要失败后拿回值重试时应使用 trySend()。co_await send() 的值保存在 coroutine
+ * @note try_send(T&&) 只有在成功抢到 slot 后才移动参数；失败时参数保持未移动。
+ *       需要失败后拿回值重试时应使用 try_send()。co_await send() 的值保存在 coroutine
  *       awaiter 中，超时或关闭时不会归还。
  */
 template <BoundedValue T, size_t Capacity>
@@ -608,7 +608,7 @@ public:
     explicit BoundedChannel(size_t capacity) noexcept
         requires (!kUsesStaticCapacity)
     {
-        const size_t normalized = normalizeCapacity(capacity);
+        const size_t normalized = normalize_capacity(capacity);
         if (normalized == 0) {
             m_error = RingError::kCapacityTooLarge;
             return;
@@ -644,9 +644,9 @@ public:
      */
     ~BoundedChannel() noexcept
     {
-        clearWaiterQueue(m_recvWaiters);
-        clearWaiterQueue(m_sendWaiters);
-        if (!isValid()) {
+        clear_waiter_queue(m_recvWaiters);
+        clear_waiter_queue(m_sendWaiters);
+        if (!is_valid()) {
             return;
         }
         const size_t head = m_head.load(std::memory_order_relaxed);
@@ -656,7 +656,7 @@ public:
         const size_t count = pending < ringCapacity ? pending : ringCapacity;
         for (size_t i = 0; i < count; ++i) {
             const size_t position = head + i;
-            Slot& slot = slotAt(position & ringMask());
+            Slot& slot = slot_at(position & ring_mask());
             std::destroy_at(slot.value());
         }
     }
@@ -681,21 +681,21 @@ public:
      *
      * @note 该路径不使用 cursor CAS；失败只表示关闭或当前容量已满。
      */
-    bool trySend(T&& value)
+    bool try_send(T&& value)
     {
         PendingWakes pendingWakes;
-        const auto enqueueResult = ringEnqueue(std::move(value));
+        const auto enqueueResult = ring_enqueue(std::move(value));
         const bool sent = enqueueResult == RingEnqueueResult::kPublished;
         if (sent) {
-            if (isClosed()) {
-                finishCloseAfterPublication(pendingWakes);
+            if (is_closed()) {
+                finish_close_after_publication(pendingWakes);
             } else if (m_recvWaiterPathUsed.load(std::memory_order_seq_cst)) {
-                wakeOneConsumerIfAny(pendingWakes);
+                wake_one_consumer_if_any(pendingWakes);
             }
         } else if (enqueueResult == RingEnqueueResult::kClosedAfterPublishing) {
-            finishCloseAfterPublication(pendingWakes);
+            finish_close_after_publication(pendingWakes);
         }
-        pendingWakes.wakeAll();
+        pendingWakes.wake_all();
         return sent;
     }
 
@@ -707,10 +707,10 @@ public:
      *
      * @note 仅为不抛复制构造类型提供；先创建本地副本，再复用移动发送路径。
      */
-    bool trySend(const T& value) requires std::is_nothrow_copy_constructible_v<T>
+    bool try_send(const T& value) requires std::is_nothrow_copy_constructible_v<T>
     {
         T copy = value;
-        return trySend(std::move(copy));
+        return try_send(std::move(copy));
     }
 
     /**
@@ -730,20 +730,20 @@ public:
      *
      * @note 该路径不使用 cursor CAS；空结果只表示当前没有已发布消息。
      */
-    std::optional<T> tryRecv()
+    std::optional<T> try_recv()
     {
         PendingWakes pendingWakes;
         std::optional<T> value;
-        if (ringDequeueTo([&value](T&& item) {
+        if (ring_dequeue_to([&value](T&& item) {
                 value.emplace(std::move(item));
             })) {
             if (m_sendWaiterPathUsed.load(std::memory_order_seq_cst)) {
-                drainOneSendWaiter(pendingWakes);
+                drain_one_send_waiter(pendingWakes);
             }
-            pendingWakes.wakeAll();
+            pendingWakes.wake_all();
             return value;
         }
-        pendingWakes.wakeAll();
+        pendingWakes.wake_all();
         return std::nullopt;
     }
 
@@ -763,9 +763,9 @@ public:
      * @return 可 co_await 的等待体；至少收到一条后尽量补齐至 count 条。
      *
      * @note count 为 0 时立即返回空批次；返回 vector 的默认 allocator OOM 不经
-     *       IOError。要求显式可恢复、无分配时使用 recvBatchTo(std::span<T>)。
+     *       IOError。要求显式可恢复、无分配时使用 recv_batch_to(std::span<T>)。
      */
-    BoundedRecvBatchAwaitable<T, Capacity> recvBatch(size_t count);
+    BoundedRecvBatchAwaitable<T, Capacity> recv_batch(size_t count);
 
     /**
      * @brief 异步把消息移动到调用方已构造缓冲区。
@@ -775,7 +775,7 @@ public:
      *
      * @note output 必须活到 await 完成，等待期间不得由其他线程或协程访问。
      */
-    [[nodiscard]] BoundedRecvBatchToAwaitable<T, Capacity> recvBatchTo(
+    [[nodiscard]] BoundedRecvBatchToAwaitable<T, Capacity> recv_batch_to(
         std::span<T> output) noexcept
         requires std::is_nothrow_move_assignable_v<T>;
 
@@ -787,7 +787,7 @@ public:
      *
      * @note 仅唯一 consumer 可调用；路径不分配，整批结束后只推进一次发送 waiter。
      */
-    [[nodiscard]] size_t tryRecvBatch(std::span<T> output) noexcept
+    [[nodiscard]] size_t try_recv_batch(std::span<T> output) noexcept
         requires std::is_nothrow_move_assignable_v<T>
     {
         if (output.empty()) {
@@ -797,7 +797,7 @@ public:
         PendingWakes pendingWakes;
         size_t received = 0;
         while (received < output.size()) {
-            const bool dequeued = ringDequeueTo([&output, received](T&& value) noexcept {
+            const bool dequeued = ring_dequeue_to([&output, received](T&& value) noexcept {
                 output[received] = std::move(value);
             });
             if (!dequeued) {
@@ -807,9 +807,9 @@ public:
         }
         if (received != 0 &&
             m_sendWaiterPathUsed.load(std::memory_order_seq_cst)) {
-            drainOneSendWaiter(pendingWakes);
+            drain_one_send_waiter(pendingWakes);
         }
-        pendingWakes.wakeAll();
+        pendingWakes.wake_all();
         return received;
     }
 
@@ -820,27 +820,27 @@ public:
      * @return 收到至少一条消息时返回消息批次；否则返回 std::nullopt。
      *
      * @note 返回 vector 的 convenience 路径可能分配，默认 allocator OOM 不经
-     *       返回值传播；要求显式可恢复、无分配时使用 tryRecvBatch(std::span<T>)。
+     *       返回值传播；要求显式可恢复、无分配时使用 try_recv_batch(std::span<T>)。
      */
-    std::optional<std::vector<T>> tryRecvBatch(size_t count)
+    std::optional<std::vector<T>> try_recv_batch(size_t count)
     {
         if (count == 0) {
             return std::vector<T>{};
         }
-        if (!hasReadySlot()) {
+        if (!has_ready_slot()) {
             return std::nullopt;
         }
 
         std::vector<T> values;
         values.reserve(count);
-        auto first = tryRecv();
+        auto first = try_recv();
         if (!first.has_value()) {
             return std::nullopt;
         }
 
         values.push_back(std::move(*first));
         while (values.size() < count) {
-            auto value = tryRecv();
+            auto value = try_recv();
             if (!value.has_value()) {
                 break;
             }
@@ -862,12 +862,12 @@ public:
             return;
         }
         PendingWakes pendingWakes;
-        if (!hasPublishingSlot()) {
-            wakeAllRecvWaiters(pendingWakes);
+        if (!has_publishing_slot()) {
+            wake_all_recv_waiters(pendingWakes);
         }
-        wakeAllSendWaiters(pendingWakes);
+        wake_all_send_waiters(pendingWakes);
         // 从这里开始只访问栈上 wake batch；同步恢复即使销毁 channel 也不会 UAF。
-        pendingWakes.wakeAll();
+        pendingWakes.wake_all();
     }
 
     /**
@@ -877,7 +877,7 @@ public:
      *
      * @note 返回调用时刻的原子快照，可与其他通道操作并发调用。
      */
-    bool isClosed() const noexcept
+    bool is_closed() const noexcept
     {
         return m_closed.load(std::memory_order_acquire);
     }
@@ -939,7 +939,7 @@ public:
      */
     bool full() const noexcept
     {
-        return !isValid() || size() >= capacity();
+        return !is_valid() || size() >= capacity();
     }
 
 private:
@@ -968,7 +968,7 @@ private:
          *
          * @return 仅供 construct_at 使用的对齐地址。
          */
-        T* storageAddress() noexcept
+        T* storage_address() noexcept
         {
             return reinterpret_cast<T*>(storage);
         }
@@ -1000,7 +1000,7 @@ private:
         std::array<Slot, kStoredStaticCapacity>,
         std::unique_ptr<Slot[]>>;
 
-    [[nodiscard]] bool isValid() const noexcept
+    [[nodiscard]] bool is_valid() const noexcept
     {
         if constexpr (kUsesStaticCapacity) {
             return true;
@@ -1009,14 +1009,14 @@ private:
         }
     }
 
-    [[nodiscard]] IOError constructionError() const noexcept
+    [[nodiscard]] IOError construction_error() const noexcept
     {
         return m_error == RingError::kAllocationFailed
             ? IOError(kernel::kOutOfMemory, 0)
             : IOError(kernel::kParamInvalid, 0);
     }
 
-    [[nodiscard]] size_t ringMask() const noexcept
+    [[nodiscard]] size_t ring_mask() const noexcept
     {
         if constexpr (kUsesStaticCapacity) {
             return Capacity - 1;
@@ -1025,7 +1025,7 @@ private:
         }
     }
 
-    [[nodiscard]] Slot& slotAt(size_t index) noexcept
+    [[nodiscard]] Slot& slot_at(size_t index) noexcept
     {
         if constexpr (kUsesStaticCapacity) {
             return m_slots[index];
@@ -1034,7 +1034,7 @@ private:
         }
     }
 
-    [[nodiscard]] const Slot& slotAt(size_t index) const noexcept
+    [[nodiscard]] const Slot& slot_at(size_t index) const noexcept
     {
         if constexpr (kUsesStaticCapacity) {
             return m_slots[index];
@@ -1118,12 +1118,12 @@ private:
         TimeoutTimer::ptr timeoutWinner;
         std::optional<Waker> waker;
 
-        void setWaker(Waker waiterWaker) noexcept
+        void set_waker(Waker waiterWaker) noexcept
         {
             waker.emplace(std::move(waiterWaker));
         }
 
-        void setTimeoutWinner(const TimeoutTimer::ptr& timer) noexcept
+        void set_timeout_winner(const TimeoutTimer::ptr& timer) noexcept
         {
             timeoutWinner = timer;
         }
@@ -1133,10 +1133,10 @@ private:
             TimeoutTimer::ptr timer = std::move(timeoutWinner);
             std::optional<Waker> waiterWaker = std::move(waker);
             if (timer) {
-                timer->wakeTimeoutWinner();
+                timer->wake_timeout_winner();
             }
             if (waiterWaker.has_value()) {
-                waiterWaker->wakeUp();
+                waiterWaker->wake_up();
             }
         }
     };
@@ -1147,7 +1147,7 @@ private:
         PendingWake send;
         PendingWake recv;
 
-        void wakeAll() noexcept
+        void wake_all() noexcept
         {
             send.wake();
             recv.wake();
@@ -1171,7 +1171,7 @@ private:
      *
      * @note arming 窗口内只登记 pending wake；实际恢复请求全局至多提交一次。
      */
-    void prepareWaiterWake(Waiter& waiter, PendingWake& pendingWake) noexcept
+    void prepare_waiter_wake(Waiter& waiter, PendingWake& pendingWake) noexcept
     {
         auto phase = waiter.wakePhase.load(std::memory_order_acquire);
         for (;;) {
@@ -1193,7 +1193,7 @@ private:
                         std::memory_order_acquire)) {
                     Waker waker = std::move(waiter.waker);
                     waiter.wakeIssued.store(true, std::memory_order_release);
-                    pendingWake.setWaker(std::move(waker));
+                    pendingWake.set_waker(std::move(waker));
                     return;
                 }
                 continue;
@@ -1212,7 +1212,7 @@ private:
      * @note retry 必须先于 CAS 发布：若 owner 未观察到 generation 变化，随后 CAS 必然能在
      *       owner 发布 kWaiting 后认领 waiter，因此不能把该顺序改回“CAS 失败后再登记”。
      */
-    bool claimWaiter(Waiter* waiter, bool requestRetry) noexcept
+    bool claim_waiter(Waiter* waiter, bool requestRetry) noexcept
     {
         if (waiter == nullptr) {
             return false;
@@ -1237,7 +1237,7 @@ private:
      * @return waiter 已在队列中或本次发布成功时返回 true；队列被其他
      *         waiter 占用时返回 false。
      */
-    bool enqueueWaiter(WaiterQueue& waiters, Waiter* waiter) noexcept
+    bool enqueue_waiter(WaiterQueue& waiters, Waiter* waiter) noexcept
     {
         if (waiter == nullptr) {
             return false;
@@ -1272,7 +1272,7 @@ private:
      * @return 成功取得有效 waiter 时返回 true；队列为空或入口已失效时
      *         返回 false。
      */
-    bool tryDequeueWaiter(WaiterQueue& waiters, WaiterLease& lease) noexcept
+    bool try_dequeue_waiter(WaiterQueue& waiters, WaiterLease& lease) noexcept
     {
         lease.reset();
         Waiter* const queuedWaiter =
@@ -1298,7 +1298,7 @@ private:
      * @param waiters waiter 所属的单 waiter 队列。
      * @param waiter 进入终态的固定 waiter 槽。
      */
-    void removeQueuedWaiter(WaiterQueue& waiters, Waiter* waiter) noexcept
+    void remove_queued_waiter(WaiterQueue& waiters, Waiter* waiter) noexcept
     {
         if (waiter == nullptr) {
             return;
@@ -1321,7 +1321,7 @@ private:
      *
      * @param waiters 待清空的单 waiter 队列。
      */
-    void clearWaiterQueue(WaiterQueue& waiters) noexcept
+    void clear_waiter_queue(WaiterQueue& waiters) noexcept
     {
         Waiter* const queuedWaiter =
             waiters.waiter.exchange(nullptr, std::memory_order_relaxed);
@@ -1345,7 +1345,7 @@ private:
      * @note terminal state 会阻止新认领；摘队列后等待的只是已持 pin 推进方的
      *       有限收尾窗口。所有完成方必须在实际 wake 前释放 lease。
      */
-    bool reclaimWaiter(WaiterQueue& waiters,
+    bool reclaim_waiter(WaiterQueue& waiters,
                        Waiter& waiter,
                        uint64_t waiterGeneration) noexcept
     {
@@ -1353,12 +1353,12 @@ private:
             return false;
         }
 
-        removeQueuedWaiter(waiters, &waiter);
+        remove_queued_waiter(waiters, &waiter);
         while (waiter.pins.load(std::memory_order_acquire) != 0) {
 #ifdef GALAY_SPSC_BOUNDED_RECLAIM_TEST_POINT
             GALAY_SPSC_BOUNDED_RECLAIM_TEST_POINT(&waiter);
 #endif
-            detail::boundedChannelCpuPause();
+            detail::bounded_channel_cpu_pause();
         }
 
         BoundedWaiterState terminal = waiter.state.load(std::memory_order_acquire);
@@ -1388,36 +1388,36 @@ private:
         return true;
     }
 
-    void synchronizeRecvWaiterPath() noexcept
+    void synchronize_recv_waiter_path() noexcept
     {
-        if (!isValid()) {
+        if (!is_valid()) {
             return;
         }
         const size_t position = m_head.load(std::memory_order_relaxed);
         // fallback 路径与 SC ready.store 组成 Dekker 握手；native 路径在首次
         // waiter 发布后先执行 process-wide barrier，再用该 load 复核 slot。
         [[maybe_unused]] const SlotState published =
-            slotAt(position & ringMask()).ready.load(std::memory_order_seq_cst);
+            slot_at(position & ring_mask()).ready.load(std::memory_order_seq_cst);
     }
 
-    void synchronizeSendWaiterPath() noexcept
+    void synchronize_send_waiter_path() noexcept
     {
-        if (!isValid()) {
+        if (!is_valid()) {
             return;
         }
         const size_t position = m_tail.load(std::memory_order_relaxed);
         // fallback 路径与 SC ready.store 组成 Dekker 握手；native 路径在首次
         // waiter 发布后先执行 process-wide barrier，再用该 load 复核 slot。
         [[maybe_unused]] const SlotState released =
-            slotAt(position & ringMask()).ready.load(std::memory_order_seq_cst);
+            slot_at(position & ring_mask()).ready.load(std::memory_order_seq_cst);
     }
 
-    std::optional<uint32_t> firstWaiterBarrierError(bool firstUse) noexcept
+    std::optional<uint32_t> first_waiter_barrier_error(bool firstUse) noexcept
     {
         if (!firstUse || !m_useAsymmetricBarrier) {
             return std::nullopt;
         }
-        auto barrier = kernel::detail::asymmetricHeavyBarrier();
+        auto barrier = kernel::detail::asymmetric_heavy_barrier();
         if (barrier) {
             return std::nullopt;
         }
@@ -1429,13 +1429,13 @@ private:
      *
      * @return 存在 kPublishing 槽位时返回 true。
      */
-    bool hasPublishingSlot() const noexcept
+    bool has_publishing_slot() const noexcept
     {
-        if (!isValid()) {
+        if (!is_valid()) {
             return false;
         }
         for (size_t index = 0; index < capacity(); ++index) {
-            const Slot& slot = slotAt(index);
+            const Slot& slot = slot_at(index);
             if (slot.ready.load(std::memory_order_seq_cst) == SlotState::kPublishing) {
                 return true;
             }
@@ -1448,16 +1448,16 @@ private:
      *
      * @return 通道已关闭且当前 head 不处于发布窗口时返回 true。
      */
-    bool isReceiveClosed() const noexcept
+    bool is_receive_closed() const noexcept
     {
         if (!m_closed.load(std::memory_order_acquire)) {
             return false;
         }
-        if (!isValid()) {
+        if (!is_valid()) {
             return true;
         }
         const size_t position = m_head.load(std::memory_order_relaxed);
-        return slotAt(position & ringMask()).ready.load(std::memory_order_acquire) ==
+        return slot_at(position & ring_mask()).ready.load(std::memory_order_acquire) ==
             SlotState::kEmpty;
     }
 
@@ -1466,13 +1466,13 @@ private:
      *
      * @return 当前 head 槽位为 kReady 时返回 true。
      */
-    bool hasReadySlot() const noexcept
+    bool has_ready_slot() const noexcept
     {
-        if (!isValid()) {
+        if (!is_valid()) {
             return false;
         }
         const size_t position = m_head.load(std::memory_order_relaxed);
-        return slotAt(position & ringMask()).ready.load(std::memory_order_acquire) ==
+        return slot_at(position & ring_mask()).ready.load(std::memory_order_acquire) ==
             SlotState::kReady;
     }
 
@@ -1481,7 +1481,7 @@ private:
      * @param capacity 调用方请求的容量。
      * @return 正常请求向上取整后的 2 的幂；超出安全半区间时返回 0。
      */
-    static size_t normalizeCapacity(size_t capacity) noexcept
+    static size_t normalize_capacity(size_t capacity) noexcept
     {
         if (kMaxRingCapacity < 2) {
             return 0;
@@ -1503,16 +1503,16 @@ private:
      * @note 同一时刻只能有一个逻辑发送操作；waiter helping 可切换物理执行线程，
      *       因此 cursor 保持 atomic，但不执行 CAS。
      */
-    RingEnqueueResult ringEnqueue(T&& value) noexcept
+    RingEnqueueResult ring_enqueue(T&& value) noexcept
     {
-        if (!isValid()) {
+        if (!is_valid()) {
             return RingEnqueueResult::kFull;
         }
         if (m_closed.load(std::memory_order_acquire)) {
             return RingEnqueueResult::kClosed;
         }
         const size_t position = m_tail.load(std::memory_order_relaxed);
-        Slot& slot = slotAt(position & ringMask());
+        Slot& slot = slot_at(position & ring_mask());
         if (slot.ready.load(std::memory_order_acquire) != SlotState::kEmpty) {
             return RingEnqueueResult::kFull;
         }
@@ -1526,12 +1526,12 @@ private:
         }
 
         [[maybe_unused]] T* const stored =
-            std::construct_at(slot.storageAddress(), std::move(value));
+            std::construct_at(slot.storage_address(), std::move(value));
         // close 仍由 kPublishing 的 SC 发布仲裁；waiter 首次启用时
         // 的 process-wide barrier 允许稳定数据发布使用 release。
         if (m_useAsymmetricBarrier) {
             slot.ready.store(SlotState::kReady, std::memory_order_release);
-            kernel::detail::asymmetricLightBarrier();
+            kernel::detail::asymmetric_light_barrier();
         } else {
             slot.ready.store(SlotState::kReady, std::memory_order_seq_cst);
         }
@@ -1548,13 +1548,13 @@ private:
      *       因此 cursor 保持 atomic，但不执行 CAS。
      */
     template <typename Consume>
-    bool ringDequeueTo(Consume&& consume) noexcept
+    bool ring_dequeue_to(Consume&& consume) noexcept
     {
-        if (!isValid()) {
+        if (!is_valid()) {
             return false;
         }
         const size_t position = m_head.load(std::memory_order_relaxed);
-        Slot& slot = slotAt(position & ringMask());
+        Slot& slot = slot_at(position & ring_mask());
         if (slot.ready.load(std::memory_order_acquire) != SlotState::kReady) {
             return false;
         }
@@ -1563,7 +1563,7 @@ private:
         std::destroy_at(slot.value());
         if (m_useAsymmetricBarrier) {
             slot.ready.store(SlotState::kEmpty, std::memory_order_release);
-            kernel::detail::asymmetricLightBarrier();
+            kernel::detail::asymmetric_light_barrier();
         } else {
             slot.ready.store(SlotState::kEmpty, std::memory_order_seq_cst);
         }
@@ -1579,7 +1579,7 @@ private:
      *         kNotClaimed 表示等待体已由其他并发路径处理。
      * @note ring 仍满时会把 waiter 恢复为 kWaiting 并重新入队。
      */
-    BoundedWaiterProgress tryCompleteSendWaiter(Waiter* waiter,
+    BoundedWaiterProgress try_complete_send_waiter(Waiter* waiter,
                                                 bool wake,
                                                 PendingWakes& pendingWakes) noexcept
     {
@@ -1599,12 +1599,12 @@ private:
 retry_timeout_operation:
         bool timeoutOperationStarted = false;
         if (timeoutTimer != nullptr) {
-            const auto start = timeoutTimer->tryBeginOperation();
+            const auto start = timeoutTimer->try_begin_operation();
             if (start == TimeoutTimer::OperationStart::kBusy) {
                 const auto state = waiter->state.load(std::memory_order_acquire);
                 if (state == BoundedWaiterState::kWaiting ||
                     state == BoundedWaiterState::kFulfilling) {
-                    const bool requeued = enqueueWaiter(m_sendWaiters, waiter);
+                    const bool requeued = enqueue_waiter(m_sendWaiters, waiter);
                     if (!requeued) {
                         // transaction owner 已观察 retryRequested，并负责最终重排或失败。
                     }
@@ -1620,35 +1620,35 @@ retry_timeout_operation:
                         std::memory_order_acquire)) {
                     // timeout winner 或当前 operation owner 会发布最终状态。
                 }
-                removeQueuedWaiter(m_sendWaiters, waiter);
+                remove_queued_waiter(m_sendWaiters, waiter);
                 return BoundedWaiterProgress::kSkipped;
             }
             if (start == TimeoutTimer::OperationStart::kOperationWon) {
-                removeQueuedWaiter(m_sendWaiters, waiter);
+                remove_queued_waiter(m_sendWaiters, waiter);
                 return BoundedWaiterProgress::kSkipped;
             }
             timeoutOperationStarted = true;
         }
 
-        if (!claimWaiter(waiter, wake && !retryPreannounced)) {
+        if (!claim_waiter(waiter, wake && !retryPreannounced)) {
             if (timeoutOperationStarted) {
-                const auto aborted = timeoutTimer->abortOperation();
+                const auto aborted = timeoutTimer->abort_operation();
                 if (aborted == TimeoutTimer::OperationAbort::kTimeoutWon) {
                     waiter->state.store(BoundedWaiterState::kCancelled,
                                         std::memory_order_release);
-                    removeQueuedWaiter(m_sendWaiters, waiter);
-                    pendingWakes.send.setTimeoutWinner(waiter->timeoutTimer);
+                    remove_queued_waiter(m_sendWaiters, waiter);
+                    pendingWakes.send.set_timeout_winner(waiter->timeoutTimer);
                     return BoundedWaiterProgress::kSkipped;
                 }
                 if (aborted == TimeoutTimer::OperationAbort::kCompleted) {
-                    removeQueuedWaiter(m_sendWaiters, waiter);
+                    remove_queued_waiter(m_sendWaiters, waiter);
                     return BoundedWaiterProgress::kSkipped;
                 }
             }
             const auto state = waiter->state.load(std::memory_order_acquire);
             if (state != BoundedWaiterState::kWaiting &&
                 state != BoundedWaiterState::kFulfilling) {
-                removeQueuedWaiter(m_sendWaiters, waiter);
+                remove_queued_waiter(m_sendWaiters, waiter);
                 return BoundedWaiterProgress::kSkipped;
             }
             return BoundedWaiterProgress::kNotClaimed;
@@ -1657,40 +1657,40 @@ retry_timeout_operation:
             const uint64_t retryEpoch =
                 waiter->retryRequested.load(std::memory_order_seq_cst);
 
-            if (isClosed()) {
+            if (is_closed()) {
                 waiter->state.store(BoundedWaiterState::kClosed, std::memory_order_release);
                 const bool completionCommitted =
-                    !timeoutOperationStarted || timeoutTimer->commitOperation();
+                    !timeoutOperationStarted || timeoutTimer->commit_operation();
                 if (!completionCommitted) {
                     waiter->state.store(BoundedWaiterState::kFailed,
                                         std::memory_order_release);
                 }
-                removeQueuedWaiter(m_sendWaiters, waiter);
+                remove_queued_waiter(m_sendWaiters, waiter);
                 if (wake) {
-                    prepareWaiterWake(*waiter, pendingWakes.send);
+                    prepare_waiter_wake(*waiter, pendingWakes.send);
                 }
                 return BoundedWaiterProgress::kCompleted;
             }
 
             RingEnqueueResult enqueueResult = RingEnqueueResult::kFull;
             if (waiter->sendValue != nullptr) {
-                enqueueResult = ringEnqueue(std::move(*waiter->sendValue));
+                enqueueResult = ring_enqueue(std::move(*waiter->sendValue));
             }
             if (enqueueResult == RingEnqueueResult::kPublished) {
                 waiter->state.store(BoundedWaiterState::kFulfilled,
                                     std::memory_order_release);
                 const bool completionCommitted =
-                    !timeoutOperationStarted || timeoutTimer->commitOperation();
+                    !timeoutOperationStarted || timeoutTimer->commit_operation();
                 if (!completionCommitted) {
                     waiter->state.store(BoundedWaiterState::kFailed,
                                         std::memory_order_release);
                 }
-                removeQueuedWaiter(m_sendWaiters, waiter);
+                remove_queued_waiter(m_sendWaiters, waiter);
                 if (wake) {
-                    prepareWaiterWake(*waiter, pendingWakes.send);
+                    prepare_waiter_wake(*waiter, pendingWakes.send);
                 }
-                if (isClosed()) {
-                    finishCloseAfterPublication(pendingWakes);
+                if (is_closed()) {
+                    finish_close_after_publication(pendingWakes);
                 }
                 return BoundedWaiterProgress::kCompleted;
             }
@@ -1698,32 +1698,32 @@ retry_timeout_operation:
                 enqueueResult == RingEnqueueResult::kClosedAfterPublishing) {
                 waiter->state.store(BoundedWaiterState::kClosed, std::memory_order_release);
                 const bool completionCommitted =
-                    !timeoutOperationStarted || timeoutTimer->commitOperation();
+                    !timeoutOperationStarted || timeoutTimer->commit_operation();
                 if (!completionCommitted) {
                     waiter->state.store(BoundedWaiterState::kFailed,
                                         std::memory_order_release);
                 }
-                removeQueuedWaiter(m_sendWaiters, waiter);
+                remove_queued_waiter(m_sendWaiters, waiter);
                 if (wake) {
-                    prepareWaiterWake(*waiter, pendingWakes.send);
+                    prepare_waiter_wake(*waiter, pendingWakes.send);
                 }
                 if (enqueueResult == RingEnqueueResult::kClosedAfterPublishing) {
-                    finishCloseAfterPublication(pendingWakes);
+                    finish_close_after_publication(pendingWakes);
                 }
                 return BoundedWaiterProgress::kCompleted;
             }
 
             // 先保证唯一队列入口存在，再发布 kWaiting；enqueue 失败时 owner 仍独占状态。
-            if (!enqueueWaiter(m_sendWaiters, waiter)) {
+            if (!enqueue_waiter(m_sendWaiters, waiter)) {
                 waiter->state.store(BoundedWaiterState::kFailed, std::memory_order_release);
                 const bool completionCommitted =
-                    !timeoutOperationStarted || timeoutTimer->commitOperation();
+                    !timeoutOperationStarted || timeoutTimer->commit_operation();
                 if (!completionCommitted) {
                     // kFailed 已是唯一可传播的终态，不再覆盖。
                 }
-                removeQueuedWaiter(m_sendWaiters, waiter);
+                remove_queued_waiter(m_sendWaiters, waiter);
                 if (wake) {
-                    prepareWaiterWake(*waiter, pendingWakes.send);
+                    prepare_waiter_wake(*waiter, pendingWakes.send);
                 }
                 return BoundedWaiterProgress::kCompleted;
             }
@@ -1733,16 +1733,16 @@ retry_timeout_operation:
 #ifdef GALAY_SPSC_BOUNDED_TIMEOUT_ABORT_TEST_POINT
                     GALAY_SPSC_BOUNDED_TIMEOUT_ABORT_TEST_POINT(waiter);
 #endif
-                    const auto aborted = timeoutTimer->abortOperation();
+                    const auto aborted = timeoutTimer->abort_operation();
                     if (aborted == TimeoutTimer::OperationAbort::kTimeoutWon) {
                         waiter->state.store(BoundedWaiterState::kCancelled,
                                             std::memory_order_release);
-                        removeQueuedWaiter(m_sendWaiters, waiter);
-                        pendingWakes.send.setTimeoutWinner(waiter->timeoutTimer);
+                        remove_queued_waiter(m_sendWaiters, waiter);
+                        pendingWakes.send.set_timeout_winner(waiter->timeoutTimer);
                         return BoundedWaiterProgress::kSkipped;
                     }
                     if (aborted == TimeoutTimer::OperationAbort::kCompleted) {
-                        removeQueuedWaiter(m_sendWaiters, waiter);
+                        remove_queued_waiter(m_sendWaiters, waiter);
                         return BoundedWaiterProgress::kSkipped;
                     }
                     timeoutOperationStarted = false;
@@ -1751,8 +1751,8 @@ retry_timeout_operation:
                         goto retry_timeout_operation;
                     }
                 }
-                if (isClosed()) {
-                    wakeAllSendWaiters(pendingWakes);
+                if (is_closed()) {
+                    wake_all_send_waiters(pendingWakes);
                 }
                 return BoundedWaiterProgress::kWaiting;
             }
@@ -1764,16 +1764,16 @@ retry_timeout_operation:
                     std::memory_order_acq_rel,
                     std::memory_order_acquire)) {
                 if (timeoutOperationStarted) {
-                    const auto aborted = timeoutTimer->abortOperation();
+                    const auto aborted = timeoutTimer->abort_operation();
                     if (aborted == TimeoutTimer::OperationAbort::kTimeoutWon) {
                         waiter->state.store(BoundedWaiterState::kCancelled,
                                             std::memory_order_release);
-                        removeQueuedWaiter(m_sendWaiters, waiter);
-                        pendingWakes.send.setTimeoutWinner(waiter->timeoutTimer);
+                        remove_queued_waiter(m_sendWaiters, waiter);
+                        pendingWakes.send.set_timeout_winner(waiter->timeoutTimer);
                         return BoundedWaiterProgress::kSkipped;
                     }
                     if (aborted == TimeoutTimer::OperationAbort::kCompleted) {
-                        removeQueuedWaiter(m_sendWaiters, waiter);
+                        remove_queued_waiter(m_sendWaiters, waiter);
                         return BoundedWaiterProgress::kSkipped;
                     }
                 }
@@ -1790,7 +1790,7 @@ retry_timeout_operation:
      *         kNotClaimed 表示等待体已由其他并发路径处理。
      * @note ring 仍空时会把 waiter 恢复为 kWaiting 并重新入队。
      */
-    BoundedWaiterProgress tryCompleteRecvWaiter(Waiter* waiter,
+    BoundedWaiterProgress try_complete_recv_waiter(Waiter* waiter,
                                                 bool wake,
                                                 PendingWakes& pendingWakes) noexcept
     {
@@ -1809,12 +1809,12 @@ retry_timeout_operation:
 retry_timeout_operation:
         bool timeoutOperationStarted = false;
         if (timeoutTimer != nullptr) {
-            const auto start = timeoutTimer->tryBeginOperation();
+            const auto start = timeoutTimer->try_begin_operation();
             if (start == TimeoutTimer::OperationStart::kBusy) {
                 const auto state = waiter->state.load(std::memory_order_acquire);
                 if (state == BoundedWaiterState::kWaiting ||
                     state == BoundedWaiterState::kFulfilling) {
-                    const bool requeued = enqueueWaiter(m_recvWaiters, waiter);
+                    const bool requeued = enqueue_waiter(m_recvWaiters, waiter);
                     if (!requeued) {
                         // transaction owner 已观察 retryRequested，并负责最终重排或失败。
                     }
@@ -1830,35 +1830,35 @@ retry_timeout_operation:
                         std::memory_order_acquire)) {
                     // timeout winner 或当前 operation owner 会发布最终状态。
                 }
-                removeQueuedWaiter(m_recvWaiters, waiter);
+                remove_queued_waiter(m_recvWaiters, waiter);
                 return BoundedWaiterProgress::kSkipped;
             }
             if (start == TimeoutTimer::OperationStart::kOperationWon) {
-                removeQueuedWaiter(m_recvWaiters, waiter);
+                remove_queued_waiter(m_recvWaiters, waiter);
                 return BoundedWaiterProgress::kSkipped;
             }
             timeoutOperationStarted = true;
         }
 
-        if (!claimWaiter(waiter, wake && !retryPreannounced)) {
+        if (!claim_waiter(waiter, wake && !retryPreannounced)) {
             if (timeoutOperationStarted) {
-                const auto aborted = timeoutTimer->abortOperation();
+                const auto aborted = timeoutTimer->abort_operation();
                 if (aborted == TimeoutTimer::OperationAbort::kTimeoutWon) {
                     waiter->state.store(BoundedWaiterState::kCancelled,
                                         std::memory_order_release);
-                    removeQueuedWaiter(m_recvWaiters, waiter);
-                    pendingWakes.recv.setTimeoutWinner(waiter->timeoutTimer);
+                    remove_queued_waiter(m_recvWaiters, waiter);
+                    pendingWakes.recv.set_timeout_winner(waiter->timeoutTimer);
                     return BoundedWaiterProgress::kSkipped;
                 }
                 if (aborted == TimeoutTimer::OperationAbort::kCompleted) {
-                    removeQueuedWaiter(m_recvWaiters, waiter);
+                    remove_queued_waiter(m_recvWaiters, waiter);
                     return BoundedWaiterProgress::kSkipped;
                 }
             }
             const auto state = waiter->state.load(std::memory_order_acquire);
             if (state != BoundedWaiterState::kWaiting &&
                 state != BoundedWaiterState::kFulfilling) {
-                removeQueuedWaiter(m_recvWaiters, waiter);
+                remove_queued_waiter(m_recvWaiters, waiter);
                 return BoundedWaiterProgress::kSkipped;
             }
             return BoundedWaiterProgress::kNotClaimed;
@@ -1869,54 +1869,54 @@ retry_timeout_operation:
 
             const bool wakeOnly = waiter->recvValue == nullptr;
             const bool ready = wakeOnly
-                ? hasReadySlot()
-                : ringDequeueTo([&waiter](T&& value) {
+                ? has_ready_slot()
+                : ring_dequeue_to([&waiter](T&& value) {
                       waiter->recvValue->emplace(std::move(value));
                   });
             if (ready) {
                 waiter->state.store(BoundedWaiterState::kFulfilled,
                                     std::memory_order_release);
                 const bool completionCommitted =
-                    !timeoutOperationStarted || timeoutTimer->commitOperation();
+                    !timeoutOperationStarted || timeoutTimer->commit_operation();
                 if (!completionCommitted) {
                     waiter->state.store(BoundedWaiterState::kFailed,
                                         std::memory_order_release);
                 }
                 if (!wakeOnly) {
-                    drainOneSendWaiter(pendingWakes);
+                    drain_one_send_waiter(pendingWakes);
                 }
-                removeQueuedWaiter(m_recvWaiters, waiter);
+                remove_queued_waiter(m_recvWaiters, waiter);
                 if (wake) {
-                    prepareWaiterWake(*waiter, pendingWakes.recv);
+                    prepare_waiter_wake(*waiter, pendingWakes.recv);
                 }
                 return BoundedWaiterProgress::kCompleted;
             }
 
-            if (isReceiveClosed()) {
+            if (is_receive_closed()) {
                 waiter->state.store(BoundedWaiterState::kClosed, std::memory_order_release);
                 const bool completionCommitted =
-                    !timeoutOperationStarted || timeoutTimer->commitOperation();
+                    !timeoutOperationStarted || timeoutTimer->commit_operation();
                 if (!completionCommitted) {
                     waiter->state.store(BoundedWaiterState::kFailed,
                                         std::memory_order_release);
                 }
-                removeQueuedWaiter(m_recvWaiters, waiter);
+                remove_queued_waiter(m_recvWaiters, waiter);
                 if (wake) {
-                    prepareWaiterWake(*waiter, pendingWakes.recv);
+                    prepare_waiter_wake(*waiter, pendingWakes.recv);
                 }
                 return BoundedWaiterProgress::kCompleted;
             }
 
-            if (!enqueueWaiter(m_recvWaiters, waiter)) {
+            if (!enqueue_waiter(m_recvWaiters, waiter)) {
                 waiter->state.store(BoundedWaiterState::kFailed, std::memory_order_release);
                 const bool completionCommitted =
-                    !timeoutOperationStarted || timeoutTimer->commitOperation();
+                    !timeoutOperationStarted || timeoutTimer->commit_operation();
                 if (!completionCommitted) {
                     // kFailed 已是唯一可传播的终态，不再覆盖。
                 }
-                removeQueuedWaiter(m_recvWaiters, waiter);
+                remove_queued_waiter(m_recvWaiters, waiter);
                 if (wake) {
-                    prepareWaiterWake(*waiter, pendingWakes.recv);
+                    prepare_waiter_wake(*waiter, pendingWakes.recv);
                 }
                 return BoundedWaiterProgress::kCompleted;
             }
@@ -1926,16 +1926,16 @@ retry_timeout_operation:
 #ifdef GALAY_SPSC_BOUNDED_TIMEOUT_ABORT_TEST_POINT
                     GALAY_SPSC_BOUNDED_TIMEOUT_ABORT_TEST_POINT(waiter);
 #endif
-                    const auto aborted = timeoutTimer->abortOperation();
+                    const auto aborted = timeoutTimer->abort_operation();
                     if (aborted == TimeoutTimer::OperationAbort::kTimeoutWon) {
                         waiter->state.store(BoundedWaiterState::kCancelled,
                                             std::memory_order_release);
-                        removeQueuedWaiter(m_recvWaiters, waiter);
-                        pendingWakes.recv.setTimeoutWinner(waiter->timeoutTimer);
+                        remove_queued_waiter(m_recvWaiters, waiter);
+                        pendingWakes.recv.set_timeout_winner(waiter->timeoutTimer);
                         return BoundedWaiterProgress::kSkipped;
                     }
                     if (aborted == TimeoutTimer::OperationAbort::kCompleted) {
-                        removeQueuedWaiter(m_recvWaiters, waiter);
+                        remove_queued_waiter(m_recvWaiters, waiter);
                         return BoundedWaiterProgress::kSkipped;
                     }
                     timeoutOperationStarted = false;
@@ -1944,8 +1944,8 @@ retry_timeout_operation:
                         goto retry_timeout_operation;
                     }
                 }
-                if (isReceiveClosed()) {
-                    wakeAllRecvWaiters(pendingWakes);
+                if (is_receive_closed()) {
+                    wake_all_recv_waiters(pendingWakes);
                 }
                 return BoundedWaiterProgress::kWaiting;
             }
@@ -1957,16 +1957,16 @@ retry_timeout_operation:
                     std::memory_order_acq_rel,
                     std::memory_order_acquire)) {
                 if (timeoutOperationStarted) {
-                    const auto aborted = timeoutTimer->abortOperation();
+                    const auto aborted = timeoutTimer->abort_operation();
                     if (aborted == TimeoutTimer::OperationAbort::kTimeoutWon) {
                         waiter->state.store(BoundedWaiterState::kCancelled,
                                             std::memory_order_release);
-                        removeQueuedWaiter(m_recvWaiters, waiter);
-                        pendingWakes.recv.setTimeoutWinner(waiter->timeoutTimer);
+                        remove_queued_waiter(m_recvWaiters, waiter);
+                        pendingWakes.recv.set_timeout_winner(waiter->timeoutTimer);
                         return BoundedWaiterProgress::kSkipped;
                     }
                     if (aborted == TimeoutTimer::OperationAbort::kCompleted) {
-                        removeQueuedWaiter(m_recvWaiters, waiter);
+                        remove_queued_waiter(m_recvWaiters, waiter);
                         return BoundedWaiterProgress::kSkipped;
                     }
                 }
@@ -1982,12 +1982,12 @@ retry_timeout_operation:
      *
      * @note 跳过已取消或被其他路径认领的 waiter；处理一个有效 waiter 后立即返回。
      */
-    void wakeOneConsumerIfAny(PendingWakes& pendingWakes) noexcept
+    void wake_one_consumer_if_any(PendingWakes& pendingWakes) noexcept
     {
         WaiterLease lease;
-        while (tryDequeueWaiter(m_recvWaiters, lease)) {
+        while (try_dequeue_waiter(m_recvWaiters, lease)) {
             const auto progress =
-                tryCompleteRecvWaiter(lease.get(), true, pendingWakes);
+                try_complete_recv_waiter(lease.get(), true, pendingWakes);
             if (progress == BoundedWaiterProgress::kCompleted ||
                 progress == BoundedWaiterProgress::kWaiting) {
                 return;
@@ -2002,12 +2002,12 @@ retry_timeout_operation:
      *
      * @note 跳过已取消或被其他路径认领的 waiter；处理一个有效 waiter 后立即返回。
      */
-    void drainOneSendWaiter(PendingWakes& pendingWakes) noexcept
+    void drain_one_send_waiter(PendingWakes& pendingWakes) noexcept
     {
         WaiterLease lease;
-        while (tryDequeueWaiter(m_sendWaiters, lease)) {
+        while (try_dequeue_waiter(m_sendWaiters, lease)) {
             const auto progress =
-                tryCompleteSendWaiter(lease.get(), true, pendingWakes);
+                try_complete_send_waiter(lease.get(), true, pendingWakes);
             if (progress == BoundedWaiterProgress::kCompleted ||
                 progress == BoundedWaiterProgress::kWaiting) {
                 return;
@@ -2020,12 +2020,12 @@ retry_timeout_operation:
      *
      * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
      */
-    void wakeAllRecvWaiters(PendingWakes& pendingWakes) noexcept
+    void wake_all_recv_waiters(PendingWakes& pendingWakes) noexcept
     {
         WaiterLease lease;
-        while (tryDequeueWaiter(m_recvWaiters, lease)) {
+        while (try_dequeue_waiter(m_recvWaiters, lease)) {
             const auto progress =
-                tryCompleteRecvWaiter(lease.get(), true, pendingWakes);
+                try_complete_recv_waiter(lease.get(), true, pendingWakes);
             if (progress == BoundedWaiterProgress::kWaiting) {
                 return;
             }
@@ -2037,12 +2037,12 @@ retry_timeout_operation:
      *
      * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
      */
-    void wakeAllSendWaiters(PendingWakes& pendingWakes) noexcept
+    void wake_all_send_waiters(PendingWakes& pendingWakes) noexcept
     {
         WaiterLease lease;
-        while (tryDequeueWaiter(m_sendWaiters, lease)) {
+        while (try_dequeue_waiter(m_sendWaiters, lease)) {
             const auto progress =
-                tryCompleteSendWaiter(lease.get(), true, pendingWakes);
+                try_complete_send_waiter(lease.get(), true, pendingWakes);
             if (progress == BoundedWaiterProgress::kWaiting) {
                 return;
             }
@@ -2054,10 +2054,10 @@ retry_timeout_operation:
      *
      * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
      */
-    void finishCloseAfterPublication(PendingWakes& pendingWakes) noexcept
+    void finish_close_after_publication(PendingWakes& pendingWakes) noexcept
     {
-        wakeAllRecvWaiters(pendingWakes);
-        wakeAllSendWaiters(pendingWakes);
+        wake_all_recv_waiters(pendingWakes);
+        wake_all_send_waiters(pendingWakes);
     }
 
     template <BoundedValue U, size_t UCapacity>
@@ -2075,7 +2075,7 @@ retry_timeout_operation:
     alignas(::galay::utils::kCacheLineSize) std::atomic<size_t> m_head{0};
     alignas(::galay::utils::kCacheLineSize) std::atomic<bool> m_closed{false};
     // Once an async waiter path has been used, keep the waiter-aware path enabled.
-    // Before that point, synchronous trySend/tryRecv avoid polling empty waiter queues.
+    // Before that point, synchronous try_send/try_recv avoid polling empty waiter queues.
     alignas(::galay::utils::kCacheLineSize)
         std::atomic<bool> m_recvWaiterPathUsed{false};
     alignas(::galay::utils::kCacheLineSize)
@@ -2084,7 +2084,7 @@ retry_timeout_operation:
     size_t m_capacity = 0;
     size_t m_mask = 0;
     bool m_useAsymmetricBarrier =
-        kernel::detail::asymmetricMemoryBarrierSupport().has_value();
+        kernel::detail::asymmetric_memory_barrier_support().has_value();
     RingError m_error = RingError::kNone;
     alignas(::galay::utils::kCacheLineSize) Waiter m_recvWaiterSlot;
     alignas(::galay::utils::kCacheLineSize) Waiter m_sendWaiterSlot;
@@ -2103,12 +2103,12 @@ namespace detail {
  * @note 仅在认领已完成后短时自旋，不等待 ring 的满/空条件；调用期间会短时占用当前线程。
  */
 template <BoundedValue T>
-void waitForBoundedChannelFulfillment(BoundedChannelWaiter<T>& waiter) noexcept
+void wait_for_bounded_channel_fulfillment(BoundedChannelWaiter<T>& waiter) noexcept
 {
     // 对端已经通过 CAS 认领 waiter，发布只剩值搬运和一次 release store；
     // 这里不是等待条件成立的长时间自旋，而是等待该有限发布窗口完成。
     while (waiter.state.load(std::memory_order_acquire) == BoundedWaiterState::kFulfilling) {
-        boundedChannelCpuPause();
+        bounded_channel_cpu_pause();
     }
 }
 
@@ -2132,7 +2132,7 @@ inline BoundedRecvAwaitable<T, Capacity> BoundedChannel<T, Capacity>::recv()
 template <BoundedValue T, size_t Capacity>
     requires detail::ValidBoundedChannelCapacity<Capacity>
 inline BoundedRecvBatchAwaitable<T, Capacity>
-BoundedChannel<T, Capacity>::recvBatch(size_t count)
+BoundedChannel<T, Capacity>::recv_batch(size_t count)
 {
     return BoundedRecvBatchAwaitable<T, Capacity>(this, count);
 }
@@ -2140,7 +2140,7 @@ BoundedChannel<T, Capacity>::recvBatch(size_t count)
 template <BoundedValue T, size_t Capacity>
     requires detail::ValidBoundedChannelCapacity<Capacity>
 inline BoundedRecvBatchToAwaitable<T, Capacity>
-BoundedChannel<T, Capacity>::recvBatchTo(
+BoundedChannel<T, Capacity>::recv_batch_to(
     std::span<T> output) noexcept
     requires std::is_nothrow_move_assignable_v<T>
 {
@@ -2150,11 +2150,11 @@ BoundedChannel<T, Capacity>::recvBatchTo(
 template <BoundedValue T, size_t Capacity>
 inline bool BoundedSendAwaitable<T, Capacity>::await_ready() noexcept
 {
-    if (m_channel->trySend(std::move(m_value))) {
+    if (m_channel->try_send(std::move(m_value))) {
         m_sent = true;
         return true;
     }
-    return !m_channel->isValid() || m_channel->isClosed();
+    return !m_channel->is_valid() || m_channel->is_closed();
 }
 
 template <BoundedValue T, size_t Capacity>
@@ -2163,11 +2163,11 @@ inline bool BoundedSendAwaitable<T, Capacity>::await_suspend(
     std::coroutine_handle<Promise> handle) noexcept
 {
     auto* channel = m_channel;
-    if (channel->trySend(std::move(m_value))) {
+    if (channel->try_send(std::move(m_value))) {
         m_sent = true;
         return false;
     }
-    if (!channel->isValid() || channel->isClosed()) {
+    if (!channel->is_valid() || channel->is_closed()) {
         return false;
     }
 
@@ -2186,7 +2186,7 @@ inline bool BoundedSendAwaitable<T, Capacity>::await_suspend(
         channel->m_sendWaiterPathUsed.exchange(
             true, std::memory_order_seq_cst);
     if (auto barrierError =
-            channel->firstWaiterBarrierError(!waiterPathWasUsed);
+            channel->first_waiter_barrier_error(!waiterPathWasUsed);
         barrierError.has_value()) {
         m_registrationSystemError = *barrierError;
         channel->m_sendWaiterPathUsed.store(false,
@@ -2195,18 +2195,18 @@ inline bool BoundedSendAwaitable<T, Capacity>::await_suspend(
                             std::memory_order_release);
         return false;
     }
-    if (!channel->enqueueWaiter(channel->m_sendWaiters, waiter)) {
+    if (!channel->enqueue_waiter(channel->m_sendWaiters, waiter)) {
         waiter->state.store(BoundedWaiterState::kFailed, std::memory_order_release);
         return false;
     }
-    channel->synchronizeSendWaiterPath();
+    channel->synchronize_send_waiter_path();
 
     typename BoundedChannel<T, Capacity>::PendingWakes pendingWakes;
-    const auto progress = channel->tryCompleteSendWaiter(waiter, false, pendingWakes);
+    const auto progress = channel->try_complete_send_waiter(waiter, false, pendingWakes);
     const bool suspend =
         progress != BoundedWaiterProgress::kCompleted &&
-        progress != BoundedWaiterProgress::kSkipped && waiter->finishArming();
-    pendingWakes.wakeAll();
+        progress != BoundedWaiterProgress::kSkipped && waiter->finish_arming();
+    pendingWakes.wake_all();
     return suspend;
 }
 
@@ -2221,9 +2221,9 @@ BoundedSendAwaitable<T, Capacity>::await_resume() noexcept
         return std::unexpected(IOError(kNotReady, 0));
     }
     if (m_waiter != nullptr) {
-        detail::waitForBoundedChannelFulfillment(*m_waiter);
+        detail::wait_for_bounded_channel_fulfillment(*m_waiter);
         const auto state = m_waiter->state.load(std::memory_order_acquire);
-        const bool reclaimed = m_channel->reclaimWaiter(
+        const bool reclaimed = m_channel->reclaim_waiter(
             m_channel->m_sendWaiters, *m_waiter, m_waiterGeneration);
         m_waiter = nullptr;
         m_waiterGeneration = 0;
@@ -2244,17 +2244,17 @@ BoundedSendAwaitable<T, Capacity>::await_resume() noexcept
     if (m_timedOut) {
         return std::unexpected(IOError(kTimeout, 0));
     }
-    if (!m_channel->isValid()) {
-        return std::unexpected(m_channel->constructionError());
+    if (!m_channel->is_valid()) {
+        return std::unexpected(m_channel->construction_error());
     }
-    if (m_channel->isClosed()) {
+    if (m_channel->is_closed()) {
         return std::unexpected(IOError(kClosed, 0));
     }
     return std::unexpected(IOError(kNotReady, 0));
 }
 
 template <BoundedValue T, size_t Capacity>
-inline void BoundedSendAwaitable<T, Capacity>::markTimeout() noexcept
+inline void BoundedSendAwaitable<T, Capacity>::mark_timeout() noexcept
 {
     m_timedOut = true;
     if (m_waiter == nullptr ||
@@ -2267,20 +2267,20 @@ inline void BoundedSendAwaitable<T, Capacity>::markTimeout() noexcept
                                                 BoundedWaiterState::kCancelled,
                                                 std::memory_order_acq_rel,
                                                 std::memory_order_acquire)) {
-        m_channel->removeQueuedWaiter(m_channel->m_sendWaiters, m_waiter);
+        m_channel->remove_queued_waiter(m_channel->m_sendWaiters, m_waiter);
     } else if (expected == BoundedWaiterState::kCancelled) {
-        m_channel->removeQueuedWaiter(m_channel->m_sendWaiters, m_waiter);
+        m_channel->remove_queued_waiter(m_channel->m_sendWaiters, m_waiter);
     }
 }
 
 template <BoundedValue T, size_t Capacity>
 inline bool BoundedRecvAwaitable<T, Capacity>::await_ready() noexcept
 {
-    if (auto value = m_channel->tryRecv(); value.has_value()) {
+    if (auto value = m_channel->try_recv(); value.has_value()) {
         m_ready.emplace(std::move(*value));
         return true;
     }
-    return !m_channel->isValid() || m_channel->isReceiveClosed();
+    return !m_channel->is_valid() || m_channel->is_receive_closed();
 }
 
 template <BoundedValue T, size_t Capacity>
@@ -2289,11 +2289,11 @@ inline bool BoundedRecvAwaitable<T, Capacity>::await_suspend(
     std::coroutine_handle<Promise> handle) noexcept
 {
     auto* channel = m_channel;
-    if (auto value = channel->tryRecv(); value.has_value()) {
+    if (auto value = channel->try_recv(); value.has_value()) {
         m_ready.emplace(std::move(*value));
         return false;
     }
-    if (!channel->isValid() || channel->isReceiveClosed()) {
+    if (!channel->is_valid() || channel->is_receive_closed()) {
         return false;
     }
 
@@ -2312,7 +2312,7 @@ inline bool BoundedRecvAwaitable<T, Capacity>::await_suspend(
         channel->m_recvWaiterPathUsed.exchange(
             true, std::memory_order_seq_cst);
     if (auto barrierError =
-            channel->firstWaiterBarrierError(!waiterPathWasUsed);
+            channel->first_waiter_barrier_error(!waiterPathWasUsed);
         barrierError.has_value()) {
         m_registrationSystemError = *barrierError;
         channel->m_recvWaiterPathUsed.store(false,
@@ -2321,18 +2321,18 @@ inline bool BoundedRecvAwaitable<T, Capacity>::await_suspend(
                             std::memory_order_release);
         return false;
     }
-    if (!channel->enqueueWaiter(channel->m_recvWaiters, waiter)) {
+    if (!channel->enqueue_waiter(channel->m_recvWaiters, waiter)) {
         waiter->state.store(BoundedWaiterState::kFailed, std::memory_order_release);
         return false;
     }
-    channel->synchronizeRecvWaiterPath();
+    channel->synchronize_recv_waiter_path();
 
     typename BoundedChannel<T, Capacity>::PendingWakes pendingWakes;
-    const auto progress = channel->tryCompleteRecvWaiter(waiter, false, pendingWakes);
+    const auto progress = channel->try_complete_recv_waiter(waiter, false, pendingWakes);
     const bool suspend =
         progress != BoundedWaiterProgress::kCompleted &&
-        progress != BoundedWaiterProgress::kSkipped && waiter->finishArming();
-    pendingWakes.wakeAll();
+        progress != BoundedWaiterProgress::kSkipped && waiter->finish_arming();
+    pendingWakes.wake_all();
     return suspend;
 }
 
@@ -2344,9 +2344,9 @@ BoundedRecvAwaitable<T, Capacity>::await_resume() noexcept
         return std::unexpected(IOError(kNotReady, 0));
     }
     if (m_waiter != nullptr) {
-        detail::waitForBoundedChannelFulfillment(*m_waiter);
+        detail::wait_for_bounded_channel_fulfillment(*m_waiter);
         const auto state = m_waiter->state.load(std::memory_order_acquire);
-        const bool reclaimed = m_channel->reclaimWaiter(
+        const bool reclaimed = m_channel->reclaim_waiter(
             m_channel->m_recvWaiters, *m_waiter, m_waiterGeneration);
         m_waiter = nullptr;
         m_waiterGeneration = 0;
@@ -2373,20 +2373,20 @@ BoundedRecvAwaitable<T, Capacity>::await_resume() noexcept
     if (m_timedOut) {
         return std::unexpected(IOError(kTimeout, 0));
     }
-    if (!m_channel->isValid()) {
-        return std::unexpected(m_channel->constructionError());
+    if (!m_channel->is_valid()) {
+        return std::unexpected(m_channel->construction_error());
     }
-    if (m_channel->isReceiveClosed()) {
+    if (m_channel->is_receive_closed()) {
         return std::unexpected(IOError(kClosed, 0));
     }
-    if (auto value = m_channel->tryRecv(); value.has_value()) {
+    if (auto value = m_channel->try_recv(); value.has_value()) {
         return std::move(*value);
     }
     return std::unexpected(IOError(kNotReady, 0));
 }
 
 template <BoundedValue T, size_t Capacity>
-inline void BoundedRecvAwaitable<T, Capacity>::markTimeout() noexcept
+inline void BoundedRecvAwaitable<T, Capacity>::mark_timeout() noexcept
 {
     m_timedOut = true;
     if (m_waiter == nullptr ||
@@ -2399,14 +2399,14 @@ inline void BoundedRecvAwaitable<T, Capacity>::markTimeout() noexcept
                                                 BoundedWaiterState::kCancelled,
                                                 std::memory_order_acq_rel,
                                                 std::memory_order_acquire)) {
-        m_channel->removeQueuedWaiter(m_channel->m_recvWaiters, m_waiter);
+        m_channel->remove_queued_waiter(m_channel->m_recvWaiters, m_waiter);
     } else if (expected == BoundedWaiterState::kCancelled) {
-        m_channel->removeQueuedWaiter(m_channel->m_recvWaiters, m_waiter);
+        m_channel->remove_queued_waiter(m_channel->m_recvWaiters, m_waiter);
     }
 }
 
 template <BoundedValue T, size_t Capacity>
-inline bool BoundedRecvBatchToAwaitable<T, Capacity>::tryReceiveNow() noexcept
+inline bool BoundedRecvBatchToAwaitable<T, Capacity>::try_receive_now() noexcept
 {
     if (m_ready) {
         return true;
@@ -2415,7 +2415,7 @@ inline bool BoundedRecvBatchToAwaitable<T, Capacity>::tryReceiveNow() noexcept
         m_ready = true;
         return true;
     }
-    m_readyCount = m_channel->tryRecvBatch(m_output);
+    m_readyCount = m_channel->try_recv_batch(m_output);
     m_ready = m_readyCount != 0;
     return m_ready;
 }
@@ -2423,8 +2423,8 @@ inline bool BoundedRecvBatchToAwaitable<T, Capacity>::tryReceiveNow() noexcept
 template <BoundedValue T, size_t Capacity>
 inline bool BoundedRecvBatchToAwaitable<T, Capacity>::await_ready() noexcept
 {
-    return tryReceiveNow() || !m_channel->isValid() ||
-        m_channel->isReceiveClosed();
+    return try_receive_now() || !m_channel->is_valid() ||
+        m_channel->is_receive_closed();
 }
 
 template <BoundedValue T, size_t Capacity>
@@ -2433,10 +2433,10 @@ inline bool BoundedRecvBatchToAwaitable<T, Capacity>::await_suspend(
     std::coroutine_handle<Promise> handle) noexcept
 {
     auto* channel = m_channel;
-    if (tryReceiveNow()) {
+    if (try_receive_now()) {
         return false;
     }
-    if (!channel->isValid() || channel->isReceiveClosed()) {
+    if (!channel->is_valid() || channel->is_receive_closed()) {
         return false;
     }
 
@@ -2455,7 +2455,7 @@ inline bool BoundedRecvBatchToAwaitable<T, Capacity>::await_suspend(
         channel->m_recvWaiterPathUsed.exchange(
             true, std::memory_order_seq_cst);
     if (auto barrierError =
-            channel->firstWaiterBarrierError(!waiterPathWasUsed);
+            channel->first_waiter_barrier_error(!waiterPathWasUsed);
         barrierError.has_value()) {
         m_registrationSystemError = *barrierError;
         channel->m_recvWaiterPathUsed.store(false,
@@ -2464,20 +2464,20 @@ inline bool BoundedRecvBatchToAwaitable<T, Capacity>::await_suspend(
                             std::memory_order_release);
         return false;
     }
-    if (!channel->enqueueWaiter(channel->m_recvWaiters, waiter)) {
+    if (!channel->enqueue_waiter(channel->m_recvWaiters, waiter)) {
         waiter->state.store(BoundedWaiterState::kFailed,
                             std::memory_order_release);
         return false;
     }
-    channel->synchronizeRecvWaiterPath();
+    channel->synchronize_recv_waiter_path();
 
     typename BoundedChannel<T, Capacity>::PendingWakes pendingWakes;
     const auto progress =
-        channel->tryCompleteRecvWaiter(waiter, false, pendingWakes);
+        channel->try_complete_recv_waiter(waiter, false, pendingWakes);
     const bool suspend =
         progress != BoundedWaiterProgress::kCompleted &&
-        progress != BoundedWaiterProgress::kSkipped && waiter->finishArming();
-    pendingWakes.wakeAll();
+        progress != BoundedWaiterProgress::kSkipped && waiter->finish_arming();
+    pendingWakes.wake_all();
     return suspend;
 }
 
@@ -2492,9 +2492,9 @@ BoundedRecvBatchToAwaitable<T, Capacity>::await_resume() noexcept
         return std::unexpected(IOError(kNotReady, 0));
     }
     if (m_waiter != nullptr) {
-        detail::waitForBoundedChannelFulfillment(*m_waiter);
+        detail::wait_for_bounded_channel_fulfillment(*m_waiter);
         const auto state = m_waiter->state.load(std::memory_order_acquire);
-        const bool reclaimed = m_channel->reclaimWaiter(
+        const bool reclaimed = m_channel->reclaim_waiter(
             m_channel->m_recvWaiters, *m_waiter, m_waiterGeneration);
         m_waiter = nullptr;
         m_waiterGeneration = 0;
@@ -2508,7 +2508,7 @@ BoundedRecvBatchToAwaitable<T, Capacity>::await_resume() noexcept
             m_readyCount = 1;
             if (m_output.size() > 1) {
                 m_readyCount +=
-                    m_channel->tryRecvBatch(m_output.subspan(1));
+                    m_channel->try_recv_batch(m_output.subspan(1));
             }
             m_ready = true;
             return m_readyCount;
@@ -2525,20 +2525,20 @@ BoundedRecvBatchToAwaitable<T, Capacity>::await_resume() noexcept
     if (m_timedOut) {
         return std::unexpected(IOError(kTimeout, 0));
     }
-    if (!m_channel->isValid()) {
-        return std::unexpected(m_channel->constructionError());
+    if (!m_channel->is_valid()) {
+        return std::unexpected(m_channel->construction_error());
     }
-    if (m_channel->isReceiveClosed()) {
+    if (m_channel->is_receive_closed()) {
         return std::unexpected(IOError(kClosed, 0));
     }
-    if (tryReceiveNow()) {
+    if (try_receive_now()) {
         return m_readyCount;
     }
     return std::unexpected(IOError(kNotReady, 0));
 }
 
 template <BoundedValue T, size_t Capacity>
-inline void BoundedRecvBatchToAwaitable<T, Capacity>::markTimeout() noexcept
+inline void BoundedRecvBatchToAwaitable<T, Capacity>::mark_timeout() noexcept
 {
     m_timedOut = true;
     if (m_waiter == nullptr ||
@@ -2551,14 +2551,14 @@ inline void BoundedRecvBatchToAwaitable<T, Capacity>::markTimeout() noexcept
                                                 BoundedWaiterState::kCancelled,
                                                 std::memory_order_acq_rel,
                                                 std::memory_order_acquire)) {
-        m_channel->removeQueuedWaiter(m_channel->m_recvWaiters, m_waiter);
+        m_channel->remove_queued_waiter(m_channel->m_recvWaiters, m_waiter);
     } else if (expected == BoundedWaiterState::kCancelled) {
-        m_channel->removeQueuedWaiter(m_channel->m_recvWaiters, m_waiter);
+        m_channel->remove_queued_waiter(m_channel->m_recvWaiters, m_waiter);
     }
 }
 
 template <BoundedValue T, size_t Capacity>
-inline bool BoundedRecvBatchAwaitable<T, Capacity>::tryReceiveNow()
+inline bool BoundedRecvBatchAwaitable<T, Capacity>::try_receive_now()
 {
     if (m_batchReady) {
         return true;
@@ -2567,18 +2567,18 @@ inline bool BoundedRecvBatchAwaitable<T, Capacity>::tryReceiveNow()
         m_batchReady = true;
         return true;
     }
-    if (!m_channel->hasReadySlot()) {
+    if (!m_channel->has_ready_slot()) {
         return false;
     }
     // 先完成 owning vector 分配，再消费 ring，保证 allocator 失败时队列不变。
     m_values.reserve(m_count);
-    auto first = m_channel->tryRecv();
+    auto first = m_channel->try_recv();
     if (!first.has_value()) {
         return false;
     }
     m_values.push_back(std::move(*first));
     while (m_values.size() < m_count) {
-        auto value = m_channel->tryRecv();
+        auto value = m_channel->try_recv();
         if (!value.has_value()) {
             break;
         }
@@ -2591,8 +2591,8 @@ inline bool BoundedRecvBatchAwaitable<T, Capacity>::tryReceiveNow()
 template <BoundedValue T, size_t Capacity>
 inline bool BoundedRecvBatchAwaitable<T, Capacity>::await_ready()
 {
-    return tryReceiveNow() || !m_channel->isValid() ||
-        m_channel->isReceiveClosed();
+    return try_receive_now() || !m_channel->is_valid() ||
+        m_channel->is_receive_closed();
 }
 
 template <BoundedValue T, size_t Capacity>
@@ -2601,10 +2601,10 @@ inline bool BoundedRecvBatchAwaitable<T, Capacity>::await_suspend(
     std::coroutine_handle<Promise> handle)
 {
     auto* channel = m_channel;
-    if (tryReceiveNow()) {
+    if (try_receive_now()) {
         return false;
     }
-    if (!channel->isValid() || channel->isReceiveClosed()) {
+    if (!channel->is_valid() || channel->is_receive_closed()) {
         return false;
     }
 
@@ -2623,7 +2623,7 @@ inline bool BoundedRecvBatchAwaitable<T, Capacity>::await_suspend(
         channel->m_recvWaiterPathUsed.exchange(
             true, std::memory_order_seq_cst);
     if (auto barrierError =
-            channel->firstWaiterBarrierError(!waiterPathWasUsed);
+            channel->first_waiter_barrier_error(!waiterPathWasUsed);
         barrierError.has_value()) {
         m_registrationSystemError = *barrierError;
         channel->m_recvWaiterPathUsed.store(false,
@@ -2632,18 +2632,18 @@ inline bool BoundedRecvBatchAwaitable<T, Capacity>::await_suspend(
                             std::memory_order_release);
         return false;
     }
-    if (!channel->enqueueWaiter(channel->m_recvWaiters, waiter)) {
+    if (!channel->enqueue_waiter(channel->m_recvWaiters, waiter)) {
         waiter->state.store(BoundedWaiterState::kFailed, std::memory_order_release);
         return false;
     }
-    channel->synchronizeRecvWaiterPath();
+    channel->synchronize_recv_waiter_path();
 
     typename BoundedChannel<T, Capacity>::PendingWakes pendingWakes;
-    const auto progress = channel->tryCompleteRecvWaiter(waiter, false, pendingWakes);
+    const auto progress = channel->try_complete_recv_waiter(waiter, false, pendingWakes);
     const bool suspend =
         progress != BoundedWaiterProgress::kCompleted &&
-        progress != BoundedWaiterProgress::kSkipped && waiter->finishArming();
-    pendingWakes.wakeAll();
+        progress != BoundedWaiterProgress::kSkipped && waiter->finish_arming();
+    pendingWakes.wake_all();
     return suspend;
 }
 
@@ -2658,16 +2658,16 @@ BoundedRecvBatchAwaitable<T, Capacity>::await_resume()
         return std::unexpected(IOError(kNotReady, 0));
     }
     if (m_waiter != nullptr) {
-        detail::waitForBoundedChannelFulfillment(*m_waiter);
+        detail::wait_for_bounded_channel_fulfillment(*m_waiter);
         const auto state = m_waiter->state.load(std::memory_order_acquire);
-        const bool reclaimed = m_channel->reclaimWaiter(
+        const bool reclaimed = m_channel->reclaim_waiter(
             m_channel->m_recvWaiters, *m_waiter, m_waiterGeneration);
         m_waiter = nullptr;
         m_waiterGeneration = 0;
         if (!reclaimed) {
             return std::unexpected(IOError(kNotReady, 0));
         }
-        if (state == BoundedWaiterState::kFulfilled && tryReceiveNow()) {
+        if (state == BoundedWaiterState::kFulfilled && try_receive_now()) {
             return std::move(m_values);
         }
         if (state == BoundedWaiterState::kClosed || state == BoundedWaiterState::kFulfilled) {
@@ -2681,20 +2681,20 @@ BoundedRecvBatchAwaitable<T, Capacity>::await_resume()
     if (m_timedOut) {
         return std::unexpected(IOError(kTimeout, 0));
     }
-    if (!m_channel->isValid()) {
-        return std::unexpected(m_channel->constructionError());
+    if (!m_channel->is_valid()) {
+        return std::unexpected(m_channel->construction_error());
     }
-    if (m_channel->isReceiveClosed()) {
+    if (m_channel->is_receive_closed()) {
         return std::unexpected(IOError(kClosed, 0));
     }
-    if (tryReceiveNow()) {
+    if (try_receive_now()) {
         return std::move(m_values);
     }
     return std::unexpected(IOError(kNotReady, 0));
 }
 
 template <BoundedValue T, size_t Capacity>
-inline void BoundedRecvBatchAwaitable<T, Capacity>::markTimeout() noexcept
+inline void BoundedRecvBatchAwaitable<T, Capacity>::mark_timeout() noexcept
 {
     m_timedOut = true;
     if (m_waiter == nullptr ||
@@ -2707,9 +2707,9 @@ inline void BoundedRecvBatchAwaitable<T, Capacity>::markTimeout() noexcept
                                                 BoundedWaiterState::kCancelled,
                                                 std::memory_order_acq_rel,
                                                 std::memory_order_acquire)) {
-        m_channel->removeQueuedWaiter(m_channel->m_recvWaiters, m_waiter);
+        m_channel->remove_queued_waiter(m_channel->m_recvWaiters, m_waiter);
     } else if (expected == BoundedWaiterState::kCancelled) {
-        m_channel->removeQueuedWaiter(m_channel->m_recvWaiters, m_waiter);
+        m_channel->remove_queued_waiter(m_channel->m_recvWaiters, m_waiter);
     }
 }
 

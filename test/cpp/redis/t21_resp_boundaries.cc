@@ -14,7 +14,7 @@ using namespace galay::redis::protocol;
 namespace
 {
 
-bool expectParseError(std::string_view input, ParseError expected, const char* label)
+bool expect_parse_error(std::string_view input, ParseError expected, const char* label)
 {
     RespParser parser;
     auto parsed = parser.parse(input.data(), input.size());
@@ -30,11 +30,11 @@ bool expectParseError(std::string_view input, ParseError expected, const char* l
     return true;
 }
 
-bool expectFastParseError(std::string_view input, ParseError expected, const char* label)
+bool expect_fast_parse_error(std::string_view input, ParseError expected, const char* label)
 {
     RespParser parser;
     RedisReply reply;
-    auto parsed = parser.parseFast(input.data(), input.size(), &reply);
+    auto parsed = parser.parse_fast(input.data(), input.size(), &reply);
     if (parsed) {
         std::cerr << label << " parsed unexpectedly\n";
         return false;
@@ -47,14 +47,14 @@ bool expectFastParseError(std::string_view input, ParseError expected, const cha
     return true;
 }
 
-bool expectOwnedStringReply(std::string input,
+bool expect_owned_string_reply(std::string input,
                             RespType expected_type,
                             const std::string& expected,
                             const char* label)
 {
     RespParser parser;
     RedisReply reply;
-    auto parsed = parser.parseFast(input.data(), input.size(), &reply);
+    auto parsed = parser.parse_fast(input.data(), input.size(), &reply);
     if (!parsed) {
         std::cerr << label << " parse failed with " << static_cast<int>(parsed.error()) << "\n";
         return false;
@@ -63,13 +63,13 @@ bool expectOwnedStringReply(std::string input,
         std::cerr << label << " consumed " << parsed.value() << " of " << input.size() << "\n";
         return false;
     }
-    if (reply.getType() != expected_type) {
+    if (reply.get_type() != expected_type) {
         std::cerr << label << " returned unexpected type\n";
         return false;
     }
 
     std::fill(input.begin(), input.end(), '?');
-    const std::string value = reply.asString();
+    const std::string value = reply.as_string();
     if (value != expected) {
         std::cerr << label << " did not preserve owned string payload\n";
         return false;
@@ -77,7 +77,7 @@ bool expectOwnedStringReply(std::string input,
     return true;
 }
 
-std::optional<std::string> readFile(const std::filesystem::path& path)
+std::optional<std::string> read_file(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input) {
@@ -90,13 +90,13 @@ std::optional<std::string> readFile(const std::filesystem::path& path)
     return buffer.str();
 }
 
-std::filesystem::path repoRoot()
+std::filesystem::path repo_root()
 {
     std::filesystem::path file = __FILE__;
     return file.parent_path().parent_path().parent_path().parent_path();
 }
 
-std::optional<std::string> bodyAfter(const std::string& text, const std::string& signature)
+std::optional<std::string> body_after(const std::string& text, const std::string& signature)
 {
     const auto signature_pos = text.find(signature);
     if (signature_pos == std::string::npos) {
@@ -131,11 +131,11 @@ bool contains(const std::string& text, const std::string& needle)
     return text.find(needle) != std::string::npos;
 }
 
-bool testStringReplyOwnership()
+bool test_string_reply_ownership()
 {
     const std::string simple_payload(64, 's');
     const std::string simple_input = std::string("+") + simple_payload + "\r\n";
-    if (!expectOwnedStringReply(simple_input,
+    if (!expect_owned_string_reply(simple_input,
                                 RespType::SimpleString,
                                 simple_payload,
                                 "simple string ownership")) {
@@ -147,7 +147,7 @@ bool testStringReplyOwnership()
     };
     const std::string bulk_input(bulk_raw, sizeof(bulk_raw));
     const std::string bulk_payload(bulk_raw + 4, 6);
-    if (!expectOwnedStringReply(bulk_input,
+    if (!expect_owned_string_reply(bulk_input,
                                 RespType::BulkString,
                                 bulk_payload,
                                 "bulk string ownership")) {
@@ -157,23 +157,23 @@ bool testStringReplyOwnership()
     return true;
 }
 
-bool testStringParseErrors()
+bool test_string_parse_errors()
 {
-    if (!expectFastParseError("+QUEUED", ParseError::Incomplete, "simple string missing crlf")) {
+    if (!expect_fast_parse_error("+QUEUED", ParseError::Incomplete, "simple string missing crlf")) {
         return false;
     }
-    if (!expectFastParseError("$3\r\nab\r\n", ParseError::Incomplete, "bulk string truncated payload")) {
+    if (!expect_fast_parse_error("$3\r\nab\r\n", ParseError::Incomplete, "bulk string truncated payload")) {
         return false;
     }
-    if (!expectFastParseError("$3\r\nabcxx", ParseError::InvalidFormat, "bulk string invalid trailer")) {
+    if (!expect_fast_parse_error("$3\r\nabcxx", ParseError::InvalidFormat, "bulk string invalid trailer")) {
         return false;
     }
-    if (!expectFastParseError("$-2\r\n", ParseError::InvalidLength, "bulk string invalid negative length")) {
+    if (!expect_fast_parse_error("$-2\r\n", ParseError::InvalidLength, "bulk string invalid negative length")) {
         return false;
     }
 
     RespParser parser;
-    auto parsed = parser.parseFast("+OK\r\n", 5, nullptr);
+    auto parsed = parser.parse_fast("+OK\r\n", 5, nullptr);
     if (parsed) {
         std::cerr << "parseFast null output parsed unexpectedly\n";
         return false;
@@ -186,71 +186,71 @@ bool testStringParseErrors()
     return true;
 }
 
-bool testBulkLengthBoundaries()
+bool test_bulk_length_boundaries()
 {
-    if (!expectParseError("$5\r\nabc\r\n", ParseError::Incomplete, "bulk len greater than remaining")) {
+    if (!expect_parse_error("$5\r\nabc\r\n", ParseError::Incomplete, "bulk len greater than remaining")) {
         return false;
     }
-    if (!expectParseError("$9223372036854775807\r\nx\r\n",
+    if (!expect_parse_error("$9223372036854775807\r\nx\r\n",
                           ParseError::InvalidLength,
                           "bulk len far above upper bound")) {
         return false;
     }
-    if (!expectParseError("$536870913\r\n", ParseError::InvalidLength, "bulk len upper bound")) {
+    if (!expect_parse_error("$536870913\r\n", ParseError::InvalidLength, "bulk len upper bound")) {
         return false;
     }
     return true;
 }
 
-bool testAggregateLengthBoundaries()
+bool test_aggregate_length_boundaries()
 {
-    if (!expectParseError("*536870913\r\n", ParseError::InvalidLength, "array len upper bound")) {
+    if (!expect_parse_error("*536870913\r\n", ParseError::InvalidLength, "array len upper bound")) {
         return false;
     }
-    if (!expectParseError("%268435457\r\n", ParseError::InvalidLength, "map len upper bound")) {
+    if (!expect_parse_error("%268435457\r\n", ParseError::InvalidLength, "map len upper bound")) {
         return false;
     }
-    if (!expectParseError("~536870913\r\n", ParseError::InvalidLength, "set len upper bound")) {
+    if (!expect_parse_error("~536870913\r\n", ParseError::InvalidLength, "set len upper bound")) {
         return false;
     }
-    if (!expectParseError("*2\r\n:1\r\n", ParseError::Incomplete, "array len greater than remaining")) {
+    if (!expect_parse_error("*2\r\n:1\r\n", ParseError::Incomplete, "array len greater than remaining")) {
         return false;
     }
-    if (!expectParseError("%1\r\n+key\r\n", ParseError::Incomplete, "map value missing")) {
+    if (!expect_parse_error("%1\r\n+key\r\n", ParseError::Incomplete, "map value missing")) {
         return false;
     }
-    if (!expectParseError("~2\r\n+a\r\n", ParseError::Incomplete, "set len greater than remaining")) {
+    if (!expect_parse_error("~2\r\n+a\r\n", ParseError::Incomplete, "set len greater than remaining")) {
         return false;
     }
     return true;
 }
 
-bool testDoubleParseBoundaries()
+bool test_double_parse_boundaries()
 {
     RespParser parser;
     RedisReply reply;
     const std::string input = ",1.25\r\n";
-    auto parsed = parser.parseFast(input.data(), input.size(), &reply);
+    auto parsed = parser.parse_fast(input.data(), input.size(), &reply);
     if (!parsed) {
         std::cerr << "double parse failed with " << static_cast<int>(parsed.error()) << "\n";
         return false;
     }
-    if (reply.getType() != RespType::Double || reply.asDouble() != 1.25) {
+    if (reply.get_type() != RespType::Double || reply.as_double() != 1.25) {
         std::cerr << "double parse returned wrong value\n";
         return false;
     }
-    if (!expectFastParseError(",1.2x\r\n", ParseError::InvalidFormat, "double trailing garbage")) {
+    if (!expect_fast_parse_error(",1.2x\r\n", ParseError::InvalidFormat, "double trailing garbage")) {
         return false;
     }
-    if (!expectFastParseError(",1e999999\r\n", ParseError::InvalidFormat, "double out of range")) {
+    if (!expect_fast_parse_error(",1e999999\r\n", ParseError::InvalidFormat, "double out of range")) {
         return false;
     }
 
-    const auto protocol_source = readFile(repoRoot() / "src/cpp/galay-redis/protoc/redis_protocol.cc");
+    const auto protocol_source = read_file(repo_root() / "src/cpp/galay-redis/protoc/redis_protocol.cc");
     if (!protocol_source) {
         return false;
     }
-    const auto double_body = bodyAfter(*protocol_source, "RespParser::parseDoubleFast");
+    const auto double_body = body_after(*protocol_source, "RespParser::parse_double_fast");
     if (!double_body) {
         return false;
     }
@@ -268,19 +268,19 @@ bool testDoubleParseBoundaries()
 
 int main()
 {
-    if (!testStringReplyOwnership()) {
+    if (!test_string_reply_ownership()) {
         return 1;
     }
-    if (!testStringParseErrors()) {
+    if (!test_string_parse_errors()) {
         return 1;
     }
-    if (!testBulkLengthBoundaries()) {
+    if (!test_bulk_length_boundaries()) {
         return 1;
     }
-    if (!testAggregateLengthBoundaries()) {
+    if (!test_aggregate_length_boundaries()) {
         return 1;
     }
-    if (!testDoubleParseBoundaries()) {
+    if (!test_double_parse_boundaries()) {
         return 1;
     }
     std::cout << "T21-RedisRespBoundaries PASS\n";

@@ -28,7 +28,7 @@ Task<void> test_request_timeout(IOScheduler* scheduler)
     try {
         // 创建socket并连接
         AsyncTcpSocket socket(IPType::IPV4);
-        auto nonblock_result = socket.option().handleNonBlock();
+        auto nonblock_result = socket.option().handle_non_block();
         if (!nonblock_result) {
             co_return;
         }
@@ -41,10 +41,10 @@ Task<void> test_request_timeout(IOScheduler* scheduler)
         }
 
         // 创建 HttpClient
-        HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+        HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
         // 获取Session
-        auto session_result = client.getSession();
+        auto session_result = client.get_session();
         if (!session_result) {
             co_await client.close();
             co_return;
@@ -88,7 +88,7 @@ Task<void> test_connect_timeout(IOScheduler* scheduler)
     try {
         // 尝试连接到不存在的服务器（使用不可路由的 IP）
         AsyncTcpSocket socket(IPType::IPV4);
-        auto nonblock_result = socket.option().handleNonBlock();
+        auto nonblock_result = socket.option().handle_non_block();
         if (!nonblock_result) {
             co_return;
         }
@@ -119,7 +119,7 @@ Task<void> test_server_disconnect(IOScheduler* scheduler)
     try {
         // 创建socket并连接
         AsyncTcpSocket socket(IPType::IPV4);
-        auto nonblock_result = socket.option().handleNonBlock();
+        auto nonblock_result = socket.option().handle_non_block();
         if (!nonblock_result) {
             co_return;
         }
@@ -132,10 +132,10 @@ Task<void> test_server_disconnect(IOScheduler* scheduler)
         }
 
         // 创建 HttpClient
-        HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+        HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
         // 获取Session
-        auto session_result = client.getSession();
+        auto session_result = client.get_session();
         if (!session_result) {
             co_await client.close();
             co_return;
@@ -180,7 +180,7 @@ Task<void> test_receive_timeout(IOScheduler* scheduler)
     try {
         // 创建socket并连接
         AsyncTcpSocket socket(IPType::IPV4);
-        auto nonblock_result = socket.option().handleNonBlock();
+        auto nonblock_result = socket.option().handle_non_block();
         if (!nonblock_result) {
             co_return;
         }
@@ -193,10 +193,10 @@ Task<void> test_receive_timeout(IOScheduler* scheduler)
         }
 
         // 创建 HttpClient
-        HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+        HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
         // 请求一个会发送部分数据然后停止的端点
-        auto session_result = client.getSession();
+        auto session_result = client.get_session();
         if (!session_result) {
             co_await client.close();
             co_return;
@@ -237,7 +237,7 @@ Task<void> test_timeout_retry(IOScheduler* scheduler)
     try {
         // 创建socket并连接
         AsyncTcpSocket socket(IPType::IPV4);
-        auto nonblock_result = socket.option().handleNonBlock();
+        auto nonblock_result = socket.option().handle_non_block();
         if (!nonblock_result) {
             co_return;
         }
@@ -250,9 +250,9 @@ Task<void> test_timeout_retry(IOScheduler* scheduler)
         }
 
         // 创建 HttpClient
-        HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+        HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
-        auto session_result = client.getSession();
+        auto session_result = client.get_session();
         if (!session_result) {
             co_await client.close();
             co_return;
@@ -306,7 +306,7 @@ Task<void> test_normal_request_with_timeout(IOScheduler* scheduler)
     try {
         // 创建socket并连接
         AsyncTcpSocket socket(IPType::IPV4);
-        auto nonblock_result = socket.option().handleNonBlock();
+        auto nonblock_result = socket.option().handle_non_block();
         if (!nonblock_result) {
             co_return;
         }
@@ -319,10 +319,10 @@ Task<void> test_normal_request_with_timeout(IOScheduler* scheduler)
         }
 
         // 创建 HttpClient
-        HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+        HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
         // 发送正常请求，设置足够长的超时
-        auto session_result = client.getSession();
+        auto session_result = client.get_session();
         if (!session_result) {
             co_await client.close();
             co_return;
@@ -361,28 +361,28 @@ int main()
         runtime.start();
 
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             return 1;
         }
 
         // 运行测试
-        scheduleTask(scheduler, test_normal_request_with_timeout(scheduler));
+        schedule_task(scheduler, test_normal_request_with_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        scheduleTask(scheduler, test_request_timeout(scheduler));
+        schedule_task(scheduler, test_request_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        scheduleTask(scheduler, test_connect_timeout(scheduler));
+        schedule_task(scheduler, test_connect_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        scheduleTask(scheduler, test_server_disconnect(scheduler));
+        schedule_task(scheduler, test_server_disconnect(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, test_receive_timeout(scheduler));
+        schedule_task(scheduler, test_receive_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        scheduleTask(scheduler, test_timeout_retry(scheduler));
+        schedule_task(scheduler, test_timeout_retry(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(5));
 
         runtime.stop();

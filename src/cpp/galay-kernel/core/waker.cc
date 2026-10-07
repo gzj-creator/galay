@@ -16,12 +16,12 @@ namespace detail {
 
 ResumeToken::ResumeToken(TaskRef task) noexcept
 {
-    if (task.isValid()) {
-        m_encoded = encode(Kind::CppTask, TaskRefStorageAccess::releaseState(task));
+    if (task.is_valid()) {
+        m_encoded = encode(Kind::CppTask, TaskRefStorageAccess::release_state(task));
     }
 }
 
-ResumeToken ResumeToken::fromCCoroutine(void* state) noexcept
+ResumeToken ResumeToken::from_c_coroutine(void* state) noexcept
 {
     ResumeToken token;
     if (state == nullptr) {
@@ -43,7 +43,7 @@ ResumeToken ResumeToken::fromCCoroutine(void* state) noexcept
     return token;
 }
 
-ResumeToken ResumeToken::fromNonOwningCCoroutine(void* state) noexcept
+ResumeToken ResumeToken::from_non_owning_c_coroutine(void* state) noexcept
 {
     ResumeToken token;
     if (state == nullptr) {
@@ -65,7 +65,7 @@ ResumeToken ResumeToken::fromNonOwningCCoroutine(void* state) noexcept
 
 ResumeToken::ResumeToken(const ResumeToken& other) noexcept
 {
-    copyFrom(other);
+    copy_from(other);
 }
 
 ResumeToken::ResumeToken(ResumeToken&& other) noexcept
@@ -83,7 +83,7 @@ ResumeToken& ResumeToken::operator=(const ResumeToken& other) noexcept
 {
     if (this != &other) {
         release();
-        copyFrom(other);
+        copy_from(other);
     }
     return *this;
 }
@@ -98,7 +98,7 @@ ResumeToken& ResumeToken::operator=(ResumeToken&& other) noexcept
     return *this;
 }
 
-bool ResumeToken::isValid() const noexcept
+bool ResumeToken::is_valid() const noexcept
 {
     return m_encoded != 0;
 }
@@ -109,29 +109,29 @@ Scheduler* ResumeToken::scheduler() const noexcept
         auto* task_state = static_cast<TaskState*>(state());
         return task_state != nullptr ? task_state->m_scheduler : nullptr;
     }
-    const auto* hooks = coroHooks();
+    const auto* hooks = coro_hooks();
     return hooks != nullptr && hooks->owner_scheduler != nullptr
         ? hooks->owner_scheduler(state())
         : nullptr;
 }
 
-bool ResumeToken::requestResume() noexcept
+bool ResumeToken::request_resume() noexcept
 {
     if (kind() == Kind::CppTask) {
-        return detail::requestTaskResumeState(static_cast<TaskState*>(state()));
+        return detail::request_task_resume_state(static_cast<TaskState*>(state()));
     }
-    const auto* hooks = coroHooks();
+    const auto* hooks = coro_hooks();
     return hooks != nullptr && hooks->request_resume != nullptr &&
         hooks->request_resume(state());
 }
 
-void ResumeToken::copyFrom(const ResumeToken& other) noexcept
+void ResumeToken::copy_from(const ResumeToken& other) noexcept
 {
     if (other.kind() == Kind::CppTask) {
         auto* task_state = static_cast<TaskState*>(other.state());
         if (task_state != nullptr) {
             TaskRef retained(task_state, true);
-            m_encoded = encode(Kind::CppTask, TaskRefStorageAccess::releaseState(retained));
+            m_encoded = encode(Kind::CppTask, TaskRefStorageAccess::release_state(retained));
         }
         return;
     }
@@ -160,7 +160,7 @@ void ResumeToken::release() noexcept
 {
     if (kind() == Kind::CppTask && state() != nullptr) {
         [[maybe_unused]] TaskRef released =
-            TaskRefStorageAccess::adoptState(static_cast<TaskState*>(state()));
+            TaskRefStorageAccess::adopt_state(static_cast<TaskState*>(state()));
     } else if (kind() == Kind::CCoroutine && state() != nullptr) {
         auto* header = static_cast<ResumeTokenHeader*>(state());
         if (header->hooks != nullptr && header->hooks->release != nullptr) {
@@ -180,7 +180,7 @@ ResumeToken::Kind ResumeToken::kind() const noexcept
     return static_cast<Kind>(m_encoded & kKindMask);
 }
 
-const ResumeTokenHooks* ResumeToken::coroHooks() const noexcept
+const ResumeTokenHooks* ResumeToken::coro_hooks() const noexcept
 {
     if ((kind() != Kind::CCoroutine && kind() != Kind::NonOwningCCoroutine) ||
         state() == nullptr) {
@@ -223,7 +223,7 @@ Waker::Waker(detail::ResumeToken token) noexcept
  *
  * @return 所属 Scheduler 指针，若任务未绑定则返回 nullptr
  */
-Scheduler* Waker::getScheduler() noexcept
+Scheduler* Waker::get_scheduler() noexcept
 {
     return m_token.scheduler();
 }
@@ -231,13 +231,13 @@ Scheduler* Waker::getScheduler() noexcept
 /**
  * @brief 请求在所属调度器上恢复持有任务
  *
- * @details 调用 detail::requestTaskResume，原子地将任务标记为已入队并通过
+ * @details 调用 detail::request_task_resume，原子地将任务标记为已入队并通过
  * owner scheduler 的无分配 resume admission 提交。若任务已入队、无效或已
  * 完成，请求被静默忽略。
  */
-void Waker::wakeUp() noexcept
+void Waker::wake_up() noexcept
 {
-    (void)m_token.requestResume();
+    (void)m_token.request_resume();
 }
 
 }

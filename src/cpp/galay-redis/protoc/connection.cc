@@ -185,7 +185,7 @@ namespace galay::redis::protocol
         return {};
     }
 
-    std::expected<RedisReply, RedisError> Connection::receiveReply()
+    std::expected<RedisReply, RedisError> Connection::receive_reply()
     {
         if (!m_connected || m_socket_fd < 0) {
             return std::unexpected(RedisError(RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR,
@@ -237,6 +237,6 @@ namespace galay::redis::protocol
             return std::unexpected(send_result.error());
         }
 
-        return receiveReply();
+        return receive_reply();
     }
 }

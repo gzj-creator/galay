@@ -11,7 +11,7 @@
 namespace
 {
 
-std::string readFile(const std::filesystem::path& path)
+std::string read_file(const std::filesystem::path& path)
 {
     std::ifstream input(path);
     if (!input) {
@@ -34,12 +34,12 @@ bool contains(const std::string& haystack, const std::string& needle)
 int main()
 {
     const std::filesystem::path source_root = GALAY_MYSQL_SOURCE_DIR;
-    const auto pool_header = readFile(source_root / "galay-mysql" / "async" / "conn_pool.h");
-    const auto pool_source = readFile(source_root / "galay-mysql" / "async" / "conn_pool.cc");
+    const auto pool_header = read_file(source_root / "galay-mysql" / "async" / "conn_pool.h");
+    const auto pool_source = read_file(source_root / "galay-mysql" / "async" / "conn_pool.cc");
     const auto awaitable_header =
-        readFile(source_root / "galay-mysql" / "details" / "pool_awaitable.h");
+        read_file(source_root / "galay-mysql" / "details" / "pool_awaitable.h");
     const auto awaitable_inline =
-        readFile(source_root / "galay-mysql" / "details" / "pool_awaitable.inl");
+        read_file(source_root / "galay-mysql" / "details" / "pool_awaitable.inl");
 
     if (contains(pool_header, "class AcquireAwaitable\n") ||
         contains(pool_header, "class LeaseAwaitable\n") ||

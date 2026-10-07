@@ -27,7 +27,7 @@ struct AsyncClientConfig
     AsyncMongoConfig async;
 };
 
-Task<void> runPipelineTest(IOScheduler* scheduler,
+Task<void> run_pipeline_test(IOScheduler* scheduler,
                            PipelineTestState* state,
                            AsyncClientConfig cfg)
 {
@@ -37,7 +37,7 @@ Task<void> runPipelineTest(IOScheduler* scheduler,
         .build();
 
     const std::expected<bool, MongoError> conn_result =
-        mongo_test::unwrapMongoTaskResult(co_await client.connect(std::move(cfg.mongo)),
+        mongo_test::unwrap_mongo_task_result(co_await client.connect(std::move(cfg.mongo)),
                                           MONGO_ERROR_CONNECTION);
     if (!conn_result) {
         state->ok.store(false, std::memory_order_relaxed);
@@ -53,7 +53,7 @@ Task<void> runPipelineTest(IOScheduler* scheduler,
     commands.append("ping", int32_t(1));
 
     const std::expected<std::vector<MongoPipelineResponse>, MongoError> pipeline_result =
-        mongo_test::unwrapMongoTaskResult(co_await client.pipeline("admin", commands.commands()),
+        mongo_test::unwrap_mongo_task_result(co_await client.pipeline("admin", commands.commands()),
                                           MONGO_ERROR_COMMAND);
     if (!pipeline_result) {
         state->ok.store(false, std::memory_order_relaxed);
@@ -102,13 +102,13 @@ int main()
 {
     std::cout << "=== T3: Async Mongo Pipeline Tests ===" << std::endl;
 
-    const auto test_cfg = mongo_test::loadMongoTestConfig();
-    mongo_test::printMongoTestConfig(test_cfg);
+    const auto test_cfg = mongo_test::load_mongo_test_config();
+    mongo_test::print_mongo_test_config(test_cfg);
 
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         std::cerr << "No scheduler available" << std::endl;
         runtime.stop();
@@ -116,12 +116,12 @@ int main()
     }
 
     PipelineTestState state;
-    if (!scheduleTask(scheduler,
-                      runPipelineTest(scheduler,
+    if (!schedule_task(scheduler,
+                      run_pipeline_test(scheduler,
                                       &state,
                                       AsyncClientConfig{
-                                          mongo_test::toMongoConfig(test_cfg),
-                                          mongo_test::loadAsyncMongoTestConfig()}))) {
+                                          mongo_test::to_mongo_config(test_cfg),
+                                          mongo_test::load_async_mongo_test_config()}))) {
         std::cerr << "Failed to schedule async pipeline task" << std::endl;
         runtime.stop();
         return 1;

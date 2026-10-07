@@ -22,7 +22,7 @@ struct DemoState {
     int code{1};
 };
 
-void finishDemo(DemoState& state, int code)
+void finish_demo(DemoState& state, int code)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
     state.done = true;
@@ -30,7 +30,7 @@ void finishDemo(DemoState& state, int code)
     state.cv.notify_one();
 }
 
-std::optional<int> parsePort(const char* text)
+std::optional<int> parse_port(const char* text)
 {
     if (text == nullptr) return std::nullopt;
     try {
@@ -42,29 +42,29 @@ std::optional<int> parsePort(const char* text)
     }
 }
 
-bool readCommandSingleString(const RedisCommandResult& result, std::string& out)
+bool read_command_single_string(const RedisCommandResult& result, std::string& out)
 {
     if (!result || result.value().empty()) {
         return false;
     }
     const auto& first = result.value().front();
-    if (first.isString()) {
-        out = first.toString();
+    if (first.is_string()) {
+        out = first.to_string();
         return true;
     }
-    if (first.isStatus()) {
-        out = first.toStatus();
+    if (first.is_status()) {
+        out = first.to_status();
         return true;
     }
     return false;
 }
 
-bool readAwaitedCommandSingleString(auto&& result, std::string& out)
+bool read_awaited_command_single_string(auto&& result, std::string& out)
 {
-    return result && result.value() && readCommandSingleString(result.value(), out);
+    return result && result.value() && read_command_single_string(result.value(), out);
 }
 
-Task<bool> runPubSubDemo(IOScheduler* scheduler, std::string host, int port)
+Task<bool> run_pub_sub_demo(IOScheduler* scheduler, std::string host, int port)
 {
     auto subscriber = RedisClientBuilder().scheduler(scheduler).build();
     auto publisher = RedisClientBuilder().scheduler(scheduler).build();
@@ -114,15 +114,15 @@ Task<bool> runPubSubDemo(IOScheduler* scheduler, std::string host, int port)
         co_return false;
     }
 
-    const auto msg_array = recv_result.value()->front().toArray();
-    if (msg_array.size() < 3 || !msg_array[2].isString() || msg_array[2].toString() != message) {
+    const auto msg_array = recv_result.value()->front().to_array();
+    if (msg_array.size() < 3 || !msg_array[2].is_string() || msg_array[2].to_string() != message) {
         std::cerr << "PubSub payload mismatch" << std::endl;
         (void)co_await subscriber.command(command_builder.unsubscribe(channel));
         (void)co_await subscriber.close();
         (void)co_await publisher.close();
         co_return false;
     }
-    std::cout << "E3 pubsub received: " << msg_array[2].toString() << std::endl;
+    std::cout << "E3 pubsub received: " << msg_array[2].to_string() << std::endl;
 
     (void)co_await subscriber.command(command_builder.unsubscribe(channel));
     (void)co_await subscriber.close();
@@ -131,21 +131,21 @@ Task<bool> runPubSubDemo(IOScheduler* scheduler, std::string host, int port)
     co_return true;
 }
 
-Task<bool> runMasterSlaveDemo(IOScheduler* scheduler, std::string host, int port)
+Task<bool> run_master_slave_demo(IOScheduler* scheduler, std::string host, int port)
 {
     auto ms_client = RedisMasterSlaveClientBuilder().scheduler(scheduler).build();
     RedisNodeAddress node_addr;
     node_addr.host = host;
     node_addr.port = port;
-    ms_client.setAutoRetryAttempts(3);
+    ms_client.set_auto_retry_attempts(3);
 
-    auto master_connect = co_await ms_client.connectMaster(node_addr).timeout(std::chrono::seconds(5));
+    auto master_connect = co_await ms_client.connect_master(node_addr).timeout(std::chrono::seconds(5));
     if (!master_connect) {
         std::cerr << "Master connect failed: " << master_connect.error().message() << std::endl;
         co_return false;
     }
 
-    auto replica_connect = co_await ms_client.addReplica(node_addr).timeout(std::chrono::seconds(5));
+    auto replica_connect = co_await ms_client.add_replica(node_addr).timeout(std::chrono::seconds(5));
     if (!replica_connect) {
         std::cerr << "Replica connect failed: " << replica_connect.error().message() << std::endl;
         (void)co_await ms_client.master().close();
@@ -166,7 +166,7 @@ Task<bool> runMasterSlaveDemo(IOScheduler* scheduler, std::string host, int port
 
     auto ms_get = co_await ms_client.execute("GET", {ms_key}, true);
     std::string ms_read_value;
-    if (!readAwaitedCommandSingleString(ms_get, ms_read_value) || ms_read_value != ms_value) {
+    if (!read_awaited_command_single_string(ms_get, ms_read_value) || ms_read_value != ms_value) {
         std::cerr << "Replica read value mismatch, got: " << ms_read_value << std::endl;
         if (auto repl = ms_client.replica(0); repl.has_value()) {
             (void)co_await repl->get().close();
@@ -184,7 +184,7 @@ Task<bool> runMasterSlaveDemo(IOScheduler* scheduler, std::string host, int port
     co_return true;
 }
 
-Task<bool> runClusterDemo(IOScheduler* scheduler, std::string host, int port)
+Task<bool> run_cluster_demo(IOScheduler* scheduler, std::string host, int port)
 {
     auto cluster_client = RedisClusterClientBuilder().scheduler(scheduler).build();
     RedisClusterNodeAddress cluster_node;
@@ -193,7 +193,7 @@ Task<bool> runClusterDemo(IOScheduler* scheduler, std::string host, int port)
     cluster_node.slot_start = 0;
     cluster_node.slot_end = 16383;
 
-    auto cluster_connect = co_await cluster_client.addNode(cluster_node).timeout(std::chrono::seconds(5));
+    auto cluster_connect = co_await cluster_client.add_node(cluster_node).timeout(std::chrono::seconds(5));
     if (!cluster_connect) {
         std::cerr << "Cluster node connect failed: " << cluster_connect.error().message() << std::endl;
         co_return false;
@@ -213,7 +213,7 @@ Task<bool> runClusterDemo(IOScheduler* scheduler, std::string host, int port)
 
     auto cluster_get = co_await cluster_client.execute("GET", {cluster_key}, cluster_key);
     std::string cluster_read_value;
-    if (!readAwaitedCommandSingleString(cluster_get, cluster_read_value) || cluster_read_value != cluster_value) {
+    if (!read_awaited_command_single_string(cluster_get, cluster_read_value) || cluster_read_value != cluster_value) {
         std::cerr << "Cluster GET value mismatch" << std::endl;
         if (auto node = cluster_client.node(0); node.has_value()) {
             (void)co_await node->get().close();
@@ -229,27 +229,27 @@ Task<bool> runClusterDemo(IOScheduler* scheduler, std::string host, int port)
     co_return true;
 }
 
-Task<void> runDemo(IOScheduler* scheduler, DemoState* state, std::string host, int port)
+Task<void> run_demo(IOScheduler* scheduler, DemoState* state, std::string host, int port)
 {
-    auto pubsub_ok = co_await runPubSubDemo(scheduler, host, port);
+    auto pubsub_ok = co_await run_pub_sub_demo(scheduler, host, port);
     if (!pubsub_ok) {
-        finishDemo(*state, 1);
+        finish_demo(*state, 1);
         co_return;
     }
 
-    auto master_slave_ok = co_await runMasterSlaveDemo(scheduler, host, port);
+    auto master_slave_ok = co_await run_master_slave_demo(scheduler, host, port);
     if (!master_slave_ok) {
-        finishDemo(*state, 1);
+        finish_demo(*state, 1);
         co_return;
     }
 
-    auto cluster_ok = co_await runClusterDemo(scheduler, host, port);
+    auto cluster_ok = co_await run_cluster_demo(scheduler, host, port);
     if (!cluster_ok) {
-        finishDemo(*state, 1);
+        finish_demo(*state, 1);
         co_return;
     }
 
-    finishDemo(*state, 0);
+    finish_demo(*state, 0);
 }
 
 }  // namespace
@@ -261,7 +261,7 @@ int main(int argc, char* argv[])
 
     if (argc > 1) host = argv[1];
     if (argc > 2) {
-        auto parsed_port = parsePort(argv[2]);
+        auto parsed_port = parse_port(argv[2]);
         if (!parsed_port) {
             std::cerr << "Invalid port: " << argv[2] << std::endl;
             std::cerr << "Usage: " << argv[0] << " [host] [port]" << std::endl;
@@ -273,7 +273,7 @@ int main(int argc, char* argv[])
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "Failed to get IO scheduler" << std::endl;
         runtime.stop();
@@ -281,7 +281,7 @@ int main(int argc, char* argv[])
     }
 
     DemoState state;
-    scheduleTask(scheduler, runDemo(scheduler, &state, host, port));
+    schedule_task(scheduler, run_demo(scheduler, &state, host, port));
 
     std::unique_lock<std::mutex> lock(state.mutex);
     const bool finished = state.cv.wait_for(lock, std::chrono::seconds(30), [&]() {

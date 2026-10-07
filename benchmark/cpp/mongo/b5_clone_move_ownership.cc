@@ -13,7 +13,7 @@
 namespace
 {
 
-std::expected<size_t, std::string> parsePositiveSize(std::string_view text,
+std::expected<size_t, std::string> parse_positive_size(std::string_view text,
                                                      size_t fallback)
 {
     if (text.empty()) {
@@ -30,34 +30,34 @@ std::expected<size_t, std::string> parsePositiveSize(std::string_view text,
     return value;
 }
 
-uint64_t mixChecksum(uint64_t seed, uint64_t value)
+uint64_t mix_checksum(uint64_t seed, uint64_t value)
 {
     seed ^= value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
     return seed;
 }
 
-uint64_t checksumValue(const galay::mongo::MongoValue& value);
+uint64_t checksum_value(const galay::mongo::MongoValue& value);
 
-uint64_t checksumArray(const galay::mongo::MongoArray& array)
+uint64_t checksum_array(const galay::mongo::MongoArray& array)
 {
-    uint64_t checksum = mixChecksum(1469598103934665603ULL, array.size());
+    uint64_t checksum = mix_checksum(1469598103934665603ULL, array.size());
     for (const auto& value : array.values()) {
-        checksum = mixChecksum(checksum, checksumValue(value));
+        checksum = mix_checksum(checksum, checksum_value(value));
     }
     return checksum;
 }
 
-uint64_t checksumDocument(const galay::mongo::MongoDocument& document)
+uint64_t checksum_document(const galay::mongo::MongoDocument& document)
 {
-    uint64_t checksum = mixChecksum(1099511628211ULL, document.size());
+    uint64_t checksum = mix_checksum(1099511628211ULL, document.size());
     for (const auto& [name, value] : document.fields()) {
-        checksum = mixChecksum(checksum, name.size());
-        checksum = mixChecksum(checksum, checksumValue(value));
+        checksum = mix_checksum(checksum, name.size());
+        checksum = mix_checksum(checksum, checksum_value(value));
     }
     return checksum;
 }
 
-uint64_t checksumValue(const galay::mongo::MongoValue& value)
+uint64_t checksum_value(const galay::mongo::MongoValue& value)
 {
     using galay::mongo::MongoValueType;
 
@@ -66,29 +66,29 @@ uint64_t checksumValue(const galay::mongo::MongoValue& value)
     case MongoValueType::Null:
         return checksum;
     case MongoValueType::Bool:
-        return mixChecksum(checksum, value.toBool(false) ? 1 : 0);
+        return mix_checksum(checksum, value.to_bool(false) ? 1 : 0);
     case MongoValueType::Int32:
-        return mixChecksum(checksum, static_cast<uint64_t>(value.toInt32()));
+        return mix_checksum(checksum, static_cast<uint64_t>(value.to_int32()));
     case MongoValueType::Int64:
     case MongoValueType::DateTime:
     case MongoValueType::Timestamp:
-        return mixChecksum(checksum, static_cast<uint64_t>(value.toInt64()));
+        return mix_checksum(checksum, static_cast<uint64_t>(value.to_int64()));
     case MongoValueType::Double:
-        return mixChecksum(checksum, static_cast<uint64_t>(value.toDouble() * 1000.0));
+        return mix_checksum(checksum, static_cast<uint64_t>(value.to_double() * 1000.0));
     case MongoValueType::String:
     case MongoValueType::ObjectId:
-        return mixChecksum(checksum, value.toString().size());
+        return mix_checksum(checksum, value.to_string().size());
     case MongoValueType::Binary:
-        return mixChecksum(checksum, value.toBinary().size());
+        return mix_checksum(checksum, value.to_binary().size());
     case MongoValueType::Document:
-        return mixChecksum(checksum, checksumDocument(value.toDocument()));
+        return mix_checksum(checksum, checksum_document(value.to_document()));
     case MongoValueType::Array:
-        return mixChecksum(checksum, checksumArray(value.toArray()));
+        return mix_checksum(checksum, checksum_array(value.to_array()));
     }
     return checksum;
 }
 
-galay::mongo::MongoDocument makeSeedDocument(size_t field_count)
+galay::mongo::MongoDocument make_seed_document(size_t field_count)
 {
     galay::mongo::MongoDocument document;
     document.fields().reserve(field_count + 4);
@@ -114,7 +114,7 @@ galay::mongo::MongoDocument makeSeedDocument(size_t field_count)
     return document;
 }
 
-galay::mongo::MongoArray makeSeedArray(size_t item_count)
+galay::mongo::MongoArray make_seed_array(size_t item_count)
 {
     galay::mongo::MongoArray array;
     array.reserve(item_count);
@@ -131,13 +131,13 @@ galay::mongo::MongoArray makeSeedArray(size_t item_count)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     size_t iterations = 50000;
     if (argc > 1) {
-        auto parsed = parsePositiveSize(argv[1], iterations);
+        auto parsed = parse_positive_size(argv[1], iterations);
         if (!parsed) {
             std::cerr << "invalid iterations: " << parsed.error() << '\n';
             return 1;
@@ -147,7 +147,7 @@ int main(int argc, char** argv)
 
     size_t payload_fields = 32;
     if (argc > 2) {
-        auto parsed = parsePositiveSize(argv[2], payload_fields);
+        auto parsed = parse_positive_size(argv[2], payload_fields);
         if (!parsed) {
             std::cerr << "invalid payload fields: " << parsed.error() << '\n';
             return 1;
@@ -155,8 +155,8 @@ int main(int argc, char** argv)
         payload_fields = *parsed;
     }
 
-    const galay::mongo::MongoDocument seed_document = makeSeedDocument(payload_fields);
-    const galay::mongo::MongoArray seed_array = makeSeedArray(payload_fields);
+    const galay::mongo::MongoDocument seed_document = make_seed_document(payload_fields);
+    const galay::mongo::MongoArray seed_array = make_seed_array(payload_fields);
     const galay::mongo::MongoValue seed_value(seed_document.clone());
 
     galay::mongo::MongoDocument reply_doc;
@@ -167,29 +167,29 @@ int main(int argc, char** argv)
     uint64_t checksum = 0;
     constexpr size_t kWarmupIterations = 512;
     for (size_t i = 0; i < kWarmupIterations; ++i) {
-        checksum = mixChecksum(checksum, checksumValue(seed_value.clone()));
-        checksum = mixChecksum(checksum, checksumArray(seed_array.clone()));
-        checksum = mixChecksum(checksum, checksumDocument(seed_document.clone()));
-        checksum = mixChecksum(checksum, checksumDocument(seed_reply.clone().document()));
+        checksum = mix_checksum(checksum, checksum_value(seed_value.clone()));
+        checksum = mix_checksum(checksum, checksum_array(seed_array.clone()));
+        checksum = mix_checksum(checksum, checksum_document(seed_document.clone()));
+        checksum = mix_checksum(checksum, checksum_document(seed_reply.clone().document()));
     }
 
     const auto start = std::chrono::steady_clock::now();
     for (size_t i = 0; i < iterations; ++i) {
         galay::mongo::MongoValue value_clone = seed_value.clone();
         galay::mongo::MongoValue moved_value = std::move(value_clone);
-        checksum = mixChecksum(checksum, checksumValue(moved_value));
+        checksum = mix_checksum(checksum, checksum_value(moved_value));
 
         galay::mongo::MongoArray array_clone = seed_array.clone();
         galay::mongo::MongoArray moved_array = std::move(array_clone);
-        checksum = mixChecksum(checksum, checksumArray(moved_array));
+        checksum = mix_checksum(checksum, checksum_array(moved_array));
 
         galay::mongo::MongoDocument document_clone = seed_document.clone();
         galay::mongo::MongoDocument moved_document = std::move(document_clone);
-        checksum = mixChecksum(checksum, checksumDocument(moved_document));
+        checksum = mix_checksum(checksum, checksum_document(moved_document));
 
         galay::mongo::MongoReply reply_clone = seed_reply.clone();
         galay::mongo::MongoReply moved_reply = std::move(reply_clone);
-        checksum = mixChecksum(checksum, checksumDocument(moved_reply.document()));
+        checksum = mix_checksum(checksum, checksum_document(moved_reply.document()));
     }
     const auto finish = std::chrono::steady_clock::now();
 

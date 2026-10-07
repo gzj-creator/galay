@@ -35,20 +35,20 @@ std::atomic<bool> g_server_ready{false};
 /**
  * @brief UDP Echo服务器协程
  */
-Task<void> udpServer() {
+Task<void> udp_server() {
     LogInfo("UDP Server starting...");
 
     // 创建UDP socket
     AsyncUdpSocket socket;
 
     // 设置socket选项
-    auto optResult = socket.option().handleReuseAddr();
+    auto optResult = socket.option().handle_reuse_addr();
     if (!optResult) {
         LogError("Failed to set reuse addr: {}", optResult.error().message());
         co_return;
     }
 
-    optResult = socket.option().handleNonBlock();
+    optResult = socket.option().handle_non_block();
     if (!optResult) {
         LogError("Failed to set non-block: {}", optResult.error().message());
         co_return;
@@ -93,7 +93,7 @@ Task<void> udpServer() {
 /**
  * @brief UDP客户端协程
  */
-Task<void> udpClient() {
+Task<void> udp_client() {
     // 等待服务器准备好
     while (!g_server_ready) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -105,7 +105,7 @@ Task<void> udpClient() {
     AsyncUdpSocket socket;
 
     // 设置非阻塞模式
-    auto optResult = socket.option().handleNonBlock();
+    auto optResult = socket.option().handle_non_block();
     if (!optResult) {
         LogError("Failed to set non-block: {}", optResult.error().message());
         co_return;
@@ -125,8 +125,8 @@ Task<void> udpClient() {
 
     // 接收响应
     char buffer[1024];
-    Host fromHost;
-    auto recvResult = co_await socket.recvfrom(buffer, sizeof(buffer), &fromHost);
+    Host from_host;
+    auto recvResult = co_await socket.recvfrom(buffer, sizeof(buffer), &from_host);
     if (!recvResult) {
         LogError("Failed to recvfrom: {}", recvResult.error().message());
         co_return;
@@ -134,7 +134,7 @@ Task<void> udpClient() {
 
     size_t bytes = recvResult.value();
     LogInfo("Received from {}:{}: {}",
-            fromHost.ip(), fromHost.port(), std::string_view(buffer, bytes));
+            from_host.ip(), from_host.port(), std::string_view(buffer, bytes));
 
     co_await socket.close();
 }
@@ -149,8 +149,8 @@ int main() {
     scheduler.start();
 
     // 启动服务器和客户端
-    scheduleTask(scheduler, udpServer());
-    scheduleTask(scheduler, udpClient());
+    schedule_task(scheduler, udp_server());
+    schedule_task(scheduler, udp_client());
 
     // 等待执行完成
     std::this_thread::sleep_for(std::chrono::seconds(1));

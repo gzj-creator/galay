@@ -38,7 +38,7 @@ std::atomic<uint64_t> g_total_bytes_written{0};
 std::atomic<uint64_t> g_total_errors{0};
 std::atomic<bool> g_running{true};
 
-void signalHandler([[maybe_unused]] int signum) {
+void signal_handler([[maybe_unused]] int signum) {
     g_running.store(false, std::memory_order_release);
 }
 
@@ -54,9 +54,9 @@ struct BenchConfig {
 
 #if defined(USE_EPOLL)
 // Epoll/AIO 压测 - 支持批量操作
-Task<void> benchmarkWorkerAIO(galay::async::AsyncAio* file, int worker_id, const BenchConfig& config) {
-    char* read_buffer = galay::async::AsyncAio::allocAlignedBuffer(config.block_size * config.batch_size);
-    char* write_buffer = galay::async::AsyncAio::allocAlignedBuffer(config.block_size * config.batch_size);
+Task<void> benchmark_worker_aio(galay::async::AsyncAio* file, int worker_id, const BenchConfig& config) {
+    char* read_buffer = galay::async::AsyncAio::alloc_aligned_buffer(config.block_size * config.batch_size);
+    char* write_buffer = galay::async::AsyncAio::alloc_aligned_buffer(config.block_size * config.batch_size);
 
     if (!read_buffer || !write_buffer) {
         LogError("[Worker {}] Failed to allocate aligned buffers", worker_id);
@@ -75,7 +75,7 @@ Task<void> benchmarkWorkerAIO(galay::async::AsyncAio* file, int worker_id, const
         file->clear();
         for (int i = 0; i < config.batch_size; ++i) {
             off_t offset = (worker_id * config.operations_per_worker + ops) * config.block_size + i * config.block_size;
-            file->preWrite(write_buffer + i * config.block_size, config.block_size, offset);
+            file->pre_write(write_buffer + i * config.block_size, config.block_size, offset);
         }
 
         auto write_result = co_await file->commit();
@@ -94,7 +94,7 @@ Task<void> benchmarkWorkerAIO(galay::async::AsyncAio* file, int worker_id, const
         file->clear();
         for (int i = 0; i < config.batch_size; ++i) {
             off_t offset = (worker_id * config.operations_per_worker + ops) * config.block_size + i * config.block_size;
-            file->preRead(read_buffer + i * config.block_size, config.block_size, offset);
+            file->pre_read(read_buffer + i * config.block_size, config.block_size, offset);
         }
 
         auto read_result = co_await file->commit();
@@ -112,12 +112,12 @@ Task<void> benchmarkWorkerAIO(galay::async::AsyncAio* file, int worker_id, const
         ops++;
     }
 
-    galay::async::AsyncAio::freeAlignedBuffer(read_buffer);
-    galay::async::AsyncAio::freeAlignedBuffer(write_buffer);
+    galay::async::AsyncAio::free_aligned_buffer(read_buffer);
+    galay::async::AsyncAio::free_aligned_buffer(write_buffer);
     co_return;
 }
 
-void runEpollBenchmark(const BenchConfig& config) {
+void run_epoll_benchmark(const BenchConfig& config) {
     LogInfo("=== Epoll/AIO File IO Benchmark ===");
     LogInfo("Workers: {}, Operations per worker: {}, Block size: {}, Batch size: {}",
             config.num_workers, config.operations_per_worker, config.block_size, config.batch_size);
@@ -149,7 +149,7 @@ void runEpollBenchmark(const BenchConfig& config) {
 
     // 启动所有 worker
     for (size_t i = 0; i < files.size(); ++i) {
-        scheduleTask(scheduler, benchmarkWorkerAIO(files[i], i, config));
+        schedule_task(scheduler, benchmark_worker_aio(files[i], i, config));
     }
 
     // 等待所有 worker 完成
@@ -213,7 +213,7 @@ void runEpollBenchmark(const BenchConfig& config) {
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
 // Kqueue/io_uring 压测 - 单次操作
-Task<void> benchmarkWorkerAsync(galay::async::AsyncFile* file, int worker_id, const BenchConfig& config) {
+Task<void> benchmark_worker_async(galay::async::AsyncFile* file, int worker_id, const BenchConfig& config) {
     char read_buffer[8192];
     char write_buffer[8192];
 
@@ -251,7 +251,7 @@ Task<void> benchmarkWorkerAsync(galay::async::AsyncFile* file, int worker_id, co
 }
 
 #ifdef USE_KQUEUE
-void runKqueueBenchmark(const BenchConfig& config) {
+void run_kqueue_benchmark(const BenchConfig& config) {
     LogInfo("=== Kqueue File IO Benchmark ===");
     LogInfo("Workers: {}, Operations per worker: {}, Block size: {}",
             config.num_workers, config.operations_per_worker, config.block_size);
@@ -280,7 +280,7 @@ void runKqueueBenchmark(const BenchConfig& config) {
 
     // 启动所有 worker
     for (size_t i = 0; i < files.size(); ++i) {
-        scheduleTask(scheduler, benchmarkWorkerAsync(files[i], i, config));
+        schedule_task(scheduler, benchmark_worker_async(files[i], i, config));
     }
 
     // 等待所有 worker 完成
@@ -335,7 +335,7 @@ void runKqueueBenchmark(const BenchConfig& config) {
 #endif
 
 #ifdef USE_IOURING
-void runIOUringBenchmark(const BenchConfig& config) {
+void run_io_uring_benchmark(const BenchConfig& config) {
     LogInfo("=== io_uring File IO Benchmark ===");
     LogInfo("Workers: {}, Operations per worker: {}, Block size: {}",
             config.num_workers, config.operations_per_worker, config.block_size);
@@ -364,7 +364,7 @@ void runIOUringBenchmark(const BenchConfig& config) {
 
     // 启动所有 worker
     for (size_t i = 0; i < files.size(); ++i) {
-        scheduleTask(scheduler, benchmarkWorkerAsync(files[i], i, config));
+        schedule_task(scheduler, benchmark_worker_async(files[i], i, config));
     }
 
     // 等待所有 worker 完成
@@ -420,13 +420,13 @@ void runIOUringBenchmark(const BenchConfig& config) {
 #endif
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     // 注册信号处理
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 
     BenchConfig config;
 
@@ -461,11 +461,11 @@ int main(int argc, char* argv[]) {
     LogInfo("========================================");
 
 #ifdef USE_KQUEUE
-    runKqueueBenchmark(config);
+    run_kqueue_benchmark(config);
 #elif defined(USE_EPOLL)
-    runEpollBenchmark(config);
+    run_epoll_benchmark(config);
 #elif defined(USE_IOURING)
-    runIOUringBenchmark(config);
+    run_io_uring_benchmark(config);
 #else
     LogError("No supported platform detected (kqueue/epoll/io_uring)");
     return 1;

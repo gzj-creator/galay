@@ -6,8 +6,8 @@
  *
  * @details 三层继承结构：
  * - AwaitableBase: 基类（m_sqe_type, virtual ~）
- * - IOContextBase: 中间层（virtual handleComplete 纯虚函数）
- *   - XxxIOContext: IO参数 + result + handleComplete 实现
+ * - IOContextBase: 中间层（virtual handle_complete 纯虚函数）
+ *   - XxxIOContext: IO参数 + result + handle_complete 实现
  *     - XxxAwaitable: m_controller + m_waker + await_* + TimeoutSupport
  * - CloseAwaitable: 直接继承 AwaitableBase（无IO参数，无handleComplete）
  * - SequenceAwaitable: 组合式序列 Awaitable，支持标准 IO 与本地解析步骤
@@ -90,7 +90,7 @@ struct AwaitContext {
  *               内嵌拥有该 inner
  *
  * @details 统一实现 facade 的 await_ready / await_suspend / await_resume /
- *          markTimeout 到 `m_inner` 的转发，消除各协议模块的复制粘贴样板。
+ *          mark_timeout 到 `m_inner` 的转发，消除各协议模块的复制粘贴样板。
  *          新的自定义 facade 推荐使用两参数形式，避免暴露内部成员；已有
  *          协议 facade 使用一参数形式收口重复转发。超时行为通过
  *          `TimeoutSupport<Derived, Policy>` 的模板策略显式选择。
@@ -133,26 +133,26 @@ public:
     }
 
     template <typename D = Derived>
-    requires requires(D& value) { value.m_inner.markTimeout(); }
-    void markTimeout() noexcept(noexcept(inner().markTimeout())) {
-        inner().markTimeout();
+    requires requires(D& value) { value.m_inner.mark_timeout(); }
+    void mark_timeout() noexcept(noexcept(inner().mark_timeout())) {
+        inner().mark_timeout();
     }
 
     template <typename D = Derived>
     requires requires(D& value) {
-        { value.m_inner.ownsIoRegistration() } -> std::convertible_to<bool>;
+        { value.m_inner.owns_io_registration() } -> std::convertible_to<bool>;
     }
-    bool ownsIoRegistration() noexcept(noexcept(inner().ownsIoRegistration())) {
-        return static_cast<bool>(inner().ownsIoRegistration());
+    bool owns_io_registration() noexcept(noexcept(inner().owns_io_registration())) {
+        return static_cast<bool>(inner().owns_io_registration());
     }
 
     template <typename TimerT, typename D = Derived>
     requires requires(D& value, TimerT&& timer) {
-        value.m_inner.bindTimeoutTimer(std::forward<TimerT>(timer));
+        value.m_inner.bind_timeout_timer(std::forward<TimerT>(timer));
     }
-    void bindTimeoutTimer(TimerT&& timer)
-        noexcept(noexcept(inner().bindTimeoutTimer(std::forward<TimerT>(timer)))) {
-        inner().bindTimeoutTimer(std::forward<TimerT>(timer));
+    void bind_timeout_timer(TimerT&& timer)
+        noexcept(noexcept(inner().bind_timeout_timer(std::forward<TimerT>(timer)))) {
+        inner().bind_timeout_timer(std::forward<TimerT>(timer));
     }
 };
 
@@ -194,26 +194,26 @@ public:
     }
 
     template <typename T = InnerT>
-    requires requires(T& value) { value.markTimeout(); }
-    void markTimeout() noexcept(noexcept(m_inner.markTimeout())) {
-        m_inner.markTimeout();
+    requires requires(T& value) { value.mark_timeout(); }
+    void mark_timeout() noexcept(noexcept(m_inner.mark_timeout())) {
+        m_inner.mark_timeout();
     }
 
     template <typename T = InnerT>
     requires requires(T& value) {
-        { value.ownsIoRegistration() } -> std::convertible_to<bool>;
+        { value.owns_io_registration() } -> std::convertible_to<bool>;
     }
-    bool ownsIoRegistration() noexcept(noexcept(m_inner.ownsIoRegistration())) {
-        return static_cast<bool>(m_inner.ownsIoRegistration());
+    bool owns_io_registration() noexcept(noexcept(m_inner.owns_io_registration())) {
+        return static_cast<bool>(m_inner.owns_io_registration());
     }
 
     template <typename TimerT, typename T = InnerT>
     requires requires(T& value, TimerT&& timer) {
-        value.bindTimeoutTimer(std::forward<TimerT>(timer));
+        value.bind_timeout_timer(std::forward<TimerT>(timer));
     }
-    void bindTimeoutTimer(TimerT&& timer)
-        noexcept(noexcept(m_inner.bindTimeoutTimer(std::forward<TimerT>(timer)))) {
-        m_inner.bindTimeoutTimer(std::forward<TimerT>(timer));
+    void bind_timeout_timer(TimerT&& timer)
+        noexcept(noexcept(m_inner.bind_timeout_timer(std::forward<TimerT>(timer)))) {
+        m_inner.bind_timeout_timer(std::forward<TimerT>(timer));
     }
 
 protected:
@@ -237,9 +237,9 @@ enum class SequenceOwnerDomain : uint8_t {
  */
 struct IOContextBase: public AwaitableBase {
 #ifdef USE_IOURING
-    virtual bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) = 0;  ///< 消费 CQE 并返回该操作是否已完成
+    virtual bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) = 0;  ///< 消费 CQE 并返回该操作是否已完成
 #else
-    virtual bool handleComplete(GHandle handle) = 0;  ///< 在传统后端上消费一次就绪事件并返回该操作是否已完成
+    virtual bool handle_complete(GHandle handle) = 0;  ///< 在传统后端上消费一次就绪事件并返回该操作是否已完成
 #endif
 
     // SequenceAwaitable 调度时可由上下文动态指定下一次等待方向；
@@ -263,75 +263,75 @@ struct SequenceAwaitableBase;
 
 namespace detail {
 
-int registerIOSchedulerEvent(Scheduler* scheduler,
+int register_io_scheduler_event(Scheduler* scheduler,
                              IOEventType event,
                              IOController* controller) noexcept;
-int registerIOSchedulerClose(Scheduler* scheduler,
+int register_io_scheduler_close(Scheduler* scheduler,
                              IOController* controller) noexcept;
 
 using SequenceInterestMask = uint8_t;
 
-constexpr bool sequenceEventUsesSlot(IOEventType type,
+constexpr bool sequence_event_uses_slot(IOEventType type,
                                      IOController::Index slot) noexcept;
 
-constexpr SequenceInterestMask sequenceSlotMask(IOController::Index slot) noexcept {
+constexpr SequenceInterestMask sequence_slot_mask(IOController::Index slot) noexcept {
     return static_cast<SequenceInterestMask>(1u << static_cast<uint8_t>(slot));
 }
 
-constexpr SequenceInterestMask sequenceInterestMask(IOEventType type) noexcept {
+constexpr SequenceInterestMask sequence_interest_mask(IOEventType type) noexcept {
     SequenceInterestMask mask = 0;
-    if (sequenceEventUsesSlot(type, IOController::READ)) {
-        mask = static_cast<SequenceInterestMask>(mask | sequenceSlotMask(IOController::READ));
+    if (sequence_event_uses_slot(type, IOController::READ)) {
+        mask = static_cast<SequenceInterestMask>(mask | sequence_slot_mask(IOController::READ));
     }
-    if (sequenceEventUsesSlot(type, IOController::WRITE)) {
-        mask = static_cast<SequenceInterestMask>(mask | sequenceSlotMask(IOController::WRITE));
+    if (sequence_event_uses_slot(type, IOController::WRITE)) {
+        mask = static_cast<SequenceInterestMask>(mask | sequence_slot_mask(IOController::WRITE));
     }
     return mask;
 }
 
-SequenceInterestMask collectSequenceInterestMask(const IOController* controller) noexcept;  ///< 汇总 controller 上所有 sequence awaitable 的关注位
-SequenceInterestMask syncSequenceInterestMask(IOController* controller) noexcept;  ///< 重新计算并写回 controller 的 sequence 关注位
-void clearSequenceInterestMask(IOController* controller) noexcept;  ///< 清空 controller 的 sequence 关注位与 armed 位
+SequenceInterestMask collect_sequence_interest_mask(const IOController* controller) noexcept;  ///< 汇总 controller 上所有 sequence awaitable 的关注位
+SequenceInterestMask sync_sequence_interest_mask(IOController* controller) noexcept;  ///< 重新计算并写回 controller 的 sequence 关注位
+void clear_sequence_interest_mask(IOController* controller) noexcept;  ///< 清空 controller 的 sequence 关注位与 armed 位
 
-inline uint32_t normalizeAwaitableErrno(int ret) noexcept {
+inline uint32_t normalize_awaitable_errno(int ret) noexcept {
     return (ret < 0 && ret != -1)
         ? static_cast<uint32_t>(-ret)
         : static_cast<uint32_t>(errno);
 }
 
 template <typename ResultT>
-inline bool finalizeAwaitableAddResult(int ret,
+inline bool finalize_awaitable_add_result(int ret,
                                        IOErrorCode io_error,
                                        std::expected<ResultT, IOError>& result) {
     if (ret == 1) {
         return false;
     }
     if (ret < 0) {
-        result = std::unexpected(IOError(io_error, normalizeAwaitableErrno(ret)));
+        result = std::unexpected(IOError(io_error, normalize_awaitable_errno(ret)));
         return false;
     }
     return true;
 }
 
 template <IOEventType Event, typename AwaitableT>
-inline auto resumeIOAwaitable(AwaitableT& awaitable) -> decltype(std::move(awaitable.m_result)) {
+inline auto resume_io_awaitable(AwaitableT& awaitable) -> decltype(std::move(awaitable.m_result)) {
     // 控制器为空说明操作在挂起前已短路返回（如 kClosed），无槽位需要清理
     if (awaitable.m_controller != nullptr) {
         const bool owns_read =
-            sequenceEventUsesSlot(Event, IOController::READ) &&
+            sequence_event_uses_slot(Event, IOController::READ) &&
             awaitable.m_controller->m_awaitable[IOController::READ] == &awaitable;
         const bool owns_write =
-            sequenceEventUsesSlot(Event, IOController::WRITE) &&
+            sequence_event_uses_slot(Event, IOController::WRITE) &&
             awaitable.m_controller->m_awaitable[IOController::WRITE] == &awaitable;
         if (owns_read || owns_write) {
-            awaitable.m_controller->removeAwaitable(Event);
+            awaitable.m_controller->remove_awaitable(Event);
         }
     }
     return std::move(awaitable.m_result);
 }
 
 template <typename AwaitableT, IOEventType Event, IOErrorCode ErrorCode, typename Promise>
-inline bool suspendRegisteredAwaitable(AwaitableT& awaitable, std::coroutine_handle<Promise> handle) {
+inline bool suspend_registered_awaitable(AwaitableT& awaitable, std::coroutine_handle<Promise> handle) {
     awaitable.m_waker = Waker(handle);
 #ifdef USE_IOURING
     awaitable.m_sqe_type = Event;
@@ -340,56 +340,56 @@ inline bool suspendRegisteredAwaitable(AwaitableT& awaitable, std::coroutine_han
         awaitable.m_result = std::unexpected(IOError(kClosed, 0));
         return false;
     }
-    if ((sequenceEventUsesSlot(Event, IOController::READ) &&
+    if ((sequence_event_uses_slot(Event, IOController::READ) &&
          awaitable.m_controller->m_sequence_owner[IOController::READ] != nullptr) ||
-        (sequenceEventUsesSlot(Event, IOController::WRITE) &&
+        (sequence_event_uses_slot(Event, IOController::WRITE) &&
          awaitable.m_controller->m_sequence_owner[IOController::WRITE] != nullptr)) {
         awaitable.m_result = std::unexpected(IOError(kNotReady, 0));
         return false;
     }
-    awaitable.m_controller->fillAwaitable(Event, &awaitable);
-    auto* scheduler = awaitable.m_waker.getScheduler();
+    awaitable.m_controller->fill_awaitable(Event, &awaitable);
+    auto* scheduler = awaitable.m_waker.get_scheduler();
     if (scheduler == nullptr || scheduler->type() != kIOScheduler) {
         awaitable.m_result = std::unexpected(IOError(kNotRunningOnIOScheduler, errno));
-        awaitable.m_controller->removeAwaitable(Event);
+        awaitable.m_controller->remove_awaitable(Event);
         return false;
     }
-    const int ret = registerIOSchedulerEvent(scheduler, Event, awaitable.m_controller);
+    const int ret = register_io_scheduler_event(scheduler, Event, awaitable.m_controller);
     if (ret == 1) {
-        awaitable.m_controller->removeAwaitable(Event);
+        awaitable.m_controller->remove_awaitable(Event);
         return false;
     }
     if (ret < 0) {
-        awaitable.m_result = std::unexpected(IOError(ErrorCode, normalizeAwaitableErrno(ret)));
-        awaitable.m_controller->removeAwaitable(Event);
+        awaitable.m_result = std::unexpected(IOError(ErrorCode, normalize_awaitable_errno(ret)));
+        awaitable.m_controller->remove_awaitable(Event);
         return false;
     }
     return true;
 }
 
 template <typename Promise>
-inline bool suspendSequenceAwaitable(SequenceAwaitableBase& awaitable,
+inline bool suspend_sequence_awaitable(SequenceAwaitableBase& awaitable,
                                      std::coroutine_handle<Promise> handle);
 
 template <typename Promise>
-inline AwaitContext makeAwaitContext(std::coroutine_handle<Promise> handle) {
-    TaskRef task = handle.promise().taskRefView();
+inline AwaitContext make_await_context(std::coroutine_handle<Promise> handle) {
+    TaskRef task = handle.promise().task_ref_view();
     return AwaitContext{
         .task = task,
-        .scheduler = task.belongScheduler(),
+        .scheduler = task.belong_scheduler(),
     };
 }
 
 template <typename TargetT>
-inline void bindAwaitContextIfSupported(TargetT& target, const AwaitContext& ctx) {
+inline void bind_await_context_if_supported(TargetT& target, const AwaitContext& ctx) {
     if constexpr (requires(TargetT& t, const AwaitContext& context) {
-        t.onAwaitContext(context);
+        t.on_await_context(context);
     }) {
-        target.onAwaitContext(ctx);
+        target.on_await_context(ctx);
     }
 }
 
-constexpr bool sequenceOwnerDomainUsesSlot(SequenceOwnerDomain domain,
+constexpr bool sequence_owner_domain_uses_slot(SequenceOwnerDomain domain,
                                            IOController::Index slot) noexcept {
     switch (domain) {
     case SequenceOwnerDomain::Read:
@@ -402,7 +402,7 @@ constexpr bool sequenceOwnerDomainUsesSlot(SequenceOwnerDomain domain,
     return false;
 }
 
-constexpr bool sequenceEventUsesSlot(IOEventType type,
+constexpr bool sequence_event_uses_slot(IOEventType type,
                                      IOController::Index slot) noexcept {
     const uint32_t t = static_cast<uint32_t>(type);
     if (slot == IOController::READ) {
@@ -415,7 +415,7 @@ constexpr bool sequenceEventUsesSlot(IOEventType type,
 }
 
 template <typename MachineT>
-constexpr SequenceOwnerDomain resolveStateMachineOwnerDomain(const MachineT& machine) {
+constexpr SequenceOwnerDomain resolve_state_machine_owner_domain(const MachineT& machine) {
     if constexpr (requires {
         { MachineT::kSequenceOwnerDomain } -> std::convertible_to<SequenceOwnerDomain>;
     }) {
@@ -425,16 +425,16 @@ constexpr SequenceOwnerDomain resolveStateMachineOwnerDomain(const MachineT& mac
     }) {
         return MachineT::sequence_owner_domain;
     } else if constexpr (requires(const MachineT& m) {
-        { m.sequenceOwnerDomain() } -> std::convertible_to<SequenceOwnerDomain>;
+        { m.sequence_owner_domain() } -> std::convertible_to<SequenceOwnerDomain>;
     }) {
-        return machine.sequenceOwnerDomain();
+        return machine.sequence_owner_domain();
     } else {
         return SequenceOwnerDomain::ReadWrite;
     }
 }
 
 template <typename ContextT>
-constexpr IOEventType customAwaitableDefaultEvent() {
+constexpr IOEventType custom_awaitable_default_event() {
     using T = std::remove_cvref_t<ContextT>;
     if constexpr (std::is_base_of_v<AcceptIOContext, T>) {
         return ACCEPT;
@@ -488,7 +488,7 @@ struct expected_traits<std::expected<T, E>> {
 };
 
 template <typename ResultT>
-auto makeUnexpectedIOError(IOError error) -> ResultT
+auto make_unexpected_io_error(IOError error) -> ResultT
 {
     if constexpr (is_expected_v<ResultT>) {
         using ErrorT = typename expected_traits<std::remove_cvref_t<ResultT>>::error_type;
@@ -515,9 +515,9 @@ struct AcceptIOContext: public IOContextBase {
         : m_host(host) {}
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring accept 完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring accept 完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端 accept 就绪事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 accept 就绪事件
 #endif
 
     Host* m_host;  ///< 输出客户端地址；允许为 nullptr
@@ -557,7 +557,7 @@ struct AcceptAwaitable : public AwaitableBase {
         return std::move(*this).timeout(duration);
     }
     /** @brief 未发布前创建 owner timer；通常由 suspend 惰性调用。 */
-    void ensureTimer() {
+    void ensure_timer() {
         if (m_duration && !m_timer) {
             m_timer = std::make_shared<AcceptTimeoutTimer>(*m_duration);
         }
@@ -565,11 +565,11 @@ struct AcceptAwaitable : public AwaitableBase {
 
     /** @brief 以下入口仅供 IO owner adapter；不得跨线程调用。 */
     bool suspend(Waker&& waker);
-    void timeoutOnOwner() noexcept;
-    [[nodiscard]] bool selectError(CompletionReason reason, IOError error) noexcept;
+    void timeout_on_owner() noexcept;
+    [[nodiscard]] bool select_error(CompletionReason reason, IOError error) noexcept;
     /** @brief epoll 借用 listener；io_uring 接管 accepted fd（含失败/败者的回收）。
      *  peer 只写入 typed result，调用方 Host 直到 await_resume 才更新。 */
-    [[nodiscard]] bool selectReady(GHandle handle);
+    [[nodiscard]] bool select_ready(GHandle handle);
     [[nodiscard]] std::expected<ResumeCapability, OperationError> detach();
 
     std::optional<AcceptOperation> m_operation;
@@ -597,7 +597,7 @@ struct AcceptAwaitable: public AcceptIOContext, public TimeoutSupport<AcceptAwai
     bool await_ready() { return false; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<AcceptAwaitable, ACCEPT, kAcceptFailed>(
+        return detail::suspend_registered_awaitable<AcceptAwaitable, ACCEPT, kAcceptFailed>(
             *this, handle);
     }
     std::expected<GHandle, IOError> await_resume();  ///< 返回 accept 结果；若失败则返回 IOError
@@ -617,9 +617,9 @@ struct RecvIOContext: public IOContextBase {
         : m_buffer(buffer), m_length(length) {}
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring recv 完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring recv 完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端 recv 就绪事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 recv 就绪事件
 #endif
 
     char* m_buffer;  ///< 接收缓冲区
@@ -637,7 +637,7 @@ struct RecvAwaitable: public RecvIOContext, public TimeoutSupport<RecvAwaitable>
     bool await_ready() { return false; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<RecvAwaitable, RECV, kRecvFailed>(
+        return detail::suspend_registered_awaitable<RecvAwaitable, RECV, kRecvFailed>(
             *this, handle);
     }
     std::expected<size_t, IOError> await_resume();  ///< 返回实际接收字节数；0 可能表示 EOF
@@ -656,9 +656,9 @@ struct SendIOContext: public IOContextBase {
         : m_buffer(buffer), m_length(length) {}
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring send 完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring send 完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端 send 就绪事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 send 就绪事件
 #endif
 
     const char* m_buffer;  ///< 发送缓冲区
@@ -676,7 +676,7 @@ struct SendAwaitable: public SendIOContext, public TimeoutSupport<SendAwaitable>
     bool await_ready() { return false; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<SendAwaitable, SEND, kSendFailed>(
+        return detail::suspend_registered_awaitable<SendAwaitable, SEND, kSendFailed>(
             *this, handle);
     }
     std::expected<size_t, IOError> await_resume();  ///< 返回实际发送字节数；可能小于请求长度
@@ -694,44 +694,44 @@ struct ReadvIOContext: public IOContextBase {
     explicit ReadvIOContext(std::span<const struct iovec> iovecs)
         : m_iovecs(iovecs) {
 #ifdef USE_IOURING
-        initMsghdr();
+        init_msghdr();
 #endif
     }
 
     template<size_t N>
     ReadvIOContext(std::array<struct iovec, N>& iovecs, size_t count)
-        : m_iovecs(iovecs.data(), boundedBorrowedCount(count, N)) {
-        markInvalidBorrowedCount(count, N);
+        : m_iovecs(iovecs.data(), bounded_borrowed_count(count, N)) {
+        mark_invalid_borrowed_count(count, N);
 #ifdef USE_IOURING
-        initMsghdr();
+        init_msghdr();
 #endif
     }
 
     template<size_t N>
     ReadvIOContext(struct iovec (&iovecs)[N], size_t count)
-        : m_iovecs(iovecs, boundedBorrowedCount(count, N)) {
-        markInvalidBorrowedCount(count, N);
+        : m_iovecs(iovecs, bounded_borrowed_count(count, N)) {
+        mark_invalid_borrowed_count(count, N);
 #ifdef USE_IOURING
-        initMsghdr();
+        init_msghdr();
 #endif
     }
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring readv 完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring readv 完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端 readv 就绪事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 readv 就绪事件
 #endif
 
-    static size_t boundedBorrowedCount(size_t count, size_t capacity) noexcept {
+    static size_t bounded_borrowed_count(size_t count, size_t capacity) noexcept {
         return count <= capacity ? count : 0;
     }
 
-    static bool borrowedCountValid(size_t count, size_t capacity) noexcept {
+    static bool borrowed_count_valid(size_t count, size_t capacity) noexcept {
         return count <= capacity;
     }
 
-    void markInvalidBorrowedCount(size_t count, size_t capacity) {
-        if (!borrowedCountValid(count, capacity)) {
+    void mark_invalid_borrowed_count(size_t count, size_t capacity) {
+        if (!borrowed_count_valid(count, capacity)) {
             m_result = std::unexpected(IOError(kParamInvalid, 0));
             m_immediate_result = true;
         }
@@ -742,7 +742,7 @@ struct ReadvIOContext: public IOContextBase {
     uint64_t m_immediate_result = 0;  ///< 构造阶段即可返回的参数错误
 
 #ifdef USE_IOURING
-    void initMsghdr() {
+    void init_msghdr() {
         m_msg.msg_iov = const_cast<struct iovec*>(m_iovecs.data());
         m_msg.msg_iovlen = m_iovecs.size();
     }
@@ -769,7 +769,7 @@ struct ReadvAwaitable: public ReadvIOContext, public TimeoutSupport<ReadvAwaitab
     bool await_ready() { return m_immediate_result; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<ReadvAwaitable, READV, kRecvFailed>(
+        return detail::suspend_registered_awaitable<ReadvAwaitable, READV, kRecvFailed>(
             *this, handle);
     }
     std::expected<size_t, IOError> await_resume();  ///< 返回实际读取字节数或错误
@@ -787,44 +787,44 @@ struct WritevIOContext: public IOContextBase {
     explicit WritevIOContext(std::span<const struct iovec> iovecs)
         : m_iovecs(iovecs) {
 #ifdef USE_IOURING
-        initMsghdr();
+        init_msghdr();
 #endif
     }
 
     template<size_t N>
     WritevIOContext(std::array<struct iovec, N>& iovecs, size_t count)
-        : m_iovecs(iovecs.data(), boundedBorrowedCount(count, N)) {
-        markInvalidBorrowedCount(count, N);
+        : m_iovecs(iovecs.data(), bounded_borrowed_count(count, N)) {
+        mark_invalid_borrowed_count(count, N);
 #ifdef USE_IOURING
-        initMsghdr();
+        init_msghdr();
 #endif
     }
 
     template<size_t N>
     WritevIOContext(struct iovec (&iovecs)[N], size_t count)
-        : m_iovecs(iovecs, boundedBorrowedCount(count, N)) {
-        markInvalidBorrowedCount(count, N);
+        : m_iovecs(iovecs, bounded_borrowed_count(count, N)) {
+        mark_invalid_borrowed_count(count, N);
 #ifdef USE_IOURING
-        initMsghdr();
+        init_msghdr();
 #endif
     }
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring writev 完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring writev 完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端 writev 就绪事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 writev 就绪事件
 #endif
 
-    static size_t boundedBorrowedCount(size_t count, size_t capacity) noexcept {
+    static size_t bounded_borrowed_count(size_t count, size_t capacity) noexcept {
         return count <= capacity ? count : 0;
     }
 
-    static bool borrowedCountValid(size_t count, size_t capacity) noexcept {
+    static bool borrowed_count_valid(size_t count, size_t capacity) noexcept {
         return count <= capacity;
     }
 
-    void markInvalidBorrowedCount(size_t count, size_t capacity) {
-        if (!borrowedCountValid(count, capacity)) {
+    void mark_invalid_borrowed_count(size_t count, size_t capacity) {
+        if (!borrowed_count_valid(count, capacity)) {
             m_result = std::unexpected(IOError(kParamInvalid, 0));
             m_immediate_result = true;
         }
@@ -835,7 +835,7 @@ struct WritevIOContext: public IOContextBase {
     uint64_t m_immediate_result = 0;  ///< 构造阶段即可返回的参数错误
 
 #ifdef USE_IOURING
-    void initMsghdr() {
+    void init_msghdr() {
         m_msg.msg_iov = const_cast<struct iovec*>(m_iovecs.data());
         m_msg.msg_iovlen = m_iovecs.size();
     }
@@ -862,7 +862,7 @@ struct WritevAwaitable: public WritevIOContext, public TimeoutSupport<WritevAwai
     bool await_ready() { return m_immediate_result; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<WritevAwaitable, WRITEV, kSendFailed>(
+        return detail::suspend_registered_awaitable<WritevAwaitable, WRITEV, kSendFailed>(
             *this, handle);
     }
     std::expected<size_t, IOError> await_resume();  ///< 返回实际写入字节数或错误
@@ -881,9 +881,9 @@ struct ConnectIOContext: public IOContextBase {
         : m_host(host) {}
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring connect 完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring connect 完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端 connect 就绪事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 connect 就绪事件
 #endif
 
     Host m_host;  ///< 目标地址
@@ -900,7 +900,7 @@ struct ConnectAwaitable: public ConnectIOContext, public TimeoutSupport<ConnectA
     bool await_ready() { return false; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<ConnectAwaitable, CONNECT, kConnectFailed>(
+        return detail::suspend_registered_awaitable<ConnectAwaitable, CONNECT, kConnectFailed>(
             *this, handle);
     }
     std::expected<void, IOError> await_resume();  ///< 返回连接结果；失败时返回 IOError
@@ -929,7 +929,7 @@ struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitabl
 
     CloseAwaitable& operator=(CloseAwaitable&& other) noexcept {
         if (this != &other) {
-            releaseOwnedOwnership();
+            release_owned_ownership();
             TimeoutSupport<CloseAwaitable>::operator=(std::move(other));
             m_owned = std::move(other.m_owned);
             m_controller = other.m_controller;
@@ -953,7 +953,7 @@ struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitabl
      *       直接关闭句柄，避免引用随 awaitable 销毁导致 fd 泄漏。
      */
     ~CloseAwaitable() {
-        releaseOwnedOwnership();
+        release_owned_ownership();
     }
 
     bool await_ready() { return false; }
@@ -963,20 +963,20 @@ struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitabl
         if (m_controller == nullptr) {
             // 控制器为空说明句柄已关闭或从未打开。
             m_result = std::unexpected(IOError(kClosed, 0));
-            cancelBoundTimeoutTimer();
+            cancel_bound_timeout_timer();
             return false;
         }
         if (m_controller->m_handle == GHandle::invalid()) {
             m_result = std::unexpected(IOError(kClosed, 0));
-            cancelBoundTimeoutTimer();
+            cancel_bound_timeout_timer();
             return false;
         }
-        auto scheduler = m_waker.getScheduler();
+        auto scheduler = m_waker.get_scheduler();
         if (scheduler == nullptr || scheduler->type() != kIOScheduler) {
             m_result = std::unexpected(IOError(kNotRunningOnIOScheduler, errno));
             // close 在 await_suspend() 中同步提交；在 awaiter 可能销毁前
             // 消费非拥有的超时绑定。
-            cancelBoundTimeoutTimer();
+            cancel_bound_timeout_timer();
             return false;
         }
         if (m_owned && m_owned.use_count() > 1) {
@@ -984,19 +984,19 @@ struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitabl
             m_owned.reset();
             m_controller = nullptr;
             m_result = {};
-            cancelBoundTimeoutTimer();
+            cancel_bound_timeout_timer();
             return false;
         }
-        int res = detail::registerIOSchedulerClose(scheduler, m_controller);
+        int res = detail::register_io_scheduler_close(scheduler, m_controller);
         if (res == 0) {
             m_result = {};
-            // addClose() 返回后 CloseAwaitable 不会挂起，因此不再有 reactor
+            // add_close() 返回后 CloseAwaitable 不会挂起，因此不再有 reactor
             // 回调负责取消该 timer。
-            cancelBoundTimeoutTimer();
+            cancel_bound_timeout_timer();
             return false;
         }
-        m_result = std::unexpected(IOError(kDisconnectError, detail::normalizeAwaitableErrno(res)));
-        cancelBoundTimeoutTimer();
+        m_result = std::unexpected(IOError(kDisconnectError, detail::normalize_awaitable_errno(res)));
+        cancel_bound_timeout_timer();
         return false;
     }
     std::expected<void, IOError> await_resume();  ///< 返回关闭结果；失败时返回 IOError
@@ -1007,7 +1007,7 @@ struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitabl
     std::expected<void, IOError> m_result;  ///< 关闭操作结果
 
 private:
-    void releaseOwnedOwnership() noexcept {
+    void release_owned_ownership() noexcept {
         if (m_owned && m_owned.use_count() == 1 && m_controller != nullptr &&
             m_controller->m_handle != GHandle::invalid()) {
             (void)galay_close(m_controller->m_handle.fd);
@@ -1027,9 +1027,9 @@ struct RecvFromIOContext: public IOContextBase {
         : m_buffer(buffer), m_length(length), m_from(from) {}
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring recvfrom 完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring recvfrom 完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端 recvfrom 就绪事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 recvfrom 就绪事件
 #endif
 
     char* m_buffer;  ///< 接收缓冲区
@@ -1054,7 +1054,7 @@ struct RecvFromAwaitable: public RecvFromIOContext, public TimeoutSupport<RecvFr
     bool await_ready() { return false; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<RecvFromAwaitable, RECVFROM, kRecvFailed>(
+        return detail::suspend_registered_awaitable<RecvFromAwaitable, RECVFROM, kRecvFailed>(
             *this, handle);
     }
     std::expected<size_t, IOError> await_resume();  ///< 返回实际接收字节数或错误
@@ -1073,9 +1073,9 @@ struct SendToIOContext: public IOContextBase {
         : m_buffer(buffer), m_length(length), m_to(to) {}
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring sendto 完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring sendto 完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端 sendto 就绪事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 sendto 就绪事件
 #endif
 
     const char* m_buffer;  ///< 发送缓冲区
@@ -1099,7 +1099,7 @@ struct SendToAwaitable: public SendToIOContext, public TimeoutSupport<SendToAwai
     bool await_ready() { return false; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<SendToAwaitable, SENDTO, kSendFailed>(
+        return detail::suspend_registered_awaitable<SendToAwaitable, SENDTO, kSendFailed>(
             *this, handle);
     }
     std::expected<size_t, IOError> await_resume();  ///< 返回实际发送字节数或错误
@@ -1125,9 +1125,9 @@ struct FileReadIOContext: public IOContextBase {
 #endif
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring 文件读完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring 文件读完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端文件读完成事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端文件读完成事件
 #endif
 
     char* m_buffer;  ///< 读取缓冲区
@@ -1163,7 +1163,7 @@ struct FileReadAwaitable: public FileReadIOContext, public TimeoutSupport<FileRe
     bool await_ready() { return false; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<FileReadAwaitable, FILEREAD, kReadFailed>(
+        return detail::suspend_registered_awaitable<FileReadAwaitable, FILEREAD, kReadFailed>(
             *this, handle);
     }
     std::expected<size_t, IOError> await_resume();  ///< 返回实际读取字节数或错误
@@ -1189,9 +1189,9 @@ struct FileWriteIOContext: public IOContextBase {
 #endif
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring 文件写完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring 文件写完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端文件写完成事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端文件写完成事件
 #endif
 
     const char* m_buffer;  ///< 写入缓冲区
@@ -1227,7 +1227,7 @@ struct FileWriteAwaitable: public FileWriteIOContext, public TimeoutSupport<File
     bool await_ready() { return false; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<FileWriteAwaitable, FILEWRITE, kWriteFailed>(
+        return detail::suspend_registered_awaitable<FileWriteAwaitable, FILEWRITE, kWriteFailed>(
             *this, handle);
     }
     std::expected<size_t, IOError> await_resume();  ///< 返回实际写入字节数或错误
@@ -1258,9 +1258,9 @@ struct FileWatchIOContext: public IOContextBase {
 #endif
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring 文件监控完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring 文件监控完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端文件监控事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端文件监控事件
 #endif
 
     char* m_buffer;  ///< 监控事件输出缓冲区
@@ -1302,7 +1302,7 @@ struct FileWatchAwaitable: public FileWatchIOContext, public TimeoutSupport<File
     }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<FileWatchAwaitable, FILEWATCH, kReadFailed>(
+        return detail::suspend_registered_awaitable<FileWatchAwaitable, FILEWATCH, kReadFailed>(
             *this, handle);
     }
     std::expected<FileWatchResult, IOError> await_resume();  ///< 返回文件监控结果或错误
@@ -1321,9 +1321,9 @@ struct SendFileIOContext: public IOContextBase {
         : m_offset(offset), m_count(count), m_transferred(0), m_file_fd(file_fd) {}
 
 #ifdef USE_IOURING
-    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring sendfile 完成事件
+    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring sendfile 完成事件
 #else
-    bool handleComplete(GHandle handle) override;  ///< 处理传统后端 sendfile 就绪事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 sendfile 就绪事件
 #endif
 
     off_t m_offset;  ///< 发送起始偏移
@@ -1343,7 +1343,7 @@ struct SendFileAwaitable: public SendFileIOContext, public TimeoutSupport<SendFi
     bool await_ready() { return false; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendRegisteredAwaitable<SendFileAwaitable, SENDFILE, kSendFailed>(
+        return detail::suspend_registered_awaitable<SendFileAwaitable, SENDFILE, kSendFailed>(
             *this, handle);
     }
     std::expected<size_t, IOError> await_resume();  ///< 返回实际发送字节数或错误
@@ -1404,7 +1404,7 @@ struct MachineAction {
         return MachineAction{};
     }
 
-    static MachineAction waitRead(char* buffer, size_t length) {
+    static MachineAction wait_read(char* buffer, size_t length) {
         MachineAction action;
         action.signal = MachineSignal::kWaitRead;
         action.read_buffer = buffer;
@@ -1412,7 +1412,7 @@ struct MachineAction {
         return action;
     }
 
-    static MachineAction waitWrite(const char* buffer, size_t length) {
+    static MachineAction wait_write(const char* buffer, size_t length) {
         MachineAction action;
         action.signal = MachineSignal::kWaitWrite;
         action.write_buffer = buffer;
@@ -1420,7 +1420,7 @@ struct MachineAction {
         return action;
     }
 
-    static MachineAction waitReadv(const struct iovec* iovecs, size_t count) {
+    static MachineAction wait_readv(const struct iovec* iovecs, size_t count) {
         MachineAction action;
         action.signal = MachineSignal::kWaitReadv;
         action.iovecs = iovecs;
@@ -1428,7 +1428,7 @@ struct MachineAction {
         return action;
     }
 
-    static MachineAction waitWritev(const struct iovec* iovecs, size_t count) {
+    static MachineAction wait_writev(const struct iovec* iovecs, size_t count) {
         MachineAction action;
         action.signal = MachineSignal::kWaitWritev;
         action.iovecs = iovecs;
@@ -1436,7 +1436,7 @@ struct MachineAction {
         return action;
     }
 
-    static MachineAction waitConnect(const Host& host) {
+    static MachineAction wait_connect(const Host& host) {
         MachineAction action;
         action.signal = MachineSignal::kWaitConnect;
         action.connect_host = host;
@@ -1463,8 +1463,8 @@ concept AwaitableStateMachine =
     requires(MachineT& machine, std::expected<size_t, IOError> io_result) {
         typename MachineT::result_type;
         { machine.advance() } -> std::same_as<MachineAction<typename MachineT::result_type>>;
-        { machine.onRead(std::move(io_result)) } -> std::same_as<void>;
-        { machine.onWrite(std::move(io_result)) } -> std::same_as<void>;
+        { machine.on_read(std::move(io_result)) } -> std::same_as<void>;
+        { machine.on_write(std::move(io_result)) } -> std::same_as<void>;
     };
 
 /**
@@ -1489,10 +1489,10 @@ struct SequenceAwaitableBase: public AwaitableBase, public TimeoutTimerBinding {
 
     virtual IOTask* front() = 0;  ///< 返回当前队首任务；为空时返回 nullptr
     virtual const IOTask* front() const = 0;  ///< 返回当前队首任务的只读视图；为空时返回 nullptr
-    virtual void popFront() = 0;  ///< 弹出当前队首任务
+    virtual void pop_front() = 0;  ///< 弹出当前队首任务
     virtual bool empty() const = 0;  ///< 当前是否没有待执行的 sequence 条目
 
-    IOEventType resolveTaskEventType(const IOTask& task) const {
+    IOEventType resolve_task_event_type(const IOTask& task) const {
         if (task.context == nullptr) {
             return task.type;
         }
@@ -1500,24 +1500,24 @@ struct SequenceAwaitableBase: public AwaitableBase, public TimeoutTimerBinding {
         return desired == IOEventType::INVALID ? task.type : desired;
     }
 
-    IOEventType activeEventType() const {
+    IOEventType active_event_type() const {
         const auto* task = front();
-        return task == nullptr ? IOEventType::INVALID : resolveTaskEventType(*task);
+        return task == nullptr ? IOEventType::INVALID : resolve_task_event_type(*task);
     }
 
-    bool waitsOn(IOController::Index slot) const {
-        return detail::sequenceEventUsesSlot(activeEventType(), slot);
+    bool waits_on(IOController::Index slot) const {
+        return detail::sequence_event_uses_slot(active_event_type(), slot);
     }
 
-    bool claimRequestedDomain() {
+    bool claim_requested_domain() {
         if (m_controller == nullptr) {
             return false;
         }
 
         const bool need_read =
-            detail::sequenceOwnerDomainUsesSlot(m_requested_domain, IOController::READ);
+            detail::sequence_owner_domain_uses_slot(m_requested_domain, IOController::READ);
         const bool need_write =
-            detail::sequenceOwnerDomainUsesSlot(m_requested_domain, IOController::WRITE);
+            detail::sequence_owner_domain_uses_slot(m_requested_domain, IOController::WRITE);
 
         const auto can_claim = [this](IOController::Index slot) {
             return m_controller->m_awaitable[slot] == nullptr &&
@@ -1542,17 +1542,17 @@ struct SequenceAwaitableBase: public AwaitableBase, public TimeoutTimerBinding {
         return true;
     }
 
-    void releaseRegisteredDomain() {
+    void release_registered_domain() {
         if (!m_registered || m_controller == nullptr) {
             m_registered = false;
             return;
         }
 
-        if (detail::sequenceOwnerDomainUsesSlot(m_registered_domain, IOController::READ) &&
+        if (detail::sequence_owner_domain_uses_slot(m_registered_domain, IOController::READ) &&
             m_controller->m_sequence_owner[IOController::READ] == this) {
             m_controller->m_sequence_owner[IOController::READ] = nullptr;
         }
-        if (detail::sequenceOwnerDomainUsesSlot(m_registered_domain, IOController::WRITE) &&
+        if (detail::sequence_owner_domain_uses_slot(m_registered_domain, IOController::WRITE) &&
             m_controller->m_sequence_owner[IOController::WRITE] == this) {
             m_controller->m_sequence_owner[IOController::WRITE] = nullptr;
         }
@@ -1560,21 +1560,21 @@ struct SequenceAwaitableBase: public AwaitableBase, public TimeoutTimerBinding {
         for (const auto slot : {IOController::READ, IOController::WRITE}) {
             if (m_controller->m_awaitable[slot] == this) {
                 m_controller->m_awaitable[slot] = nullptr;
-                m_controller->advanceSqeGeneration(slot);
+                m_controller->advance_sqe_generation(slot);
             }
         }
 #endif
         if (m_controller->m_sequence_owner[IOController::READ] == nullptr &&
             m_controller->m_sequence_owner[IOController::WRITE] == nullptr) {
             m_controller->m_type &= ~SEQUENCE;
-            detail::clearSequenceInterestMask(m_controller);
+            detail::clear_sequence_interest_mask(m_controller);
         } else {
-            (void)detail::syncSequenceInterestMask(m_controller);
+            (void)detail::sync_sequence_interest_mask(m_controller);
         }
         m_registered = false;
     }
 
-    void onCompleted() {
+    void on_completed() {
         if (std::exchange(m_completed, true)) {
             return;
         }
@@ -1582,21 +1582,21 @@ struct SequenceAwaitableBase: public AwaitableBase, public TimeoutTimerBinding {
         // 已成功的读被滞后的 TimeoutTimer 误判为超时（见 WithTimeout）。
         // 同步完成路径的 await_resume() 仍可能调用此方法；完成位会让该
         // 兜底调用直接返回。
-        cancelBoundTimeoutTimer();
-        releaseRegisteredDomain();
+        cancel_bound_timeout_timer();
+        release_registered_domain();
     }
 
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
-        return detail::suspendSequenceAwaitable(*this, handle);
+        return detail::suspend_sequence_awaitable(*this, handle);
     }
 
 #ifdef USE_IOURING
-    virtual SequenceProgress prepareForSubmit() = 0;  ///< 为 io_uring 准备下一条待提交任务
-    virtual SequenceProgress onActiveEvent(struct io_uring_cqe* cqe, GHandle handle) = 0;  ///< 处理 io_uring 当前活动任务的完成事件
+    virtual SequenceProgress prepare_for_submit() = 0;  ///< 为 io_uring 准备下一条待提交任务
+    virtual SequenceProgress on_active_event(struct io_uring_cqe* cqe, GHandle handle) = 0;  ///< 处理 io_uring 当前活动任务的完成事件
 #else
-    virtual SequenceProgress prepareForSubmit(GHandle handle) = 0;  ///< 为传统后端准备下一条待执行任务
-    virtual SequenceProgress onActiveEvent(GHandle handle) = 0;  ///< 处理传统后端当前活动任务的就绪事件
+    virtual SequenceProgress prepare_for_submit(GHandle handle) = 0;  ///< 为传统后端准备下一条待执行任务
+    virtual SequenceProgress on_active_event(GHandle handle) = 0;  ///< 处理传统后端当前活动任务的就绪事件
 #endif
 
     std::optional<IOError> m_error;  ///< 当前 sequence 错误
@@ -1610,7 +1610,7 @@ struct SequenceAwaitableBase: public AwaitableBase, public TimeoutTimerBinding {
 
 namespace detail {
 
-inline SequenceInterestMask collectSequenceInterestMask(const IOController* controller) noexcept {
+inline SequenceInterestMask collect_sequence_interest_mask(const IOController* controller) noexcept {
     if (controller == nullptr) {
         return 0;
     }
@@ -1622,22 +1622,22 @@ inline SequenceInterestMask collectSequenceInterestMask(const IOController* cont
         if (owner == nullptr || owner == last_owner) {
             continue;
         }
-        mask = static_cast<SequenceInterestMask>(mask | sequenceInterestMask(owner->activeEventType()));
+        mask = static_cast<SequenceInterestMask>(mask | sequence_interest_mask(owner->active_event_type()));
         last_owner = owner;
     }
     return mask;
 }
 
-inline SequenceInterestMask syncSequenceInterestMask(IOController* controller) noexcept {
+inline SequenceInterestMask sync_sequence_interest_mask(IOController* controller) noexcept {
     if (controller == nullptr) {
         return 0;
     }
 
-    controller->m_sequence_interest_mask = collectSequenceInterestMask(controller);
+    controller->m_sequence_interest_mask = collect_sequence_interest_mask(controller);
     return controller->m_sequence_interest_mask;
 }
 
-inline void clearSequenceInterestMask(IOController* controller) noexcept {
+inline void clear_sequence_interest_mask(IOController* controller) noexcept {
     if (controller == nullptr) {
         return;
     }
@@ -1647,7 +1647,7 @@ inline void clearSequenceInterestMask(IOController* controller) noexcept {
 }
 
 template <typename Promise>
-inline bool suspendSequenceAwaitable(SequenceAwaitableBase& awaitable,
+inline bool suspend_sequence_awaitable(SequenceAwaitableBase& awaitable,
                                      std::coroutine_handle<Promise> handle) {
     awaitable.m_waker = Waker(handle);
     awaitable.m_registered = false;
@@ -1662,36 +1662,36 @@ inline bool suspendSequenceAwaitable(SequenceAwaitableBase& awaitable,
         return false;
     }
 
-    if (!awaitable.claimRequestedDomain()) {
+    if (!awaitable.claim_requested_domain()) {
         awaitable.m_error = IOError(kNotReady, 0);
         return false;
     }
 
 #ifdef USE_IOURING
-    if (awaitable.prepareForSubmit() == SequenceProgress::kCompleted) {
+    if (awaitable.prepare_for_submit() == SequenceProgress::kCompleted) {
         return false;
     }
 #else
-    if (awaitable.prepareForSubmit(awaitable.m_controller->m_handle) == SequenceProgress::kCompleted) {
+    if (awaitable.prepare_for_submit(awaitable.m_controller->m_handle) == SequenceProgress::kCompleted) {
         return false;
     }
 #endif
 
-    (void)syncSequenceInterestMask(awaitable.m_controller);
+    (void)sync_sequence_interest_mask(awaitable.m_controller);
 
-    auto* scheduler = awaitable.m_waker.getScheduler();
+    auto* scheduler = awaitable.m_waker.get_scheduler();
     if (scheduler == nullptr || scheduler->type() != kIOScheduler) {
-        awaitable.releaseRegisteredDomain();
+        awaitable.release_registered_domain();
         awaitable.m_error = IOError(kNotRunningOnIOScheduler, errno);
         return false;
     }
-    const int ret = registerIOSchedulerEvent(scheduler, SEQUENCE, awaitable.m_controller);
+    const int ret = register_io_scheduler_event(scheduler, SEQUENCE, awaitable.m_controller);
     if (ret == 1) {
         return false;
     }
     if (ret < 0) {
-        awaitable.releaseRegisteredDomain();
-        awaitable.m_error = IOError(kNotReady, normalizeAwaitableErrno(ret));
+        awaitable.release_registered_domain();
+        awaitable.m_error = IOError(kNotReady, normalize_awaitable_errno(ret));
         return false;
     }
     return true;
@@ -1726,7 +1726,7 @@ public:
     }
 
     template <typename... StepTs>
-    void queueMany(StepTs&... steps) {
+    void queue_many(StepTs&... steps) {
         (queue(steps), ...);
     }
 
@@ -1757,15 +1757,15 @@ public:
      */
     struct TaskBase {
         virtual ~TaskBase() = default;
-        virtual IOContextBase* contextBase() = 0;  ///< 返回步骤关联的 IOContext；本地步骤可返回 nullptr
-        virtual IOEventType defaultEventType() const = 0;  ///< 返回该步骤默认使用的 IO 事件类型
-        virtual void beforeSubmit() {}  ///< 在真正提交给后端前执行的可选钩子
-        virtual bool isLocal() const = 0;  ///< 当前步骤是否为纯本地步骤
+        virtual IOContextBase* context_base() = 0;  ///< 返回步骤关联的 IOContext；本地步骤可返回 nullptr
+        virtual IOEventType default_event_type() const = 0;  ///< 返回该步骤默认使用的 IO 事件类型
+        virtual void before_submit() {}  ///< 在真正提交给后端前执行的可选钩子
+        virtual bool is_local() const = 0;  ///< 当前步骤是否为纯本地步骤
 #ifdef USE_IOURING
-        virtual bool onEvent(SequenceAwaitable& owner, struct io_uring_cqe* cqe, GHandle handle) = 0;  ///< 处理 io_uring 事件并返回该步骤是否完成
+        virtual bool on_event(SequenceAwaitable& owner, struct io_uring_cqe* cqe, GHandle handle) = 0;  ///< 处理 io_uring 事件并返回该步骤是否完成
 #else
-        virtual bool onReady(SequenceAwaitable& owner, GHandle handle) = 0;  ///< 在传统后端提交前尝试同步推进该步骤
-        virtual bool onEvent(SequenceAwaitable& owner, GHandle handle) = 0;  ///< 处理传统后端就绪事件并返回该步骤是否完成
+        virtual bool on_ready(SequenceAwaitable& owner, GHandle handle) = 0;  ///< 在传统后端提交前尝试同步推进该步骤
+        virtual bool on_event(SequenceAwaitable& owner, GHandle handle) = 0;  ///< 处理传统后端就绪事件并返回该步骤是否完成
 #endif
     };
 
@@ -1778,7 +1778,7 @@ public:
     }
 
     auto await_resume() -> ResultT {
-        onCompleted();
+        on_completed();
         if (m_result_set) {
             return std::move(*m_result);
         }
@@ -1796,19 +1796,19 @@ public:
                 return std::unexpected(ErrorT(IOError(kNotReady, errno)));
             }
         }
-        return detail::makeUnexpectedIOError<ResultT>(IOError(kNotReady, errno));
+        return detail::make_unexpected_io_error<ResultT>(IOError(kNotReady, errno));
     }
 
     template <typename StepT>
     StepT& queue(StepT& step) {
         static_assert(std::is_base_of_v<TaskBase, std::remove_cvref_t<StepT>>,
                       "SequenceAwaitable::queue requires a Sequence task");
-        (void)emplaceTask(step.defaultEventType(), step.contextBase(), &step);
+        (void)emplace_task(step.default_event_type(), step.context_base(), &step);
         return step;
     }
 
     TaskBase& queue(TaskBase& task) {
-        (void)emplaceTask(task.defaultEventType(), task.contextBase(), &task);
+        (void)emplace_task(task.default_event_type(), task.context_base(), &task);
         return task;
     }
 
@@ -1816,17 +1816,17 @@ public:
     StepT& queue(IOEventType type, StepT& step) {
         static_assert(std::is_base_of_v<TaskBase, std::remove_cvref_t<StepT>>,
                       "SequenceAwaitable::queue requires a Sequence task");
-        (void)emplaceTask(type, step.contextBase(), &step);
+        (void)emplace_task(type, step.context_base(), &step);
         return step;
     }
 
     TaskBase& queue(IOEventType type, TaskBase& task) {
-        (void)emplaceTask(type, task.contextBase(), &task);
+        (void)emplace_task(type, task.context_base(), &task);
         return task;
     }
 
     template <typename... StepTs>
-    void queueMany(StepTs&... steps) {
+    void queue_many(StepTs&... steps) {
         (queue(steps), ...);
     }
 
@@ -1847,28 +1847,28 @@ public:
         clear();
     }
 
-    bool hasResultValue() const {
+    bool has_result_value() const {
         return m_result_set && m_result.has_value();
     }
 
-    bool hasFailure() const {
+    bool has_failure() const {
         return m_error.has_value();
     }
 
-    std::optional<ResultT> takeResultValue() {
+    std::optional<ResultT> take_result_value() {
         m_result_set = false;
         auto result = std::move(m_result);
         m_result.reset();
         return result;
     }
 
-    std::optional<IOError> takeFailure() {
+    std::optional<IOError> take_failure() {
         auto error = std::move(m_error);
         m_error.reset();
         return error;
     }
 
-    void resetOutcomeForReuse() {
+    void reset_outcome_for_reuse() {
         m_result.reset();
         m_result_set = false;
         m_error.reset();
@@ -1893,7 +1893,7 @@ public:
         return &m_tasks[m_head];
     }
 
-    void popFront() override {
+    void pop_front() override {
         if (m_size == 0) {
             return;
         }
@@ -1906,58 +1906,58 @@ public:
     }
 
 #ifdef USE_IOURING
-    SequenceProgress prepareForSubmit() override {
+    SequenceProgress prepare_for_submit() override {
         while (auto* entry = front()) {
             auto* task = static_cast<TaskBase*>(entry->task);
             if (!task) {
-                popFront();
+                pop_front();
                 continue;
             }
-            if (task->isLocal()) {
-                task->onEvent(*this, nullptr, m_controller->m_handle);
-                consumeFrontIfSame(task);
+            if (task->is_local()) {
+                task->on_event(*this, nullptr, m_controller->m_handle);
+                consume_front_if_same(task);
                 if (m_result_set) {
                     return SequenceProgress::kCompleted;
                 }
                 continue;
             }
-            task->beforeSubmit();
-            entry->context = task->contextBase();
+            task->before_submit();
+            entry->context = task->context_base();
             return SequenceProgress::kNeedWait;
         }
         return SequenceProgress::kCompleted;
     }
 
-    SequenceProgress onActiveEvent(struct io_uring_cqe* cqe, GHandle handle) override {
+    SequenceProgress on_active_event(struct io_uring_cqe* cqe, GHandle handle) override {
         auto* entry = front();
         if (!entry) {
             return SequenceProgress::kCompleted;
         }
         auto* task = static_cast<TaskBase*>(entry->task);
         if (!task) {
-            popFront();
-            return prepareForSubmit();
+            pop_front();
+            return prepare_for_submit();
         }
-        if (task->onEvent(*this, cqe, handle)) {
-            consumeFrontIfSame(task);
+        if (task->on_event(*this, cqe, handle)) {
+            consume_front_if_same(task);
         }
         if (m_result_set) {
             return SequenceProgress::kCompleted;
         }
-        return prepareForSubmit();
+        return prepare_for_submit();
     }
 #else
-    SequenceProgress prepareForSubmit(GHandle handle) override {
+    SequenceProgress prepare_for_submit(GHandle handle) override {
         while (auto* entry = front()) {
             auto* task = static_cast<TaskBase*>(entry->task);
             if (!task) {
-                popFront();
+                pop_front();
                 continue;
             }
-            task->beforeSubmit();
-            entry->context = task->contextBase();
-            if (task->onReady(*this, handle)) {
-                consumeFrontIfSame(task);
+            task->before_submit();
+            entry->context = task->context_base();
+            if (task->on_ready(*this, handle)) {
+                consume_front_if_same(task);
                 if (m_result_set) {
                     return SequenceProgress::kCompleted;
                 }
@@ -1968,28 +1968,28 @@ public:
         return SequenceProgress::kCompleted;
     }
 
-    SequenceProgress onActiveEvent(GHandle handle) override {
+    SequenceProgress on_active_event(GHandle handle) override {
         auto* entry = front();
         if (!entry) {
             return SequenceProgress::kCompleted;
         }
         auto* task = static_cast<TaskBase*>(entry->task);
         if (!task) {
-            popFront();
-            return prepareForSubmit(handle);
+            pop_front();
+            return prepare_for_submit(handle);
         }
-        if (task->onEvent(*this, handle)) {
-            consumeFrontIfSame(task);
+        if (task->on_event(*this, handle)) {
+            consume_front_if_same(task);
         }
         if (m_result_set) {
             return SequenceProgress::kCompleted;
         }
-        return prepareForSubmit(handle);
+        return prepare_for_submit(handle);
     }
 #endif
 
 private:
-    bool emplaceTask(IOEventType type, IOContextBase* context, TaskBase* task) {
+    bool emplace_task(IOEventType type, IOContextBase* context, TaskBase* task) {
         if (m_size >= InlineN) {
             fail(IOError(kParamInvalid, 0));
             return false;
@@ -2000,10 +2000,10 @@ private:
         return true;
     }
 
-    void consumeFrontIfSame(TaskBase* task) {
+    void consume_front_if_same(TaskBase* task) {
         auto* entry = front();
         if (entry && entry->task == task) {
-            popFront();
+            pop_front();
         }
     }
 
@@ -2058,7 +2058,7 @@ public:
     using result_type = typename MachineT::result_type;
 
     StateMachineAwaitable(IOController* controller, MachineT machine)
-        : SequenceAwaitableBase(controller, detail::resolveStateMachineOwnerDomain(machine))
+        : SequenceAwaitableBase(controller, detail::resolve_state_machine_owner_domain(machine))
         , m_recv_context(nullptr, 0)
         , m_readv_context(std::span<const struct iovec>{})
         , m_send_context(nullptr, 0)
@@ -2089,14 +2089,14 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
         if (!m_context_bound) {
-            detail::bindAwaitContextIfSupported(m_machine, detail::makeAwaitContext(handle));
+            detail::bind_await_context_if_supported(m_machine, detail::make_await_context(handle));
             m_context_bound = true;
         }
         return SequenceAwaitableBase::await_suspend(handle);
     }
 
     auto await_resume() -> result_type {
-        onCompleted();
+        on_completed();
         if (m_result_set) {
             return std::move(*m_result);
         }
@@ -2106,7 +2106,7 @@ public:
                 if constexpr (std::is_constructible_v<ErrorT, IOError>) {
                     return std::unexpected(ErrorT(*m_error));
                 } else {
-                    deliverErrorToMachine(std::move(*m_error));
+                    deliver_error_to_machine(std::move(*m_error));
                     m_error.reset();
                     if (m_result_set) {
                         return std::move(*m_result);
@@ -2119,7 +2119,7 @@ public:
             if constexpr (std::is_constructible_v<ErrorT, IOError>) {
                 return std::unexpected(ErrorT(IOError(kNotReady, errno)));
             } else {
-                deliverErrorToMachine(IOError(kNotReady, errno));
+                deliver_error_to_machine(IOError(kNotReady, errno));
                 if (m_result_set) {
                     return std::move(*m_result);
                 }
@@ -2136,30 +2136,30 @@ public:
         return m_has_active_task ? &m_active_task : nullptr;
     }
 
-    void popFront() override {
-        clearActiveTask();
+    void pop_front() override {
+        clear_active_task();
     }
 
     bool empty() const override {
         return !m_has_active_task;
     }
 
-    void markTimeout() {
+    void mark_timeout() {
         const IOError timeout_error(kTimeout, 0);
         const ActiveKind active_kind = m_active_kind;
-        clearActiveTask();
+        clear_active_task();
 
         switch (active_kind) {
         case ActiveKind::kRead:
         case ActiveKind::kReadv:
-            m_machine.onRead(std::unexpected(timeout_error));
+            m_machine.on_read(std::unexpected(timeout_error));
             break;
         case ActiveKind::kWrite:
         case ActiveKind::kWritev:
-            m_machine.onWrite(std::unexpected(timeout_error));
+            m_machine.on_write(std::unexpected(timeout_error));
             break;
         case ActiveKind::kConnect:
-            deliverConnect(std::unexpected(timeout_error));
+            deliver_connect(std::unexpected(timeout_error));
             break;
         case ActiveKind::kNone:
             break;
@@ -2172,64 +2172,64 @@ public:
     }
 
 #ifdef USE_IOURING
-    SequenceProgress prepareForSubmit() override {
+    SequenceProgress prepare_for_submit() override {
         return pump();
     }
 
-    SequenceProgress onActiveEvent(struct io_uring_cqe* cqe, GHandle handle) override {
+    SequenceProgress on_active_event(struct io_uring_cqe* cqe, GHandle handle) override {
         if (!m_has_active_task) {
             return pump();
         }
         if (m_active_kind == ActiveKind::kRead) {
-            if (!m_recv_context.handleComplete(cqe, handle)) {
+            if (!m_recv_context.handle_complete(cqe, handle)) {
                 return SequenceProgress::kNeedWait;
             }
             auto io_result = std::move(m_recv_context.m_result);
-            clearActiveTask();
-            m_machine.onRead(std::move(io_result));
+            clear_active_task();
+            m_machine.on_read(std::move(io_result));
             return pump();
         }
         if (m_active_kind == ActiveKind::kReadv) {
-            if (!m_readv_context.handleComplete(cqe, handle)) {
+            if (!m_readv_context.handle_complete(cqe, handle)) {
                 return SequenceProgress::kNeedWait;
             }
             auto io_result = std::move(m_readv_context.m_result);
-            clearActiveTask();
-            m_machine.onRead(std::move(io_result));
+            clear_active_task();
+            m_machine.on_read(std::move(io_result));
             return pump();
         }
         if (m_active_kind == ActiveKind::kWrite) {
-            if (!m_send_context.handleComplete(cqe, handle)) {
+            if (!m_send_context.handle_complete(cqe, handle)) {
                 return SequenceProgress::kNeedWait;
             }
             auto io_result = std::move(m_send_context.m_result);
-            clearActiveTask();
-            m_machine.onWrite(std::move(io_result));
+            clear_active_task();
+            m_machine.on_write(std::move(io_result));
             return pump();
         }
         if (m_active_kind == ActiveKind::kWritev) {
-            if (!m_writev_context.handleComplete(cqe, handle)) {
+            if (!m_writev_context.handle_complete(cqe, handle)) {
                 return SequenceProgress::kNeedWait;
             }
             auto io_result = std::move(m_writev_context.m_result);
-            clearActiveTask();
-            m_machine.onWrite(std::move(io_result));
+            clear_active_task();
+            m_machine.on_write(std::move(io_result));
             return pump();
         }
         if (m_active_kind == ActiveKind::kConnect) {
-            if (!m_connect_context.handleComplete(cqe, handle)) {
+            if (!m_connect_context.handle_complete(cqe, handle)) {
                 return SequenceProgress::kNeedWait;
             }
             auto io_result = std::move(m_connect_context.m_result);
-            clearActiveTask();
-            deliverConnect(std::move(io_result));
+            clear_active_task();
+            deliver_connect(std::move(io_result));
             return pump();
         }
         m_error = IOError(kParamInvalid, 0);
         return SequenceProgress::kCompleted;
     }
 #else
-    SequenceProgress prepareForSubmit(GHandle handle) override {
+    SequenceProgress prepare_for_submit(GHandle handle) override {
         for (size_t i = 0; i < kInlineTransitionCap; ++i) {
             const SequenceProgress progress = pump();
             if (progress == SequenceProgress::kCompleted) {
@@ -2239,106 +2239,106 @@ public:
                 return SequenceProgress::kCompleted;
             }
             if (m_active_kind == ActiveKind::kRead) {
-                if (!m_recv_context.handleComplete(handle)) {
+                if (!m_recv_context.handle_complete(handle)) {
                     return SequenceProgress::kNeedWait;
                 }
                 auto io_result = std::move(m_recv_context.m_result);
-                clearActiveTask();
-                m_machine.onRead(std::move(io_result));
+                clear_active_task();
+                m_machine.on_read(std::move(io_result));
                 continue;
             }
             if (m_active_kind == ActiveKind::kReadv) {
-                if (!m_readv_context.handleComplete(handle)) {
+                if (!m_readv_context.handle_complete(handle)) {
                     return SequenceProgress::kNeedWait;
                 }
                 auto io_result = std::move(m_readv_context.m_result);
-                clearActiveTask();
-                m_machine.onRead(std::move(io_result));
+                clear_active_task();
+                m_machine.on_read(std::move(io_result));
                 continue;
             }
             if (m_active_kind == ActiveKind::kWrite) {
-                if (!m_send_context.handleComplete(handle)) {
+                if (!m_send_context.handle_complete(handle)) {
                     return SequenceProgress::kNeedWait;
                 }
                 auto io_result = std::move(m_send_context.m_result);
-                clearActiveTask();
-                m_machine.onWrite(std::move(io_result));
+                clear_active_task();
+                m_machine.on_write(std::move(io_result));
                 continue;
             }
             if (m_active_kind == ActiveKind::kWritev) {
-                if (!m_writev_context.handleComplete(handle)) {
+                if (!m_writev_context.handle_complete(handle)) {
                     return SequenceProgress::kNeedWait;
                 }
                 auto io_result = std::move(m_writev_context.m_result);
-                clearActiveTask();
-                m_machine.onWrite(std::move(io_result));
+                clear_active_task();
+                m_machine.on_write(std::move(io_result));
                 continue;
             }
             if (m_active_kind == ActiveKind::kConnect) {
-                if (!m_connect_context.handleComplete(handle)) {
+                if (!m_connect_context.handle_complete(handle)) {
                     return SequenceProgress::kNeedWait;
                 }
                 auto io_result = std::move(m_connect_context.m_result);
-                clearActiveTask();
-                deliverConnect(std::move(io_result));
+                clear_active_task();
+                deliver_connect(std::move(io_result));
                 continue;
             }
             m_error = IOError(kParamInvalid, 0);
             return SequenceProgress::kCompleted;
         }
         m_error = IOError(kParamInvalid, 0);
-        clearActiveTask();
+        clear_active_task();
         return SequenceProgress::kCompleted;
     }
 
-    SequenceProgress onActiveEvent(GHandle handle) override {
+    SequenceProgress on_active_event(GHandle handle) override {
         if (!m_has_active_task) {
-            return prepareForSubmit(handle);
+            return prepare_for_submit(handle);
         }
         if (m_active_kind == ActiveKind::kRead) {
-            if (!m_recv_context.handleComplete(handle)) {
+            if (!m_recv_context.handle_complete(handle)) {
                 return SequenceProgress::kNeedWait;
             }
             auto io_result = std::move(m_recv_context.m_result);
-            clearActiveTask();
-            m_machine.onRead(std::move(io_result));
-            return prepareForSubmit(handle);
+            clear_active_task();
+            m_machine.on_read(std::move(io_result));
+            return prepare_for_submit(handle);
         }
         if (m_active_kind == ActiveKind::kReadv) {
-            if (!m_readv_context.handleComplete(handle)) {
+            if (!m_readv_context.handle_complete(handle)) {
                 return SequenceProgress::kNeedWait;
             }
             auto io_result = std::move(m_readv_context.m_result);
-            clearActiveTask();
-            m_machine.onRead(std::move(io_result));
-            return prepareForSubmit(handle);
+            clear_active_task();
+            m_machine.on_read(std::move(io_result));
+            return prepare_for_submit(handle);
         }
         if (m_active_kind == ActiveKind::kWrite) {
-            if (!m_send_context.handleComplete(handle)) {
+            if (!m_send_context.handle_complete(handle)) {
                 return SequenceProgress::kNeedWait;
             }
             auto io_result = std::move(m_send_context.m_result);
-            clearActiveTask();
-            m_machine.onWrite(std::move(io_result));
-            return prepareForSubmit(handle);
+            clear_active_task();
+            m_machine.on_write(std::move(io_result));
+            return prepare_for_submit(handle);
         }
         if (m_active_kind == ActiveKind::kWritev) {
-            if (!m_writev_context.handleComplete(handle)) {
+            if (!m_writev_context.handle_complete(handle)) {
                 return SequenceProgress::kNeedWait;
             }
             auto io_result = std::move(m_writev_context.m_result);
-            clearActiveTask();
-            m_machine.onWrite(std::move(io_result));
-            return prepareForSubmit(handle);
+            clear_active_task();
+            m_machine.on_write(std::move(io_result));
+            return prepare_for_submit(handle);
         }
         if (m_active_kind == ActiveKind::kConnect) {
-            if (!m_connect_context.handleComplete(handle)) {
+            if (!m_connect_context.handle_complete(handle)) {
                 return SequenceProgress::kNeedWait;
             }
             auto io_result = std::move(m_connect_context.m_result);
-            clearActiveTask();
-            deliverConnect(std::move(io_result));
-            return prepareForSubmit(handle);
+            clear_active_task();
+            deliver_connect(std::move(io_result));
+            return prepare_for_submit(handle);
         }
         m_error = IOError(kParamInvalid, 0);
         return SequenceProgress::kCompleted;
@@ -2376,11 +2376,11 @@ private:
             case MachineSignal::kWaitRead:
                 if (action.read_buffer == nullptr && action.read_length != 0) {
                     m_error = IOError(kParamInvalid, 0);
-                    clearActiveTask();
+                    clear_active_task();
                     return SequenceProgress::kCompleted;
                 }
                 if (action.read_length == 0) {
-                    m_machine.onRead(std::expected<size_t, IOError>(size_t{0}));
+                    m_machine.on_read(std::expected<size_t, IOError>(size_t{0}));
                     continue;
                 }
                 m_recv_context.m_buffer = action.read_buffer;
@@ -2392,16 +2392,16 @@ private:
             case MachineSignal::kWaitReadv:
                 if (action.iovecs == nullptr && action.iov_count != 0) {
                     m_error = IOError(kParamInvalid, 0);
-                    clearActiveTask();
+                    clear_active_task();
                     return SequenceProgress::kCompleted;
                 }
                 if (action.iov_count == 0) {
-                    m_machine.onRead(std::expected<size_t, IOError>(size_t{0}));
+                    m_machine.on_read(std::expected<size_t, IOError>(size_t{0}));
                     continue;
                 }
                 m_readv_context.m_iovecs = std::span<const struct iovec>(action.iovecs, action.iov_count);
 #ifdef USE_IOURING
-                m_readv_context.initMsghdr();
+                m_readv_context.init_msghdr();
 #endif
                 m_active_task = IOTask{nullptr, &m_readv_context, READV};
                 m_has_active_task = true;
@@ -2410,11 +2410,11 @@ private:
             case MachineSignal::kWaitWrite:
                 if (action.write_buffer == nullptr && action.write_length != 0) {
                     m_error = IOError(kParamInvalid, 0);
-                    clearActiveTask();
+                    clear_active_task();
                     return SequenceProgress::kCompleted;
                 }
                 if (action.write_length == 0) {
-                    m_machine.onWrite(std::expected<size_t, IOError>(size_t{0}));
+                    m_machine.on_write(std::expected<size_t, IOError>(size_t{0}));
                     continue;
                 }
                 m_send_context.m_buffer = action.write_buffer;
@@ -2426,16 +2426,16 @@ private:
             case MachineSignal::kWaitWritev:
                 if (action.iovecs == nullptr && action.iov_count != 0) {
                     m_error = IOError(kParamInvalid, 0);
-                    clearActiveTask();
+                    clear_active_task();
                     return SequenceProgress::kCompleted;
                 }
                 if (action.iov_count == 0) {
-                    m_machine.onWrite(std::expected<size_t, IOError>(size_t{0}));
+                    m_machine.on_write(std::expected<size_t, IOError>(size_t{0}));
                     continue;
                 }
                 m_writev_context.m_iovecs = std::span<const struct iovec>(action.iovecs, action.iov_count);
 #ifdef USE_IOURING
-                m_writev_context.initMsghdr();
+                m_writev_context.init_msghdr();
 #endif
                 m_active_task = IOTask{nullptr, &m_writev_context, WRITEV};
                 m_has_active_task = true;
@@ -2450,29 +2450,29 @@ private:
             case MachineSignal::kComplete:
                 if (!action.result.has_value()) {
                     m_error = IOError(kParamInvalid, 0);
-                    clearActiveTask();
+                    clear_active_task();
                     return SequenceProgress::kCompleted;
                 }
                 m_result = std::move(*action.result);
                 m_result_set = true;
-                clearActiveTask();
+                clear_active_task();
                 return SequenceProgress::kCompleted;
             case MachineSignal::kFail:
                 m_error = action.error.value_or(IOError(kParamInvalid, 0));
-                clearActiveTask();
+                clear_active_task();
                 return SequenceProgress::kCompleted;
             }
         }
         m_error = IOError(kParamInvalid, 0);
-        clearActiveTask();
+        clear_active_task();
         return SequenceProgress::kCompleted;
     }
 
-    void deliverConnect(std::expected<void, IOError> result) {
+    void deliver_connect(std::expected<void, IOError> result) {
         if constexpr (requires(MachineT& machine, std::expected<void, IOError> connect_result) {
-            { machine.onConnect(std::move(connect_result)) } -> std::same_as<void>;
+            { machine.on_connect(std::move(connect_result)) } -> std::same_as<void>;
         }) {
-            m_machine.onConnect(std::move(result));
+            m_machine.on_connect(std::move(result));
         } else {
             if (!result) {
                 m_error = result.error();
@@ -2482,28 +2482,28 @@ private:
         }
     }
 
-    void deliverErrorToMachine(IOError error) {
+    void deliver_error_to_machine(IOError error) {
         const ActiveKind active_kind = m_active_kind;
-        clearActiveTask();
+        clear_active_task();
 
         switch (active_kind) {
         case ActiveKind::kRead:
         case ActiveKind::kReadv:
-            m_machine.onRead(std::unexpected(std::move(error)));
+            m_machine.on_read(std::unexpected(std::move(error)));
             break;
         case ActiveKind::kWrite:
         case ActiveKind::kWritev:
-            m_machine.onWrite(std::unexpected(std::move(error)));
+            m_machine.on_write(std::unexpected(std::move(error)));
             break;
         case ActiveKind::kConnect:
-            deliverConnect(std::unexpected(std::move(error)));
+            deliver_connect(std::unexpected(std::move(error)));
             break;
         case ActiveKind::kNone:
-            if (detail::sequenceOwnerDomainUsesSlot(m_requested_domain, IOController::WRITE) &&
-                !detail::sequenceOwnerDomainUsesSlot(m_requested_domain, IOController::READ)) {
-                m_machine.onWrite(std::unexpected(std::move(error)));
+            if (detail::sequence_owner_domain_uses_slot(m_requested_domain, IOController::WRITE) &&
+                !detail::sequence_owner_domain_uses_slot(m_requested_domain, IOController::READ)) {
+                m_machine.on_write(std::unexpected(std::move(error)));
             } else {
-                m_machine.onRead(std::unexpected(std::move(error)));
+                m_machine.on_read(std::unexpected(std::move(error)));
             }
             break;
         }
@@ -2511,7 +2511,7 @@ private:
         (void)pump();
     }
 
-    void clearActiveTask() {
+    void clear_active_task() {
         m_active_task = IOTask{};
         m_has_active_task = false;
         m_active_kind = ActiveKind::kNone;
@@ -2573,21 +2573,21 @@ struct SequenceStep : public SequenceAwaitable<ResultT, InlineN>::TaskBase, publ
         : BaseContextT(std::forward<Args>(args)...)
         , m_owner(owner) {}
 
-    IOContextBase* contextBase() override {
+    IOContextBase* context_base() override {
         return this;
     }
 
-    IOEventType defaultEventType() const override {
-        return detail::customAwaitableDefaultEvent<BaseContextT>();
+    IOEventType default_event_type() const override {
+        return detail::custom_awaitable_default_event<BaseContextT>();
     }
 
-    bool isLocal() const override {
+    bool is_local() const override {
         return false;
     }
 
 #ifdef USE_IOURING
-    bool onEvent(SequenceAwaitable<ResultT, InlineN>& owner, struct io_uring_cqe* cqe, GHandle handle) override {
-        if (!BaseContextT::handleComplete(cqe, handle)) {
+    bool on_event(SequenceAwaitable<ResultT, InlineN>& owner, struct io_uring_cqe* cqe, GHandle handle) override {
+        if (!BaseContextT::handle_complete(cqe, handle)) {
             return false;
         }
         auto ops = owner.ops();
@@ -2595,8 +2595,8 @@ struct SequenceStep : public SequenceAwaitable<ResultT, InlineN>::TaskBase, publ
         return true;
     }
 #else
-    bool onReady(SequenceAwaitable<ResultT, InlineN>& owner, GHandle handle) override {
-        if (!BaseContextT::handleComplete(handle)) {
+    bool on_ready(SequenceAwaitable<ResultT, InlineN>& owner, GHandle handle) override {
+        if (!BaseContextT::handle_complete(handle)) {
             return false;
         }
         auto ops = owner.ops();
@@ -2604,8 +2604,8 @@ struct SequenceStep : public SequenceAwaitable<ResultT, InlineN>::TaskBase, publ
         return true;
     }
 
-    bool onEvent(SequenceAwaitable<ResultT, InlineN>& owner, GHandle handle) override {
-        if (!BaseContextT::handleComplete(handle)) {
+    bool on_event(SequenceAwaitable<ResultT, InlineN>& owner, GHandle handle) override {
+        if (!BaseContextT::handle_complete(handle)) {
             return false;
         }
         auto ops = owner.ops();
@@ -2626,32 +2626,32 @@ struct LocalSequenceStep : public SequenceAwaitable<ResultT, InlineN>::TaskBase 
     explicit LocalSequenceStep(FlowT* owner)
         : m_owner(owner) {}
 
-    IOContextBase* contextBase() override {
+    IOContextBase* context_base() override {
         return nullptr;
     }
 
-    IOEventType defaultEventType() const override {
+    IOEventType default_event_type() const override {
         return IOEventType::INVALID;
     }
 
-    bool isLocal() const override {
+    bool is_local() const override {
         return true;
     }
 
 #ifdef USE_IOURING
-    bool onEvent(SequenceAwaitable<ResultT, InlineN>& owner, struct io_uring_cqe*, GHandle) override {
+    bool on_event(SequenceAwaitable<ResultT, InlineN>& owner, struct io_uring_cqe*, GHandle) override {
         auto ops = owner.ops();
         (m_owner->*Handler)(ops);
         return true;
     }
 #else
-    bool onReady(SequenceAwaitable<ResultT, InlineN>& owner, GHandle) override {
+    bool on_ready(SequenceAwaitable<ResultT, InlineN>& owner, GHandle) override {
         auto ops = owner.ops();
         (m_owner->*Handler)(ops);
         return true;
     }
 
-    bool onEvent(SequenceAwaitable<ResultT, InlineN>& owner, GHandle) override {
+    bool on_event(SequenceAwaitable<ResultT, InlineN>& owner, GHandle) override {
         auto ops = owner.ops();
         (m_owner->*Handler)(ops);
         return true;
@@ -2672,28 +2672,28 @@ struct ParserSequenceStep : public SequenceAwaitable<ResultT, InlineN>::TaskBase
         : m_owner(owner)
         , m_rearm_step(rearm_step) {}
 
-    IOContextBase* contextBase() override {
+    IOContextBase* context_base() override {
         return nullptr;
     }
 
-    IOEventType defaultEventType() const override {
+    IOEventType default_event_type() const override {
         return IOEventType::INVALID;
     }
 
-    bool isLocal() const override {
+    bool is_local() const override {
         return true;
     }
 
 #ifdef USE_IOURING
-    bool onEvent(SequenceAwaitable<ResultT, InlineN>& owner, struct io_uring_cqe*, GHandle) override {
+    bool on_event(SequenceAwaitable<ResultT, InlineN>& owner, struct io_uring_cqe*, GHandle) override {
         return run(owner);
     }
 #else
-    bool onReady(SequenceAwaitable<ResultT, InlineN>& owner, GHandle) override {
+    bool on_ready(SequenceAwaitable<ResultT, InlineN>& owner, GHandle) override {
         return run(owner);
     }
 
-    bool onEvent(SequenceAwaitable<ResultT, InlineN>& owner, GHandle) override {
+    bool on_event(SequenceAwaitable<ResultT, InlineN>& owner, GHandle) override {
         return run(owner);
     }
 #endif
@@ -2704,7 +2704,7 @@ private:
         const ParseStatus status = (m_owner->*Handler)(ops);
         switch (status) {
             case ParseStatus::kNeedMore:
-                if (m_rearm_step == nullptr || m_rearm_step->isLocal()) {
+                if (m_rearm_step == nullptr || m_rearm_step->is_local()) {
                     owner.fail(IOError(kParamInvalid, 0));
                     return true;
                 }
@@ -2790,85 +2790,85 @@ public:
         , m_connect_context(Host{}) {}
 
     template <auto Handler>
-    static Node makeRecvNode(char* buffer, size_t length) {
+    static Node make_recv_node(char* buffer, size_t length) {
         Node node;
         node.kind = NodeKind::kRecv;
-        node.io_handler = &invokeIO<RecvIOContext, Handler>;
+        node.io_handler = &invoke_io<RecvIOContext, Handler>;
         node.read_buffer = buffer;
         node.io_length = length;
         return node;
     }
 
     template <auto Handler>
-    static Node makeSendNode(const char* buffer, size_t length) {
+    static Node make_send_node(const char* buffer, size_t length) {
         Node node;
         node.kind = NodeKind::kSend;
-        node.io_handler = &invokeIO<SendIOContext, Handler>;
+        node.io_handler = &invoke_io<SendIOContext, Handler>;
         node.write_buffer = buffer;
         node.io_length = length;
         return node;
     }
 
     template <auto Handler>
-    static Node makeReadvNode(const struct iovec* iovecs, size_t count) {
+    static Node make_readv_node(const struct iovec* iovecs, size_t count) {
         Node node;
         node.kind = NodeKind::kReadv;
-        node.io_handler = &invokeIO<ReadvIOContext, Handler>;
+        node.io_handler = &invoke_io<ReadvIOContext, Handler>;
         node.iovecs = iovecs;
         node.iov_count = count;
         return node;
     }
 
     template <auto Handler>
-    static Node makeWritevNode(const struct iovec* iovecs, size_t count) {
+    static Node make_writev_node(const struct iovec* iovecs, size_t count) {
         Node node;
         node.kind = NodeKind::kWritev;
-        node.io_handler = &invokeIO<WritevIOContext, Handler>;
+        node.io_handler = &invoke_io<WritevIOContext, Handler>;
         node.iovecs = iovecs;
         node.iov_count = count;
         return node;
     }
 
     template <auto Handler>
-    static Node makeConnectNode(const Host& host) {
+    static Node make_connect_node(const Host& host) {
         Node node;
         node.kind = NodeKind::kConnect;
-        node.io_handler = &invokeIO<ConnectIOContext, Handler>;
+        node.io_handler = &invoke_io<ConnectIOContext, Handler>;
         node.connect_host = host;
         return node;
     }
 
     template <auto Handler>
-    static Node makeLocalNode() {
+    static Node make_local_node() {
         Node node;
         node.kind = NodeKind::kLocal;
-        node.local_handler = &invokeLocal<Handler>;
+        node.local_handler = &invoke_local<Handler>;
         return node;
     }
 
     template <auto Handler>
-    static Node makeFinishNode() {
+    static Node make_finish_node() {
         Node node;
         node.kind = NodeKind::kFinish;
-        node.local_handler = &invokeLocal<Handler>;
+        node.local_handler = &invoke_local<Handler>;
         return node;
     }
 
     template <auto Handler>
-    static Node makeParseNode(size_t rearm_recv_index) {
+    static Node make_parse_node(size_t rearm_recv_index) {
         Node node;
         node.kind = NodeKind::kParse;
-        node.parse_handler = &invokeParse<Handler>;
+        node.parse_handler = &invoke_parse<Handler>;
         node.parse_rearm_recv_index = rearm_recv_index;
         return node;
     }
 
-    void onAwaitContext(const AwaitContext& ctx) {
+    void on_await_context(const AwaitContext& ctx) {
         if constexpr (requires(FlowT& flow, const AwaitContext& context) {
-            flow.onAwaitContext(context);
+            flow.on_await_context(context);
         }) {
             if (m_flow != nullptr) {
-                m_flow->onAwaitContext(ctx);
+                m_flow->on_await_context(ctx);
             }
         }
     }
@@ -2881,8 +2881,8 @@ public:
             return MachineAction<result_type>::fail(*m_error);
         }
         if (m_cursor >= m_nodes.size()) {
-            setIOError(IOError(kNotReady, 0));
-            return emitActionFromOutcome();
+            set_io_error(IOError(kNotReady, 0));
+            return emit_action_from_outcome();
         }
 
         const Node& node = m_nodes[m_cursor];
@@ -2892,45 +2892,45 @@ public:
             m_recv_context.m_length = node.io_length;
             m_pending_io = PendingIO::kRead;
             m_pending_index = m_cursor;
-            return MachineAction<result_type>::waitRead(node.read_buffer, node.io_length);
+            return MachineAction<result_type>::wait_read(node.read_buffer, node.io_length);
         case NodeKind::kReadv:
             m_readv_context.m_iovecs = std::span<const struct iovec>(node.iovecs, node.iov_count);
 #ifdef USE_IOURING
-            m_readv_context.initMsghdr();
+            m_readv_context.init_msghdr();
 #endif
             m_pending_io = PendingIO::kReadv;
             m_pending_index = m_cursor;
-            return MachineAction<result_type>::waitReadv(node.iovecs, node.iov_count);
+            return MachineAction<result_type>::wait_readv(node.iovecs, node.iov_count);
         case NodeKind::kSend:
             m_send_context.m_buffer = node.write_buffer;
             m_send_context.m_length = node.io_length;
             m_pending_io = PendingIO::kWrite;
             m_pending_index = m_cursor;
-            return MachineAction<result_type>::waitWrite(node.write_buffer, node.io_length);
+            return MachineAction<result_type>::wait_write(node.write_buffer, node.io_length);
         case NodeKind::kWritev:
             m_writev_context.m_iovecs = std::span<const struct iovec>(node.iovecs, node.iov_count);
 #ifdef USE_IOURING
-            m_writev_context.initMsghdr();
+            m_writev_context.init_msghdr();
 #endif
             m_pending_io = PendingIO::kWritev;
             m_pending_index = m_cursor;
-            return MachineAction<result_type>::waitWritev(node.iovecs, node.iov_count);
+            return MachineAction<result_type>::wait_writev(node.iovecs, node.iov_count);
         case NodeKind::kConnect:
-            return runConnect(node);
+            return run_connect(node);
         case NodeKind::kParse:
-            return runParse(node);
+            return run_parse(node);
         case NodeKind::kLocal:
         case NodeKind::kFinish:
-            return runLocal(node);
+            return run_local(node);
         }
-        setIOError(IOError(kParamInvalid, 0));
-        return emitActionFromOutcome();
+        set_io_error(IOError(kParamInvalid, 0));
+        return emit_action_from_outcome();
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if ((m_pending_io != PendingIO::kRead && m_pending_io != PendingIO::kReadv) ||
             m_pending_index >= m_nodes.size()) {
-            setIOError(IOError(kParamInvalid, 0));
+            set_io_error(IOError(kParamInvalid, 0));
             return;
         }
 
@@ -2942,27 +2942,27 @@ public:
         const Node& node = m_nodes[m_pending_index];
         if (m_pending_io == PendingIO::kRead) {
             m_recv_context.m_result = std::move(result);
-            invokeIONode(node, m_recv_context);
+            invoke_io_node(node, m_recv_context);
         } else {
             m_readv_context.m_result = std::move(result);
-            invokeIONode(node, m_readv_context);
+            invoke_io_node(node, m_readv_context);
         }
-        clearPendingIO();
+        clear_pending_io();
 
-        if (absorbOpsOutcome()) {
+        if (absorb_ops_outcome()) {
             return;
         }
         if (io_error.has_value()) {
-            setIOError(std::move(*io_error));
+            set_io_error(std::move(*io_error));
             return;
         }
         ++m_cursor;
     }
 
-    void onWrite(std::expected<size_t, IOError> result) {
+    void on_write(std::expected<size_t, IOError> result) {
         if ((m_pending_io != PendingIO::kWrite && m_pending_io != PendingIO::kWritev) ||
             m_pending_index >= m_nodes.size()) {
-            setIOError(IOError(kParamInvalid, 0));
+            set_io_error(IOError(kParamInvalid, 0));
             return;
         }
 
@@ -2974,26 +2974,26 @@ public:
         const Node& node = m_nodes[m_pending_index];
         if (m_pending_io == PendingIO::kWrite) {
             m_send_context.m_result = std::move(result);
-            invokeIONode(node, m_send_context);
+            invoke_io_node(node, m_send_context);
         } else {
             m_writev_context.m_result = std::move(result);
-            invokeIONode(node, m_writev_context);
+            invoke_io_node(node, m_writev_context);
         }
-        clearPendingIO();
+        clear_pending_io();
 
-        if (absorbOpsOutcome()) {
+        if (absorb_ops_outcome()) {
             return;
         }
         if (io_error.has_value()) {
-            setIOError(std::move(*io_error));
+            set_io_error(std::move(*io_error));
             return;
         }
         ++m_cursor;
     }
 
-    void onConnect(std::expected<void, IOError> result) {
+    void on_connect(std::expected<void, IOError> result) {
         if (m_pending_io != PendingIO::kConnect || m_pending_index >= m_nodes.size()) {
-            setIOError(IOError(kParamInvalid, 0));
+            set_io_error(IOError(kParamInvalid, 0));
             return;
         }
 
@@ -3005,14 +3005,14 @@ public:
         m_connect_context.m_result = std::move(result);
 
         const Node& node = m_nodes[m_pending_index];
-        invokeIONode(node, m_connect_context);
-        clearPendingIO();
+        invoke_io_node(node, m_connect_context);
+        clear_pending_io();
 
-        if (absorbOpsOutcome()) {
+        if (absorb_ops_outcome()) {
             return;
         }
         if (io_error.has_value()) {
-            setIOError(std::move(*io_error));
+            set_io_error(std::move(*io_error));
             return;
         }
         ++m_cursor;
@@ -3032,61 +3032,61 @@ private:
     };
 
     template <typename ContextT, auto Handler>
-    static void invokeIO(FlowT* flow, OpsT& ops, IOContextBase& context) {
+    static void invoke_io(FlowT* flow, OpsT& ops, IOContextBase& context) {
         (flow->*Handler)(ops, static_cast<ContextT&>(context));
     }
 
     template <auto Handler>
-    static void invokeLocal(FlowT* flow, OpsT& ops) {
+    static void invoke_local(FlowT* flow, OpsT& ops) {
         (flow->*Handler)(ops);
     }
 
     template <auto Handler>
-    static ParseStatus invokeParse(FlowT* flow, OpsT& ops) {
+    static ParseStatus invoke_parse(FlowT* flow, OpsT& ops) {
         return (flow->*Handler)(ops);
     }
 
-    MachineAction<result_type> runConnect(const Node& node) {
+    MachineAction<result_type> run_connect(const Node& node) {
         if (node.io_handler == nullptr) {
-            setIOError(IOError(kParamInvalid, 0));
-            return emitActionFromOutcome();
+            set_io_error(IOError(kParamInvalid, 0));
+            return emit_action_from_outcome();
         }
 
         m_connect_context.m_host = node.connect_host;
         m_pending_io = PendingIO::kConnect;
         m_pending_index = m_cursor;
-        return MachineAction<result_type>::waitConnect(node.connect_host);
+        return MachineAction<result_type>::wait_connect(node.connect_host);
     }
 
-    MachineAction<result_type> runLocal(const Node& node) {
+    MachineAction<result_type> run_local(const Node& node) {
         if (node.local_handler == nullptr) {
-            setIOError(IOError(kParamInvalid, 0));
-            return emitActionFromOutcome();
+            set_io_error(IOError(kParamInvalid, 0));
+            return emit_action_from_outcome();
         }
 
-        m_ops_owner.resetOutcomeForReuse();
+        m_ops_owner.reset_outcome_for_reuse();
         auto ops = m_ops_owner.ops();
         node.local_handler(m_flow, ops);
 
-        if (absorbOpsOutcome()) {
-            return emitActionFromOutcome();
+        if (absorb_ops_outcome()) {
+            return emit_action_from_outcome();
         }
         ++m_cursor;
         return MachineAction<result_type>::continue_();
     }
 
-    MachineAction<result_type> runParse(const Node& node) {
+    MachineAction<result_type> run_parse(const Node& node) {
         if (node.parse_handler == nullptr) {
-            setIOError(IOError(kParamInvalid, 0));
-            return emitActionFromOutcome();
+            set_io_error(IOError(kParamInvalid, 0));
+            return emit_action_from_outcome();
         }
 
-        m_ops_owner.resetOutcomeForReuse();
+        m_ops_owner.reset_outcome_for_reuse();
         auto ops = m_ops_owner.ops();
         const ParseStatus status = node.parse_handler(m_flow, ops);
 
-        if (absorbOpsOutcome()) {
-            return emitActionFromOutcome();
+        if (absorb_ops_outcome()) {
+            return emit_action_from_outcome();
         }
 
         switch (status) {
@@ -3095,8 +3095,8 @@ private:
                 node.parse_rearm_recv_index >= m_nodes.size() ||
                 (m_nodes[node.parse_rearm_recv_index].kind != NodeKind::kRecv &&
                  m_nodes[node.parse_rearm_recv_index].kind != NodeKind::kReadv)) {
-                setIOError(IOError(kParamInvalid, 0));
-                return emitActionFromOutcome();
+                set_io_error(IOError(kParamInvalid, 0));
+                return emit_action_from_outcome();
             }
             m_cursor = node.parse_rearm_recv_index;
             return MachineAction<result_type>::continue_();
@@ -3106,48 +3106,48 @@ private:
             ++m_cursor;
             return MachineAction<result_type>::continue_();
         }
-        setIOError(IOError(kParamInvalid, 0));
-        return emitActionFromOutcome();
+        set_io_error(IOError(kParamInvalid, 0));
+        return emit_action_from_outcome();
     }
 
-    void invokeIONode(const Node& node, IOContextBase& context) {
+    void invoke_io_node(const Node& node, IOContextBase& context) {
         if (node.io_handler == nullptr) {
-            setIOError(IOError(kParamInvalid, 0));
+            set_io_error(IOError(kParamInvalid, 0));
             return;
         }
-        m_ops_owner.resetOutcomeForReuse();
+        m_ops_owner.reset_outcome_for_reuse();
         auto ops = m_ops_owner.ops();
         node.io_handler(m_flow, ops, context);
     }
 
-    bool absorbOpsOutcome() {
-        if (m_ops_owner.hasResultValue()) {
-            auto result = m_ops_owner.takeResultValue();
+    bool absorb_ops_outcome() {
+        if (m_ops_owner.has_result_value()) {
+            auto result = m_ops_owner.take_result_value();
             if (result.has_value()) {
                 m_result = std::move(*result);
             } else {
-                setIOError(IOError(kParamInvalid, 0));
+                set_io_error(IOError(kParamInvalid, 0));
             }
             return true;
         }
-        if (m_ops_owner.hasFailure()) {
-            auto error = m_ops_owner.takeFailure();
+        if (m_ops_owner.has_failure()) {
+            auto error = m_ops_owner.take_failure();
             if (error.has_value()) {
-                setIOError(std::move(*error));
+                set_io_error(std::move(*error));
             } else {
-                setIOError(IOError(kParamInvalid, 0));
+                set_io_error(IOError(kParamInvalid, 0));
             }
             return true;
         }
         if (!m_ops_owner.empty()) {
             m_ops_owner.clear();
-            setIOError(IOError(kParamInvalid, 0));
+            set_io_error(IOError(kParamInvalid, 0));
             return true;
         }
         return false;
     }
 
-    MachineAction<result_type> emitActionFromOutcome() {
+    MachineAction<result_type> emit_action_from_outcome() {
         if (m_result.has_value()) {
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
@@ -3157,12 +3157,12 @@ private:
         return MachineAction<result_type>::continue_();
     }
 
-    void clearPendingIO() {
+    void clear_pending_io() {
         m_pending_io = PendingIO::kNone;
         m_pending_index = kInvalidIndex;
     }
 
-    void setIOError(IOError error) {
+    void set_io_error(IOError error) {
         if constexpr (detail::is_expected_v<result_type>) {
             using ErrorT = typename detail::expected_traits<result_type>::error_type;
             if constexpr (std::is_constructible_v<ErrorT, IOError>) {
@@ -3212,7 +3212,7 @@ public:
     }
 
     template <AwaitableStateMachine MachineTParam>
-    static auto fromStateMachine(IOController* controller, MachineTParam machine) -> StateMachineBuilder<MachineTParam> {
+    static auto from_state_machine(IOController* controller, MachineTParam machine) -> StateMachineBuilder<MachineTParam> {
         static_assert(std::same_as<typename MachineTParam::result_type, ResultT>,
                       "AwaitableBuilder::fromStateMachine requires matching result_type");
         return StateMachineBuilder<MachineTParam>(controller, std::move(machine));
@@ -3226,97 +3226,97 @@ public:
 
     template <auto Handler>
     AwaitableBuilder& local() {
-        m_nodes.push_back(MachineT::template makeLocalNode<Handler>());
+        m_nodes.push_back(MachineT::template make_local_node<Handler>());
         return *this;
     }
 
     template <auto Handler>
     AwaitableBuilder& parse() {
-        m_nodes.push_back(MachineT::template makeParseNode<Handler>(m_last_recv_index));
+        m_nodes.push_back(MachineT::template make_parse_node<Handler>(m_last_recv_index));
         return *this;
     }
 
     template <auto Handler>
     AwaitableBuilder& finish() {
-        m_nodes.push_back(MachineT::template makeFinishNode<Handler>());
+        m_nodes.push_back(MachineT::template make_finish_node<Handler>());
         return *this;
     }
 
     template <auto Handler>
     AwaitableBuilder& recv(char* buffer, size_t length) {
-        m_nodes.push_back(MachineT::template makeRecvNode<Handler>(buffer, length));
+        m_nodes.push_back(MachineT::template make_recv_node<Handler>(buffer, length));
         m_last_recv_index = m_nodes.size() - 1;
         return *this;
     }
 
     template <auto Handler, size_t N>
     AwaitableBuilder& readv(std::array<struct iovec, N>& iovecs, size_t count = N) {
-        if (!ReadvIOContext::borrowedCountValid(count, N)) {
+        if (!ReadvIOContext::borrowed_count_valid(count, N)) {
             m_nodes.push_back(MachineNode{});
             return *this;
         }
-        const size_t bounded = ReadvIOContext::boundedBorrowedCount(count, N);
-        m_nodes.push_back(MachineT::template makeReadvNode<Handler>(iovecs.data(), bounded));
+        const size_t bounded = ReadvIOContext::bounded_borrowed_count(count, N);
+        m_nodes.push_back(MachineT::template make_readv_node<Handler>(iovecs.data(), bounded));
         m_last_recv_index = m_nodes.size() - 1;
         return *this;
     }
 
     template <auto Handler, size_t N>
     AwaitableBuilder& readv(struct iovec (&iovecs)[N], size_t count = N) {
-        if (!ReadvIOContext::borrowedCountValid(count, N)) {
+        if (!ReadvIOContext::borrowed_count_valid(count, N)) {
             m_nodes.push_back(MachineNode{});
             return *this;
         }
-        const size_t bounded = ReadvIOContext::boundedBorrowedCount(count, N);
-        m_nodes.push_back(MachineT::template makeReadvNode<Handler>(iovecs, bounded));
+        const size_t bounded = ReadvIOContext::bounded_borrowed_count(count, N);
+        m_nodes.push_back(MachineT::template make_readv_node<Handler>(iovecs, bounded));
         m_last_recv_index = m_nodes.size() - 1;
         return *this;
     }
 
     template <auto Handler>
     AwaitableBuilder& send(const char* buffer, size_t length) {
-        m_nodes.push_back(MachineT::template makeSendNode<Handler>(buffer, length));
+        m_nodes.push_back(MachineT::template make_send_node<Handler>(buffer, length));
         return *this;
     }
 
     template <auto Handler, size_t N>
     AwaitableBuilder& writev(std::array<struct iovec, N>& iovecs, size_t count = N) {
-        if (!WritevIOContext::borrowedCountValid(count, N)) {
+        if (!WritevIOContext::borrowed_count_valid(count, N)) {
             m_nodes.push_back(MachineNode{});
             return *this;
         }
-        const size_t bounded = WritevIOContext::boundedBorrowedCount(count, N);
-        m_nodes.push_back(MachineT::template makeWritevNode<Handler>(iovecs.data(), bounded));
+        const size_t bounded = WritevIOContext::bounded_borrowed_count(count, N);
+        m_nodes.push_back(MachineT::template make_writev_node<Handler>(iovecs.data(), bounded));
         return *this;
     }
 
     template <auto Handler, size_t N>
     AwaitableBuilder& writev(struct iovec (&iovecs)[N], size_t count = N) {
-        if (!WritevIOContext::borrowedCountValid(count, N)) {
+        if (!WritevIOContext::borrowed_count_valid(count, N)) {
             m_nodes.push_back(MachineNode{});
             return *this;
         }
-        const size_t bounded = WritevIOContext::boundedBorrowedCount(count, N);
-        m_nodes.push_back(MachineT::template makeWritevNode<Handler>(iovecs, bounded));
+        const size_t bounded = WritevIOContext::bounded_borrowed_count(count, N);
+        m_nodes.push_back(MachineT::template make_writev_node<Handler>(iovecs, bounded));
         return *this;
     }
 
     template <auto Handler>
     AwaitableBuilder& connect(const Host& host) {
-        m_nodes.push_back(MachineT::template makeConnectNode<Handler>(host));
+        m_nodes.push_back(MachineT::template make_connect_node<Handler>(host));
         return *this;
     }
 
     auto build() & -> StateMachineAwaitable<MachineT> {
-        return buildImpl();
+        return build_impl();
     }
 
     auto build() && -> StateMachineAwaitable<MachineT> {
-        return buildImpl();
+        return build_impl();
     }
 
 private:
-    auto buildImpl() -> StateMachineAwaitable<MachineT> {
+    auto build_impl() -> StateMachineAwaitable<MachineT> {
         bool has_read = false;
         bool has_write = false;
         for (const auto& node : m_nodes) {
@@ -3357,7 +3357,7 @@ template <typename ResultT, size_t InlineN>
 class AwaitableBuilder<ResultT, InlineN, void> {
 public:
     template <AwaitableStateMachine MachineT>
-    static auto fromStateMachine(IOController* controller, MachineT machine) -> StateMachineBuilder<MachineT> {
+    static auto from_state_machine(IOController* controller, MachineT machine) -> StateMachineBuilder<MachineT> {
         static_assert(std::same_as<typename MachineT::result_type, ResultT>,
                       "AwaitableBuilder::fromStateMachine requires matching result_type");
         return StateMachineBuilder<MachineT>(controller, std::move(machine));
@@ -3400,15 +3400,15 @@ struct ExactStreamMachine {
             return MachineAction<result_type>::complete(offset);
         }
         if constexpr (Write) {
-            return MachineAction<result_type>::waitWrite(
+            return MachineAction<result_type>::wait_write(
                 write_buffer + offset, length - offset);
         } else {
-            return MachineAction<result_type>::waitRead(
+            return MachineAction<result_type>::wait_read(
                 read_buffer + offset, length - offset);
         }
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if constexpr (Write) {
             (void)result;
             error = IOError(kNotReady, 0);
@@ -3426,7 +3426,7 @@ struct ExactStreamMachine {
         offset += result.value();
     }
 
-    void onWrite(std::expected<size_t, IOError> result) {
+    void on_write(std::expected<size_t, IOError> result) {
         if constexpr (!Write) {
             (void)result;
             error = IOError(kNotReady, 0);

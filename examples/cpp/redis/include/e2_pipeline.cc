@@ -24,7 +24,7 @@ struct DemoState {
     int code{1};
 };
 
-void finishDemo(DemoState& state, int code)
+void finish_demo(DemoState& state, int code)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
     state.done = true;
@@ -32,7 +32,7 @@ void finishDemo(DemoState& state, int code)
     state.cv.notify_one();
 }
 
-std::optional<int> parsePort(const char* text)
+std::optional<int> parse_port(const char* text)
 {
     if (text == nullptr) return std::nullopt;
     try {
@@ -44,7 +44,7 @@ std::optional<int> parsePort(const char* text)
     }
 }
 
-std::optional<int> parsePositiveInt(const char* text)
+std::optional<int> parse_positive_int(const char* text)
 {
     if (text == nullptr) return std::nullopt;
     try {
@@ -56,7 +56,7 @@ std::optional<int> parsePositiveInt(const char* text)
     }
 }
 
-Task<void> runDemo(
+Task<void> run_demo(
     IOScheduler* scheduler,
     DemoState* state,
     std::string host,
@@ -71,7 +71,7 @@ Task<void> runDemo(
         std::chrono::seconds(galay::redis::example::kDefaultTimeoutSeconds));
     if (!connect_result) {
         std::cerr << "Connect failed: " << connect_result.error().message() << std::endl;
-        finishDemo(*state, 1);
+        finish_demo(*state, 1);
         co_return;
     }
 
@@ -88,13 +88,13 @@ Task<void> runDemo(
     if (!pipeline_result) {
         std::cerr << "Pipeline failed: " << pipeline_result.error().message() << std::endl;
         (void)co_await client.close();
-        finishDemo(*state, 1);
+        finish_demo(*state, 1);
         co_return;
     }
     if (!pipeline_result.value()) {
         std::cerr << "Pipeline returned empty response" << std::endl;
         (void)co_await client.close();
-        finishDemo(*state, 1);
+        finish_demo(*state, 1);
         co_return;
     }
 
@@ -106,12 +106,12 @@ Task<void> runDemo(
     if (!sample_result || !sample_result.value()) {
         std::cerr << "Sample GET failed for " << sample_key << std::endl;
         (void)co_await client.close();
-        finishDemo(*state, 1);
+        finish_demo(*state, 1);
         co_return;
     }
     const auto& sample_values = sample_result.value().value();
-    if (!sample_values.empty() && sample_values[0].isString()) {
-        std::cout << "E2 sample value: " << sample_values[0].toString() << std::endl;
+    if (!sample_values.empty() && sample_values[0].is_string()) {
+        std::cout << "E2 sample value: " << sample_values[0].to_string() << std::endl;
     }
 
     RedisCommandBuilder cleanup_commands;
@@ -125,18 +125,18 @@ Task<void> runDemo(
     if (!cleanup_result) {
         std::cerr << "Cleanup pipeline failed: " << cleanup_result.error().message() << std::endl;
         (void)co_await client.close();
-        finishDemo(*state, 1);
+        finish_demo(*state, 1);
         co_return;
     }
 
     auto close_result = co_await client.close();
     if (!close_result) {
         std::cerr << "Close failed: " << close_result.error().message() << std::endl;
-        finishDemo(*state, 1);
+        finish_demo(*state, 1);
         co_return;
     }
 
-    finishDemo(*state, 0);
+    finish_demo(*state, 0);
 }
 
 }  // namespace
@@ -150,7 +150,7 @@ int main(int argc, char* argv[])
 
     if (argc > 1) host = argv[1];
     if (argc > 2) {
-        auto parsed_port = parsePort(argv[2]);
+        auto parsed_port = parse_port(argv[2]);
         if (!parsed_port) {
             std::cerr << "Invalid port: " << argv[2] << std::endl;
             std::cerr << "Usage: " << argv[0] << " [host] [port] [key_prefix] [batch_size]" << std::endl;
@@ -160,7 +160,7 @@ int main(int argc, char* argv[])
     }
     if (argc > 3) key_prefix = argv[3];
     if (argc > 4) {
-        auto parsed_batch = parsePositiveInt(argv[4]);
+        auto parsed_batch = parse_positive_int(argv[4]);
         if (!parsed_batch) {
             std::cerr << "Invalid batch_size: " << argv[4] << std::endl;
             std::cerr << "Usage: " << argv[0] << " [host] [port] [key_prefix] [batch_size]" << std::endl;
@@ -172,7 +172,7 @@ int main(int argc, char* argv[])
     Runtime runtime;
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (!scheduler) {
         std::cerr << "Failed to get IO scheduler" << std::endl;
         runtime.stop();
@@ -180,7 +180,7 @@ int main(int argc, char* argv[])
     }
 
     DemoState state;
-    scheduleTask(scheduler, runDemo(scheduler, &state, host, port, key_prefix, batch_size));
+    schedule_task(scheduler, run_demo(scheduler, &state, host, port, key_prefix, batch_size));
 
     std::unique_lock<std::mutex> lock(state.mutex);
     const bool finished = state.cv.wait_for(lock, std::chrono::seconds(15), [&]() {

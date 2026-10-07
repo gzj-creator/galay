@@ -16,7 +16,7 @@ using namespace galay::kernel;
 /**
  * @brief WebSocket 客户端协程
  */
-Task<bool> runWebSocketClient(const std::string& url) {
+Task<bool> run_web_socket_client(const std::string& url) {
 
     // 1. 创建 WsClient
     auto client = WsClientBuilder().build();
@@ -32,7 +32,7 @@ Task<bool> runWebSocketClient(const std::string& url) {
     reader_setting.max_frame_size = 1024 * 1024;  // 1MB
     reader_setting.max_message_size = 10 * 1024 * 1024;  // 10MB
 
-    auto session_result = client.getSession(WsWriterSetting::byClient(), 8192, reader_setting);
+    auto session_result = client.get_session(WsWriterSetting::by_client(), 8192, reader_setting);
     if (!session_result) {
         co_return false;
     }
@@ -49,15 +49,15 @@ Task<bool> runWebSocketClient(const std::string& url) {
     }
 
     // 5. 获取 Reader 和 Writer
-    auto& reader = session.getReader();
-    auto& writer = session.getWriter();
+    auto& reader = session.get_reader();
+    auto& writer = session.get_writer();
 
     // 6. 读取欢迎消息
     std::string welcome_message;
     WsOpcode welcome_opcode;
 
     while (true) {
-        auto result = co_await reader.getMessage(welcome_message, welcome_opcode);
+        auto result = co_await reader.get_message(welcome_message, welcome_opcode);
         if (!result) {
             co_await client.close();
             co_return false;
@@ -79,7 +79,7 @@ Task<bool> runWebSocketClient(const std::string& url) {
     for (const auto& msg : test_messages) {
         // 发送消息
         while (true) {
-            auto send_result = co_await writer.sendText(msg);
+            auto send_result = co_await writer.send_text(msg);
             if (!send_result) {
                 co_await client.close();
                 co_return false;
@@ -94,7 +94,7 @@ Task<bool> runWebSocketClient(const std::string& url) {
         WsOpcode echo_opcode;
 
         while (true) {
-            auto result = co_await reader.getMessage(echo_message, echo_opcode);
+            auto result = co_await reader.get_message(echo_message, echo_opcode);
             if (!result) {
                 if (result.error().code() == kWsConnectionClosed) {
                     co_await client.close();
@@ -111,7 +111,7 @@ Task<bool> runWebSocketClient(const std::string& url) {
             // 处理不同类型的消息
             if (echo_opcode == WsOpcode::Ping) {
                 while (true) {
-                    auto pong_result = co_await writer.sendPong(echo_message);
+                    auto pong_result = co_await writer.send_pong(echo_message);
                     if (!pong_result) {
                         co_await client.close();
                         co_return false;
@@ -127,7 +127,7 @@ Task<bool> runWebSocketClient(const std::string& url) {
             }
             else if (echo_opcode == WsOpcode::Close) {
                 while (true) {
-                    auto close_result = co_await writer.sendClose();
+                    auto close_result = co_await writer.send_close();
                     if (!close_result || close_result.value()) {
                         break;
                     }
@@ -146,7 +146,7 @@ Task<bool> runWebSocketClient(const std::string& url) {
 
     // 8. 发送 Ping 测试
     while (true) {
-        auto ping_result = co_await writer.sendPing("ping");
+        auto ping_result = co_await writer.send_ping("ping");
         if (!ping_result) {
             co_await client.close();
             co_return false;
@@ -160,7 +160,7 @@ Task<bool> runWebSocketClient(const std::string& url) {
     std::string pong_message;
     WsOpcode pong_opcode;
     while (true) {
-        auto result = co_await reader.getMessage(pong_message, pong_opcode);
+        auto result = co_await reader.get_message(pong_message, pong_opcode);
         if (!result) {
             co_await client.close();
             co_return false;
@@ -176,7 +176,7 @@ Task<bool> runWebSocketClient(const std::string& url) {
 
     // 9. 关闭连接
     while (true) {
-        auto close_result = co_await writer.sendClose();
+        auto close_result = co_await writer.send_close();
         if (!close_result || close_result.value()) {
             break;
         }
@@ -202,11 +202,11 @@ int main(int argc, char* argv[]) {
 
     try {
         // 创建 Runtime
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
         runtime.start();
 
 
-        auto join = runtime.spawnIO(runWebSocketClient(url));
+        auto join = runtime.spawn_io(run_web_socket_client(url));
         bool ok = false;
         if (join) {
             auto result = join->join();

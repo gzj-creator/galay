@@ -20,14 +20,14 @@ struct Result {
     double qps = 0.0;
 };
 
-Task<void> runPool(size_t requests, Result* result)
+Task<void> run_pool(size_t requests, Result* result)
 {
     RpcEndpoint endpoint{"127.0.0.1", 9000};
     RpcConnectionPoolConfig config;
     config.max_connections_per_endpoint = 1;
     config.max_waiters_per_endpoint = 1;
     RpcConnectionPool pool(config);
-    pool.ensureEndpoint(endpoint);
+    pool.ensure_endpoint(endpoint);
 
     const auto start = std::chrono::steady_clock::now();
     for (size_t i = 0; i < requests; ++i) {
@@ -52,15 +52,15 @@ Task<void> runPool(size_t requests, Result* result)
 
 int main(int argc, char** argv)
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
     const size_t requests = argc > 1 ? static_cast<size_t>(std::stoull(argv[1])) : 10000;
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
     Result result;
-    auto scheduled = runtime.spawnIO(runPool(requests, &result));
+    auto scheduled = runtime.spawn_io(run_pool(requests, &result));
     if (!scheduled.has_value()) {
         runtime.stop();
         std::cerr << "failed to schedule pool pressure\n";

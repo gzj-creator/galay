@@ -28,7 +28,7 @@ struct SignalAwaitable;
 struct SignalTimeoutPolicy {
     static void inject(SignalAwaitable& awaitable) noexcept;
 
-    static bool ownsIoRegistration(SignalAwaitable&) noexcept {
+    static bool owns_io_registration(SignalAwaitable&) noexcept {
         return true;
     }
 };
@@ -39,7 +39,7 @@ struct SignalAwaitable
         : m_signal(&signal) {}
 
     bool await_ready() const noexcept {
-        return m_signal->isReady();
+        return m_signal->is_ready();
     }
 
     template <typename Promise>
@@ -55,10 +55,10 @@ struct SignalAwaitable
         return 42;
     }
 
-    void setTimeout() noexcept {
+    void set_timeout() noexcept {
         m_timed_out = true;
         auto waiter = m_signal->wait();
-        waiter.markTimeout();
+        waiter.mark_timeout();
     }
 
 private:
@@ -67,7 +67,7 @@ private:
 };
 
 void SignalTimeoutPolicy::inject(SignalAwaitable& awaitable) noexcept {
-    awaitable.setTimeout();
+    awaitable.set_timeout();
 }
 
 struct DemoState {
@@ -75,14 +75,14 @@ struct DemoState {
     std::atomic<bool> success{false};
 };
 
-Task<void> waitForSignal(AsyncWaiter<void>* signal, DemoState* state) {
+Task<void> wait_for_signal(AsyncWaiter<void>* signal, DemoState* state) {
     auto result = co_await SignalAwaitable(*signal).timeout(500ms);
     state->success.store(result.has_value() && result.value() == 42,
                          std::memory_order_release);
     state->done.store(true, std::memory_order_release);
 }
 
-bool waitUntil(const std::atomic<bool>& flag) {
+bool wait_until(const std::atomic<bool>& flag) {
     const auto deadline = std::chrono::steady_clock::now() + 2s;
     while (std::chrono::steady_clock::now() < deadline) {
         if (flag.load(std::memory_order_acquire)) {
@@ -97,8 +97,8 @@ bool waitUntil(const std::atomic<bool>& flag) {
 
 int main() {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     auto started = runtime.start();
     if (!started.has_value()) {
@@ -108,17 +108,17 @@ int main() {
 
     AsyncWaiter<void> signal;
     DemoState state;
-    auto task = waitForSignal(&signal, &state);
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto task = wait_for_signal(&signal, &state);
+    auto* scheduler = runtime.get_next_io_scheduler();
     const bool submitted = scheduler != nullptr &&
-        scheduler->schedule(detail::TaskAccess::detachTask(std::move(task)));
+        scheduler->schedule(detail::TaskAccess::detach_task(std::move(task)));
 
     std::thread producer([&signal]() {
         std::this_thread::sleep_for(10ms);
         signal.notify();
     });
 
-    const bool completed = submitted && waitUntil(state.done);
+    const bool completed = submitted && wait_until(state.done);
     runtime.stop();
     producer.join();
 

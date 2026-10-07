@@ -29,20 +29,20 @@ public:
      * @brief 获取 Content-Type
      * @return MIME 类型字符串，如 "text/plain"、"application/json"
      */
-    virtual std::string contentType() = 0;
+    virtual std::string content_type() = 0;
 
     /**
      * @brief 从字符串填充 Body 内容（移动语义）
      * @param str 包含 Body 数据的字符串，调用后原始字符串不再有效
      * @return 解析成功返回 true，否则返回 false
      */
-    virtual bool fromString(std::string&& str) = 0;
+    virtual bool from_string(std::string&& str) = 0;
 
     /**
      * @brief 将 Body 内容序列化为字符串（移动语义，会清空内部数据）
      * @return 包含 Body 数据的字符串
      */
-    virtual std::string toString() = 0;
+    virtual std::string to_string() = 0;
 };
 
 /**
@@ -62,20 +62,20 @@ public:
      */
     PlainBody clone() const;
 
-    std::string contentType() override { return "text/plain"; } ///< 返回 "text/plain"
+    std::string content_type() override { return "text/plain"; } ///< 返回 "text/plain"
 
     /**
      * @brief 从字符串填充 Body 内容
      * @param str Body 数据（移动语义）
      * @return 始终返回 true
      */
-    bool fromString(std::string&& str) override;
+    bool from_string(std::string&& str) override;
 
     /**
      * @brief 将 Body 内容序列化为字符串（移交所有权，破坏性操作）
      * @return 包含 Body 数据的字符串
      */
-    std::string toString() override;
+    std::string to_string() override;
 
 private:
     PlainBody(const PlainBody&) = delete;

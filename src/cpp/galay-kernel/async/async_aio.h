@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 通过 Linux libaio 接口和 O_DIRECT 提供协程友好的异步文件 I/O。
- * 所有缓冲区必须正确对齐。操作通过 preRead/preWrite 累积，
+ * 所有缓冲区必须正确对齐。操作通过 pre_read/pre_write 累积，
  * 并通过 commit() 批量提交，commit() 返回一个可等待对象，会挂起调用协程，
  * 直到内核完成所有已提交的 I/O 请求。
  *
@@ -36,7 +36,7 @@ namespace galay::async
  * @brief AIO 操作的文件打开模式
  *
  * @details 所有模式均强制使用 O_DIRECT；调用方必须使用对齐缓冲区
- * （参见 allocAlignedBuffer）。
+ * （参见 alloc_aligned_buffer）。
  */
 enum class AioOpenMode : int {
     Read      = O_RDONLY | O_DIRECT,  ///< 只读直通模式
@@ -116,8 +116,8 @@ public:
  *   file.open("test.txt", AioOpenMode::Read);
  *
  *   // 准备多个操作
- *   file.preRead(buf1, len1, offset1);
- *   file.preRead(buf2, len2, offset2);
+ *   file.pre_read(buf1, len1, offset1);
+ *   file.pre_read(buf2, len2, offset2);
  *
  *   // 批量提交并等待完成
  *   auto results = co_await file.commit();
@@ -125,7 +125,7 @@ public:
 /**
  * @brief Linux AIO 文件，用于批量异步 I/O 操作
  *
- * @details 通过 preRead/preWrite 累积读/写操作，然后通过 commit() 单次批量提交。
+ * @details 通过 pre_read/pre_write 累积读/写操作，然后通过 commit() 单次批量提交。
  * 使用 libaio 和 eventfd 通过 IO 调度器进行完成通知。
  *
  * @note 所有 I/O 操作均需要 O_DIRECT 对齐的缓冲区。
@@ -183,7 +183,7 @@ public:
      * @param length 要读取的字节数
      * @param offset 文件偏移量（字节）
      */
-    void preRead(char* buffer, size_t length, off_t offset);
+    void pre_read(char* buffer, size_t length, off_t offset);
 
     /**
      * @brief 入队一个异步写操作
@@ -191,19 +191,19 @@ public:
      * @param length 要写入的字节数
      * @param offset 文件偏移量（字节）
      */
-    void preWrite(const char* buffer, size_t length, off_t offset);
+    void pre_write(const char* buffer, size_t length, off_t offset);
 
     /**
      * @brief 批量入队多个读操作
      * @param reads (buffer, length, offset) 元组向量
      */
-    void preReadBatch(const std::vector<std::tuple<char*, size_t, off_t>>& reads);
+    void pre_read_batch(const std::vector<std::tuple<char*, size_t, off_t>>& reads);
 
     /**
      * @brief 批量入队多个写操作
      * @param writes (buffer, length, offset) 元组向量
      */
-    void preWriteBatch(const std::vector<std::tuple<const char*, size_t, off_t>>& writes);
+    void pre_write_batch(const std::vector<std::tuple<const char*, size_t, off_t>>& writes);
 
     /**
      * @brief 提交所有累积的操作并返回一个可等待对象
@@ -233,7 +233,7 @@ public:
      * @brief 检查文件当前是否已打开且有效
      * @return 如果文件描述符有效则返回 true
      */
-    bool isValid() const { return m_handle.fd >= 0; }
+    bool is_valid() const { return m_handle.fd >= 0; }
 
     /**
      * @brief 获取当前文件大小
@@ -253,19 +253,19 @@ public:
      * @param alignment 对齐边界（默认 512）
      * @return 指向对齐缓冲区的指针，失败时返回 nullptr
      */
-    static char* allocAlignedBuffer(size_t size, size_t alignment = 512);
+    static char* alloc_aligned_buffer(size_t size, size_t alignment = 512);
 
     /**
-     * @brief 释放先前由 allocAlignedBuffer 分配的缓冲区
+     * @brief 释放先前由 alloc_aligned_buffer 分配的缓冲区
      * @param buffer 指向待释放缓冲区的指针
      */
-    static void freeAlignedBuffer(char* buffer);
+    static void free_aligned_buffer(char* buffer);
 
     /**
      * @brief 获取内部 IO 控制器（用于高级操作）
      * @return IOController 指针
      */
-    galay::kernel::IOController* getController() { return m_controller.get(); }
+    galay::kernel::IOController* get_controller() { return m_controller.get(); }
 
 private:
     GHandle m_handle;  ///< 当前文件句柄
@@ -300,7 +300,7 @@ inline bool AioCommitAwaitable::await_suspend(std::coroutine_handle<Promise> han
         return false;
     }
 
-    auto scheduler = m_waker.getScheduler();
+    auto scheduler = m_waker.get_scheduler();
     if (scheduler == nullptr || scheduler->type() != galay::kernel::kIOScheduler) {
         m_result = std::unexpected(
             galay::kernel::IOError(galay::kernel::kNotRunningOnIOScheduler, errno));
@@ -309,8 +309,8 @@ inline bool AioCommitAwaitable::await_suspend(std::coroutine_handle<Promise> han
     auto io_scheduler = static_cast<galay::kernel::IOSchedulerBackend*>(scheduler);
 
     m_controller->m_handle.fd = m_event_fd;
-    m_controller->fillAwaitable(FILEREAD, this);
-    if (io_scheduler->addFileRead(m_controller) < 0) {
+    m_controller->fill_awaitable(FILEREAD, this);
+    if (io_scheduler->add_file_read(m_controller) < 0) {
         m_result = std::unexpected(
             galay::kernel::IOError(galay::kernel::kReadFailed, errno));
         return false;

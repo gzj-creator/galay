@@ -25,14 +25,14 @@ template <typename S>
 concept HasTaskRefScheduleSurface = std::derived_from<S, Scheduler> &&
     requires(S& scheduler, TaskRef task) {
         { scheduler.schedule(task) } -> std::same_as<bool>;
-        { scheduler.scheduleDeferred(task) } -> std::same_as<bool>;
-        { scheduler.scheduleImmediately(task) } -> std::same_as<bool>;
+        { scheduler.schedule_deferred(task) } -> std::same_as<bool>;
+        { scheduler.schedule_immediately(task) } -> std::same_as<bool>;
     };
 
 static_assert(HasTaskRefScheduleSurface<ParallelScheduler>,
               "Public scheduler headers should expose TaskRef-native scheduling");
 static_assert(requires(Runtime runtime, Task<int> task) {
-    { runtime.blockOnIO(std::move(task)) } -> std::same_as<std::expected<int, RuntimeError>>;
+    { runtime.block_on_io(std::move(task)) } -> std::same_as<std::expected<int, RuntimeError>>;
 }, "Runtime should expose expected-returning Task-native blockOn");
 
 int main()

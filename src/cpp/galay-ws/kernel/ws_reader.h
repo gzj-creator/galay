@@ -96,7 +96,7 @@ struct WsConsumeFastPathView {
     BorrowedIovecs<2> payload_iovecs;
 };
 
-inline size_t wsIovecTotalLength(const struct iovec* iovecs, size_t iovec_count) noexcept {
+inline size_t ws_iovec_total_length(const struct iovec* iovecs, size_t iovec_count) noexcept {
     size_t total = 0;
     for (size_t i = 0; i < iovec_count; ++i) {
         total += iovecs[i].iov_len;
@@ -104,7 +104,7 @@ inline size_t wsIovecTotalLength(const struct iovec* iovecs, size_t iovec_count)
     return total;
 }
 
-inline bool wsReadIovecBytes(const struct iovec* iovecs,
+inline bool ws_read_iovec_bytes(const struct iovec* iovecs,
                              size_t iovec_count,
                              size_t offset,
                              void* dst,
@@ -140,21 +140,21 @@ inline bool wsReadIovecBytes(const struct iovec* iovecs,
     return false;
 }
 
-inline void wsApplyMaskInPlace(char* data, size_t len, const uint8_t masking_key[4]) noexcept {
-    WsFrameParser::applyMaskBytes(data, len, masking_key);
+inline void ws_apply_mask_in_place(char* data, size_t len, const uint8_t masking_key[4]) noexcept {
+    WsFrameParser::apply_mask_bytes(data, len, masking_key);
 }
 
-inline bool wsIsValidUtf8Span(const char* data, size_t len) noexcept {
-    return WsFrameParser::isValidUtf8Bytes(data, len);
+inline bool ws_is_valid_utf8_span(const char* data, size_t len) noexcept {
+    return WsFrameParser::is_valid_utf8_bytes(data, len);
 }
 
-inline bool wsIsValidUtf8MaskedSpan(const char* data,
+inline bool ws_is_valid_utf8_masked_span(const char* data,
                                     size_t len,
                                     const uint8_t masking_key[4]) noexcept {
-    return WsFrameParser::isValidUtf8MaskedBytes(data, len, masking_key);
+    return WsFrameParser::is_valid_utf8_masked_bytes(data, len, masking_key);
 }
 
-inline bool wsIsValidUtf8MaskedIovecs(const struct iovec* iovecs,
+inline bool ws_is_valid_utf8_masked_iovecs(const struct iovec* iovecs,
                                       size_t iovec_count,
                                       const uint8_t masking_key[4]) noexcept {
     size_t total_length = 0;
@@ -231,7 +231,7 @@ inline bool wsIsValidUtf8MaskedIovecs(const struct iovec* iovecs,
     return true;
 }
 
-inline void wsApplyMaskIovecsInPlace(struct iovec* iovecs,
+inline void ws_apply_mask_iovecs_in_place(struct iovec* iovecs,
                                      size_t iovec_count,
                                      const uint8_t masking_key[4]) noexcept {
     size_t logical_index = 0;
@@ -243,11 +243,11 @@ inline void wsApplyMaskIovecsInPlace(struct iovec* iovecs,
     }
 }
 
-inline WsFastPathPrefixResult scanWsMessageFastPathPrefix(const struct iovec* iovecs,
+inline WsFastPathPrefixResult scan_ws_message_fast_path_prefix(const struct iovec* iovecs,
                                                           size_t iovec_count,
                                                           bool is_server) noexcept {
     WsFastPathPrefixResult result;
-    const size_t total_length = wsIovecTotalLength(iovecs, iovec_count);
+    const size_t total_length = ws_iovec_total_length(iovecs, iovec_count);
     if (total_length < 2) {
         result.status = WsMessageFastPathStatus::kNeedMore;
         return result;
@@ -255,8 +255,8 @@ inline WsFastPathPrefixResult scanWsMessageFastPathPrefix(const struct iovec* io
 
     uint8_t byte1 = 0;
     uint8_t byte2 = 0;
-    if (!wsReadIovecBytes(iovecs, iovec_count, 0, &byte1, 1) ||
-        !wsReadIovecBytes(iovecs, iovec_count, 1, &byte2, 1)) {
+    if (!ws_read_iovec_bytes(iovecs, iovec_count, 0, &byte1, 1) ||
+        !ws_read_iovec_bytes(iovecs, iovec_count, 1, &byte2, 1)) {
         result.status = WsMessageFastPathStatus::kNeedMore;
         return result;
     }
@@ -272,7 +272,7 @@ inline WsFastPathPrefixResult scanWsMessageFastPathPrefix(const struct iovec* io
 
     result.prefix.fin = (byte1 & 0x80) != 0;
     result.prefix.opcode = static_cast<WsOpcode>(opcode_value);
-    if (isControlFrame(result.prefix.opcode)) {
+    if (is_control_frame(result.prefix.opcode)) {
         return result;
     }
 
@@ -289,7 +289,7 @@ inline WsFastPathPrefixResult scanWsMessageFastPathPrefix(const struct iovec* io
             return result;
         }
         uint8_t len_buf[2];
-        if (!wsReadIovecBytes(iovecs, iovec_count, header_length, len_buf, sizeof(len_buf))) {
+        if (!ws_read_iovec_bytes(iovecs, iovec_count, header_length, len_buf, sizeof(len_buf))) {
             result.status = WsMessageFastPathStatus::kNeedMore;
             return result;
         }
@@ -304,7 +304,7 @@ inline WsFastPathPrefixResult scanWsMessageFastPathPrefix(const struct iovec* io
             return result;
         }
         uint8_t len_buf[8];
-        if (!wsReadIovecBytes(iovecs, iovec_count, header_length, len_buf, sizeof(len_buf))) {
+        if (!ws_read_iovec_bytes(iovecs, iovec_count, header_length, len_buf, sizeof(len_buf))) {
             result.status = WsMessageFastPathStatus::kNeedMore;
             return result;
         }
@@ -330,7 +330,7 @@ inline WsFastPathPrefixResult scanWsMessageFastPathPrefix(const struct iovec* io
             result.status = WsMessageFastPathStatus::kNeedMore;
             return result;
         }
-        if (!wsReadIovecBytes(iovecs,
+        if (!ws_read_iovec_bytes(iovecs,
                               iovec_count,
                               header_length,
                               result.prefix.masking_key,
@@ -354,11 +354,11 @@ inline WsFastPathPrefixResult scanWsMessageFastPathPrefix(const struct iovec* io
     return result;
 }
 
-inline bool bindWsConsumeFastPathView(const struct iovec* iovecs,
+inline bool bind_ws_consume_fast_path_view(const struct iovec* iovecs,
                                       size_t iovec_count,
                                       bool is_server,
                                       WsConsumeFastPathView& view) noexcept {
-    const auto prefix_result = scanWsMessageFastPathPrefix(iovecs, iovec_count, is_server);
+    const auto prefix_result = scan_ws_message_fast_path_prefix(iovecs, iovec_count, is_server);
     if (prefix_result.status != WsMessageFastPathStatus::kContinue) {
         return false;
     }
@@ -374,7 +374,7 @@ inline bool bindWsConsumeFastPathView(const struct iovec* iovecs,
     view.frame_length = prefix.frame_length;
     view.payload_data = nullptr;
     std::memcpy(view.masking_key, prefix.masking_key, sizeof(view.masking_key));
-    view.payload_iovecs.setCount(0);
+    view.payload_iovecs.set_count(0);
 
     size_t cursor = prefix.payload_offset;
     size_t remaining = view.payload_length;
@@ -402,7 +402,7 @@ inline bool bindWsConsumeFastPathView(const struct iovec* iovecs,
     if (remaining != 0) {
         return false;
     }
-    view.payload_iovecs.setCount(out_count);
+    view.payload_iovecs.set_count(out_count);
     if (out_count == 1) {
         view.payload_data = static_cast<char*>(view.payload_iovecs[0].iov_base);
     }
@@ -429,38 +429,38 @@ public:
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (m_state->parseFromBuffer()) {
-            m_result = m_state->takeResult();
+        if (m_state->parse_from_buffer()) {
+            m_result = m_state->take_result();
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (!m_state->prepareRecvWindow()) {
-            m_result = m_state->takeResult();
+        if (!m_state->prepare_recv_window()) {
+            m_result = m_state->take_result();
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        return MachineAction<result_type>::waitReadv(
-            m_state->recvIovecsData(),
-            m_state->recvIovecsCount());
+        return MachineAction<result_type>::wait_readv(
+            m_state->recv_iovecs_data(),
+            m_state->recv_iovecs_count());
     }
 
-    void onRead(std::expected<size_t, IOError> result) {
+    void on_read(std::expected<size_t, IOError> result) {
         if (!result) {
-            m_state->setRecvError(result.error());
-            m_result = m_state->takeResult();
+            m_state->set_recv_error(result.error());
+            m_result = m_state->take_result();
             return;
         }
 
         if (result.value() == 0) {
-            m_state->onPeerClosed();
-            m_result = m_state->takeResult();
+            m_state->on_peer_closed();
+            m_result = m_state->take_result();
             return;
         }
 
-        m_state->onBytesReceived(result.value());
+        m_state->on_bytes_received(result.value());
     }
 
-    void onWrite(std::expected<size_t, IOError>) {}
+    void on_write(std::expected<size_t, IOError>) {}
 
     std::shared_ptr<StateT> m_state;
     std::optional<result_type> m_result;
@@ -487,43 +487,43 @@ public:
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        if (m_state->parseFromBuffer()) {
-            m_result = m_state->takeResult();
+        if (m_state->parse_from_buffer()) {
+            m_result = m_state->take_result();
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
 
         char* recv_buffer = nullptr;
         size_t recv_length = 0;
-        if (!m_state->prepareRecvWindow(recv_buffer, recv_length)) {
-            m_result = m_state->takeResult();
+        if (!m_state->prepare_recv_window(recv_buffer, recv_length)) {
+            m_result = m_state->take_result();
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
 
         return galay::ssl::SslMachineAction<result_type>::recv(recv_buffer, recv_length);
     }
 
-    void onHandshake(std::expected<void, galay::ssl::SslError>) {}
+    void on_handshake(std::expected<void, galay::ssl::SslError>) {}
 
-    void onRecv(std::expected<Bytes, galay::ssl::SslError> result) {
+    void on_recv(std::expected<Bytes, galay::ssl::SslError> result) {
         if (!result) {
-            m_state->setSslRecvError(result.error());
-            m_result = m_state->takeResult();
+            m_state->set_ssl_recv_error(result.error());
+            m_result = m_state->take_result();
             return;
         }
 
         const size_t recv_bytes = result.value().size();
         if (recv_bytes == 0) {
-            m_state->onPeerClosed();
-            m_result = m_state->takeResult();
+            m_state->on_peer_closed();
+            m_result = m_state->take_result();
             return;
         }
 
-        m_state->onBytesReceived(recv_bytes);
+        m_state->on_bytes_received(recv_bytes);
     }
 
-    void onSend(std::expected<size_t, galay::ssl::SslError>) {}
+    void on_send(std::expected<size_t, galay::ssl::SslError>) {}
 
-    void onShutdown(std::expected<void, galay::ssl::SslError>) {}
+    void on_shutdown(std::expected<void, galay::ssl::SslError>) {}
 
     std::shared_ptr<StateT> m_state;
     std::optional<result_type> m_result;
@@ -549,13 +549,13 @@ public:
     WsFrameReadState(WsFrameReadState&&) noexcept = default;
     WsFrameReadState& operator=(WsFrameReadState&&) noexcept = default;
 
-    bool parseFromBuffer() {
-        auto read_iovecs = borrowReadIovecs(*m_ring_buffer);
+    bool parse_from_buffer() {
+        auto read_iovecs = borrow_read_iovecs(*m_ring_buffer);
         if (read_iovecs.empty()) {
             return false;
         }
 
-        auto parse_result = WsFrameParser::fromIOVec(
+        auto parse_result = WsFrameParser::from_io_vec(
             read_iovecs.data(),
             read_iovecs.size(),
             *m_frame,
@@ -565,40 +565,40 @@ public:
                 if (error.code() == kWsIncomplete) {
                     const size_t buffered = m_ring_buffer->readable();
                     if (m_total_received + buffered > m_setting.max_frame_size) {
-                        setParseError(WsError(kWsMessageTooLarge, "Frame size exceeds limit"));
+                        set_parse_error(WsError(kWsMessageTooLarge, "Frame size exceeds limit"));
                         return true;
                     }
                     return false;
                 }
-            setParseError(std::move(error));
+            set_parse_error(std::move(error));
             return true;
         }
 
         m_ring_buffer->consume(parse_result.value());
         if (m_frame->header.payload_length > m_setting.max_frame_size) {
-            setParseError(WsError(kWsMessageTooLarge, "Frame payload too large"));
+            set_parse_error(WsError(kWsMessageTooLarge, "Frame payload too large"));
             return true;
         }
         return true;
     }
 
-    bool prepareRecvWindow() {
-        m_write_iovecs = borrowWriteIovecs(*m_ring_buffer);
+    bool prepare_recv_window() {
+        m_write_iovecs = borrow_write_iovecs(*m_ring_buffer);
         if (m_write_iovecs.empty()) {
-            setParseError(WsError(kWsConnectionError, "Ring buffer has no space for writing"));
+            set_parse_error(WsError(kWsConnectionError, "Ring buffer has no space for writing"));
             return false;
         }
         return true;
     }
 
-    bool prepareRecvWindow(char*& buffer, size_t& length) {
-        if (!prepareRecvWindow()) {
+    bool prepare_recv_window(char*& buffer, size_t& length) {
+        if (!prepare_recv_window()) {
             buffer = nullptr;
             length = 0;
             return false;
         }
-        if (!IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
-            setParseError(WsError(kWsConnectionError, "Ring buffer has no space for writing"));
+        if (!IoVecWindow::bind_first_non_empty(m_write_iovecs, buffer, length)) {
+            set_parse_error(WsError(kWsConnectionError, "Ring buffer has no space for writing"));
             buffer = nullptr;
             length = 0;
             return false;
@@ -607,10 +607,10 @@ public:
         return length > 0;
     }
 
-    const struct iovec* recvIovecsData() const { return m_write_iovecs.data(); }
-    size_t recvIovecsCount() const { return m_write_iovecs.size(); }
+    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); }
+    size_t recv_iovecs_count() const { return m_write_iovecs.size(); }
 
-    void setRecvError(const IOError& io_error) {
+    void set_recv_error(const IOError& io_error) {
         if (IOError::contains(io_error.code(), kDisconnectError)) {
             m_ws_error = WsError(kWsConnectionClosed, io_error.message());
             return;
@@ -619,16 +619,16 @@ public:
     }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    void setSslRecvError(const galay::ssl::SslError& error) {
+    void set_ssl_recv_error(const galay::ssl::SslError& error) {
         m_ws_error = WsError(error);
     }
 #endif
 
-    void onPeerClosed() {
+    void on_peer_closed() {
         m_ws_error = WsError(kWsConnectionClosed, "Connection closed by peer");
     }
 
-    void onBytesReceived(size_t recv_bytes) {
+    void on_bytes_received(size_t recv_bytes) {
         m_total_received += recv_bytes;
         if (m_recv_staged) {
             size_t copied = 0;
@@ -645,9 +645,9 @@ public:
         m_recv_staged = false;
     }
 
-    void setParseError(WsError&& error) { m_ws_error = std::move(error); }
+    void set_parse_error(WsError&& error) { m_ws_error = std::move(error); }
 
-    ResultType takeResult() {
+    ResultType take_result() {
         if (m_ws_error.has_value()) {
             return std::unexpected(std::move(*m_ws_error));
         }
@@ -692,20 +692,20 @@ public:
     WsMessageReadState(WsMessageReadState&&) noexcept = default;
     WsMessageReadState& operator=(WsMessageReadState&&) noexcept = default;
 
-    void rebindStorage(std::string& message, WsOpcode& opcode) noexcept {
+    void rebind_storage(std::string& message, WsOpcode& opcode) noexcept {
         m_message = &message;
         m_opcode = &opcode;
     }
 
-    bool parseFromBuffer() {
+    bool parse_from_buffer() {
         while (true) {
-            auto read_iovecs = borrowReadIovecs(*m_ring_buffer);
+            auto read_iovecs = borrow_read_iovecs(*m_ring_buffer);
             if (read_iovecs.empty()) {
                 return false;
             }
 
             if (m_enable_fast_path) {
-                switch (tryFastPath(read_iovecs.data(), read_iovecs.size())) {
+                switch (try_fast_path(read_iovecs.data(), read_iovecs.size())) {
                     case WsMessageFastPathStatus::kReturn:
                         return true;
                     case WsMessageFastPathStatus::kContinue:
@@ -716,7 +716,7 @@ public:
                     case WsMessageFastPathStatus::kNeedMore: {
                         const size_t buffered = m_ring_buffer->readable();
                         if (m_message->size() + m_total_received + buffered > m_setting.max_message_size) {
-                            setParseError(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
+                            set_parse_error(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
                             return true;
                         }
                         return false;
@@ -727,7 +727,7 @@ public:
             }
 
             WsFrame frame;
-            auto parse_result = WsFrameParser::fromIOVec(
+            auto parse_result = WsFrameParser::from_io_vec(
                 read_iovecs.data(),
                 read_iovecs.size(),
                 frame,
@@ -737,24 +737,24 @@ public:
                 if (error.code() == kWsIncomplete) {
                     const size_t buffered = m_ring_buffer->readable();
                     if (m_message->size() + m_total_received + buffered > m_setting.max_message_size) {
-                        setParseError(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
+                        set_parse_error(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
                         return true;
                     }
                     return false;
                 }
-                setParseError(std::move(error));
+                set_parse_error(std::move(error));
                 return true;
             }
 
             m_ring_buffer->consume(parse_result.value());
             if (frame.header.payload_length > m_setting.max_frame_size) {
-                setParseError(WsError(kWsMessageTooLarge, "Frame payload too large"));
+                set_parse_error(WsError(kWsMessageTooLarge, "Frame payload too large"));
                 return true;
             }
 
-            if (isControlFrame(frame.header.opcode)) {
+            if (is_control_frame(frame.header.opcode)) {
                 if (!frame.header.fin) {
-                    setParseError(WsError(kWsControlFrameFragmented));
+                    set_parse_error(WsError(kWsControlFrameFragmented));
                     return true;
                 }
                 if (m_control_frame_callback) {
@@ -767,7 +767,7 @@ public:
 
             if (m_first_frame) {
                 if (frame.header.opcode == WsOpcode::Continuation) {
-                    setParseError(WsError(kWsProtocolError, "First frame cannot be continuation"));
+                    set_parse_error(WsError(kWsProtocolError, "First frame cannot be continuation"));
                     return true;
                 }
                 *m_opcode = frame.header.opcode;
@@ -775,14 +775,14 @@ public:
                 *m_message = std::move(frame.payload);
             } else {
                 if (frame.header.opcode != WsOpcode::Continuation) {
-                    setParseError(WsError(kWsProtocolError, "Expected continuation frame"));
+                    set_parse_error(WsError(kWsProtocolError, "Expected continuation frame"));
                     return true;
                 }
                 m_message->append(frame.payload);
             }
 
             if (m_message->size() > m_setting.max_message_size) {
-                setParseError(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
+                set_parse_error(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
                 return true;
             }
 
@@ -791,8 +791,8 @@ public:
             if (frame.header.fin) {
                 if (*m_opcode == WsOpcode::Text &&
                     !frame_payload_utf8_validated &&
-                    !WsFrameParser::isValidUtf8(*m_message)) {
-                    setParseError(WsError(kWsInvalidUtf8));
+                    !WsFrameParser::is_valid_utf8(*m_message)) {
+                    set_parse_error(WsError(kWsInvalidUtf8));
                     return true;
                 }
                 return true;
@@ -804,8 +804,8 @@ public:
         }
     }
 
-    WsMessageFastPathStatus tryFastPath(const struct iovec* iovecs, size_t iovec_count) {
-        const auto prefix_result = scanWsMessageFastPathPrefix(iovecs, iovec_count, m_is_server);
+    WsMessageFastPathStatus try_fast_path(const struct iovec* iovecs, size_t iovec_count) {
+        const auto prefix_result = scan_ws_message_fast_path_prefix(iovecs, iovec_count, m_is_server);
         if (prefix_result.status != WsMessageFastPathStatus::kContinue) {
             return prefix_result.status;
         }
@@ -814,12 +814,12 @@ public:
         if (m_first_frame) {
             if (prefix.opcode == WsOpcode::Continuation) {
                 m_ring_buffer->consume(prefix.frame_length);
-                setParseError(WsError(kWsProtocolError, "First frame cannot be continuation"));
+                set_parse_error(WsError(kWsProtocolError, "First frame cannot be continuation"));
                 return WsMessageFastPathStatus::kReturn;
             }
         } else if (prefix.opcode != WsOpcode::Continuation) {
             m_ring_buffer->consume(prefix.frame_length);
-            setParseError(WsError(kWsProtocolError, "Expected continuation frame"));
+            set_parse_error(WsError(kWsProtocolError, "Expected continuation frame"));
             return WsMessageFastPathStatus::kReturn;
         }
 
@@ -827,7 +827,7 @@ public:
         if (payload_size > m_setting.max_frame_size ||
             payload_size > m_setting.max_message_size ||
             m_message->size() > m_setting.max_message_size - payload_size) {
-            setParseError(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
+            set_parse_error(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
             return WsMessageFastPathStatus::kReturn;
         }
         const size_t old_size = m_message->size();
@@ -842,7 +842,7 @@ public:
         }
         m_message->resize(write_offset + payload_size);
         if (payload_size > 0 &&
-            !wsReadIovecBytes(iovecs,
+            !ws_read_iovec_bytes(iovecs,
                               iovec_count,
                               prefix.payload_offset,
                               m_message->data() + write_offset,
@@ -856,15 +856,15 @@ public:
         }
 
         if (prefix.mask) {
-            wsApplyMaskInPlace(m_message->data() + write_offset, payload_size, prefix.masking_key);
+            ws_apply_mask_in_place(m_message->data() + write_offset, payload_size, prefix.masking_key);
         }
 
         bool payload_utf8_validated = false;
         if (prefix.opcode == WsOpcode::Text &&
             prefix.fin &&
-            !wsIsValidUtf8Span(m_message->data() + write_offset, payload_size)) {
+            !ws_is_valid_utf8_span(m_message->data() + write_offset, payload_size)) {
             m_message->resize(old_size);
-            setParseError(WsError(kWsInvalidUtf8));
+            set_parse_error(WsError(kWsInvalidUtf8));
             return WsMessageFastPathStatus::kReturn;
         }
         payload_utf8_validated = prefix.opcode == WsOpcode::Text && prefix.fin;
@@ -882,15 +882,15 @@ public:
         ++m_fast_path_frames;
 
         if (m_message->size() > m_setting.max_message_size) {
-            setParseError(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
+            set_parse_error(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
             return WsMessageFastPathStatus::kReturn;
         }
 
         if (prefix.fin &&
             *m_opcode == WsOpcode::Text &&
             !payload_utf8_validated &&
-            !wsIsValidUtf8Span(m_message->data(), m_message->size())) {
-            setParseError(WsError(kWsInvalidUtf8));
+            !ws_is_valid_utf8_span(m_message->data(), m_message->size())) {
+            set_parse_error(WsError(kWsInvalidUtf8));
             return WsMessageFastPathStatus::kReturn;
         }
 
@@ -901,23 +901,23 @@ public:
         return WsMessageFastPathStatus::kContinue;
     }
 
-    bool prepareRecvWindow() {
-        m_write_iovecs = borrowWriteIovecs(*m_ring_buffer);
+    bool prepare_recv_window() {
+        m_write_iovecs = borrow_write_iovecs(*m_ring_buffer);
         if (m_write_iovecs.empty()) {
-            setParseError(WsError(kWsConnectionError, "Ring buffer has no space for writing"));
+            set_parse_error(WsError(kWsConnectionError, "Ring buffer has no space for writing"));
             return false;
         }
         return true;
     }
 
-    bool prepareRecvWindow(char*& buffer, size_t& length) {
-        if (!prepareRecvWindow()) {
+    bool prepare_recv_window(char*& buffer, size_t& length) {
+        if (!prepare_recv_window()) {
             buffer = nullptr;
             length = 0;
             return false;
         }
-        if (!IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
-            setParseError(WsError(kWsConnectionError, "Ring buffer has no space for writing"));
+        if (!IoVecWindow::bind_first_non_empty(m_write_iovecs, buffer, length)) {
+            set_parse_error(WsError(kWsConnectionError, "Ring buffer has no space for writing"));
             buffer = nullptr;
             length = 0;
             return false;
@@ -926,10 +926,10 @@ public:
         return length > 0;
     }
 
-    const struct iovec* recvIovecsData() const { return m_write_iovecs.data(); }
-    size_t recvIovecsCount() const { return m_write_iovecs.size(); }
+    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); }
+    size_t recv_iovecs_count() const { return m_write_iovecs.size(); }
 
-    void setRecvError(const IOError& io_error) {
+    void set_recv_error(const IOError& io_error) {
         if (IOError::contains(io_error.code(), kDisconnectError)) {
             m_ws_error = WsError(kWsConnectionClosed, io_error.message());
             return;
@@ -938,16 +938,16 @@ public:
     }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    void setSslRecvError(const galay::ssl::SslError& error) {
+    void set_ssl_recv_error(const galay::ssl::SslError& error) {
         m_ws_error = WsError(error);
     }
 #endif
 
-    void onPeerClosed() {
+    void on_peer_closed() {
         m_ws_error = WsError(kWsConnectionClosed, "Connection closed by peer");
     }
 
-    void onBytesReceived(size_t recv_bytes) {
+    void on_bytes_received(size_t recv_bytes) {
         m_total_received += recv_bytes;
         if (m_recv_staged) {
             size_t copied = 0;
@@ -964,21 +964,21 @@ public:
         m_recv_staged = false;
     }
 
-    void setParseError(WsError&& error) { m_ws_error = std::move(error); }
+    void set_parse_error(WsError&& error) { m_ws_error = std::move(error); }
 
-    void resetForNextMessage() {
+    void reset_for_next_message() {
         m_total_received = 0;
         m_first_frame = true;
         m_fast_path_frames = 0;
         m_recv_staged = false;
         m_ws_error.reset();
-        m_write_iovecs.setCount(0);
+        m_write_iovecs.set_count(0);
         if (m_message != nullptr) {
             m_message->clear();
         }
     }
 
-    ResultType takeResult() {
+    ResultType take_result() {
         if (m_ws_error.has_value()) {
             return std::unexpected(std::move(*m_ws_error));
         }
@@ -1003,11 +1003,11 @@ public:
 };
 
 template<typename SocketType, typename StateT>
-auto buildReadOperation(SocketType& socket, std::shared_ptr<StateT> state) {
+auto build_read_operation(SocketType& socket, std::shared_ptr<StateT> state) {
     using ResultType = typename StateT::ResultType;
     if constexpr (is_ssl_socket_v<SocketType>) {
 #ifdef GALAY_SSL_FEATURE_ENABLED
-        return galay::ssl::SslAwaitableBuilder<ResultType>::fromStateMachine(
+        return galay::ssl::SslAwaitableBuilder<ResultType>::from_state_machine(
                    socket.controller(),
                    &socket,
                    WsRingBufferSslReadMachine<StateT>(std::move(state)))
@@ -1016,7 +1016,7 @@ auto buildReadOperation(SocketType& socket, std::shared_ptr<StateT> state) {
         static_assert(!sizeof(SocketType), "SSL support is disabled");
 #endif
     } else {
-        return AwaitableBuilder<ResultType>::fromStateMachine(
+        return AwaitableBuilder<ResultType>::from_state_machine(
                    socket.controller(),
                    WsRingBufferTcpReadMachine<StateT>(std::move(state)))
             .build();
@@ -1070,9 +1070,9 @@ public:
      * @param frame 待填充的帧对象
      * @return 可 co_await 的异步操作
      */
-    auto getFrame(WsFrame& frame) {
+    auto get_frame(WsFrame& frame) {
         ++m_operation_counters.frame_awaitables_started;
-        return detail::buildReadOperation(
+        return detail::build_read_operation(
             *m_socket,
             std::make_shared<detail::WsFrameReadState>(*m_ring_buffer, m_setting, frame, m_is_server));
     }
@@ -1083,9 +1083,9 @@ public:
      * @param opcode 输出消息操作码
      * @return 可 co_await 的异步操作
      */
-    auto getMessage(std::string& message, WsOpcode& opcode) {
+    auto get_message(std::string& message, WsOpcode& opcode) {
         ++m_operation_counters.message_awaitables_started;
-        return detail::buildReadOperation(
+        return detail::build_read_operation(
             *m_socket,
             std::make_shared<detail::WsMessageReadState>(
                 *m_ring_buffer,
@@ -1095,11 +1095,11 @@ public:
                 m_is_server,
                 m_use_mask,
                 nullptr,
-                messageFastPathEnabled()));
+                message_fast_path_enabled()));
     }
 
 private:
-    static constexpr bool messageFastPathEnabled() noexcept {
+    static constexpr bool message_fast_path_enabled() noexcept {
         return true;
     }
 

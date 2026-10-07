@@ -13,7 +13,7 @@ namespace galay::http2
 
 namespace {
 
-std::time_t toTimeT(std::filesystem::file_time_type file_time)
+std::time_t to_time_t(std::filesystem::file_time_type file_time)
 {
     const auto system_time = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
         file_time - std::filesystem::file_time_type::clock::now() +
@@ -21,16 +21,16 @@ std::time_t toTimeT(std::filesystem::file_time_type file_time)
     return std::chrono::system_clock::to_time_t(system_time);
 }
 
-std::string extensionToMime(const std::filesystem::path& path)
+std::string extension_to_mime(const std::filesystem::path& path)
 {
     auto ext = path.extension().string();
     if (!ext.empty() && ext.front() == '.') {
-        return galay::http::MimeType::convertToMimeType(ext.substr(1));
+        return galay::http::MimeType::convert_to_mime_type(ext.substr(1));
     }
-    return galay::http::MimeType::convertToMimeType(ext);
+    return galay::http::MimeType::convert_to_mime_type(ext);
 }
 
-std::string stripQuery(std::string_view path)
+std::string strip_query(std::string_view path)
 {
     const auto query_pos = path.find('?');
     if (query_pos == std::string_view::npos) {
@@ -41,7 +41,7 @@ std::string stripQuery(std::string_view path)
 
 } // namespace
 
-H2StaticFileMount makeH2StaticFileMount(std::string prefix, H2StaticFileConfig config)
+H2StaticFileMount make_h2_static_file_mount(std::string prefix, H2StaticFileConfig config)
 {
     if (prefix.empty()) {
         prefix = "/";
@@ -59,7 +59,7 @@ H2StaticFileMount makeH2StaticFileMount(std::string prefix, H2StaticFileConfig c
     return mount;
 }
 
-std::shared_ptr<const std::string> encodeH2StaticFileHeaders(
+std::shared_ptr<const std::string> encode_h2_static_file_headers(
     int status,
     const std::vector<Http2HeaderField>& headers)
 {
@@ -68,7 +68,7 @@ std::shared_ptr<const std::string> encodeH2StaticFileHeaders(
     fields.push_back({":status", std::to_string(status)});
     fields.insert(fields.end(), headers.begin(), headers.end());
     HpackEncoder encoder;
-    auto block = encoder.encodeStateless(fields);
+    auto block = encoder.encode_stateless(fields);
     return std::make_shared<const std::string>(std::move(block));
 }
 
@@ -84,22 +84,22 @@ H2StaticFileCache::H2StaticFileCache(H2StaticFileConfig config)
 
 H2StaticFileLookup H2StaticFileCache::lookup(const H2StaticFileRequest& request)
 {
-    auto* entry = findOrLoadEntry(request.path);
+    auto* entry = find_or_load_entry(request.path);
     if (entry == nullptr) {
-        return makeNotFound();
+        return make_not_found();
     }
 
     if (m_config.enable_etag &&
         !request.if_none_match.empty() &&
-        galay::http::ETagGenerator::matchIfNoneMatch(entry->etag, request.if_none_match)) {
-        return makeLookup(*entry, 304);
+        galay::http::ETagGenerator::match_if_none_match(entry->etag, request.if_none_match)) {
+        return make_lookup(*entry, 304);
     }
 
     if (!request.range.empty()) {
         auto range_result = galay::http::HttpRangeParser::parse(request.range, entry->file_size);
-        if (!range_result.isValid() ||
+        if (!range_result.is_valid() ||
             range_result.type != galay::http::RangeType::SINGLE_RANGE) {
-            auto lookup = makeLookup(*entry, 416);
+            auto lookup = make_lookup(*entry, 416);
             lookup.headers.clear();
             lookup.headers.push_back({"content-length", "0"});
             lookup.headers.push_back({"content-range", "bytes */" + std::to_string(entry->file_size)});
@@ -112,7 +112,7 @@ H2StaticFileLookup H2StaticFileCache::lookup(const H2StaticFileRequest& request)
         }
 
         const auto& range = range_result.ranges.front();
-        auto lookup = makeLookup(*entry, 206);
+        auto lookup = make_lookup(*entry, 206);
         lookup.range_start = range.start;
         lookup.range_end = range.end;
         const auto length = range.end - range.start + 1;
@@ -121,7 +121,7 @@ H2StaticFileLookup H2StaticFileCache::lookup(const H2StaticFileRequest& request)
         lookup.headers.push_back({"content-type", entry->content_type});
         lookup.headers.push_back({
             "content-range",
-            galay::http::HttpRangeParser::makeContentRange(range, entry->file_size)});
+            galay::http::HttpRangeParser::make_content_range(range, entry->file_size)});
         lookup.headers.push_back({"accept-ranges", "bytes"});
         if (m_config.enable_etag && !entry->etag.empty()) {
             lookup.headers.push_back({"etag", entry->etag});
@@ -139,13 +139,13 @@ H2StaticFileLookup H2StaticFileCache::lookup(const H2StaticFileRequest& request)
         lookup.body_cacheable = entry->body_cacheable;
         return lookup;
     }
-    return makeLookup(*entry, 200);
+    return make_lookup(*entry, 200);
 }
 
-std::optional<H2StaticFileFastLookup> H2StaticFileCache::lookupFast200(
+std::optional<H2StaticFileFastLookup> H2StaticFileCache::lookup_fast200(
     std::string_view request_path)
 {
-    auto* entry = findOrLoadEntry(request_path);
+    auto* entry = find_or_load_entry(request_path);
     if (entry == nullptr) {
         return std::nullopt;
     }
@@ -162,15 +162,15 @@ std::optional<H2StaticFileFastLookup> H2StaticFileCache::lookupFast200(
     return lookup;
 }
 
-H2StaticFileCache::Entry* H2StaticFileCache::findOrLoadEntry(std::string_view request_path)
+H2StaticFileCache::Entry* H2StaticFileCache::find_or_load_entry(std::string_view request_path)
 {
-    const auto cache_path = stripQuery(request_path);
+    const auto cache_path = strip_query(request_path);
     std::string key;
     if (auto cached = m_request_path_cache.find(cache_path);
         cached != m_request_path_cache.end()) {
         key = cached->second;
     } else {
-        auto file_path = normalizeRequestPath(cache_path);
+        auto file_path = normalize_request_path(cache_path);
         if (file_path.empty()) {
             return nullptr;
         }
@@ -188,7 +188,7 @@ H2StaticFileCache::Entry* H2StaticFileCache::findOrLoadEntry(std::string_view re
         if (!std::filesystem::is_regular_file(file_path, ec) || ec) {
             return nullptr;
         }
-        auto [insert_it, inserted] = m_cache.emplace(key, loadEntry(file_path));
+        auto [insert_it, inserted] = m_cache.emplace(key, load_entry(file_path));
         it = insert_it;
         if (!inserted) {
             return &it->second;
@@ -197,7 +197,7 @@ H2StaticFileCache::Entry* H2StaticFileCache::findOrLoadEntry(std::string_view re
     return &it->second;
 }
 
-std::filesystem::path H2StaticFileCache::normalizeRequestPath(
+std::filesystem::path H2StaticFileCache::normalize_request_path(
     const std::string& request_path) const
 {
     if (request_path.empty() || request_path.find('\0') != std::string::npos) {
@@ -218,20 +218,20 @@ std::filesystem::path H2StaticFileCache::normalizeRequestPath(
 
     std::error_code ec;
     auto candidate = (m_root / relative).lexically_normal();
-    if (!isInsideRoot(candidate)) {
+    if (!is_inside_root(candidate)) {
         return {};
     }
     if (!std::filesystem::exists(candidate, ec) || ec) {
         return {};
     }
     auto canonical = std::filesystem::weakly_canonical(candidate, ec);
-    if (ec || !isInsideRoot(canonical)) {
+    if (ec || !is_inside_root(canonical)) {
         return {};
     }
     return canonical;
 }
 
-bool H2StaticFileCache::isInsideRoot(const std::filesystem::path& path) const
+bool H2StaticFileCache::is_inside_root(const std::filesystem::path& path) const
 {
     std::error_code ec;
     auto relative = std::filesystem::relative(path, m_root, ec);
@@ -246,7 +246,7 @@ bool H2StaticFileCache::isInsideRoot(const std::filesystem::path& path) const
     return true;
 }
 
-H2StaticFileLookup H2StaticFileCache::makeNotFound() const
+H2StaticFileLookup H2StaticFileCache::make_not_found() const
 {
     H2StaticFileLookup lookup;
     lookup.status = 404;
@@ -254,7 +254,7 @@ H2StaticFileLookup H2StaticFileCache::makeNotFound() const
     return lookup;
 }
 
-H2StaticFileLookup H2StaticFileCache::makeLookup(const Entry& entry, int status) const
+H2StaticFileLookup H2StaticFileCache::make_lookup(const Entry& entry, int status) const
 {
     H2StaticFileLookup lookup;
     lookup.status = status;
@@ -282,7 +282,7 @@ H2StaticFileLookup H2StaticFileCache::makeLookup(const Entry& entry, int status)
     return lookup;
 }
 
-H2StaticFileCache::Entry H2StaticFileCache::loadEntry(
+H2StaticFileCache::Entry H2StaticFileCache::load_entry(
     const std::filesystem::path& file_path) const
 {
     Entry entry;
@@ -293,13 +293,13 @@ H2StaticFileCache::Entry H2StaticFileCache::loadEntry(
     if (ec) {
         entry.file_size = 0;
     }
-    entry.last_modified = toTimeT(std::filesystem::last_write_time(file_path, ec));
+    entry.last_modified = to_time_t(std::filesystem::last_write_time(file_path, ec));
     if (ec) {
         entry.last_modified = 0;
     }
-    entry.content_type = extensionToMime(file_path);
+    entry.content_type = extension_to_mime(file_path);
     if (m_config.enable_etag) {
-        entry.etag = galay::http::ETagGenerator::generateStrong(
+        entry.etag = galay::http::ETagGenerator::generate_strong(
             file_path, static_cast<size_t>(entry.file_size), entry.last_modified);
     }
     entry.headers.push_back({"content-length", std::to_string(entry.file_size)});
@@ -308,7 +308,7 @@ H2StaticFileCache::Entry H2StaticFileCache::loadEntry(
     if (m_config.enable_etag && !entry.etag.empty()) {
         entry.headers.push_back({"etag", entry.etag});
     }
-    entry.encoded_headers = encodeH2StaticFileHeaders(200, entry.headers);
+    entry.encoded_headers = encode_h2_static_file_headers(200, entry.headers);
     if (entry.file_size <= m_config.small_file_threshold) {
         entry.body_cache_slot = std::make_shared<H2StaticFileBodyCacheSlot>();
         entry.body_cacheable = true;

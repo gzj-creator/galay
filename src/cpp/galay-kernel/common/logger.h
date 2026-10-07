@@ -47,7 +47,7 @@ namespace galay::kernel
  * @brief 日志级别枚举
  *
  * @details 从低到高分为五个级别，用于过滤和分类日志消息。
- * 各库 log::get()->minLevel() 返回的值决定了哪些级别的消息会被实际发送到日志实现。
+ * 各库 log::get()->min_level() 返回的值决定了哪些级别的消息会被实际发送到日志实现。
  */
 enum class LogLevel : uint8_t
 {
@@ -71,7 +71,7 @@ enum class LogLevel : uint8_t
  *
  * 线程安全要求：
  * - log() 实现必须是线程安全的，因为多个 IO 线程可能并发写入日志
- * - minLevel() 实现应返回不变量（constexpr 或从 immutable 状态读取）
+ * - min_level() 实现应返回不变量（constexpr 或从 immutable 状态读取）
  */
 class BaseLogger
 {
@@ -88,7 +88,7 @@ public:
      * @brief 核心日志写入方法
      *
      * @details 当日志宏（GALAY_LOG_* 等）检测到 logger 已设置且消息级别
-     * 不低于 minLevel() 时，将调用此方法。调用方已完成消息格式化，
+     * 不低于 min_level() 时，将调用此方法。调用方已完成消息格式化，
      * 实现只需将消息路由到目标后端。
      *
      * @param level    本次消息的日志级别
@@ -123,7 +123,7 @@ public:
      * @note 此方法应返回不变量。如果需要动态调整日志级别，
      *       返回值应使用 std::atomic 或由用户保证线程安全。
      */
-    virtual LogLevel minLevel() const { return LogLevel::kTrace; }
+    virtual LogLevel min_level() const { return LogLevel::kTrace; }
 };
 
 /**

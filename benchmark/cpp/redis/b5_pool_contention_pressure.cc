@@ -30,7 +30,7 @@ struct SharedState {
     std::atomic<int> command_failures{0};
 };
 
-Task<void> workerTask(RedisConnectionPool* pool,
+Task<void> worker_task(RedisConnectionPool* pool,
                      SharedState* state,
                      int worker_id,
                      std::shared_ptr<std::atomic<int>> remaining,
@@ -80,7 +80,7 @@ Task<void> workerTask(RedisConnectionPool* pool,
     }
 }
 
-Task<void> runTest(IOScheduler* scheduler, std::promise<int>* exit_code)
+Task<void> run_test(IOScheduler* scheduler, std::promise<int>* exit_code)
 {
     auto config = ConnectionPoolConfig::create("127.0.0.1", 6379, kMinConnections, kMaxConnections);
     config.initial_connections = kMinConnections;
@@ -98,7 +98,7 @@ Task<void> runTest(IOScheduler* scheduler, std::promise<int>* exit_code)
     auto done_waiter = std::make_shared<AsyncWaiter<void>>();
 
     for (int worker_id = 0; worker_id < kWorkerCount; ++worker_id) {
-        if (!scheduleTask(scheduler, workerTask(&pool, &state, worker_id, remaining, done_waiter))) {
+        if (!schedule_task(scheduler, worker_task(&pool, &state, worker_id, remaining, done_waiter))) {
             std::cerr << "Failed to schedule worker " << worker_id << std::endl;
             exit_code->set_value(1);
             co_return;
@@ -112,7 +112,7 @@ Task<void> runTest(IOScheduler* scheduler, std::promise<int>* exit_code)
         co_return;
     }
 
-    const auto stats = pool.getStats();
+    const auto stats = pool.get_stats();
     const int acquire_failures = state.acquire_failures.load(std::memory_order_relaxed);
     const int acquire_internal_errors = state.acquire_internal_errors.load(std::memory_order_relaxed);
     const int acquire_timeouts = state.acquire_timeouts.load(std::memory_order_relaxed);
@@ -140,7 +140,7 @@ Task<void> runTest(IOScheduler* scheduler, std::promise<int>* exit_code)
 
 int main()
 {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -148,7 +148,7 @@ int main()
         Runtime runtime;
         runtime.start();
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (scheduler == nullptr) {
             std::cerr << "Failed to get IO scheduler" << std::endl;
             return 1;
@@ -156,7 +156,7 @@ int main()
 
         std::promise<int> exit_code_promise;
         auto exit_code_future = exit_code_promise.get_future();
-        if (!scheduleTask(scheduler, runTest(scheduler, &exit_code_promise))) {
+        if (!schedule_task(scheduler, run_test(scheduler, &exit_code_promise))) {
             std::cerr << "Failed to schedule test coroutine" << std::endl;
             runtime.stop();
             return 1;

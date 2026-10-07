@@ -25,7 +25,7 @@ Task<void> test_get_method(IOScheduler* scheduler)
     std::cout << "=== Test 1: GET Method ===" << std::endl;
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
     auto connect_result = co_await socket.connect(host);
@@ -38,8 +38,8 @@ Task<void> test_get_method(IOScheduler* scheduler)
 
     std::cout << "✓ Connected to server" << std::endl;
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -57,7 +57,7 @@ Task<void> test_get_method(IOScheduler* scheduler)
             auto& response = result.value().value();
             std::cout << "✓ GET request succeeded" << std::endl;
             std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-            std::cout << "  Body length: " << response.getBodyStr().length() << " bytes" << std::endl;
+            std::cout << "  Body length: " << response.get_body_str().length() << " bytes" << std::endl;
             std::cout << "  Loops: " << loop_count << std::endl;
             break;
         }
@@ -81,7 +81,7 @@ Task<void> test_post_method(IOScheduler* scheduler)
     std::cout << "=== Test 2: POST Method ===" << std::endl;
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
     auto connect_result = co_await socket.connect(host);
@@ -94,10 +94,10 @@ Task<void> test_post_method(IOScheduler* scheduler)
 
     std::cout << "✓ Connected to server" << std::endl;
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
     std::string body = R"({"name": "test", "value": 123})";
-    auto session_result = client.getSession();
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -138,7 +138,7 @@ Task<void> test_put_method(IOScheduler* scheduler)
     std::cout << "=== Test 3: PUT Method ===" << std::endl;
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
     auto connect_result = co_await socket.connect(host);
@@ -151,10 +151,10 @@ Task<void> test_put_method(IOScheduler* scheduler)
 
     std::cout << "✓ Connected to server" << std::endl;
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
     std::string body = R"({"name": "updated", "value": 456})";
-    auto session_result = client.getSession();
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -195,7 +195,7 @@ Task<void> test_delete_method(IOScheduler* scheduler)
     std::cout << "=== Test 4: DELETE Method ===" << std::endl;
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
     auto connect_result = co_await socket.connect(host);
@@ -208,8 +208,8 @@ Task<void> test_delete_method(IOScheduler* scheduler)
 
     std::cout << "✓ Connected to server" << std::endl;
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -250,7 +250,7 @@ Task<void> test_head_method(IOScheduler* scheduler)
     std::cout << "=== Test 5: HEAD Method ===" << std::endl;
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
     auto connect_result = co_await socket.connect(host);
@@ -263,8 +263,8 @@ Task<void> test_head_method(IOScheduler* scheduler)
 
     std::cout << "✓ Connected to server" << std::endl;
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -282,7 +282,7 @@ Task<void> test_head_method(IOScheduler* scheduler)
             auto& response = result.value().value();
             std::cout << "✓ HEAD request succeeded" << std::endl;
             std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-            std::cout << "  Body length: " << response.getBodyStr().length() << " bytes (should be 0)" << std::endl;
+            std::cout << "  Body length: " << response.get_body_str().length() << " bytes (should be 0)" << std::endl;
             std::cout << "  Loops: " << loop_count << std::endl;
             break;
         }
@@ -306,7 +306,7 @@ Task<void> test_options_method(IOScheduler* scheduler)
     std::cout << "=== Test 6: OPTIONS Method ===" << std::endl;
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
     auto connect_result = co_await socket.connect(host);
@@ -319,8 +319,8 @@ Task<void> test_options_method(IOScheduler* scheduler)
 
     std::cout << "✓ Connected to server" << std::endl;
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -340,9 +340,9 @@ Task<void> test_options_method(IOScheduler* scheduler)
             std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
 
             // 查找 Allow 头
-            auto& headers = response.header().headerPairs();
-            if (headers.hasKey("Allow")) {
-                std::cout << "  Allow: " << headers.getValue("Allow") << std::endl;
+            auto& headers = response.header().header_pairs();
+            if (headers.has_key("Allow")) {
+                std::cout << "  Allow: " << headers.get_value("Allow") << std::endl;
             }
 
             std::cout << "  Loops: " << loop_count << std::endl;
@@ -368,7 +368,7 @@ Task<void> test_patch_method(IOScheduler* scheduler)
     std::cout << "=== Test 7: PATCH Method ===" << std::endl;
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
     auto connect_result = co_await socket.connect(host);
@@ -381,10 +381,10 @@ Task<void> test_patch_method(IOScheduler* scheduler)
 
     std::cout << "✓ Connected to server" << std::endl;
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
 
     std::string body = R"({"value": 789})";
-    auto session_result = client.getSession();
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -425,7 +425,7 @@ Task<void> test_trace_method(IOScheduler* scheduler)
     std::cout << "=== Test 8: TRACE Method ===" << std::endl;
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
     auto connect_result = co_await socket.connect(host);
@@ -438,8 +438,8 @@ Task<void> test_trace_method(IOScheduler* scheduler)
 
     std::cout << "✓ Connected to server" << std::endl;
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -480,7 +480,7 @@ Task<void> test_connect_method(IOScheduler* scheduler)
     std::cout << "=== Test 9: CONNECT Method ===" << std::endl;
 
     AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handleNonBlock();
+    socket.option().handle_non_block();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
     auto connect_result = co_await socket.connect(host);
@@ -493,8 +493,8 @@ Task<void> test_connect_method(IOScheduler* scheduler)
 
     std::cout << "✓ Connected to server" << std::endl;
 
-    HttpClient client(std::move(socket), HttpClientBuilder().buildConfig());
-    auto session_result = client.getSession();
+    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+    auto session_result = client.get_session();
     if (!session_result) {
         co_await client.close();
         co_return;
@@ -541,38 +541,38 @@ int main()
         Runtime runtime;
         runtime.start();
 
-        auto* scheduler = runtime.getNextIOScheduler();
+        auto* scheduler = runtime.get_next_io_scheduler();
         if (!scheduler) {
             std::cerr << "No IO scheduler available" << std::endl;
             return 1;
         }
 
         // 运行所有测试
-        scheduleTask(scheduler, test_get_method(scheduler));
+        schedule_task(scheduler, test_get_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, test_post_method(scheduler));
+        schedule_task(scheduler, test_post_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, test_put_method(scheduler));
+        schedule_task(scheduler, test_put_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, test_delete_method(scheduler));
+        schedule_task(scheduler, test_delete_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, test_head_method(scheduler));
+        schedule_task(scheduler, test_head_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, test_options_method(scheduler));
+        schedule_task(scheduler, test_options_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, test_patch_method(scheduler));
+        schedule_task(scheduler, test_patch_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, test_trace_method(scheduler));
+        schedule_task(scheduler, test_trace_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, test_connect_method(scheduler));
+        schedule_task(scheduler, test_connect_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         runtime.stop();

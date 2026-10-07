@@ -7,7 +7,7 @@
 
 namespace {
 
-bool sourceDoesNotUseBlockingLocks()
+bool source_does_not_use_blocking_locks()
 {
     std::ifstream input(
         std::string(GALAY_UTILS_SOURCE_DIR) + "/galay-utils/algorithm/consistent_hash.hpp");
@@ -41,14 +41,14 @@ bool sourceDoesNotUseBlockingLocks()
 
 int main()
 {
-    if (!sourceDoesNotUseBlockingLocks()) {
+    if (!source_does_not_use_blocking_locks()) {
         return 1;
     }
 
     galay::utils::ConsistentHash ring;
-    ring.addNode({"node-a", "127.0.0.1:9000", 1});
+    ring.add_node({"node-a", "127.0.0.1:9000", 1});
 
-    const auto node = ring.getNode("request-a");
+    const auto node = ring.get_node("request-a");
     if (!node.has_value() || node->id != "node-a") {
         std::cerr << "consistent_hash header self-contained smoke failed\n";
         return 1;

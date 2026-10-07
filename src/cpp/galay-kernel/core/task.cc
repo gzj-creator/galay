@@ -52,7 +52,7 @@ thread_local TaskStateFreeListCleanup g_taskStateFreeListCleanup;
 
 // 带有非平凡析构函数的 thread_local 对象由运行时延迟初始化。让分配辅助函数
 // 持有该对象的引用，确保每个使用缓存的线程都注册清理回调。
-inline void ensureTaskStateFreeListCleanup() noexcept
+inline void ensure_task_state_free_list_cleanup() noexcept
 {
     (void)g_taskStateFreeListCleanup;
 }
@@ -86,7 +86,7 @@ struct alignas(std::max_align_t) FrameAllocationHeader
 static_assert(sizeof(FrameAllocationHeader) % alignof(std::max_align_t) == 0);
 constexpr std::uint64_t kFrameAllocationMagic = 0x47414c415946524dULL;
 
-FrameAllocationHeader* frameAllocationHeader(void* ptr) noexcept;
+FrameAllocationHeader* frame_allocation_header(void* ptr) noexcept;
 
 struct FrameFreeList
 {
@@ -98,7 +98,7 @@ struct FrameFreeList
         while (head != nullptr) {
             auto* node = head;
             head = node->next;
-            if (auto* header = frameAllocationHeader(node); header != nullptr) {
+            if (auto* header = frame_allocation_header(node); header != nullptr) {
                 ::operator delete(header->base,
                                   std::align_val_t(header->alignment));
             } else {
@@ -114,7 +114,7 @@ thread_local bool g_frameRecyclerEnabled = true;
 thread_local bool g_failFrameAllocationForTesting = false;
 thread_local bool g_failTaskStateAllocationForTesting = false;
 
-std::size_t frameSizeClassIndex(std::size_t size) noexcept
+std::size_t frame_size_class_index(std::size_t size) noexcept
 {
     for (std::size_t index = 0; index < kFrameSizeClassCount; ++index) {
         if (size <= kFrameSizeClasses[index]) {
@@ -124,7 +124,7 @@ std::size_t frameSizeClassIndex(std::size_t size) noexcept
     return kFrameSizeClassCount;
 }
 
-std::align_val_t frameGlobalAlignment(std::size_t alignment) noexcept
+std::align_val_t frame_global_alignment(std::size_t alignment) noexcept
 {
     if (alignment == 0 || alignment <= kFrameDefaultAlignment) {
         return std::align_val_t(kFrameDefaultAlignment);
@@ -132,14 +132,14 @@ std::align_val_t frameGlobalAlignment(std::size_t alignment) noexcept
     return std::align_val_t(alignment);
 }
 
-std::uintptr_t alignAddress(std::uintptr_t address,
+std::uintptr_t align_address(std::uintptr_t address,
                             std::size_t alignment) noexcept
 {
     const auto remainder = address % alignment;
     return remainder == 0 ? address : address + alignment - remainder;
 }
 
-void* allocateFrameStorageBlock(std::size_t size,
+void* allocate_frame_storage_block(std::size_t size,
                                 std::size_t alignment,
                                 std::size_t bucket) noexcept
 {
@@ -159,7 +159,7 @@ void* allocateFrameStorageBlock(std::size_t size,
     }
 
     const auto total = size + sizeof(FrameAllocationHeader) + extra;
-    const auto globalAlignment = frameGlobalAlignment(alignment);
+    const auto globalAlignment = frame_global_alignment(alignment);
     auto* base = ::operator new(total,
                                 globalAlignment,
                                 std::nothrow);
@@ -169,7 +169,7 @@ void* allocateFrameStorageBlock(std::size_t size,
 
     const auto first = reinterpret_cast<std::uintptr_t>(base) +
         sizeof(FrameAllocationHeader);
-    const auto aligned = alignAddress(first, alignment);
+    const auto aligned = align_address(first, alignment);
     auto* header = reinterpret_cast<FrameAllocationHeader*>(
         aligned - sizeof(FrameAllocationHeader));
     header->base = base;
@@ -179,7 +179,7 @@ void* allocateFrameStorageBlock(std::size_t size,
     return reinterpret_cast<void*>(aligned);
 }
 
-FrameAllocationHeader* frameAllocationHeader(void* ptr) noexcept
+FrameAllocationHeader* frame_allocation_header(void* ptr) noexcept
 {
     if (ptr == nullptr) {
         return nullptr;
@@ -190,13 +190,13 @@ FrameAllocationHeader* frameAllocationHeader(void* ptr) noexcept
     return header->magic == kFrameAllocationMagic ? header : nullptr;
 }
 
-void releaseFrameRaw(void* ptr, std::size_t alignment) noexcept
+void release_frame_raw(void* ptr, std::size_t alignment) noexcept
 {
     if (ptr == nullptr) {
         return;
     }
 
-    if (auto* header = frameAllocationHeader(ptr); header != nullptr) {
+    if (auto* header = frame_allocation_header(ptr); header != nullptr) {
         ::operator delete(header->base, std::align_val_t(header->alignment));
         return;
     }
@@ -204,10 +204,10 @@ void releaseFrameRaw(void* ptr, std::size_t alignment) noexcept
         ::operator delete(ptr);
         return;
     }
-    ::operator delete(ptr, frameGlobalAlignment(alignment));
+    ::operator delete(ptr, frame_global_alignment(alignment));
 }
 
-void destroyTaskFrameForStateTeardown(TaskState* state) noexcept
+void destroy_task_frame_for_state_teardown(TaskState* state) noexcept
 {
     if (state == nullptr || state->m_handle == nullptr) {
         return;
@@ -221,9 +221,9 @@ void destroyTaskFrameForStateTeardown(TaskState* state) noexcept
     handle.destroy();
 }
 
-void* allocateTaskStateStorage(std::size_t size, std::align_val_t alignment)
+void* allocate_task_state_storage(std::size_t size, std::align_val_t alignment)
 {
-    ensureTaskStateFreeListCleanup();
+    ensure_task_state_free_list_cleanup();
     if (size == sizeof(TaskState) &&
         alignment == std::align_val_t(alignof(TaskState)) &&
         g_taskStateFreeList != nullptr) {
@@ -235,13 +235,13 @@ void* allocateTaskStateStorage(std::size_t size, std::align_val_t alignment)
     return ::operator new(size, alignment);
 }
 
-void releaseTaskStateStorage(void* ptr, std::size_t size, std::align_val_t alignment) noexcept
+void release_task_state_storage(void* ptr, std::size_t size, std::align_val_t alignment) noexcept
 {
     if (ptr == nullptr) {
         return;
     }
 
-    ensureTaskStateFreeListCleanup();
+    ensure_task_state_free_list_cleanup();
 
     if (size != sizeof(TaskState) ||
         alignment != std::align_val_t(alignof(TaskState)) ||
@@ -261,7 +261,7 @@ void releaseTaskStateStorage(void* ptr, std::size_t size, std::align_val_t align
 namespace detail
 {
 
-void* allocateFrameStorage(std::size_t size, std::size_t alignment) noexcept
+void* allocate_frame_storage(std::size_t size, std::size_t alignment) noexcept
 {
     if (alignment == 0) {
         alignment = kFrameDefaultAlignment;
@@ -270,7 +270,7 @@ void* allocateFrameStorage(std::size_t size, std::size_t alignment) noexcept
         return nullptr;
     }
     if (g_frameRecyclerEnabled && alignment <= kFrameDefaultAlignment) {
-        const auto index = frameSizeClassIndex(size);
+        const auto index = frame_size_class_index(size);
         if (index < kFrameSizeClassCount) {
             auto& bucket = g_frameFreeListBuckets[index];
             if (bucket.head != nullptr) {
@@ -279,14 +279,14 @@ void* allocateFrameStorage(std::size_t size, std::size_t alignment) noexcept
                 --bucket.count;
                 return node;
             }
-            return allocateFrameStorageBlock(kFrameSizeClasses[index], alignment, index);
+            return allocate_frame_storage_block(kFrameSizeClasses[index], alignment, index);
         }
     }
 
-    return allocateFrameStorageBlock(size, alignment, kFrameSizeClassCount);
+    return allocate_frame_storage_block(size, alignment, kFrameSizeClassCount);
 }
 
-void releaseFrameStorage(void* ptr,
+void release_frame_storage(void* ptr,
                          [[maybe_unused]] std::size_t size,
                          std::size_t alignment) noexcept
 {
@@ -301,17 +301,17 @@ void releaseFrameStorage(void* ptr,
     // 分配头记录实际的尺寸类别。不要根据编译器提供的 delete 尺寸推导缓存桶：
     // 调用方传入过期或不匹配的尺寸时，也不能将内存块放入更大的缓存桶。
     // size 参数仍属于编译器 delete ABI，但在此处有意忽略。
-    auto* header = frameAllocationHeader(ptr);
+    auto* header = frame_allocation_header(ptr);
     if (header == nullptr ||
         header->bucket >= kFrameSizeClassCount ||
         alignment > kFrameDefaultAlignment || !g_frameRecyclerEnabled) {
-        releaseFrameRaw(ptr, alignment);
+        release_frame_raw(ptr, alignment);
         return;
     }
 
     auto& bucket = g_frameFreeListBuckets[header->bucket];
     if (bucket.count >= kFrameFreeListLimit) {
-        releaseFrameRaw(ptr, alignment);
+        release_frame_raw(ptr, alignment);
         return;
     }
 
@@ -321,29 +321,29 @@ void releaseFrameStorage(void* ptr,
     ++bucket.count;
 }
 
-std::size_t frameFreeListSizeForTesting(std::size_t size,
+std::size_t frame_free_list_size_for_testing(std::size_t size,
                                         std::size_t alignment) noexcept
 {
     if (alignment > kFrameDefaultAlignment) {
         return 0;
     }
-    const auto index = frameSizeClassIndex(size);
+    const auto index = frame_size_class_index(size);
     return index < kFrameSizeClassCount
         ? g_frameFreeListBuckets[index].count
         : 0;
 }
 
-void setFrameRecyclerEnabledForTesting(bool enabled) noexcept
+void set_frame_recycler_enabled_for_testing(bool enabled) noexcept
 {
     g_frameRecyclerEnabled = enabled;
 }
 
-void setFrameAllocationFailureForTesting(bool enabled) noexcept
+void set_frame_allocation_failure_for_testing(bool enabled) noexcept
 {
     g_failFrameAllocationForTesting = enabled;
 }
 
-void setTaskStateAllocationFailureForTesting(bool enabled) noexcept
+void set_task_state_allocation_failure_for_testing(bool enabled) noexcept
 {
     g_failTaskStateAllocationForTesting = enabled;
 }
@@ -354,7 +354,7 @@ TaskState::~TaskState()
 {
     // 已完成的 frame 会由 final_suspend() == suspend_never 销毁；只有未完成且
     // 尚未提交的 frame 才需要执行这条显式清理路径。
-    destroyTaskFrameForStateTeardown(this);
+    destroy_task_frame_for_state_teardown(this);
     if (m_destroy_result != nullptr && m_result_kind != ResultStorageKind::Empty) {
         m_destroy_result(*this);
     }
@@ -365,17 +365,17 @@ TaskState::~TaskState()
 
 void* TaskState::operator new(std::size_t size)
 {
-    return allocateTaskStateStorage(size, std::align_val_t(alignof(TaskState)));
+    return allocate_task_state_storage(size, std::align_val_t(alignof(TaskState)));
 }
 
 void* TaskState::operator new(std::size_t size, std::align_val_t alignment)
 {
-    return allocateTaskStateStorage(size, alignment);
+    return allocate_task_state_storage(size, alignment);
 }
 
 void* TaskState::operator new(std::size_t size, const std::nothrow_t&) noexcept
 {
-    ensureTaskStateFreeListCleanup();
+    ensure_task_state_free_list_cleanup();
     if (g_failTaskStateAllocationForTesting) {
         return nullptr;
     }
@@ -394,7 +394,7 @@ void* TaskState::operator new(std::size_t size,
                               std::align_val_t alignment,
                               const std::nothrow_t&) noexcept
 {
-    ensureTaskStateFreeListCleanup();
+    ensure_task_state_free_list_cleanup();
     if (g_failTaskStateAllocationForTesting) {
         return nullptr;
     }
@@ -411,28 +411,28 @@ void* TaskState::operator new(std::size_t size,
 
 void TaskState::operator delete(void* ptr) noexcept
 {
-    releaseTaskStateStorage(ptr, sizeof(TaskState), std::align_val_t(alignof(TaskState)));
+    release_task_state_storage(ptr, sizeof(TaskState), std::align_val_t(alignof(TaskState)));
 }
 
 void TaskState::operator delete(void* ptr, std::size_t size) noexcept
 {
-    releaseTaskStateStorage(ptr, size, std::align_val_t(alignof(TaskState)));
+    release_task_state_storage(ptr, size, std::align_val_t(alignof(TaskState)));
 }
 
 void TaskState::operator delete(void* ptr, std::align_val_t alignment) noexcept
 {
-    releaseTaskStateStorage(ptr, sizeof(TaskState), alignment);
+    release_task_state_storage(ptr, sizeof(TaskState), alignment);
 }
 
 void TaskState::operator delete(void* ptr, std::size_t size, std::align_val_t alignment) noexcept
 {
-    releaseTaskStateStorage(ptr, size, alignment);
+    release_task_state_storage(ptr, size, alignment);
 }
 
 namespace detail
 {
 
-bool destroyTaskFrame(TaskState* state) noexcept
+bool destroy_task_frame(TaskState* state) noexcept
 {
     if (state == nullptr || state->m_done.load(std::memory_order_acquire) ||
         state->m_handle == nullptr) {
@@ -453,7 +453,7 @@ namespace detail
 namespace
 {
 
-TaskWaiter& ensureTaskWaiter(TaskState& state)
+TaskWaiter& ensure_task_waiter(TaskState& state)
 {
     TaskWaiter* waiter = state.m_waiter.load(std::memory_order_acquire);
     if (waiter != nullptr) {
@@ -472,7 +472,7 @@ TaskWaiter& ensureTaskWaiter(TaskState& state)
     return *waiter;
 }
 
-void notifyTaskWaiters(TaskState& state)
+void notify_task_waiters(TaskState& state)
 {
     TaskWaiter* waiter = state.m_waiter.load(std::memory_order_acquire);
     if (waiter == nullptr) {
@@ -485,51 +485,51 @@ void notifyTaskWaiters(TaskState& state)
 
 } // namespace
 
-Runtime* currentRuntime() noexcept
+Runtime* current_runtime() noexcept
 {
     return g_currentRuntime;
 }
 
-Runtime* swapCurrentRuntime(Runtime* runtime) noexcept
+Runtime* swap_current_runtime(Runtime* runtime) noexcept
 {
     Runtime* previous = g_currentRuntime;
     g_currentRuntime = runtime;
     return previous;
 }
 
-bool scheduleTask(const TaskRef& task) noexcept
+bool schedule_task(const TaskRef& task) noexcept
 {
-    auto* scheduler = task.belongScheduler();
+    auto* scheduler = task.belong_scheduler();
     return scheduler != nullptr && scheduler->schedule(task);
 }
 
-bool scheduleTaskDeferred(const TaskRef& task) noexcept
+bool schedule_task_deferred(const TaskRef& task) noexcept
 {
-    auto* scheduler = task.belongScheduler();
-    return scheduler != nullptr && scheduler->scheduleDeferred(task);
+    auto* scheduler = task.belong_scheduler();
+    return scheduler != nullptr && scheduler->schedule_deferred(task);
 }
 
-bool scheduleTaskDeferredState(TaskState* state) noexcept
+bool schedule_task_deferred_state(TaskState* state) noexcept
 {
     if (state == nullptr || state->m_scheduler == nullptr) {
         return false;
     }
-    return state->m_scheduler->scheduleDeferred(TaskRef(state, true));
+    return state->m_scheduler->schedule_deferred(TaskRef(state, true));
 }
 
-bool scheduleTaskImmediately(const TaskRef& task) noexcept
+bool schedule_task_immediately(const TaskRef& task) noexcept
 {
-    auto* scheduler = task.belongScheduler();
-    return scheduler != nullptr && scheduler->scheduleImmediately(task);
+    auto* scheduler = task.belong_scheduler();
+    return scheduler != nullptr && scheduler->schedule_immediately(task);
 }
 
-bool requestTaskResume(const TaskRef& task) noexcept
+bool request_task_resume(const TaskRef& task) noexcept
 {
-    return requestTaskResumeStateDetailed(task.state()) ==
+    return request_task_resume_state_detailed(task.state()) ==
         TaskResumeResult::kAccepted;
 }
 
-TaskResumeResult requestTaskResumeStateDetailed(TaskState* state) noexcept
+TaskResumeResult request_task_resume_state_detailed(TaskState* state) noexcept
 {
     if (!state || !state->m_handle || !state->m_scheduler ||
         state->m_done.load(std::memory_order_relaxed)) {
@@ -540,7 +540,7 @@ TaskResumeResult requestTaskResumeStateDetailed(TaskState* state) noexcept
         return TaskResumeResult::kAlreadyQueued;
     }
     state->m_resume_owner_only.store(true, std::memory_order_release);
-    if (state->m_scheduler->scheduleResume(TaskRef(state, true))) {
+    if (state->m_scheduler->schedule_resume(TaskRef(state, true))) {
         return TaskResumeResult::kAccepted;
     }
 
@@ -549,43 +549,43 @@ TaskResumeResult requestTaskResumeStateDetailed(TaskState* state) noexcept
     return TaskResumeResult::kRejected;
 }
 
-bool requestTaskResumeState(TaskState* state) noexcept
+bool request_task_resume_state(TaskState* state) noexcept
 {
-    return requestTaskResumeStateDetailed(state) == TaskResumeResult::kAccepted;
+    return request_task_resume_state_detailed(state) == TaskResumeResult::kAccepted;
 }
 
-std::thread::id schedulerThreadId(Scheduler* scheduler) noexcept
+std::thread::id scheduler_thread_id(Scheduler* scheduler) noexcept
 {
-    return scheduler ? scheduler->threadId() : std::thread::id{};
+    return scheduler ? scheduler->thread_id() : std::thread::id{};
 }
 
-void attachTaskContinuation(const TaskRef& task, TaskRef next) noexcept
+void attach_task_continuation(const TaskRef& task, TaskRef next) noexcept
 {
     auto* state = task.state();
     if (state == nullptr) {
         return;
     }
 
-    inheritTaskRuntime(next, state->m_runtime);
-    if (next.belongScheduler() == nullptr && state->m_scheduler != nullptr) {
-        setTaskScheduler(next, state->m_scheduler);
+    inherit_task_runtime(next, state->m_runtime);
+    if (next.belong_scheduler() == nullptr && state->m_scheduler != nullptr) {
+        set_task_scheduler(next, state->m_scheduler);
     }
     state->m_then = std::move(next);
 }
 
-void completeTaskState(const TaskRef& task) noexcept
+void complete_task_state(const TaskRef& task) noexcept
 {
-    completeTaskState(task.state());
+    complete_task_state(task.state());
 }
 
-void completeTaskState(TaskState* state) noexcept
+void complete_task_state(TaskState* state) noexcept
 {
     if (!state) {
         return;
     }
 
     state->m_done.store(true, std::memory_order_release);
-    notifyTaskWaiters(*state);
+    notify_task_waiters(*state);
 
     auto schedule_continuation = [](std::optional<TaskRef>& continuation) {
         if (!continuation.has_value()) {
@@ -594,18 +594,18 @@ void completeTaskState(TaskState* state) noexcept
 
         TaskRef next = std::move(*continuation);
         continuation.reset();
-        if (requestTaskResume(next)) {
+        if (request_task_resume(next)) {
             return;
         }
 
         auto* nextState = next.state();
-        auto* scheduler = next.belongScheduler();
+        auto* scheduler = next.belong_scheduler();
         bool expected = false;
         // stop() 会先关闭 resume admission 再排空普通任务。只有 owner 线程
         // 可以把 completion continuation 降级到普通延后队列，避免跨线程恢复。
         if (nextState != nullptr && scheduler != nullptr &&
             !nextState->m_done.load(std::memory_order_acquire) &&
-            std::this_thread::get_id() == schedulerThreadId(scheduler) &&
+            std::this_thread::get_id() == scheduler_thread_id(scheduler) &&
             nextState->m_queued.compare_exchange_strong(
                 expected,
                 true,
@@ -613,7 +613,7 @@ void completeTaskState(TaskState* state) noexcept
                 std::memory_order_acquire)) {
             nextState->m_resume_owner_only.store(true,
                                                  std::memory_order_release);
-            if (scheduler->scheduleDeferred(next)) {
+            if (scheduler->schedule_deferred(next)) {
                 return;
             }
             nextState->m_resume_owner_only.store(false,
@@ -632,7 +632,7 @@ void completeTaskState(TaskState* state) noexcept
     schedule_continuation(state->m_next);
 }
 
-bool waitTaskCompletion(const TaskRef& task)
+bool wait_task_completion(const TaskRef& task)
 {
     auto* state = task.state();
     if (state == nullptr) {
@@ -640,7 +640,7 @@ bool waitTaskCompletion(const TaskRef& task)
     }
 
     while (!state->m_done.load(std::memory_order_acquire)) {
-        TaskWaiter& waiter = ensureTaskWaiter(*state);
+        TaskWaiter& waiter = ensure_task_waiter(*state);
         std::unique_lock<std::mutex> lock(waiter.m_mutex);
         if (state->m_done.load(std::memory_order_acquire)) {
             return true;

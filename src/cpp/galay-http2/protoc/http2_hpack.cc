@@ -4929,7 +4929,7 @@ std::pair<size_t, bool> HpackDynamicTable::find(const std::string& name, const s
     return {SIZE_MAX, false};  // 未找到：用 SIZE_MAX 区分于索引 0 的完全匹配
 }
 
-void HpackDynamicTable::setMaxSize(size_t max_size)
+void HpackDynamicTable::set_max_size(size_t max_size)
 {
     m_max_size = max_size;
     while (m_current_size > m_max_size) {
@@ -4988,7 +4988,7 @@ std::string HpackHuffman::encode(const std::string& input)
     return output;
 }
 
-size_t HpackHuffman::encodedLength(const std::string& input)
+size_t HpackHuffman::encoded_length(const std::string& input)
 {
     size_t bits = 0;
     for (unsigned char c : input) {
@@ -5044,7 +5044,7 @@ HpackEncoder::HpackEncoder(size_t max_table_size)
 {
 }
 
-void HpackEncoder::encodeInteger(uint32_t value, uint8_t prefix_bits, uint8_t prefix, std::string& output)
+void HpackEncoder::encode_integer(uint32_t value, uint8_t prefix_bits, uint8_t prefix, std::string& output)
 {
     uint8_t max_prefix = (1 << prefix_bits) - 1;
     
@@ -5061,78 +5061,78 @@ void HpackEncoder::encodeInteger(uint32_t value, uint8_t prefix_bits, uint8_t pr
     }
 }
 
-void HpackEncoder::encodeString(const std::string& str, bool use_huffman, std::string& output)
+void HpackEncoder::encode_string(const std::string& str, bool use_huffman, std::string& output)
 {
     if (use_huffman) {
         std::string encoded = HpackHuffman::encode(str);
-        encodeInteger(encoded.size(), 7, 0x80, output);  // H=1
+        encode_integer(encoded.size(), 7, 0x80, output);  // H=1
         output.append(encoded);
     } else {
-        encodeInteger(str.size(), 7, 0x00, output);  // H=0
+        encode_integer(str.size(), 7, 0x00, output);  // H=0
         output.append(str);
     }
 }
 
-void HpackEncoder::encodeIndexed(size_t index, std::string& output)
+void HpackEncoder::encode_indexed(size_t index, std::string& output)
 {
     // 索引头部字段: 1xxxxxxx
-    encodeInteger(index, 7, 0x80, output);
+    encode_integer(index, 7, 0x80, output);
 }
 
-void HpackEncoder::encodeLiteralIndexed(size_t name_index, const std::string& value, std::string& output)
+void HpackEncoder::encode_literal_indexed(size_t name_index, const std::string& value, std::string& output)
 {
     // 带索引的字面头部字段: 01xxxxxx
-    encodeInteger(name_index, 6, 0x40, output);
-    encodeString(value, m_use_huffman, output);
+    encode_integer(name_index, 6, 0x40, output);
+    encode_string(value, m_use_huffman, output);
 }
 
-void HpackEncoder::encodeLiteralIndexed(const std::string& name, const std::string& value, std::string& output)
+void HpackEncoder::encode_literal_indexed(const std::string& name, const std::string& value, std::string& output)
 {
     // 带索引的字面头部字段，新名称: 01000000
     output.push_back(0x40);
-    encodeString(name, m_use_huffman, output);
-    encodeString(value, m_use_huffman, output);
+    encode_string(name, m_use_huffman, output);
+    encode_string(value, m_use_huffman, output);
 }
 
-void HpackEncoder::encodeLiteralWithoutIndexing(size_t name_index, const std::string& value, std::string& output)
+void HpackEncoder::encode_literal_without_indexing(size_t name_index, const std::string& value, std::string& output)
 {
     // 不带索引的字面头部字段: 0000xxxx
-    encodeInteger(name_index, 4, 0x00, output);
-    encodeString(value, m_use_huffman, output);
+    encode_integer(name_index, 4, 0x00, output);
+    encode_string(value, m_use_huffman, output);
 }
 
-void HpackEncoder::encodeLiteralWithoutIndexing(const std::string& name, const std::string& value, std::string& output)
+void HpackEncoder::encode_literal_without_indexing(const std::string& name, const std::string& value, std::string& output)
 {
     // 不带索引的字面头部字段，新名称: 00000000
     output.push_back(0x00);
-    encodeString(name, m_use_huffman, output);
-    encodeString(value, m_use_huffman, output);
+    encode_string(name, m_use_huffman, output);
+    encode_string(value, m_use_huffman, output);
 }
 
-void HpackEncoder::encodeLiteralNeverIndexed(size_t name_index, const std::string& value, std::string& output)
+void HpackEncoder::encode_literal_never_indexed(size_t name_index, const std::string& value, std::string& output)
 {
     // 永不索引的字面头部字段: 0001xxxx
-    encodeInteger(name_index, 4, 0x10, output);
-    encodeString(value, m_use_huffman, output);
+    encode_integer(name_index, 4, 0x10, output);
+    encode_string(value, m_use_huffman, output);
 }
 
-void HpackEncoder::encodeLiteralNeverIndexed(const std::string& name, const std::string& value, std::string& output)
+void HpackEncoder::encode_literal_never_indexed(const std::string& name, const std::string& value, std::string& output)
 {
     // 永不索引的字面头部字段，新名称: 00010000
     output.push_back(0x10);
-    encodeString(name, m_use_huffman, output);
-    encodeString(value, m_use_huffman, output);
+    encode_string(name, m_use_huffman, output);
+    encode_string(value, m_use_huffman, output);
 }
 
-void HpackEncoder::setMaxTableSize(size_t size)
+void HpackEncoder::set_max_table_size(size_t size)
 {
-    m_dynamic_table.setMaxSize(size);
+    m_dynamic_table.set_max_size(size);
     m_table_size_update_pending = true;
     m_pending_table_size = size;
 }
 
 
-void HpackEncoder::encodeField(const Http2HeaderField& field, std::string& output)
+void HpackEncoder::encode_field(const Http2HeaderField& field, std::string& output)
 {
     const auto& static_table = HpackStaticTable::instance();
     
@@ -5141,7 +5141,7 @@ void HpackEncoder::encodeField(const Http2HeaderField& field, std::string& outpu
     
     if (static_idx > 0 && !static_name_only) {
         // 静态表完全匹配
-        encodeIndexed(static_idx, output);
+        encode_indexed(static_idx, output);
         return;
     }
     
@@ -5151,7 +5151,7 @@ void HpackEncoder::encodeField(const Http2HeaderField& field, std::string& outpu
     if (dyn_idx != SIZE_MAX && !dyn_name_only) {
         // 动态表完全匹配
         size_t index = static_table.size() + dyn_idx + 1;
-        encodeIndexed(index, output);
+        encode_indexed(index, output);
         return;
     }
 
@@ -5164,40 +5164,40 @@ void HpackEncoder::encodeField(const Http2HeaderField& field, std::string& outpu
 
     if (sensitive) {
         if (static_idx > 0) {
-            encodeLiteralNeverIndexed(static_idx, field.value, output);
+            encode_literal_never_indexed(static_idx, field.value, output);
         } else {
-            encodeLiteralNeverIndexed(field.name, field.value, output);
+            encode_literal_never_indexed(field.name, field.value, output);
         }
     } else {
         // 添加到动态表
         if (static_idx > 0) {
-            encodeLiteralIndexed(static_idx, field.value, output);
+            encode_literal_indexed(static_idx, field.value, output);
         } else if (dyn_idx != SIZE_MAX && dyn_name_only) {
             size_t index = static_table.size() + dyn_idx + 1;
-            encodeLiteralIndexed(index, field.value, output);
+            encode_literal_indexed(index, field.value, output);
         } else {
-            encodeLiteralIndexed(field.name, field.value, output);
+            encode_literal_indexed(field.name, field.value, output);
         }
         m_dynamic_table.add(field);
     }
 }
 
-void HpackEncoder::encodeFieldStateless(const Http2HeaderField& field, std::string& output)
+void HpackEncoder::encode_field_stateless(const Http2HeaderField& field, std::string& output)
 {
     const auto& static_table = HpackStaticTable::instance();
     auto [static_idx, static_name_only] = static_table.find(field.name, field.value);
 
     if (static_idx > 0 && !static_name_only) {
-        encodeIndexed(static_idx, output);
+        encode_indexed(static_idx, output);
         return;
     }
 
     if (static_idx > 0) {
-        encodeLiteralWithoutIndexing(static_idx, field.value, output);
+        encode_literal_without_indexing(static_idx, field.value, output);
         return;
     }
 
-    encodeLiteralWithoutIndexing(field.name, field.value, output);
+    encode_literal_without_indexing(field.name, field.value, output);
 }
 
 std::string HpackEncoder::encode(const std::vector<Http2HeaderField>& headers)
@@ -5208,24 +5208,24 @@ std::string HpackEncoder::encode(const std::vector<Http2HeaderField>& headers)
     // 如果有待处理的表大小更新
     if (m_table_size_update_pending) {
         // 动态表大小更新: 001xxxxx
-        encodeInteger(m_pending_table_size, 5, 0x20, output);
+        encode_integer(m_pending_table_size, 5, 0x20, output);
         m_table_size_update_pending = false;
     }
     
     for (const auto& field : headers) {
-        encodeField(field, output);
+        encode_field(field, output);
     }
     
     return output;
 }
 
-std::string HpackEncoder::encodeStateless(const std::vector<Http2HeaderField>& headers)
+std::string HpackEncoder::encode_stateless(const std::vector<Http2HeaderField>& headers)
 {
     std::string output;
     output.reserve(headers.size() * 32);
 
     for (const auto& field : headers) {
-        encodeFieldStateless(field, output);
+        encode_field_stateless(field, output);
     }
 
     return output;
@@ -5240,7 +5240,7 @@ HpackDecoder::HpackDecoder(size_t max_table_size)
 {
 }
 
-std::expected<uint32_t, Http2ErrorCode> HpackDecoder::decodeInteger(const uint8_t*& data, const uint8_t* end, uint8_t prefix_bits)
+std::expected<uint32_t, Http2ErrorCode> HpackDecoder::decode_integer(const uint8_t*& data, const uint8_t* end, uint8_t prefix_bits)
 {
     if (data >= end) {
         return std::unexpected(Http2ErrorCode::CompressionError);
@@ -5273,14 +5273,14 @@ std::expected<uint32_t, Http2ErrorCode> HpackDecoder::decodeInteger(const uint8_
     return std::unexpected(Http2ErrorCode::CompressionError);
 }
 
-std::expected<std::string, Http2ErrorCode> HpackDecoder::decodeString(const uint8_t*& data, const uint8_t* end)
+std::expected<std::string, Http2ErrorCode> HpackDecoder::decode_string(const uint8_t*& data, const uint8_t* end)
 {
     if (data >= end) {
         return std::unexpected(Http2ErrorCode::CompressionError);
     }
     
     bool huffman = (*data & 0x80) != 0;
-    auto length_result = decodeInteger(data, end, 7);
+    auto length_result = decode_integer(data, end, 7);
     if (!length_result) {
         return std::unexpected(length_result.error());
     }
@@ -5305,7 +5305,7 @@ std::expected<std::string, Http2ErrorCode> HpackDecoder::decodeString(const uint
     return result;
 }
 
-const Http2HeaderField* HpackDecoder::getField(size_t index) const
+const Http2HeaderField* HpackDecoder::get_field(size_t index) const
 {
     const auto& static_table = HpackStaticTable::instance();
     
@@ -5321,13 +5321,13 @@ const Http2HeaderField* HpackDecoder::getField(size_t index) const
     return m_dynamic_table.get(dyn_index);
 }
 
-void HpackDecoder::setMaxTableSize(size_t size)
+void HpackDecoder::set_max_table_size(size_t size)
 {
     m_max_table_size = size;
-    m_dynamic_table.setMaxSize(size);
+    m_dynamic_table.set_max_size(size);
 }
 
-void HpackDecoder::setMaxHeaderListSize(size_t size)
+void HpackDecoder::set_max_header_list_size(size_t size)
 {
     m_max_header_list_size = size;
 }
@@ -5353,12 +5353,12 @@ std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> HpackDecoder::decod
         
         if (byte & 0x80) {
             // 索引头部字段: 1xxxxxxx
-            auto index_result = decodeInteger(data, end, 7);
+            auto index_result = decode_integer(data, end, 7);
             if (!index_result) {
                 return std::unexpected(index_result.error());
             }
             
-            const Http2HeaderField* field = getField(*index_result);
+            const Http2HeaderField* field = get_field(*index_result);
             if (!field) {
                 return std::unexpected(Http2ErrorCode::CompressionError);
             }
@@ -5372,27 +5372,27 @@ std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> HpackDecoder::decod
         }
         else if (byte & 0x40) {
             // 带索引的字面头部字段: 01xxxxxx
-            auto index_result = decodeInteger(data, end, 6);
+            auto index_result = decode_integer(data, end, 6);
             if (!index_result) {
                 return std::unexpected(index_result.error());
             }
             
             std::string name;
             if (*index_result > 0) {
-                const Http2HeaderField* field = getField(*index_result);
+                const Http2HeaderField* field = get_field(*index_result);
                 if (!field) {
                     return std::unexpected(Http2ErrorCode::CompressionError);
                 }
                 name = field->name;
             } else {
-                auto name_result = decodeString(data, end);
+                auto name_result = decode_string(data, end);
                 if (!name_result) {
                     return std::unexpected(name_result.error());
                 }
                 name = std::move(*name_result);
             }
             
-            auto value_result = decodeString(data, end);
+            auto value_result = decode_string(data, end);
             if (!value_result) {
                 return std::unexpected(value_result.error());
             }
@@ -5408,7 +5408,7 @@ std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> HpackDecoder::decod
         }
         else if (byte & 0x20) {
             // 动态表大小更新: 001xxxxx
-            auto size_result = decodeInteger(data, end, 5);
+            auto size_result = decode_integer(data, end, 5);
             if (!size_result) {
                 return std::unexpected(size_result.error());
             }
@@ -5417,34 +5417,34 @@ std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> HpackDecoder::decod
                 return std::unexpected(Http2ErrorCode::CompressionError);
             }
             
-            m_dynamic_table.setMaxSize(*size_result);
+            m_dynamic_table.set_max_size(*size_result);
         }
         else {
             // 不带索引或永不索引的字面头部字段: 0000xxxx 或 0001xxxx
             bool never_index = (byte & 0x10) != 0;
             (void)never_index;  // 解码时不需要区分
             
-            auto index_result = decodeInteger(data, end, 4);
+            auto index_result = decode_integer(data, end, 4);
             if (!index_result) {
                 return std::unexpected(index_result.error());
             }
             
             std::string name;
             if (*index_result > 0) {
-                const Http2HeaderField* field = getField(*index_result);
+                const Http2HeaderField* field = get_field(*index_result);
                 if (!field) {
                     return std::unexpected(Http2ErrorCode::CompressionError);
                 }
                 name = field->name;
             } else {
-                auto name_result = decodeString(data, end);
+                auto name_result = decode_string(data, end);
                 if (!name_result) {
                     return std::unexpected(name_result.error());
                 }
                 name = std::move(*name_result);
             }
             
-            auto value_result = decodeString(data, end);
+            auto value_result = decode_string(data, end);
             if (!value_result) {
                 return std::unexpected(value_result.error());
             }
@@ -5464,7 +5464,7 @@ std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> HpackDecoder::decod
 }
 
 std::expected<HpackDecoder::RequestTarget, Http2ErrorCode>
-HpackDecoder::decodeRequestTarget(const uint8_t* data, size_t length)
+HpackDecoder::decode_request_target(const uint8_t* data, size_t length)
 {
     if (data == nullptr && length != 0) {
         return std::unexpected(Http2ErrorCode::CompressionError);
@@ -5499,12 +5499,12 @@ HpackDecoder::decodeRequestTarget(const uint8_t* data, size_t length)
         uint8_t byte = *data;
 
         if (byte & 0x80) {
-            auto index_result = decodeInteger(data, end, 7);
+            auto index_result = decode_integer(data, end, 7);
             if (!index_result) {
                 return std::unexpected(index_result.error());
             }
 
-            const Http2HeaderField* field = getField(*index_result);
+            const Http2HeaderField* field = get_field(*index_result);
             if (!field) {
                 return std::unexpected(Http2ErrorCode::CompressionError);
             }
@@ -5514,27 +5514,27 @@ HpackDecoder::decodeRequestTarget(const uint8_t* data, size_t length)
             }
         }
         else if (byte & 0x40) {
-            auto index_result = decodeInteger(data, end, 6);
+            auto index_result = decode_integer(data, end, 6);
             if (!index_result) {
                 return std::unexpected(index_result.error());
             }
 
             std::string name;
             if (*index_result > 0) {
-                const Http2HeaderField* field = getField(*index_result);
+                const Http2HeaderField* field = get_field(*index_result);
                 if (!field) {
                     return std::unexpected(Http2ErrorCode::CompressionError);
                 }
                 name = field->name;
             } else {
-                auto name_result = decodeString(data, end);
+                auto name_result = decode_string(data, end);
                 if (!name_result) {
                     return std::unexpected(name_result.error());
                 }
                 name = std::move(*name_result);
             }
 
-            auto value_result = decodeString(data, end);
+            auto value_result = decode_string(data, end);
             if (!value_result) {
                 return std::unexpected(value_result.error());
             }
@@ -5547,7 +5547,7 @@ HpackDecoder::decodeRequestTarget(const uint8_t* data, size_t length)
             m_dynamic_table.add(field);
         }
         else if (byte & 0x20) {
-            auto size_result = decodeInteger(data, end, 5);
+            auto size_result = decode_integer(data, end, 5);
             if (!size_result) {
                 return std::unexpected(size_result.error());
             }
@@ -5556,30 +5556,30 @@ HpackDecoder::decodeRequestTarget(const uint8_t* data, size_t length)
                 return std::unexpected(Http2ErrorCode::CompressionError);
             }
 
-            m_dynamic_table.setMaxSize(*size_result);
+            m_dynamic_table.set_max_size(*size_result);
         }
         else {
-            auto index_result = decodeInteger(data, end, 4);
+            auto index_result = decode_integer(data, end, 4);
             if (!index_result) {
                 return std::unexpected(index_result.error());
             }
 
             std::string name;
             if (*index_result > 0) {
-                const Http2HeaderField* field = getField(*index_result);
+                const Http2HeaderField* field = get_field(*index_result);
                 if (!field) {
                     return std::unexpected(Http2ErrorCode::CompressionError);
                 }
                 name = field->name;
             } else {
-                auto name_result = decodeString(data, end);
+                auto name_result = decode_string(data, end);
                 if (!name_result) {
                     return std::unexpected(name_result.error());
                 }
                 name = std::move(*name_result);
             }
 
-            auto value_result = decodeString(data, end);
+            auto value_result = decode_string(data, end);
             if (!value_result) {
                 return std::unexpected(value_result.error());
             }

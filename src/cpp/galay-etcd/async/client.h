@@ -167,14 +167,14 @@ public:
      * @param ttl_seconds 租约存活时间（秒）
      * @return GrantLease 操作 Awaitable，co_await 返回 EtcdLeaseGrantResult（租约 ID）
      */
-    GrantLeaseAwaitable grantLease(int64_t ttl_seconds);
+    GrantLeaseAwaitable grant_lease(int64_t ttl_seconds);
 
     /**
      * @brief 异步发送一次租约续期请求
      * @param lease_id 需要续期的租约 ID
      * @return KeepAlive 操作 Awaitable，co_await 返回 EtcdLeaseGrantResult（租约 ID）
      */
-    KeepAliveAwaitable keepAliveOnce(int64_t lease_id);
+    KeepAliveAwaitable keep_alive_once(int64_t lease_id);
 
     /**
      * @brief 异步执行 Pipeline 事务（span 版本）
@@ -196,7 +196,7 @@ public:
      *          返回值用于锁定公开 API 形状，后续生产 wrapper 会补齐计数。
      * @return 当前统计快照
      */
-    [[nodiscard]] EtcdClientStats getStats() const
+    [[nodiscard]] EtcdClientStats get_stats() const
     {
         return m_stats;
     }
@@ -234,23 +234,23 @@ private:
 
     struct WatchWorkerState;
 
-    void resetLastOperation();
-    void setError(EtcdErrorType type, const std::string& message);
-    void setError(EtcdError error);
+    void reset_last_operation();
+    void set_error(EtcdErrorType type, const std::string& message);
+    void set_error(EtcdError error);
 
-    [[nodiscard]] EtcdBoolResult currentBoolResult() const;
-    std::expected<std::string, EtcdError> resumePostOrCurrent(
+    [[nodiscard]] EtcdBoolResult current_bool_result() const;
+    std::expected<std::string, EtcdError> resume_post_or_current(
         PostJsonAwaitable* post_awaitable);
-    [[nodiscard]] std::string buildSerializedPostRequest(std::string_view api_path,
+    [[nodiscard]] std::string build_serialized_post_request(std::string_view api_path,
                                                          std::string_view body) const;
 
-    PostJsonAwaitable postJsonInternal(const std::string& api_path,
+    PostJsonAwaitable post_json_internal(const std::string& api_path,
                                        const std::string& body,
                                        std::optional<std::chrono::milliseconds> force_timeout = std::nullopt);
-    EtcdBoolResult startWatchWorker(const std::string& key,
+    EtcdBoolResult start_watch_worker(const std::string& key,
                                     std::function<void(EtcdWatchResponse)> dispatch);
-    void stopWatchWorkers();
-    void joinWatchWorkers();
+    void stop_watch_workers();
+    void join_watch_workers();
 
 private:
     galay::kernel::IOScheduler* m_scheduler;                              ///< IO 调度器指针
@@ -284,7 +284,7 @@ private:
  * auto client = AsyncEtcdClientBuilder()
  *     .scheduler(&scheduler)
  *     .endpoint("http://127.0.0.1:2379")
- *     .requestTimeout(std::chrono::seconds(5))
+ *     .request_timeout(std::chrono::seconds(5))
  *     .build();
  * @endcode
  */
@@ -322,7 +322,7 @@ public:
      * @param prefix 路径前缀，如 "/v3"
      * @return 构建器引用，支持链式调用
      */
-    AsyncEtcdClientBuilder& apiPrefix(std::string prefix)
+    AsyncEtcdClientBuilder& api_prefix(std::string prefix)
     {
         m_config.api_prefix = std::move(prefix);
         return *this;
@@ -335,7 +335,7 @@ public:
      * @note 当前仅保存配置并在 endpoints 非空时同步首个 endpoint，
      *       不改变现有单端点请求行为。
      */
-    AsyncEtcdClientBuilder& productionConfig(EtcdProductionConfig config)
+    AsyncEtcdClientBuilder& production_config(EtcdProductionConfig config)
     {
         if (!config.endpoints.empty()) {
             m_config.endpoint = config.endpoints.front();
@@ -349,7 +349,7 @@ public:
      * @param timeout 超时时间
      * @return 构建器引用，支持链式调用
      */
-    AsyncEtcdClientBuilder& requestTimeout(std::chrono::milliseconds timeout)
+    AsyncEtcdClientBuilder& request_timeout(std::chrono::milliseconds timeout)
     {
         m_config.request_timeout = timeout;
         return *this;
@@ -360,7 +360,7 @@ public:
      * @param size 缓冲区大小（字节）
      * @return 构建器引用，支持链式调用
      */
-    AsyncEtcdClientBuilder& bufferSize(size_t size)
+    AsyncEtcdClientBuilder& buffer_size(size_t size)
     {
         m_config.buffer_size = size;
         return *this;
@@ -371,7 +371,7 @@ public:
      * @param enabled 是否启用
      * @return 构建器引用，支持链式调用
      */
-    AsyncEtcdClientBuilder& keepAlive(bool enabled)
+    AsyncEtcdClientBuilder& keep_alive(bool enabled)
     {
         m_config.keepalive = enabled;
         return *this;
@@ -382,7 +382,7 @@ public:
      * @param enabled true 表示启用 TCP_NODELAY；false 表示保留系统默认
      * @return 构建器引用，支持链式调用
      */
-    AsyncEtcdClientBuilder& tcpNoDelay(bool enabled)
+    AsyncEtcdClientBuilder& tcp_no_delay(bool enabled)
     {
         m_config.tcp_no_delay = enabled;
         return *this;
@@ -418,7 +418,7 @@ public:
      * @brief 仅构建配置对象而不创建客户端
      * @return 配置好的 EtcdConfig 实例
      */
-    EtcdConfig& buildConfig()
+    EtcdConfig& build_config()
     {
         return m_config;
     }
@@ -427,7 +427,7 @@ public:
      * @brief 仅查看构建配置对象而不创建客户端
      * @return 当前配置引用
      */
-    const EtcdConfig& buildConfig() const
+    const EtcdConfig& build_config() const
     {
         return m_config;
     }
@@ -486,9 +486,9 @@ using AsyncEtcdClientAcquireResult = std::expected<AsyncEtcdClientLease, EtcdErr
 /**
  * @brief 多端点 AsyncEtcdClient 无锁池
  * @details 为每个 endpoint 创建固定数量且绑定同一 IOScheduler 的 AsyncEtcdClient。
- *          调用方通过 tryAcquire() 获取独占租约，再直接 co_await client 操作；池本身
+ *          调用方通过 try_acquire() 获取独占租约，再直接 co_await client 操作；池本身
  *          不执行连接、请求、重试或健康检查。
- * @note tryAcquire() 不挂起、不阻塞；池空时返回 EtcdErrorType::PoolExhausted。
+ * @note try_acquire() 不挂起、不阻塞；池空时返回 EtcdErrorType::PoolExhausted。
  */
 class AsyncEtcdClusterClient
 {
@@ -509,14 +509,14 @@ public:
      * @return 成功返回租约；配置无效、池内部失败或暂无空闲 client 时返回 EtcdError
      * @note 该操作只访问无锁队列，不挂起协程，也不执行网络连接。
      */
-    [[nodiscard]] AsyncEtcdClientAcquireResult tryAcquire();
+    [[nodiscard]] AsyncEtcdClientAcquireResult try_acquire();
 
     /**
      * @brief 异步获取独占租约并确保 client 已连接
      * @return Task 完成后返回已连接租约，或返回池获取、建连对应的 EtcdError
      * @note 建连由池绑定的 IOScheduler 挂起推进，不阻塞调用线程；错误路径自动归还租约。
      */
-    [[nodiscard]] galay::kernel::Task<AsyncEtcdClientAcquireResult> acquireConnected();
+    [[nodiscard]] galay::kernel::Task<AsyncEtcdClientAcquireResult> acquire_connected();
 
     /**
      * @brief 使用一个已连接的独占 client 执行异步操作
@@ -526,13 +526,13 @@ public:
      * @note 方法只通过 co_await 挂起，不阻塞线程；租约会跨所有挂起点存活，并在任意返回路径自动归还。
      */
     template <class Fn>
-    [[nodiscard]] auto withClient(Fn fn) -> galay::kernel::Task<
+    [[nodiscard]] auto with_client(Fn fn) -> galay::kernel::Task<
         std::expected<details::AsyncEtcdOperationValue<Fn>, EtcdError>>;
 
     /** @brief 返回池持有的 client 总数。 */
     [[nodiscard]] size_t size() const noexcept;
     /** @brief 返回当前空闲 client 数量的并发快照。 */
-    [[nodiscard]] size_t idleCount() const noexcept;
+    [[nodiscard]] size_t idle_count() const noexcept;
     /** @brief 返回池内 AsyncEtcdClient 固定绑定的 IOScheduler。 */
     [[nodiscard]] galay::kernel::IOScheduler* scheduler() const noexcept;
 
@@ -562,13 +562,13 @@ public:
         return *this;
     }
 
-    AsyncEtcdClusterClientBuilder& apiPrefix(std::string prefix)
+    AsyncEtcdClusterClientBuilder& api_prefix(std::string prefix)
     {
         m_config.api_prefix = std::move(prefix);
         return *this;
     }
 
-    AsyncEtcdClusterClientBuilder& productionConfig(EtcdProductionConfig config)
+    AsyncEtcdClusterClientBuilder& production_config(EtcdProductionConfig config)
     {
         if (!config.endpoints.empty()) {
             m_config.endpoint = config.endpoints.front();
@@ -577,25 +577,25 @@ public:
         return *this;
     }
 
-    AsyncEtcdClusterClientBuilder& connectionsPerEndpoint(size_t count)
+    AsyncEtcdClusterClientBuilder& connections_per_endpoint(size_t count)
     {
         m_config.production.connections_per_endpoint = count;
         return *this;
     }
 
-    AsyncEtcdClusterClientBuilder& requestTimeout(std::chrono::milliseconds timeout)
+    AsyncEtcdClusterClientBuilder& request_timeout(std::chrono::milliseconds timeout)
     {
         m_config.request_timeout = timeout;
         return *this;
     }
 
-    AsyncEtcdClusterClientBuilder& bufferSize(size_t size)
+    AsyncEtcdClusterClientBuilder& buffer_size(size_t size)
     {
         m_config.buffer_size = size;
         return *this;
     }
 
-    AsyncEtcdClusterClientBuilder& keepAlive(bool enabled)
+    AsyncEtcdClusterClientBuilder& keep_alive(bool enabled)
     {
         m_config.keepalive = enabled;
         return *this;
@@ -618,12 +618,12 @@ public:
         return AsyncEtcdClusterClientBuilder(*this);
     }
 
-    EtcdConfig& buildConfig()
+    EtcdConfig& build_config()
     {
         return m_config;
     }
 
-    const EtcdConfig& buildConfig() const
+    const EtcdConfig& build_config() const
     {
         return m_config;
     }
@@ -643,10 +643,10 @@ private:
 namespace galay::etcd {
 
 template <class Fn>
-auto AsyncEtcdClusterClient::withClient(Fn fn) -> galay::kernel::Task<
+auto AsyncEtcdClusterClient::with_client(Fn fn) -> galay::kernel::Task<
     std::expected<details::AsyncEtcdOperationValue<Fn>, EtcdError>>
 {
-    auto lease_result = tryAcquire();
+    auto lease_result = try_acquire();
     if (!lease_result.has_value()) {
         co_return std::unexpected(lease_result.error());
     }

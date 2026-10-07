@@ -65,7 +65,7 @@ struct BlackListConfig {
      * @param auto_close true 则在拦截时关闭 socket，false 则仅拦截不关闭。
      * @return *this，支持链式调用。
      */
-    BlackListConfig& autoClose(const bool auto_close) {
+    BlackListConfig& auto_close(const bool auto_close) {
         close_blocked_socket = auto_close;
         return *this;
     }
@@ -75,7 +75,7 @@ struct BlackListConfig {
      * @param p IntervalBlockPolicy 或 DecayCounterPolicy。
      * @return *this，支持链式调用。
      */
-    BlackListConfig& setPolicy(const Policy &p) {
+    BlackListConfig& set_policy(const Policy &p) {
         policy = p;
         return *this;
     }
@@ -85,7 +85,7 @@ struct BlackListConfig {
      * @param mode IpOnly 忽略端口，IpAndPort 按完整地址统计。
      * @return *this，支持链式调用。
      */
-    BlackListConfig& clientKeyMode(ClientKeyMode mode) {
+    BlackListConfig& set_client_key_mode(ClientKeyMode mode) {
         client_key_mode = mode;
         return *this;
     }
@@ -95,7 +95,7 @@ struct BlackListConfig {
      * @param ip 不受 blacklist 策略限制的客户端 IP。
      * @return *this，支持链式调用。
      */
-    BlackListConfig& excludeIp(const std::string &ip) {
+    BlackListConfig& exclude_ip(const std::string &ip) {
         exclude_ips.insert(ip);
         return *this;
     }
@@ -105,7 +105,7 @@ struct BlackListConfig {
      * @param ips 不受 blacklist 策略限制的客户端 IP 集合。
      * @return *this，支持链式调用。
      */
-    BlackListConfig& excludeIps(std::unordered_set<std::string> ips) {
+    BlackListConfig& set_exclude_ips(std::unordered_set<std::string> ips) {
         exclude_ips = std::move(ips);
         return *this;
     }
@@ -120,7 +120,7 @@ struct BlackListConfig {
  * @brief 基于 accept plugin 的 HTTP 接入黑名单插件。
  * @tparam SocketType 接入阶段传入的 socket 类型，例如 AsyncTcpSocket 或 SslSocket。
  * @details 同一 SocketType 的所有 BlackList 插件实例共享一份 ConnInfoStorage 和
- *          AsyncMutex，确保多 serverLoop、多插件实例对同一客户端地址使用同一份统计。
+ *          AsyncMutex，确保多 server_loop、多插件实例对同一客户端地址使用同一份统计。
  *          配置归插件实例私有；插件只在 accept 阶段决定是否继续后续插件/业务处理，
  *          不读取 HTTP 请求内容。
  */
@@ -142,7 +142,7 @@ public:
      *          其余字段使用 BlackListConfig 默认值。
      */
     explicit BlackList(std::size_t connection_count_limit)
-        : m_config(makeLimitConfig(connection_count_limit)) {}
+        : m_config(make_limit_config(connection_count_limit)) {}
 
 
     /**
@@ -202,11 +202,11 @@ public:
 
         const bool include_port =
             m_config.client_key_mode == BlackListConfig::ClientKeyMode::IpAndPort;
-        ConnInfo& conn_info = m_storage.getOrCreateConnInfo(host, include_port);
+        ConnInfo& conn_info = m_storage.get_or_create_conn_info(host, include_port);
         const auto now = std::chrono::steady_clock::now();
         const bool allowed = std::visit(
             [&](const auto& policy) {
-                return applyPolicy(conn_info, policy, now);
+                return apply_policy(conn_info, policy, now);
             },
             m_config.policy);
         m_mutex.unlock();
@@ -230,14 +230,14 @@ public:
      *          例如测试用例之间、服务器启动前或服务器完全停止后。运行中调用会与
      *          accept hook 并发访问 m_storage，属于调用方错误。
      */
-    static void clearConnInfo() {
-        m_storage.clearConnInfo();
+    static void clear_conn_info() {
+        m_storage.clear_conn_info();
     }
 
 private:
     using TimePoint = std::chrono::steady_clock::time_point;
 
-    static BlackListConfig makeLimitConfig(std::size_t connection_count_limit) {
+    static BlackListConfig make_limit_config(std::size_t connection_count_limit) {
         BlackListConfig config;
         BlackListConfig::IntervalBlockPolicy policy;
         policy.max_attempts_per_interval = connection_count_limit;
@@ -248,14 +248,14 @@ private:
     /**
      * @brief 判断 time_point 是否已经被初始化为有效业务时间。
      */
-    static bool isSet(TimePoint value) noexcept {
+    static bool is_set(TimePoint value) noexcept {
         return value != TimePoint{};
     }
 
     /**
      * @brief 对计数做饱和加一，避免高频拒绝路径上发生 size_t 溢出。
      */
-    static std::size_t incrementCapped(std::size_t value, std::size_t cap) noexcept {
+    static std::size_t increment_capped(std::size_t value, std::size_t cap) noexcept {
         if (value >= cap) {
             return cap;
         }
@@ -269,10 +269,10 @@ private:
      * @param now 当前 steady_clock 时间，由调用方统一采集。
      * @return 本次连接允许继续返回 true；应被拦截返回 false。
      */
-    static bool applyPolicy(ConnInfo& conn_info,
+    static bool apply_policy(ConnInfo& conn_info,
                             const BlackListConfig::IntervalBlockPolicy& policy,
                             TimePoint now) {
-        if (isSet(conn_info.blocked_until)) {
+        if (is_set(conn_info.blocked_until)) {
             if (now < conn_info.blocked_until) {
                 return false;
             }
@@ -283,7 +283,7 @@ private:
             }
         }
 
-        const bool has_window = isSet(conn_info.first_access_at);
+        const bool has_window = is_set(conn_info.first_access_at);
         const bool window_expired =
             has_window && policy.interval > std::chrono::milliseconds::zero() &&
             now - conn_info.first_access_at >= policy.interval;
@@ -302,7 +302,7 @@ private:
             return true;
         }
 
-        conn_info.ip_conn_times = incrementCapped(
+        conn_info.ip_conn_times = increment_capped(
             conn_info.ip_conn_times, std::numeric_limits<std::size_t>::max());
         conn_info.blocked_until = now + policy.block_duration;
         return false;
@@ -313,7 +313,7 @@ private:
      * @details 即使 max_counter_value 配置过小，也至少保留 max_attempts + 1，
      *          这样计数仍然能够进入拒绝状态。
      */
-    static std::size_t counterCap(const BlackListConfig::DecayCounterPolicy& policy) noexcept {
+    static std::size_t counter_cap(const BlackListConfig::DecayCounterPolicy& policy) noexcept {
         if (policy.max_attempts == std::numeric_limits<std::size_t>::max()) {
             return std::numeric_limits<std::size_t>::max();
         }
@@ -327,10 +327,10 @@ private:
      * @param now 当前 steady_clock 时间，由调用方统一采集。
      * @details 只在访问到该地址时懒衰减，不启动后台定时器。
      */
-    static void decayCounter(ConnInfo& conn_info,
+    static void decay_counter(ConnInfo& conn_info,
                              const BlackListConfig::DecayCounterPolicy& policy,
                              TimePoint now) {
-        if (!isSet(conn_info.last_decay_at)) {
+        if (!is_set(conn_info.last_decay_at)) {
             conn_info.last_decay_at = now;
             return;
         }
@@ -366,11 +366,11 @@ private:
      * @param now 当前 steady_clock 时间，由调用方统一采集。
      * @return 衰减后加上本次连接仍不超过阈值返回 true；超过阈值返回 false。
      */
-    static bool applyPolicy(ConnInfo& conn_info,
+    static bool apply_policy(ConnInfo& conn_info,
                             const BlackListConfig::DecayCounterPolicy& policy,
                             TimePoint now) {
-        decayCounter(conn_info, policy, now);
-        conn_info.ip_conn_times = incrementCapped(conn_info.ip_conn_times, counterCap(policy));
+        decay_counter(conn_info, policy, now);
+        conn_info.ip_conn_times = increment_capped(conn_info.ip_conn_times, counter_cap(policy));
         return conn_info.ip_conn_times <= policy.max_attempts;
     }
 

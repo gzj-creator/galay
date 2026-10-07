@@ -14,8 +14,8 @@ std::unique_ptr<Http2DataFrame> Http2FrameBuilder::data(uint32_t stream_id,
 {
     auto frame = std::make_unique<Http2DataFrame>();
     frame->header().stream_id = stream_id;
-    frame->setData(std::move(payload));
-    frame->setEndStream(end_stream);
+    frame->set_data(std::move(payload));
+    frame->set_end_stream(end_stream);
     return frame;
 }
 
@@ -26,21 +26,21 @@ std::unique_ptr<Http2HeadersFrame> Http2FrameBuilder::headers(uint32_t stream_id
 {
     auto frame = std::make_unique<Http2HeadersFrame>();
     frame->header().stream_id = stream_id;
-    frame->setHeaderBlock(std::move(header_block));
-    frame->setEndStream(end_stream);
-    frame->setEndHeaders(end_headers);
+    frame->set_header_block(std::move(header_block));
+    frame->set_end_stream(end_stream);
+    frame->set_end_headers(end_headers);
     return frame;
 }
 
-std::unique_ptr<Http2RstStreamFrame> Http2FrameBuilder::rstStream(uint32_t stream_id, Http2ErrorCode error)
+std::unique_ptr<Http2RstStreamFrame> Http2FrameBuilder::rst_stream(uint32_t stream_id, Http2ErrorCode error)
 {
     auto frame = std::make_unique<Http2RstStreamFrame>();
     frame->header().stream_id = stream_id;
-    frame->setErrorCode(error);
+    frame->set_error_code(error);
     return frame;
 }
 
-std::array<char, kHttp2FrameHeaderLength> Http2FrameBuilder::dataHeaderBytes(uint32_t stream_id,
+std::array<char, kHttp2FrameHeaderLength> Http2FrameBuilder::data_header_bytes(uint32_t stream_id,
                                                                              size_t payload_length,
                                                                              bool end_stream)
 {
@@ -48,11 +48,11 @@ std::array<char, kHttp2FrameHeaderLength> Http2FrameBuilder::dataHeaderBytes(uin
     if (end_stream) {
         flags |= Http2FrameFlags::kEndStream;
     }
-    return buildH2FrameHeaderBytes(
+    return build_h2_frame_header_bytes(
         Http2FrameType::Data, flags, stream_id, static_cast<uint32_t>(payload_length));
 }
 
-std::array<char, kHttp2FrameHeaderLength> Http2FrameBuilder::headersHeaderBytes(uint32_t stream_id,
+std::array<char, kHttp2FrameHeaderLength> Http2FrameBuilder::headers_header_bytes(uint32_t stream_id,
                                                                                 size_t header_block_length,
                                                                                 bool end_stream,
                                                                                 bool end_headers)
@@ -64,11 +64,11 @@ std::array<char, kHttp2FrameHeaderLength> Http2FrameBuilder::headersHeaderBytes(
     if (end_headers) {
         flags |= Http2FrameFlags::kEndHeaders;
     }
-    return buildH2FrameHeaderBytes(
+    return build_h2_frame_header_bytes(
         Http2FrameType::Headers, flags, stream_id, static_cast<uint32_t>(header_block_length));
 }
 
-std::array<char, kHttp2FrameHeaderLength> Http2FrameBuilder::continuationHeaderBytes(
+std::array<char, kHttp2FrameHeaderLength> Http2FrameBuilder::continuation_header_bytes(
     uint32_t stream_id,
     size_t header_block_length,
     bool end_headers)
@@ -77,11 +77,11 @@ std::array<char, kHttp2FrameHeaderLength> Http2FrameBuilder::continuationHeaderB
     if (end_headers) {
         flags |= Http2FrameFlags::kEndHeaders;
     }
-    return buildH2FrameHeaderBytes(
+    return build_h2_frame_header_bytes(
         Http2FrameType::Continuation, flags, stream_id, static_cast<uint32_t>(header_block_length));
 }
 
-std::string Http2FrameBuilder::dataBytes(uint32_t stream_id,
+std::string Http2FrameBuilder::data_bytes(uint32_t stream_id,
                                          std::string_view payload,
                                          bool end_stream)
 {
@@ -96,7 +96,7 @@ std::string Http2FrameBuilder::dataBytes(uint32_t stream_id,
             const size_t chunk_size = std::min<size_t>(
                 payload.size() - offset, kDefaultMaxFrameSize);
             const bool chunk_end_stream = end_stream && offset + chunk_size == payload.size();
-            result.append(dataBytes(
+            result.append(data_bytes(
                 stream_id, payload.substr(offset, chunk_size), chunk_end_stream));
             offset += chunk_size;
         }
@@ -107,10 +107,10 @@ std::string Http2FrameBuilder::dataBytes(uint32_t stream_id,
     if (end_stream) {
         flags |= Http2FrameFlags::kEndStream;
     }
-    return buildH2FrameBytes(Http2FrameType::Data, flags, stream_id, payload);
+    return build_h2_frame_bytes(Http2FrameType::Data, flags, stream_id, payload);
 }
 
-std::string Http2FrameBuilder::headersBytes(uint32_t stream_id,
+std::string Http2FrameBuilder::headers_bytes(uint32_t stream_id,
                                             std::string_view header_block,
                                             bool end_stream,
                                             bool end_headers)
@@ -122,10 +122,10 @@ std::string Http2FrameBuilder::headersBytes(uint32_t stream_id,
     if (end_headers) {
         flags |= Http2FrameFlags::kEndHeaders;
     }
-    return buildH2FrameBytes(Http2FrameType::Headers, flags, stream_id, header_block);
+    return build_h2_frame_bytes(Http2FrameType::Headers, flags, stream_id, header_block);
 }
 
-std::string Http2FrameBuilder::continuationBytes(uint32_t stream_id,
+std::string Http2FrameBuilder::continuation_bytes(uint32_t stream_id,
                                                  std::string_view header_block,
                                                  bool end_headers)
 {
@@ -133,10 +133,10 @@ std::string Http2FrameBuilder::continuationBytes(uint32_t stream_id,
     if (end_headers) {
         flags |= Http2FrameFlags::kEndHeaders;
     }
-    return buildH2FrameBytes(Http2FrameType::Continuation, flags, stream_id, header_block);
+    return build_h2_frame_bytes(Http2FrameType::Continuation, flags, stream_id, header_block);
 }
 
-std::string Http2FrameBuilder::rstStreamBytes(uint32_t stream_id, Http2ErrorCode error)
+std::string Http2FrameBuilder::rst_stream_bytes(uint32_t stream_id, Http2ErrorCode error)
 {
     char payload[4];
     const uint32_t code = static_cast<uint32_t>(error);
@@ -144,7 +144,7 @@ std::string Http2FrameBuilder::rstStreamBytes(uint32_t stream_id, Http2ErrorCode
     payload[1] = static_cast<char>((code >> 16) & 0xFF);
     payload[2] = static_cast<char>((code >> 8) & 0xFF);
     payload[3] = static_cast<char>(code & 0xFF);
-    return buildH2FrameBytes(Http2FrameType::RstStream, 0, stream_id,
+    return build_h2_frame_bytes(Http2FrameType::RstStream, 0, stream_id,
                              std::string_view(payload, sizeof(payload)));
 }
 

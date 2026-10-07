@@ -12,8 +12,8 @@ using namespace galay::websocket;
 
 namespace {
 
-bool writeAll(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring, std::string_view bytes) {
-    return ring.tryWriteBatch(bytes.data(), bytes.size()) == bytes.size();
+bool write_all(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring, std::string_view bytes) {
+    return ring.try_write_batch(bytes.data(), bytes.size()) == bytes.size();
 }
 
 bool check(bool condition, const char* message) {
@@ -31,7 +31,7 @@ int main() {
 
     {
         RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> ring(8);
-        if (!check(writeAll(ring, "abcdef"), "failed to seed wrapped frame buffer")) {
+        if (!check(write_all(ring, "abcdef"), "failed to seed wrapped frame buffer")) {
             return 1;
         }
         ring.consume(4);
@@ -40,10 +40,10 @@ int main() {
         galay::websocket::detail::WsFrameReadState state(ring, setting, frame, true);
         char* buffer = nullptr;
         size_t length = 0;
-        if (!check(state.prepareRecvWindow(buffer, length), "frame state should expose recv window")) {
+        if (!check(state.prepare_recv_window(buffer, length), "frame state should expose recv window")) {
             return 1;
         }
-        if (!check(state.recvIovecsCount() == 1, "frame state should expose one contiguous mmap segment")) {
+        if (!check(state.recv_iovecs_count() == 1, "frame state should expose one contiguous mmap segment")) {
             return 1;
         }
         if (!check(length == ring.writable(), "frame state should expose the full contiguous writable window")) {
@@ -59,7 +59,7 @@ int main() {
 
     {
         RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> ring(8);
-        if (!check(writeAll(ring, "abcdef"), "failed to seed wrapped message buffer")) {
+        if (!check(write_all(ring, "abcdef"), "failed to seed wrapped message buffer")) {
             return 1;
         }
         ring.consume(4);
@@ -70,10 +70,10 @@ int main() {
             ring, setting, message, opcode, true, false, nullptr);
         char* buffer = nullptr;
         size_t length = 0;
-        if (!check(state.prepareRecvWindow(buffer, length), "message state should expose recv window")) {
+        if (!check(state.prepare_recv_window(buffer, length), "message state should expose recv window")) {
             return 1;
         }
-        if (!check(state.recvIovecsCount() == 1, "message state should expose one contiguous mmap segment")) {
+        if (!check(state.recv_iovecs_count() == 1, "message state should expose one contiguous mmap segment")) {
             return 1;
         }
         if (!check(length == ring.writable(), "message state should expose the full contiguous writable window")) {

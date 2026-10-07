@@ -47,13 +47,13 @@ std::expected<void, RuntimeError> Runtime::start()
     }
 
     if (m_io_schedulers.empty() && m_parallel_schedulers.empty()) {
-        createDefaultSchedulers();
+        create_default_schedulers();
     }
 
-    applyAffinityConfig();
-    configureIOSchedulerStealDomains();
+    apply_affinity_config();
+    configure_io_scheduler_steal_domains();
 
-    TimerScheduler::getInstance()->start();
+    TimerScheduler::get_instance()->start();
     for (auto& scheduler : m_io_schedulers) {
         auto started = scheduler->start();
         if (!started.has_value()) {
@@ -87,7 +87,7 @@ void Runtime::stop()
     for (auto it = m_io_schedulers.rbegin(); it != m_io_schedulers.rend(); ++it) {
         (*it)->stop();
     }
-    TimerScheduler::getInstance()->stop();
+    TimerScheduler::get_instance()->stop();
 }
 
 RuntimeHandle Runtime::handle() noexcept
@@ -101,22 +101,22 @@ RuntimeStats Runtime::stats() const
     snapshot.io_schedulers.reserve(m_io_schedulers.size());
     for (const auto& scheduler : m_io_schedulers) {
         snapshot.io_schedulers.push_back(
-            scheduler ? scheduler->stealStats() : IOSchedulerStealStats{});
+            scheduler ? scheduler->steal_stats() : IOSchedulerStealStats{});
     }
     return snapshot;
 }
 
-IOScheduler* Runtime::getIOScheduler(size_t index)
+IOScheduler* Runtime::get_io_scheduler(size_t index)
 {
     return index < m_io_schedulers.size() ? m_io_schedulers[index].get() : nullptr;
 }
 
-ParallelScheduler* Runtime::getParallelScheduler(size_t index)
+ParallelScheduler* Runtime::get_parallel_scheduler(size_t index)
 {
     return index < m_parallel_schedulers.size() ? m_parallel_schedulers[index].get() : nullptr;
 }
 
-IOScheduler* Runtime::getNextIOScheduler()
+IOScheduler* Runtime::get_next_io_scheduler()
 {
     if (m_io_schedulers.empty()) {
         return nullptr;
@@ -124,7 +124,7 @@ IOScheduler* Runtime::getNextIOScheduler()
     return m_io_schedulers[m_io_index.fetch_add(1, std::memory_order_relaxed) % m_io_schedulers.size()].get();
 }
 
-ParallelScheduler* Runtime::getNextParallelScheduler()
+ParallelScheduler* Runtime::get_next_parallel_scheduler()
 {
     if (m_parallel_schedulers.empty()) {
         return nullptr;
@@ -132,39 +132,39 @@ ParallelScheduler* Runtime::getNextParallelScheduler()
     return m_parallel_schedulers[m_parallel_index.fetch_add(1, std::memory_order_relaxed) % m_parallel_schedulers.size()].get();
 }
 
-std::expected<void, RuntimeError> Runtime::ensureStarted()
+std::expected<void, RuntimeError> Runtime::ensure_started()
 {
-    if (!isRunning()) {
+    if (!is_running()) {
         return start();
     }
     return {};
 }
 
-std::expected<IOScheduler*, RuntimeError> Runtime::acquireIOScheduler()
+std::expected<IOScheduler*, RuntimeError> Runtime::acquire_io_scheduler()
 {
-    auto started = ensureStarted();
+    auto started = ensure_started();
     if (!started.has_value()) {
         return std::unexpected(started.error());
     }
-    return getNextIOScheduler();
+    return get_next_io_scheduler();
 }
 
-std::expected<ParallelScheduler*, RuntimeError> Runtime::acquireParallelScheduler()
+std::expected<ParallelScheduler*, RuntimeError> Runtime::acquire_parallel_scheduler()
 {
-    auto started = ensureStarted();
+    auto started = ensure_started();
     if (!started.has_value()) {
         return std::unexpected(started.error());
     }
-    return getNextParallelScheduler();
+    return get_next_parallel_scheduler();
 }
 
-void Runtime::bindTaskToRuntime(const TaskRef& task, Scheduler* scheduler)
+void Runtime::bind_task_to_runtime(const TaskRef& task, Scheduler* scheduler)
 {
-    detail::setTaskRuntime(task, this);
-    detail::setTaskScheduler(task, scheduler);
+    detail::set_task_runtime(task, this);
+    detail::set_task_scheduler(task, scheduler);
 }
 
-RuntimeError Runtime::mapTaskResultError(const detail::TaskResultError& error) noexcept
+RuntimeError Runtime::map_task_result_error(const detail::TaskResultError& error) noexcept
 {
     if (error.code() == detail::TaskResultErrorCode::kTaskException) {
         return RuntimeError(RuntimeErrorCode::kTaskException);
@@ -177,30 +177,30 @@ RuntimeError Runtime::mapTaskResultError(const detail::TaskResultError& error) n
 
 std::expected<RuntimeHandle, RuntimeError> RuntimeHandle::current()
 {
-    auto* runtime = detail::currentRuntime();
+    auto* runtime = detail::current_runtime();
     if (runtime == nullptr) {
         return std::unexpected(RuntimeError(RuntimeErrorCode::kNoCurrentRuntime));
     }
     return RuntimeHandle(runtime);
 }
 
-std::optional<RuntimeHandle> RuntimeHandle::tryCurrent()
+std::optional<RuntimeHandle> RuntimeHandle::try_current()
 {
-    if (auto* runtime = detail::currentRuntime()) {
+    if (auto* runtime = detail::current_runtime()) {
         return RuntimeHandle(runtime);
     }
     return std::nullopt;
 }
 
-size_t Runtime::getCPUCount()
+size_t Runtime::get_cpu_count()
 {
     size_t count = std::thread::hardware_concurrency();
     return count > 0 ? count : 4;
 }
 
-void Runtime::createDefaultSchedulers()
+void Runtime::create_default_schedulers()
 {
-    size_t cpu = getCPUCount();
+    size_t cpu = get_cpu_count();
     const size_t ioCount = m_config.io_scheduler_count == GALAY_RUNTIME_SCHEDULER_COUNT_AUTO
         ? cpu * 2
         : m_config.io_scheduler_count;
@@ -216,24 +216,24 @@ void Runtime::createDefaultSchedulers()
     }
 }
 
-void Runtime::applyAffinityConfig()
+void Runtime::apply_affinity_config()
 {
     const auto& affinity = m_config.affinity;
     if (affinity.mode == RuntimeAffinityConfig::Mode::None) {
         return;
     }
 
-    const uint32_t cpuCount = static_cast<uint32_t>(getCPUCount());
+    const uint32_t cpuCount = static_cast<uint32_t>(get_cpu_count());
 
     if (affinity.mode == RuntimeAffinityConfig::Mode::Sequential) {
         uint32_t cpu = 0;
         for (size_t i = 0; i < affinity.seq_io_count && i < m_io_schedulers.size(); ++i) {
-            m_io_schedulers[i]->setAffinity(cpu % cpuCount);
+            m_io_schedulers[i]->set_affinity(cpu % cpuCount);
             ++cpu;
         }
         cpu = 0;
         for (size_t i = 0; i < affinity.seq_parallel_count && i < m_parallel_schedulers.size(); ++i) {
-            m_parallel_schedulers[i]->setAffinity(cpu % cpuCount);
+            m_parallel_schedulers[i]->set_affinity(cpu % cpuCount);
             ++cpu;
         }
         return;
@@ -245,14 +245,14 @@ void Runtime::applyAffinityConfig()
     }
 
     for (size_t i = 0; i < m_io_schedulers.size(); ++i) {
-        m_io_schedulers[i]->setAffinity(affinity.custom_io_cpus[i]);
+        m_io_schedulers[i]->set_affinity(affinity.custom_io_cpus[i]);
     }
     for (size_t i = 0; i < m_parallel_schedulers.size(); ++i) {
-        m_parallel_schedulers[i]->setAffinity(affinity.custom_parallel_cpus[i]);
+        m_parallel_schedulers[i]->set_affinity(affinity.custom_parallel_cpus[i]);
     }
 }
 
-void Runtime::configureIOSchedulerStealDomains()
+void Runtime::configure_io_scheduler_steal_domains()
 {
     const size_t io_count = m_io_schedulers.size();
     if (io_count == 0) {
@@ -268,7 +268,7 @@ void Runtime::configureIOSchedulerStealDomains()
 
     const std::span<IOScheduler* const> siblings{m_io_scheduler_sibling_view.data(), m_io_scheduler_sibling_view.size()};
     for (size_t index = 0; index < siblings.size(); ++index) {
-        siblings[index]->configureStealDomain(siblings, index);
+        siblings[index]->configure_steal_domain(siblings, index);
     }
 }
 

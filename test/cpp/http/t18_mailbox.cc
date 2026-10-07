@@ -17,8 +17,8 @@ using namespace galay::http2;
 
 template<typename T>
 concept HasBatchMailboxSurface = requires(T& mailbox, std::vector<Http2Stream::ptr>&& batch) {
-    { mailbox.sendBatch(std::move(batch)) } -> std::same_as<void>;
-    { mailbox.recvBatch(16) };
+    { mailbox.send_batch(std::move(batch)) } -> std::same_as<void>;
+    { mailbox.recv_batch(16) };
     { mailbox.close() } -> std::same_as<void>;
     { mailbox.reset() } -> std::same_as<void>;
 };
@@ -38,29 +38,29 @@ int main() {
     std::vector<Http2Stream::ptr> ready;
     ready.push_back(first);
     ready.push_back(second);
-    mailbox.sendBatch(std::move(ready));
+    mailbox.send_batch(std::move(ready));
 
-    auto first_batch = ctx.getActiveStreams(1);
+    auto first_batch = ctx.get_active_streams(1);
     assert(first_batch.await_ready());
     auto first_result = first_batch.await_resume();
     assert(first_result.has_value());
     assert(first_result->size() == 1);
-    assert((*first_result)[0]->streamId() == 1);
-    assert(hasHttp2StreamEvent((*first_result)[0]->takeEvents(), Http2StreamEvent::HeadersReady));
+    assert((*first_result)[0]->stream_id() == 1);
+    assert(has_http2_stream_event((*first_result)[0]->take_events(), Http2StreamEvent::HeadersReady));
 
-    auto second_batch = ctx.getActiveStreams(1);
+    auto second_batch = ctx.get_active_streams(1);
     assert(second_batch.await_ready());
     auto second_result = second_batch.await_resume();
     assert(second_result.has_value());
     assert(second_result->size() == 1);
-    assert((*second_result)[0]->streamId() == 3);
-    const auto second_events = (*second_result)[0]->takeEvents();
-    assert(hasHttp2StreamEvent(second_events, Http2StreamEvent::DataArrived));
-    assert(hasHttp2StreamEvent(second_events, Http2StreamEvent::RequestComplete));
+    assert((*second_result)[0]->stream_id() == 3);
+    const auto second_events = (*second_result)[0]->take_events();
+    assert(has_http2_stream_event(second_events, Http2StreamEvent::DataArrived));
+    assert(has_http2_stream_event(second_events, Http2StreamEvent::RequestComplete));
 
     mailbox.close();
 
-    auto closed_batch = ctx.getActiveStreams(16);
+    auto closed_batch = ctx.get_active_streams(16);
     assert(closed_batch.await_ready());
     auto closed_result = closed_batch.await_resume();
     assert(!closed_result.has_value());

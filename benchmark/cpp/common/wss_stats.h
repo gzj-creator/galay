@@ -34,17 +34,17 @@ struct WssClientStatsBatch {
     uint32_t latency_min_us = std::numeric_limits<uint32_t>::max();
     uint32_t latency_max_us = 0;
 
-    void noteMessageSent(size_t bytes) {
+    void note_message_sent(size_t bytes) {
         ++messages_sent;
         bytes_sent += bytes;
     }
 
-    void noteMessageReceived(size_t bytes) {
+    void note_message_received(size_t bytes) {
         ++messages_received;
         bytes_received += bytes;
     }
 
-    void noteLatency(uint32_t latency_us) {
+    void note_latency(uint32_t latency_us) {
         latency_sum_us += latency_us;
         ++latency_count;
         if (latency_us < latency_min_us) {
@@ -55,7 +55,7 @@ struct WssClientStatsBatch {
         }
     }
 
-    void mergeInto(WssBenchGlobalStats& global) const {
+    void merge_into(WssBenchGlobalStats& global) const {
         global.total_connections.fetch_add(total_connections, std::memory_order_relaxed);
         global.successful_connections.fetch_add(successful_connections, std::memory_order_relaxed);
         global.failed_connections.fetch_add(failed_connections, std::memory_order_relaxed);

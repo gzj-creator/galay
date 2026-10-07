@@ -132,36 +132,36 @@ public:
 };
 
 template <typename Function, typename Callable>
-Function makeCountingFunction(const std::shared_ptr<CopyStats>& stats)
+Function make_counting_function(const std::shared_ptr<CopyStats>& stats)
 {
     Function fn{Callable(stats)};
     stats->copies.store(0, std::memory_order_relaxed);
     return fn;
 }
 
-bool stdioRegistrationMovesHandlers()
+bool stdio_registration_moves_handlers()
 {
     auto toolStats = std::make_shared<CopyStats>();
     auto resourceStats = std::make_shared<CopyStats>();
     auto promptStats = std::make_shared<CopyStats>();
 
     galay::mcp::McpStdioServer server;
-    auto tool = makeCountingFunction<galay::mcp::McpStdioServer::ToolHandler, StdioToolHandler>(toolStats);
+    auto tool = make_counting_function<galay::mcp::McpStdioServer::ToolHandler, StdioToolHandler>(toolStats);
     auto resource =
-        makeCountingFunction<galay::mcp::McpStdioServer::ResourceReader, StdioResourceReader>(resourceStats);
+        make_counting_function<galay::mcp::McpStdioServer::ResourceReader, StdioResourceReader>(resourceStats);
     auto prompt =
-        makeCountingFunction<galay::mcp::McpStdioServer::PromptGetter, StdioPromptGetter>(promptStats);
+        make_counting_function<galay::mcp::McpStdioServer::PromptGetter, StdioPromptGetter>(promptStats);
 
     std::vector<galay::mcp::PromptArgument> arguments;
     arguments.push_back(galay::mcp::PromptArgument{.name = "topic", .description = "Topic", .required = true});
 
-    server.addTool(std::string("echo"), std::string("Echo"), std::string("{}"), std::move(tool));
-    server.addResource(std::string("mem://one"),
+    server.add_tool(std::string("echo"), std::string("Echo"), std::string("{}"), std::move(tool));
+    server.add_resource(std::string("mem://one"),
                        std::string("One"),
                        std::string("Resource"),
                        std::string("text/plain"),
                        std::move(resource));
-    server.addPrompt(std::string("prompt"), std::string("Prompt"), std::move(arguments), std::move(prompt));
+    server.add_prompt(std::string("prompt"), std::string("Prompt"), std::move(arguments), std::move(prompt));
 
     return require(toolStats->copies.load(std::memory_order_relaxed) == 0,
                    "stdio tool registration copied callable") &&
@@ -171,27 +171,27 @@ bool stdioRegistrationMovesHandlers()
                    "stdio prompt registration copied callable");
 }
 
-bool httpRegistrationMovesHandlers()
+bool http_registration_moves_handlers()
 {
     auto toolStats = std::make_shared<CopyStats>();
     auto resourceStats = std::make_shared<CopyStats>();
     auto promptStats = std::make_shared<CopyStats>();
 
     galay::mcp::McpHttpServer server("127.0.0.1", 0, 1, 1);
-    auto tool = makeCountingFunction<galay::mcp::McpHttpServer::ToolHandler, HttpToolHandler>(toolStats);
-    auto resource = makeCountingFunction<galay::mcp::McpHttpServer::ResourceReader, HttpResourceReader>(resourceStats);
-    auto prompt = makeCountingFunction<galay::mcp::McpHttpServer::PromptGetter, HttpPromptGetter>(promptStats);
+    auto tool = make_counting_function<galay::mcp::McpHttpServer::ToolHandler, HttpToolHandler>(toolStats);
+    auto resource = make_counting_function<galay::mcp::McpHttpServer::ResourceReader, HttpResourceReader>(resourceStats);
+    auto prompt = make_counting_function<galay::mcp::McpHttpServer::PromptGetter, HttpPromptGetter>(promptStats);
 
     std::vector<galay::mcp::PromptArgument> arguments;
     arguments.push_back(galay::mcp::PromptArgument{.name = "topic", .description = "Topic", .required = true});
 
-    server.addTool(std::string("echo"), std::string("Echo"), std::string("{}"), std::move(tool));
-    server.addResource(std::string("mem://one"),
+    server.add_tool(std::string("echo"), std::string("Echo"), std::string("{}"), std::move(tool));
+    server.add_resource(std::string("mem://one"),
                        std::string("One"),
                        std::string("Resource"),
                        std::string("text/plain"),
                        std::move(resource));
-    server.addPrompt(std::string("prompt"), std::string("Prompt"), std::move(arguments), std::move(prompt));
+    server.add_prompt(std::string("prompt"), std::string("Prompt"), std::move(arguments), std::move(prompt));
 
     return require(toolStats->copies.load(std::memory_order_relaxed) == 0,
                    "http tool registration copied callable") &&
@@ -205,10 +205,10 @@ bool httpRegistrationMovesHandlers()
 
 int main()
 {
-    if (!stdioRegistrationMovesHandlers()) {
+    if (!stdio_registration_moves_handlers()) {
         return 1;
     }
-    if (!httpRegistrationMovesHandlers()) {
+    if (!http_registration_moves_handlers()) {
         return 1;
     }
 

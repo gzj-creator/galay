@@ -60,7 +60,7 @@ struct MysqlConfig {
     std::string charset = "utf8mb4";
     uint32_t connect_timeout_ms = 5000;
 
-    static MysqlConfig defaultConfig();
+    static MysqlConfig default_config();
     static MysqlConfig create(const std::string& host, uint16_t port,
                               const std::string& user, const std::string& password,
                               const std::string& database = "");
@@ -76,14 +76,14 @@ struct AsyncMysqlConfig {
     size_t buffer_size = 16384;
     size_t result_row_reserve_hint = 0;
 
-    bool isSendTimeoutEnabled() const;
-    bool isRecvTimeoutEnabled() const;
+    bool is_send_timeout_enabled() const;
+    bool is_recv_timeout_enabled() const;
 
-    static AsyncMysqlConfig withTimeout(std::chrono::milliseconds send,
+    static AsyncMysqlConfig with_timeout(std::chrono::milliseconds send,
                                         std::chrono::milliseconds recv);
-    static AsyncMysqlConfig withRecvTimeout(std::chrono::milliseconds recv);
-    static AsyncMysqlConfig withSendTimeout(std::chrono::milliseconds send);
-    static AsyncMysqlConfig noTimeout();
+    static AsyncMysqlConfig with_recv_timeout(std::chrono::milliseconds recv);
+    static AsyncMysqlConfig with_send_timeout(std::chrono::milliseconds send);
+    static AsyncMysqlConfig no_timeout();
 };
 ```
 
@@ -91,8 +91,8 @@ struct AsyncMysqlConfig {
 
 ```cpp
 struct MysqlConnectionPoolConfig {
-    MysqlConfig mysql_config = MysqlConfig::defaultConfig();
-    AsyncMysqlConfig async_config = AsyncMysqlConfig::noTimeout();
+    MysqlConfig mysql_config = MysqlConfig::default_config();
+    AsyncMysqlConfig async_config = AsyncMysqlConfig::no_timeout();
     size_t min_connections = 2;
     size_t max_connections = 10;
 };
@@ -101,7 +101,7 @@ struct MysqlConnectionPoolConfig {
 - `MysqlConfig::create()` 只覆写 host / port / username / password / database；`charset` 仍保持默认 `utf8mb4`，`connect_timeout_ms` 仍保持默认 `5000`。
 - `AsyncMysqlConfig` 中 `< 0ms` 的 `send_timeout` / `recv_timeout` 表示关闭超时。
 - `buffer_size` 用于异步客户端内部接收 `RingBuffer` 的容量。
-- `result_row_reserve_hint` 仅是异步结果集的 `reserveRows()` 提示，不改变协议语义。
+- `result_row_reserve_hint` 仅是异步结果集的 `reserve_rows()` 提示，不改变协议语义。
 
 ## 错误、字段与结果集类型
 
@@ -134,12 +134,12 @@ public:
 
     MysqlErrorType type() const;
     std::string message() const;
-    uint16_t serverErrno() const;
+    uint16_t server_errno() const;
 };
 ```
 
 - 当前仓库里的常见归类可以按调用面理解：网络建立失败归到 `MYSQL_ERROR_CONNECTION`，认证失败归到 `MYSQL_ERROR_AUTH`，服务端 `ERR` 包通常归到 `MYSQL_ERROR_SERVER`，报文缺失 / 空 payload / 解析失败归到 `MYSQL_ERROR_PROTOCOL`，上游超时回落为 `MYSQL_ERROR_TIMEOUT`，状态机未到预期终态则归到 `MYSQL_ERROR_INTERNAL`。
-- `MysqlError(server_errno, server_msg)` 这一路保留服务端 errno；需要区分“库侧失败”与“服务端拒绝”时，优先先看 `type()`，再看 `serverErrno()` / `message()`。
+- `MysqlError(server_errno, server_msg)` 这一路保留服务端 errno；需要区分“库侧失败”与“服务端拒绝”时，优先先看 `type()`，再看 `server_errno()` / `message()`。
 
 ### `MysqlFieldType` / `MysqlFieldFlags`
 
@@ -182,27 +182,27 @@ public:
     const std::string& name() const;
     MysqlFieldType type() const;
     uint16_t flags() const;
-    uint32_t columnLength() const;
+    uint32_t column_length() const;
     uint8_t decimals() const;
 
-    void setCatalog(std::string catalog);
-    void setSchema(std::string schema);
-    void setTable(std::string table);
-    void setOrgTable(std::string org_table);
-    void setOrgName(std::string org_name);
-    void setCharacterSet(uint16_t cs);
+    void set_catalog(std::string catalog);
+    void set_schema(std::string schema);
+    void set_table(std::string table);
+    void set_org_table(std::string org_table);
+    void set_org_name(std::string org_name);
+    void set_character_set(uint16_t cs);
 
     const std::string& catalog() const;
     const std::string& schema() const;
     const std::string& table() const;
-    const std::string& orgTable() const;
-    const std::string& orgName() const;
-    uint16_t characterSet() const;
+    const std::string& org_table() const;
+    const std::string& org_name() const;
+    uint16_t character_set() const;
 
-    bool isNotNull() const;
-    bool isPrimaryKey() const;
-    bool isAutoIncrement() const;
-    bool isUnsigned() const;
+    bool is_not_null() const;
+    bool is_primary_key() const;
+    bool is_auto_increment() const;
+    bool is_unsigned() const;
 };
 
 class MysqlRow {
@@ -215,11 +215,11 @@ public:
     const std::optional<std::string>& operator[](size_t index) const;
     const std::optional<std::string>& at(size_t index) const;
 
-    bool isNull(size_t index) const;
-    std::string getString(size_t index, const std::string& default_val = "") const;
-    int64_t getInt64(size_t index, int64_t default_val = 0) const;
-    uint64_t getUint64(size_t index, uint64_t default_val = 0) const;
-    double getDouble(size_t index, double default_val = 0.0) const;
+    bool is_null(size_t index) const;
+    std::string get_string(size_t index, const std::string& default_val = "") const;
+    int64_t get_int64(size_t index, int64_t default_val = 0) const;
+    uint64_t get_uint64(size_t index, uint64_t default_val = 0) const;
+    double get_double(size_t index, double default_val = 0.0) const;
 
     const std::vector<std::optional<std::string>>& values() const;
 };
@@ -228,32 +228,32 @@ class MysqlResultSet {
 public:
     MysqlResultSet();
 
-    void addField(MysqlField field);
-    void reserveFields(size_t n);
-    size_t fieldCount() const;
+    void add_field(MysqlField field);
+    void reserve_fields(size_t n);
+    size_t field_count() const;
     const MysqlField& field(size_t index) const;
     const std::vector<MysqlField>& fields() const;
 
-    void addRow(MysqlRow row);
-    void reserveRows(size_t n);
-    size_t rowCount() const;
+    void add_row(MysqlRow row);
+    void reserve_rows(size_t n);
+    size_t row_count() const;
     const MysqlRow& row(size_t index) const;
     const std::vector<MysqlRow>& rows() const;
 
-    int findField(const std::string& name) const;
+    int find_field(const std::string& name) const;
 
-    void setAffectedRows(uint64_t n);
-    void setLastInsertId(uint64_t id);
-    void setWarnings(uint16_t w);
-    void setStatusFlags(uint16_t f);
-    void setInfo(std::string info);
+    void set_affected_rows(uint64_t n);
+    void set_last_insert_id(uint64_t id);
+    void set_warnings(uint16_t w);
+    void set_status_flags(uint16_t f);
+    void set_info(std::string info);
 
-    uint64_t affectedRows() const;
-    uint64_t lastInsertId() const;
+    uint64_t affected_rows() const;
+    uint64_t last_insert_id() const;
     uint16_t warnings() const;
-    uint16_t statusFlags() const;
+    uint16_t status_flags() const;
     const std::string& info() const;
-    bool hasResultSet() const;
+    bool has_result_set() const;
 };
 ```
 
@@ -277,7 +277,7 @@ void set(::galay::kernel::BaseLogger::uptr logger);
 - `MYSQL_LOG_ERROR`
 - `MYSQL_LOG_ENABLED`
 
-这些宏只读取 `galay::mysql::log::set()` 注入的库级 logger。未设置 logger 或日志级别低于 `minLevel()` 时，不会执行 `std::format`。
+这些宏只读取 `galay::mysql::log::set()` 注入的库级 logger。未设置 logger 或日志级别低于 `min_level()` 时，不会执行 `std::format`。
 
 ## 缓冲配置
 
@@ -290,19 +290,19 @@ class AsyncMysqlClientBuilder {
 public:
     AsyncMysqlClientBuilder& scheduler(IOScheduler* scheduler);
     AsyncMysqlClientBuilder& config(AsyncMysqlConfig config);
-    AsyncMysqlClientBuilder& sendTimeout(std::chrono::milliseconds timeout);
-    AsyncMysqlClientBuilder& recvTimeout(std::chrono::milliseconds timeout);
-    AsyncMysqlClientBuilder& bufferSize(size_t size);
-    AsyncMysqlClientBuilder& resultRowReserveHint(size_t hint);
+    AsyncMysqlClientBuilder& send_timeout(std::chrono::milliseconds timeout);
+    AsyncMysqlClientBuilder& recv_timeout(std::chrono::milliseconds timeout);
+    AsyncMysqlClientBuilder& buffer_size(size_t size);
+    AsyncMysqlClientBuilder& result_row_reserve_hint(size_t hint);
 
     AsyncMysqlClient build() const;
-    AsyncMysqlConfig buildConfig() const;
+    AsyncMysqlConfig build_config() const;
 };
 ```
 
 - `scheduler()` 对当前仓库是事实上的前置条件：`build()` 只是把内部保存的 `IOScheduler*` 透传给 `AsyncMysqlClient` 构造函数，本仓库不做空指针校验。
-- `config()` 会整体替换 builder 内部的 `AsyncMysqlConfig`，随后再调用 `sendTimeout()` / `recvTimeout()` / `bufferSize()` / `resultRowReserveHint()` 会继续在这份配置上增量修改。
-- `bufferSize()` 影响 `AsyncMysqlClient` 内部接收 ring buffer 的容量。
+- `config()` 会整体替换 builder 内部的 `AsyncMysqlConfig`，随后再调用 `send_timeout()` / `recv_timeout()` / `buffer_size()` / `result_row_reserve_hint()` 会继续在这份配置上增量修改。
+- `buffer_size()` 影响 `AsyncMysqlClient` 内部接收 ring buffer 的容量。
 - 真实消费入口：`README.md` 的异步最小示例、`examples/mysql/include/e1_query.cc`、`test/mysql/t3_client.cc`。
 
 ## `AsyncMysqlClient`
@@ -313,7 +313,7 @@ public:
 class AsyncMysqlClient {
 public:
     AsyncMysqlClient(IOScheduler* scheduler,
-                     AsyncMysqlConfig config = AsyncMysqlConfig::noTimeout());
+                     AsyncMysqlConfig config = AsyncMysqlConfig::no_timeout());
     AsyncMysqlClient(AsyncMysqlClient&& other) noexcept;
     AsyncMysqlClient& operator=(AsyncMysqlClient&& other) noexcept;
     ~AsyncMysqlClient() = default;
@@ -328,31 +328,31 @@ public:
     MysqlPipelineAwaitable pipeline(std::span<const std::string_view> sqls);
 
     MysqlPrepareAwaitable prepare(std::string_view sql);
-    MysqlStmtExecuteAwaitable stmtExecute(uint32_t stmt_id,
+    MysqlStmtExecuteAwaitable stmt_execute(uint32_t stmt_id,
                                           std::span<const std::optional<std::string>> params,
                                           std::span<const uint8_t> param_types = {});
-    MysqlStmtExecuteAwaitable stmtExecute(uint32_t stmt_id,
+    MysqlStmtExecuteAwaitable stmt_execute(uint32_t stmt_id,
                                           std::span<const std::optional<std::string_view>> params,
                                           std::span<const uint8_t> param_types = {});
 
-    MysqlQueryAwaitable beginTransaction();
+    MysqlQueryAwaitable begin_transaction();
     MysqlQueryAwaitable commit();
     MysqlQueryAwaitable rollback();
 
     MysqlQueryAwaitable ping();
-    MysqlQueryAwaitable useDatabase(std::string_view database);
+    MysqlQueryAwaitable use_database(std::string_view database);
 
     auto close();
-    bool isClosed() const;
+    bool is_closed() const;
 
     AsyncTcpSocket& socket();
-    galay::utils::RingBuffer& ringBuffer();
-    const galay::utils::RingBuffer& ringBuffer() const;
+    galay::utils::RingBuffer& ring_buffer();
+    const galay::utils::RingBuffer& ring_buffer() const;
     protocol::MysqlParser& parser();
     protocol::MysqlEncoder& encoder();
-    const AsyncMysqlConfig& asyncConfig() const;
-    uint32_t serverCapabilities() const;
-    void setServerCapabilities(uint32_t caps);
+    const AsyncMysqlConfig& async_config() const;
+    uint32_t server_capabilities() const;
+    void set_server_capabilities(uint32_t caps);
 };
 ```
 
@@ -365,12 +365,12 @@ public:
 
 使用约束：
 
-- 从公开头和当前示例 / 测试可以确认：单个 `AsyncMysqlClient` 暴露的是同一套 `AsyncTcpSocket`、`RingBuffer`、`MysqlParser`、`MysqlEncoder` 状态，因此 canonical API **不承诺** 对同一实例的并发 `query()` / `prepare()` / `stmtExecute()` / `batch()` / `pipeline()` 调用安全；需要并发时应改用多个 client 或 `MysqlConnectionPool`。
-- `query()` / `prepare()` / `stmtExecute()` / `batch()` / `pipeline()` / 事务辅助通常都应在 `connect()` 成功之后调用。
-- `stmtExecute()` 的 `param_types` 是可选 span；编码器在 `param_types.size() < params.size()` 时，会把剩余参数按 `MysqlFieldType::VAR_STRING` 编码。
-- `beginTransaction()` / `commit()` / `rollback()` / `ping()` / `useDatabase()` 都只是 `query()` 的语法糖；其中 `ping()` 实际发送的是 `SELECT 1`，不是 `COM_PING`。
-- `close()` 会先把 `isClosed()` 置为 `true`，然后直接转发到上游 `AsyncTcpSocket::close()`；因此消费者应按仓库示例那样使用 `co_await client.close();`。本仓库自身不会在这一步额外发送 MySQL `QUIT` 包。
-- `isClosed()` 是本地生命周期标记，不是“服务端仍在线”的探针；连接被服务端断开时，仍应以随后一次 awaitable 的返回值为准。
+- 从公开头和当前示例 / 测试可以确认：单个 `AsyncMysqlClient` 暴露的是同一套 `AsyncTcpSocket`、`RingBuffer`、`MysqlParser`、`MysqlEncoder` 状态，因此 canonical API **不承诺** 对同一实例的并发 `query()` / `prepare()` / `stmt_execute()` / `batch()` / `pipeline()` 调用安全；需要并发时应改用多个 client 或 `MysqlConnectionPool`。
+- `query()` / `prepare()` / `stmt_execute()` / `batch()` / `pipeline()` / 事务辅助通常都应在 `connect()` 成功之后调用。
+- `stmt_execute()` 的 `param_types` 是可选 span；编码器在 `param_types.size() < params.size()` 时，会把剩余参数按 `MysqlFieldType::VAR_STRING` 编码。
+- `begin_transaction()` / `commit()` / `rollback()` / `ping()` / `use_database()` 都只是 `query()` 的语法糖；其中 `ping()` 实际发送的是 `SELECT 1`，不是 `COM_PING`。
+- `close()` 会先把 `is_closed()` 置为 `true`，然后直接转发到上游 `AsyncTcpSocket::close()`；因此消费者应按仓库示例那样使用 `co_await client.close();`。本仓库自身不会在这一步额外发送 MySQL `QUIT` 包。
+- `is_closed()` 是本地生命周期标记，不是“服务端仍在线”的探针；连接被服务端断开时，仍应以随后一次 awaitable 的返回值为准。
 - 真实消费入口：`examples/mysql/include/e1_query.cc`、`examples/mysql/include/e5_pipeline.cc`、`test/mysql/t3_client.cc`、`test/mysql/t6_transaction.cc`、`test/mysql/t7_stmt.cc`。
 
 ## 异步 awaitable 类型
@@ -438,7 +438,7 @@ public:
 
 ### `MysqlQueryAwaitable`
 
-- 来源：`AsyncMysqlClient::query(...)`、`beginTransaction()`、`commit()`、`rollback()`、`ping()`、`useDatabase(...)`
+- 来源：`AsyncMysqlClient::query(...)`、`begin_transaction()`、`commit()`、`rollback()`、`ping()`、`use_database(...)`
 - `await_resume()` 返回 `std::expected<std::optional<MysqlResultSet>, MysqlError>`
 - 成功路径返回带值的 `optional<MysqlResultSet>`；当前仓库没有把空 `optional` 当成“继续轮询”的公共协议
 - 服务端 `ERR` 包在能解析错误码时映射到 `MYSQL_ERROR_SERVER`，否则回落到 `MYSQL_ERROR_QUERY`
@@ -455,7 +455,7 @@ public:
 
 ### `MysqlStmtExecuteAwaitable`
 
-- 来源：`AsyncMysqlClient::stmtExecute(...)`
+- 来源：`AsyncMysqlClient::stmt_execute(...)`
 - `await_resume()` 返回 `std::expected<std::optional<MysqlResultSet>, MysqlError>`
 - 执行成功时既可能得到 OK 结果，也可能得到完整结果集；两种路径都收敛为 `MysqlResultSet`
 - 服务端 `ERR` 包在能解析错误码时映射到 `MYSQL_ERROR_SERVER`，否则回落到 `MYSQL_ERROR_QUERY`
@@ -523,7 +523,7 @@ public:
     AcquireAwaitable acquire();
     void release(AsyncMysqlClient* client);
     size_t size() const;
-    size_t idleCount() const;
+    size_t idle_count() const;
 };
 ```
 
@@ -575,29 +575,29 @@ public:
     };
 
     std::expected<PrepareResult, MysqlError> prepare(const std::string& sql);
-    MysqlResult stmtExecute(uint32_t stmt_id,
+    MysqlResult stmt_execute(uint32_t stmt_id,
                             const std::vector<std::optional<std::string>>& params,
                             const std::vector<uint8_t>& param_types = {});
-    MysqlVoidResult stmtClose(uint32_t stmt_id);
+    MysqlVoidResult stmt_close(uint32_t stmt_id);
 
-    MysqlVoidResult beginTransaction();
+    MysqlVoidResult begin_transaction();
     MysqlVoidResult commit();
     MysqlVoidResult rollback();
 
     MysqlVoidResult ping();
-    MysqlVoidResult useDatabase(const std::string& database);
+    MysqlVoidResult use_database(const std::string& database);
 
     void close();
-    bool isConnected() const;
+    bool is_connected() const;
 };
 ```
 
-- `MysqlClient` 的查询、批量、预处理、事务与工具命令都要求先 `connect()`；否则底层 `sendAll()` / `sendAllv()` / `recvIntoRingBuffer()` 会直接返回 `MYSQL_ERROR_CONNECTION_CLOSED`。
+- `MysqlClient` 的查询、批量、预处理、事务与工具命令都要求先 `connect()`；否则底层 `send_all()` / `send_allv()` / `recv_into_ring_buffer()` 会直接返回 `MYSQL_ERROR_CONNECTION_CLOSED`。
 - `batch()` / `pipeline()` 对空输入返回成功的空 `std::vector<MysqlResultSet>`；如果某条 `MysqlCommandView::encoded` 为空，则返回 `MYSQL_ERROR_PROTOCOL`。
 - 同步 `prepare()` 只返回 `{statement_id, num_columns, num_params}`；参数列 / 结果列元数据会被内部读取掉，但不会像异步 `PrepareResult` 那样向调用方暴露。
-- 同步 `stmtExecute()` 同样把缺省的 `param_types` 视为“剩余参数按 `MysqlFieldType::VAR_STRING` 编码”。
-- `stmtClose()` 只发送 `COM_STMT_CLOSE`，不会等待服务端响应。
-- `beginTransaction()` / `commit()` / `rollback()` / `ping()` / `useDatabase()` 都复用同步简单语句请求路径；其中 `ping()` 同样执行 `SELECT 1`。
+- 同步 `stmt_execute()` 同样把缺省的 `param_types` 视为“剩余参数按 `MysqlFieldType::VAR_STRING` 编码”。
+- `stmt_close()` 只发送 `COM_STMT_CLOSE`，不会等待服务端响应。
+- `begin_transaction()` / `commit()` / `rollback()` / `ping()` / `use_database()` 都复用同步简单语句请求路径；其中 `ping()` 同样执行 `SELECT 1`。
 - `close()` 是 best-effort：若当前已连接，会先尝试发送 `QUIT`，无论发送是否成功都继续关闭 socket。
 - 从公开头与实现可见，`MysqlClient` 没有对外声明任何线程同步策略；当前 examples / tests 也只按单线程、串行调用方式使用它。
 - 真实消费入口：`examples/mysql/include/e2_query.cc`、`examples/mysql/include/e4_prepared.cc`、`test/mysql/t4_client.cc`。
@@ -635,17 +635,17 @@ public:
     void clear() noexcept;
     void reserve(size_t command_count, size_t encoded_bytes);
 
-    MysqlCommandBuilder& appendQuery(std::string_view sql, uint8_t sequence_id = 0);
-    MysqlCommandBuilder& appendStmtPrepare(std::string_view sql, uint8_t sequence_id = 0);
-    MysqlCommandBuilder& appendInitDb(std::string_view database, uint8_t sequence_id = 0);
-    MysqlCommandBuilder& appendPing(uint8_t sequence_id = 0);
-    MysqlCommandBuilder& appendQuit(uint8_t sequence_id = 0);
-    MysqlCommandBuilder& appendResetConnection(uint8_t sequence_id = 0);
-    MysqlCommandBuilder& appendSimple(CommandType cmd,
+    MysqlCommandBuilder& append_query(std::string_view sql, uint8_t sequence_id = 0);
+    MysqlCommandBuilder& append_stmt_prepare(std::string_view sql, uint8_t sequence_id = 0);
+    MysqlCommandBuilder& append_init_db(std::string_view database, uint8_t sequence_id = 0);
+    MysqlCommandBuilder& append_ping(uint8_t sequence_id = 0);
+    MysqlCommandBuilder& append_quit(uint8_t sequence_id = 0);
+    MysqlCommandBuilder& append_reset_connection(uint8_t sequence_id = 0);
+    MysqlCommandBuilder& append_simple(CommandType cmd,
                                       std::string_view payload = {},
                                       uint8_t sequence_id = 0,
                                       MysqlCommandKind kind = MysqlCommandKind::Raw);
-    MysqlCommandBuilder& appendFast(CommandType cmd,
+    MysqlCommandBuilder& append_fast(CommandType cmd,
                                     std::string_view payload,
                                     uint8_t sequence_id = 0,
                                     MysqlCommandKind kind = MysqlCommandKind::Raw);
@@ -661,8 +661,8 @@ public:
 
 - `commands()` 返回的 `std::span<const MysqlCommandView>` 以及其中每个 `MysqlCommandView::encoded` 都引用 builder 内部的 `m_encoded` 缓冲；在继续 `append*()`、`clear()` 或 `release()` 之后，先前取出的 view 不应再继续持有。
 - `build()` 会复制当前编码后的字节串；`release()` 会把编码结果 move 出去并清空 builder 内部状态。
-- `appendPing()` / `appendQuit()` / `appendResetConnection()` 这类低层命令是协议构建入口，不意味着高层 `AsyncMysqlClient` / `MysqlClient` 一定提供同名 wrapper。
-- `appendFast()` 的注释前提是“调用方已自行预留足够容量”；保守用法优先选 `reserve()` + `appendQuery()` / `appendSimple()`。
+- `append_ping()` / `append_quit()` / `append_reset_connection()` 这类低层命令是协议构建入口，不意味着高层 `AsyncMysqlClient` / `MysqlClient` 一定提供同名 wrapper。
+- `append_fast()` 的注释前提是“调用方已自行预留足够容量”；保守用法优先选 `reserve()` + `append_query()` / `append_simple()`。
 - 真实锚点：`test/mysql/t1_protocol.cc`、`test/mysql/t4_client.cc`、`examples/mysql/include/e5_pipeline.cc`。
 
 ## `protocol::AuthPlugin`
@@ -672,23 +672,23 @@ public:
 ```cpp
 class AuthPlugin {
 public:
-    static std::string nativePasswordAuth(const std::string& password, const std::string& salt);
-    static std::string cachingSha2Auth(const std::string& password, const std::string& salt);
+    static std::string native_password_auth(const std::string& password, const std::string& salt);
+    static std::string caching_sha2_auth(const std::string& password, const std::string& salt);
     static std::expected<std::string, std::string>
-    cachingSha2FullAuth(const std::string& password,
+    caching_sha2_full_auth(const std::string& password,
                         const std::string& salt,
                         std::string_view pem_public_key);
 
     static std::string sha1(const std::string& data);
     static std::string sha256(const std::string& data);
-    static std::string xorStrings(const std::string& a, const std::string& b);
+    static std::string xor_strings(const std::string& a, const std::string& b);
 };
 ```
 
-- `nativePasswordAuth()` 对应 `mysql_native_password`
-- `cachingSha2Auth()` 对应 `caching_sha2_password` fast auth
-- `cachingSha2FullAuth()` 对应 `caching_sha2_password` 公钥 full auth 辅助
-- `cachingSha2FullAuth()` 的返回类型是 `std::expected<std::string, std::string>`；失败信息直接以字符串错误返回，而不是 `MysqlError`。
+- `native_password_auth()` 对应 `mysql_native_password`
+- `caching_sha2_auth()` 对应 `caching_sha2_password` fast auth
+- `caching_sha2_full_auth()` 对应 `caching_sha2_password` 公钥 full auth 辅助
+- `caching_sha2_full_auth()` 的返回类型是 `std::expected<std::string, std::string>`；失败信息直接以字符串错误返回，而不是 `MysqlError`。
 - 同步 / 异步 connect 链路都会在服务端请求 `caching_sha2_password` full auth 时复用这个 helper；具体验证看 `test/mysql/t2_auth.cc`。
 
 ## `protocol::MysqlPacket` 协议模型
@@ -788,36 +788,36 @@ struct StmtPrepareOkPacket {
 `galay-mysql/protoc/mysql_protocol.h` 暴露协议 helper、parser 与 encoder：
 
 ```cpp
-std::expected<uint64_t, ParseError> readLenEncInt(const char* data, size_t len, size_t& consumed);
-std::expected<std::string, ParseError> readLenEncString(const char* data, size_t len, size_t& consumed);
-std::expected<std::string, ParseError> readNullTermString(const char* data, size_t len, size_t& consumed);
+std::expected<uint64_t, ParseError> read_len_enc_int(const char* data, size_t len, size_t& consumed);
+std::expected<std::string, ParseError> read_len_enc_string(const char* data, size_t len, size_t& consumed);
+std::expected<std::string, ParseError> read_null_term_string(const char* data, size_t len, size_t& consumed);
 
-uint16_t readUint16(const char* data);
-uint32_t readUint24(const char* data);
-uint32_t readUint32(const char* data);
-uint64_t readUint64(const char* data);
+uint16_t read_uint16(const char* data);
+uint32_t read_uint24(const char* data);
+uint32_t read_uint32(const char* data);
+uint64_t read_uint64(const char* data);
 
-void writeUint16(std::string& buf, uint16_t val);
-void writeUint24(std::string& buf, uint32_t val);
-void writeUint32(std::string& buf, uint32_t val);
-void writeUint64(std::string& buf, uint64_t val);
-void writeLenEncInt(std::string& buf, uint64_t val);
-void writeLenEncString(std::string& buf, std::string_view str);
+void write_uint16(std::string& buf, uint16_t val);
+void write_uint24(std::string& buf, uint32_t val);
+void write_uint32(std::string& buf, uint32_t val);
+void write_uint64(std::string& buf, uint64_t val);
+void write_len_enc_int(std::string& buf, uint64_t val);
+void write_len_enc_string(std::string& buf, std::string_view str);
 
 class MysqlParser {
 public:
     MysqlParser() = default;
 
-    std::expected<PacketHeader, ParseError> parseHeader(const char* data, size_t len);
-    std::expected<HandshakeV10, ParseError> parseHandshake(const char* data, size_t len);
-    ResponseType identifyResponse(uint8_t first_byte, uint32_t payload_len);
-    std::expected<OkPacket, ParseError> parseOk(const char* data, size_t len, uint32_t capabilities);
-    std::expected<ErrPacket, ParseError> parseErr(const char* data, size_t len, uint32_t capabilities);
-    std::expected<EofPacket, ParseError> parseEof(const char* data, size_t len);
-    std::expected<ColumnDefinitionPacket, ParseError> parseColumnDefinition(const char* data, size_t len);
+    std::expected<PacketHeader, ParseError> parse_header(const char* data, size_t len);
+    std::expected<HandshakeV10, ParseError> parse_handshake(const char* data, size_t len);
+    ResponseType identify_response(uint8_t first_byte, uint32_t payload_len);
+    std::expected<OkPacket, ParseError> parse_ok(const char* data, size_t len, uint32_t capabilities);
+    std::expected<ErrPacket, ParseError> parse_err(const char* data, size_t len, uint32_t capabilities);
+    std::expected<EofPacket, ParseError> parse_eof(const char* data, size_t len);
+    std::expected<ColumnDefinitionPacket, ParseError> parse_column_definition(const char* data, size_t len);
     std::expected<std::vector<std::optional<std::string>>, ParseError>
-    parseTextRow(const char* data, size_t len, size_t column_count);
-    std::expected<StmtPrepareOkPacket, ParseError> parseStmtPrepareOk(const char* data, size_t len);
+    parse_text_row(const char* data, size_t len, size_t column_count);
+    std::expected<StmtPrepareOkPacket, ParseError> parse_stmt_prepare_ok(const char* data, size_t len);
 
     struct PacketView {
         const char* payload;
@@ -825,34 +825,34 @@ public:
         uint8_t sequence_id;
     };
 
-    std::expected<PacketView, ParseError> extractPacket(const char* data, size_t len, size_t& consumed);
+    std::expected<PacketView, ParseError> extract_packet(const char* data, size_t len, size_t& consumed);
 };
 
 class MysqlEncoder {
 public:
     MysqlEncoder() = default;
 
-    std::string encodeHandshakeResponse(const HandshakeResponse41& resp, uint8_t sequence_id);
-    std::string encodeQuery(std::string_view sql, uint8_t sequence_id = 0);
-    std::string encodeStmtPrepare(std::string_view sql, uint8_t sequence_id = 0);
-    std::string encodeStmtExecute(uint32_t stmt_id,
+    std::string encode_handshake_response(const HandshakeResponse41& resp, uint8_t sequence_id);
+    std::string encode_query(std::string_view sql, uint8_t sequence_id = 0);
+    std::string encode_stmt_prepare(std::string_view sql, uint8_t sequence_id = 0);
+    std::string encode_stmt_execute(uint32_t stmt_id,
                                   std::span<const std::optional<std::string>> params,
                                   std::span<const uint8_t> param_types,
                                   uint8_t sequence_id = 0);
-    std::string encodeStmtExecute(uint32_t stmt_id,
+    std::string encode_stmt_execute(uint32_t stmt_id,
                                   std::span<const std::optional<std::string_view>> params,
                                   std::span<const uint8_t> param_types,
                                   uint8_t sequence_id = 0);
-    std::string encodeStmtClose(uint32_t stmt_id, uint8_t sequence_id = 0);
-    std::string encodeQuit(uint8_t sequence_id = 0);
-    std::string encodePing(uint8_t sequence_id = 0);
-    std::string encodeInitDb(std::string_view database, uint8_t sequence_id = 0);
-    std::string encodeResetConnection(uint8_t sequence_id = 0);
+    std::string encode_stmt_close(uint32_t stmt_id, uint8_t sequence_id = 0);
+    std::string encode_quit(uint8_t sequence_id = 0);
+    std::string encode_ping(uint8_t sequence_id = 0);
+    std::string encode_init_db(std::string_view database, uint8_t sequence_id = 0);
+    std::string encode_reset_connection(uint8_t sequence_id = 0);
 };
 ```
 
-- `MysqlParser::extractPacket()` / `parseHeader()` 等会返回 `ParseError::Incomplete`，同步 / 异步接收路径正是依靠这个信号继续从 ring buffer 补读，而不是立即把它当成协议错误。
-- `MysqlEncoder::encodePing()` / `encodeQuit()` / `encodeResetConnection()` 主要服务于低层协议拼包；高层客户端目前只把 `query("SELECT 1")` 暴露为 `ping()`。
+- `MysqlParser::extract_packet()` / `parse_header()` 等会返回 `ParseError::Incomplete`，同步 / 异步接收路径正是依靠这个信号继续从 ring buffer 补读，而不是立即把它当成协议错误。
+- `MysqlEncoder::encode_ping()` / `encode_quit()` / `encode_reset_connection()` 主要服务于低层协议拼包；高层客户端目前只把 `query("SELECT 1")` 暴露为 `ping()`。
 - 真实锚点：`test/mysql/t1_protocol.cc`、`test/mysql/t4_client.cc`、`examples/mysql/include/e5_pipeline.cc`。
 
 ## `module_prelude.hpp`
@@ -877,6 +877,6 @@ target_link_libraries(app PRIVATE galay::mysql)
 
 - 同步 `close()` 是普通函数；异步 `close()` 需要 `co_await client.close();`
 - `pipeline()` 直接接受 `std::span<const std::string_view>`；`batch()` 接受更底层的 `MysqlCommandView`
-- 异步 `stmtExecute()` 同时支持 `std::string` 与 `std::string_view` 参数层
-- `AsyncMysqlClient::ringBuffer()` / `parser()` / `encoder()` 等 accessor 已经是公开面，适合高级扩展或测试观察
+- 异步 `stmt_execute()` 同时支持 `std::string` 与 `std::string_view` 参数层
+- `AsyncMysqlClient::ring_buffer()` / `parser()` / `encoder()` 等 accessor 已经是公开面，适合高级扩展或测试观察
 - import / module 文档里的 target 名应与 `examples/CMakeLists.txt` 真实 target 保持一致，不再使用额外别名

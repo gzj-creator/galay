@@ -16,7 +16,7 @@ enum class ReadError {
     kPath,
 };
 
-std::expected<std::string, ReadError> repoRoot()
+std::expected<std::string, ReadError> repo_root()
 {
     std::string path(__FILE__);
     const std::string marker = "/test/cpp/http/";
@@ -28,7 +28,7 @@ std::expected<std::string, ReadError> repoRoot()
     return path;
 }
 
-std::expected<std::string, ReadError> readFile(const std::string& path)
+std::expected<std::string, ReadError> read_file(const std::string& path)
 {
     const int fd = ::open(path.c_str(), O_RDONLY);
     if (fd < 0) {
@@ -66,9 +66,9 @@ std::expected<std::string, ReadError> readFile(const std::string& path)
     return content;
 }
 
-std::expected<std::string, ReadError> repoFile(std::string_view relative_path)
+std::expected<std::string, ReadError> repo_file(std::string_view relative_path)
 {
-    auto root = repoRoot();
+    auto root = repo_root();
     if (!root.has_value()) {
         return std::unexpected(root.error());
     }
@@ -81,25 +81,25 @@ std::expected<std::string, ReadError> repoFile(std::string_view relative_path)
     if (&appended != &path) {
         return std::unexpected(ReadError::kPath);
     }
-    return readFile(path);
+    return read_file(path);
 }
 
-std::expected<std::string, ReadError> routerSource()
+std::expected<std::string, ReadError> router_source()
 {
-    return repoFile("src/cpp/galay-http/server/http_router.cc");
+    return repo_file("src/cpp/galay-http/server/http_router.cc");
 }
 
-std::expected<std::string, ReadError> routerHeader()
+std::expected<std::string, ReadError> router_header()
 {
-    return repoFile("src/cpp/galay-http/server/http_router.h");
+    return repo_file("src/cpp/galay-http/server/http_router.h");
 }
 
-std::expected<std::string, ReadError> requestHeader()
+std::expected<std::string, ReadError> request_header()
 {
-    return repoFile("src/cpp/galay-http/protoc/http_request.h");
+    return repo_file("src/cpp/galay-http/protoc/http_request.h");
 }
 
-int requireContains(std::string_view haystack, std::string_view needle, const char* message)
+int require_contains(std::string_view haystack, std::string_view needle, const char* message)
 {
     const size_t found = haystack.find(needle);
     if (found == std::string_view::npos) {
@@ -109,7 +109,7 @@ int requireContains(std::string_view haystack, std::string_view needle, const ch
     return 0;
 }
 
-int requireNotContains(std::string_view haystack, std::string_view needle, const char* message)
+int require_not_contains(std::string_view haystack, std::string_view needle, const char* message)
 {
     const size_t found = haystack.find(needle);
     if (found != std::string_view::npos) {
@@ -123,58 +123,58 @@ int requireNotContains(std::string_view haystack, std::string_view needle, const
 
 int main()
 {
-    auto source = routerSource();
+    auto source = router_source();
     if (!source.has_value()) {
         std::cerr << "failed to read http_router.cc\n";
         return 1;
     }
-    auto header = routerHeader();
+    auto header = router_header();
     if (!header.has_value()) {
         std::cerr << "failed to read http_router.h\n";
         return 1;
     }
-    auto request = requestHeader();
+    auto request = request_header();
     if (!request.has_value()) {
         std::cerr << "failed to read http_request.h\n";
         return 1;
     }
 
-    if (const int rc = requireContains(*source,
-                                       "searchRoutePath",
+    if (const int rc = require_contains(*source,
+                                       "search_route_path",
                                        "HttpRouter fuzzy hot path must scan string_view path segments")) {
         return rc;
     }
-    if (const int rc = requireContains(*source,
+    if (const int rc = require_contains(*source,
                                        "std::vector<std::string_view>",
                                        "HttpRouter fuzzy hot path must store borrowed param segments before materializing params")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*source,
+    if (const int rc = require_not_contains(*source,
                                           "std::stringstream ss(path)",
                                           "HttpRouter path splitting must not use stringstream")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*source,
+    if (const int rc = require_not_contains(*source,
                                           "std::function<HttpRouteHandler*",
                                           "HttpRouter fuzzy hot path must not allocate through std::function recursion")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*source,
-                                          "result.handler = searchRoute(fuzzyIt->second.get(), segments, result.params)",
-                                          "HttpRouter findHandler must not allocate splitPath vector on fuzzy match")) {
+    if (const int rc = require_not_contains(*source,
+                                          "result.handler = search_route(fuzzyIt->second.get(), segments, result.params)",
+                                          "HttpRouter find_handler must not allocate split_path vector on fuzzy match")) {
         return rc;
     }
-    if (const int rc = requireContains(*header,
+    if (const int rc = require_contains(*header,
                                        "RouteParams params",
                                        "RouteMatch must use the small route parameter container instead of std::map")) {
         return rc;
     }
-    if (const int rc = requireNotContains(*header,
+    if (const int rc = require_not_contains(*header,
                                           "std::map<std::string, std::string> params",
                                           "RouteMatch params must not allocate std::map nodes on the match hot path")) {
         return rc;
     }
-    if (const int rc = requireContains(*request,
+    if (const int rc = require_contains(*request,
                                        "RouteParams m_routeParams",
                                        "HttpRequest must keep route params in the small container until map compatibility is requested")) {
         return rc;

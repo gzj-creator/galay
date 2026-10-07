@@ -103,8 +103,8 @@ public:
     using TimePoint = Clock::time_point;
 
     explicit BasicCircuitBreaker(CircuitBreakerConfig config = {})
-        : m_config(normalizeConfig(config))
-        , m_resetTimeoutNs(timeoutToNs(m_config.resetTimeout))
+        : m_config(normalize_config(config))
+        , m_resetTimeoutNs(timeout_to_ns(m_config.resetTimeout))
         , m_state(static_cast<int>(CircuitState::Closed))
         , m_failureCount(0)
         , m_successCount(0)
@@ -115,7 +115,7 @@ public:
      * @brief 判断是否允许请求通过
      * @return 允许请求返回 true，熔断中返回 false
      */
-    bool allowRequest() {
+    bool allow_request() {
         auto currentState = static_cast<CircuitState>(m_state.load(std::memory_order_acquire));
 
         switch (currentState) {
@@ -123,7 +123,7 @@ public:
                 return true;
 
             case CircuitState::Open: {
-                auto now = nowNs();
+                auto now = now_ns();
                 auto lastFailure = m_lastFailureTimeNs.load(std::memory_order_acquire);
                 auto timeoutNs = m_resetTimeoutNs;
 
@@ -141,7 +141,7 @@ public:
                     auto observedState = static_cast<CircuitState>(
                         m_state.load(std::memory_order_acquire));
                     if (observedState == CircuitState::HalfOpen) {
-                        return tryAcquireHalfOpenProbe();
+                        return try_acquire_half_open_probe();
                     }
                     return observedState == CircuitState::Closed;
                 }
@@ -149,7 +149,7 @@ public:
             }
 
             case CircuitState::HalfOpen:
-                return tryAcquireHalfOpenProbe();
+                return try_acquire_half_open_probe();
         }
 
         return false;
@@ -158,7 +158,7 @@ public:
     /**
      * @brief 记录一次成功调用
      */
-    void onSuccess() {
+    void on_success() {
         auto currentState = static_cast<CircuitState>(m_state.load(std::memory_order_acquire));
 
         switch (currentState) {
@@ -169,7 +169,7 @@ public:
                 break;
 
             case CircuitState::HalfOpen: {
-                releaseHalfOpenProbe();
+                release_half_open_probe();
                 auto count = m_successCount.fetch_add(1, std::memory_order_relaxed) + 1;
                 if (count >= m_config.successThreshold) {
                     // 尝试转换到 Closed
@@ -193,8 +193,8 @@ public:
     /**
      * @brief 记录一次失败调用
      */
-    void onFailure() {
-        auto now = nowNs();
+    void on_failure() {
+        auto now = now_ns();
         m_lastFailureTimeNs.store(now, std::memory_order_release);
 
         auto currentState = static_cast<CircuitState>(m_state.load(std::memory_order_acquire));
@@ -214,7 +214,7 @@ public:
 
             case CircuitState::HalfOpen: {
                 // 直接转换到 Open
-                releaseHalfOpenProbe();
+                release_half_open_probe();
                 int expected = static_cast<int>(CircuitState::HalfOpen);
                 if (m_state.compare_exchange_strong(expected,
                         static_cast<int>(CircuitState::Open),
@@ -245,15 +245,15 @@ public:
     auto execute(F&& f) -> std::invoke_result_t<F&&> {
         using Result = std::remove_cvref_t<std::invoke_result_t<F&&>>;
 
-        if (!allowRequest()) {
-            return makeOpenResult<Result>();
+        if (!allow_request()) {
+            return make_open_result<Result>();
         }
 
         auto result = std::invoke(std::forward<F>(f));
         if (result.has_value()) {
-            onSuccess();
+            on_success();
         } else {
-            onFailure();
+            on_failure();
         }
         return result;
     }
@@ -270,18 +270,18 @@ public:
      */
     template<typename F, typename Fallback>
     requires detail::CircuitBreakerFallbackPair<F&&, Fallback&&>
-    auto executeWithFallback(F&& f, Fallback&& fallback) -> std::invoke_result_t<F&&> {
-        if (!allowRequest()) {
+    auto execute_with_fallback(F&& f, Fallback&& fallback) -> std::invoke_result_t<F&&> {
+        if (!allow_request()) {
             return std::invoke(std::forward<Fallback>(fallback));
         }
 
         auto result = std::invoke(std::forward<F>(f));
         if (result.has_value()) {
-            onSuccess();
+            on_success();
             return result;
         }
 
-        onFailure();
+        on_failure();
         return std::invoke(std::forward<Fallback>(fallback));
     }
 
@@ -297,7 +297,7 @@ public:
      * @brief 获取当前状态的可读字符串
      * @return 状态字符串（"CLOSED"、"OPEN"、"HALF_OPEN"）
      */
-    const char* stateString() const {
+    const char* state_string() const {
         switch (state()) {
             case CircuitState::Closed: return "CLOSED";
             case CircuitState::Open: return "OPEN";
@@ -310,7 +310,7 @@ public:
      * @brief 获取失败计数
      * @return 当前失败次数
      */
-    size_t failureCount() const {
+    size_t failure_count() const {
         return m_failureCount.load(std::memory_order_acquire);
     }
 
@@ -318,7 +318,7 @@ public:
      * @brief 获取成功计数
      * @return 当前成功次数
      */
-    size_t successCount() const {
+    size_t success_count() const {
         return m_successCount.load(std::memory_order_acquire);
     }
 
@@ -336,8 +336,8 @@ public:
     /**
      * @brief 强制将熔断器设置为开启状态
      */
-    void forceOpen() {
-        m_lastFailureTimeNs.store(nowNs(), std::memory_order_release);
+    void force_open() {
+        m_lastFailureTimeNs.store(now_ns(), std::memory_order_release);
         m_failureCount.store(0, std::memory_order_relaxed);
         m_successCount.store(0, std::memory_order_relaxed);
         m_halfOpenInFlight.store(0, std::memory_order_relaxed);
@@ -352,12 +352,12 @@ public:
 
 private:
     template<detail::CircuitBreakerOpenExpected Result>
-    static Result makeOpenResult() {
+    static Result make_open_result() {
         using Error = typename std::remove_cvref_t<Result>::error_type;
         return std::unexpected<Error>{Error{CircuitBreakerError::Open}};
     }
 
-    static CircuitBreakerConfig normalizeConfig(CircuitBreakerConfig config) {
+    static CircuitBreakerConfig normalize_config(CircuitBreakerConfig config) {
         if (config.failureThreshold == 0) {
             config.failureThreshold = 1;
         }
@@ -373,16 +373,16 @@ private:
         return config;
     }
 
-    static int64_t timeoutToNs(std::chrono::seconds timeout) {
+    static int64_t timeout_to_ns(std::chrono::seconds timeout) {
         return std::chrono::duration_cast<std::chrono::nanoseconds>(timeout).count();
     }
 
-    static int64_t nowNs() {
+    static int64_t now_ns() {
         return std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now().time_since_epoch()).count();
     }
 
-    bool tryAcquireHalfOpenProbe() {
+    bool try_acquire_half_open_probe() {
         auto current = m_halfOpenInFlight.load(std::memory_order_relaxed);
         while (current < m_config.halfOpenMaxRequests) {
             if (m_halfOpenInFlight.compare_exchange_weak(current,
@@ -395,7 +395,7 @@ private:
         return false;
     }
 
-    void releaseHalfOpenProbe() {
+    void release_half_open_probe() {
         auto current = m_halfOpenInFlight.load(std::memory_order_relaxed);
         while (current > 0) {
             if (m_halfOpenInFlight.compare_exchange_weak(current,

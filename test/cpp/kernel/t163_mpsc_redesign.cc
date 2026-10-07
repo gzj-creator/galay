@@ -58,9 +58,9 @@ using ConstructOnlyRecvAwaitable =
     galay::mpsc::UnboundedRecvAwaitable<NothrowMoveConstructOnly>;
 struct AwaitSuspendProbePromise {};
 static_assert(noexcept(std::declval<UIntChannel&>().send(uint64_t{})));
-static_assert(noexcept(std::declval<UIntChannel&>().sendBatch(
+static_assert(noexcept(std::declval<UIntChannel&>().send_batch(
     std::declval<std::vector<uint64_t>&&>())));
-static_assert(noexcept(std::declval<UIntChannel&>().tryRecv()));
+static_assert(noexcept(std::declval<UIntChannel&>().try_recv()));
 static_assert(!std::is_constructible_v<UIntRecvAwaitable, UIntChannel*>);
 static_assert(!std::is_copy_constructible_v<UIntRecvAwaitable>);
 static_assert(std::is_nothrow_move_constructible_v<UIntRecvAwaitable>);
@@ -123,7 +123,7 @@ struct BlockingMove
     }
 };
 
-bool waitForFlag(const std::atomic<bool>& flag) noexcept
+bool wait_for_flag(const std::atomic<bool>& flag) noexcept
 {
     const auto deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(2);
@@ -134,11 +134,11 @@ bool waitForFlag(const std::atomic<bool>& flag) noexcept
     return flag.load(std::memory_order_acquire);
 }
 
-bool testCloseDrainsPublishedValues()
+bool test_close_drains_published_values()
 {
     galay::mpsc::UnboundedChannel<uint64_t> channel;
-    auto first = channel.makeProducerToken();
-    auto second = channel.makeProducerToken();
+    auto first = channel.make_producer_token();
+    auto second = channel.make_producer_token();
     if (!first.valid() || !second.valid()) {
         return false;
     }
@@ -146,7 +146,7 @@ bool testCloseDrainsPublishedValues()
     if (!channel.send(first, 11) || !channel.send(second, 22)) {
         return false;
     }
-    if (!channel.close() || !channel.isClosed()) {
+    if (!channel.close() || !channel.is_closed()) {
         return false;
     }
 
@@ -155,17 +155,17 @@ bool testCloseDrainsPublishedValues()
         return false;
     }
 
-    auto one = channel.tryRecv();
-    auto two = channel.tryRecv();
+    auto one = channel.try_recv();
+    auto two = channel.try_recv();
     return one.has_value() && two.has_value() &&
         ((*one == 11 && *two == 22) || (*one == 22 && *two == 11)) &&
-        !channel.tryRecv().has_value() && channel.isClosedAndDrained();
+        !channel.try_recv().has_value() && channel.is_closed_and_drained();
 }
 
-bool testDrainToReusesCapacity()
+bool test_drain_to_reuses_capacity()
 {
     galay::mpsc::UnboundedChannel<uint64_t> channel;
-    auto token = channel.makeProducerToken();
+    auto token = channel.make_producer_token();
     if (!token.valid()) {
         return false;
     }
@@ -178,7 +178,7 @@ bool testDrainToReusesCapacity()
     std::vector<uint64_t> values;
     values.reserve(16);
     const size_t initialCapacity = values.capacity();
-    const size_t drained = channel.drainTo(values, 32);
+    const size_t drained = channel.drain_to(values, 32);
     if (drained != 16 || values.size() != 16 ||
         values.capacity() != initialCapacity) {
         return false;
@@ -191,7 +191,7 @@ bool testDrainToReusesCapacity()
     return channel.size() == 16;
 }
 
-bool testClosedReceiveCompletesWithoutSuspending()
+bool test_closed_receive_completes_without_suspending()
 {
     galay::mpsc::UnboundedChannel<uint64_t> channel;
     if (!channel.close()) {
@@ -207,7 +207,7 @@ bool testClosedReceiveCompletesWithoutSuspending()
                                         galay::kernel::kClosed);
 }
 
-bool testCloseWaitsForInFlightSends()
+bool test_close_waits_for_in_flight_sends()
 {
     using Channel = galay::mpsc::UnboundedChannel<BlockingMove>;
     constexpr size_t kProducerCount = 4;
@@ -215,7 +215,7 @@ bool testCloseWaitsForInFlightSends()
     std::vector<Channel::ProducerToken> tokens;
     tokens.reserve(kProducerCount);
     for (size_t producer = 0; producer < kProducerCount; ++producer) {
-        auto token = channel.makeProducerToken();
+        auto token = channel.make_producer_token();
         if (!token.valid()) {
             return false;
         }
@@ -244,7 +244,7 @@ bool testCloseWaitsForInFlightSends()
         closeSucceeded.store(channel.close(), std::memory_order_release);
         closeReturned.store(true, std::memory_order_release);
     });
-    while (!channel.isClosed()) {
+    while (!channel.is_closed()) {
         std::this_thread::yield();
     }
     for (size_t producer = 0; producer + 1 < kProducerCount; ++producer) {
@@ -254,7 +254,7 @@ bool testCloseWaitsForInFlightSends()
     }
     const bool closeWaitedForLastProducer =
         !closeReturned.load(std::memory_order_acquire) &&
-        !channel.isClosedAndDrained();
+        !channel.is_closed_and_drained();
 
     gates.back().release.store(true, std::memory_order_release);
     gates.back().release.notify_all();
@@ -263,7 +263,7 @@ bool testCloseWaitsForInFlightSends()
 
     std::array<bool, kProducerCount> received{};
     for (size_t count = 0; count < kProducerCount; ++count) {
-        auto value = channel.tryRecv();
+        auto value = channel.try_recv();
         if (!value.has_value() || value->value < 91 ||
             value->value >= 91 + kProducerCount) {
             return false;
@@ -274,7 +274,7 @@ bool testCloseWaitsForInFlightSends()
         }
         received[producer] = true;
     }
-    auto lateToken = channel.makeProducerToken();
+    auto lateToken = channel.make_producer_token();
     bool allSent = true;
     for (const std::atomic<bool>& producerSent : sent) {
         allSent = allSent && producerSent.load(std::memory_order_acquire);
@@ -282,15 +282,15 @@ bool testCloseWaitsForInFlightSends()
     return closeWaitedForLastProducer && allSent &&
         closeSucceeded.load(std::memory_order_acquire) &&
         closeReturned.load(std::memory_order_acquire) &&
-        !channel.tryRecv().has_value() && channel.isClosedAndDrained() &&
+        !channel.try_recv().has_value() && channel.is_closed_and_drained() &&
         !lateToken.valid();
 }
 
-bool testBatchPublicationRemainsAtomicAcrossClose()
+bool test_batch_publication_remains_atomic_across_close()
 {
     using Channel = galay::mpsc::UnboundedChannel<BlockingMove>;
     Channel channel;
-    auto token = channel.makeProducerToken();
+    auto token = channel.make_producer_token();
     if (!token.valid()) {
         return false;
     }
@@ -305,11 +305,11 @@ bool testBatchPublicationRemainsAtomicAcrossClose()
     std::atomic<bool> sendSucceeded{false};
     std::thread producer([&]() {
         sendSucceeded.store(
-            channel.sendBatch(token, std::move(values)),
+            channel.send_batch(token, std::move(values)),
             std::memory_order_release);
     });
 
-    if (!waitForFlag(gate.entered)) {
+    if (!wait_for_flag(gate.entered)) {
         gate.release.store(true, std::memory_order_release);
         gate.release.notify_all();
         producer.join();
@@ -329,12 +329,12 @@ bool testBatchPublicationRemainsAtomicAcrossClose()
 
     const auto closingDeadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (!channel.isClosed() &&
+    while (!channel.is_closed() &&
            std::chrono::steady_clock::now() < closingDeadline) {
         std::this_thread::yield();
     }
-    const bool closeStarted = channel.isClosed();
-    auto hiddenValue = channel.tryRecv();
+    const bool closeStarted = channel.is_closed();
+    auto hiddenValue = channel.try_recv();
     const bool batchStayedHidden = !hiddenValue.has_value() && channel.empty();
     const bool closeWaitedForWholeBatch =
         !closeReturned.load(std::memory_order_acquire);
@@ -344,50 +344,50 @@ bool testBatchPublicationRemainsAtomicAcrossClose()
     producer.join();
     closer.join();
 
-    auto first = channel.tryRecv();
-    auto second = channel.tryRecv();
-    auto third = channel.tryRecv();
-    auto extra = channel.tryRecv();
+    auto first = channel.try_recv();
+    auto second = channel.try_recv();
+    auto third = channel.try_recv();
+    auto extra = channel.try_recv();
     return closeStarted && batchStayedHidden && closeWaitedForWholeBatch &&
         sendSucceeded.load(std::memory_order_acquire) &&
         closeSucceeded.load(std::memory_order_acquire) &&
         closeReturned.load(std::memory_order_acquire) && first.has_value() &&
         first->value == 101 && second.has_value() && second->value == 102 &&
         third.has_value() && third->value == 103 && !extra.has_value() &&
-        channel.isClosedAndDrained();
+        channel.is_closed_and_drained();
 }
 
-bool testSendStartingAfterCloseBeginsFails()
+bool test_send_starting_after_close_begins_fails()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     Channel channel;
-    auto token = channel.makeProducerToken();
+    auto token = channel.make_producer_token();
     if (!token.valid()) {
         return false;
     }
 
-    galay::mpsc::UnboundedChannelTestAccess::holdProducerRegistration(channel);
+    galay::mpsc::UnboundedChannelTestAccess::hold_producer_registration(channel);
     std::atomic<bool> closeSucceeded{false};
     std::thread closer([&]() {
         closeSucceeded.store(channel.close(), std::memory_order_release);
     });
-    while (!channel.isClosed()) {
+    while (!channel.is_closed()) {
         std::this_thread::yield();
     }
 
     uint64_t value = 7;
     const bool sentAfterClosing = channel.send(token, std::move(value));
-    galay::mpsc::UnboundedChannelTestAccess::releaseProducerRegistration(channel);
+    galay::mpsc::UnboundedChannelTestAccess::release_producer_registration(channel);
     closer.join();
     return !sentAfterClosing && closeSucceeded.load(std::memory_order_acquire) &&
-        channel.isClosedAndDrained();
+        channel.is_closed_and_drained();
 }
 
-bool testConcurrentCloseLoserReturnsImmediately()
+bool test_concurrent_close_loser_returns_immediately()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     Channel channel;
-    galay::mpsc::UnboundedChannelTestAccess::holdProducerRegistration(channel);
+    galay::mpsc::UnboundedChannelTestAccess::hold_producer_registration(channel);
 
     std::atomic<bool> winnerSucceeded{false};
     std::thread winner([&]() {
@@ -395,12 +395,12 @@ bool testConcurrentCloseLoserReturnsImmediately()
     });
     const auto closingDeadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(1);
-    while (!channel.isClosed() &&
+    while (!channel.is_closed() &&
            std::chrono::steady_clock::now() < closingDeadline) {
         std::this_thread::yield();
     }
-    if (!channel.isClosed()) {
-        galay::mpsc::UnboundedChannelTestAccess::releaseProducerRegistration(channel);
+    if (!channel.is_closed()) {
+        galay::mpsc::UnboundedChannelTestAccess::release_producer_registration(channel);
         winner.join();
         return false;
     }
@@ -420,7 +420,7 @@ bool testConcurrentCloseLoserReturnsImmediately()
     const bool returnedBeforeWinner =
         loserReturned.load(std::memory_order_acquire);
 
-    galay::mpsc::UnboundedChannelTestAccess::releaseProducerRegistration(channel);
+    galay::mpsc::UnboundedChannelTestAccess::release_producer_registration(channel);
     loser.join();
     winner.join();
     return returnedBeforeWinner &&
@@ -428,37 +428,37 @@ bool testConcurrentCloseLoserReturnsImmediately()
         winnerSucceeded.load(std::memory_order_acquire);
 }
 
-bool testEmptyBatchHonorsValidityAndClose()
+bool test_empty_batch_honors_validity_and_close()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     Channel channel;
-    auto token = channel.makeProducerToken();
+    auto token = channel.make_producer_token();
     if (!token.valid()) {
         return false;
     }
     auto invalid = std::move(token);
     std::vector<uint64_t> empty;
-    if (channel.sendBatch(token, empty) ||
-        !channel.sendBatch(invalid, empty) ||
-        !channel.sendBatch(empty)) {
+    if (channel.send_batch(token, empty) ||
+        !channel.send_batch(invalid, empty) ||
+        !channel.send_batch(empty)) {
         return false;
     }
     if (!channel.close()) {
         return false;
     }
-    return !channel.sendBatch(invalid, empty) && !channel.sendBatch(empty);
+    return !channel.send_batch(invalid, empty) && !channel.send_batch(empty);
 }
 
-bool testUnlimitedBatchLimitDoesNotTerminate()
+bool test_unlimited_batch_limit_does_not_terminate()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     constexpr size_t kUnlimited = std::numeric_limits<size_t>::max();
     Channel channel;
 
-    if (channel.tryRecvBatch(kUnlimited).has_value()) {
+    if (channel.try_recv_batch(kUnlimited).has_value()) {
         return false;
     }
-    auto emptyWait = channel.recvBatch(kUnlimited);
+    auto emptyWait = channel.recv_batch(kUnlimited);
     if (emptyWait.await_ready()) {
         return false;
     }
@@ -466,7 +466,7 @@ bool testUnlimitedBatchLimitDoesNotTerminate()
     if (!channel.send(42)) {
         return false;
     }
-    auto receive = channel.recvBatch(kUnlimited);
+    auto receive = channel.recv_batch(kUnlimited);
     if (!receive.await_ready()) {
         return false;
     }
@@ -474,7 +474,7 @@ bool testUnlimitedBatchLimitDoesNotTerminate()
     return result.has_value() && result->size() == 1 && result->front() == 42;
 }
 
-bool testPreallocatedBatchAwaitable()
+bool test_preallocated_batch_awaitable()
 {
     using Channel = galay::mpsc::UnboundedChannel<uint64_t>;
     constexpr size_t kUnlimited = std::numeric_limits<size_t>::max();
@@ -487,7 +487,7 @@ bool testPreallocatedBatchAwaitable()
 
     std::vector<uint64_t> destination;
     destination.reserve(2);
-    auto receive = channel.recvBatchTo(destination, kUnlimited);
+    auto receive = channel.recv_batch_to(destination, kUnlimited);
     if (!receive.await_ready()) {
         return false;
     }
@@ -498,7 +498,7 @@ bool testPreallocatedBatchAwaitable()
     }
 
     std::vector<uint64_t> noCapacity;
-    auto invalid = channel.recvBatchTo(noCapacity, 1);
+    auto invalid = channel.recv_batch_to(noCapacity, 1);
     if (!invalid.await_ready()) {
         return false;
     }
@@ -512,7 +512,7 @@ bool testPreallocatedBatchAwaitable()
     if (!channel.close()) {
         return false;
     }
-    auto zero = channel.recvBatchTo(noCapacity, 0);
+    auto zero = channel.recv_batch_to(noCapacity, 0);
     if (!zero.await_ready()) {
         return false;
     }
@@ -520,12 +520,12 @@ bool testPreallocatedBatchAwaitable()
     return zeroResult.has_value() && *zeroResult == 0;
 }
 
-bool testCounterBoundary(uint64_t boundary)
+bool test_counter_boundary(uint64_t boundary)
 {
     UIntChannel channel(UIntChannel::DEFAULT_BATCH_SIZE, 0);
-    auto token = channel.makeProducerToken();
+    auto token = channel.make_producer_token();
     if (!token.valid() || boundary == 0 ||
-        !galay::mpsc::UnboundedChannelTestAccess::seedOnlyStreamSequence(
+        !galay::mpsc::UnboundedChannelTestAccess::seed_only_stream_sequence(
             channel, boundary - 1)) {
         return false;
     }
@@ -534,7 +534,7 @@ bool testCounterBoundary(uint64_t boundary)
     if (!channel.send(token, std::move(first)) || channel.size() != 1) {
         return false;
     }
-    auto firstBatch = channel.tryRecvBatch(1);
+    auto firstBatch = channel.try_recv_batch(1);
     if (!firstBatch.has_value() || firstBatch->size() != 1 ||
         firstBatch->front() != 101 || !channel.empty()) {
         return false;
@@ -544,31 +544,31 @@ bool testCounterBoundary(uint64_t boundary)
     if (!channel.send(token, std::move(second)) || channel.size() != 1) {
         return false;
     }
-    auto secondBatch = channel.tryRecvBatch(1);
+    auto secondBatch = channel.try_recv_batch(1);
     if (!secondBatch.has_value() || secondBatch->size() != 1 ||
         secondBatch->front() != 202 || !channel.empty()) {
         return false;
     }
 
-    return channel.close() && channel.isClosedAndDrained();
+    return channel.close() && channel.is_closed_and_drained();
 }
 
-bool testCumulativeCountersCross32BitBoundary()
+bool test_cumulative_counters_cross32_bit_boundary()
 {
-    return testCounterBoundary(std::numeric_limits<uint32_t>::max());
+    return test_counter_boundary(std::numeric_limits<uint32_t>::max());
 }
 
-bool testCumulativeCountersWrapModulo64()
+bool test_cumulative_counters_wrap_modulo64()
 {
-    return testCounterBoundary(std::numeric_limits<uint64_t>::max());
+    return test_counter_boundary(std::numeric_limits<uint64_t>::max());
 }
 
-bool testSizeSnapshotSaturates()
+bool test_size_snapshot_saturates()
 {
     UIntChannel channel(UIntChannel::DEFAULT_BATCH_SIZE, 0);
-    auto first = channel.makeProducerToken();
-    auto second = channel.makeProducerToken();
-    auto third = channel.makeProducerToken();
+    auto first = channel.make_producer_token();
+    auto second = channel.make_producer_token();
+    auto third = channel.make_producer_token();
     if (!first.valid() || !second.valid() || !third.valid()) {
         return false;
     }
@@ -576,31 +576,31 @@ bool testSizeSnapshotSaturates()
     constexpr uint64_t kSyntheticPending =
         std::numeric_limits<uint64_t>::max() / 3 + 1;
     const size_t seeded =
-        galay::mpsc::UnboundedChannelTestAccess::setSyntheticPendingForAllStreams(
+        galay::mpsc::UnboundedChannelTestAccess::set_synthetic_pending_for_all_streams(
             channel, kSyntheticPending);
     const size_t snapshot = channel.size();
     const size_t reset =
-        galay::mpsc::UnboundedChannelTestAccess::setSyntheticPendingForAllStreams(
+        galay::mpsc::UnboundedChannelTestAccess::set_synthetic_pending_for_all_streams(
             channel, 0);
 
     return seeded == 3 && reset == seeded &&
         snapshot == std::numeric_limits<size_t>::max() && channel.empty() &&
-        channel.close() && channel.isClosedAndDrained();
+        channel.close() && channel.is_closed_and_drained();
 }
 
-bool testInconsistentSizeSnapshotDoesNotExplode()
+bool test_inconsistent_size_snapshot_does_not_explode()
 {
     UIntChannel channel(UIntChannel::DEFAULT_BATCH_SIZE, 0);
-    auto token = channel.makeProducerToken();
+    auto token = channel.make_producer_token();
     if (!token.valid() ||
-        !galay::mpsc::UnboundedChannelTestAccess::setOnlyStreamObservedCounters(
+        !galay::mpsc::UnboundedChannelTestAccess::set_only_stream_observed_counters(
             channel, 100, 101)) {
         return false;
     }
 
     const size_t snapshot = channel.size();
     const bool reset =
-        galay::mpsc::UnboundedChannelTestAccess::setOnlyStreamObservedCounters(
+        galay::mpsc::UnboundedChannelTestAccess::set_only_stream_observed_counters(
             channel, 0, 0);
     return reset && snapshot == 0 && channel.empty() && channel.close();
 }
@@ -610,7 +610,7 @@ bool testInconsistentSizeSnapshotDoesNotExplode()
 int main()
 {
     galay::test::TestResultWriter writer("t163_mpsc_redesign");
-    writer.addTest();
+    writer.add_test();
 
     bool passed = true;
     const auto check = [&passed](bool result, const char* name) {
@@ -619,38 +619,38 @@ int main()
             passed = false;
         }
     };
-    check(testCloseDrainsPublishedValues(), "close drains published values");
-    check(testDrainToReusesCapacity(), "drainTo reuses capacity");
-    check(testClosedReceiveCompletesWithoutSuspending(),
+    check(test_close_drains_published_values(), "close drains published values");
+    check(test_drain_to_reuses_capacity(), "drainTo reuses capacity");
+    check(test_closed_receive_completes_without_suspending(),
           "closed receive completes without suspending");
-    check(testCloseWaitsForInFlightSends(), "close waits for in-flight sends");
-    check(testBatchPublicationRemainsAtomicAcrossClose(),
+    check(test_close_waits_for_in_flight_sends(), "close waits for in-flight sends");
+    check(test_batch_publication_remains_atomic_across_close(),
           "batch publication remains atomic across close");
-    check(testSendStartingAfterCloseBeginsFails(),
+    check(test_send_starting_after_close_begins_fails(),
           "send starting after close begins fails");
-    check(testConcurrentCloseLoserReturnsImmediately(),
+    check(test_concurrent_close_loser_returns_immediately(),
           "concurrent close loser returns immediately");
-    check(testEmptyBatchHonorsValidityAndClose(),
+    check(test_empty_batch_honors_validity_and_close(),
           "empty batch honors validity and close");
-    check(testUnlimitedBatchLimitDoesNotTerminate(),
+    check(test_unlimited_batch_limit_does_not_terminate(),
           "unlimited batch limit does not terminate");
-    check(testPreallocatedBatchAwaitable(), "preallocated batch awaitable");
-    check(testCumulativeCountersCross32BitBoundary(),
+    check(test_preallocated_batch_awaitable(), "preallocated batch awaitable");
+    check(test_cumulative_counters_cross32_bit_boundary(),
           "cumulative counters cross 32-bit boundary");
-    check(testCumulativeCountersWrapModulo64(),
+    check(test_cumulative_counters_wrap_modulo64(),
           "cumulative counters wrap modulo 64");
-    check(testSizeSnapshotSaturates(), "size snapshot saturates");
-    check(testInconsistentSizeSnapshotDoesNotExplode(),
+    check(test_size_snapshot_saturates(), "size snapshot saturates");
+    check(test_inconsistent_size_snapshot_does_not_explode(),
           "inconsistent size snapshot does not explode");
     if (!passed) {
         std::cerr << "MPSC redesign boundary test failed\n";
-        writer.addFailed();
-        writer.writeResult();
+        writer.add_failed();
+        writer.write_result();
         return 1;
     }
 
-    writer.addPassed();
-    writer.writeResult();
+    writer.add_passed();
+    writer.write_result();
     std::cout << "t163_mpsc_redesign PASS\n";
     return 0;
 }

@@ -21,7 +21,7 @@ public:
      * @brief 设置最大头部长度
      * @param max_header_size 最大头部长度（字节）
      */
-    void setMaxHeaderSize(size_t max_header_size) {
+    void set_max_header_size(size_t max_header_size) {
         m_max_header_size = max_header_size;
     }
 
@@ -29,7 +29,7 @@ public:
      * @brief 获取最大头部长度
      * @return 最大头部长度（字节）
      */
-    size_t getMaxHeaderSize() const {
+    size_t get_max_header_size() const {
         return m_max_header_size;
     }
 
@@ -37,7 +37,7 @@ public:
      * @brief 设置最大头部字段数量
      * @param max_header_count 最大头部字段数量，0 表示不限制
      */
-    void setMaxHeaderCount(size_t max_header_count) {
+    void set_max_header_count(size_t max_header_count) {
         m_max_header_count = max_header_count;
     }
 
@@ -45,7 +45,7 @@ public:
      * @brief 获取最大头部字段数量
      * @return 最大头部字段数量，0 表示不限制
      */
-    size_t getMaxHeaderCount() const {
+    size_t get_max_header_count() const {
         return m_max_header_count;
     }
 
@@ -53,7 +53,7 @@ public:
      * @brief 设置单个头部行最大长度
      * @param max_header_line_size 单行长度上限（字节），0 表示不限制
      */
-    void setMaxHeaderLineSize(size_t max_header_line_size) {
+    void set_max_header_line_size(size_t max_header_line_size) {
         m_max_header_line_size = max_header_line_size;
     }
 
@@ -61,7 +61,7 @@ public:
      * @brief 获取单个头部行最大长度
      * @return 单行长度上限（字节），0 表示不限制
      */
-    size_t getMaxHeaderLineSize() const {
+    size_t get_max_header_line_size() const {
         return m_max_header_line_size;
     }
 
@@ -69,7 +69,7 @@ public:
      * @brief 设置最大 URI 长度
      * @param max_uri_size URI 长度上限（字节），0 表示不限制
      */
-    void setMaxUriSize(size_t max_uri_size) {
+    void set_max_uri_size(size_t max_uri_size) {
         m_max_uri_size = max_uri_size;
     }
 
@@ -77,7 +77,7 @@ public:
      * @brief 获取最大 URI 长度
      * @return URI 长度上限（字节），0 表示不限制
      */
-    size_t getMaxUriSize() const {
+    size_t get_max_uri_size() const {
         return m_max_uri_size;
     }
 
@@ -85,7 +85,7 @@ public:
      * @brief 设置最大Body长度
      * @param max_body_size 最大Body长度（字节）
      */
-    void setMaxBodySize(size_t max_body_size) {
+    void set_max_body_size(size_t max_body_size) {
         m_max_body_size = max_body_size;
     }
 
@@ -93,7 +93,7 @@ public:
      * @brief 获取最大Body长度
      * @return 最大Body长度（字节）
      */
-    size_t getMaxBodySize() const {
+    size_t get_max_body_size() const {
         return m_max_body_size;
     }
 
@@ -101,7 +101,7 @@ public:
      * @brief 设置接收超时时间
      * @param timeout_ms 超时时间（毫秒）
      */
-    void setRecvTimeout(int timeout_ms) {
+    void set_recv_timeout(int timeout_ms) {
         m_recv_timeout_ms = timeout_ms;
     }
 
@@ -109,7 +109,7 @@ public:
      * @brief 获取接收超时时间
      * @return 超时时间（毫秒）
      */
-    int getRecvTimeout() const {
+    int get_recv_timeout() const {
         return m_recv_timeout_ms;
     }
 

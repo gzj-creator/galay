@@ -27,7 +27,7 @@ int fail(const std::string& message)
     return 1;
 }
 
-std::vector<std::string> parseEndpoints(const char* raw)
+std::vector<std::string> parse_endpoints(const char* raw)
 {
     std::vector<std::string> endpoints;
     if (raw == nullptr) {
@@ -51,14 +51,14 @@ std::vector<std::string> parseEndpoints(const char* raw)
     return endpoints;
 }
 
-std::string nowSuffix()
+std::string now_suffix()
 {
     const auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
     return std::to_string(
         std::chrono::duration_cast<std::chrono::microseconds>(now).count());
 }
 
-galay::kernel::Task<void> runPoolCase(
+galay::kernel::Task<void> run_pool_case(
     galay::kernel::IOScheduler* scheduler,
     galay::etcd::EtcdProductionConfig production,
     std::atomic<bool>* done,
@@ -73,14 +73,14 @@ galay::kernel::Task<void> runPoolCase(
         production.endpoints.size() * production.connections_per_endpoint;
     auto pool = galay::etcd::AsyncEtcdClusterClientBuilder()
         .scheduler(scheduler)
-        .productionConfig(std::move(production))
+        .production_config(std::move(production))
         .build();
-    if (pool.size() != expected_size || pool.idleCount() != expected_size) {
+    if (pool.size() != expected_size || pool.idle_count() != expected_size) {
         finish(fail("async cluster pool size mismatch"));
         co_return;
     }
 
-    auto lease = pool.tryAcquire();
+    auto lease = pool.try_acquire();
     if (!lease.has_value()) {
         finish(fail("async cluster acquire failed: " + lease.error().message()));
         co_return;
@@ -92,8 +92,8 @@ galay::kernel::Task<void> runPoolCase(
         co_return;
     }
 
-    const std::string key = "/galay-etcd/async-cluster-pool/" + nowSuffix();
-    const std::string value = "value-" + nowSuffix();
+    const std::string key = "/galay-etcd/async-cluster-pool/" + now_suffix();
+    const std::string value = "value-" + now_suffix();
     auto put = co_await lease->get()->put(key, value);
     if (!put.has_value()) {
         finish(fail("async cluster put failed: " + put.error().message()));
@@ -123,7 +123,7 @@ galay::kernel::Task<void> runPoolCase(
     }
 
     lease->release();
-    if (pool.idleCount() != pool.size()) {
+    if (pool.idle_count() != pool.size()) {
         finish(fail("async cluster lease should return client to pool"));
         co_return;
     }
@@ -136,12 +136,12 @@ galay::kernel::Task<void> runPoolCase(
 
 int main()
 {
-    if (const int skip_code = etcd_test::requireIntegrationEnabledOrSkip("etcd.it.async_cluster");
+    if (const int skip_code = etcd_test::require_integration_enabled_or_skip("etcd.it.async_cluster");
         skip_code != 0) {
         return skip_code;
     }
 
-    const auto endpoints = parseEndpoints(std::getenv("GALAY_ETCD_ENDPOINTS"));
+    const auto endpoints = parse_endpoints(std::getenv("GALAY_ETCD_ENDPOINTS"));
     if (endpoints.size() < 2) {
         std::cout << "[SKIP] etcd.it.async_cluster requires GALAY_ETCD_ENDPOINTS with at least 2 endpoints\n";
         return etcd_test::kEtcdTestSkippedExitCode;
@@ -152,15 +152,15 @@ int main()
     production.connections_per_endpoint = 2;
 
     galay::kernel::Runtime runtime = galay::kernel::RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     auto start_result = runtime.start();
     if (!start_result.has_value()) {
         return fail("runtime start failed");
     }
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         return fail("failed to get io scheduler");
@@ -168,9 +168,9 @@ int main()
 
     std::atomic<bool> done{false};
     int exit_code = 1;
-    const bool scheduled = galay::kernel::scheduleTask(
+    const bool scheduled = galay::kernel::schedule_task(
         scheduler,
-        runPoolCase(scheduler, std::move(production), &done, &exit_code));
+        run_pool_case(scheduler, std::move(production), &done, &exit_code));
     if (!scheduled) {
         runtime.stop();
         return fail("failed to schedule async cluster pool task");

@@ -29,7 +29,7 @@ struct EndpointParts {
     bool valid = false;
 };
 
-EndpointParts parseHttpEndpoint(const std::string& endpoint)
+EndpointParts parse_http_endpoint(const std::string& endpoint)
 {
     constexpr std::string_view prefix = "http://";
     if (endpoint.rfind(prefix, 0) != 0) {
@@ -55,13 +55,13 @@ EndpointParts parseHttpEndpoint(const std::string& endpoint)
     return parts;
 }
 
-bool setNonBlocking(int fd)
+bool set_non_blocking(int fd)
 {
     const int flags = ::fcntl(fd, F_GETFL, 0);
     return flags >= 0 && ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool endpointReachable(const EndpointParts& endpoint)
+bool endpoint_reachable(const EndpointParts& endpoint)
 {
     if (!endpoint.valid) {
         return true;
@@ -83,7 +83,7 @@ bool endpointReachable(const EndpointParts& endpoint)
         if (fd < 0) {
             continue;
         }
-        if (!setNonBlocking(fd)) {
+        if (!set_non_blocking(fd)) {
             (void)::close(fd);
             continue;
         }
@@ -110,7 +110,7 @@ bool endpointReachable(const EndpointParts& endpoint)
     return reachable;
 }
 
-Task<void> runExample(IOScheduler* scheduler,
+Task<void> run_example(IOScheduler* scheduler,
                       std::string endpoint,
                       std::atomic<bool>* done,
                       int* exit_code)
@@ -169,16 +169,16 @@ Task<void> runExample(IOScheduler* scheduler,
 int main(int argc, char** argv)
 {
     const std::string endpoint = argc > 1 ? argv[1] : "http://127.0.0.1:2379";
-    const EndpointParts endpoint_parts = parseHttpEndpoint(endpoint);
-    if (!endpointReachable(endpoint_parts)) {
+    const EndpointParts endpoint_parts = parse_http_endpoint(endpoint);
+    if (!endpoint_reachable(endpoint_parts)) {
         std::cerr << "[EXTERNAL_DEP] etcd endpoint is required: " << endpoint << '\n';
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();
     runtime.start();
 
-    auto* scheduler = runtime.getNextIOScheduler();
+    auto* scheduler = runtime.get_next_io_scheduler();
     if (scheduler == nullptr) {
         runtime.stop();
         std::cerr << "failed to get io scheduler\n";
@@ -187,7 +187,7 @@ int main(int argc, char** argv)
 
     std::atomic<bool> done{false};
     int exit_code = 1;
-    if (!galay::kernel::scheduleTask(scheduler, runExample(scheduler, endpoint, &done, &exit_code))) {
+    if (!galay::kernel::schedule_task(scheduler, run_example(scheduler, endpoint, &done, &exit_code))) {
         runtime.stop();
         std::cerr << "failed to schedule async example task\n";
         return 1;

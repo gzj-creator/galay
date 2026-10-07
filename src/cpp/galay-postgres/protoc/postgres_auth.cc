@@ -17,7 +17,7 @@ namespace galay::postgres::protocol
 namespace
 {
 
-bool isValidNonce(std::string_view nonce)
+bool is_valid_nonce(std::string_view nonce)
 {
     if (nonce.empty()) {
         return false;
@@ -30,7 +30,7 @@ bool isValidNonce(std::string_view nonce)
     return true;
 }
 
-std::expected<std::string, std::string> escapeUsername(std::string_view username)
+std::expected<std::string, std::string> escape_username(std::string_view username)
 {
     std::string escaped;
     escaped.reserve(username.size());
@@ -49,13 +49,13 @@ std::expected<std::string, std::string> escapeUsername(std::string_view username
     return escaped;
 }
 
-std::string base64Encode(std::span<const uint8_t> bytes)
+std::string base64_encode(std::span<const uint8_t> bytes)
 {
-    return galay::utils::Base64Util::Base64Encode(bytes.data(), bytes.size());
+    return galay::utils::Base64Util::base64_encode(bytes.data(), bytes.size());
 }
 
 std::expected<std::vector<uint8_t>, std::string>
-strictBase64Decode(std::string_view encoded)
+strict_base64_decode(std::string_view encoded)
 {
     if (encoded.empty() || encoded.size() % 4 != 0) {
         return std::unexpected("invalid Base64 length");
@@ -80,15 +80,15 @@ strictBase64Decode(std::string_view encoded)
         }
     }
 
-    if (!galay::utils::Base64Util::Base64CanDecodeView(encoded)) {
+    if (!galay::utils::Base64Util::base64_can_decode_view(encoded)) {
         return std::unexpected("invalid Base64 input");
     }
-    const std::string decoded = galay::utils::Base64Util::Base64DecodeView(encoded);
+    const std::string decoded = galay::utils::Base64Util::base64_decode_view(encoded);
     if (decoded.empty()) {
         return std::unexpected("empty Base64 value");
     }
     const auto* bytes = reinterpret_cast<const uint8_t*>(decoded.data());
-    if (base64Encode(std::span<const uint8_t>(bytes, decoded.size())) != encoded) {
+    if (base64_encode(std::span<const uint8_t>(bytes, decoded.size())) != encoded) {
         return std::unexpected("non-canonical Base64 input");
     }
     return std::vector<uint8_t>(bytes, bytes + decoded.size());
@@ -96,29 +96,29 @@ strictBase64Decode(std::string_view encoded)
 
 } // namespace
 
-std::expected<std::string, std::string> ScramSha256::generateNonce()
+std::expected<std::string, std::string> ScramSha256::generate_nonce()
 {
-    const std::vector<uint8_t> bytes = galay::utils::SaltGenerator::generateSecureBytes(18);
+    const std::vector<uint8_t> bytes = galay::utils::SaltGenerator::generate_secure_bytes(18);
     if (bytes.size() != 18) {
         return std::unexpected("failed to generate SCRAM nonce bytes");
     }
-    std::string nonce = base64Encode(bytes);
-    if (!isValidNonce(nonce)) {
+    std::string nonce = base64_encode(bytes);
+    if (!is_valid_nonce(nonce)) {
         return std::unexpected("failed to encode a valid SCRAM nonce");
     }
     return nonce;
 }
 
 std::expected<std::string, std::string>
-ScramSha256::clientFirstMessage(std::string_view username, std::string_view nonce)
+ScramSha256::client_first_message(std::string_view username, std::string_view nonce)
 {
     if (m_phase != Phase::Initial) {
         return std::unexpected("SCRAM client-first-message is out of order");
     }
-    if (!isValidNonce(nonce)) {
+    if (!is_valid_nonce(nonce)) {
         return std::unexpected("invalid SCRAM client nonce");
     }
-    auto escaped_username = escapeUsername(username);
+    auto escaped_username = escape_username(username);
     if (!escaped_username) {
         return std::unexpected(escaped_username.error());
     }
@@ -130,7 +130,7 @@ ScramSha256::clientFirstMessage(std::string_view username, std::string_view nonc
 }
 
 std::expected<void, std::string>
-ScramSha256::parseServerFirst(std::string_view server_first)
+ScramSha256::parse_server_first(std::string_view server_first)
 {
     if (m_phase != Phase::ClientFirstSent) {
         return std::unexpected("SCRAM server-first-message is out of order");
@@ -158,12 +158,12 @@ ScramSha256::parseServerFirst(std::string_view server_first)
     }
 
     const std::string_view server_nonce = nonce_attribute.substr(2);
-    if (!isValidNonce(server_nonce) || !server_nonce.starts_with(m_client_nonce) ||
+    if (!is_valid_nonce(server_nonce) || !server_nonce.starts_with(m_client_nonce) ||
         server_nonce.size() <= m_client_nonce.size()) {
         return std::unexpected("SCRAM server nonce does not extend the client nonce");
     }
 
-    auto salt = strictBase64Decode(salt_attribute.substr(2));
+    auto salt = strict_base64_decode(salt_attribute.substr(2));
     if (!salt) {
         return std::unexpected("invalid SCRAM salt: " + salt.error());
     }
@@ -187,14 +187,14 @@ ScramSha256::parseServerFirst(std::string_view server_first)
 }
 
 std::expected<std::string, std::string>
-ScramSha256::clientFinalMessage(std::string_view password)
+ScramSha256::client_final_message(std::string_view password)
 {
     if (m_phase != Phase::ServerFirstReceived) {
         return std::unexpected("SCRAM client-final-message is out of order");
     }
 
     const auto* password_bytes = reinterpret_cast<const uint8_t*>(password.data());
-    std::vector<uint8_t> salted_password = galay::utils::PBKDF2::hmacSha256(
+    std::vector<uint8_t> salted_password = galay::utils::PBKDF2::hmac_sha256(
         password_bytes,
         password.size(),
         m_salt.data(),
@@ -211,11 +211,11 @@ ScramSha256::clientFinalMessage(std::string_view password)
     static constexpr std::string_view kClientKeyLabel = "Client Key";
     static constexpr std::string_view kServerKeyLabel = "Server Key";
 
-    const auto client_key = galay::utils::HMAC::hmacSha256(
+    const auto client_key = galay::utils::HMAC::hmac_sha256(
         salted_password.data(), salted_password.size(),
         reinterpret_cast<const uint8_t*>(kClientKeyLabel.data()), kClientKeyLabel.size());
     const auto stored_key = galay::utils::SHA256::hash(client_key.data(), client_key.size());
-    const auto client_signature = galay::utils::HMAC::hmacSha256(
+    const auto client_signature = galay::utils::HMAC::hmac_sha256(
         stored_key.data(), stored_key.size(),
         reinterpret_cast<const uint8_t*>(auth_message.data()), auth_message.size());
 
@@ -224,20 +224,20 @@ ScramSha256::clientFinalMessage(std::string_view password)
         client_proof[index] = static_cast<uint8_t>(client_key[index] ^ client_signature[index]);
     }
 
-    const auto server_key = galay::utils::HMAC::hmacSha256(
+    const auto server_key = galay::utils::HMAC::hmac_sha256(
         salted_password.data(), salted_password.size(),
         reinterpret_cast<const uint8_t*>(kServerKeyLabel.data()), kServerKeyLabel.size());
-    m_expected_server_signature = galay::utils::HMAC::hmacSha256(
+    m_expected_server_signature = galay::utils::HMAC::hmac_sha256(
         server_key.data(), server_key.size(),
         reinterpret_cast<const uint8_t*>(auth_message.data()), auth_message.size());
 
     std::fill(salted_password.begin(), salted_password.end(), uint8_t{0});
     m_phase = Phase::ClientFinalSent;
-    return client_final_without_proof + ",p=" + base64Encode(client_proof);
+    return client_final_without_proof + ",p=" + base64_encode(client_proof);
 }
 
 std::expected<void, std::string>
-ScramSha256::verifyServerFinal(std::string_view server_final)
+ScramSha256::verify_server_final(std::string_view server_final)
 {
     if (m_phase != Phase::ClientFinalSent) {
         return std::unexpected("SCRAM server-final-message is out of order");
@@ -255,7 +255,7 @@ ScramSha256::verifyServerFinal(std::string_view server_final)
         return std::unexpected("SCRAM server-final-message is missing the verifier");
     }
 
-    auto verifier = strictBase64Decode(server_final.substr(2));
+    auto verifier = strict_base64_decode(server_final.substr(2));
     if (!verifier || verifier->size() != m_expected_server_signature.size()) {
         return std::unexpected("invalid SCRAM server signature");
     }
@@ -285,7 +285,7 @@ void ScramSha256::reset() noexcept
     m_phase = Phase::Initial;
 }
 
-std::string md5Password(std::string_view username,
+std::string md5_password(std::string_view username,
                         std::string_view password,
                         std::span<const uint8_t, 4> salt)
 {
@@ -293,11 +293,11 @@ std::string md5Password(std::string_view username,
     first_input.reserve(password.size() + username.size());
     first_input.append(password);
     first_input.append(username);
-    const std::string first_digest = galay::utils::MD5Util::MD5View(first_input);
+    const std::string first_digest = galay::utils::MD5Util::md5_view(first_input);
 
     std::string second_input = first_digest;
     second_input.append(reinterpret_cast<const char*>(salt.data()), salt.size());
-    return "md5" + galay::utils::MD5Util::MD5View(second_input);
+    return "md5" + galay::utils::MD5Util::md5_view(second_input);
 }
 
 } // namespace galay::postgres::protocol

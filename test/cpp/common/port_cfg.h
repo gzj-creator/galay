@@ -6,7 +6,7 @@
 
 namespace galay::test {
 
-inline uint16_t resolvePortFromEnv(const char* env_name, uint16_t default_port) {
+inline uint16_t resolve_port_from_env(const char* env_name, uint16_t default_port) {
     const char* value = std::getenv(env_name);
     if (value == nullptr || *value == '\0') {
         return default_port;

@@ -23,11 +23,11 @@ bool check(bool condition, const char* message) {
 #ifdef GALAY_SSL_FEATURE_ENABLED
 using LoopMachine = galay::websocket::detail::WsSslEchoLoopMachine<galay::ssl::SslSocket>;
 
-LoopMachine makeMovedLoopMachine(galay::websocket::WssConn& conn) {
+LoopMachine make_moved_loop_machine(galay::websocket::WssConn& conn) {
     LoopMachine machine(
         &conn,
         galay::websocket::WsReaderSetting(),
-        galay::websocket::WsWriterSetting::byServer());
+        galay::websocket::WsWriterSetting::by_server());
     return std::move(machine);
 }
 #endif
@@ -42,7 +42,7 @@ int main() {
     galay::ssl::SslSocket socket(nullptr);
     galay::websocket::WssConn conn(std::move(socket), true);
 
-    auto machine = makeMovedLoopMachine(conn);
+    auto machine = make_moved_loop_machine(conn);
 
     if (!check(machine.m_read_state.m_message == &machine.m_message,
                "moved loop machine should rebind reader message storage")) {

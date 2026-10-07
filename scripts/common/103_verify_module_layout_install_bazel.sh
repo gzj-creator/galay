@@ -124,8 +124,8 @@ int main()
     galay::redis::RedisSessionConfig cfg;
     cfg.host = "127.0.0.1";
     galay::postgres::PostgresConfig postgres_cfg =
-        galay::postgres::PostgresConfig::defaultConfig();
-    const auto query = galay::postgres::protocol::PostgresEncoder{}.encodeQuery("SELECT 1");
+        galay::postgres::PostgresConfig::default_config();
+    const auto query = galay::postgres::protocol::PostgresEncoder{}.encode_query("SELECT 1");
     galay::http::HttpRequest request;
     return cfg.host.empty() || postgres_cfg.host.empty() || query.empty() ? 1 : 0;
 }

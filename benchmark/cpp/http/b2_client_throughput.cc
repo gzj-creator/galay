@@ -43,7 +43,7 @@ double percentile_ms(const std::vector<int64_t>& sorted_samples_us, double perce
 #if defined(__GNUC__) && !defined(__clang__)
 __attribute__((noinline))
 #endif
-Task<void> continuousWorker(int worker_id, const std::string& host, int port, const std::string& path,
+Task<void> continuous_worker(int worker_id, const std::string& host, int port, const std::string& path,
                             std::chrono::steady_clock::time_point end_time,
                             std::atomic<bool>& stop_flag,
                             std::vector<int64_t>* latency_samples_us) {
@@ -99,7 +99,7 @@ Task<void> continuousWorker(int worker_id, const std::string& host, int port, co
                 latency_samples_us->push_back(request_time_us);
             }
             g_success++;
-            g_bytes_recv += response.getBodyStr().size();
+            g_bytes_recv += response.get_body_str().size();
             g_bytes_sent += 100;  // 估算请求大小
         } else {
             g_fail++;
@@ -115,7 +115,7 @@ Task<void> continuousWorker(int worker_id, const std::string& host, int port, co
 /**
  * @brief 运行持续压测（类似 wrk）
  */
-void runContinuousBenchmark(Runtime& rt, int connections, int duration_sec,
+void run_continuous_benchmark(Runtime& rt, int connections, int duration_sec,
                             const std::string& host, int port, const std::string& path) {
     g_success = 0;
     g_fail = 0;
@@ -141,10 +141,10 @@ void runContinuousBenchmark(Runtime& rt, int connections, int duration_sec,
     // 启动所有工作协程
     std::cout << "启动 " << connections << " 个连接...\n";
     for (int i = 0; i < connections; i++) {
-        auto* scheduler = rt.getNextIOScheduler();
+        auto* scheduler = rt.get_next_io_scheduler();
         if (scheduler) {
             latency_samples[static_cast<size_t>(i)].reserve(1024);
-            scheduleTask(scheduler, continuousWorker(i, host, port, path, end_time, stop_flag,
+            schedule_task(scheduler, continuous_worker(i, host, port, path, end_time, stop_flag,
                                                      &latency_samples[static_cast<size_t>(i)]));
         }
     }
@@ -207,7 +207,7 @@ void runContinuousBenchmark(Runtime& rt, int connections, int duration_sec,
 }
 
 int main(int argc, char* argv[]) {
-    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+    if (!galay::benchmark::initialize_benchmark_environment()) {
         return 1;
     }
 
@@ -230,11 +230,11 @@ int main(int argc, char* argv[]) {
     std::cout << "默认: localhost 8080 100 10 /\n";
     std::cout << "==========================================\n";
 
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(4).parallelSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().io_scheduler_count(4).parallel_scheduler_count(0).build();
     rt.start();
 
     // 运行持续压测
-    runContinuousBenchmark(rt, connections, duration, host, port, path);
+    run_continuous_benchmark(rt, connections, duration, host, port, path);
 
     rt.stop();
 

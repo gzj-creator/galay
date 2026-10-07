@@ -56,7 +56,7 @@ public:
         : minLevel(level) {
     }
 
-    bool isEnabled(galay::tracing::LogLevel level) const noexcept {
+    bool is_enabled(galay::tracing::LogLevel level) const noexcept {
         return minLevel != galay::tracing::LogLevel::kOff &&
             static_cast<int>(level) >= static_cast<int>(minLevel);
     }
@@ -71,7 +71,7 @@ public:
 
 class StructuredWriter {
 public:
-    bool isEnabled(galay::tracing::LogLevel level) const noexcept {
+    bool is_enabled(galay::tracing::LogLevel level) const noexcept {
         return static_cast<int>(level) >= static_cast<int>(minLevel);
     }
 
@@ -81,7 +81,7 @@ public:
         fieldCount = record.fields.size();
         if (!record.fields.empty()) {
             firstFieldName = std::string(record.fields[0].name);
-            firstFieldValue = record.fields[0].value.asInt64();
+            firstFieldValue = record.fields[0].value.as_int64();
         }
         context = record.context;
     }
@@ -111,24 +111,24 @@ private:
     std::weak_ptr<RefcountSink>* m_selfRef;
 };
 
-galay::tracing::LogField countedField(int& evaluations) {
+galay::tracing::LogField counted_field(int& evaluations) {
     ++evaluations;
     return galay::tracing::field("order_id", 42);
 }
 
-galay::tracing::TraceContext makeTestContext() {
+galay::tracing::TraceContext make_test_context() {
     return galay::tracing::TraceContext(
-        galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
-        galay::tracing::SpanId::fromHex("00f067aa0ba902b7"),
+        galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"),
+        galay::tracing::SpanId::from_hex("00f067aa0ba902b7"),
         0x01);
 }
 
-void noContextLogsStillEmit() {
-    galay::tracing::clearCurrentContext();
+void no_context_logs_still_emit() {
+    galay::tracing::clear_current_context();
     galay::tracing::Logger logger;
     auto sink = std::make_shared<TestSink>();
-    logger.clearSinks();
-    logger.addSink(sink);
+    logger.clear_sinks();
+    logger.add_sink(sink);
 
     logger.log(galay::tracing::LogLevel::kInfo, {"test.cc", 42, "noContextLogsStillEmit"}, "hello {}", "world");
 
@@ -138,46 +138,46 @@ void noContextLogsStillEmit() {
     assert(sink->records[0].source.line == 42);
 }
 
-void contextLogsIncludeTraceAndSpanIds() {
-    auto context = makeTestContext();
-    galay::tracing::setCurrentContext(context);
+void context_logs_include_trace_and_span_ids() {
+    auto context = make_test_context();
+    galay::tracing::set_current_context(context);
 
     galay::tracing::Logger logger;
     auto sink = std::make_shared<TestSink>();
-    logger.clearSinks();
-    logger.addSink(sink);
+    logger.clear_sinks();
+    logger.add_sink(sink);
 
     logger.log(galay::tracing::LogLevel::kInfo, {"test.cc", 7, "contextLogsIncludeTraceAndSpanIds"}, "accepted");
 
     assert(sink->records.size() == 1);
     assert(sink->records[0].context.has_value());
-    assert(sink->records[0].context->traceId() == context.traceId());
-    assert(sink->records[0].context->spanId() == context.spanId());
+    assert(sink->records[0].context->trace_id() == context.trace_id());
+    assert(sink->records[0].context->span_id() == context.span_id());
 
-    galay::tracing::clearCurrentContext();
+    galay::tracing::clear_current_context();
 }
 
-void contextProxyLogsThroughDefaultWriter() {
-    const auto context = makeTestContext();
+void context_proxy_logs_through_default_writer() {
+    const auto context = make_test_context();
     galay::tracing::Logger logger;
     auto sink = std::make_shared<TestSink>();
-    logger.clearSinks();
-    logger.addSink(sink);
-    galay::tracing::setDefaultLogWriter(&logger);
+    logger.clear_sinks();
+    logger.add_sink(sink);
+    galay::tracing::set_default_log_writer(&logger);
 
     galay::tracing::log(context).info("proxy {}", 42);
 
-    galay::tracing::setDefaultLogWriter(nullptr);
+    galay::tracing::set_default_log_writer(nullptr);
 
     assert(sink->records.size() == 1);
     assert(sink->records[0].message == "proxy 42");
     assert(sink->records[0].context.has_value());
-    assert(sink->records[0].context->traceId() == context.traceId());
-    assert(sink->records[0].context->spanId() == context.spanId());
+    assert(sink->records[0].context->trace_id() == context.trace_id());
+    assert(sink->records[0].context->span_id() == context.span_id());
 }
 
-void contextProxyCanUseExplicitWriter() {
-    const auto context = makeTestContext();
+void context_proxy_can_use_explicit_writer() {
+    const auto context = make_test_context();
     TestWriter writer;
 
     galay::tracing::log(context, writer).warn("writer {}", 7);
@@ -186,41 +186,41 @@ void contextProxyCanUseExplicitWriter() {
     assert(writer.records[0].level == galay::tracing::LogLevel::kWarn);
     assert(writer.records[0].message == "writer 7");
     assert(writer.records[0].context.has_value());
-    assert(writer.records[0].context->traceId() == context.traceId());
+    assert(writer.records[0].context->trace_id() == context.trace_id());
 }
 
-void disabledLevelDoesNotFormat() {
+void disabled_level_does_not_format() {
     galay::tracing::Logger logger;
     auto sink = std::make_shared<TestSink>();
-    logger.clearSinks();
-    logger.addSink(sink);
-    logger.setLevel(galay::tracing::LogLevel::kWarn);
+    logger.clear_sinks();
+    logger.add_sink(sink);
+    logger.set_level(galay::tracing::LogLevel::kWarn);
 
     logger.log(galay::tracing::LogLevel::kDebug, {"test.cc", 11, "disabledLevelDoesNotFormat"}, "{}", ExplodingFormat{});
 
     assert(sink->records.empty());
 }
 
-void disabledProxyWriterDoesNotFormat() {
+void disabled_proxy_writer_does_not_format() {
     TestWriter writer(galay::tracing::LogLevel::kError);
 
-    galay::tracing::log(makeTestContext(), writer).info("{}", ExplodingFormat{});
+    galay::tracing::log(make_test_context(), writer).info("{}", ExplodingFormat{});
 
     assert(writer.records.empty());
 }
 
-void macrosCaptureFileAndLine() {
-    galay::tracing::clearCurrentContext();
+void macros_capture_file_and_line() {
+    galay::tracing::clear_current_context();
     galay::tracing::Logger logger;
     auto sink = std::make_shared<TestSink>();
-    logger.clearSinks();
-    logger.addSink(sink);
-    galay::tracing::setDefaultLogger(&logger);
+    logger.clear_sinks();
+    logger.add_sink(sink);
+    galay::tracing::set_default_logger(&logger);
 
     const auto expectedLine = __LINE__ + 1;
     GALAY_LOG_INFO("macro {}", 7);
 
-    galay::tracing::setDefaultLogger(nullptr);
+    galay::tracing::set_default_logger(nullptr);
 
     assert(sink->records.size() == 1);
     assert(sink->records[0].message == "macro 7");
@@ -228,22 +228,22 @@ void macrosCaptureFileAndLine() {
     assert(sink->records[0].source.line == expectedLine);
 }
 
-void publishDoesNotCopySinkSharedPointers() {
+void publish_does_not_copy_sink_shared_pointers() {
     std::weak_ptr<RefcountSink> weak;
     auto sink = std::make_shared<RefcountSink>(&weak);
     weak = sink;
 
     galay::tracing::Logger logger;
-    logger.clearSinks();
-    logger.addSink(sink);
+    logger.clear_sinks();
+    logger.add_sink(sink);
 
     logger.log(galay::tracing::LogLevel::kInfo, {"test.cc", 88, "publishDoesNotCopySinkSharedPointers"}, "snapshot");
 
     assert(sink->observedUseCount == 2);
 }
 
-void structuredEventUsesExplicitWriter() {
-    const auto context = makeTestContext();
+void structured_event_uses_explicit_writer() {
+    const auto context = make_test_context();
     StructuredWriter writer;
 
     galay::tracing::event(context, writer).info("order_sent", galay::tracing::field("order_id", 42));
@@ -254,17 +254,17 @@ void structuredEventUsesExplicitWriter() {
     assert(writer.firstFieldName == "order_id");
     assert(writer.firstFieldValue == 42);
     assert(writer.context.has_value());
-    assert(writer.context->traceId() == context.traceId());
+    assert(writer.context->trace_id() == context.trace_id());
 }
 
-void structuredEventUsesDefaultStructuredWriter() {
-    const auto context = makeTestContext();
+void structured_event_uses_default_structured_writer() {
+    const auto context = make_test_context();
     StructuredWriter writer;
-    galay::tracing::setDefaultLogWriter(&writer);
+    galay::tracing::set_default_log_writer(&writer);
 
     galay::tracing::event(context).info("order_sent", galay::tracing::field("order_id", 42));
 
-    galay::tracing::setDefaultLogWriter(nullptr);
+    galay::tracing::set_default_log_writer(nullptr);
 
     assert(writer.level == galay::tracing::LogLevel::kInfo);
     assert(writer.name == "order_sent");
@@ -272,41 +272,41 @@ void structuredEventUsesDefaultStructuredWriter() {
     assert(writer.firstFieldName == "order_id");
     assert(writer.firstFieldValue == 42);
     assert(writer.context.has_value());
-    assert(writer.context->traceId() == context.traceId());
+    assert(writer.context->trace_id() == context.trace_id());
 }
 
-void structuredEventCanUseLoggerSink() {
-    const auto context = makeTestContext();
+void structured_event_can_use_logger_sink() {
+    const auto context = make_test_context();
     galay::tracing::Logger logger;
     auto sink = std::make_shared<TestSink>();
-    logger.clearSinks();
-    logger.addSink(sink);
+    logger.clear_sinks();
+    logger.add_sink(sink);
 
     galay::tracing::event(context, logger).info("order_sent", galay::tracing::field("order_id", 42));
 
     assert(sink->records.size() == 1);
     assert(sink->records[0].message == "order_sent order_id=42");
     assert(sink->records[0].context.has_value());
-    assert(sink->records[0].context->traceId() == context.traceId());
+    assert(sink->records[0].context->trace_id() == context.trace_id());
 }
 
-void eventMacroDoesNotEvaluateDisabledFields() {
+void event_macro_does_not_evaluate_disabled_fields() {
     StructuredWriter writer;
     writer.minLevel = galay::tracing::LogLevel::kError;
     int evaluations = 0;
 
-    GALAY_EVENT_DEBUG(writer, makeTestContext(), "order_sent", countedField(evaluations));
+    GALAY_EVENT_DEBUG(writer, make_test_context(), "order_sent", counted_field(evaluations));
 
     assert(evaluations == 0);
     assert(writer.name.empty());
 }
 
-void eventMacroWritesEnabledStructuredEvent() {
-    const auto context = makeTestContext();
+void event_macro_writes_enabled_structured_event() {
+    const auto context = make_test_context();
     StructuredWriter writer;
     int evaluations = 0;
 
-    GALAY_EVENT_INFO(writer, context, "order_sent", countedField(evaluations));
+    GALAY_EVENT_INFO(writer, context, "order_sent", counted_field(evaluations));
 
     assert(evaluations == 1);
     assert(writer.level == galay::tracing::LogLevel::kInfo);
@@ -315,32 +315,32 @@ void eventMacroWritesEnabledStructuredEvent() {
     assert(writer.firstFieldName == "order_id");
     assert(writer.firstFieldValue == 42);
     assert(writer.context.has_value());
-    assert(writer.context->traceId() == context.traceId());
+    assert(writer.context->trace_id() == context.trace_id());
 }
 
-void defaultEventMacroDoesNotEvaluateDisabledFields() {
+void default_event_macro_does_not_evaluate_disabled_fields() {
     StructuredWriter writer;
     writer.minLevel = galay::tracing::LogLevel::kError;
-    galay::tracing::setDefaultLogWriter(&writer);
+    galay::tracing::set_default_log_writer(&writer);
     int evaluations = 0;
 
-    GALAY_EVENT_DEBUG_DEFAULT(makeTestContext(), "order_sent", countedField(evaluations));
+    GALAY_EVENT_DEBUG_DEFAULT(make_test_context(), "order_sent", counted_field(evaluations));
 
-    galay::tracing::setDefaultLogWriter(nullptr);
+    galay::tracing::set_default_log_writer(nullptr);
 
     assert(evaluations == 0);
     assert(writer.name.empty());
 }
 
-void defaultEventMacroWritesEnabledStructuredEvent() {
-    const auto context = makeTestContext();
+void default_event_macro_writes_enabled_structured_event() {
+    const auto context = make_test_context();
     StructuredWriter writer;
-    galay::tracing::setDefaultLogWriter(&writer);
+    galay::tracing::set_default_log_writer(&writer);
     int evaluations = 0;
 
-    GALAY_EVENT_INFO_DEFAULT(context, "order_sent", countedField(evaluations));
+    GALAY_EVENT_INFO_DEFAULT(context, "order_sent", counted_field(evaluations));
 
-    galay::tracing::setDefaultLogWriter(nullptr);
+    galay::tracing::set_default_log_writer(nullptr);
 
     assert(evaluations == 1);
     assert(writer.level == galay::tracing::LogLevel::kInfo);
@@ -349,25 +349,25 @@ void defaultEventMacroWritesEnabledStructuredEvent() {
     assert(writer.firstFieldName == "order_id");
     assert(writer.firstFieldValue == 42);
     assert(writer.context.has_value());
-    assert(writer.context->traceId() == context.traceId());
+    assert(writer.context->trace_id() == context.trace_id());
 }
 
 } // namespace
 
 int main() {
-    noContextLogsStillEmit();
-    contextLogsIncludeTraceAndSpanIds();
-    contextProxyLogsThroughDefaultWriter();
-    contextProxyCanUseExplicitWriter();
-    disabledLevelDoesNotFormat();
-    disabledProxyWriterDoesNotFormat();
-    macrosCaptureFileAndLine();
-    publishDoesNotCopySinkSharedPointers();
-    structuredEventUsesExplicitWriter();
-    structuredEventUsesDefaultStructuredWriter();
-    structuredEventCanUseLoggerSink();
-    eventMacroDoesNotEvaluateDisabledFields();
-    eventMacroWritesEnabledStructuredEvent();
-    defaultEventMacroDoesNotEvaluateDisabledFields();
-    defaultEventMacroWritesEnabledStructuredEvent();
+    no_context_logs_still_emit();
+    context_logs_include_trace_and_span_ids();
+    context_proxy_logs_through_default_writer();
+    context_proxy_can_use_explicit_writer();
+    disabled_level_does_not_format();
+    disabled_proxy_writer_does_not_format();
+    macros_capture_file_and_line();
+    publish_does_not_copy_sink_shared_pointers();
+    structured_event_uses_explicit_writer();
+    structured_event_uses_default_structured_writer();
+    structured_event_can_use_logger_sink();
+    event_macro_does_not_evaluate_disabled_fields();
+    event_macro_writes_enabled_structured_event();
+    default_event_macro_does_not_evaluate_disabled_fields();
+    default_event_macro_writes_enabled_structured_event();
 }

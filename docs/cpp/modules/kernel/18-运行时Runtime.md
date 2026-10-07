@@ -12,9 +12,9 @@
 
 - `Runtime` 负责统一管理多个 IO / 计算调度器
 - `RuntimeBuilder` 负责调度器数量与高级绑核策略等配置
-- 高层任务入口现在包括 `Runtime::blockOnIO(Task<T>)`、`Runtime::blockOnCpu(Task<T>)`、`Runtime::spawnIO(Task<T>)`、`Runtime::spawnCpu(Task<T>)`、`Runtime::spawnBlocking(...)`
+- 高层任务入口现在包括 `Runtime::block_on_io(Task<T>)`、`Runtime::block_on_cpu(Task<T>)`、`Runtime::spawn_io(Task<T>)`、`Runtime::spawn_cpu(Task<T>)`、`Runtime::spawn_blocking(...)`
 - `JoinHandle<T>` 的公开结果路径收口为 `join()` / `wait()`
-- runtime 上下文可通过 `Runtime::handle()`、`RuntimeHandle::current()`、`RuntimeHandle::tryCurrent()` 获取
+- runtime 上下文可通过 `Runtime::handle()`、`RuntimeHandle::current()`、`RuntimeHandle::try_current()` 获取
 - `Task<void>::then(...)` 是当前保留的链式根任务接口
 - `TaskRef`、协程绑定与 resume plumbing 已收敛为 runtime/scheduler 内核细节，不再作为高层工作流 API 推荐
 - `start()` / `stop()`、调度器轮询、全局 `TimerScheduler` 的完整说明已折回主干页
@@ -41,7 +41,7 @@
 - `JoinHandle`
 - `RuntimeHandle`
 - `blockOn`
-- `spawnBlocking`
+- `spawn_blocking`
 - `start`
 - `stop`
-- `getNextIOScheduler`
+- `get_next_io_scheduler`

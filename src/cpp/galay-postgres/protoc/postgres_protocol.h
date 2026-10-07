@@ -22,92 +22,92 @@
 namespace galay::postgres::protocol
 {
 
-uint16_t readInt16(const char* data) noexcept;
-uint32_t readInt32(const char* data) noexcept;
-void writeInt16(std::string& output, uint16_t value);
-void writeInt32(std::string& output, uint32_t value);
-std::expected<std::string, ParseError> readCString(const char* data,
+uint16_t read_int16(const char* data) noexcept;
+uint32_t read_int32(const char* data) noexcept;
+void write_int16(std::string& output, uint16_t value);
+void write_int32(std::string& output, uint32_t value);
+std::expected<std::string, ParseError> read_c_string(const char* data,
                                                    size_t length,
                                                    size_t& consumed);
-void writeCString(std::string& output, std::string_view value);
+void write_c_string(std::string& output, std::string_view value);
 
 class PostgresParser
 {
 public:
     [[nodiscard]] std::expected<MessageHeader, ParseError>
-    parseHeader(const char* data, size_t length) const;
+    parse_header(const char* data, size_t length) const;
 
     /** The returned payload borrows data from the caller's buffer. */
     [[nodiscard]] std::expected<MessageView, ParseError>
-    extractMessage(const char* data, size_t length) const;
+    extract_message(const char* data, size_t length) const;
 
     [[nodiscard]] std::expected<AuthenticationRequest, ParseError>
-    parseAuthenticationRequest(const char* data, size_t length) const;
+    parse_authentication_request(const char* data, size_t length) const;
     [[nodiscard]] std::expected<ErrorFields, ParseError>
-    parseErrorResponse(const char* data, size_t length) const;
+    parse_error_response(const char* data, size_t length) const;
     [[nodiscard]] std::expected<std::vector<RowDescriptionField>, ParseError>
-    parseRowDescription(const char* data, size_t length) const;
+    parse_row_description(const char* data, size_t length) const;
     [[nodiscard]] std::expected<PostgresRow, ParseError>
-    parseDataRow(const char* data, size_t length) const;
+    parse_data_row(const char* data, size_t length) const;
 
     /** Returned values borrow the DataRow payload until that payload is consumed. */
     [[nodiscard]] std::expected<std::vector<std::optional<std::string_view>>, ParseError>
-    parseDataRowView(const char* data, size_t length) const;
+    parse_data_row_view(const char* data, size_t length) const;
 
     [[nodiscard]] std::expected<CommandCompleteInfo, ParseError>
-    parseCommandComplete(const char* data, size_t length) const;
+    parse_command_complete(const char* data, size_t length) const;
     [[nodiscard]] std::expected<ReadyForQueryInfo, ParseError>
-    parseReadyForQuery(const char* data, size_t length) const;
+    parse_ready_for_query(const char* data, size_t length) const;
     [[nodiscard]] std::expected<ParameterStatusInfo, ParseError>
-    parseParameterStatus(const char* data, size_t length) const;
+    parse_parameter_status(const char* data, size_t length) const;
     [[nodiscard]] std::expected<BackendKeyDataInfo, ParseError>
-    parseBackendKeyData(const char* data, size_t length) const;
+    parse_backend_key_data(const char* data, size_t length) const;
     [[nodiscard]] std::expected<std::vector<uint32_t>, ParseError>
-    parseParameterDescription(const char* data, size_t length) const;
+    parse_parameter_description(const char* data, size_t length) const;
     [[nodiscard]] std::expected<void, ParseError>
-    parseParseComplete(const char* data, size_t length) const;
+    parse_parse_complete(const char* data, size_t length) const;
     [[nodiscard]] std::expected<void, ParseError>
-    parseBindComplete(const char* data, size_t length) const;
+    parse_bind_complete(const char* data, size_t length) const;
     [[nodiscard]] std::expected<void, ParseError>
-    parseCloseComplete(const char* data, size_t length) const;
+    parse_close_complete(const char* data, size_t length) const;
     [[nodiscard]] std::expected<void, ParseError>
-    parseNoData(const char* data, size_t length) const;
+    parse_no_data(const char* data, size_t length) const;
     [[nodiscard]] std::expected<void, ParseError>
-    parsePortalSuspended(const char* data, size_t length) const;
+    parse_portal_suspended(const char* data, size_t length) const;
 };
 
 class PostgresEncoder
 {
 public:
-    [[nodiscard]] std::string encodeStartupMessage(const PostgresConfig& config) const;
-    [[nodiscard]] std::string encodeSASLInitialResponse(std::string_view mechanism,
+    [[nodiscard]] std::string encode_startup_message(const PostgresConfig& config) const;
+    [[nodiscard]] std::string encode_sasl_initial_response(std::string_view mechanism,
                                                         std::string_view client_first) const;
-    [[nodiscard]] std::string encodeSASLResponse(std::string_view client_final) const;
-    [[nodiscard]] std::string encodePasswordMessage(std::string_view password) const;
-    [[nodiscard]] std::string encodeQuery(std::string_view sql) const;
-    [[nodiscard]] std::string encodeTerminate() const;
+    [[nodiscard]] std::string encode_sasl_response(std::string_view client_final) const;
+    [[nodiscard]] std::string encode_password_message(std::string_view password) const;
+    [[nodiscard]] std::string encode_query(std::string_view sql) const;
+    [[nodiscard]] std::string encode_terminate() const;
 
-    [[nodiscard]] std::string encodeParse(std::string_view statement_name,
+    [[nodiscard]] std::string encode_parse(std::string_view statement_name,
                                           std::string_view sql,
                                           std::span<const uint32_t> parameter_type_oids = {}) const;
-    [[nodiscard]] std::string encodeBind(
+    [[nodiscard]] std::string encode_bind(
         std::string_view portal_name,
         std::string_view statement_name,
         std::span<const std::optional<std::string_view>> parameters) const;
-    [[nodiscard]] std::string encodeBind(
+    [[nodiscard]] std::string encode_bind(
         std::string_view portal_name,
         std::string_view statement_name,
         std::span<const std::optional<std::string>> parameters) const;
-    [[nodiscard]] std::string encodeDescribeStatement(std::string_view statement_name) const;
-    [[nodiscard]] std::string encodeDescribePortal(std::string_view portal_name) const;
-    [[nodiscard]] std::string encodeExecute(std::string_view portal_name,
+    [[nodiscard]] std::string encode_describe_statement(std::string_view statement_name) const;
+    [[nodiscard]] std::string encode_describe_portal(std::string_view portal_name) const;
+    [[nodiscard]] std::string encode_execute(std::string_view portal_name,
                                             uint32_t max_rows = 0) const;
-    [[nodiscard]] std::string encodeSync() const;
-    [[nodiscard]] std::string encodeCloseStatement(std::string_view statement_name) const;
-    [[nodiscard]] std::string encodeClosePortal(std::string_view portal_name) const;
+    [[nodiscard]] std::string encode_sync() const;
+    [[nodiscard]] std::string encode_close_statement(std::string_view statement_name) const;
+    [[nodiscard]] std::string encode_close_portal(std::string_view portal_name) const;
 
 private:
-    [[nodiscard]] std::string wrapMessage(char type, std::string_view payload) const;
+    [[nodiscard]] std::string wrap_message(char type, std::string_view payload) const;
 };
 
 } // namespace galay::postgres::protocol

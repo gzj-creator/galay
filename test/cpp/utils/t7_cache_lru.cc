@@ -119,9 +119,9 @@ void test_lru_cache() {
         ManualClock::reset();
         Cache cache(10);
 
-        cache.putFor("alpha", 1, ManualClock::duration{50});
+        cache.put_for("alpha", 1, ManualClock::duration{50});
         ManualClock::advance(ManualClock::duration{25});
-        cache.putFor("alpha", 2, ManualClock::duration{100});
+        cache.put_for("alpha", 2, ManualClock::duration{100});
 
         ManualClock::advance(ManualClock::duration{30});
         assert(cache.get("alpha") != nullptr && *cache.get("alpha") == 2);
@@ -137,12 +137,12 @@ void test_lru_cache() {
         ManualClock::reset();
         Cache cache(10);
 
-        assert(!cache.putFor("zero", 1, ManualClock::duration{0}));
-        assert(!cache.putFor("negative", 2, ManualClock::duration{-1}));
+        assert(!cache.put_for("zero", 1, ManualClock::duration{0}));
+        assert(!cache.put_for("negative", 2, ManualClock::duration{-1}));
         assert(cache.empty());
 
-        assert(cache.putUntil("future", 3, ManualClock::now() + ManualClock::duration{10}));
-        assert(!cache.putUntil("past", 4, ManualClock::now()));
+        assert(cache.put_until("future", 3, ManualClock::now() + ManualClock::duration{10}));
+        assert(!cache.put_until("past", 4, ManualClock::now()));
         assert(cache.get("future") != nullptr && *cache.get("future") == 3);
         assert(cache.get("past") == nullptr);
     }
@@ -154,7 +154,7 @@ void test_lru_cache() {
         ManualClock::reset();
         Cache cache(1);
 
-        cache.putFor("alpha", 1, ManualClock::duration{10});
+        cache.put_for("alpha", 1, ManualClock::duration{10});
         cache.put("beta", 2);
         ManualClock::advance(ManualClock::duration{11});
         cache.put("alpha", 3);
@@ -171,15 +171,15 @@ void test_lru_cache() {
         Cache cache(10, ManualClock::duration{10});
 
         cache.put("old", 1);
-        cache.setDefaultTtl(ManualClock::duration{100});
+        cache.set_default_ttl(ManualClock::duration{100});
         cache.put("new", 2);
 
         ManualClock::advance(ManualClock::duration{11});
         assert(cache.get("old") == nullptr);
         assert(cache.get("new") != nullptr && *cache.get("new") == 2);
-        assert(cache.defaultTtl().has_value());
+        assert(cache.default_ttl().has_value());
 
-        cache.setDefaultTtl(std::nullopt);
+        cache.set_default_ttl(std::nullopt);
         cache.put("forever", 3);
         ManualClock::advance(ManualClock::duration{200});
         assert(cache.get("forever") != nullptr && *cache.get("forever") == 3);
@@ -234,7 +234,7 @@ void test_lru_cache() {
             reasons.push_back(reason);
         });
 
-        cache.putFor("alpha", 1, ManualClock::duration{10});
+        cache.put_for("alpha", 1, ManualClock::duration{10});
         ManualClock::advance(ManualClock::duration{11});
 
         assert(cache.size() == 0);
@@ -257,12 +257,12 @@ void test_lru_cache() {
         cache.put(2, "two");
         cache.put(3, "three");
 
-        cache.setCapacity(2);
+        cache.set_capacity(2);
         assert(cache.get(1) == nullptr);
         assert(cache.get(2) != nullptr);
         assert(cache.get(3) != nullptr);
 
-        cache.setCapacity(4);
+        cache.set_capacity(4);
         cache.put(4, "four");
         cache.put(5, "five");
         assert(cache.size() == 4);
@@ -283,7 +283,7 @@ void test_lru_cache() {
         assert(cache.size() == 2);
 
         cache.put(3, "three");
-        cache.setCapacity(1);
+        cache.set_capacity(1);
         assert(cache.get(3) != nullptr);
         assert(CountingClock::nowCalls == 0);
     }
@@ -340,18 +340,18 @@ void test_lru_cache() {
         auto disabledStats = cache.stats();
         assert(disabledStats.hits == 0);
         assert(disabledStats.misses == 0);
-        assert(!Cache::statsEnabled());
+        assert(!Cache::stats_enabled());
     }
 
     {
         using Cache = LruCache<int, std::string, std::hash<int>,
                                std::equal_to<int>, std::chrono::steady_clock, true>;
 
-        static_assert(Cache::statsEnabled());
+        static_assert(Cache::stats_enabled());
         Cache cache(2);
         cache.reserve(16);
-        cache.maxLoadFactor(0.7f);
-        assert(cache.maxLoadFactor() <= 0.71f);
+        cache.max_load_factor(0.7f);
+        assert(cache.max_load_factor() <= 0.71f);
 
         cache.put(1, "one");
         cache.put(2, "two");
@@ -372,7 +372,7 @@ void test_lru_cache() {
         assert(stats.removes == 1);
         assert(stats.clears == 1);
 
-        cache.resetStats();
+        cache.reset_stats();
         stats = cache.stats();
         assert(stats.hits == 0);
         assert(stats.misses == 0);
@@ -391,11 +391,11 @@ void test_lru_cache() {
         ManualClock::reset();
         Cache cache(3);
 
-        cache.putFor("alpha", 1, ManualClock::duration{10});
-        cache.putFor("beta", 2, ManualClock::duration{20});
+        cache.put_for("alpha", 1, ManualClock::duration{10});
+        cache.put_for("beta", 2, ManualClock::duration{20});
         ManualClock::advance(ManualClock::duration{11});
 
-        assert(cache.purgeExpired() == 1);
+        assert(cache.purge_expired() == 1);
         assert(cache.size() == 1);
 
         auto stats = cache.stats();

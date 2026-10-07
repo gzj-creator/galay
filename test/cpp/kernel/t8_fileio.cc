@@ -41,7 +41,7 @@ std::atomic<int> g_failed{0};
 std::atomic<int> g_total{0};
 
 template <typename Rep, typename Period>
-bool waitForDone(const std::atomic<bool>& done,
+bool wait_for_done(const std::atomic<bool>& done,
                  std::chrono::duration<Rep, Period> timeout,
                  std::chrono::milliseconds poll_interval = std::chrono::milliseconds(1)) {
     if (done.load(std::memory_order_acquire)) {
@@ -60,7 +60,7 @@ bool waitForDone(const std::atomic<bool>& done,
 }
 
 // 创建测试文件
-void createTestFile() {
+void create_test_file() {
     std::ofstream ofs(TEST_FILE);
     ofs << TEST_CONTENT;
     ofs.close();
@@ -68,7 +68,7 @@ void createTestFile() {
 }
 
 // 清理测试文件
-void cleanupTestFile() {
+void cleanup_test_file() {
     std::remove(TEST_FILE);
     LogInfo("Cleaned up test file");
 }
@@ -167,14 +167,14 @@ Task<void> test_kqueue_file_io(std::atomic<bool>* done) {
     co_return;
 }
 
-void runKqueueTest() {
+void run_kqueue_test() {
     KqueueScheduler scheduler;
     scheduler.start();
 
     std::atomic<bool> done{false};
-    scheduleTask(scheduler, test_kqueue_file_io(&done));
+    schedule_task(scheduler, test_kqueue_file_io(&done));
 
-    if (!waitForDone(done, std::chrono::seconds(5))) {
+    if (!wait_for_done(done, std::chrono::seconds(5))) {
         LogError("[Kqueue] Test timed out waiting for file IO task completion");
         g_failed++;
     }
@@ -214,7 +214,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             co_return;
         }
 
-        char* buffer = galay::async::AsyncAio::allocAlignedBuffer(4096);
+        char* buffer = galay::async::AsyncAio::alloc_aligned_buffer(4096);
         if (!buffer) {
             LogError("[Epoll/AIO] Failed to allocate aligned buffer");
             g_failed++;
@@ -222,7 +222,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             co_return;
         }
 
-        file.preRead(buffer, 4096, 0);
+        file.pre_read(buffer, 4096, 0);
         auto result = co_await file.commit();
 
         if (!result) {
@@ -241,7 +241,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             }
         }
 
-        galay::async::AsyncAio::freeAlignedBuffer(buffer);
+        galay::async::AsyncAio::free_aligned_buffer(buffer);
     }
 
     // 测试2: 批量读取
@@ -257,9 +257,9 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             co_return;
         }
 
-        char* buffer1 = galay::async::AsyncAio::allocAlignedBuffer(4096);
-        char* buffer2 = galay::async::AsyncAio::allocAlignedBuffer(4096);
-        char* buffer3 = galay::async::AsyncAio::allocAlignedBuffer(4096);
+        char* buffer1 = galay::async::AsyncAio::alloc_aligned_buffer(4096);
+        char* buffer2 = galay::async::AsyncAio::alloc_aligned_buffer(4096);
+        char* buffer3 = galay::async::AsyncAio::alloc_aligned_buffer(4096);
 
         if (!buffer1 || !buffer2 || !buffer3) {
             LogError("[Epoll/AIO] Failed to allocate aligned buffers");
@@ -268,9 +268,9 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             co_return;
         }
 
-        file.preRead(buffer1, 4096, 0);
-        file.preRead(buffer2, 4096, 4096);
-        file.preRead(buffer3, 4096, 8192);
+        file.pre_read(buffer1, 4096, 0);
+        file.pre_read(buffer2, 4096, 4096);
+        file.pre_read(buffer3, 4096, 8192);
 
         auto result = co_await file.commit();
 
@@ -295,9 +295,9 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             }
         }
 
-        galay::async::AsyncAio::freeAlignedBuffer(buffer1);
-        galay::async::AsyncAio::freeAlignedBuffer(buffer2);
-        galay::async::AsyncAio::freeAlignedBuffer(buffer3);
+        galay::async::AsyncAio::free_aligned_buffer(buffer1);
+        galay::async::AsyncAio::free_aligned_buffer(buffer2);
+        galay::async::AsyncAio::free_aligned_buffer(buffer3);
     }
 
     // 测试3: 写入
@@ -314,7 +314,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             co_return;
         }
 
-        char* buffer = galay::async::AsyncAio::allocAlignedBuffer(4096);
+        char* buffer = galay::async::AsyncAio::alloc_aligned_buffer(4096);
         if (!buffer) {
             LogError("[Epoll/AIO] Failed to allocate aligned buffer");
             g_failed++;
@@ -326,7 +326,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
         memset(buffer, 0, 4096);
         strcpy(buffer, writeContent);
 
-        file.preWrite(buffer, 512, 0);  // O_DIRECT 需要 512 对齐
+        file.pre_write(buffer, 512, 0);  // O_DIRECT 需要 512 对齐
         auto result = co_await file.commit();
 
         if (!result) {
@@ -344,7 +344,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             }
         }
 
-        galay::async::AsyncAio::freeAlignedBuffer(buffer);
+        galay::async::AsyncAio::free_aligned_buffer(buffer);
         std::remove(writeTestFile);
     }
 
@@ -354,14 +354,14 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
     co_return;
 }
 
-void runEpollTest() {
+void run_epoll_test() {
     EpollScheduler scheduler;
     scheduler.start();
 
     std::atomic<bool> done{false};
-    scheduleTask(scheduler, test_epoll_file_io(&done));
+    schedule_task(scheduler, test_epoll_file_io(&done));
 
-    if (!waitForDone(done, std::chrono::seconds(5))) {
+    if (!wait_for_done(done, std::chrono::seconds(5))) {
         LogError("[Epoll/AIO] Test timed out waiting for file IO task completion");
         g_failed++;
     }
@@ -464,14 +464,14 @@ Task<void> test_io_uring_file_io(std::atomic<bool>* done) {
     co_return;
 }
 
-void runIOUringTest() {
+void run_io_uring_test() {
     IOUringScheduler scheduler;
     scheduler.start();
 
     std::atomic<bool> done{false};
-    scheduleTask(scheduler, test_io_uring_file_io(&done));
+    schedule_task(scheduler, test_io_uring_file_io(&done));
 
-    if (!waitForDone(done, std::chrono::seconds(5))) {
+    if (!wait_for_done(done, std::chrono::seconds(5))) {
         LogError("[io_uring] Test timed out waiting for file IO task completion");
         g_failed++;
     }
@@ -486,32 +486,32 @@ int main() {
     LogInfo("========================================\n");
 
     // 创建测试文件
-    createTestFile();
+    create_test_file();
 
 #ifdef USE_KQUEUE
-    runKqueueTest();
+    run_kqueue_test();
 #elif defined(USE_EPOLL)
-    runEpollTest();
+    run_epoll_test();
 #elif defined(USE_IOURING)
-    runIOUringTest();
+    run_io_uring_test();
 #else
     LogWarn("No supported platform detected (kqueue/epoll/io_uring)");
 #endif
 
     // 清理
-    cleanupTestFile();
+    cleanup_test_file();
 
     galay::test::TestResultWriter writer("test_file_io");
     for (int i = 0; i < g_total.load(); ++i) {
-        writer.addTest();
+        writer.add_test();
     }
     for (int i = 0; i < g_passed.load(); ++i) {
-        writer.addPassed();
+        writer.add_passed();
     }
     for (int i = 0; i < g_failed.load(); ++i) {
-        writer.addFailed();
+        writer.add_failed();
     }
-    writer.writeResult();
+    writer.write_result();
 
     LogInfo("Test Results: Total={}, Passed={}, Failed={}", g_total.load(), g_passed.load(), g_failed.load());
 

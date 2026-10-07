@@ -14,15 +14,15 @@
 
 namespace {
 
-std::filesystem::path projectRoot() {
+std::filesystem::path project_root() {
     return std::filesystem::path(GALAY_PROJECT_ROOT);
 }
 
-std::filesystem::path sourceRoot() {
+std::filesystem::path source_root() {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
-std::string readAll(const std::filesystem::path& path) {
+std::string read_all(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
         return {};
@@ -31,31 +31,31 @@ std::string readAll(const std::filesystem::path& path) {
                        std::istreambuf_iterator<char>());
 }
 
-bool containsText(const std::string& haystack, const std::string& needle) {
+bool contains_text(const std::string& haystack, const std::string& needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
-void requireContains(std::vector<std::string>& failures,
+void require_contains(std::vector<std::string>& failures,
                      const std::filesystem::path& path,
                      const std::string& content,
                      const std::string& needle,
                      const std::string& message) {
-    if (!containsText(content, needle)) {
+    if (!contains_text(content, needle)) {
         failures.push_back(path.string() + ": " + message);
     }
 }
 
-void requireNotContains(std::vector<std::string>& failures,
+void require_not_contains(std::vector<std::string>& failures,
                         const std::filesystem::path& path,
                         const std::string& content,
                         const std::string& needle,
                         const std::string& message) {
-    if (containsText(content, needle)) {
+    if (contains_text(content, needle)) {
         failures.push_back(path.string() + ": " + message);
     }
 }
 
-void requireOrdered(std::vector<std::string>& failures,
+void require_ordered(std::vector<std::string>& failures,
                     const std::filesystem::path& path,
                     const std::string& content,
                     const std::string& first,
@@ -71,8 +71,8 @@ void requireOrdered(std::vector<std::string>& failures,
 }  // namespace
 
 int main() {
-    const auto root = projectRoot();
-    const auto source_root = sourceRoot();
+    const auto root = project_root();
+    const auto source_root = ::source_root();
 
     const auto timer_hpp = source_root / "galay-kernel" / "common" / "timer.hpp";
     const auto option_cmake = root / "cmake" / "option.cmake";
@@ -86,15 +86,15 @@ int main() {
 
     std::vector<std::string> failures;
 
-    const std::string timer_content = readAll(timer_hpp);
-    const std::string option_content = readAll(option_cmake);
-    const std::string root_cmake_content = readAll(root_cmake);
-    const std::string root_build_content = readAll(root_build);
-    const std::string kernel_build_content = readAll(kernel_build);
-    const std::string kernel_cmake_content = readAll(kernel_cmake);
-    const std::string aio_content = readAll(aio_file_h);
-    const std::string defn_content = readAll(defn_hpp);
-    const std::string kqueue_scheduler_content = readAll(kqueue_scheduler_h);
+    const std::string timer_content = read_all(timer_hpp);
+    const std::string option_content = read_all(option_cmake);
+    const std::string root_cmake_content = read_all(root_cmake);
+    const std::string root_build_content = read_all(root_build);
+    const std::string kernel_build_content = read_all(kernel_build);
+    const std::string kernel_cmake_content = read_all(kernel_cmake);
+    const std::string aio_content = read_all(aio_file_h);
+    const std::string defn_content = read_all(defn_hpp);
+    const std::string kqueue_scheduler_content = read_all(kqueue_scheduler_h);
 
     if (timer_content.empty()) failures.push_back(timer_hpp.string() + ": failed to read file");
     if (option_content.empty()) failures.push_back(option_cmake.string() + ": failed to read file");
@@ -106,131 +106,131 @@ int main() {
     if (kqueue_scheduler_content.empty()) failures.push_back(kqueue_scheduler_h.string() + ": failed to read file");
     if (!std::filesystem::exists(kernel_build)) failures.push_back(kernel_build.string() + ": missing Bazel BUILD file");
 
-    requireContains(failures,
+    require_contains(failures,
                     timer_hpp,
                     timer_content,
                     "enum class TimerFlag : int",
                     "expected TimerFlag enum class");
-    requireContains(failures,
+    require_contains(failures,
                     timer_hpp,
                     timer_content,
                     "std::atomic<int> m_flag{0};",
                     "expected atomic timer flag");
-    requireContains(failures,
+    require_contains(failures,
                     timer_hpp,
                     timer_content,
                     "load(std::memory_order_acquire)",
                     "expected acquire loads for timer flag reads");
-    requireContains(failures,
+    require_contains(failures,
                     timer_hpp,
                     timer_content,
                     "fetch_or(",
                     "expected release fetch_or writes for timer flag updates");
-    requireNotContains(failures,
+    require_not_contains(failures,
                        timer_hpp,
                        timer_content,
                        "#define DONE",
                        "expected DONE macro removal");
-    requireNotContains(failures,
+    require_not_contains(failures,
                        timer_hpp,
                        timer_content,
                        "#define CANCEL",
                        "expected CANCEL macro removal");
-    requireNotContains(failures,
+    require_not_contains(failures,
                        timer_hpp,
                        timer_content,
                        "#define TIMEOUT",
                        "expected TIMEOUT macro removal");
 
-    requireNotContains(failures,
+    require_not_contains(failures,
                        root_cmake,
                        root_cmake_content,
                        "GALAY_KERNEL_BACKEND STREQUAL \"iocp\"",
                        "expected top-level backend allow-list to drop iocp");
-    requireNotContains(failures,
+    require_not_contains(failures,
                        root_cmake,
                        root_cmake_content,
                        "galay-module-config.cmake.in",
                        "expected old per-module package config template removal");
 
-    requireContains(failures,
+    require_contains(failures,
                     kernel_build,
                     kernel_build_content,
                     "cc_library(",
                     "expected galay-kernel/BUILD to define a cc_library");
-    requireContains(failures,
+    require_contains(failures,
                     kernel_build,
                     kernel_build_content,
                     "name = \"galay-kernel\"",
                     "expected galay-kernel Bazel target name");
 
-    requireContains(failures,
+    require_contains(failures,
                     kernel_cmake,
                     kernel_cmake_content,
                     "CONFIGURE_DEPENDS",
                     "expected GLOB_RECURSE to use CONFIGURE_DEPENDS");
 
-    requireContains(failures,
+    require_contains(failures,
                     aio_file_h,
                     aio_content,
-                    "auto scheduler = m_waker.getScheduler();",
+                    "auto scheduler = m_waker.get_scheduler();",
                     "expected AioCommitAwaitable to fetch scheduler before registration");
-    requireContains(failures,
+    require_contains(failures,
                     aio_file_h,
                     aio_content,
                     "namespace galay::async {\n\ntemplate <typename Promise>\ninline bool AioCommitAwaitable::await_suspend",
                     "expected the await_suspend template definition to remain at namespace scope for modules");
-    requireNotContains(failures,
+    require_not_contains(failures,
                        aio_file_h,
                        aio_content,
                        "inline bool galay::async::AioCommitAwaitable::await_suspend",
                        "qualified await_suspend definition must not be placed directly in export extern scope");
-    requireContains(failures,
+    require_contains(failures,
                     aio_file_h,
                     aio_content,
                     "scheduler == nullptr",
                     "expected AioCommitAwaitable to guard null scheduler");
-    requireOrdered(failures,
+    require_ordered(failures,
                    aio_file_h,
                    aio_content,
-                   "auto scheduler = m_waker.getScheduler();",
+                   "auto scheduler = m_waker.get_scheduler();",
                    "m_controller->m_handle.fd = m_event_fd;",
                    "expected scheduler lookup before controller state write");
-    requireOrdered(failures,
+    require_ordered(failures,
                    aio_file_h,
                    aio_content,
-                   "auto scheduler = m_waker.getScheduler();",
-                   "m_controller->fillAwaitable(",
+                   "auto scheduler = m_waker.get_scheduler();",
+                   "m_controller->fill_awaitable(",
                    "expected scheduler lookup before controller awaitable binding");
-    requireOrdered(failures,
+    require_ordered(failures,
                    aio_file_h,
                    aio_content,
                    "scheduler == nullptr",
                    "scheduler->type() != galay::kernel::kIOScheduler",
                    "expected null guard before scheduler type dereference");
 
-    requireNotContains(failures,
+    require_not_contains(failures,
                        defn_hpp,
                        defn_content,
                        "#define close(x) closesocket(x)",
                        "expected close macro removal");
-    requireNotContains(failures,
+    require_not_contains(failures,
                        defn_hpp,
                        defn_content,
                        "bool operator==(GHandle&& other)",
                        "expected GHandle rvalue equality overload removal");
-    requireContains(failures,
+    require_contains(failures,
                     defn_hpp,
                     defn_content,
                     "bool operator==(const GHandle& other) const",
                     "expected const GHandle equality overload");
 
-    requireNotContains(failures,
+    require_not_contains(failures,
                        kqueue_scheduler_h,
                        kqueue_scheduler_content,
                        "#define  OK 1",
                        "expected KqueueScheduler OK macro removal");
-    requireNotContains(failures,
+    require_not_contains(failures,
                        kqueue_scheduler_h,
                        kqueue_scheduler_content,
                        "#define OK 1",

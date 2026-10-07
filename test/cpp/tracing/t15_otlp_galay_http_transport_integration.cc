@@ -13,36 +13,36 @@
 
 namespace {
 
-galay::tracing::TraceContext makeContext() {
+galay::tracing::TraceContext make_context() {
     return galay::tracing::TraceContext(
-        galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
-        galay::tracing::SpanId::fromHex("00f067aa0ba902b7"),
+        galay::tracing::TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736"),
+        galay::tracing::SpanId::from_hex("00f067aa0ba902b7"),
         0x01);
 }
 
-galay::tracing::Span makeSpan(std::string_view name) {
-    galay::tracing::Span span(std::string(name), makeContext());
+galay::tracing::Span make_span(std::string_view name) {
+    galay::tracing::Span span(std::string(name), make_context());
     span.end();
     return span;
 }
 
-galay::kernel::Task<galay::tracing::ExportResult> exportOnSchedulerThread() {
-    auto transport = galay::tracing::makeGalayHttpOtlpTransport();
+galay::kernel::Task<galay::tracing::ExportResult> export_on_scheduler_thread() {
+    auto transport = galay::tracing::make_galay_http_otlp_transport();
     galay::tracing::OtlpHttpExporter exporter({}, transport);
     std::vector<galay::tracing::Span> spans;
-    spans.push_back(makeSpan("scheduler-thread"));
+    spans.push_back(make_span("scheduler-thread"));
 
-    co_return exporter.exportSpans(std::span<const galay::tracing::Span>(spans));
+    co_return exporter.export_spans(std::span<const galay::tracing::Span>(spans));
 }
 
-void rejectsSchedulerThreadBlocking() {
+void rejects_scheduler_thread_blocking() {
     galay::kernel::Runtime runtime = galay::kernel::RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     runtime.start();
 
-    auto join = runtime.spawnIO(exportOnSchedulerThread());
+    auto join = runtime.spawn_io(export_on_scheduler_thread());
     assert(join.has_value());
     auto result = join->join();
     runtime.stop();
@@ -51,8 +51,8 @@ void rejectsSchedulerThreadBlocking() {
     assert(result.value() == galay::tracing::ExportResult::kFailure);
 }
 
-void rejectsMalformedEndpoint() {
-    auto transport = galay::tracing::makeGalayHttpOtlpTransport();
+void rejects_malformed_endpoint() {
+    auto transport = galay::tracing::make_galay_http_otlp_transport();
     auto response = transport(galay::tracing::OtlpHttpRequest{
         .endpoint = "ftp://collector.invalid/v1/traces",
         .timeout = std::chrono::milliseconds(10),
@@ -66,6 +66,6 @@ void rejectsMalformedEndpoint() {
 } // namespace
 
 int main() {
-    rejectsSchedulerThreadBlocking();
-    rejectsMalformedEndpoint();
+    rejects_scheduler_thread_blocking();
+    rejects_malformed_endpoint();
 }

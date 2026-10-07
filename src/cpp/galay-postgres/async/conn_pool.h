@@ -37,8 +37,8 @@ struct PostgresPoolWaiter
 
 struct PostgresConnectionPoolConfig
 {
-    PostgresConfig postgres_config = PostgresConfig::defaultConfig();
-    AsyncPostgresConfig async_config = AsyncPostgresConfig::noTimeout();
+    PostgresConfig postgres_config = PostgresConfig::default_config();
+    AsyncPostgresConfig async_config = AsyncPostgresConfig::no_timeout();
     size_t min_connections = 2;
     size_t max_connections = 10;
 };
@@ -93,7 +93,7 @@ public:
     {
         return m_total_connections.load(std::memory_order_acquire);
     }
-    [[nodiscard]] size_t idleCount() const noexcept
+    [[nodiscard]] size_t idle_count() const noexcept
     {
         return m_idle_connections.load(std::memory_order_acquire);
     }
@@ -101,12 +101,12 @@ public:
 private:
     friend class AcquireAwaitable;
 
-    AsyncPostgresClient<>* tryAcquire();
-    AsyncPostgresClient<>* createClient();
-    void recycleDisconnected(AsyncPostgresClient<>* client);
-    bool enqueueWaiter(std::shared_ptr<detail::PostgresPoolWaiter> waiter);
-    bool wakeOneWaiter();
-    bool failOneWaiter();
+    AsyncPostgresClient<>* try_acquire();
+    AsyncPostgresClient<>* create_client();
+    void recycle_disconnected(AsyncPostgresClient<>* client);
+    bool enqueue_waiter(std::shared_ptr<detail::PostgresPoolWaiter> waiter);
+    bool wake_one_waiter();
+    bool fail_one_waiter();
 
     galay::kernel::IOScheduler* m_scheduler = nullptr;
     PostgresConfig m_postgres_config;

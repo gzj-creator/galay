@@ -23,7 +23,7 @@ MysqlErrorType MysqlError::type() const
     return m_type;
 }
 
-uint16_t MysqlError::serverErrno() const
+uint16_t MysqlError::server_errno() const
 {
     return m_server_errno;
 }

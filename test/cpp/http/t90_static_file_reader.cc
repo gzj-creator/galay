@@ -41,8 +41,8 @@ int main()
     }
 
     galay::kernel::Runtime runtime = galay::kernel::RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .parallelSchedulerCount(0)
+        .io_scheduler_count(1)
+        .parallel_scheduler_count(0)
         .build();
     auto started = runtime.start();
     if (!check(started.has_value(), "failed to start runtime")) {
@@ -50,7 +50,7 @@ int main()
         return 1;
     }
 
-    auto metadata_task = runtime.blockOnIO(galay::http::StaticFileReader::inspect(path.string()));
+    auto metadata_task = runtime.block_on_io(galay::http::StaticFileReader::inspect(path.string()));
     if (!check(metadata_task.has_value(), "metadata task failed")) {
         runtime.stop();
         std::filesystem::remove(path);
@@ -66,8 +66,8 @@ int main()
         return 1;
     }
 
-    auto all_task = runtime.blockOnIO(
-        galay::http::StaticFileReader::readAll(path.string(), content.size()));
+    auto all_task = runtime.block_on_io(
+        galay::http::StaticFileReader::read_all(path.string(), content.size()));
     if (!check(all_task.has_value(), "readAll task failed")) {
         runtime.stop();
         std::filesystem::remove(path);
@@ -81,8 +81,8 @@ int main()
         return 1;
     }
 
-    auto range_task = runtime.blockOnIO(
-        galay::http::StaticFileReader::readAt(path.string(), 7, 11));
+    auto range_task = runtime.block_on_io(
+        galay::http::StaticFileReader::read_at(path.string(), 7, 11));
     if (!check(range_task.has_value(), "readAt task failed")) {
         runtime.stop();
         std::filesystem::remove(path);
@@ -96,8 +96,8 @@ int main()
         return 1;
     }
 
-    auto invalid_task = runtime.blockOnIO(
-        galay::http::StaticFileReader::readAt(
+    auto invalid_task = runtime.block_on_io(
+        galay::http::StaticFileReader::read_at(
             path.string(), std::numeric_limits<size_t>::max(), 1));
     if (!check(invalid_task.has_value(), "invalid readAt task failed")) {
         runtime.stop();
@@ -113,7 +113,7 @@ int main()
         return 1;
     }
 
-    auto session_task = runtime.blockOnIO(galay::http::StaticFileReader::open(path.string()));
+    auto session_task = runtime.block_on_io(galay::http::StaticFileReader::open(path.string()));
     if (!check(session_task.has_value(), "open session task failed")) {
         runtime.stop();
         std::filesystem::remove(path);
@@ -126,7 +126,7 @@ int main()
         return 1;
     }
     auto session = std::move(session_result.value());
-    auto session_read_task = runtime.blockOnIO(session.readAt(19, 6));
+    auto session_read_task = runtime.block_on_io(session.read_at(19, 6));
     if (!check(session_read_task.has_value(), "session read task failed")) {
         runtime.stop();
         std::filesystem::remove(path);
@@ -140,8 +140,8 @@ int main()
         return 1;
     }
 
-    auto descriptor_task = runtime.blockOnIO(
-        galay::http::StaticFileReader::openForSendfile(path.string()));
+    auto descriptor_task = runtime.block_on_io(
+        galay::http::StaticFileReader::open_for_sendfile(path.string()));
     if (!check(descriptor_task.has_value(), "openForSendfile task failed")) {
         runtime.stop();
         std::filesystem::remove(path);
@@ -155,7 +155,7 @@ int main()
         return 1;
     }
 
-    auto missing_task = runtime.blockOnIO(
+    auto missing_task = runtime.block_on_io(
         galay::http::StaticFileReader::inspect(path.string() + ".missing"));
     if (!check(missing_task.has_value(), "missing metadata task failed") ||
         !check(!missing_task.value().has_value(), "missing metadata unexpectedly succeeded")) {

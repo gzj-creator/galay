@@ -116,14 +116,14 @@ Task<void> test_stress(AsyncMutex* mutex) {
 }
 
 // ============================================================================
-// 测试6：isLocked 状态检查
+// 测试6：is_locked 状态检查
 // ============================================================================
 std::atomic<bool> g_test6_locked_inside{false};
 std::atomic<bool> g_test6_done{false};
 
 Task<void> test_is_locked(AsyncMutex* mutex) {
     co_await mutex->lock();
-    g_test6_locked_inside = mutex->isLocked();
+    g_test6_locked_inside = mutex->is_locked();
     mutex->unlock();
     g_test6_done = true;
     co_return;
@@ -243,7 +243,7 @@ Task<void> test_cross_scheduler(AsyncMutex* mutex) {
 // ============================================================================
 // 主函数
 // ============================================================================
-void runTests() {
+void run_tests() {
     LogInfo("========================================");
     LogInfo("AsyncMutex Unit Tests");
     LogInfo("========================================");
@@ -259,7 +259,7 @@ void runTests() {
         AsyncMutex mutex(8);  // 小容量队列
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(test_basic_lock_unlock(&mutex)));
+        scheduler.schedule(detail::TaskAccess::detach_task(test_basic_lock_unlock(&mutex)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test1_done) {
@@ -288,7 +288,7 @@ void runTests() {
         scheduler.start();
 
         for (int i = 0; i < TEST3_COROUTINE_COUNT; ++i) {
-            scheduler.schedule(detail::TaskAccess::detachTask(test_mutual_exclusion(&mutex)));
+            scheduler.schedule(detail::TaskAccess::detach_task(test_mutual_exclusion(&mutex)));
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -326,7 +326,7 @@ void runTests() {
 
         // 按顺序添加协程
         for (int i = 0; i < TEST4_COROUTINE_COUNT; ++i) {
-            scheduler.schedule(detail::TaskAccess::detachTask(test_fairness(&mutex, i)));
+            scheduler.schedule(detail::TaskAccess::detach_task(test_fairness(&mutex, i)));
             // 已移除 sleep_for，确保顺序
         }
 
@@ -367,7 +367,7 @@ void runTests() {
         scheduler.start();
 
         for (int i = 0; i < TEST5_COROUTINE_COUNT; ++i) {
-            scheduler.schedule(detail::TaskAccess::detachTask(test_stress(&mutex)));
+            scheduler.schedule(detail::TaskAccess::detach_task(test_stress(&mutex)));
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -393,7 +393,7 @@ void runTests() {
         }
     }
 
-    // 测试6：isLocked 状态检查
+    // 测试6：is_locked 状态检查
     {
         LogInfo("\n--- Test 6: isLocked state ---");
         g_total++;
@@ -401,10 +401,10 @@ void runTests() {
         IOSchedulerType scheduler;
         AsyncMutex mutex(8);
 
-        bool initially_unlocked = !mutex.isLocked();
+        bool initially_unlocked = !mutex.is_locked();
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(test_is_locked(&mutex)));
+        scheduler.schedule(detail::TaskAccess::detach_task(test_is_locked(&mutex)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test6_done) {
@@ -414,7 +414,7 @@ void runTests() {
 
         scheduler.stop();
 
-        bool finally_unlocked = !mutex.isLocked();
+        bool finally_unlocked = !mutex.is_locked();
 
         if (initially_unlocked && g_test6_locked_inside && finally_unlocked) {
             LogInfo("[PASS] isLocked: initial=unlocked, inside=locked, final=unlocked");
@@ -439,7 +439,7 @@ void runTests() {
         scheduler.start();
 
         for (int i = 0; i < TEST8_COROUTINE_COUNT; ++i) {
-            scheduler.schedule(detail::TaskAccess::detachTask(test_race_condition(&mutex)));
+            scheduler.schedule(detail::TaskAccess::detach_task(test_race_condition(&mutex)));
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -476,7 +476,7 @@ void runTests() {
         scheduler.start();
 
         for (int i = 0; i < 5; ++i) {
-            scheduler.schedule(detail::TaskAccess::detachTask(test_rapid_lock_unlock(&mutex)));
+            scheduler.schedule(detail::TaskAccess::detach_task(test_rapid_lock_unlock(&mutex)));
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -507,7 +507,7 @@ void runTests() {
         scheduler.start();
 
         for (int i = 0; i < TEST12_COROUTINE_COUNT; ++i) {
-            scheduler.schedule(detail::TaskAccess::detachTask(test_queue_capacity(&mutex)));
+            scheduler.schedule(detail::TaskAccess::detach_task(test_queue_capacity(&mutex)));
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -539,7 +539,7 @@ void runTests() {
 
         // 一些提前退出，一些正常完成
         for (int i = 0; i < 5; ++i) {
-            scheduler.schedule(detail::TaskAccess::detachTask(test_early_exit(&mutex, i % 2 == 0)));  // 偶数提前退出
+            scheduler.schedule(detail::TaskAccess::detach_task(test_early_exit(&mutex, i % 2 == 0)));  // 偶数提前退出
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -551,7 +551,7 @@ void runTests() {
         scheduler.stop();
 
         // 验证锁状态正常
-        bool lock_ok = !mutex.isLocked();
+        bool lock_ok = !mutex.is_locked();
 
         if (g_test13_completed == 2 && lock_ok) {
             LogInfo("[PASS] Early exit: completed={}, lock_released={}",
@@ -573,12 +573,12 @@ void runTests() {
 
         scheduler.start();
 
-        scheduler.schedule(detail::TaskAccess::detachTask(test_long_hold(&mutex)));
+        scheduler.schedule(detail::TaskAccess::detach_task(test_long_hold(&mutex)));
         // 已移除 sleep_for
 
         // 添加等待者
         for (int i = 0; i < 3; ++i) {
-            scheduler.schedule(detail::TaskAccess::detachTask(test_long_hold_waiter(&mutex)));
+            scheduler.schedule(detail::TaskAccess::detach_task(test_long_hold_waiter(&mutex)));
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -619,7 +619,7 @@ void runTests() {
         // 启动调度器并提交协程
         for (int i = 0; i < TEST19_SCHEDULER_COUNT; ++i) {
             schedulers[i]->start();
-            schedulers[i]->schedule(detail::TaskAccess::detachTask(test_cross_scheduler(&mutex)));
+            schedulers[i]->schedule(detail::TaskAccess::detach_task(test_cross_scheduler(&mutex)));
         }
 
         // 等待所有协程完成
@@ -662,16 +662,16 @@ void runTests() {
 
 int main() {
     galay::test::TestResultWriter resultWriter("test_async_mutex");
-    runTests();
+    run_tests();
 
     // 写入测试结果
-    resultWriter.addTest();
+    resultWriter.add_test();
     if (g_passed == g_total) {
-        resultWriter.addPassed();
+        resultWriter.add_passed();
     } else {
-        resultWriter.addFailed();
+        resultWriter.add_failed();
     }
-    resultWriter.writeResult();
+    resultWriter.write_result();
 
     return (g_passed == g_total) ? 0 : 1;
 }

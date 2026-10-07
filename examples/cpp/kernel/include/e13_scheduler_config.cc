@@ -36,7 +36,7 @@ using CustomScheduler = EpollSchedulerT<CustomConfig>;
 #error "An IO scheduler backend must be selected"
 #endif
 
-Task<void> demoTask(std::atomic<bool>* done) {
+Task<void> demo_task(std::atomic<bool>* done) {
     co_yield true;
     done->store(true, std::memory_order_release);
 }
@@ -55,7 +55,7 @@ int main() {
 
     // 同一后端的自定义配置也可以安全地通过 Scheduler* 提交任务。
     Scheduler* borrowed = &scheduler;
-    if (!scheduleTask(borrowed, demoTask(&done))) {
+    if (!schedule_task(borrowed, demo_task(&done))) {
         scheduler.stop();
         std::cerr << "failed to submit task\n";
         return 1;
@@ -75,13 +75,13 @@ int main() {
     }
 
 #if defined(USE_IOURING)
-    std::cout << "io_uring: queue_depth=" << CustomScheduler::queueDepth();
+    std::cout << "io_uring: queue_depth=" << CustomScheduler::queue_depth();
 #elif defined(USE_KQUEUE)
-    std::cout << "kqueue: max_events=" << CustomScheduler::maxEvents();
+    std::cout << "kqueue: max_events=" << CustomScheduler::max_events();
 #else
-    std::cout << "epoll: max_events=" << CustomScheduler::maxEvents();
+    std::cout << "epoll: max_events=" << CustomScheduler::max_events();
 #endif
-    std::cout << ", batch_size=" << CustomScheduler::batchSize()
+    std::cout << ", batch_size=" << CustomScheduler::batch_size()
               << "; task resumed successfully\n";
     return 0;
 }

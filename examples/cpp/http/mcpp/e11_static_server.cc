@@ -11,7 +11,7 @@ import galay.http;
 using namespace galay::http;
 using namespace galay::kernel;
 
-Task<void> indexHandler(HttpConn& conn, HttpRequest req) {
+Task<void> index_handler(HttpConn& conn, HttpRequest req) {
     (void)req;
     auto response = Http1_1ResponseBuilder::ok()
         .header("Server", "Galay-Static-Import/1.0")
@@ -22,8 +22,8 @@ Task<void> indexHandler(HttpConn& conn, HttpRequest req) {
             "</body></html>")
         .build();
 
-    auto writer = conn.getWriter();
-    (void)co_await writer.sendResponse(response);
+    auto writer = conn.get_writer();
+    (void)co_await writer.send_response(response);
     co_return;
 }
 
@@ -39,18 +39,18 @@ int main(int argc, char* argv[]) {
     }
 
     HttpRouter router;
-    router.addHandler<HttpMethod::GET>("/", indexHandler);
+    router.add_handler<HttpMethod::GET>("/", index_handler);
     router.mount("/static", static_dir);
 
     HttpServer server(HttpServerBuilder()
         .host("0.0.0.0")
         .port(port)
-        .ioSchedulerCount(2)
+        .io_scheduler_count(2)
         .build());
     std::cout << "Import static server: http://127.0.0.1:" << port << "/\n";
     server.start(std::move(router));
 
-    while (server.isRunning()) {
+    while (server.is_running()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 

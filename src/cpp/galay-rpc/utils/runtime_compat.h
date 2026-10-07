@@ -23,7 +23,7 @@ namespace galay::rpc
  * @param requested 用户请求的调度器数量，0表示自动检测
  * @return 实际使用的调度器数量，至少为1
  */
-inline size_t resolveIoSchedulerCount(size_t requested)
+inline size_t resolve_io_scheduler_count(size_t requested)
 {
     if (requested != 0) {
         return requested;

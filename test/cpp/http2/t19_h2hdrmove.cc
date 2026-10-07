@@ -20,7 +20,7 @@ bool check(bool condition, const char* message) {
     return true;
 }
 
-std::string largeString(char ch, size_t size) {
+std::string large_string(char ch, size_t size) {
     return std::string(size, ch);
 }
 
@@ -34,12 +34,12 @@ int main() {
         headers.emplace_back(":scheme", "https");
         headers.emplace_back(":authority", "127.0.0.1:9443");
         headers.emplace_back(":path", "/echo");
-        headers.emplace_back(largeString('n', 64), largeString('v', 128));
-        stream->setDecodedHeaders(std::move(headers));
+        headers.emplace_back(large_string('n', 64), large_string('v', 128));
+        stream->set_decoded_headers(std::move(headers));
 
-        const auto* name_ptr = stream->decodedHeaders().back().name.data();
-        const auto* value_ptr = stream->decodedHeaders().back().value.data();
-        stream->consumeDecodedHeadersAsRequest();
+        const auto* name_ptr = stream->decoded_headers().back().name.data();
+        const auto* value_ptr = stream->decoded_headers().back().value.data();
+        stream->consume_decoded_headers_as_request();
 
         if (!check(stream->request().headers.size() == 1, "request should keep one regular header")) {
             return 1;
@@ -58,12 +58,12 @@ int main() {
         auto stream = Http2Stream::create(3);
         std::vector<Http2HeaderField> headers;
         headers.emplace_back(":status", "200");
-        headers.emplace_back(largeString('x', 64), largeString('y', 128));
-        stream->setDecodedHeaders(std::move(headers));
+        headers.emplace_back(large_string('x', 64), large_string('y', 128));
+        stream->set_decoded_headers(std::move(headers));
 
-        const auto* name_ptr = stream->decodedHeaders().back().name.data();
-        const auto* value_ptr = stream->decodedHeaders().back().value.data();
-        stream->consumeDecodedHeadersAsResponse();
+        const auto* name_ptr = stream->decoded_headers().back().name.data();
+        const auto* value_ptr = stream->decoded_headers().back().value.data();
+        stream->consume_decoded_headers_as_response();
 
         if (!check(stream->response().headers.size() == 1, "response should keep one regular header")) {
             return 1;

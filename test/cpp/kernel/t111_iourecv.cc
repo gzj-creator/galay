@@ -45,7 +45,7 @@ std::atomic<uint32_t> g_error_sys{0};
 std::mutex g_error_mutex;
 std::string g_error_message;
 
-std::string makePayload() {
+std::string make_payload() {
     std::string payload;
     payload.resize(kPayloadSize);
     for (size_t i = 0; i < payload.size(); ++i) {
@@ -55,11 +55,11 @@ std::string makePayload() {
 }
 
 const std::string& payload() {
-    static const std::string kPayload = makePayload();
+    static const std::string kPayload = make_payload();
     return kPayload;
 }
 
-void recordFailure(const std::string& message, uint32_t sys = 0) {
+void record_failure(const std::string& message, uint32_t sys = 0) {
     {
         std::lock_guard<std::mutex> lock(g_error_mutex);
         g_error_message = message;
@@ -68,7 +68,7 @@ void recordFailure(const std::string& message, uint32_t sys = 0) {
     g_done.store(true, std::memory_order_release);
 }
 
-uint16_t boundPort(int fd) {
+uint16_t bound_port(int fd) {
     sockaddr_in addr{};
     socklen_t len = sizeof(addr);
     if (::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
@@ -77,7 +77,7 @@ uint16_t boundPort(int fd) {
     return ntohs(addr.sin_port);
 }
 
-bool sendAll(int fd, const char* data, size_t length) {
+bool send_all(int fd, const char* data, size_t length) {
     size_t sent = 0;
     while (sent < length) {
         const ssize_t n = ::send(fd, data + sent, length - sent, 0);
@@ -90,37 +90,37 @@ bool sendAll(int fd, const char* data, size_t length) {
 }
 
 #ifdef USE_IOURING
-Task<void> recvTwiceWithStaging() {
+Task<void> recv_twice_with_staging() {
     AsyncTcpSocket listener;
 
-    auto opt = listener.option().handleReuseAddr();
+    auto opt = listener.option().handle_reuse_addr();
     if (!opt) {
-        recordFailure("reuse addr failed: " + opt.error().message());
+        record_failure("reuse addr failed: " + opt.error().message());
         co_return;
     }
 
-    opt = listener.option().handleNonBlock();
+    opt = listener.option().handle_non_block();
     if (!opt) {
-        recordFailure("non-block failed: " + opt.error().message());
+        record_failure("non-block failed: " + opt.error().message());
         co_return;
     }
 
     Host bindHost(IPType::IPV4, "127.0.0.1", 0);
     auto bindResult = listener.bind(bindHost);
     if (!bindResult) {
-        recordFailure("bind failed: " + bindResult.error().message());
+        record_failure("bind failed: " + bindResult.error().message());
         co_return;
     }
 
     auto listenResult = listener.listen(16);
     if (!listenResult) {
-        recordFailure("listen failed: " + listenResult.error().message());
+        record_failure("listen failed: " + listenResult.error().message());
         co_return;
     }
 
-    const uint16_t port = boundPort(listener.handle().fd);
+    const uint16_t port = bound_port(listener.handle().fd);
     if (port == 0) {
-        recordFailure("getsockname returned port 0");
+        record_failure("getsockname returned port 0");
         co_await listener.close();
         co_return;
     }
@@ -132,13 +132,13 @@ Task<void> recvTwiceWithStaging() {
     auto acceptResult = co_await listener.accept(&clientHost);
     if (!acceptResult) {
         const uint32_t sys = static_cast<uint32_t>(acceptResult.error().code() >> 32);
-        recordFailure("accept failed: " + acceptResult.error().message(), sys);
+        record_failure("accept failed: " + acceptResult.error().message(), sys);
         co_await listener.close();
         co_return;
     }
 
     AsyncTcpSocket client(acceptResult.value());
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     const auto sent_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
     while (!g_client_sent.load(std::memory_order_acquire) &&
@@ -146,7 +146,7 @@ Task<void> recvTwiceWithStaging() {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     if (!g_client_sent.load(std::memory_order_acquire)) {
-        recordFailure("client did not finish sending before recv");
+        record_failure("client did not finish sending before recv");
         co_await client.close();
         co_await listener.close();
         co_return;
@@ -156,25 +156,25 @@ Task<void> recvTwiceWithStaging() {
     auto firstRecv = co_await client.recv(first, sizeof(first));
     if (!firstRecv) {
         const uint32_t sys = static_cast<uint32_t>(firstRecv.error().code() >> 32);
-        recordFailure("first recv failed: " + firstRecv.error().message(), sys);
+        record_failure("first recv failed: " + firstRecv.error().message(), sys);
         co_await client.close();
         co_await listener.close();
         co_return;
     }
     if (firstRecv.value() != sizeof(first)) {
-        recordFailure("first recv returned unexpected length: " + std::to_string(firstRecv.value()));
+        record_failure("first recv returned unexpected length: " + std::to_string(firstRecv.value()));
         co_await client.close();
         co_await listener.close();
         co_return;
     }
     if (std::memcmp(first, payload().data(), sizeof(first)) != 0) {
-        recordFailure("first recv payload mismatch");
+        record_failure("first recv payload mismatch");
         co_await client.close();
         co_await listener.close();
         co_return;
     }
     if (client.controller()->m_ready_recvs.empty()) {
-        recordFailure("expected staged ready recv data after partial consume");
+        record_failure("expected staged ready recv data after partial consume");
         co_await client.close();
         co_await listener.close();
         co_return;
@@ -184,13 +184,13 @@ Task<void> recvTwiceWithStaging() {
     auto secondRecv = co_await client.recv(second.data(), second.size());
     if (!secondRecv) {
         const uint32_t sys = static_cast<uint32_t>(secondRecv.error().code() >> 32);
-        recordFailure("second recv failed: " + secondRecv.error().message(), sys);
+        record_failure("second recv failed: " + secondRecv.error().message(), sys);
         co_await client.close();
         co_await listener.close();
         co_return;
     }
     if (secondRecv.value() != second.size()) {
-        recordFailure("second recv returned unexpected length: " + std::to_string(secondRecv.value()));
+        record_failure("second recv returned unexpected length: " + std::to_string(secondRecv.value()));
         co_await client.close();
         co_await listener.close();
         co_return;
@@ -198,7 +198,7 @@ Task<void> recvTwiceWithStaging() {
     if (std::memcmp(second.data(),
                     payload().data() + sizeof(first),
                     second.size()) != 0) {
-        recordFailure("second recv payload mismatch");
+        record_failure("second recv payload mismatch");
         co_await client.close();
         co_await listener.close();
         co_return;
@@ -207,19 +207,19 @@ Task<void> recvTwiceWithStaging() {
     auto eofRecv = co_await client.recv(&eof, 1);
     if (!eofRecv) {
         const uint32_t sys = static_cast<uint32_t>(eofRecv.error().code() >> 32);
-        recordFailure("eof recv failed: " + eofRecv.error().message(), sys);
+        record_failure("eof recv failed: " + eofRecv.error().message(), sys);
         co_await client.close();
         co_await listener.close();
         co_return;
     }
     if (eofRecv.value() != 0) {
-        recordFailure("expected EOF after staged payload drained");
+        record_failure("expected EOF after staged payload drained");
         co_await client.close();
         co_await listener.close();
         co_return;
     }
     if (!client.controller()->m_ready_recvs.empty()) {
-        recordFailure("ready recv queue should be empty after EOF is consumed");
+        record_failure("ready recv queue should be empty after EOF is consumed");
         co_await client.close();
         co_await listener.close();
         co_return;
@@ -243,7 +243,7 @@ int main() {
 
     IOUringScheduler scheduler;
     scheduler.start();
-    scheduleTask(scheduler, recvTwiceWithStaging());
+    schedule_task(scheduler, recv_twice_with_staging());
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!g_listener_ready.load(std::memory_order_acquire) &&
@@ -278,7 +278,7 @@ int main() {
         return 1;
     }
 
-    if (!sendAll(fd, payload().data(), payload().size())) {
+    if (!send_all(fd, payload().data(), payload().size())) {
         const int err = errno;
         ::close(fd);
         scheduler.stop();

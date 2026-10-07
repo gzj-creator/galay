@@ -42,21 +42,21 @@ std::atomic<uint16_t> g_port{0};
 std::mutex g_error_mutex;
 std::string g_error_message;
 
-std::string makePayload(char fill) {
+std::string make_payload(char fill) {
     return std::string(kChunkSize, fill);
 }
 
-const std::string& firstPayload() {
-    static const std::string kPayload = makePayload('a');
+const std::string& first_payload() {
+    static const std::string kPayload = make_payload('a');
     return kPayload;
 }
 
-const std::string& secondPayload() {
-    static const std::string kPayload = makePayload('z');
+const std::string& second_payload() {
+    static const std::string kPayload = make_payload('z');
     return kPayload;
 }
 
-void recordFailure(const std::string& message) {
+void record_failure(const std::string& message) {
     {
         std::lock_guard<std::mutex> lock(g_error_mutex);
         g_error_message = message;
@@ -64,7 +64,7 @@ void recordFailure(const std::string& message) {
     g_done.store(true, std::memory_order_release);
 }
 
-uint16_t boundPort(int fd) {
+uint16_t bound_port(int fd) {
     sockaddr_in addr{};
     socklen_t len = sizeof(addr);
     if (::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
@@ -74,36 +74,36 @@ uint16_t boundPort(int fd) {
 }
 
 #ifdef USE_IOURING
-Task<void> sendTwoChunks() {
+Task<void> send_two_chunks() {
     AsyncTcpSocket listener;
 
-    auto opt = listener.option().handleReuseAddr();
+    auto opt = listener.option().handle_reuse_addr();
     if (!opt) {
-        recordFailure("reuse addr failed: " + opt.error().message());
+        record_failure("reuse addr failed: " + opt.error().message());
         co_return;
     }
-    opt = listener.option().handleNonBlock();
+    opt = listener.option().handle_non_block();
     if (!opt) {
-        recordFailure("non-block failed: " + opt.error().message());
+        record_failure("non-block failed: " + opt.error().message());
         co_return;
     }
 
     Host bindHost(IPType::IPV4, "127.0.0.1", 0);
     auto bindResult = listener.bind(bindHost);
     if (!bindResult) {
-        recordFailure("bind failed: " + bindResult.error().message());
+        record_failure("bind failed: " + bindResult.error().message());
         co_return;
     }
 
     auto listenResult = listener.listen(16);
     if (!listenResult) {
-        recordFailure("listen failed: " + listenResult.error().message());
+        record_failure("listen failed: " + listenResult.error().message());
         co_return;
     }
 
-    const uint16_t port = boundPort(listener.handle().fd);
+    const uint16_t port = bound_port(listener.handle().fd);
     if (port == 0) {
-        recordFailure("getsockname returned port 0");
+        record_failure("getsockname returned port 0");
         co_await listener.close();
         co_return;
     }
@@ -114,25 +114,25 @@ Task<void> sendTwoChunks() {
     Host clientHost;
     auto acceptResult = co_await listener.accept(&clientHost);
     if (!acceptResult) {
-        recordFailure("accept failed: " + acceptResult.error().message());
+        record_failure("accept failed: " + acceptResult.error().message());
         co_await listener.close();
         co_return;
     }
 
     AsyncTcpSocket client(acceptResult.value());
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
-    auto first = co_await client.send(firstPayload().data(), firstPayload().size());
-    if (!first || first.value() != firstPayload().size()) {
-        recordFailure("first send failed or partial");
+    auto first = co_await client.send(first_payload().data(), first_payload().size());
+    if (!first || first.value() != first_payload().size()) {
+        record_failure("first send failed or partial");
         co_await client.close();
         co_await listener.close();
         co_return;
     }
 
-    auto second = co_await client.send(secondPayload().data(), secondPayload().size());
-    if (!second || second.value() != secondPayload().size()) {
-        recordFailure("second send failed or partial");
+    auto second = co_await client.send(second_payload().data(), second_payload().size());
+    if (!second || second.value() != second_payload().size()) {
+        record_failure("second send failed or partial");
         co_await client.close();
         co_await listener.close();
         co_return;
@@ -156,7 +156,7 @@ int main() {
 
     IOUringScheduler scheduler;
     scheduler.start();
-    scheduleTask(scheduler, sendTwoChunks());
+    schedule_task(scheduler, send_two_chunks());
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!g_listener_ready.load(std::memory_order_acquire) &&
@@ -190,7 +190,7 @@ int main() {
     }
 
     std::string received;
-    received.resize(firstPayload().size() + secondPayload().size());
+    received.resize(first_payload().size() + second_payload().size());
     size_t offset = 0;
     while (offset < received.size()) {
         const ssize_t n = ::recv(fd, received.data() + offset, received.size() - offset, 0);
@@ -231,13 +231,13 @@ int main() {
         LogError("received {} bytes, expected {}", offset, received.size());
         return 1;
     }
-    if (std::memcmp(received.data(), firstPayload().data(), firstPayload().size()) != 0) {
+    if (std::memcmp(received.data(), first_payload().data(), first_payload().size()) != 0) {
         LogError("first payload mismatch");
         return 1;
     }
-    if (std::memcmp(received.data() + firstPayload().size(),
-                    secondPayload().data(),
-                    secondPayload().size()) != 0) {
+    if (std::memcmp(received.data() + first_payload().size(),
+                    second_payload().data(),
+                    second_payload().size()) != 0) {
         LogError("second payload mismatch");
         return 1;
     }

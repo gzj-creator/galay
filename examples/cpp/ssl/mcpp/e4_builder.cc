@@ -35,7 +35,7 @@ namespace {
 constexpr uint16_t kPort = 19546;
 using ExampleResult = std::expected<std::string, SslError>;
 
-uint32_t readBigEndian32(const ByteQueueView& queue)
+uint32_t read_big_endian32(const ByteQueueView& queue)
 {
     auto header = queue.view(0, sizeof(uint32_t));
     return (static_cast<uint32_t>(static_cast<unsigned char>(header[0])) << 24) |
@@ -44,7 +44,7 @@ uint32_t readBigEndian32(const ByteQueueView& queue)
            static_cast<uint32_t>(static_cast<unsigned char>(header[3]));
 }
 
-std::array<char, 8> makeFrame()
+std::array<char, 8> make_frame()
 {
     std::array<char, 8> frame{};
     constexpr uint32_t kLength = 4;
@@ -57,28 +57,28 @@ std::array<char, 8> makeFrame()
 }
 
 struct BuilderFlow {
-    void onHandshake(SslBuilderOps<ExampleResult, 8>& ops, SslHandshakeContext& ctx)
+    void on_handshake(SslBuilderOps<ExampleResult, 8>& ops, SslHandshakeContext& ctx)
     {
         if (!ctx.m_result) {
             ops.complete(std::unexpected(ctx.m_result.error()));
         }
     }
 
-    void onRecv(SslBuilderOps<ExampleResult, 8>& ops, SslRecvContext& ctx)
+    void on_recv(SslBuilderOps<ExampleResult, 8>& ops, SslRecvContext& ctx)
     {
         if (!ctx.m_result) {
             ops.complete(std::unexpected(ctx.m_result.error()));
             return;
         }
-        inbox.append(ctx.m_result.value().toStringView());
+        inbox.append(ctx.m_result.value().to_string_view());
     }
 
-    ParseStatus onParse(SslBuilderOps<ExampleResult, 8>& ops)
+    ParseStatus on_parse(SslBuilderOps<ExampleResult, 8>& ops)
     {
         if (!inbox.has(sizeof(uint32_t))) {
             return ParseStatus::kNeedMore;
         }
-        const size_t payload_size = readBigEndian32(inbox);
+        const size_t payload_size = read_big_endian32(inbox);
         if (!inbox.has(sizeof(uint32_t) + payload_size)) {
             return ParseStatus::kNeedMore;
         }
@@ -94,7 +94,7 @@ struct BuilderFlow {
         return ParseStatus::kCompleted;
     }
 
-    void onSend(SslBuilderOps<ExampleResult, 8>& ops, SslSendContext& ctx)
+    void on_send(SslBuilderOps<ExampleResult, 8>& ops, SslSendContext& ctx)
     {
         if (!ctx.m_result) {
             ops.complete(std::unexpected(ctx.m_result.error()));
@@ -107,7 +107,7 @@ struct BuilderFlow {
         sent_reply = true;
     }
 
-    void onShutdown(SslBuilderOps<ExampleResult, 8>& ops, SslShutdownContext& ctx)
+    void on_shutdown(SslBuilderOps<ExampleResult, 8>& ops, SslShutdownContext& ctx)
     {
         if (!ctx.m_result) {
             ops.complete(std::unexpected(ctx.m_result.error()));
@@ -116,7 +116,7 @@ struct BuilderFlow {
         shutdown_ok = true;
     }
 
-    void onFinish(SslBuilderOps<ExampleResult, 8>& ops)
+    void on_finish(SslBuilderOps<ExampleResult, 8>& ops)
     {
         if (!parsed_ping || !sent_reply || !shutdown_ok) {
             ops.complete(std::unexpected(SslError(SslErrorCode::kUnknown)));
@@ -139,13 +139,13 @@ struct ExampleState {
     std::atomic<bool> ok{false};
 };
 
-Task<void> serverTask(SslContext* ctx, ExampleState* state)
+Task<void> server_task(SslContext* ctx, ExampleState* state)
 {
     SslSocket listener(ctx);
-    listener.option().handleReuseAddr();
-    listener.option().handleNonBlock();
+    listener.option().handle_reuse_addr();
+    listener.option().handle_non_block();
 
-    if (!listener.isValid() ||
+    if (!listener.is_valid() ||
         !listener.bind(Host(IPType::IPV4, "127.0.0.1", kPort)) ||
         !listener.listen(16)) {
         state->done.store(true, std::memory_order_relaxed);
@@ -163,7 +163,7 @@ Task<void> serverTask(SslContext* ctx, ExampleState* state)
     }
 
     SslSocket client(ctx, accept_result.value());
-    client.option().handleNonBlock();
+    client.option().handle_non_block();
 
     BuilderFlow flow;
     auto awaitable = SslAwaitableBuilder<ExampleResult, 8, BuilderFlow>(
@@ -171,12 +171,12 @@ Task<void> serverTask(SslContext* ctx, ExampleState* state)
         &client,
         flow
     )
-        .handshake<&BuilderFlow::onHandshake>()
-        .recv<&BuilderFlow::onRecv>(flow.scratch, sizeof(flow.scratch))
-        .parse<&BuilderFlow::onParse>()
-        .send<&BuilderFlow::onSend>(flow.reply.data(), flow.reply.size())
-        .shutdown<&BuilderFlow::onShutdown>()
-        .finish<&BuilderFlow::onFinish>()
+        .handshake<&BuilderFlow::on_handshake>()
+        .recv<&BuilderFlow::on_recv>(flow.scratch, sizeof(flow.scratch))
+        .parse<&BuilderFlow::on_parse>()
+        .send<&BuilderFlow::on_send>(flow.reply.data(), flow.reply.size())
+        .shutdown<&BuilderFlow::on_shutdown>()
+        .finish<&BuilderFlow::on_finish>()
         .build();
 
     auto result = co_await awaitable;
@@ -187,13 +187,13 @@ Task<void> serverTask(SslContext* ctx, ExampleState* state)
     state->done.store(true, std::memory_order_relaxed);
 }
 
-Task<void> clientTask(SslContext* ctx, ExampleState* state)
+Task<void> client_task(SslContext* ctx, ExampleState* state)
 {
     SslSocket socket(ctx);
-    socket.option().handleNonBlock();
-    socket.setHostname("localhost");
+    socket.option().handle_non_block();
+    socket.set_hostname("localhost");
 
-    if (!socket.isValid()) {
+    if (!socket.is_valid()) {
         co_return;
     }
 
@@ -209,7 +209,7 @@ Task<void> clientTask(SslContext* ctx, ExampleState* state)
         co_return;
     }
 
-    const auto frame = makeFrame();
+    const auto frame = make_frame();
     auto send_result = co_await socket.send(frame.data(), frame.size());
     if (!send_result) {
         co_await socket.close();
@@ -218,7 +218,7 @@ Task<void> clientTask(SslContext* ctx, ExampleState* state)
 
     char buffer[8];
     auto recv_result = co_await socket.recv(buffer, 4);
-    if (recv_result && recv_result.value().toStringView() == "pong") {
+    if (recv_result && recv_result.value().to_string_view() == "pong") {
         state->ok.store(true, std::memory_order_relaxed);
     }
 
@@ -226,7 +226,7 @@ Task<void> clientTask(SslContext* ctx, ExampleState* state)
     co_await socket.close();
 }
 
-void waitFor(const std::atomic<bool>& flag)
+void wait_for(const std::atomic<bool>& flag)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!flag.load(std::memory_order_relaxed)) {
@@ -243,25 +243,25 @@ int main()
 {
     SslContext server_ctx(SslMethod::TLS_Server);
     SslContext client_ctx(SslMethod::TLS_Client);
-    if (!server_ctx.isValid() || !client_ctx.isValid()) {
+    if (!server_ctx.is_valid() || !client_ctx.is_valid()) {
         return 1;
     }
 
-    if (!server_ctx.loadCertificate("certs/server.crt") ||
-        !server_ctx.loadPrivateKey("certs/server.key") ||
-        !client_ctx.loadCACertificate("certs/ca.crt")) {
+    if (!server_ctx.load_certificate("certs/server.crt") ||
+        !server_ctx.load_private_key("certs/server.key") ||
+        !client_ctx.load_ca_certificate("certs/ca.crt")) {
         return 1;
     }
-    client_ctx.setVerifyMode(SslVerifyMode::Peer);
+    client_ctx.set_verify_mode(SslVerifyMode::Peer);
 
     ExampleScheduler scheduler;
     scheduler.start();
 
     ExampleState state;
-    scheduleTask(scheduler, serverTask(&server_ctx, &state));
-    waitFor(state.server_ready);
-    scheduleTask(scheduler, clientTask(&client_ctx, &state));
-    waitFor(state.done);
+    schedule_task(scheduler, server_task(&server_ctx, &state));
+    wait_for(state.server_ready);
+    schedule_task(scheduler, client_task(&client_ctx, &state));
+    wait_for(state.done);
 
     scheduler.stop();
 

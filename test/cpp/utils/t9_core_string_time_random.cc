@@ -15,21 +15,21 @@ void test_string() {
 
     // Trim
     assert(StringUtils::trim("  hello  ") == "hello");
-    assert(StringUtils::trimLeft("  hello") == "hello");
-    assert(StringUtils::trimRight("hello  ") == "hello");
+    assert(StringUtils::trim_left("  hello") == "hello");
+    assert(StringUtils::trim_right("hello  ") == "hello");
 
     // Case conversion
-    assert(StringUtils::toLower("HELLO") == "hello");
-    assert(StringUtils::toUpper("hello") == "HELLO");
+    assert(StringUtils::to_lower("HELLO") == "hello");
+    assert(StringUtils::to_upper("hello") == "HELLO");
 
     // StartsWith/EndsWith
-    assert(StringUtils::startsWith("hello world", "hello"));
-    assert(StringUtils::endsWith("hello world", "world"));
+    assert(StringUtils::starts_with("hello world", "hello"));
+    assert(StringUtils::ends_with("hello world", "world"));
     assert(StringUtils::contains("hello world", "lo wo"));
 
     // Replace
     assert(StringUtils::replace("aaa", "a", "b") == "bbb");
-    assert(StringUtils::replaceFirst("aaa", "a", "b") == "baa");
+    assert(StringUtils::replace_first("aaa", "a", "b") == "baa");
 
     // Count
     assert(StringUtils::count("hello", 'l') == 2);
@@ -37,18 +37,18 @@ void test_string() {
 
     // Hex conversion
     uint8_t data[] = {0xDE, 0xAD, 0xBE, 0xEF};
-    assert(StringUtils::toHex(data, 4, true) == "DEADBEEF");
-    auto bytes = StringUtils::fromHex("DEADBEEF");
+    assert(StringUtils::to_hex(data, 4, true) == "DEADBEEF");
+    auto bytes = StringUtils::from_hex("DEADBEEF");
     assert(bytes.size() == 4 && bytes[0] == 0xDE);
 
     // Validation
-    assert(StringUtils::isInteger("123"));
-    assert(StringUtils::isInteger("-456"));
-    assert(!StringUtils::isInteger("12.3"));
-    assert(StringUtils::isFloat("3.14"));
-    assert(StringUtils::isFloat("1e10"));
-    assert(StringUtils::isBlank("   "));
-    assert(!StringUtils::isBlank("  a  "));
+    assert(StringUtils::is_integer("123"));
+    assert(StringUtils::is_integer("-456"));
+    assert(!StringUtils::is_integer("12.3"));
+    assert(StringUtils::is_float("3.14"));
+    assert(StringUtils::is_float("1e10"));
+    assert(StringUtils::is_blank("   "));
+    assert(!StringUtils::is_blank("  a  "));
 
     // Format
     assert(StringUtils::format("Hello %s, %d", "World", 42) == "Hello World, 42");
@@ -83,45 +83,45 @@ void test_string() {
     assert(repeatedStringDelimiter.size() == 3);
     assert(repeatedStringDelimiter[0].empty() && repeatedStringDelimiter[1].empty() && repeatedStringDelimiter[2].empty());
 
-    auto quoted = StringUtils::splitRespectQuotes("a,\"b,c\",d", ',');
+    auto quoted = StringUtils::split_respect_quotes("a,\"b,c\",d", ',');
     assert(quoted.size() == 3 && quoted[0] == "a" && quoted[1] == "\"b,c\"" && quoted[2] == "d");
 
-    auto mismatchedQuote = StringUtils::splitRespectQuotes("a,\"b,c", ',');
+    auto mismatchedQuote = StringUtils::split_respect_quotes("a,\"b,c", ',');
     assert(mismatchedQuote.size() == 2 && mismatchedQuote[0] == "a" && mismatchedQuote[1] == "\"b,c");
 
     // Edge cases for string operations
     assert(StringUtils::trim("").empty());
-    assert(StringUtils::toLower("").empty());
-    assert(StringUtils::toUpper("").empty());
+    assert(StringUtils::to_lower("").empty());
+    assert(StringUtils::to_upper("").empty());
     assert(StringUtils::replace("", "a", "b").empty());
-    assert(StringUtils::replaceFirst("", "a", "b").empty());
+    assert(StringUtils::replace_first("", "a", "b").empty());
     assert(StringUtils::count("", 'a') == 0);
 
     // Edge cases for hex conversion
-    assert(StringUtils::toHex(nullptr, 0).empty());
-    assert(StringUtils::toHex(nullptr, 1).empty());
-    assert(StringUtils::toVisibleHex(nullptr, 1).empty());
-    assert(StringUtils::fromHex("").empty());
-    assert(StringUtils::fromHex("invalid").empty());
-    assert(StringUtils::fromHex("0").empty());
-    assert(StringUtils::fromHex("DEADZEEF").empty());
-    auto mixedCaseHex = StringUtils::fromHex("deAd");
+    assert(StringUtils::to_hex(nullptr, 0).empty());
+    assert(StringUtils::to_hex(nullptr, 1).empty());
+    assert(StringUtils::to_visible_hex(nullptr, 1).empty());
+    assert(StringUtils::from_hex("").empty());
+    assert(StringUtils::from_hex("invalid").empty());
+    assert(StringUtils::from_hex("0").empty());
+    assert(StringUtils::from_hex("DEADZEEF").empty());
+    auto mixedCaseHex = StringUtils::from_hex("deAd");
     assert(mixedCaseHex.size() == 2 && mixedCaseHex[0] == 0xDE && mixedCaseHex[1] == 0xAD);
 
     // Edge cases for validation
-    assert(!StringUtils::isInteger(""));
-    assert(StringUtils::isInteger("+123"));
-    assert(!StringUtils::isInteger("+"));
-    assert(!StringUtils::isInteger("1e3"));
-    assert(!StringUtils::isFloat(""));
-    assert(StringUtils::isFloat(".5"));
-    assert(StringUtils::isFloat("1."));
-    assert(!StringUtils::isFloat("."));
-    assert(!StringUtils::isFloat("1e"));
-    assert(!StringUtils::isFloat("1e+"));
-    assert(StringUtils::isBlank(""));
-    assert(StringUtils::isBlank("   "));
-    assert(StringUtils::isBlank("\t\n"));
+    assert(!StringUtils::is_integer(""));
+    assert(StringUtils::is_integer("+123"));
+    assert(!StringUtils::is_integer("+"));
+    assert(!StringUtils::is_integer("1e3"));
+    assert(!StringUtils::is_float(""));
+    assert(StringUtils::is_float(".5"));
+    assert(StringUtils::is_float("1."));
+    assert(!StringUtils::is_float("."));
+    assert(!StringUtils::is_float("1e"));
+    assert(!StringUtils::is_float("1e+"));
+    assert(StringUtils::is_blank(""));
+    assert(StringUtils::is_blank("   "));
+    assert(StringUtils::is_blank("\t\n"));
 
     // Edge cases for formatting and parsing
     assert(StringUtils::format(nullptr).empty());
@@ -143,22 +143,22 @@ void test_random() {
 
     // Integer range
     for (int i = 0; i < 100; ++i) {
-        int val = rng.randomInt(10, 20);
+        int val = rng.random_int(10, 20);
         assert(val >= 10 && val <= 20);
     }
 
     // Double range
     for (int i = 0; i < 100; ++i) {
-        double val = rng.randomDouble(0.0, 1.0);
+        double val = rng.random_double(0.0, 1.0);
         assert(val >= 0.0 && val < 1.0);
     }
 
     // Random string
-    std::string str = rng.randomString(10);
+    std::string str = rng.random_string(10);
     assert(str.length() == 10);
 
     // Random hex
-    std::string hex = rng.randomHex(8);
+    std::string hex = rng.random_hex(8);
     assert(hex.length() == 8);
 
     // UUID
@@ -176,50 +176,50 @@ void test_random() {
 
     // Random bytes
     uint8_t buffer[16];
-    rng.randomBytes(buffer, 16);
+    rng.random_bytes(buffer, 16);
 
     // Edge cases
     // Same min/max should return min
-    assert(rng.randomInt(5, 5) == 5);
-    assert(rng.randomUint32(10, 10) == 10);
-    assert(rng.randomUint64(20, 20) == 20);
-    assert(rng.randomDouble(1.5, 1.5) == 1.5);
-    assert(rng.randomFloat(2.5f, 2.5f) == 2.5f);
+    assert(rng.random_int(5, 5) == 5);
+    assert(rng.random_uint32(10, 10) == 10);
+    assert(rng.random_uint64(20, 20) == 20);
+    assert(rng.random_double(1.5, 1.5) == 1.5);
+    assert(rng.random_float(2.5f, 2.5f) == 2.5f);
 
     // Empty/zero length strings
-    assert(rng.randomString(0).empty());
-    assert(rng.randomHex(0).empty());
-    rng.randomBytes(nullptr, 0); // Should not crash
-    rng.randomBytes(nullptr, 1); // Should not crash
+    assert(rng.random_string(0).empty());
+    assert(rng.random_hex(0).empty());
+    rng.random_bytes(nullptr, 0); // Should not crash
+    rng.random_bytes(nullptr, 1); // Should not crash
 
     // Empty charset
-    assert(rng.randomString(5, "").empty());
+    assert(rng.random_string(5, "").empty());
 
     // Invalid ranges and probability bounds
-    assert(rng.randomInt(8, 3) == 8);
-    assert(rng.randomUint32(8, 3) == 8);
-    assert(rng.randomUint64(8, 3) == 8);
-    assert(rng.randomDouble(8.0, 3.0) == 8.0);
-    assert(rng.randomFloat(8.0f, 3.0f) == 8.0f);
-    assert(!rng.randomBool(-0.5));
-    assert(rng.randomBool(1.5));
+    assert(rng.random_int(8, 3) == 8);
+    assert(rng.random_uint32(8, 3) == 8);
+    assert(rng.random_uint64(8, 3) == 8);
+    assert(rng.random_double(8.0, 3.0) == 8.0);
+    assert(rng.random_float(8.0f, 3.0f) == 8.0f);
+    assert(!rng.random_bool(-0.5));
+    assert(rng.random_bool(1.5));
 
     // Deterministic global seeding
     rng.seed(12345);
-    int firstInt = rng.randomInt(1, 1000000);
-    std::string firstHex = rng.randomHex(16);
+    int firstInt = rng.random_int(1, 1000000);
+    std::string firstHex = rng.random_hex(16);
     rng.seed(12345);
-    assert(firstInt == rng.randomInt(1, 1000000));
-    assert(firstHex == rng.randomHex(16));
+    assert(firstInt == rng.random_int(1, 1000000));
+    assert(firstHex == rng.random_hex(16));
     rng.reseed();
 
     // Local generator has no shared state and no internal mutex.
     RandomGenerator localA(20260606);
     RandomGenerator localB(20260606);
-    assert(localA.randomUint64(1, std::numeric_limits<uint64_t>::max()) ==
-           localB.randomUint64(1, std::numeric_limits<uint64_t>::max()));
-    assert(localA.randomString(12, "ab").size() == 12);
-    localA.randomBytes(nullptr, 4);
+    assert(localA.random_uint64(1, std::numeric_limits<uint64_t>::max()) ==
+           localB.random_uint64(1, std::numeric_limits<uint64_t>::max()));
+    assert(localA.random_string(12, "ab").size() == 12);
+    localA.random_bytes(nullptr, 4);
 
     std::cout << "Random tests passed!" << std::endl;
 }
@@ -229,36 +229,36 @@ void test_random() {
 void test_time_utilities() {
     std::cout << "=== Testing Time Utilities ===" << std::endl;
 
-    const int64_t ms = Time::currentTimeMs();
-    const int64_t us = Time::currentTimeUs();
-    const int64_t ns = Time::currentTimeNs();
+    const int64_t ms = Time::current_time_ms();
+    const int64_t us = Time::current_time_us();
+    const int64_t ns = Time::current_time_ns();
     assert(ms > 0);
     assert(us >= ms * 1000);
     assert(ns >= us * 1000);
 
-    std::string gmt = Time::currentGMTTime();
+    std::string gmt = Time::current_gmt_time();
     assert(!gmt.empty());
 
-    std::string local = Time::currentLocalTime();
+    std::string local = Time::current_local_time();
     assert(!local.empty());
-    assert(Time::formatTime(0, "%Y", true) == "1970");
-    assert(Time::formatTime(0, "%Y-%m-%d %H:%M:%S", true) == "1970-01-01 00:00:00");
-    assert(Time::formatTime(0, "", true).empty());
+    assert(Time::format_time(0, "%Y", true) == "1970");
+    assert(Time::format_time(0, "%Y-%m-%d %H:%M:%S", true) == "1970-01-01 00:00:00");
+    assert(Time::format_time(0, "", true).empty());
     const std::string oversizedFormat(300, 'Y');
-    assert(Time::formatTime(0, oversizedFormat.c_str(), true).empty());
-    assert(Time::formatTime(0, nullptr, true).empty());
-    assert(Time::currentGMTTime(nullptr).empty());
-    assert(Time::currentLocalTime(nullptr).empty());
+    assert(Time::format_time(0, oversizedFormat.c_str(), true).empty());
+    assert(Time::format_time(0, nullptr, true).empty());
+    assert(Time::current_gmt_time(nullptr).empty());
+    assert(Time::current_local_time(nullptr).empty());
     std::cout << "  Current time: " << local << std::endl;
 
     ManualClock::reset();
     StopWatch<ManualClock> watch;
     ManualClock::advance(ManualClock::duration{25});
     assert(watch.elapsed() == ManualClock::duration{25});
-    assert(watch.elapsedMs() == 25.0);
+    assert(watch.elapsed_ms() == 25.0);
 
     watch.reset();
-    assert(watch.startTime() == ManualClock::now());
+    assert(watch.start_time() == ManualClock::now());
     ManualClock::advance(ManualClock::duration{7});
     assert(watch.elapsed() == ManualClock::duration{7});
 
@@ -267,18 +267,18 @@ void test_time_utilities() {
     assert(explicitWatch.elapsed() == ManualClock::duration{7});
 
     ManualClock::reset();
-    auto deadline = Deadline<ManualClock>::fromNow(ManualClock::duration{10});
-    assert(deadline.timePoint() == ManualClock::now() + ManualClock::duration{10});
+    auto deadline = Deadline<ManualClock>::from_now(ManualClock::duration{10});
+    assert(deadline.deadline_time() == ManualClock::now() + ManualClock::duration{10});
     assert(!deadline.expired());
     assert(deadline.remaining() == ManualClock::duration{10});
     ManualClock::advance(ManualClock::duration{11});
     assert(deadline.expired());
     assert(deadline.remaining() == ManualClock::duration{0});
 
-    auto zeroDeadline = Deadline<ManualClock>::fromNow(ManualClock::duration{0});
+    auto zeroDeadline = Deadline<ManualClock>::from_now(ManualClock::duration{0});
     assert(zeroDeadline.expired());
 
-    auto negativeDeadline = Deadline<ManualClock>::fromNow(ManualClock::duration{-1});
+    auto negativeDeadline = Deadline<ManualClock>::from_now(ManualClock::duration{-1});
     assert(negativeDeadline.expired());
 
     using namespace std::chrono_literals;
@@ -331,18 +331,18 @@ void test_time_utilities() {
 void test_type_name() {
     std::cout << "=== Testing TypeName ===" << std::endl;
 
-    std::string intName = getTypeName<int>();
+    std::string intName = get_type_name<int>();
     assert(intName == "int");
-    assert(getTypeName(0) == intName);
+    assert(get_type_name(0) == intName);
 
-    std::string strName = getTypeName<std::string>();
+    std::string strName = get_type_name<std::string>();
     assert(strName.find("string") != std::string::npos);
 
     std::vector<int> vec;
-    std::string vecName = getTypeName(vec);
+    std::string vecName = get_type_name(vec);
     assert(vecName.find("vector") != std::string::npos);
-    assert(getTypeName<std::vector<int>>() == vecName);
-    assert(demangleSymbol(nullptr).empty());
+    assert(get_type_name<std::vector<int>>() == vecName);
+    assert(demangle_symbol(nullptr).empty());
 
     std::cout << "  int type name: " << intName << std::endl;
     std::cout << "  string type name: " << strName << std::endl;

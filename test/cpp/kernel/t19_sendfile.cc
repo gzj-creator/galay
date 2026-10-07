@@ -89,17 +89,17 @@ enum class WaitResult {
     kError,
 };
 
-unsigned char patternAt(size_t index)
+unsigned char pattern_at(size_t index)
 {
     return static_cast<unsigned char>((index * 131U + 17U) & 0xffU);
 }
 
-void reportFailure(std::string_view stage, std::string_view message)
+void report_failure(std::string_view stage, std::string_view message)
 {
     std::cerr << "[t19][" << stage << "] " << message << '\n';
 }
 
-bool writeAll(int fd, const unsigned char* data, size_t size)
+bool write_all(int fd, const unsigned char* data, size_t size)
 {
     size_t written = 0;
     while (written < size) {
@@ -116,7 +116,7 @@ bool writeAll(int fd, const unsigned char* data, size_t size)
     return true;
 }
 
-bool createTemporaryFile(TemporaryFile* file)
+bool create_temporary_file(TemporaryFile* file)
 {
     constexpr char kTemplate[] = "/tmp/galay-t19-sendfile-XXXXXX";
     static_assert(sizeof(kTemplate) <= std::tuple_size_v<decltype(file->path)>);
@@ -124,7 +124,7 @@ bool createTemporaryFile(TemporaryFile* file)
 
     file->fd.value = ::mkstemp(file->path.data());
     if (file->fd.value < 0) {
-        reportFailure("setup", "mkstemp failed");
+        report_failure("setup", "mkstemp failed");
         return false;
     }
 
@@ -132,10 +132,10 @@ bool createTemporaryFile(TemporaryFile* file)
     for (size_t offset = 0; offset < kFileSize;) {
         const size_t chunk_size = std::min(buffer.size(), kFileSize - offset);
         for (size_t index = 0; index < chunk_size; ++index) {
-            buffer[index] = patternAt(offset + index);
+            buffer[index] = pattern_at(offset + index);
         }
-        if (!writeAll(file->fd.value, buffer.data(), chunk_size)) {
-            reportFailure("setup", "temporary file write failed");
+        if (!write_all(file->fd.value, buffer.data(), chunk_size)) {
+            report_failure("setup", "temporary file write failed");
             return false;
         }
         offset += chunk_size;
@@ -143,24 +143,24 @@ bool createTemporaryFile(TemporaryFile* file)
     return true;
 }
 
-bool setNonBlocking(int fd)
+bool set_non_blocking(int fd)
 {
     const int flags = ::fcntl(fd, F_GETFL, 0);
     return flags >= 0 && ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-bool createListener(ScopedFd* listener, uint16_t* port)
+bool create_listener(ScopedFd* listener, uint16_t* port)
 {
     listener->value = ::socket(AF_INET, SOCK_STREAM, 0);
     if (listener->value < 0) {
-        reportFailure("setup", "socket failed");
+        report_failure("setup", "socket failed");
         return false;
     }
 
     int reuse = 1;
     if (::setsockopt(listener->value, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) != 0 ||
-        !setNonBlocking(listener->value)) {
-        reportFailure("setup", "listener option setup failed");
+        !set_non_blocking(listener->value)) {
+        report_failure("setup", "listener option setup failed");
         return false;
     }
 
@@ -170,14 +170,14 @@ bool createListener(ScopedFd* listener, uint16_t* port)
     address.sin_port = 0;
     if (::bind(listener->value, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0 ||
         ::listen(listener->value, 1) != 0) {
-        reportFailure("setup", "listener bind or listen failed");
+        report_failure("setup", "listener bind or listen failed");
         return false;
     }
 
     socklen_t address_size = sizeof(address);
     if (::getsockname(listener->value, reinterpret_cast<sockaddr*>(&address), &address_size) != 0 ||
         address.sin_family != AF_INET || address.sin_port == 0) {
-        reportFailure("setup", "getsockname failed");
+        report_failure("setup", "getsockname failed");
         return false;
     }
 
@@ -185,7 +185,7 @@ bool createListener(ScopedFd* listener, uint16_t* port)
     return true;
 }
 
-WaitResult waitForInput(int fd, std::chrono::steady_clock::time_point deadline)
+WaitResult wait_for_input(int fd, std::chrono::steady_clock::time_point deadline)
 {
     while (true) {
         const auto now = std::chrono::steady_clock::now();
@@ -209,17 +209,17 @@ WaitResult waitForInput(int fd, std::chrono::steady_clock::time_point deadline)
     }
 }
 
-int acceptWithinDeadline(int listener, std::chrono::steady_clock::time_point deadline)
+int accept_within_deadline(int listener, std::chrono::steady_clock::time_point deadline)
 {
     while (true) {
-        const WaitResult wait_result = waitForInput(listener, deadline);
+        const WaitResult wait_result = wait_for_input(listener, deadline);
         if (wait_result != WaitResult::kReady) {
             return -1;
         }
 
         const int peer = ::accept(listener, nullptr, nullptr);
         if (peer >= 0) {
-            if (!setNonBlocking(peer)) {
+            if (!set_non_blocking(peer)) {
                 (void)::close(peer);
                 return -1;
             }
@@ -231,12 +231,12 @@ int acceptWithinDeadline(int listener, std::chrono::steady_clock::time_point dea
     }
 }
 
-void receiveFile(int listener, TestState* state)
+void receive_file(int listener, TestState* state)
 {
     const auto deadline = std::chrono::steady_clock::now() + kOperationTimeout;
-    const int peer = acceptWithinDeadline(listener, deadline);
+    const int peer = accept_within_deadline(listener, deadline);
     if (peer < 0) {
-        reportFailure("server", "accept timed out or failed");
+        report_failure("server", "accept timed out or failed");
         state->server_done.store(true, std::memory_order_release);
         return;
     }
@@ -246,8 +246,8 @@ void receiveFile(int listener, TestState* state)
     std::array<unsigned char, 8192> buffer{};
     bool ok = true;
     while (state->received.size() < kFileSize) {
-        if (waitForInput(peer, deadline) != WaitResult::kReady) {
-            reportFailure("server", "receive timed out or failed");
+        if (wait_for_input(peer, deadline) != WaitResult::kReady) {
+            report_failure("server", "receive timed out or failed");
             ok = false;
             break;
         }
@@ -257,7 +257,7 @@ void receiveFile(int listener, TestState* state)
             state->received.insert(state->received.end(), buffer.begin(),
                                    buffer.begin() + static_cast<std::ptrdiff_t>(result));
             if (state->received.size() > kFileSize) {
-                reportFailure("server", "received more bytes than expected");
+                report_failure("server", "received more bytes than expected");
                 ok = false;
                 break;
             }
@@ -266,7 +266,7 @@ void receiveFile(int listener, TestState* state)
         if (result < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
             continue;
         }
-        reportFailure("server", "peer closed or receive failed before the transfer completed");
+        report_failure("server", "peer closed or receive failed before the transfer completed");
         ok = false;
         break;
     }
@@ -276,19 +276,19 @@ void receiveFile(int listener, TestState* state)
     state->server_done.store(true, std::memory_order_release);
 }
 
-Task<void> sendFile(TestState* state, int file_fd, uint16_t port)
+Task<void> send_file(TestState* state, int file_fd, uint16_t port)
 {
     AsyncTcpSocket socket(IPType::IPV4);
-    const auto non_blocking = socket.option().handleNonBlock();
+    const auto non_blocking = socket.option().handle_non_block();
     if (!non_blocking) {
-        reportFailure("client", "failed to enable nonblocking mode");
+        report_failure("client", "failed to enable nonblocking mode");
         state->client_done.store(true, std::memory_order_release);
         co_return;
     }
 
     const auto connected = co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", port)).timeout(kOperationTimeout);
     if (!connected) {
-        reportFailure("client", "connect failed");
+        report_failure("client", "connect failed");
         state->client_done.store(true, std::memory_order_release);
         co_return;
     }
@@ -300,7 +300,7 @@ Task<void> sendFile(TestState* state, int file_fd, uint16_t port)
             static_cast<off_t>(transferred),
             kFileSize - transferred).timeout(kOperationTimeout);
         if (!sent || sent.value() == 0) {
-            reportFailure("client", "sendfile failed or made no progress");
+            report_failure("client", "sendfile failed or made no progress");
             state->client_done.store(true, std::memory_order_release);
             co_return;
         }
@@ -309,7 +309,7 @@ Task<void> sendFile(TestState* state, int file_fd, uint16_t port)
 
     const auto closed = co_await socket.close().timeout(kOperationTimeout);
     if (!closed) {
-        reportFailure("client", "close failed");
+        report_failure("client", "close failed");
         state->client_done.store(true, std::memory_order_release);
         co_return;
     }
@@ -319,7 +319,7 @@ Task<void> sendFile(TestState* state, int file_fd, uint16_t port)
     state->client_done.store(true, std::memory_order_release);
 }
 
-bool waitForClient(const TestState& state)
+bool wait_for_client(const TestState& state)
 {
     const auto deadline = std::chrono::steady_clock::now() + kOverallTimeout;
     while (!state.client_done.load(std::memory_order_acquire)) {
@@ -331,13 +331,13 @@ bool waitForClient(const TestState& state)
     return true;
 }
 
-bool verifyPattern(const std::vector<unsigned char>& received)
+bool verify_pattern(const std::vector<unsigned char>& received)
 {
     if (received.size() != kFileSize) {
         return false;
     }
     for (size_t index = 0; index < received.size(); ++index) {
-        if (received[index] != patternAt(index)) {
+        if (received[index] != pattern_at(index)) {
             return false;
         }
     }
@@ -349,13 +349,13 @@ bool verifyPattern(const std::vector<unsigned char>& received)
 int main()
 {
     TemporaryFile file;
-    if (!createTemporaryFile(&file)) {
+    if (!create_temporary_file(&file)) {
         return 1;
     }
 
     ScopedFd listener;
     uint16_t port = 0;
-    if (!createListener(&listener, &port)) {
+    if (!create_listener(&listener, &port)) {
         return 1;
     }
 
@@ -367,15 +367,15 @@ int main()
     }
 
     TestState state;
-    std::thread server(receiveFile, listener.value, &state);
-    if (!scheduleTask(scheduler, sendFile(&state, file.fd.value, port))) {
+    std::thread server(receive_file, listener.value, &state);
+    if (!schedule_task(scheduler, send_file(&state, file.fd.value, port))) {
         std::cerr << "[t19] schedule sendfile task failed\n";
         scheduler.stop();
         server.join();
         return 1;
     }
 
-    const bool client_finished = waitForClient(state);
+    const bool client_finished = wait_for_client(state);
     scheduler.stop();
     server.join();
 
@@ -387,7 +387,7 @@ int main()
         !state.server_done.load(std::memory_order_acquire) ||
         !state.server_ok.load(std::memory_order_acquire) ||
         state.sent_bytes.load(std::memory_order_acquire) != kFileSize ||
-        !verifyPattern(state.received)) {
+        !verify_pattern(state.received)) {
         std::cerr << "[t19] sendfile loopback verification failed [sent="
                   << state.sent_bytes.load(std::memory_order_acquire)
                   << ", received=" << state.received.size() << "]\n";
