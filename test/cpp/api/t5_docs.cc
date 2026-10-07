@@ -164,7 +164,7 @@ void missing_resources()
     const DocsConfig config;
     auto missing = install_docs_from_directory(api, config,
                                                "/definitely-missing/galay-swagger-ui");
-    require(!missing && missing.error().code == ApiErrorCode::resource_error,
+    require(!missing && missing.error().code == ApiErrorCode::kResourceError,
             "missing explicit directory must fail, not fall back to embedded resources");
     require_uninstalled(api, config);
 
@@ -173,7 +173,7 @@ void missing_resources()
         auto candidate = prepared();
         assets.remove(name);
         auto result = install_docs_from_directory(candidate, config, assets.path.string());
-        require(!result && result.error().code == ApiErrorCode::resource_error,
+        require(!result && result.error().code == ApiErrorCode::kResourceError,
                 "every required asset must be loaded before registration");
         require(result.error().message.find(name) != std::string::npos,
                 "missing asset error must identify the file");
@@ -189,7 +189,7 @@ void missing_resources()
         assets.write(name, "");
         auto empty_api = prepared();
         auto empty = install_docs_from_directory(empty_api, config, assets.path.string());
-        require(!empty && empty.error().code == ApiErrorCode::resource_error,
+        require(!empty && empty.error().code == ApiErrorCode::kResourceError,
                 "every empty explicit asset must fail without fallback");
         require_uninstalled(empty_api, config);
         assets.remove(name);
@@ -198,7 +198,7 @@ void missing_resources()
         require(created && !error, "cannot create directory in place of an asset");
         auto directory_api = prepared();
         auto directory = install_docs_from_directory(directory_api, config, assets.path.string());
-        require(!directory && directory.error().code == ApiErrorCode::resource_error,
+        require(!directory && directory.error().code == ApiErrorCode::kResourceError,
                 "every non-regular explicit asset must fail without fallback");
         require_uninstalled(directory_api, config);
     }
@@ -206,7 +206,7 @@ void missing_resources()
     for (const auto directory : {std::string{}, std::string("/assets\0hidden", 14)}) {
         auto candidate = prepared();
         auto result = install_docs_from_directory(candidate, config, directory);
-        require(!result && result.error().code == ApiErrorCode::resource_error,
+        require(!result && result.error().code == ApiErrorCode::kResourceError,
                 "empty or NUL-containing asset directory must fail explicitly");
         require_uninstalled(candidate, config);
     }
@@ -226,7 +226,7 @@ void invalid_paths_and_document()
             DocsConfig config;
             (spec ? config.spec_path : config.ui_path) = path;
             auto result = install_docs(api, config);
-            require(!result && result.error().code == ApiErrorCode::invalid_path,
+            require(!result && result.error().code == ApiErrorCode::kInvalidPath,
                     "unsafe or unrouteable docs path must fail explicitly");
             require(!api.docs_installed, "invalid path must not install docs");
             require(api.router.findHandler(HttpMethod::GET, "/openapi.json").handler == nullptr,
@@ -238,7 +238,7 @@ void invalid_paths_and_document()
         auto api = prepared();
         DocsConfig config{.ui_path = path};
         auto result = install_docs(api, config);
-        require(!result && result.error().code == ApiErrorCode::invalid_path,
+        require(!result && result.error().code == ApiErrorCode::kInvalidPath,
                 "NUL, invalid UTF-8, oversized and noncanonical paths must fail");
     }
     for (const bool null_document : {true, false}) {
@@ -254,7 +254,7 @@ void invalid_paths_and_document()
     auto long_api = prepared();
     const DocsConfig long_config{.ui_path = "/" + std::string(2030, 'a')};
     auto long_path = install_docs(long_api, long_config);
-    require(!long_path && long_path.error().code == ApiErrorCode::invalid_path,
+    require(!long_path && long_path.error().code == ApiErrorCode::kInvalidPath,
             "generated asset path length must be checked, not just the UI base");
     require_uninstalled(long_api, long_config);
 }
@@ -266,7 +266,7 @@ void preflight_conflicts(const DocsConfig& config)
         api.router.addHandler<HttpMethod::GET>(path, sentinel);
         const auto* original = api.router.findHandler(HttpMethod::GET, path).handler;
         auto result = install_docs(api, config);
-        require(!result && result.error().code == ApiErrorCode::route_conflict,
+        require(!result && result.error().code == ApiErrorCode::kRouteConflict,
                 "every existing router path must be preflighted");
         require(api.router.findHandler(HttpMethod::GET, path).handler == original,
                 "conflicting route must not be replaced");
@@ -279,7 +279,7 @@ void preflight_conflicts(const DocsConfig& config)
         const auto old_size = api.router.size();
         const auto* spec_handler = api.router.findHandler(HttpMethod::GET, config.spec_path).handler;
         auto result = install_docs(api, config);
-        require(!result && result.error().code == ApiErrorCode::route_conflict,
+        require(!result && result.error().code == ApiErrorCode::kRouteConflict,
                 "parameter and wildcard router conflicts must fail");
         require(!api.docs_installed, "fuzzy conflict must not install docs");
         require(api.router.size() == old_size &&
@@ -290,21 +290,21 @@ void preflight_conflicts(const DocsConfig& config)
         auto api = prepared();
         api.endpoints.push_back(EndpointSpec{.method = HttpMethod::POST, .path = path});
         auto result = install_docs(api, config);
-        require(!result && result.error().code == ApiErrorCode::route_conflict,
+        require(!result && result.error().code == ApiErrorCode::kRouteConflict,
                 "endpoint metadata must reserve docs paths even without a router handler");
         require_uninstalled(api, config);
     }
     auto dynamic = prepared();
     dynamic.endpoints.push_back(EndpointSpec{.path = child(config.ui_path, ":asset")});
     auto dynamic_result = install_docs(dynamic, config);
-    require(!dynamic_result && dynamic_result.error().code == ApiErrorCode::route_conflict,
+    require(!dynamic_result && dynamic_result.error().code == ApiErrorCode::kRouteConflict,
             "parameterized endpoint metadata must be checked");
     require_uninstalled(dynamic, config);
 
     auto post_router = prepared();
     post_router.router.addHandler<HttpMethod::POST>(child(config.ui_path, "SHA256SUMS"), sentinel);
     auto post_conflict = install_docs(post_router, config);
-    require(!post_conflict && post_conflict.error().code == ApiErrorCode::route_conflict,
+    require(!post_conflict && post_conflict.error().code == ApiErrorCode::kRouteConflict,
             "docs paths must be checked against existing router methods, not only GET");
     require_uninstalled(post_router, config);
 
@@ -325,7 +325,7 @@ void preflight_conflicts(const DocsConfig& config)
     api.router.addHandler<HttpMethod::GET>(reserved, sentinel);
     assets.remove(asset_names.front());
     auto failure = install_docs_from_directory(api, config, assets.path.string());
-    require(!failure && failure.error().code == ApiErrorCode::resource_error,
+    require(!failure && failure.error().code == ApiErrorCode::kResourceError,
             "load all resources before checking late conflicts");
     require_uninstalled(api, config, reserved);
 }
@@ -444,7 +444,7 @@ void loopback_and_lifetime(const DocsConfig& config, bool from_directory)
         auto repeated_config = config;
         repeated_config.ui_path = "/second-docs";
         auto repeated = install_docs(api, repeated_config);
-        require(!repeated && repeated.error().code == ApiErrorCode::route_conflict,
+        require(!repeated && repeated.error().code == ApiErrorCode::kRouteConflict,
                 "install_docs must reject a second installation even at different paths");
         require(api.router.findHandler(HttpMethod::GET, "/second-docs").handler == nullptr,
                 "second install must not mutate router");

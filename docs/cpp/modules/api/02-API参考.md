@@ -27,6 +27,12 @@
 | `ApiDocsPolicy` | 约束对象类型、可移动性和精确的 install 返回类型 |
 | `ApiServer<Policy = NoSwagger>` | 启动前安装策略，随后持有 HTTP/1 server |
 
+`ApiErrorCode` 枚举类型使用 `PascalCase`，枚举项使用 `k` 前缀加
+`PascalCase`，例如 `ApiErrorCode::kBusinessError`、`ApiErrorCode::kBadRequest`；
+函数仍使用 `snake_case`。`api_error_name(code)`
+明确映射到稳定的 `business_error`、`bad_request` 等字符串，JSON 响应和
+日志中的错误码名称不随 C++ 枚举项改名。
+
 ## Builder 和生命周期
 
 ```cpp
@@ -138,8 +144,8 @@ Runtime；`start` 先验证 `PreparedApi` 并执行自持策略的 `install`，�
   不留下半注册状态；是否可重试取决于该策略自己的保证。
 - 单次初始化阶段：策略安装成功后，实例创建底层 server 并调用底层启动；
   从此实例只能使用一次，包括监听失败、运行中或 `stop` 之后。即使监听
-  失败，后续 `start` 也返回 `server_error`；`stop` 不支持 restart。
-- 底层失败：首次底层启动失败返回 `transport_error`，此时 router 已消费，
+  失败，后续 `start` 也返回 `ApiErrorCode::kServerError`；`stop` 不支持 restart。
+- 底层失败：首次底层启动失败返回 `ApiErrorCode::kTransportError`，此时 router 已消费，
   不能重用原 `PreparedApi`。重启必须重新 build API 并创建新 server。
 - `document()`：构造后或预检/安装失败时为空，策略安装成功后、底层启动前
   就保存同一份不可变共享文档；底层监听失败或 `stop()` 后仍可读取。调用方
@@ -201,7 +207,7 @@ SHA256SUMS
 
 其中 `README.md` 保留版本和来源，`SHA256SUMS` 记录上游文件的校验信息；
 文件安装器不替自定义资源执行构建期的官方哈希校验。缺文件、空文件、
-非普通文件、超限或读取/关闭失败返回 `resource_error`，保留具体原因。
+非普通文件、超限或读取/关闭失败返回 `ApiErrorCode::kResourceError`，保留具体原因。
 任何缺项都不从内嵌资源或 CDN 补齐；完整自定义策略示例见使用指南。
 
 两种安装器均在启动服务前调用一次。全部必要资产和初始化配置先准备 / 序列化，

@@ -38,7 +38,7 @@ kernel::Task<void> execute_route(std::shared_ptr<RouteState<Input, Handler>> sta
         ApiContext context{request};
         auto task_result = co_await std::invoke(state->handler, context, std::move(*input));
         if (!task_result) {
-            failure = ApiError{ApiErrorCode::task_error, std::string(task_result.error().message()), 500};
+            failure = ApiError{ApiErrorCode::kTaskError, std::string(task_result.error().message()), 500};
             HTTP_LOG_ERROR("[api] [handler-task-fail]", "operation={} error={}", state->operation.id, failure->message);
         } else if (!*task_result) {
             failure = std::move(task_result->error());
@@ -51,12 +51,12 @@ kernel::Task<void> execute_route(std::shared_ptr<RouteState<Input, Handler>> sta
             }
         } else if constexpr (!std::same_as<Output, NoContent>) {
             if (auto checked = validate_contract(**task_result); !checked) {
-                failure = ApiError{ApiErrorCode::encoding_error, std::move(checked.error().message), 500};
+                failure = ApiError{ApiErrorCode::kEncodingError, std::move(checked.error().message), 500};
                 HTTP_LOG_ERROR("[api] [contract-fail]", "operation={} error={}", state->operation.id, failure->message);
             } else if (!head) {
                 auto encoded = json::serialize(**task_result);
                 if (!encoded) {
-                    failure = ApiError{ApiErrorCode::encoding_error, std::move(encoded.error()), 500};
+                    failure = ApiError{ApiErrorCode::kEncodingError, std::move(encoded.error()), 500};
                     HTTP_LOG_ERROR("[api] [encode-fail]", "operation={} error={}", state->operation.id, failure->message);
                 } else {
                     body = std::move(*encoded);
@@ -73,7 +73,7 @@ kernel::Task<void> execute_route(std::shared_ptr<RouteState<Input, Handler>> sta
                 HTTP_LOG_ERROR("[api] [error-encode-fail]", "operation={} error={}",
                               state->operation.id, encoded.error().message);
                 status = 500;
-                encoded = encode_error(ApiError{ApiErrorCode::encoding_error, "API error response could not be encoded", 500});
+                encoded = encode_error(ApiError{ApiErrorCode::kEncodingError, "API error response could not be encoded", 500});
                 if (!encoded) {
                     HTTP_LOG_ERROR("[api] [error-encode-fail]", "operation={} error={}",
                                   state->operation.id, encoded.error().message);
@@ -109,16 +109,16 @@ kernel::Task<void> execute_route(std::shared_ptr<RouteState<Input, Handler>> sta
 template<http::HttpMethod Method, class Input, class Output, class Handler>
 ApiResult<void> ApiBuilder::add(std::string path, Handler handler, Operation operation,
                                 InputBinding<Input> binding) {
-    if (built_) return std::unexpected(ApiError{ApiErrorCode::frozen_builder, "API builder has already been built", 500});
+    if (built_) return std::unexpected(ApiError{ApiErrorCode::kFrozenBuilder, "API builder has already been built", 500});
     if constexpr (!std::is_invocable_r_v<kernel::Task<ApiResult<Output>>, Handler&, ApiContext&, Input>) {
-        return std::unexpected(ApiError{ApiErrorCode::invalid_binding, "handler must return Task<ApiResult<Output>>", 500});
+        return std::unexpected(ApiError{ApiErrorCode::kInvalidBinding, "handler must return Task<ApiResult<Output>>", 500});
     } else {
         auto plan = binding.prepare(Method, path);
         if (!plan) return std::unexpected(std::move(plan.error()));
         EndpointSpec endpoint{Method, path, operation, plan->parameters, plan->body_schema, plan->body_required, {}};
         if constexpr (!std::same_as<Output, NoContent>) {
             if (operation.success_status == 204 || operation.success_status == 205) {
-                return std::unexpected(ApiError{ApiErrorCode::invalid_metadata, "204/205 responses require NoContent output", 500});
+                return std::unexpected(ApiError{ApiErrorCode::kInvalidMetadata, "204/205 responses require NoContent output", 500});
             }
             auto response = schema_for<Output>(SchemaUse::output);
             if (!response) return std::unexpected(std::move(response.error()));

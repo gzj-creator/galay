@@ -24,11 +24,11 @@ public:
     ApiResult<void> start(PreparedApi&& prepared)
     {
         if (server_) {
-            return std::unexpected(ApiError{ApiErrorCode::server_error,
+            return std::unexpected(ApiError{ApiErrorCode::kServerError,
                 "API server has already attempted to start", 409});
         }
         if (!prepared.document || prepared.document->empty()) {
-            return std::unexpected(ApiError{ApiErrorCode::resource_error,
+            return std::unexpected(ApiError{ApiErrorCode::kResourceError,
                 "PreparedApi must own a nonempty OpenAPI document", 500});
         }
 
@@ -40,7 +40,7 @@ public:
         server_->start(std::move(prepared.router));
         if (!server_->isRunning()) {
             server_->stop();
-            return std::unexpected(ApiError{ApiErrorCode::transport_error,
+            return std::unexpected(ApiError{ApiErrorCode::kTransportError,
                 "HTTP/1 server failed to start on " + config_.host + ":" + std::to_string(config_.port), 500});
         }
         return {};

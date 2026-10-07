@@ -8,48 +8,48 @@
 namespace galay::api {
 
 enum class ApiErrorCode {
-    invalid_schema,
-    unsupported_type,
-    invalid_metadata,
-    invalid_path,
-    route_conflict,
-    duplicate_operation,
-    invalid_binding,
-    frozen_builder,
-    bad_request,
-    unsupported_media_type,
-    business_error,
-    task_error,
-    encoding_error,
-    transport_error,
-    resource_error,
-    server_error
+    kInvalidSchema,
+    kUnsupportedType,
+    kInvalidMetadata,
+    kInvalidPath,
+    kRouteConflict,
+    kDuplicateOperation,
+    kInvalidBinding,
+    kFrozenBuilder,
+    kBadRequest,
+    kUnsupportedMediaType,
+    kBusinessError,
+    kTaskError,
+    kEncodingError,
+    kTransportError,
+    kResourceError,
+    kServerError
 };
 
 constexpr std::string_view api_error_name(ApiErrorCode code) noexcept {
     switch (code) {
-    case ApiErrorCode::invalid_schema: return "invalid_schema";
-    case ApiErrorCode::unsupported_type: return "unsupported_type";
-    case ApiErrorCode::invalid_metadata: return "invalid_metadata";
-    case ApiErrorCode::invalid_path: return "invalid_path";
-    case ApiErrorCode::route_conflict: return "route_conflict";
-    case ApiErrorCode::duplicate_operation: return "duplicate_operation";
-    case ApiErrorCode::invalid_binding: return "invalid_binding";
-    case ApiErrorCode::frozen_builder: return "frozen_builder";
-    case ApiErrorCode::bad_request: return "bad_request";
-    case ApiErrorCode::unsupported_media_type: return "unsupported_media_type";
-    case ApiErrorCode::business_error: return "business_error";
-    case ApiErrorCode::task_error: return "task_error";
-    case ApiErrorCode::encoding_error: return "encoding_error";
-    case ApiErrorCode::transport_error: return "transport_error";
-    case ApiErrorCode::resource_error: return "resource_error";
-    case ApiErrorCode::server_error: return "server_error";
+    case ApiErrorCode::kInvalidSchema: return "invalid_schema";
+    case ApiErrorCode::kUnsupportedType: return "unsupported_type";
+    case ApiErrorCode::kInvalidMetadata: return "invalid_metadata";
+    case ApiErrorCode::kInvalidPath: return "invalid_path";
+    case ApiErrorCode::kRouteConflict: return "route_conflict";
+    case ApiErrorCode::kDuplicateOperation: return "duplicate_operation";
+    case ApiErrorCode::kInvalidBinding: return "invalid_binding";
+    case ApiErrorCode::kFrozenBuilder: return "frozen_builder";
+    case ApiErrorCode::kBadRequest: return "bad_request";
+    case ApiErrorCode::kUnsupportedMediaType: return "unsupported_media_type";
+    case ApiErrorCode::kBusinessError: return "business_error";
+    case ApiErrorCode::kTaskError: return "task_error";
+    case ApiErrorCode::kEncodingError: return "encoding_error";
+    case ApiErrorCode::kTransportError: return "transport_error";
+    case ApiErrorCode::kResourceError: return "resource_error";
+    case ApiErrorCode::kServerError: return "server_error";
     }
     return "invalid_error_code";
 }
 
 struct ApiError {
-    ApiErrorCode code = ApiErrorCode::bad_request;
+    ApiErrorCode code = ApiErrorCode::kBadRequest;
     std::string message;
     int status = 400;
 };

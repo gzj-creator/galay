@@ -55,13 +55,13 @@ int main() {
     for (const auto bad : {"", "users", "/users/", "//users", "/users//notes", "/users/*", "/users/**",
                            "/users/:", "/users/:1bad", "/users/:bad-name", "/:id/:id", "/users?x=1",
                            "/users#fragment", "/users/{id}", "/bad path", "/bad\\path", "/\xFF"}) {
-        passed &= error_is(inspect_path(bad), ApiErrorCode::invalid_path, bad);
+        passed &= error_is(inspect_path(bad), ApiErrorCode::kInvalidPath, bad);
     }
     for (const auto bad : {"/.", "/..", "/users/./notes", "/users/../notes"}) {
-        passed &= error_is(inspect_path(bad), ApiErrorCode::invalid_path, "URI dot segment rejected");
+        passed &= error_is(inspect_path(bad), ApiErrorCode::kInvalidPath, "URI dot segment rejected");
     }
-    passed &= error_is(inspect_path(std::string("/a\0b", 4)), ApiErrorCode::invalid_path, "embedded NUL in path");
-    passed &= error_is(inspect_path("/" + std::string(2048, 'x')), ApiErrorCode::invalid_path, "router path limit");
+    passed &= error_is(inspect_path(std::string("/a\0b", 4)), ApiErrorCode::kInvalidPath, "embedded NUL in path");
+    passed &= error_is(inspect_path("/" + std::string(2048, 'x')), ApiErrorCode::kInvalidPath, "router path limit");
 
     auto get = endpoint(HttpMethod::GET, "/users/:id", "getUser");
     get.parameters.push_back(path_parameter("id"));
@@ -76,85 +76,85 @@ int main() {
     passed &= expect(validate_endpoint(post, existing).has_value(), "same spelling different method allowed");
     auto shape_conflict = endpoint(HttpMethod::POST, "/users/:user", "otherUser");
     shape_conflict.parameters.push_back(path_parameter("user"));
-    passed &= error_is(validate_endpoint(shape_conflict, existing), ApiErrorCode::route_conflict,
+    passed &= error_is(validate_endpoint(shape_conflict, existing), ApiErrorCode::kRouteConflict,
                        "same shape different names rejected across methods");
     auto duplicate = get;
     duplicate.operation.id = "otherOperation";
-    passed &= error_is(validate_endpoint(duplicate, existing), ApiErrorCode::route_conflict, "same method and path rejected");
+    passed &= error_is(validate_endpoint(duplicate, existing), ApiErrorCode::kRouteConflict, "same method and path rejected");
     auto duplicate_id = endpoint(HttpMethod::POST, "/elsewhere", "getUser");
-    passed &= error_is(validate_endpoint(duplicate_id, existing), ApiErrorCode::duplicate_operation, "duplicate operationId");
+    passed &= error_is(validate_endpoint(duplicate_id, existing), ApiErrorCode::kDuplicateOperation, "duplicate operationId");
     auto ambiguous = endpoint(HttpMethod::GET, "/:group/lookup", "lookup");
     ambiguous.parameters.push_back(path_parameter("group", "group"));
-    passed &= error_is(validate_endpoint(ambiguous, existing), ApiErrorCode::route_conflict, "overlapping incomparable routes rejected");
+    passed &= error_is(validate_endpoint(ambiguous, existing), ApiErrorCode::kRouteConflict, "overlapping incomparable routes rejected");
     auto concrete = endpoint(HttpMethod::GET, "/users/me", "self");
     passed &= expect(validate_endpoint(concrete, existing).has_value(), "concrete route may specialize templated route");
 
     auto invalid = get;
     invalid.operation.id.clear();
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_metadata, "empty operationId");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidMetadata, "empty operationId");
     for (const auto method : {HttpMethod::CONNECT, HttpMethod::PRI, HttpMethod::UNKNOWN, static_cast<HttpMethod>(99)}) {
         invalid = get;
         invalid.method = method;
-        passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_metadata, "unsupported REST method");
+        passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidMetadata, "unsupported REST method");
     }
     invalid = get;
     invalid.parameters.erase(invalid.parameters.begin());
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "missing path source");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "missing path source");
     invalid = get;
     invalid.parameters.front().name = "wrong";
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "unmatched path source");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "unmatched path source");
     invalid = get;
     invalid.parameters.front().required = false;
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "optional path source");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "optional path source");
     invalid = get;
     invalid.parameters.front().schema.nullable = true;
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "nullable path source");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "nullable path source");
     invalid = get;
     invalid.parameters.push_back(invalid.parameters.back());
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "duplicate query source");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "duplicate query source");
     invalid = get;
     invalid.parameters.back().field_name = "id";
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "same DTO field from two sources");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "same DTO field from two sources");
     invalid = get;
     invalid.parameters.back().source = static_cast<ParameterSource>(99);
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "unknown parameter source");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "unknown parameter source");
     invalid = get;
     invalid.parameters.back().name = std::string("bad\0name", 8);
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "control character in parameter source");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "control character in parameter source");
     invalid = get;
     invalid.parameters.back().schema = scalar("object");
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "complex query parameter rejected");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "complex query parameter rejected");
     invalid = get;
     invalid.body_required = true;
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "body_required without body");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "body_required without body");
     invalid = get;
     invalid.request_body = scalar("object");
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "GET body prohibited");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "GET body prohibited");
     invalid.method = HttpMethod::HEAD;
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "HEAD body prohibited");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "HEAD body prohibited");
     invalid = post;
     invalid.request_body = scalar("object");
     invalid.request_body->properties.emplace("id", scalar("integer"));
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_binding, "body field duplicates path field");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidBinding, "body field duplicates path field");
 
     invalid = get;
     invalid.operation.success_status = 400;
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_metadata, "success must be 2xx");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidMetadata, "success must be 2xx");
     for (const auto status : {204, 205}) {
         invalid = get;
         invalid.operation.success_status = status;
-        passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_metadata, "body forbidden for 204/205");
+        passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidMetadata, "body forbidden for 204/205");
         invalid.response_body.reset();
         passed &= expect(validate_endpoint(invalid, {}).has_value(), "204/205 without body accepted");
     }
     invalid = get;
     invalid.operation.errors = {{404, "Not found"}, {404, "Duplicate"}};
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_metadata, "duplicate error status");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidMetadata, "duplicate error status");
     invalid.operation.errors = {{302, "Not an error"}};
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_metadata, "invalid business status");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidMetadata, "invalid business status");
     invalid = get;
     invalid.operation.summary = "\xFF";
-    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::invalid_metadata, "invalid UTF-8 operation metadata");
+    passed &= error_is(validate_endpoint(invalid, {}), ApiErrorCode::kInvalidMetadata, "invalid UTF-8 operation metadata");
 
     auto no_input = endpoint(HttpMethod::GET, "/health", "health");
     no_input.operation.errors = {{503, "Unavailable"}};
@@ -218,8 +218,8 @@ int main() {
     }
     const std::array duplicate_endpoints{get, get};
     passed &= expect(!render_openapi(info, duplicate_endpoints), "render revalidates all endpoints");
-    passed &= error_is(render_openapi(ApiInfo{"\xFF", "1.0", ""}, {}), ApiErrorCode::invalid_metadata, "invalid info UTF-8");
-    passed &= error_is(render_openapi(ApiInfo{"", "1.0", ""}, {}), ApiErrorCode::invalid_metadata, "empty API title");
+    passed &= error_is(render_openapi(ApiInfo{"\xFF", "1.0", ""}, {}), ApiErrorCode::kInvalidMetadata, "invalid info UTF-8");
+    passed &= error_is(render_openapi(ApiInfo{"", "1.0", ""}, {}), ApiErrorCode::kInvalidMetadata, "empty API title");
     const auto empty_document = render_openapi(info, {});
     passed &= expect(empty_document.has_value(), "empty API document");
     if (passed) std::cout << "api OpenAPI contract passed\n";

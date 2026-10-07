@@ -18,6 +18,7 @@
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
+#include <utility>
 
 namespace fixture {
 
@@ -150,6 +151,41 @@ void expect_error(const Response& response, int status, std::string_view code) {
     require(actual && *actual == code && message && !message->empty(), "typed error envelope");
 }
 
+void test_error_codes() {
+    constexpr std::pair<ApiErrorCode, std::string_view> cases[]{
+        {ApiErrorCode::kInvalidSchema, "invalid_schema"},
+        {ApiErrorCode::kUnsupportedType, "unsupported_type"},
+        {ApiErrorCode::kInvalidMetadata, "invalid_metadata"},
+        {ApiErrorCode::kInvalidPath, "invalid_path"},
+        {ApiErrorCode::kRouteConflict, "route_conflict"},
+        {ApiErrorCode::kDuplicateOperation, "duplicate_operation"},
+        {ApiErrorCode::kInvalidBinding, "invalid_binding"},
+        {ApiErrorCode::kFrozenBuilder, "frozen_builder"},
+        {ApiErrorCode::kBadRequest, "bad_request"},
+        {ApiErrorCode::kUnsupportedMediaType, "unsupported_media_type"},
+        {ApiErrorCode::kBusinessError, "business_error"},
+        {ApiErrorCode::kTaskError, "task_error"},
+        {ApiErrorCode::kEncodingError, "encoding_error"},
+        {ApiErrorCode::kTransportError, "transport_error"},
+        {ApiErrorCode::kResourceError, "resource_error"},
+        {ApiErrorCode::kServerError, "server_error"},
+    };
+    for (const auto& [code, name] : cases) {
+        require(api_error_name(code) == name, "k-prefixed error codes keep stable names");
+        const auto encoded = router_detail::encode_error(ApiError{code, "test error", 500});
+        require(encoded.has_value(), "encode renamed API error code");
+        const auto body = json::parse(*encoded);
+        require(body && body->is_object() && body->size() == 2, "renamed error code envelope");
+        const auto actual = body->at("code").as_string();
+        require(actual && *actual == name, "JSON error codes keep snake-case names");
+    }
+    const ApiError default_error;
+    require(default_error.code == ApiErrorCode::kBadRequest && default_error.status == 400 &&
+            default_error.message.empty(), "default error remains a bad request");
+    require(api_error_name(static_cast<ApiErrorCode>(-1)) == "invalid_error_code",
+            "unknown error code keeps its diagnostic name");
+}
+
 Task<ApiResult<fixture::Output>> get(ApiContext&, fixture::GetInput input) {
     co_return fixture::Output{input.id, "get", input.verbose.value_or(false)};
 }
@@ -193,11 +229,11 @@ PreparedApi prepared(std::shared_ptr<fixture::Lifetime> lifetime) {
         "/head/:id", get, Operation{.id = "headUser"}, get_binding).has_value(), "HEAD typed output");
     require(builder.add<HttpMethod::GET, NoInput, fixture::Output>(
         "/business", [](ApiContext&, NoInput) -> Task<ApiResult<fixture::Output>> {
-            co_return std::unexpected(ApiError{ApiErrorCode::business_error, "missing \"user\"\n", 404});
+            co_return std::unexpected(ApiError{ApiErrorCode::kBusinessError, "missing \"user\"\n", 404});
         }, Operation{.id = "business", .errors = {{404, "Not found"}}}).has_value(), "business error");
     require(builder.add<HttpMethod::GET, NoInput, fixture::Output>(
         "/undeclared", [](ApiContext&, NoInput) -> Task<ApiResult<fixture::Output>> {
-            co_return std::unexpected(ApiError{ApiErrorCode::business_error, "undeclared", 409});
+            co_return std::unexpected(ApiError{ApiErrorCode::kBusinessError, "undeclared", 409});
         }, Operation{.id = "undeclared"}).has_value(), "undeclared business error");
     require(builder.add<HttpMethod::GET, NoInput, fixture::Output>(
         "/task-error", [](ApiContext&, NoInput) -> Task<ApiResult<fixture::Output>> { return {}; },
@@ -226,9 +262,9 @@ PreparedApi prepared(std::shared_ptr<fixture::Lifetime> lifetime) {
     require(result.has_value(), "build API");
     const auto frozen_add = builder.add<HttpMethod::GET, NoInput, NoContent>(
         "/later", no_content, Operation{.id = "later"});
-    require(!frozen_add && frozen_add.error().code == ApiErrorCode::frozen_builder, "add after build forbidden");
+    require(!frozen_add && frozen_add.error().code == ApiErrorCode::kFrozenBuilder, "add after build forbidden");
     const auto frozen_build = builder.build();
-    require(!frozen_build && frozen_build.error().code == ApiErrorCode::frozen_builder, "repeat build forbidden");
+    require(!frozen_build && frozen_build.error().code == ApiErrorCode::kFrozenBuilder, "repeat build forbidden");
     return std::move(*result);
 }
 
@@ -245,10 +281,10 @@ void test_registration_errors() {
         "/same", no_content, Operation{.id = "first"}).has_value(), "initial registration");
     const auto conflict = builder.add<HttpMethod::GET, NoInput, NoContent>(
         "/same", no_content, Operation{.id = "second"});
-    require(!conflict && conflict.error().code == ApiErrorCode::route_conflict, "duplicate route rejected");
+    require(!conflict && conflict.error().code == ApiErrorCode::kRouteConflict, "duplicate route rejected");
     const auto duplicate_id = builder.add<HttpMethod::GET, NoInput, NoContent>(
         "/other", no_content, Operation{.id = "first"});
-    require(!duplicate_id && duplicate_id.error().code == ApiErrorCode::duplicate_operation, "duplicate operation rejected");
+    require(!duplicate_id && duplicate_id.error().code == ApiErrorCode::kDuplicateOperation, "duplicate operation rejected");
     const auto built = builder.build();
     require(built && built->endpoints.size() == 1, "failed adds do not leave partial routes");
 }
@@ -329,6 +365,7 @@ void test_loopback() {
 } // namespace
 
 int main() {
+    test_error_codes();
     test_registration_errors();
     test_loopback();
     std::cout << "P2 real HTTP loopback PASS\n";

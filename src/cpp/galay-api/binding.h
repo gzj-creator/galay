@@ -15,11 +15,11 @@ namespace galay::api {
 namespace binding_detail {
 
 inline ApiError invalid(std::string message) {
-    return {ApiErrorCode::invalid_binding, std::move(message), 500};
+    return {ApiErrorCode::kInvalidBinding, std::move(message), 500};
 }
 
 inline ApiError bad_request(std::string message) {
-    return {ApiErrorCode::bad_request, std::move(message), 400};
+    return {ApiErrorCode::kBadRequest, std::move(message), 400};
 }
 
 inline bool valid_name(std::string_view name) {
@@ -343,7 +343,7 @@ ApiResult<BindingPlan<Input>> InputBinding<Input>::prepare(http::HttpMethod meth
                     if (!absent) {
                         const auto* type = request.header().headerPairs().getValuePtr("Content-Type");
                         if (!type || !binding_detail::json_media_type(*type)) {
-                            return std::unexpected(ApiError{ApiErrorCode::unsupported_media_type,
+                            return std::unexpected(ApiError{ApiErrorCode::kUnsupportedMediaType,
                                 "request body requires Content-Type application/json", 415});
                         }
                     }

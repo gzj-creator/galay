@@ -17,7 +17,7 @@ ApiError failure(ApiErrorCode code, std::string message) {
     return {code, std::move(message), 500};
 }
 
-ApiResult<void> text_metadata(std::string_view value, ApiErrorCode code = ApiErrorCode::invalid_metadata) {
+ApiResult<void> text_metadata(std::string_view value, ApiErrorCode code = ApiErrorCode::kInvalidMetadata) {
     return schema_detail::validate_text(value, code);
 }
 
@@ -37,10 +37,10 @@ bool finite_number(const SchemaNumber& number) {
 
 ApiResult<void> check_schema(const Schema& schema, std::vector<const Schema*>& parents) {
     if (parents.size() >= 128 || std::find(parents.begin(), parents.end(), &schema) != parents.end()) {
-        return std::unexpected(failure(ApiErrorCode::invalid_schema, "recursive or excessively nested inline schema"));
+        return std::unexpected(failure(ApiErrorCode::kInvalidSchema, "recursive or excessively nested inline schema"));
     }
     const auto invalid = [](std::string message) -> ApiResult<void> {
-        return std::unexpected(failure(ApiErrorCode::invalid_schema, std::move(message)));
+        return std::unexpected(failure(ApiErrorCode::kInvalidSchema, std::move(message)));
     };
     const bool numeric = schema.type == "integer" || schema.type == "number";
     const bool string = schema.type == "string";
@@ -49,8 +49,8 @@ ApiResult<void> check_schema(const Schema& schema, std::vector<const Schema*>& p
     if (!numeric && !string && !array && !object && schema.type != "boolean" && schema.type != "null") {
         return invalid("schema type is unsupported or empty");
     }
-    if (auto checked = text_metadata(schema.format, ApiErrorCode::invalid_schema); !checked) return checked;
-    if (auto checked = text_metadata(schema.description, ApiErrorCode::invalid_schema); !checked) return checked;
+    if (auto checked = text_metadata(schema.format, ApiErrorCode::kInvalidSchema); !checked) return checked;
+    if (auto checked = text_metadata(schema.description, ApiErrorCode::kInvalidSchema); !checked) return checked;
     if ((schema.minimum || schema.maximum) && !numeric) return invalid("numeric bounds require a numeric schema");
     if ((schema.minimum && !finite_number(*schema.minimum)) || (schema.maximum && !finite_number(*schema.maximum))) {
         return invalid("schema numeric bounds must be finite");
@@ -86,7 +86,7 @@ ApiResult<void> check_schema(const Schema& schema, std::vector<const Schema*>& p
             using T = std::remove_cvref_t<decltype(entry)>;
             if constexpr (std::same_as<T, std::string>) {
                 if (!string) return invalid("string enum value requires a string schema");
-                if (auto valid = text_metadata(entry, ApiErrorCode::invalid_schema); !valid) return valid;
+                if (auto valid = text_metadata(entry, ApiErrorCode::kInvalidSchema); !valid) return valid;
                 struct Probe { std::string value; };
                 const auto descriptor = reflect::make_field("enum", &Probe::value,
                     reflect::field_options<std::string>{.min_length = schema.min_length, .max_length = schema.max_length});
@@ -114,7 +114,7 @@ ApiResult<void> check_schema(const Schema& schema, std::vector<const Schema*>& p
     parents.push_back(&schema);
     ApiResult<void> status;
     for (const auto& [name, property] : schema.properties) {
-        if (auto checked = text_metadata(name, ApiErrorCode::invalid_schema); !checked) {
+        if (auto checked = text_metadata(name, ApiErrorCode::kInvalidSchema); !checked) {
             status = std::unexpected(std::move(checked.error()));
             break;
         }
@@ -396,20 +396,20 @@ ApiResult<std::string> schema_json(const Schema& schema) {
         return {};
     }};
     if (auto written = write_schema(writer, schema); !written) {
-        return std::unexpected(failure(ApiErrorCode::encoding_error, std::move(written.error())));
+        return std::unexpected(failure(ApiErrorCode::kEncodingError, std::move(written.error())));
     }
     if (auto written = writer.finish(); !written) {
-        return std::unexpected(failure(ApiErrorCode::encoding_error, std::move(written.error())));
+        return std::unexpected(failure(ApiErrorCode::kEncodingError, std::move(written.error())));
     }
     return output;
 }
 
 ApiResult<PathInfo> inspect_path(std::string_view path) {
     if (path.empty() || path.front() != '/' || path.size() > 2048) {
-        return std::unexpected(failure(ApiErrorCode::invalid_path, "path must start with '/' and contain at most 2048 bytes"));
+        return std::unexpected(failure(ApiErrorCode::kInvalidPath, "path must start with '/' and contain at most 2048 bytes"));
     }
     if (path.size() > 1 && path.back() == '/') {
-        return std::unexpected(failure(ApiErrorCode::invalid_path, "path contains a trailing empty segment"));
+        return std::unexpected(failure(ApiErrorCode::kInvalidPath, "path contains a trailing empty segment"));
     }
     PathInfo result;
     if (path == "/") {
@@ -417,14 +417,14 @@ ApiResult<PathInfo> inspect_path(std::string_view path) {
         return result;
     }
     for (const auto segment : segments(path)) {
-        if (segment.empty()) return std::unexpected(failure(ApiErrorCode::invalid_path, "path contains an empty segment"));
+        if (segment.empty()) return std::unexpected(failure(ApiErrorCode::kInvalidPath, "path contains an empty segment"));
         result.openapi_path.push_back('/');
         result.shape.push_back('/');
         if (segment.front() == ':') {
             const auto name = segment.substr(1);
-            if (!valid_parameter(name)) return std::unexpected(failure(ApiErrorCode::invalid_path, "invalid path parameter name: " + std::string(name)));
+            if (!valid_parameter(name)) return std::unexpected(failure(ApiErrorCode::kInvalidPath, "invalid path parameter name: " + std::string(name)));
             if (std::find(result.parameters.begin(), result.parameters.end(), name) != result.parameters.end()) {
-                return std::unexpected(failure(ApiErrorCode::invalid_path, "duplicate path parameter name: " + std::string(name)));
+                return std::unexpected(failure(ApiErrorCode::kInvalidPath, "duplicate path parameter name: " + std::string(name)));
             }
             result.parameters.push_back(std::string(name));
             result.openapi_path.push_back('{');
@@ -434,11 +434,11 @@ ApiResult<PathInfo> inspect_path(std::string_view path) {
             (void)result.shape.append("{}");
         } else {
             if (segment == "." || segment == "..") {
-                return std::unexpected(failure(ApiErrorCode::invalid_path, "path contains a URI dot segment"));
+                return std::unexpected(failure(ApiErrorCode::kInvalidPath, "path contains a URI dot segment"));
             }
             for (const auto ch : segment) {
                 if (!letter(ch) && !digit(ch) && ch != '-' && ch != '_' && ch != '.' && ch != '~') {
-                    return std::unexpected(failure(ApiErrorCode::invalid_path, "path literal segments must use unreserved ASCII characters"));
+                    return std::unexpected(failure(ApiErrorCode::kInvalidPath, "path literal segments must use unreserved ASCII characters"));
                 }
             }
             // append returns only the destination string reference.
@@ -451,32 +451,32 @@ ApiResult<PathInfo> inspect_path(std::string_view path) {
 
 ApiResult<void> validate_endpoint(const EndpointSpec& endpoint, std::span<const EndpointSpec> existing) {
     if (method_name(endpoint.method).empty()) {
-        return std::unexpected(failure(ApiErrorCode::invalid_metadata, "unsupported HTTP/1 REST method"));
+        return std::unexpected(failure(ApiErrorCode::kInvalidMetadata, "unsupported HTTP/1 REST method"));
     }
     auto path = inspect_path(endpoint.path);
     if (!path) return std::unexpected(std::move(path.error()));
     const auto& operation = endpoint.operation;
-    if (operation.id.empty()) return std::unexpected(failure(ApiErrorCode::invalid_metadata, "operationId must not be empty"));
+    if (operation.id.empty()) return std::unexpected(failure(ApiErrorCode::kInvalidMetadata, "operationId must not be empty"));
     for (const auto* value : {&operation.id, &operation.summary, &operation.description, &operation.success_description}) {
         if (auto checked = text_metadata(*value); !checked) return checked;
     }
     for (const auto& tag : operation.tags) {
-        if (tag.empty()) return std::unexpected(failure(ApiErrorCode::invalid_metadata, "operation tag must not be empty"));
+        if (tag.empty()) return std::unexpected(failure(ApiErrorCode::kInvalidMetadata, "operation tag must not be empty"));
         if (auto checked = text_metadata(tag); !checked) return checked;
     }
     if (operation.success_status < 200 || operation.success_status > 299) {
-        return std::unexpected(failure(ApiErrorCode::invalid_metadata, "success status must be a 2xx response"));
+        return std::unexpected(failure(ApiErrorCode::kInvalidMetadata, "success status must be a 2xx response"));
     }
     if ((operation.success_status == 204 || operation.success_status == 205) && endpoint.response_body) {
-        return std::unexpected(failure(ApiErrorCode::invalid_metadata, "204 and 205 responses cannot declare a body"));
+        return std::unexpected(failure(ApiErrorCode::kInvalidMetadata, "204 and 205 responses cannot declare a body"));
     }
     std::set<int> error_statuses;
     for (const auto& response : operation.errors) {
         if (response.status < 400 || response.status > 599) {
-            return std::unexpected(failure(ApiErrorCode::invalid_metadata, "business error status must be 4xx or 5xx"));
+            return std::unexpected(failure(ApiErrorCode::kInvalidMetadata, "business error status must be 4xx or 5xx"));
         }
         const auto [position, inserted] = error_statuses.insert(response.status);
-        if (!inserted) return std::unexpected(failure(ApiErrorCode::invalid_metadata, "duplicate business error status: " + std::to_string(*position)));
+        if (!inserted) return std::unexpected(failure(ApiErrorCode::kInvalidMetadata, "duplicate business error status: " + std::to_string(*position)));
         if (auto checked = text_metadata(response.description); !checked) return checked;
     }
     std::set<std::pair<ParameterSource, std::string>> sources;
@@ -484,54 +484,54 @@ ApiResult<void> validate_endpoint(const EndpointSpec& endpoint, std::span<const 
     std::set<std::string> bound_paths;
     for (const auto& parameter : endpoint.parameters) {
         if (parameter.source != ParameterSource::path && parameter.source != ParameterSource::query) {
-            return std::unexpected(failure(ApiErrorCode::invalid_binding, "unknown parameter source"));
+            return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "unknown parameter source"));
         }
         if (parameter.name.empty() || parameter.field_name.empty()) {
-            return std::unexpected(failure(ApiErrorCode::invalid_binding, "parameter and DTO field names must not be empty"));
+            return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "parameter and DTO field names must not be empty"));
         }
         if (std::any_of(parameter.name.begin(), parameter.name.end(), [](unsigned char ch) {
                 return ch < 0x20 || ch == 0x7f;
             })) {
-            return std::unexpected(failure(ApiErrorCode::invalid_binding, "parameter source names must not contain control characters"));
+            return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "parameter source names must not contain control characters"));
         }
         for (const auto* value : {&parameter.name, &parameter.field_name, &parameter.description}) {
             if (auto checked = text_metadata(*value); !checked) return checked;
         }
         const auto [source_position, source_inserted] = sources.emplace(parameter.source, parameter.name);
-        if (!source_inserted) return std::unexpected(failure(ApiErrorCode::invalid_binding, "duplicate parameter source: " + source_position->second));
+        if (!source_inserted) return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "duplicate parameter source: " + source_position->second));
         const auto [field_position, field_inserted] = fields.insert(parameter.field_name);
-        if (!field_inserted) return std::unexpected(failure(ApiErrorCode::invalid_binding, "DTO field has multiple parameter sources: " + *field_position));
+        if (!field_inserted) return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "DTO field has multiple parameter sources: " + *field_position));
         if (parameter.schema.type != "string" && parameter.schema.type != "boolean" &&
             parameter.schema.type != "integer" && parameter.schema.type != "number") {
-            return std::unexpected(failure(ApiErrorCode::invalid_binding, "path and query parameters must have scalar schemas"));
+            return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "path and query parameters must have scalar schemas"));
         }
         if (auto checked = check_schema(parameter.schema); !checked) return checked;
         if (parameter.source == ParameterSource::path) {
             if (!parameter.required || parameter.schema.nullable ||
                 std::find(path->parameters.begin(), path->parameters.end(), parameter.name) == path->parameters.end()) {
-                return std::unexpected(failure(ApiErrorCode::invalid_binding, "path parameter must match the path and be required and non-nullable"));
+                return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "path parameter must match the path and be required and non-nullable"));
             }
             const auto [position, inserted] = bound_paths.insert(parameter.name);
-            if (!inserted) return std::unexpected(failure(ApiErrorCode::invalid_binding, "duplicate path parameter: " + *position));
+            if (!inserted) return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "duplicate path parameter: " + *position));
         }
     }
     if (bound_paths.size() != path->parameters.size()) {
-        return std::unexpected(failure(ApiErrorCode::invalid_binding, "every path parameter requires one binding"));
+        return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "every path parameter requires one binding"));
     }
     if (endpoint.body_required && !endpoint.request_body) {
-        return std::unexpected(failure(ApiErrorCode::invalid_binding, "body_required requires a request body schema"));
+        return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "body_required requires a request body schema"));
     }
     if (endpoint.request_body) {
         if (endpoint.method == http::HttpMethod::GET || endpoint.method == http::HttpMethod::HEAD) {
-            return std::unexpected(failure(ApiErrorCode::invalid_binding, "GET and HEAD request bodies are unsupported"));
+            return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "GET and HEAD request bodies are unsupported"));
         }
         if (endpoint.request_body->type != "object" || endpoint.request_body->nullable) {
-            return std::unexpected(failure(ApiErrorCode::invalid_binding, "request body must describe a non-nullable DTO object"));
+            return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "request body must describe a non-nullable DTO object"));
         }
         if (auto checked = check_schema(*endpoint.request_body); !checked) return checked;
         for (const auto& field : fields) {
             if (endpoint.request_body->properties.contains(field)) {
-                return std::unexpected(failure(ApiErrorCode::invalid_binding, "DTO field is bound both as a parameter and body property: " + field));
+                return std::unexpected(failure(ApiErrorCode::kInvalidBinding, "DTO field is bound both as a parameter and body property: " + field));
             }
         }
     }
@@ -542,16 +542,16 @@ ApiResult<void> validate_endpoint(const EndpointSpec& endpoint, std::span<const 
         auto other_path = inspect_path(other.path);
         if (!other_path) return std::unexpected(std::move(other_path.error()));
         if (other_path->shape == path->shape && other.path != endpoint.path) {
-            return std::unexpected(failure(ApiErrorCode::route_conflict, "same-shaped routes must use identical parameter names across all methods"));
+            return std::unexpected(failure(ApiErrorCode::kRouteConflict, "same-shaped routes must use identical parameter names across all methods"));
         }
         if (other.path == endpoint.path && other.method == endpoint.method) {
-            return std::unexpected(failure(ApiErrorCode::route_conflict, "HTTP method and path are already registered"));
+            return std::unexpected(failure(ApiErrorCode::kRouteConflict, "HTTP method and path are already registered"));
         }
         if (ambiguous_paths(other.path, endpoint.path)) {
-            return std::unexpected(failure(ApiErrorCode::route_conflict, "overlapping routes have incomparable literal segments"));
+            return std::unexpected(failure(ApiErrorCode::kRouteConflict, "overlapping routes have incomparable literal segments"));
         }
         if (other.operation.id == operation.id) {
-            return std::unexpected(failure(ApiErrorCode::duplicate_operation, "operationId is already registered: " + operation.id));
+            return std::unexpected(failure(ApiErrorCode::kDuplicateOperation, "operationId is already registered: " + operation.id));
         }
     }
     return {};
@@ -559,7 +559,7 @@ ApiResult<void> validate_endpoint(const EndpointSpec& endpoint, std::span<const 
 
 ApiResult<std::string> render_openapi(const ApiInfo& info, std::span<const EndpointSpec> endpoints) {
     if (info.title.empty() || info.version.empty()) {
-        return std::unexpected(failure(ApiErrorCode::invalid_metadata, "API title and version must not be empty"));
+        return std::unexpected(failure(ApiErrorCode::kInvalidMetadata, "API title and version must not be empty"));
     }
     for (const auto* value : {&info.title, &info.version, &info.description}) {
         if (auto checked = text_metadata(*value); !checked) return std::unexpected(std::move(checked.error()));
@@ -573,7 +573,7 @@ ApiResult<std::string> render_openapi(const ApiInfo& info, std::span<const Endpo
         auto path = inspect_path(endpoint.path);
         if (!path) return std::unexpected(std::move(path.error()));
         const auto [position, inserted] = paths[path->openapi_path].emplace(std::string(method_name(endpoint.method)), &endpoint);
-        if (!inserted) return std::unexpected(failure(ApiErrorCode::route_conflict, "duplicate document operation: " + position->first));
+        if (!inserted) return std::unexpected(failure(ApiErrorCode::kRouteConflict, "duplicate document operation: " + position->first));
     }
     std::string output;
     Writer writer{[&](std::string_view fragment) -> json::result<void> {
@@ -582,7 +582,7 @@ ApiResult<std::string> render_openapi(const ApiInfo& info, std::span<const Endpo
         return {};
     }};
     if (auto written = write_document(writer, info, paths); !written) {
-        return std::unexpected(failure(ApiErrorCode::encoding_error, std::move(written.error())));
+        return std::unexpected(failure(ApiErrorCode::kEncodingError, std::move(written.error())));
     }
     return output;
 }

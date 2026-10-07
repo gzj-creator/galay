@@ -75,7 +75,7 @@ REFLECT_FIELDS(UserDto, USER_FIELDS)
 Task<ApiResult<UserDto>> get_user(ApiContext&, GetUserInput input)
 {
     if (input.id != 1 && input.id != 2) {
-        co_return std::unexpected(ApiError{ApiErrorCode::business_error, "User not found", 404});
+        co_return std::unexpected(ApiError{ApiErrorCode::kBusinessError, "User not found", 404});
     }
     UserDto user{.id = input.id,
                  .name = input.id == 1 ? "Ada" : "Grace",
@@ -87,7 +87,7 @@ Task<ApiResult<UserDto>> get_user(ApiContext&, GetUserInput input)
 Task<ApiResult<UserDto>> create_user(ApiContext&, CreateUserInput input)
 {
     if (input.name == "admin") {
-        co_return std::unexpected(ApiError{ApiErrorCode::business_error, "Name is reserved", 409});
+        co_return std::unexpected(ApiError{ApiErrorCode::kBusinessError, "Name is reserved", 409});
     }
     // The example has no database or mutable user store; applications supply
     // persistence in their own typed handler without changing the API contract.
@@ -161,7 +161,7 @@ std::expected<Options, std::string> parse_arguments(int argc, char** argv)
 
 ApiError export_error(std::string_view action, const std::string& path, int error)
 {
-    return {ApiErrorCode::resource_error, std::string(action) + " " + path + ": " +
+    return {ApiErrorCode::kResourceError, std::string(action) + " " + path + ": " +
         std::error_code(error, std::generic_category()).message(), 500};
 }
 
@@ -192,7 +192,7 @@ ApiResult<void> export_document(const std::string& path, std::string_view bytes)
         if (count < 0) return cleanup_export(fd, temporary, export_error("write", temporary, errno));
         if (count == 0) {
             return cleanup_export(fd, temporary,
-                {ApiErrorCode::resource_error, "write made no progress: " + temporary, 500});
+                {ApiErrorCode::kResourceError, "write made no progress: " + temporary, 500});
         }
         offset += static_cast<std::size_t>(count);
     }

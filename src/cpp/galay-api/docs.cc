@@ -53,7 +53,7 @@ struct DocumentRoute {
 
 ApiError system_error(std::string_view action, const std::string& path, int error)
 {
-    return {ApiErrorCode::resource_error,
+    return {ApiErrorCode::kResourceError,
             std::string(action) + " " + path + ": " +
                 std::error_code(error, std::generic_category()).message(), 500};
 }
@@ -81,7 +81,7 @@ ApiResult<std::shared_ptr<const std::string>> load_asset(const std::string& dire
     constexpr std::size_t maximum_asset_size = 16 * 1024 * 1024;
     if (!S_ISREG(information.st_mode) || information.st_size <= 0 ||
         static_cast<std::uintmax_t>(information.st_size) > maximum_asset_size) {
-        return close_after_failure(fd, {ApiErrorCode::resource_error,
+        return close_after_failure(fd, {ApiErrorCode::kResourceError,
             "asset must be a nonempty regular file of at most 16 MiB: " + path, 500});
     }
     std::string bytes(static_cast<std::size_t>(information.st_size), '\0');
@@ -91,7 +91,7 @@ ApiResult<std::shared_ptr<const std::string>> load_asset(const std::string& dire
         if (count < 0 && errno == EINTR) continue;
         if (count < 0) return close_after_failure(fd, system_error("read", path, errno));
         if (count == 0) {
-            return close_after_failure(fd, {ApiErrorCode::resource_error,
+            return close_after_failure(fd, {ApiErrorCode::kResourceError,
                 "asset changed or was truncated while loading: " + path, 500});
         }
         offset += static_cast<std::size_t>(count);
@@ -104,7 +104,7 @@ ApiResult<void> validate_document_path(std::string_view path)
 {
     if (path.empty() || path.front() != '/' || path.size() > 2048 ||
         (path.size() > 1 && path.back() == '/')) {
-        return std::unexpected(ApiError{ApiErrorCode::invalid_path,
+        return std::unexpected(ApiError{ApiErrorCode::kInvalidPath,
             "docs path must be absolute, canonical and at most 2048 bytes", 400});
     }
     // The HTTP router accepts only ASCII unreserved literal segments. Reject
@@ -115,7 +115,7 @@ ApiResult<void> validate_document_path(std::string_view path)
             !(character >= 'a' && character <= 'z') &&
             !(character >= 'A' && character <= 'Z') &&
             !(character >= '0' && character <= '9')) {
-            return std::unexpected(ApiError{ApiErrorCode::invalid_path,
+            return std::unexpected(ApiError{ApiErrorCode::kInvalidPath,
                 "docs path contains a nonliteral or unsafe character", 400});
         }
     }
@@ -125,7 +125,7 @@ ApiResult<void> validate_document_path(std::string_view path)
         const auto end = path.find('/', offset);
         const auto segment = path.substr(offset, end == path.npos ? end : end - offset);
         if (segment.empty() || segment == "." || segment == "..") {
-            return std::unexpected(ApiError{ApiErrorCode::invalid_path,
+            return std::unexpected(ApiError{ApiErrorCode::kInvalidPath,
                 "docs path contains an empty or dot segment", 400});
         }
         if (end == path.npos) break;
@@ -144,7 +144,7 @@ ApiResult<std::string> make_initializer(std::string_view spec_path)
     const UiConfiguration configuration{.url = std::string(spec_path)};
     auto serialized = json::serialize(configuration);
     if (!serialized) {
-        return std::unexpected(ApiError{ApiErrorCode::encoding_error,
+        return std::unexpected(ApiError{ApiErrorCode::kEncodingError,
             "Swagger UI initialization configuration: " + serialized.error(), 500});
     }
     return "window.onload = function() {\n  const config = " + *serialized +
@@ -239,15 +239,15 @@ ApiResult<void> install_resources(PreparedApi& api, const DocsConfig& config,
                                   const std::string* directory)
 {
     if (api.docs_installed) {
-        return std::unexpected(ApiError{ApiErrorCode::route_conflict,
+        return std::unexpected(ApiError{ApiErrorCode::kRouteConflict,
             "docs are already installed on this PreparedApi", 409});
     }
     if (!api.document || api.document->empty()) {
-        return std::unexpected(ApiError{ApiErrorCode::resource_error,
+        return std::unexpected(ApiError{ApiErrorCode::kResourceError,
             "PreparedApi must own a nonempty OpenAPI document", 500});
     }
     if (directory && (directory->empty() || directory->find('\0') != std::string::npos)) {
-        return std::unexpected(ApiError{ApiErrorCode::resource_error,
+        return std::unexpected(ApiError{ApiErrorCode::kResourceError,
             "Swagger UI directory must be a nonempty filesystem path without NUL", 500});
     }
     const auto assets = docs_detail::embedded_assets();
@@ -285,18 +285,18 @@ ApiResult<void> install_resources(PreparedApi& api, const DocsConfig& config,
     for (std::size_t index = 0; index < routes.size(); ++index) {
         const auto& path = routes[index].path;
         if (path.size() > 2048) {
-            return std::unexpected(ApiError{ApiErrorCode::invalid_path,
+            return std::unexpected(ApiError{ApiErrorCode::kInvalidPath,
                 "generated docs resource path exceeds 2048 bytes: " + path, 400});
         }
         for (std::size_t earlier = 0; earlier < index; ++earlier) {
             if (routes[earlier].path == path) {
-                return std::unexpected(ApiError{ApiErrorCode::route_conflict,
+                return std::unexpected(ApiError{ApiErrorCode::kRouteConflict,
                     "docs paths overlap: " + path, 409});
             }
         }
         for (const auto& endpoint : api.endpoints) {
             if (endpoint_matches(endpoint.path, path)) {
-                return std::unexpected(ApiError{ApiErrorCode::route_conflict,
+                return std::unexpected(ApiError{ApiErrorCode::kRouteConflict,
                     "docs path conflicts with an endpoint: " + path, 409});
             }
         }
@@ -307,7 +307,7 @@ ApiResult<void> install_resources(PreparedApi& api, const DocsConfig& config,
             http::HttpMethod::PRI, http::HttpMethod::UNKNOWN};
         for (const auto method : methods) {
             if (api.router.findHandler(method, path).handler != nullptr) {
-                return std::unexpected(ApiError{ApiErrorCode::route_conflict,
+                return std::unexpected(ApiError{ApiErrorCode::kRouteConflict,
                     "docs path conflicts with an existing router handler: " + path, 409});
             }
         }

@@ -175,10 +175,10 @@ void check_response(const std::string& response, int expected, std::string_view 
 
 void test_nested_binding() {
     const auto null_member = validate_contract(fixture::NullMember{});
-    require(!null_member && null_member.error().code == ApiErrorCode::invalid_metadata,
+    require(!null_member && null_member.error().code == ApiErrorCode::kInvalidMetadata,
             "null member pointer rejected before any descriptor access");
     const auto null_binding = InputBinding<fixture::NullMember>{}.prepare(HttpMethod::POST, "/null");
-    require(!null_binding && null_binding.error().code == ApiErrorCode::invalid_binding,
+    require(!null_binding && null_binding.error().code == ApiErrorCode::kInvalidBinding,
             "null member pointer explicitly fails input preparation");
     const auto plan = InputBinding<fixture::NestedInput>{}.prepare(HttpMethod::POST, "/nested");
     require(plan.has_value(), "nested static contract accepted");
@@ -191,7 +191,7 @@ void test_nested_binding() {
     for (int mode = 1; mode <= 3; ++mode) {
         fixture::descriptor_mode = mode;
         const auto rejected = plan->decode(req);
-        require(!rejected && rejected.error().code == ApiErrorCode::invalid_binding,
+        require(!rejected && rejected.error().code == ApiErrorCode::kInvalidBinding,
                 "nested descriptor rejected through containers before binding");
         const auto fixed = validate_contract(std::array<fixture::DynamicChild, 1>{});
         const auto optional = validate_contract(std::optional<fixture::DynamicChild>{std::in_place});
@@ -200,19 +200,19 @@ void test_nested_binding() {
     fixture::descriptor_mode = 4;
     req.setBodyStr(R"({"children":[{"value":9}],"attributes":{}})");
     const auto after_decode = plan->decode(req);
-    require(!after_decode && after_decode.error().code == ApiErrorCode::invalid_binding,
+    require(!after_decode && after_decode.error().code == ApiErrorCode::kInvalidBinding,
             "value-dependent nested descriptor rejected after decode");
     fixture::descriptor_mode = 0;
     for (int mode = 5; mode <= 6; ++mode) {
         fixture::descriptor_mode = mode;
         const auto rejected = schema_for<fixture::DriftOutput>(SchemaUse::output);
-        require(!rejected && rejected.error().code == ApiErrorCode::invalid_metadata,
+        require(!rejected && rejected.error().code == ApiErrorCode::kInvalidMetadata,
                 "static/runtime pointer and options divergence rejected during schema generation");
     }
     fixture::descriptor_mode = 0;
     fixture::descriptor_mode = 7;
     const auto top_level = schema_for<fixture::TopLevelDrift>(SchemaUse::output);
-    require(!top_level && top_level.error().code == ApiErrorCode::invalid_metadata,
+    require(!top_level && top_level.error().code == ApiErrorCode::kInvalidMetadata,
             "top-level runtime descriptor drift rejected during schema generation");
     fixture::descriptor_mode = 0;
     for (int mode = 1; mode <= 2; ++mode) {
@@ -220,7 +220,7 @@ void test_nested_binding() {
         require(!validate_contract(std::optional<fixture::Mode>{}), "absent optional still checks enum contract");
         require(!validate_contract(std::vector<fixture::Mode>{}), "empty container still checks enum contract");
         const auto rejected = plan->decode(req);
-        require(!rejected && rejected.error().code == ApiErrorCode::invalid_binding, "enum drift rejected before binding");
+        require(!rejected && rejected.error().code == ApiErrorCode::kInvalidBinding, "enum drift rejected before binding");
     }
     fixture::enum_mode = 0;
     require(validate_contract(std::vector<bool>{true, false}).has_value(), "vector bool proxy supported");

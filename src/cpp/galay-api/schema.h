@@ -23,7 +23,7 @@ template<class T>
 struct MetadataProbe { std::optional<T> value; };
 
 inline ApiResult<void> validate_text(std::string_view text,
-                                    ApiErrorCode code = ApiErrorCode::invalid_metadata) {
+                                    ApiErrorCode code = ApiErrorCode::kInvalidMetadata) {
     const auto descriptor = reflect::make_field("text", &MetadataProbe<int>::value,
         reflect::field_options<std::optional<int>>{.description = text});
     if (auto checked = reflect::validate_field(descriptor, std::optional<int>{}); !checked) {
@@ -100,19 +100,19 @@ template<class T>
 ApiResult<void> enum_contract() {
     if constexpr (reflect::EnumReflectable<T>) {
         if constexpr (!StaticEnum<T>) {
-            return std::unexpected(error(ApiErrorCode::unsupported_type, "enum documentation requires a static descriptor"));
+            return std::unexpected(error(ApiErrorCode::kUnsupportedType, "enum documentation requires a static descriptor"));
         } else {
             if (auto checked = reflect::validate_enum_descriptor<T>(); !checked) {
-                return std::unexpected(error(ApiErrorCode::invalid_metadata, std::move(checked.error())));
+                return std::unexpected(error(ApiErrorCode::kInvalidMetadata, std::move(checked.error())));
             }
             constexpr auto stable = reflect::enum_descriptor_for<T>();
             const auto current = reflect::enum_descriptor_for<T>();
             if (current.encoding != stable.encoding) {
-                return std::unexpected(error(ApiErrorCode::invalid_metadata, "enum encoding changed from its static contract"));
+                return std::unexpected(error(ApiErrorCode::kInvalidMetadata, "enum encoding changed from its static contract"));
             }
             for (std::size_t i = 0; i < stable.values.size(); ++i) {
                 if (current.values[i].value != stable.values[i].value || current.values[i].name != stable.values[i].name) {
-                    return std::unexpected(error(ApiErrorCode::invalid_metadata, "enum values changed from their static contract"));
+                    return std::unexpected(error(ApiErrorCode::kInvalidMetadata, "enum values changed from their static contract"));
                 }
             }
         }
@@ -150,7 +150,7 @@ template<class T, class... Seen>
 ApiResult<void> contract(const T* value) {
     using U = std::remove_cvref_t<T>;
     if constexpr ((std::same_as<U, Seen> || ...) || sizeof...(Seen) >= 128) {
-        return std::unexpected(error(ApiErrorCode::invalid_schema, "recursive contract is unsupported"));
+        return std::unexpected(error(ApiErrorCode::kInvalidSchema, "recursive contract is unsupported"));
     } else if constexpr (reflect::is_optional_v<U>) {
         using Member = typename reflect::is_optional<U>::value_type;
         return contract<Member, Seen..., U>(value && *value ? std::addressof(**value) : nullptr);
@@ -180,7 +180,7 @@ ApiResult<void> contract(const T* value) {
         constexpr auto stable = reflect::static_fields<U>();
         const auto current = reflect::static_fields<U>();
         if (!same_fields(stable, current) || (value && !same_fields(stable, reflect::fields(*value)))) {
-            return std::unexpected(error(ApiErrorCode::invalid_metadata,
+            return std::unexpected(error(ApiErrorCode::kInvalidMetadata,
                 "runtime field name, member or options differ from the static serde contract"));
         }
         ApiResult<void> status;
@@ -201,7 +201,7 @@ template<class Member, class Descriptor>
 ApiResult<void> validate_metadata(const Descriptor& descriptor) {
     if constexpr (requires { descriptor.pointer; }) {
         if (descriptor.pointer == nullptr) {
-            return std::unexpected(error(ApiErrorCode::invalid_metadata, "field descriptor has a null member pointer"));
+            return std::unexpected(error(ApiErrorCode::kInvalidMetadata, "field descriptor has a null member pointer"));
         }
     }
     if constexpr (requires { descriptor.options; }) {
@@ -213,7 +213,7 @@ ApiResult<void> validate_metadata(const Descriptor& descriptor) {
             .min_items = source.min_items, .max_items = source.max_items};
         const auto probe = reflect::make_field(descriptor.name, &MetadataProbe<Member>::value, options);
         if (auto checked = reflect::validate_field(probe, std::optional<Member>{}); !checked) {
-            return std::unexpected(error(ApiErrorCode::invalid_metadata,
+            return std::unexpected(error(ApiErrorCode::kInvalidMetadata,
                 "field '" + std::string(descriptor.name) + "': " + checked.error()));
         }
     }
@@ -242,7 +242,7 @@ ApiResult<Schema> build_field(const Descriptor& descriptor, SchemaUse use) {
             if constexpr (Sequence<Value>::fixed) {
                 if ((options.min_items && *options.min_items > Sequence<Value>::size) ||
                     (options.max_items && *options.max_items < Sequence<Value>::size)) {
-                    return std::unexpected(error(ApiErrorCode::invalid_metadata,
+                    return std::unexpected(error(ApiErrorCode::kInvalidMetadata,
                         "field '" + std::string(descriptor.name) + "': fixed array length contradicts item bounds"));
                 }
             } else {
@@ -266,7 +266,7 @@ ApiResult<Schema> build_field(const Descriptor& descriptor, SchemaUse use) {
                     }, value);
                 });
                 if (removed != 0 && schema->enum_values.empty()) {
-                    return std::unexpected(error(ApiErrorCode::invalid_metadata,
+                    return std::unexpected(error(ApiErrorCode::kInvalidMetadata,
                         "field '" + std::string(descriptor.name) + "': constraints exclude every registered enum value"));
                 }
             }
@@ -279,12 +279,12 @@ template<class T, class... Seen>
 ApiResult<Schema> build(SchemaUse use) {
     using U = std::remove_cvref_t<T>;
     if (use != SchemaUse::input && use != SchemaUse::output) {
-        return std::unexpected(error(ApiErrorCode::invalid_metadata, "invalid schema use"));
+        return std::unexpected(error(ApiErrorCode::kInvalidMetadata, "invalid schema use"));
     }
     if constexpr ((std::same_as<U, Seen> || ...)) {
-        return std::unexpected(error(ApiErrorCode::invalid_schema, "recursive type cannot be represented by an inline schema"));
+        return std::unexpected(error(ApiErrorCode::kInvalidSchema, "recursive type cannot be represented by an inline schema"));
     } else if constexpr (sizeof...(Seen) >= 128) {
-        return std::unexpected(error(ApiErrorCode::invalid_schema, "inline schema nesting exceeds 128 types"));
+        return std::unexpected(error(ApiErrorCode::kInvalidSchema, "inline schema nesting exceeds 128 types"));
     } else if constexpr (reflect::is_optional_v<U>) {
         auto schema = build<typename reflect::is_optional<U>::value_type, Seen..., U>(use);
         if (schema) schema->nullable = true;
@@ -295,7 +295,7 @@ ApiResult<Schema> build(SchemaUse use) {
         return schema;
     } else if constexpr (std::is_integral_v<U>) {
         if constexpr (std::numeric_limits<U>::digits > (std::is_signed_v<U> ? 63 : 64)) {
-            return std::unexpected(error(ApiErrorCode::unsupported_type, "integers wider than the JSON 64-bit range are unsupported"));
+            return std::unexpected(error(ApiErrorCode::kUnsupportedType, "integers wider than the JSON 64-bit range are unsupported"));
         } else {
             Schema schema;
             schema.type = "integer";
@@ -314,7 +314,7 @@ ApiResult<Schema> build(SchemaUse use) {
     } else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view>) {
         if constexpr (std::same_as<U, std::string_view>) {
             if (use == SchemaUse::input) {
-                return std::unexpected(error(ApiErrorCode::unsupported_type, "serde cannot decode an owning input into string_view"));
+                return std::unexpected(error(ApiErrorCode::kUnsupportedType, "serde cannot decode an owning input into string_view"));
             }
         }
         Schema schema;
@@ -323,7 +323,7 @@ ApiResult<Schema> build(SchemaUse use) {
     } else if constexpr (std::is_enum_v<U>) {
         if constexpr (reflect::EnumReflectable<U>) {
             if constexpr (!StaticEnum<U>) {
-                return std::unexpected(error(ApiErrorCode::unsupported_type, "enum documentation requires a static descriptor"));
+                return std::unexpected(error(ApiErrorCode::kUnsupportedType, "enum documentation requires a static descriptor"));
             } else {
                 if (auto checked = enum_contract<U>(); !checked) return std::unexpected(std::move(checked.error()));
                 const auto descriptor = reflect::enum_descriptor_for<U>();
@@ -377,7 +377,7 @@ ApiResult<Schema> build(SchemaUse use) {
                 if (!status) return;
                 const auto& descriptor = std::get<I>(descriptors);
                 if (!same_field(std::get<I>(stable), descriptor)) {
-                    status = std::unexpected(error(ApiErrorCode::invalid_metadata,
+                    status = std::unexpected(error(ApiErrorCode::kInvalidMetadata,
                         "DTO field name, member or options changed from their static contract"));
                     return;
                 }
@@ -389,7 +389,7 @@ ApiResult<Schema> build(SchemaUse use) {
                 }
                 const auto [position, inserted] = schema.properties.emplace(std::string(descriptor.name), std::move(*property));
                 if (!inserted) {
-                    status = std::unexpected(error(ApiErrorCode::invalid_metadata, "duplicate DTO field name: " + position->first));
+                    status = std::unexpected(error(ApiErrorCode::kInvalidMetadata, "duplicate DTO field name: " + position->first));
                     return;
                 }
                 if (use == SchemaUse::output || !reflect::is_optional_v<Member>) schema.required.push_back(position->first);
@@ -400,7 +400,7 @@ ApiResult<Schema> build(SchemaUse use) {
         std::sort(schema.required.begin(), schema.required.end());
         return schema;
     } else {
-        return std::unexpected(error(ApiErrorCode::unsupported_type, "type has no supported static serde JSON contract"));
+        return std::unexpected(error(ApiErrorCode::kUnsupportedType, "type has no supported static serde JSON contract"));
     }
 }
 
@@ -433,7 +433,7 @@ ApiResult<Schema> schema_for_field(const Descriptor& descriptor, SchemaUse use) 
             return schema_detail::build_field<Member>(descriptor, use);
         }
     }
-    return std::unexpected(schema_detail::error(ApiErrorCode::unsupported_type,
+    return std::unexpected(schema_detail::error(ApiErrorCode::kUnsupportedType,
         "a field schema requires a public serde member-object descriptor"));
 }
 

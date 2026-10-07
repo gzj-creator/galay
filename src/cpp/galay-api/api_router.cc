@@ -8,7 +8,7 @@ namespace router_detail {
 ApiResult<std::string> encode_error(const ApiError& error) {
     auto encoded = json::serialize(std::map<std::string, std::string>{
         {"code", std::string(api_error_name(error.code))}, {"message", error.message}});
-    if (!encoded) return std::unexpected(ApiError{ApiErrorCode::encoding_error, std::move(encoded.error()), 500});
+    if (!encoded) return std::unexpected(ApiError{ApiErrorCode::kEncodingError, std::move(encoded.error()), 500});
     return std::move(*encoded);
 }
 
@@ -20,13 +20,13 @@ kernel::Task<ApiResult<void>> send_response(http::HttpConn& connection, int stat
     auto& headers = response.header().headerPairs();
     const auto connection_header = headers.addHeaderPair("Connection", keep_alive ? "keep-alive" : "close");
     if (connection_header != http::kNoError) {
-        co_return std::unexpected(ApiError{ApiErrorCode::encoding_error,
+        co_return std::unexpected(ApiError{ApiErrorCode::kEncodingError,
             "cannot create Connection header: " + std::to_string(static_cast<int>(connection_header)), 500});
     }
     if (json_body && !head && status != 204 && status != 205) {
         const auto content_type = headers.addHeaderPair("Content-Type", "application/json; charset=utf-8");
         if (content_type != http::kNoError) {
-            co_return std::unexpected(ApiError{ApiErrorCode::encoding_error,
+            co_return std::unexpected(ApiError{ApiErrorCode::kEncodingError,
                 "cannot create Content-Type header: " + std::to_string(static_cast<int>(content_type)), 500});
         }
         response.setBodyStr(std::move(body));
@@ -36,13 +36,13 @@ kernel::Task<ApiResult<void>> send_response(http::HttpConn& connection, int stat
         // sendResponse inserts Content-Length; HTTP forbids that field on a 204.
         const auto sent = co_await writer.send(response.header().toString());
         if (!sent || !*sent) {
-            co_return std::unexpected(ApiError{ApiErrorCode::transport_error,
+            co_return std::unexpected(ApiError{ApiErrorCode::kTransportError,
                 sent ? "HTTP writer returned false" : sent.error().message(), 500});
         }
     } else {
         const auto sent = co_await writer.sendResponse(std::move(response));
         if (!sent || !*sent) {
-            co_return std::unexpected(ApiError{ApiErrorCode::transport_error,
+            co_return std::unexpected(ApiError{ApiErrorCode::kTransportError,
                 sent ? "HTTP writer returned false" : sent.error().message(), 500});
         }
     }
@@ -52,7 +52,7 @@ kernel::Task<ApiResult<void>> send_response(http::HttpConn& connection, int stat
 } // namespace router_detail
 
 ApiResult<PreparedApi> ApiBuilder::build() {
-    if (built_) return std::unexpected(ApiError{ApiErrorCode::frozen_builder, "API builder has already been built", 500});
+    if (built_) return std::unexpected(ApiError{ApiErrorCode::kFrozenBuilder, "API builder has already been built", 500});
     auto document = render_openapi(info_, endpoints_);
     if (!document) return std::unexpected(std::move(document.error()));
     http::HttpRouter router;
@@ -66,7 +66,7 @@ ApiResult<PreparedApi> ApiBuilder::build() {
         case http::HttpMethod::PATCH: router.addHandler<http::HttpMethod::PATCH>(route.path, route.handler); break;
         case http::HttpMethod::OPTIONS: router.addHandler<http::HttpMethod::OPTIONS>(route.path, route.handler); break;
         case http::HttpMethod::TRACE: router.addHandler<http::HttpMethod::TRACE>(route.path, route.handler); break;
-        default: return std::unexpected(ApiError{ApiErrorCode::invalid_metadata, "unsupported route method", 500});
+        default: return std::unexpected(ApiError{ApiErrorCode::kInvalidMetadata, "unsupported route method", 500});
         }
     }
     auto shared_document = std::make_shared<const std::string>(std::move(*document));

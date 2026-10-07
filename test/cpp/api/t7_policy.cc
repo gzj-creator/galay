@@ -306,7 +306,7 @@ public:
         require(previous >= 0 && api.router.findHandler(HttpMethod::GET, "/value").handler != nullptr,
                 "policy runs before consuming PreparedApi router");
         if (resource_->trace->fail_install.load()) {
-            return std::unexpected(ApiError{ApiErrorCode::resource_error, "retryable policy failure", 503});
+            return std::unexpected(ApiError{ApiErrorCode::kResourceError, "retryable policy failure", 503});
         }
         resource_->trace->installed_address.store(this);
         api.router.addHandler<HttpMethod::GET, HttpMethod::POST>("/policy",
@@ -555,7 +555,7 @@ void directory_policy_failure_retry() {
         document = api.document;
         const auto* route = api.router.findHandler(HttpMethod::GET, "/value").handler;
         const auto failed = server.start(std::move(api));
-        require(!failed && failed.error().code == ApiErrorCode::resource_error &&
+        require(!failed && failed.error().code == ApiErrorCode::kResourceError &&
                 failed.error().message.find("swagger-ui.css") != std::string::npos,
                 "explicit file strategy forwards asset failure rather than falling back to embedded UI");
         require(!server.is_running() && !server.document() && trace->installs.load() == 1,
@@ -586,7 +586,7 @@ void directory_policy_failure_retry() {
     require(trace->installs.load() == 2, "explicit file strategy installs only once per start attempt, never per docs request");
     auto unused = prepared();
     const auto repeated = server.start(std::move(unused));
-    require(!repeated && repeated.error().code == ApiErrorCode::server_error && trace->installs.load() == 2,
+    require(!repeated && repeated.error().code == ApiErrorCode::kServerError && trace->installs.load() == 2,
             "repeated explicit file strategy start fails before reinstall");
     server.stop();
     require(server.document() == document, "explicit file strategy document persists after stop");
@@ -630,7 +630,7 @@ void swagger_delegation() {
     require(trace->installs.load() == 1, "embedded policy installs once, never during repeated docs requests");
     auto unused = prepared();
     const auto repeated = server.start(std::move(unused));
-    require(!repeated && repeated.error().code == ApiErrorCode::server_error && trace->installs.load() == 1,
+    require(!repeated && repeated.error().code == ApiErrorCode::kServerError && trace->installs.load() == 1,
             "repeated embedded Swagger start fails before reinstall");
     server.stop();
     require(server.document() == document, "embedded Swagger document persists after stop");
@@ -643,7 +643,7 @@ void listener_failure_is_single_use() {
     auto api = prepared();
     const auto document = api.document;
     const auto failed = server.start(std::move(api));
-    require(!failed && failed.error().code == ApiErrorCode::transport_error && !failed.error().message.empty(),
+    require(!failed && failed.error().code == ApiErrorCode::kTransportError && !failed.error().message.empty(),
             "occupied loopback port returns explicit transport_error");
     require(!server.is_running() && trace->installs.load() == 1 && server.document() == document,
             "listen failure occurs after one successful install and retains document");
@@ -653,11 +653,11 @@ void listener_failure_is_single_use() {
     auto unused = prepared();
     const auto* route = unused.router.findHandler(HttpMethod::GET, "/value").handler;
     const auto repeated = server.start(std::move(unused));
-    require(!repeated && repeated.error().code == ApiErrorCode::server_error && trace->installs.load() == 1,
+    require(!repeated && repeated.error().code == ApiErrorCode::kServerError && trace->installs.load() == 1,
             "listen failure freezes server even after port becomes available");
     server.stop();
     const auto restarted = server.start(std::move(unused));
-    require(!restarted && restarted.error().code == ApiErrorCode::server_error &&
+    require(!restarted && restarted.error().code == ApiErrorCode::kServerError &&
             unused.router.findHandler(HttpMethod::GET, "/value").handler == route,
             "stop after failed listen cannot restart or consume another router");
     ApiServer<> replacement(config(occupied.port));
@@ -709,7 +709,7 @@ void move_only_failure_retry_and_lifetime() {
             document = api.document;
             const auto* handler = api.router.findHandler(HttpMethod::GET, "/value").handler;
             const auto failed = server.start(std::move(api));
-            require(!failed && failed.error().code == ApiErrorCode::resource_error &&
+            require(!failed && failed.error().code == ApiErrorCode::kResourceError &&
                     failed.error().message == "retryable policy failure" && failed.error().status == 503,
                     "failed policy error must propagate unchanged");
             require(!server.is_running() && !server.document() && trace->installs.load() == 1,
@@ -733,13 +733,13 @@ void move_only_failure_retry_and_lifetime() {
         auto unused = prepared();
         const auto* untouched = unused.router.findHandler(HttpMethod::GET, "/value").handler;
         const auto repeated = server.start(std::move(unused));
-        require(!repeated && repeated.error().code == ApiErrorCode::server_error && server.is_running(),
+        require(!repeated && repeated.error().code == ApiErrorCode::kServerError && server.is_running(),
                 "start while running must fail with server_error");
         require(trace->installs.load() == 2 && unused.router.findHandler(HttpMethod::GET, "/value").handler == untouched,
                 "repeated start must not reinstall or consume another router");
         server.stop();
         const auto restarted = server.start(std::move(unused));
-        require(!restarted && restarted.error().code == ApiErrorCode::server_error && !server.is_running(),
+        require(!restarted && restarted.error().code == ApiErrorCode::kServerError && !server.is_running(),
                 "start after stop must fail with server_error");
         require(trace->installs.load() == 2 && server.document() == document && trace->destroyed.load() == 0,
                 "stopped server retains document/policy without reinstalling");

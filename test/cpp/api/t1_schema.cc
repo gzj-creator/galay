@@ -298,50 +298,50 @@ int main(int argc, char** argv) {
     passed &= expect(filtered && filtered->enum_values.size() == 1 &&
                      std::get<std::uint64_t>(filtered->enum_values.front()) == UINT64_MAX,
                      "enum and numeric bounds intersect");
-    passed &= error_is(field_schema<fixture::Code>({.maximum = 1}), ApiErrorCode::invalid_metadata,
+    passed &= error_is(field_schema<fixture::Code>({.maximum = 1}), ApiErrorCode::kInvalidMetadata,
                        "empty enum/constraint intersection fails");
 
     passed &= expect(field_schema<int>({.minimum = 18, .maximum = 120}).has_value(),
                      "metadata validation does not validate a fabricated default value");
-    passed &= error_is(field_schema<int>({.minimum = 4, .maximum = 3}), ApiErrorCode::invalid_metadata, "reversed numeric bounds");
-    passed &= error_is(field_schema<int>({.min_length = 1}), ApiErrorCode::invalid_metadata, "inapplicable length option");
-    passed &= error_is(field_schema<bool>({.minimum = 0}), ApiErrorCode::invalid_metadata, "bool rejects numeric bounds");
-    passed &= error_is(field_schema<fixture::Flag>({.minimum = false}), ApiErrorCode::invalid_metadata, "bool enum rejects numeric bounds");
-    passed &= error_is(field_schema<fixture::Mode>({.minimum = 0}), ApiErrorCode::invalid_metadata, "string enum rejects numeric bounds");
+    passed &= error_is(field_schema<int>({.minimum = 4, .maximum = 3}), ApiErrorCode::kInvalidMetadata, "reversed numeric bounds");
+    passed &= error_is(field_schema<int>({.min_length = 1}), ApiErrorCode::kInvalidMetadata, "inapplicable length option");
+    passed &= error_is(field_schema<bool>({.minimum = 0}), ApiErrorCode::kInvalidMetadata, "bool rejects numeric bounds");
+    passed &= error_is(field_schema<fixture::Flag>({.minimum = false}), ApiErrorCode::kInvalidMetadata, "bool enum rejects numeric bounds");
+    passed &= error_is(field_schema<fixture::Mode>({.minimum = 0}), ApiErrorCode::kInvalidMetadata, "string enum rejects numeric bounds");
     passed &= error_is(field_schema<double>({.minimum = std::numeric_limits<double>::infinity()}),
-                       ApiErrorCode::invalid_metadata, "infinite numeric metadata");
+                       ApiErrorCode::kInvalidMetadata, "infinite numeric metadata");
     passed &= error_is(field_schema<std::optional<double>>({.maximum = std::numeric_limits<double>::quiet_NaN()}),
-                       ApiErrorCode::invalid_metadata, "optional still validates metadata");
+                       ApiErrorCode::kInvalidMetadata, "optional still validates metadata");
     passed &= error_is(field_schema<std::string>({.min_length = 4, .max_length = 3}),
-                       ApiErrorCode::invalid_metadata, "reversed string length");
+                       ApiErrorCode::kInvalidMetadata, "reversed string length");
     passed &= error_is(field_schema<std::vector<int>>({.min_items = 4, .max_items = 3}),
-                       ApiErrorCode::invalid_metadata, "reversed collection count");
+                       ApiErrorCode::kInvalidMetadata, "reversed collection count");
     passed &= error_is(field_schema<std::array<int, 2>>({.min_items = 3}),
-                       ApiErrorCode::invalid_metadata, "fixed array incompatible minimum");
+                       ApiErrorCode::kInvalidMetadata, "fixed array incompatible minimum");
     passed &= error_is(field_schema<std::optional<std::array<int, 2>>>({.max_items = 1}),
-                       ApiErrorCode::invalid_metadata, "optional fixed array incompatible maximum");
-    passed &= error_is(field_schema<int>({.description = "\xFF"}), ApiErrorCode::invalid_metadata, "invalid UTF-8 description");
+                       ApiErrorCode::kInvalidMetadata, "optional fixed array incompatible maximum");
+    passed &= error_is(field_schema<int>({.description = "\xFF"}), ApiErrorCode::kInvalidMetadata, "invalid UTF-8 description");
     const auto null_member = reflect::make_field("value", static_cast<int fixture::Box<int>::*>(nullptr));
-    passed &= error_is(schema_for_field(null_member, SchemaUse::input), ApiErrorCode::invalid_metadata, "null field member pointer");
+    passed &= error_is(schema_for_field(null_member, SchemaUse::input), ApiErrorCode::kInvalidMetadata, "null field member pointer");
 
-    passed &= error_is(schema_for<fixture::Empty>(SchemaUse::input), ApiErrorCode::invalid_metadata, "empty enum descriptor");
-    passed &= error_is(schema_for<fixture::DuplicateValue>(SchemaUse::input), ApiErrorCode::invalid_metadata, "duplicate enum value");
-    passed &= error_is(schema_for<fixture::DuplicateName>(SchemaUse::input), ApiErrorCode::invalid_metadata, "duplicate enum name");
-    passed &= error_is(schema_for<fixture::BadName>(SchemaUse::input), ApiErrorCode::invalid_metadata, "invalid enum UTF-8");
-    passed &= error_is(schema_for<fixture::BadEncoding>(SchemaUse::input), ApiErrorCode::invalid_metadata, "invalid enum encoding");
-    passed &= error_is(schema_for<fixture::RuntimeMode>(SchemaUse::input), ApiErrorCode::unsupported_type, "nonstatic enum rejected");
-    passed &= error_is(schema_for<fixture::MutableName>(SchemaUse::input), ApiErrorCode::unsupported_type, "enum borrowed mutable name rejected");
-    passed &= error_is(schema_for<fixture::ChangedContract>(SchemaUse::input), ApiErrorCode::invalid_metadata, "runtime enum snapshot must match static contract");
-    passed &= error_is(schema_for<fixture::DuplicateFields>(SchemaUse::input), ApiErrorCode::invalid_metadata, "duplicate DTO wire name");
-    passed &= error_is(schema_for<fixture::BadFieldName>(SchemaUse::input), ApiErrorCode::invalid_metadata, "invalid DTO UTF-8 name");
-    passed &= error_is(schema_for<fixture::Dynamic>(SchemaUse::input), ApiErrorCode::unsupported_type, "dynamic DTO rejected");
-    passed &= error_is(schema_for<int*>(SchemaUse::input), ApiErrorCode::unsupported_type, "pointer rejected");
-    passed &= error_is(schema_for<std::variant<int, std::string>>(SchemaUse::input), ApiErrorCode::unsupported_type, "variant rejected");
-    passed &= error_is(schema_for<std::string_view>(SchemaUse::input), ApiErrorCode::unsupported_type, "non-owning input string rejected");
+    passed &= error_is(schema_for<fixture::Empty>(SchemaUse::input), ApiErrorCode::kInvalidMetadata, "empty enum descriptor");
+    passed &= error_is(schema_for<fixture::DuplicateValue>(SchemaUse::input), ApiErrorCode::kInvalidMetadata, "duplicate enum value");
+    passed &= error_is(schema_for<fixture::DuplicateName>(SchemaUse::input), ApiErrorCode::kInvalidMetadata, "duplicate enum name");
+    passed &= error_is(schema_for<fixture::BadName>(SchemaUse::input), ApiErrorCode::kInvalidMetadata, "invalid enum UTF-8");
+    passed &= error_is(schema_for<fixture::BadEncoding>(SchemaUse::input), ApiErrorCode::kInvalidMetadata, "invalid enum encoding");
+    passed &= error_is(schema_for<fixture::RuntimeMode>(SchemaUse::input), ApiErrorCode::kUnsupportedType, "nonstatic enum rejected");
+    passed &= error_is(schema_for<fixture::MutableName>(SchemaUse::input), ApiErrorCode::kUnsupportedType, "enum borrowed mutable name rejected");
+    passed &= error_is(schema_for<fixture::ChangedContract>(SchemaUse::input), ApiErrorCode::kInvalidMetadata, "runtime enum snapshot must match static contract");
+    passed &= error_is(schema_for<fixture::DuplicateFields>(SchemaUse::input), ApiErrorCode::kInvalidMetadata, "duplicate DTO wire name");
+    passed &= error_is(schema_for<fixture::BadFieldName>(SchemaUse::input), ApiErrorCode::kInvalidMetadata, "invalid DTO UTF-8 name");
+    passed &= error_is(schema_for<fixture::Dynamic>(SchemaUse::input), ApiErrorCode::kUnsupportedType, "dynamic DTO rejected");
+    passed &= error_is(schema_for<int*>(SchemaUse::input), ApiErrorCode::kUnsupportedType, "pointer rejected");
+    passed &= error_is(schema_for<std::variant<int, std::string>>(SchemaUse::input), ApiErrorCode::kUnsupportedType, "variant rejected");
+    passed &= error_is(schema_for<std::string_view>(SchemaUse::input), ApiErrorCode::kUnsupportedType, "non-owning input string rejected");
     passed &= expect(schema_for<std::string_view>(SchemaUse::output).has_value(), "output string_view matches serde encoder");
-    passed &= error_is(schema_for<std::map<int, int>>(SchemaUse::input), ApiErrorCode::unsupported_type, "non-string map key rejected");
-    passed &= error_is(schema_for<fixture::Recursive>(SchemaUse::input), ApiErrorCode::invalid_schema, "recursive inline DTO fails explicitly");
-    passed &= error_is(schema_for<int>(static_cast<SchemaUse>(99)), ApiErrorCode::invalid_metadata, "invalid SchemaUse rejected");
+    passed &= error_is(schema_for<std::map<int, int>>(SchemaUse::input), ApiErrorCode::kUnsupportedType, "non-string map key rejected");
+    passed &= error_is(schema_for<fixture::Recursive>(SchemaUse::input), ApiErrorCode::kInvalidSchema, "recursive inline DTO fails explicitly");
+    passed &= error_is(schema_for<int>(static_cast<SchemaUse>(99)), ApiErrorCode::kInvalidMetadata, "invalid SchemaUse rejected");
     passed &= expect(schema_for<fixture::NonDefault>(SchemaUse::output).has_value(), "DTO need not be default constructible");
     const auto empty = schema_for<fixture::EmptyDto>(SchemaUse::output);
     passed &= expect(empty && empty->type == "object" && empty->properties.empty(), "empty static DTO");
@@ -366,14 +366,14 @@ int main(int argc, char** argv) {
 
     Schema invalid;
     invalid.type = "array";
-    passed &= error_is(schema_json(invalid), ApiErrorCode::invalid_schema, "array without items is not a generated schema");
+    passed &= error_is(schema_json(invalid), ApiErrorCode::kInvalidSchema, "array without items is not a generated schema");
     invalid.type = "string";
     invalid.minimum = std::int64_t{1};
-    passed &= error_is(schema_json(invalid), ApiErrorCode::invalid_schema, "public schema applicability checked");
+    passed &= error_is(schema_json(invalid), ApiErrorCode::kInvalidSchema, "public schema applicability checked");
     auto cycle = std::make_shared<Schema>();
     cycle->type = "array";
     cycle->items = cycle;
-    passed &= error_is(schema_json(*cycle), ApiErrorCode::invalid_schema, "public schema pointer cycle detected");
+    passed &= error_is(schema_json(*cycle), ApiErrorCode::kInvalidSchema, "public schema pointer cycle detected");
     cycle->items.reset();
     if (passed) std::cout << "api schema contract passed\n";
     return passed ? 0 : 1;

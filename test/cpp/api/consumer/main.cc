@@ -120,7 +120,7 @@ int main() {
     default_server.stop();
     swagger_server.stop();
 
-    const ApiError expected{ApiErrorCode::resource_error, "installed consumer deliberately rejects startup", 409};
+    const ApiError expected{ApiErrorCode::kResourceError, "installed consumer deliberately rejects startup", 409};
     ApiServer<consumer::RejectPolicy> rejected_server(config, consumer::RejectPolicy{expected});
     // Policy failure exercises start without constructing Runtime or opening any listener.
     const auto rejected = rejected_server.start(std::move(*prepared));

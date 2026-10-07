@@ -11,6 +11,18 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `ApiErrorCode` 的全部 16 个枚举项统一改为 `k` 前缀加 `PascalCase`，例如 `kBusinessError`、`kBadRequest`；同步 API 实现、示例、测试和安装消费者，不保留旧名别名。枚举值、HTTP 状态以及 JSON/日志中的 snake_case 错误码字符串保持不变。
+
+### Docs
+
+- 在 `AGENTS.md` 明确 C++ 错误码枚举项的 `k` 前缀命名规则，保留类型 `PascalCase`、函数 `snake_case` 和 C API 模块前缀加 `UPPER_SNAKE_CASE` 的约定；更新 API 快速开始、参考、使用指南和示例中的错误码名称。
+
+### Validation
+
+- 新增回归覆盖全部 16 个错误码的稳定名称和 JSON 编码、默认 Bad Request 与未知枚举值诊断；API 示例及九个测试目标构建成功，API 回归 12/12（含配置和安装消费）通过，提交前单测复跑 9/9 通过。
+
 ## [v6.1.0] - 2026-10-07
 
 ### Added

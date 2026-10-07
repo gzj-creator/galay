@@ -316,7 +316,7 @@ class SpecOnly {
 public:
     ApiResult<void> install(PreparedApi& api) {
         if (api.router.findHandler(HttpMethod::GET, "/schema.json").handler) {
-            return std::unexpected(ApiError{ApiErrorCode::route_conflict, "spec route already exists", 409});
+            return std::unexpected(ApiError{ApiErrorCode::kRouteConflict, "spec route already exists", 409});
         }
         document = api.document;
         api.router.addHandler<HttpMethod::GET>("/schema.json",

@@ -174,22 +174,22 @@ void test_scalars() {
             {"flag", "0"}, {"retries", "6"}, {"retries", "null"}, {"retries", ""}}) {
         auto invalid = req.clone();
         invalid.header().args()[key] = value;
-        rejected(plan->decode(invalid), ApiErrorCode::bad_request, "bad scalar must fail");
+        rejected(plan->decode(invalid), ApiErrorCode::kBadRequest, "bad scalar must fail");
     }
     for (const auto value : {"18446744073709551616", "-1", "1x", "", "+1"}) {
         auto invalid = req.clone();
         invalid.setRouteParams(std::map<std::string, std::string>{{"id", value}});
-        rejected(plan->decode(invalid), ApiErrorCode::bad_request, "invalid path integer");
+        rejected(plan->decode(invalid), ApiErrorCode::kBadRequest, "invalid path integer");
     }
     auto missing = req.clone();
     missing.setRouteParams(std::map<std::string, std::string>{});
-    rejected(plan->decode(missing), ApiErrorCode::bad_request, "missing path parameter");
+    rejected(plan->decode(missing), ApiErrorCode::kBadRequest, "missing path parameter");
     missing = req.clone();
     require(missing.header().args().erase("small") == 1, "erase mandatory query");
-    rejected(plan->decode(missing), ApiErrorCode::bad_request, "missing mandatory query");
+    rejected(plan->decode(missing), ApiErrorCode::kBadRequest, "missing mandatory query");
     auto unexpected_body = req.clone();
     unexpected_body.setBodyStr(std::string("{}"));
-    rejected(plan->decode(unexpected_body), ApiErrorCode::bad_request, "body rejected when no body schema");
+    rejected(plan->decode(unexpected_body), ApiErrorCode::kBadRequest, "body rejected when no body schema");
 }
 
 void test_mixed_body() {
@@ -222,7 +222,7 @@ void test_mixed_body() {
             R"({"display-title":"Ada","nested":{"name":"inner"},"retries":6})"}) {
         auto invalid = req.clone();
         invalid.setBodyStr(std::string(body));
-        rejected(plan->decode(invalid), ApiErrorCode::bad_request, "invalid/unknown body rejected");
+        rejected(plan->decode(invalid), ApiErrorCode::kBadRequest, "invalid/unknown body rejected");
     }
     for (const auto type : {"", "text/plain", "application/jsonp", "application/problem+json"}) {
         auto invalid = req.clone();
@@ -230,12 +230,12 @@ void test_mixed_body() {
         if (!std::string_view(type).empty()) {
             require(invalid.header().headerPairs().addHeaderPair("Content-Type", type) == kNoError, "set type");
         }
-        rejected(plan->decode(invalid), ApiErrorCode::unsupported_media_type, "JSON content type required");
+        rejected(plan->decode(invalid), ApiErrorCode::kUnsupportedMediaType, "JSON content type required");
     }
     auto repeated_type = req.clone();
     require(repeated_type.header().headerPairs().addHeaderPair("Content-Type", "text/plain") == kNoError,
             "append repeated content type");
-    rejected(plan->decode(repeated_type), ApiErrorCode::unsupported_media_type,
+    rejected(plan->decode(repeated_type), ApiErrorCode::kUnsupportedMediaType,
              "repeated content type is rejected rather than partially accepted");
 }
 
@@ -256,57 +256,57 @@ void test_optional_defaults() {
     bad_query.query<&fixture::InvalidDefault::count>("count");
     auto bad_query_plan = bad_query.prepare(HttpMethod::GET, "/invalid-default");
     require(bad_query_plan.has_value(), "default value is validated at decode, not registration");
-    rejected(bad_query_plan->decode(absent), ApiErrorCode::bad_request, "invalid missing-query default rejected");
+    rejected(bad_query_plan->decode(absent), ApiErrorCode::kBadRequest, "invalid missing-query default rejected");
     auto bad_body_plan = InputBinding<fixture::InvalidDefault>{}.prepare(HttpMethod::POST, "/invalid-default");
     require(bad_body_plan.has_value(), "prepare optional body with invalid default");
-    rejected(bad_body_plan->decode(absent), ApiErrorCode::bad_request, "invalid missing-body default rejected");
+    rejected(bad_body_plan->decode(absent), ApiErrorCode::kBadRequest, "invalid missing-body default rejected");
 }
 
 void test_prepare_errors() {
     using fixture::Mixed;
     auto duplicate = InputBinding<Mixed>{};
     duplicate.path<&Mixed::id>("id").query<&Mixed::id>("id-query");
-    rejected(duplicate.prepare(HttpMethod::POST, "/:id"), ApiErrorCode::invalid_binding, "duplicate member source");
+    rejected(duplicate.prepare(HttpMethod::POST, "/:id"), ApiErrorCode::kInvalidBinding, "duplicate member source");
     auto duplicate_query = InputBinding<Mixed>{};
     duplicate_query.query<&Mixed::id>("q").query<&Mixed::verbose>("q");
-    rejected(duplicate_query.prepare(HttpMethod::POST, "/"), ApiErrorCode::invalid_binding, "duplicate query key");
+    rejected(duplicate_query.prepare(HttpMethod::POST, "/"), ApiErrorCode::kInvalidBinding, "duplicate query key");
     auto missing = InputBinding<Mixed>{};
-    rejected(missing.prepare(HttpMethod::POST, "/:id"), ApiErrorCode::invalid_binding, "unmapped path");
+    rejected(missing.prepare(HttpMethod::POST, "/:id"), ApiErrorCode::kInvalidBinding, "unmapped path");
     missing.path<&Mixed::id>("other");
-    rejected(missing.prepare(HttpMethod::POST, "/:id"), ApiErrorCode::invalid_binding, "wrong path mapping");
+    rejected(missing.prepare(HttpMethod::POST, "/:id"), ApiErrorCode::kInvalidBinding, "wrong path mapping");
     auto hidden = InputBinding<Mixed>{};
     hidden.query<&Mixed::hidden>("hidden");
-    rejected(hidden.prepare(HttpMethod::POST, "/"), ApiErrorCode::invalid_binding, "unregistered member");
+    rejected(hidden.prepare(HttpMethod::POST, "/"), ApiErrorCode::kInvalidBinding, "unregistered member");
     auto wrong_owner = InputBinding<Mixed>{};
     wrong_owner.query<&fixture::Other::id>("id");
-    rejected(wrong_owner.prepare(HttpMethod::POST, "/"), ApiErrorCode::invalid_binding, "member from wrong DTO");
+    rejected(wrong_owner.prepare(HttpMethod::POST, "/"), ApiErrorCode::kInvalidBinding, "member from wrong DTO");
     auto complex = InputBinding<fixture::Complex>{};
     complex.query<&fixture::Complex::values>("values");
-    rejected(complex.prepare(HttpMethod::GET, "/"), ApiErrorCode::invalid_binding, "query container unsupported");
+    rejected(complex.prepare(HttpMethod::GET, "/"), ApiErrorCode::kInvalidBinding, "query container unsupported");
     auto optional_path = InputBinding<fixture::OptionalOnly>{};
     optional_path.path<&fixture::OptionalOnly::count>("count");
-    rejected(optional_path.prepare(HttpMethod::GET, "/:count"), ApiErrorCode::invalid_binding, "optional path unsupported");
+    rejected(optional_path.prepare(HttpMethod::GET, "/:count"), ApiErrorCode::kInvalidBinding, "optional path unsupported");
     for (const auto name : {"", "bad\nname", "\xFF"}) {
         auto bad = InputBinding<Mixed>{};
         bad.query<&Mixed::id>(name);
-        rejected(bad.prepare(HttpMethod::POST, "/"), ApiErrorCode::invalid_binding, "invalid source name");
+        rejected(bad.prepare(HttpMethod::POST, "/"), ApiErrorCode::kInvalidBinding, "invalid source name");
     }
     for (const auto method : {HttpMethod::GET, HttpMethod::HEAD}) {
         auto body = InputBinding<fixture::OptionalOnly>{}.prepare(method, "/");
-        rejected(body, ApiErrorCode::invalid_binding, "GET/HEAD cannot have remaining body fields");
+        rejected(body, ApiErrorCode::kInvalidBinding, "GET/HEAD cannot have remaining body fields");
     }
     auto bad_metadata = InputBinding<fixture::BadMetadata>{}.prepare(HttpMethod::POST, "/");
     require(!bad_metadata, "invalid field metadata rejected in prepare");
     rejected(InputBinding<fixture::AliasMembers>{}.prepare(HttpMethod::POST, "/"),
-             ApiErrorCode::invalid_binding, "same member reflected under distinct body names");
+             ApiErrorCode::kInvalidBinding, "same member reflected under distinct body names");
     auto scalar_input = InputBinding<int>{}.prepare(HttpMethod::POST, "/");
     require(!scalar_input, "input must be a static DTO or NoInput");
     auto no_input = InputBinding<NoInput>{}.prepare(HttpMethod::GET, "/health");
     auto empty = InputBinding<fixture::Empty>{}.prepare(HttpMethod::GET, "/empty");
     require(no_input && empty && !no_input->body_schema && !empty->body_schema, "empty inputs have no body");
     auto unexpected = request("{}", {});
-    rejected(no_input->decode(unexpected), ApiErrorCode::bad_request, "NoInput rejects unexpected body");
-    rejected(empty->decode(unexpected), ApiErrorCode::bad_request, "empty DTO rejects unexpected body");
+    rejected(no_input->decode(unexpected), ApiErrorCode::kBadRequest, "NoInput rejects unexpected body");
+    rejected(empty->decode(unexpected), ApiErrorCode::kBadRequest, "empty DTO rejects unexpected body");
 }
 
 void test_descriptor_stability() {
@@ -319,8 +319,8 @@ void test_descriptor_stability() {
     for (int change = 1; change <= 3; ++change) {
         fixture::descriptor_change = change;
         rejected(InputBinding<fixture::Unstable>{}.prepare(HttpMethod::POST, "/stable"),
-                 ApiErrorCode::invalid_binding, "runtime name/pointer/options divergence rejected at prepare");
-        rejected(stable->decode(req), ApiErrorCode::invalid_binding,
+                 ApiErrorCode::kInvalidBinding, "runtime name/pointer/options divergence rejected at prepare");
+        rejected(stable->decode(req), ApiErrorCode::kInvalidBinding,
                  "contract changing after prepare rejected before binding");
     }
     fixture::descriptor_change = 0;
@@ -336,7 +336,7 @@ void test_character_integer_codec() {
     const auto decoded = plan->decode(req);
     require(decoded && decoded->value == std::numeric_limits<char32_t>::max(), "character integer full range");
     req.header().args()["value"] = "4294967296";
-    rejected(plan->decode(req), ApiErrorCode::bad_request, "character integer overflow rejected");
+    rejected(plan->decode(req), ApiErrorCode::kBadRequest, "character integer overflow rejected");
 }
 
 } // namespace
