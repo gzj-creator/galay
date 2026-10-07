@@ -38,3 +38,12 @@
 ## 6. 协程与并发阻塞操作
 
 - 使用 `std::mutex`、`std::condition_variable`、`std::shared_mutex` 等会阻塞线程的操作时，应优先改用无锁方案；只有确实无法避免时，才考虑使用 `AsyncMutex` 或其他异步同步机制。协程中的阻塞操作会影响其他协程的调度，甚至可能导致死锁。
+
+## 7. 命名约定
+
+- Galay 自有函数统一使用 `snake_case`，包括普通成员函数、静态成员函数、命名空间/全局函数、内部辅助函数和命名回调；公开与私有接口遵循同一规则，不因 `static`、`inline` 或模板而改变。例如：`add_handler`、`is_running`、`build_config`、`render_openapi`。
+- Galay 自有类型统一使用 `PascalCase`，包括类、结构体、联合体、枚举、concept、类型别名（`using` / `typedef`）和类型模板参数。例如：`ApiBuilder`、`PreparedApi`、`ApiResult`、`ApiDocsPolicy`。
+- 缩写按单词处理：函数中使用 `http`、`io`、`api`；类型中使用 `Http`、`Io`、`Api`，例如 `get_next_io_scheduler`、`HttpServer`、`IoScheduler`。C API 函数继续使用规定的模块前缀，例如 `galay_http_get_error`，并遵守 `snake_case`。
+- 此约定覆盖 Galay 自有生产代码、测试、示例和 benchmark。新增及重命名的符号必须遵守；历史拼写不能作为新增代码的例外，也不能以“保持现有风格”为由继续新增驼峰函数。
+- 构造/析构函数随类型名称，运算符遵循语言语法；语言、标准库或外部协议要求的名称，以及外部基类的覆盖方法，保持契约规定的拼写，例如 `promise_type`、`value_type`、serde 的 `reflect_fields`。第三方依赖不做 Galay 命名迁移；生成代码应从生成器或上游契约处理，不手改产物。
+- 命名迁移必须同步声明、定义、调用点、模块导出、测试、示例及文档，并完成对应构建与回归；不保留旧名别名、兼容包装或 fallback。不把落盘命名约定视为既有代码已完成迁移，也不在无关任务中擅自进行全仓重命名。

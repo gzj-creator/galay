@@ -1,6 +1,6 @@
 [package]
 name        = "galay"
-version     = "6.0.0"
+version     = "6.1.0"
 description = "C++23 coroutine networking and protocol framework"
 license     = "Apache-2.0"
 standard    = "c++23"
@@ -66,6 +66,11 @@ cxxflags = ["-UNDEBUG"]
 kind = "bin"
 main = "examples/cpp/serde/e1_struct_formats.cc"
 required_features = ["serde"]
+
+[targets.example_api_users]
+kind = "bin"
+main = "examples/cpp/api/e1_users.cc"
+required_features = ["api"]
 
 [targets.benchmark_serde_struct_formats]
 kind = "bin"
@@ -291,6 +296,14 @@ sources = [
     "src/cpp/galay-http/**/*.cc",
     "src/cpp/galay-http/module/*.cppm",
 ]
+
+# API embedding requires an explicit prebuild generation step (unverified here):
+# cmake -DASSET_DIR=assets/swagger-ui -DOUTPUT_FILE=build/api-embedded/swagger_ui.cc
+#       -P cmake/EmbedSwaggerUi.cmake
+# No galay.api module facade is provided in this release.
+[features.api]
+sources = ["src/cpp/galay-api/*.cc", "build/api-embedded/swagger_ui.cc"]
+implies = ["http", "serde"]
 
 [features.websocket]
 sources = [

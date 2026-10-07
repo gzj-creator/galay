@@ -21,6 +21,7 @@ galay 是一个基于 C++23 协程的高性能异步网络与协议框架，提�
 | `galay-serde` | 结构体与 JSON/TOML 转换，支持嵌套结构、容器和可选字段 |
 | `galay-ssl` | 基于 OpenSSL 的异步 TLS：socket、上下文、握手 |
 | `galay-http` | HTTP/1.1：server/client、路由、静态文件、chunk、range/etag、黑名单插件 |
+| `galay-api` | 可选类型化 HTTP/1 REST：成员参数绑定、serde 契约校验、OpenAPI 3.1 与离线 Swagger UI |
 | `galay-ws` | WebSocket：server/client、ws/wss、帧编解码 |
 | `galay-http2` | HTTP/2：h2c/h2、多路复用、HPACK、流控 |
 | `galay-redis` | Redis 客户端：异步、连接池、集群拓扑、TLS、pipeline/pubsub |
@@ -46,10 +47,13 @@ Galay 自带所需的 `concurrentqueue` 头文件。该副本位于
 serde 通过 `thirdparty/serde` Git submodule 获取，MCP/etcd 共用其 JSON 后端。结构体转换示例与
 三套构建说明见 [galay-serde](docs/cpp/modules/serde/00-快速开始.md)。
 
+类型化 REST 与 API Docs 使用 `GALAY_BUILD_API=ON`（默认关闭），要求 HTTP 和
+serde 同时开启。使用规则与范围见 [galay-api](docs/cpp/modules/api/00-快速开始.md)。
+
 ## 快速开始
 
 ```bash
-# 默认开启全部模块、测试、示例与基准
+# 默认构建通用模块、测试、示例与基准；galay-api 按需开启
 cmake -B build
 cmake --build build -j
 

@@ -11,6 +11,40 @@
 
 ## [Unreleased]
 
+## [v6.1.0] - 2026-10-07
+
+### Added
+
+- 新增可选 `galay-api` 模块及 `galay::api` CMake target，`GALAY_BUILD_API` 默认关闭；启用时显式要求 HTTP 和 serde，不扩大底层 HTTP 用户的依赖。
+- 提供显式 Input/Output 的类型化 HTTP/1 REST 注册：成员指针绑定 path/query，JSON body 仅解码剩余字段；DTO 外部名称、约束和枚举编码统一复用 serde 公共契约，不使用注释扫描、RTTI 或另一套 DTO 反射。
+- 提供确定性的 OpenAPI 3.1 和 JSON Schema 导出，区分输入/输出 required 与 optional null，保留 int64/uint64 精度，准确映射 bool 底层枚举、合法枚举集合、固定 array 长度及容器限制。
+- 新增 `ApiServer<Policy = NoSwagger>` 和 `ApiDocsPolicy` concept，使用组合及静态策略而非新增虚函数；`HttpSwagger` 安装文档，自定义策略可只提供 JSON 或显式加载文件资源。
+- `HttpSwagger` 默认内嵌固定官方 `swagger-ui-dist@5.17.14` 的 JS、CSS、图标、许可证、来源和校验信息；构建期验证七项上游 SHA256，部署无需额外 UI 文件、源码路径或固定工作目录，不使用 CDN 或资源缺失 fallback。
+- 新增 Users GET/POST 示例及 `--export` 离线导出；导出不创建 Runtime、不监听、不读取 UI 文件。补齐 serde v0.4.0 字段契约消费测试和 JSON/TOML 示例。
+
+### Changed
+
+- 父仓库 serde gitlink 固定到已独立发布的 v0.4.0 提交 `e93269257f04166db056da4ef9ee893d8cc096bf`，同步依赖声明与安装消费；没有重发 serde 或改动其既有 tag。
+- CMake、Bazel 和 mcpp 项目版本统一为 `6.1.0`；接入 API 构建、安装导出、示例与测试。Bazel/mcpp 接线不代表已完成运行验收，mcpp 资源生成仍需显式预生成步骤。
+- 在 `AGENTS.md` 冻结 Galay 自有函数 `snake_case`、类型 `PascalCase` 的规则；新增 API 使用 `is_running` 等约定，不保留旧名包装，也不在本次执行全仓历史命名迁移。
+
+### Fixed
+
+- HTTP/1 未匹配路由实际返回 404，不再以 200 状态发送 `404 Not Found`。
+- API 注册显式拒绝非法路径、同形/歧义路径冲突、重复 operationId、重复参数来源与非法元数据；build 后冻结，handler、请求借用、文档及资源的生命周期不依赖 builder 存活。
+- 检查协程调度、业务错误、编码、发送和失败清理结果；框架错误与声明的业务错误文档保持一致，HEAD、NoContent、204/205 不发送 JSON body 或虚报 JSON Content-Type。
+- 文档安装完整预检所有路径、路由与资源，失败不留下部分注册；显式文件策略缺失资源直接报错，不偷偷切换为内嵌文件或 CDN。
+
+### Docs
+
+- 新增 API 快速开始、公开接口、使用指南、示例和实际验证记录，明确文档只覆盖 typed endpoint；修正 serde 尚未发布及父仓库 gitlink 尚待提交的过时说明。
+- 首版范围限定为 HTTP/1 明文 typed API；HTTP/2、HTTPS typed 路由和 WS/AsyncAPI 不实施。Bazel、mcpp/native modules、Clang、io_uring、静态库与其他平台组合未实际验收，不宣称全量回归通过或性能收益。
+
+### Validation
+
+- 发布前复跑 API 12/12、HTTP/serde 定向回归 21/21、ASan/UBSan/泄漏检查 9/9，以及安装消费 3/3 和 serde 安装消费；覆盖真实 HTTP GET/POST/错误请求、配置缺失和删除资源元数据后移动安装包。
+- OpenAPI 3.1 成熟校验器及 45 个 JSON Schema 边界通过，服务文档与离线导出逐字节一致；桌面/移动 Chromium UI 无外部请求或资源错误，九资源字节一致，七项上游 SHA256 校验正确。strace 确认服务无 UI 文件访问，导出无 Runtime/网络创建。
+
 ## [v6.0.0] - 2026-10-06
 
 ### Added

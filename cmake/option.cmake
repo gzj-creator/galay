@@ -25,6 +25,8 @@ option(GALAY_BUILD_KERNEL "Build the kernel module" ON)
 option(GALAY_BUILD_SSL "Build the ssl module" ON)
 # 是否构建 HTTP C++ 模块。
 option(GALAY_BUILD_HTTP "Build the http module" ON)
+# Type-driven HTTP/1 REST endpoints and offline OpenAPI documentation.
+option(GALAY_BUILD_API "Build the typed REST API and documentation module" OFF)
 # 是否构建 WebSocket C++ 模块。
 option(GALAY_BUILD_WS "Build the websocket module" ON)
 # 是否构建 HTTP/2 C++ 模块。
@@ -103,6 +105,9 @@ if(GALAY_BUILD_SSL AND NOT GALAY_BUILD_KERNEL)
 endif()
 if(GALAY_BUILD_HTTP AND NOT GALAY_BUILD_KERNEL)
     message(FATAL_ERROR "GALAY_BUILD_HTTP requires GALAY_BUILD_KERNEL")
+endif()
+if(GALAY_BUILD_API AND (NOT GALAY_BUILD_HTTP OR NOT GALAY_BUILD_SERDE))
+    message(FATAL_ERROR "GALAY_BUILD_API requires GALAY_BUILD_HTTP=ON and GALAY_BUILD_SERDE=ON (serde 0.4.0)")
 endif()
 if(GALAY_BUILD_WS AND NOT GALAY_BUILD_HTTP)
     message(FATAL_ERROR "GALAY_BUILD_WS requires GALAY_BUILD_HTTP")

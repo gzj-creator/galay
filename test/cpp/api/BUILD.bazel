@@ -1,0 +1,13 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+
+[
+    cc_test(
+        name = name,
+        srcs = ["t%d_%s.cc" % (index + 1, name)],
+        copts = ["-std=c++23", "-UNDEBUG"],
+        deps = ["//src/cpp/galay-api:galay-api"],
+        data = ["//assets/swagger-ui:files"] if name in ["docs", "policy", "policy_document"] else [],
+        defines = ['GALAY_API_SWAGGER_UI_DIR="assets/swagger-ui"'],
+    )
+    for index, name in enumerate(["schema", "openapi", "binding", "http", "docs", "contract", "policy", "policy_document", "embedded"])
+]

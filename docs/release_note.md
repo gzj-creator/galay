@@ -503,3 +503,20 @@ CMake、Bazel 与 mcpp 版本元数据统一为 `6.0.0`。
 - **本次清理验证**：核对 CMake、Bazel、mcpp 版本均为 `6.0.0`，
   逐提交扫描发布分支和关联开发分支，确认清理路径不再进入近期历史；
   清理前后生产源码、测试、基准程序和构建配置一致。
+
+## v6.1.0 - 2026-10-07
+
+- **版本级别**：次版本（minor）
+- **Git 提交消息**：`feat: 新增类型化 REST API 与内嵌 Swagger 文档并发布 v6.1.0`
+- **Git tag**：`v6.1.0`
+
+### 变更摘要
+
+本次为 `v6.0.0` 之后的次版本发版，新增可选的类型化 HTTP/1 REST 与 API Docs 模块，收束 serde v0.4.0 集成、真实 HTTP/1 执行、OpenAPI 3.1、默认内嵌官方 Swagger UI、安装消费和离线浏览器验收。父仓库固定使用已独立发布的 serde v0.4.0，不重发 serde 或移动其既有 tag。
+
+- **类型化 REST 与 OpenAPI**：新增 `galay-api` / `galay::api`，由 `ApiBuilder` 一次登记路由、Input/Output、成员指针参数来源、操作元数据和 handler；path/query 执行字段校验，JSON body 只解码剩余字段。Schema 与真实 serde codec 共用字段外部名、约束和枚举编码，输入/输出 required 与 nullable 分离，uint64 不经 double，bool 枚举保持 boolean，固定 array、容器限制和合法枚举集合准确映射。
+- **静态文档策略**：新增 `ApiServer<Policy = NoSwagger>` 和 `ApiDocsPolicy` concept，采用按值策略与组合，不向底层 HTTP server 增加虚函数。`NoSwagger` 是空实现，`HttpSwagger` 默认安装 `/openapi.json`、`/docs` 及资源；应用可实现自定义策略，文件资源必须显式调用 `install_docs_from_directory`，缺失时不会 fallback 到内嵌资源或 CDN。
+- **默认内嵌 Swagger UI**：固定官方 `swagger-ui-dist@5.17.14`，构建期验证七项上游 SHA256，并将 JS、CSS、favicon、LICENSE、NOTICE、README 和校验清单编译进可选 API 库。运行时不读取源码树、工作目录或 `share/galay/swagger-ui`；安装后移动前缀、删除元数据目录或在空部署目录运行，默认文档仍可用。
+- **HTTP/1 错误与生命周期**：修复未匹配 HTTP 路由返回真实 404；显式处理 Task 调度错误、业务错误、编码、发送及失败清理，保持错误文档与实际响应一致。builder build 后冻结，路由、handler、文档和资源在 builder/PreparedApi 销毁后仍自持；HEAD、NoContent、204/205 不发送 body 或错误 Content-Type。
+- **命名约束**：在 `AGENTS.md` 固定 Galay 自有函数 `snake_case`、类型 `PascalCase`；新增 `ApiServer::is_running` 同步测试、安装消费、示例和文档，不保留旧名包装，也不把规则落盘视为完成全仓历史迁移。
+- **构建、示例和验证**：CMake、Bazel、mcpp 版本元数据统一为 `6.1.0`，API 默认关闭且开启时明确要求 HTTP 与 serde；新增 Users GET/POST 示例、`--export` 离线导出、安装后独立消费和 serde v0.4.0 字段契约示例/测试。实际验收范围为 GCC14、C++23 include、Linux epoll、共享库：API 12/12、HTTP/serde 定向回归 21/21、ASan/UBSan/泄漏检查 9/9、安装消费 3/3、OpenAPI 3.1 与 45 个 JSON Schema 边界、桌面/移动离线浏览器通过；九个服务资源逐字节一致，七项上游 SHA256 均正确。Bazel、mcpp/native modules、Clang、io_uring、静态库及其他平台组合未实际运行，本次未重新执行全仓回归或性能测量；HTTP/2、HTTPS typed 路由与 WS/AsyncAPI 不实施。

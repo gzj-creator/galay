@@ -6,3 +6,10 @@ cc_test(
     copts = ["-std=c++23", "-UNDEBUG"],
     deps = ["//src/cpp/galay-serde:galay-serde"],
 )
+
+cc_test(
+    name = "contract",
+    srcs = ["t14_contract.cc"],
+    copts = ["-std=c++23", "-UNDEBUG"],
+    deps = ["//src/cpp/galay-serde:galay-serde"],
+)

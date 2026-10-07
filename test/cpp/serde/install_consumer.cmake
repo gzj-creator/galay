@@ -3,6 +3,7 @@ set(prefix "${work}/prefix")
 file(MAKE_DIRECTORY "${work}/source")
 file(COPY "${CMAKE_CURRENT_LIST_DIR}/consumer/CMakeLists.txt"
     "${CMAKE_CURRENT_LIST_DIR}/t11_struct_formats.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/t14_contract.cc"
     "${CMAKE_CURRENT_LIST_DIR}/t10_import_smoke.cc"
     "${CMAKE_CURRENT_LIST_DIR}/t12_shared_backend.cc"
     "${CMAKE_CURRENT_LIST_DIR}/struct_formats.hpp"
@@ -27,6 +28,6 @@ run_checked("${CMAKE_COMMAND}" -S "${work}/source" -B "${work}/build"
     "-DCMAKE_BUILD_TYPE=${GALAY_CONFIG}"
     "-DGALAY_EXPECT_NO_MODULES=${GALAY_EXPECT_NO_MODULES}"
     "-DCMAKE_PREFIX_PATH=${prefix}")
-run_checked("${CMAKE_COMMAND}" --build "${work}/build" --config "${GALAY_CONFIG}" --parallel 2)
+run_checked("${CMAKE_COMMAND}" --build "${work}/build" --config "${GALAY_CONFIG}" --parallel 1)
 run_checked("${GALAY_CTEST_COMMAND}" --test-dir "${work}/build"
     -C "${GALAY_CONFIG}" --output-on-failure)

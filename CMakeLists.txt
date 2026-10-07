@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(galay VERSION 6.0.0 LANGUAGES C CXX)
+project(galay VERSION 6.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -60,6 +60,9 @@ endif()
 if(GALAY_BUILD_HTTP)
     add_subdirectory(src/cpp/galay-http)
 endif()
+if(GALAY_BUILD_API)
+    add_subdirectory(src/cpp/galay-api)
+endif()
 if(GALAY_BUILD_WS)
     add_subdirectory(src/cpp/galay-ws)
 endif()
@@ -96,7 +99,7 @@ endif()
 
 set(GALAY_INSTALL_TARGETS)
 foreach(_galay_target IN ITEMS
-    galay-utils galay-serde galay-kernel galay-ssl galay-http galay-ws galay-http2
+    galay-utils galay-serde galay-kernel galay-ssl galay-http galay-api galay-ws galay-http2
     galay-redis galay-rpc galay-mysql galay-postgres galay-mongo galay-etcd galay-mcp
     galay-tracing
     galay-tracing-spdlog galay-tracing-kernel

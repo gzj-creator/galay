@@ -7,7 +7,7 @@ endif()
 include(CMakeFindDependencyMacro)
 
 if(@GALAY_CONFIG_NEEDS_SERDE@)
-    find_dependency(serde 0.3.0 EXACT CONFIG)
+    find_dependency(serde 0.4.0 EXACT CONFIG)
 endif()
 
 if(@GALAY_CONFIG_NEEDS_THREADS@)

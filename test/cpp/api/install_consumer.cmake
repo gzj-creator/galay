@@ -1,0 +1,45 @@
+set(work "${GALAY_BINARY_DIR}/api-install")
+set(prefix "${work}/prefix")
+execute_process(COMMAND "${CMAKE_COMMAND}" --install "${GALAY_BINARY_DIR}" --prefix "${prefix}"
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+file(MAKE_DIRECTORY "${work}")
+file(WRITE "${work}/install.log" "${output}\n${error}")
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "API install failed: ${output}\n${error}")
+endif()
+# The fixture owns these paths: remove separately installed metadata and
+# relocate the package before find_package, building and running the consumer.
+file(REMOVE_RECURSE "${prefix}/share/galay/swagger-ui")
+if(EXISTS "${prefix}/share/galay/swagger-ui")
+    message(FATAL_ERROR "Cannot remove consumer fixture metadata directory")
+endif()
+set(relocated "${work}/relocated-prefix")
+file(REMOVE_RECURSE "${relocated}")
+file(RENAME "${prefix}" "${relocated}" RESULT result)
+if(NOT result STREQUAL "0")
+    message(FATAL_ERROR "Cannot relocate installed package: ${result}")
+endif()
+set(prefix "${relocated}")
+file(COPY "${CMAKE_CURRENT_LIST_DIR}/consumer" DESTINATION "${work}")
+file(COPY "${GALAY_SOURCE_DIR}/examples/cpp/api/e1_users.cc"
+    DESTINATION "${work}/consumer")
+execute_process(COMMAND "${CMAKE_COMMAND}" -S "${work}/consumer" -B "${work}/build"
+    -G Ninja -DCMAKE_CXX_COMPILER=${GALAY_CXX_COMPILER} -DCMAKE_PREFIX_PATH=${prefix}
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+file(WRITE "${work}/configure.log" "${output}\n${error}")
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Installed API consumer configuration failed: ${output}\n${error}")
+endif()
+execute_process(COMMAND "${CMAKE_COMMAND}" --build "${work}/build" --parallel 1
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+file(WRITE "${work}/build.log" "${output}\n${error}")
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Installed API consumer build failed: ${output}\n${error}")
+endif()
+execute_process(COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${work}/build" --output-on-failure
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+file(WRITE "${work}/ctest.log" "${output}\n${error}")
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Installed API consumer test failed: ${output}\n${error}")
+endif()
+message(STATUS "Relocated installed API consumer built and ran without share using only find_package(galay) / galay::api")

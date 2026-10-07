@@ -269,7 +269,7 @@ public:
                 if (!handler) {
 
                     auto response = Http1_1ResponseBuilder()
-                        .status(HttpStatusCode::OK_200)
+                        .status(HttpStatusCode::NotFound_404)
                         .header("Content-Type", "text/plain")
                         .body("404 Not Found")
                         .buildMove();
