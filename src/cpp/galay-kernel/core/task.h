@@ -50,13 +50,20 @@ template <typename T>
 class JoinHandle;  ///< 同步等待任务结果的句柄前置声明
 struct TaskState;  ///< 任务共享状态前置声明
 class TaskRef;  ///< 轻量任务引用前置声明
-struct TaskWaiter;  ///< 任务等待器前置声明
 
 namespace detail
 {
 
 struct TaskRefStorageAccess;  ///< 供固定容量调度 ring 在 TaskRef 与裸状态指针间转移所有权
 struct ReadyEntry;  ///< 调度器 ready queue 内部使用的语言中立就绪项
+
+/** @brief 完成与阻塞等待注册共享同一个原子状态，避免跨原子握手丢唤醒。 */
+enum class TaskCompletionStatus : uint32_t {
+    kPending,
+    kWaiting,
+    kDone,
+};
+static_assert(std::atomic<TaskCompletionStatus>::is_always_lock_free);
 
 /**
  * @brief 内部任务结果消费错误类别。
@@ -254,6 +261,11 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
 
     void* result_storage() noexcept { return static_cast<void*>(m_result_storage); }
     const void* result_storage() const noexcept { return static_cast<const void*>(m_result_storage); }
+    /** @brief 只有终态 kDone 表示完成，阻塞等待注册不影响调度资格。 */
+    bool is_done(std::memory_order order = std::memory_order_acquire) const noexcept
+    {
+        return m_completion_status.load(order) == detail::TaskCompletionStatus::kDone;
+    }
 
     alignas(std::max_align_t) std::byte m_result_storage[kInlineResultBytes]{};  ///< 小对象内联结果存储
     std::coroutine_handle<> m_handle = nullptr;  ///< 底层协程句柄
@@ -263,7 +275,9 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
     // 将所有权/接纳标记放在冷结果和 continuation 字段之前；在保持 128 字节
     // 状态大小的同时，减少热路径跨越的缓存行。
     std::atomic<uint64_t> m_refs{1};  ///< TaskRef 引用计数
-    std::atomic<bool> m_done{false};  ///< 任务是否已经执行完成
+    // 使用 32 位状态，使支持 futex 的标准库可直接等待此地址，避免 bool 等待的
+    // 共享版本计数；kWaiting 仍表示任务未完成，只有 kDone 发布结果。
+    std::atomic<detail::TaskCompletionStatus> m_completion_status{detail::TaskCompletionStatus::kPending};
     std::atomic<bool> m_queued{false};  ///< 任务是否已在调度队列中
     std::atomic<bool> m_resume_queue_claimed{false};  ///< 是否已被 resume admission 接管
     std::atomic<bool> m_resume_owner_only{false};  ///< 是否必须由 owner scheduler 线程恢复
@@ -271,7 +285,6 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
     std::optional<detail::TaskResultError> m_result_error;  ///< 任务错误
     ResultStorageKind m_result_kind = ResultStorageKind::Empty;  ///< 当前结果存储形态
     void (*m_destroy_result)(TaskState&) noexcept = nullptr;  ///< 销毁尚未消费的结果对象
-    std::atomic<TaskWaiter*> m_waiter{nullptr};  ///< 仅在 join/wait 路径惰性分配的等待器
     std::optional<TaskRef> m_then;  ///< `then()` 追加的 continuation 任务
     std::optional<TaskRef> m_next;  ///< 当前 `co_await` 后要恢复的父任务
 };
@@ -372,12 +385,6 @@ inline void TaskRef::release() noexcept
         delete state;
     }
 }
-
-struct TaskWaiter
-{
-    std::mutex m_mutex;
-    std::condition_variable m_cv;
-};
 
 namespace detail
 {
@@ -761,7 +768,7 @@ public:
     bool done() const
     {
         auto* state = m_task.state();
-        return !state || state->m_done.load(std::memory_order_acquire);
+        return !state || state->is_done();
     }
 
     auto operator co_await() &;  ///< 以左值任务创建 awaiter；恢复后会消费任务结果
@@ -809,7 +816,7 @@ public:
     bool done() const
     {
         auto* state = m_task.state();
-        return !state || state->m_done.load(std::memory_order_acquire);
+        return !state || state->is_done();
     }
 
     auto operator co_await() &;  ///< 以左值任务创建 awaiter；恢复后只消费完成状态
@@ -1359,7 +1366,7 @@ inline bool ready_entry_resume_owner_only(const ReadyEntry& entry) noexcept
 
 inline bool resume_task_state(TaskState* state)
 {
-    if (!state || !state->m_handle || state->m_done.load(std::memory_order_relaxed)) {
+    if (!state || !state->m_handle || state->is_done(std::memory_order_relaxed)) {
         return false;
     }
     state->m_queued.store(false, std::memory_order_relaxed);

@@ -478,7 +478,7 @@ bool test_publish_epoch_lost_wake_boundary() {
         beganDuringArming && sentDuringArming && !shouldSuspend &&
         refsAfterPublish == refsBeforePublish && second.has_value() && *second == 42 &&
         !cleared && refsAfterClear == refsBeforePublish && channel.empty() &&
-        taskState->m_done.load(std::memory_order_acquire);
+        taskState->is_done();
 }
 
 bool test_explicit_producer_token_api() {

@@ -76,8 +76,9 @@ int main() {
         std::cerr << "[T115] expected TaskState to declare sized operator delete\n";
         return 1;
     }
-    if (!contains_text(task_h_text, "std::atomic<TaskWaiter*> m_waiter{nullptr};")) {
-        std::cerr << "[T115] expected TaskState to lazily own a waiter pointer\n";
+    if (contains_text(task_h_text, "struct TaskWaiter") ||
+        contains_text(task_cc_text, "new TaskWaiter")) {
+        std::cerr << "[T115] expected TaskState wait to avoid a separately allocated waiter\n";
         return 1;
     }
     if (!contains_text(task_cc_text, "thread_local TaskStateFreeNode* g_taskStateFreeList = nullptr;")) {

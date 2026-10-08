@@ -46,9 +46,9 @@ bool verify() {
             owner.state()->m_handle.resume();
             if (entered != 1) { return false; }
             if (path == 2) {
-                if (owner.state()->m_done || destroyed != 0) { return false; }
+                if (owner.state()->is_done() || destroyed != 0) { return false; }
             } else {
-                if (!owner.state()->m_done || owner.state()->m_handle || destroyed != 1) { return false; }
+                if (!owner.state()->is_done() || owner.state()->m_handle || destroyed != 1) { return false; }
                 if constexpr (std::is_same_v<T, Large>) {
                     if (owner.state()->m_result_kind != TaskState::ResultStorageKind::Heap) { return false; }
                 } else if constexpr (std::is_same_v<T, int>) {

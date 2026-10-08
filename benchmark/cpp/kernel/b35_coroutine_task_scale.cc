@@ -44,7 +44,7 @@ bool run_churn(std::size_t count) {
             return false;
         }
         state->m_handle.resume();
-        if (!state->m_done.load(std::memory_order_acquire)) {
+        if (!state->is_done()) {
             std::cerr << "task_scale completion failed at=" << i << '\n';
             return false;
         }

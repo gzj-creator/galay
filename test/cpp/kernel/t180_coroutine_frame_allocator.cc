@@ -455,7 +455,7 @@ bool verify_basic_task_lifetimes() {
             return false;
         }
         state->m_handle.resume();
-        if (!require(state->m_done.load(std::memory_order_acquire),
+        if (!require(state->is_done(),
                      "Task<int> should be complete after resume")) {
             return false;
         }
@@ -555,7 +555,7 @@ bool verify_state_retention_handles() {
         auto* state = taskRef.state();
         JoinHandle<int> join(taskRef);
         state->m_handle.resume();
-        if (!require(state->m_done.load(std::memory_order_acquire),
+        if (!require(state->is_done(),
                      "join retention task should complete before Task release")) {
             return false;
         }

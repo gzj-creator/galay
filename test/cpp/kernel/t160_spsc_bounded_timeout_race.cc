@@ -536,7 +536,7 @@ public:
         m_ready.pop_front();
         TaskState* state = task.state();
         if (state == nullptr || !state->m_handle ||
-            state->m_done.load(std::memory_order_acquire)) {
+            state->is_done()) {
             return false;
         }
 

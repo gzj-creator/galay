@@ -7,7 +7,7 @@
  * @details 实现：
  * - TaskState 对象的线程局部空闲链分配器
  * - TaskRef 引用计数（retain/release）
- * - TaskState 析构函数和等待器清理
+ * - TaskState 析构函数和完成状态通知
  * - 任务生命周期辅助函数：调度、完成、等待、continuation 附加
  * - 线程局部 Runtime 作用域管理（g_currentRuntime）
  */
@@ -358,9 +358,6 @@ TaskState::~TaskState()
     if (m_destroy_result != nullptr && m_result_kind != ResultStorageKind::Empty) {
         m_destroy_result(*this);
     }
-
-    TaskWaiter* waiter = m_waiter.load(std::memory_order_acquire);
-    delete waiter;
 }
 
 void* TaskState::operator new(std::size_t size)
@@ -434,7 +431,7 @@ namespace detail
 
 bool destroy_task_frame(TaskState* state) noexcept
 {
-    if (state == nullptr || state->m_done.load(std::memory_order_acquire) ||
+    if (state == nullptr || state->is_done() ||
         state->m_handle == nullptr) {
         return false;
     }
@@ -449,41 +446,6 @@ bool destroy_task_frame(TaskState* state) noexcept
 
 namespace detail
 {
-
-namespace
-{
-
-TaskWaiter& ensure_task_waiter(TaskState& state)
-{
-    TaskWaiter* waiter = state.m_waiter.load(std::memory_order_acquire);
-    if (waiter != nullptr) {
-        return *waiter;
-    }
-
-    auto* candidate = new TaskWaiter();
-    if (state.m_waiter.compare_exchange_strong(waiter,
-                                               candidate,
-                                               std::memory_order_seq_cst,
-                                               std::memory_order_acquire)) {
-        return *candidate;
-    }
-
-    delete candidate;
-    return *waiter;
-}
-
-void notify_task_waiters(TaskState& state)
-{
-    TaskWaiter* waiter = state.m_waiter.load(std::memory_order_seq_cst);
-    if (waiter == nullptr) {
-        return;
-    }
-
-    std::lock_guard<std::mutex> lock(waiter->m_mutex);
-    waiter->m_cv.notify_all();
-}
-
-} // namespace
 
 Runtime* current_runtime() noexcept
 {
@@ -532,7 +494,7 @@ bool request_task_resume(const TaskRef& task) noexcept
 TaskResumeResult request_task_resume_state_detailed(TaskState* state) noexcept
 {
     if (!state || !state->m_handle || !state->m_scheduler ||
-        state->m_done.load(std::memory_order_relaxed)) {
+        state->is_done(std::memory_order_relaxed)) {
         return TaskResumeResult::kRejected;
     }
 
@@ -584,10 +546,14 @@ void complete_task_state(TaskState* state) noexcept
         return;
     }
 
-    // Pair completion with waiter publication: either the waiter sees done,
-    // or completion sees the waiter and cannot lose its notification.
-    state->m_done.store(true, std::memory_order_seq_cst);
-    notify_task_waiters(*state);
+    // exchange 与 kPending -> kWaiting 注册在同一原子修改序中：注册先发生就
+    // 通知全部等待者；完成先发生则注册失败并 acquire 观察结果，无需 seq_cst。
+    // 无阻塞等待者时不调用 notify_all，避免进入标准库共享等待池。
+    if (state->m_completion_status.exchange(TaskCompletionStatus::kDone,
+                                            std::memory_order_release) ==
+        TaskCompletionStatus::kWaiting) {
+        state->m_completion_status.notify_all();
+    }
 
     auto schedule_continuation = [](std::optional<TaskRef>& continuation) {
         if (!continuation.has_value()) {
@@ -606,7 +572,7 @@ void complete_task_state(TaskState* state) noexcept
         // stop() 会先关闭 resume admission 再排空普通任务。只有 owner 线程
         // 可以把 completion continuation 降级到普通延后队列，避免跨线程恢复。
         if (nextState != nullptr && scheduler != nullptr &&
-            !nextState->m_done.load(std::memory_order_acquire) &&
+            !nextState->is_done() &&
             std::this_thread::get_id() == scheduler_thread_id(scheduler) &&
             nextState->m_queued.compare_exchange_strong(
                 expected,
@@ -624,7 +590,7 @@ void complete_task_state(TaskState* state) noexcept
         }
 
         if (nextState != nullptr &&
-            !nextState->m_done.load(std::memory_order_acquire) &&
+            !nextState->is_done() &&
             !nextState->m_queued.load(std::memory_order_acquire)) {
             continuation = std::move(next);
         }
@@ -641,15 +607,21 @@ bool wait_task_completion(const TaskRef& task)
         return false;
     }
 
-    while (!state->m_done.load(std::memory_order_acquire)) {
-        TaskWaiter& waiter = ensure_task_waiter(*state);
-        std::unique_lock<std::mutex> lock(waiter.m_mutex);
-        if (state->m_done.load(std::memory_order_seq_cst)) {
-            return true;
+    auto status = state->m_completion_status.load(std::memory_order_acquire);
+    if (status == TaskCompletionStatus::kPending) {
+        if (state->m_completion_status.compare_exchange_strong(
+                status,
+                TaskCompletionStatus::kWaiting,
+                std::memory_order_acquire,
+                std::memory_order_acquire)) {
+            status = TaskCompletionStatus::kWaiting;
         }
-        waiter.m_cv.wait(lock, [state]() {
-            return state->m_done.load(std::memory_order_acquire);
-        });
+    }
+    if (status == TaskCompletionStatus::kWaiting) {
+        // wait 在值已变为 kDone 时直接返回；即使通知先于入睡也不会丢唤醒。
+        // kDone 是终态，不会出现 ABA；acquire 与完成方的 release 发布结果。
+        state->m_completion_status.wait(TaskCompletionStatus::kWaiting,
+                                         std::memory_order_acquire);
     }
     return true;
 }

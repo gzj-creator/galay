@@ -737,7 +737,7 @@ private:
                 // 观察到终态结果，而不是永久等待。
                 auto* parent_state = parent.state();
                 if (parent_state != nullptr &&
-                    !parent_state->m_done.load(std::memory_order_acquire)) {
+                    !parent_state->is_done()) {
                     store_task_error(parent_state,
                                    TaskResultError(
                                        TaskResultErrorCode::kResumeFailed));

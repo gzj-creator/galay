@@ -280,11 +280,11 @@ bool verify_parent_resume_failure_is_observable()
 
     const auto completion_deadline = std::chrono::steady_clock::now() + 1s;
     auto* state = observer.state();
-    while (state != nullptr && !state->m_done.load(std::memory_order_acquire) &&
+    while (state != nullptr && !state->is_done() &&
            std::chrono::steady_clock::now() < completion_deadline) {
         std::this_thread::yield();
     }
-    if (state == nullptr || !state->m_done.load(std::memory_order_acquire)) {
+    if (state == nullptr || !state->is_done()) {
         std::cerr << "[T182] parent remained incomplete after resume failure\n";
         runtime.get_parallel_scheduler(1)->stop();
         runtime.stop();

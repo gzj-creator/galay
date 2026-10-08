@@ -19,6 +19,7 @@
 
 ### Changed
 
+- kernel 任务完成通知以单个 32 位原子状态统一未完成、已注册阻塞等待者和已完成三种状态，替代 `m_done` 与惰性 `TaskWaiter` 的跨原子握手；完成方使用 release exchange，仅有等待者时通知，等待方使用 acquire CAS / `atomic::wait`，移除完成路径的 mutex/CV 及等待器分配，保持结果可见性和不丢唤醒语义。同步迁移完成状态查询及源码契约，`TaskState` 在本机仍为 128 字节、64 字节对齐。
 - 四种传输统一提供 OpenAPI 3.1.0、内嵌 Swagger UI 5.17.14 及离线静态资源。`EnableSwagger=false` 保留 typed binding、运行期校验、serde 编解码和业务错误，但不保存文档专用状态、不生成或挂载文档，也不提供 `docs` / `export_openapi`；开启模式支持离线导出及显式资源目录，缺资源明确失败，不升级资源或回退 CDN。
 - 原生 Builder 的 `build()` 返回 `ApiResult<std::unique_ptr<NativeServer>>`，预检路由、文档和资源后才构造服务；失败可修正重试，成功冻结注册。managed `start()` 显式报告重复启动、socket/bind/listen、Runtime 和 TLS/ALPN 错误，不破坏已通过低层接口运行的服务；配置导出统一使用 `build_config()`。
 - typed/request 路由停止时先关闭 listener、在连接 IO owner 上中断收发并异步排空 handler，最后停止 Runtime；排空期间保留定时器，不抢占任意业务协程。连接 handler、协议升级及自定义 fallback 保留原有生命周期责任。
@@ -40,10 +41,12 @@
 
 ### Docs
 
+- 更新协程文档并新增任务完成通知协议说明，记录单原子修改序与 release/acquire 的正确性依据、多等待者及生命周期边界、验证证据和本地性能测量限制。
 - 更新 API 快速开始、参考、使用指南、示例、能力表及 Swagger 资源说明，统一为原生 Builder 入口；记录文档开关、依赖边界、h2c 浏览器限制、TLS 测试证书、停止与重试语义，以及实际失败复现和最终验收证据。没有实现 `.api` parser/generator。
 
 ### Validation
 
+- 本次完成通知优化在 Linux x86_64 / GCC14 / C++23 / epoll / Release / `-Werror` 下通过 kernel 19/19、Redis topology 1/1；ASan/UBSan/LSan 5/5，TSan 在以 `setarch x86_64 -R` 避免启动地址映射冲突后 4/4，无 suppressions。扩展 T198 覆盖完成先于等待、无效与重复等待、堆结果、八个共享等待者、结果可见性及引用释放，保留双 IO scheduler 共十万任务压力；14 个模块 prelude 检查及 LLVM22/libc++ kernel 模块与 import 消费者编译通过，未完成模块链接运行或其他平台/后端运行验证。本地探针中已注册等待者的完成耗时约下降 75%，无等待者约下降 3%，完整任务生命周期基本不变，不据此宣称应用吞吐改善。
 - GCC14 / C++23 头文件接口 / Linux epoll / Release 共享库全模块、C ABI、测试、示例及可生成 benchmark 构建通过，C/C++ 使用 `-Werror`。四传输初版曾完成 clean 构建3928/3928步及最终增量302/302步；2026-10-08 原生 Builder 与 kernel 修复后的全目标增量构建809/809步通过，不声称本轮 clean 重建。
 - 四传输初版完整串行 CTest 645项：604通过、36原有跳过、5原有禁用、0失败，sanitizer覆盖30项。原生 Builder 和 kernel 修复后扩大回归至346项：338通过、3原有跳过、5原有禁用、0失败；ASan/UBSan/LSan 21/21。修复后的 SSL/HTTP2 四组合各14/14 API测试通过，迁移安装消费者6/6通过，并实际验证 API/serde 均关闭的 plain HTTP 消费者及已删除头不再安装。
 - kernel 完成压力回归修复前真实超时，修复后 Release 连续100次通过，共一千万任务；ASan/UBSan/LSan 连续10次通过，共一百万任务；SSL=OFF、HTTP2=ON 的启动回归连续1000次通过。保留 GDB 完成态与等待线程栈证据，不以重跑掩盖丢唤醒。

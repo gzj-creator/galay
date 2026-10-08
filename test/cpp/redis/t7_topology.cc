@@ -22,7 +22,7 @@ bool check_lazy_tasks(IOScheduler& scheduler, std::array<Task<RedisCommandResult
     for (size_t i = 0; i < tasks.size(); ++i) {
         refs[i] = galay::kernel::detail::TaskAccess::task_ref(tasks[i]);
         if (!refs[i].is_valid() || refs[i].belong_scheduler() != nullptr ||
-            refs[i].state()->m_done.load(std::memory_order_acquire)) {
+            refs[i].state()->is_done()) {
             std::cerr << "Refresh task must remain unbound and suspended until submission\n";
             return false;
         }
@@ -41,7 +41,7 @@ bool check_lazy_tasks(IOScheduler& scheduler, std::array<Task<RedisCommandResult
     do {
         completed = true;
         for (const auto& task : refs) {
-            completed = completed && task.state()->m_done.load(std::memory_order_acquire);
+            completed = completed && task.state()->is_done();
         }
         if (completed) { break; }
         std::this_thread::yield();
