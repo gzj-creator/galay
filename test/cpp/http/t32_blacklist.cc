@@ -251,12 +251,12 @@ ScenarioResult run_scenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket>> plugin
     TestState state;
 
     uint16_t port = pick_free_port();
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
 
     bool registered_blacklist = server.add_accept_plugin(std::move(plugin));
     if (!registered_blacklist) {
@@ -294,12 +294,12 @@ ScenarioResult run_concurrent_scenario(std::unique_ptr<AcceptPlugin<AsyncTcpSock
     TestState state;
 
     uint16_t port = pick_free_port();
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(static_cast<size_t>(io_scheduler_count))
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
 
     bool registered_blacklist = server.add_accept_plugin(std::move(plugin));
     if (!registered_blacklist) {
@@ -618,12 +618,12 @@ void test_excluded_ip_bypasses_blacklist_but_continues_plugin_chain()
     config.exclude_ips.insert("127.0.0.1");
 
     uint16_t port = pick_free_port();
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
 
     bool registered_blacklist = server.add_accept_plugin(std::make_unique<BlackList<AsyncTcpSocket>>(config));
     bool registered_downstream = server.add_accept_plugin(
@@ -671,12 +671,12 @@ void test_blacklist_stops_downstream_accept_plugin_and_handler()
     config.policy = policy;
 
     uint16_t port = pick_free_port();
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
 
     bool registered_blacklist = server.add_accept_plugin(std::make_unique<BlackList<AsyncTcpSocket>>(config));
     bool registered_downstream = server.add_accept_plugin(

@@ -89,7 +89,7 @@ int main(int argc, char* argv[])
     std::cout << "Static files: /files/*\n";
     std::cout << "========================================\n";
 
-    H2cServer server(H2cServerBuilder()
+    H2cServer server(H2cServerBuilder<>()
         .host("0.0.0.0")
         .port(port)
         .io_scheduler_count(2)
@@ -101,9 +101,13 @@ int main(int argc, char* argv[])
         })
         .static_files("/files", H2StaticFileConfig{.root = static_root})
         .active_conn_handler(fallback_active_handler)
-        .build());
+        .build_config());
 
-    server.start();
+    if (const auto started = server.start(); !started) {
+
+        std::cerr << "Server startup failed: " << started.error().message << '\n';
+
+    }
     while (g_running.load()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }

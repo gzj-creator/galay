@@ -16,6 +16,8 @@
 #include "../kernel/stream_manager.h"
 #include "../kernel/http2_stream.h"
 #include "h2_static_file.h"
+#include "http2_router.h"
+#include "../../galay-http/server/server_routes.h"
 #include "../../galay-http/common/iovec_utils.h"
 #include "../protoc/http2_base.h"
 #include "../protoc/http2_frame.h"
@@ -149,8 +151,11 @@ struct H2cServerConfig
 
 class H2cServer;
 
-class H2cServerBuilder {
+template<bool EnableSwagger = false>
+class H2cServerBuilder : public galay::http::server_detail::ServerRoutes<EnableSwagger> {
 public:
+    H2cServerBuilder() = default;
+    explicit H2cServerBuilder(H2cServerConfig config) : m_config(std::move(config)) {}
     H2cServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; }
     H2cServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; }
     H2cServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; }
@@ -220,7 +225,7 @@ public:
         m_config.affinity.custom_parallel_cpus = std::move(parallel_cpus);
         return true;
     }
-    H2cServer build() const;
+    api::ApiResult<std::unique_ptr<H2cServer>> build();
     H2cServerConfig build_config() const {
         return Http2Conn::normalize_settings_config(m_config);
     }
@@ -303,9 +308,25 @@ public:
     
     H2cServer(const H2cServer&) = delete;
     H2cServer& operator=(const H2cServer&) = delete;
-    
-    void start() {
-        if (!start_internal()) HTTP_LOG_ERROR("[h2c] [start-fail]", "error={}", m_start_error);
+
+    H2cServer(const H2cServerConfig& config, galay::http::HttpRouter&& router) : H2cServer(config)
+    {
+        m_stream_handler = [routes = std::make_shared<galay::http::HttpRouter>(std::move(router))](Http2Stream::ptr stream) {
+            return server_detail::execute_http2_route(routes, std::move(stream));
+        };
+    }
+
+    api::ApiResult<void> start() {
+        if (m_running.load()) return std::unexpected(api::ApiError{api::ApiErrorCode::kServerError,
+            "server is already running", 409});
+        if (m_start_attempted) return std::unexpected(api::ApiError{api::ApiErrorCode::kServerError,
+            "server has already attempted to start", 409});
+        m_start_attempted = true;
+        if (!start_internal()) {
+            stop();
+            return std::unexpected(api::ApiError{api::ApiErrorCode::kTransportError, m_start_error, 500});
+        }
+        return {};
     }
 
     void start(Http2ConnectionHandler handler) {
@@ -878,10 +899,12 @@ private:
     std::vector<AsyncTcpSocket> m_listeners;
     galay::http::server_detail::ServerConnections m_connections;
     std::string m_start_error;
+    bool m_start_attempted = false;
 };
 
-inline H2cServer H2cServerBuilder::build() const {
-    return H2cServer(Http2Conn::normalize_settings_config(m_config));
+template<bool EnableSwagger>
+inline api::ApiResult<std::unique_ptr<H2cServer>> H2cServerBuilder<EnableSwagger>::build() {
+    return this->template build_native<H2cServer>(build_config(), false);
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
@@ -929,8 +952,11 @@ struct H2ServerConfig
 
 class H2Server;
 
-class H2ServerBuilder {
+template<bool EnableSwagger = false>
+class H2ServerBuilder : public galay::http::server_detail::ServerRoutes<EnableSwagger> {
 public:
+    H2ServerBuilder() = default;
+    explicit H2ServerBuilder(H2ServerConfig config) : m_config(std::move(config)) {}
     H2ServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; }
     H2ServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; }
     H2ServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; }
@@ -1005,7 +1031,7 @@ public:
             make_h2_static_file_mount(std::move(prefix), std::move(config)));
         return *this;
     }
-    H2Server build() const;
+    api::ApiResult<std::unique_ptr<H2Server>> build();
     H2ServerConfig build_config() const {
         return Http2Conn::normalize_settings_config(m_config);
     }
@@ -1039,8 +1065,24 @@ public:
     H2Server(const H2Server&) = delete;
     H2Server& operator=(const H2Server&) = delete;
 
-    void start() {
-        if (!start_internal()) HTTP_LOG_ERROR("[h2] [start-fail]", "error={}", m_start_error);
+    H2Server(const H2ServerConfig& config, galay::http::HttpRouter&& router) : H2Server(config)
+    {
+        m_stream_handler = [routes = std::make_shared<galay::http::HttpRouter>(std::move(router))](Http2Stream::ptr stream) {
+            return server_detail::execute_http2_route(routes, std::move(stream));
+        };
+    }
+
+    api::ApiResult<void> start() {
+        if (m_running.load()) return std::unexpected(api::ApiError{api::ApiErrorCode::kServerError,
+            "server is already running", 409});
+        if (m_start_attempted) return std::unexpected(api::ApiError{api::ApiErrorCode::kServerError,
+            "server has already attempted to start", 409});
+        m_start_attempted = true;
+        if (!start_internal()) {
+            stop();
+            return std::unexpected(api::ApiError{api::ApiErrorCode::kTransportError, m_start_error, 500});
+        }
+        return {};
     }
 
     void start(Http2ConnectionHandler handler) {
@@ -1496,10 +1538,12 @@ private:
     galay::http::server_detail::ServerConnections m_connections;
     std::string m_start_error;
     galay::ssl::SslContext m_ssl_ctx;
+    bool m_start_attempted = false;
 };
 
-inline H2Server H2ServerBuilder::build() const {
-    return H2Server(Http2Conn::normalize_settings_config(m_config));
+template<bool EnableSwagger>
+inline api::ApiResult<std::unique_ptr<H2Server>> H2ServerBuilder<EnableSwagger>::build() {
+    return this->template build_native<H2Server>(build_config(), false);
 }
 #endif
 

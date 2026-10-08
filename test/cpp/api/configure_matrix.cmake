@@ -2,6 +2,10 @@ set(work "${GALAY_BINARY_DIR}/api-configure")
 set(source "${work}/source")
 file(MAKE_DIRECTORY "${source}/src" "${source}/thirdparty")
 file(COPY "${GALAY_SOURCE_DIR}/CMakeLists.txt" DESTINATION "${source}")
+file(APPEND "${source}/CMakeLists.txt" "
+add_executable(plain_http_consumer \"${GALAY_SOURCE_DIR}/test/cpp/http/t37_native_builder.cc\")
+target_link_libraries(plain_http_consumer PRIVATE galay::http)
+")
 file(COPY "${GALAY_SOURCE_DIR}/cmake" DESTINATION "${source}")
 file(CREATE_LINK "${GALAY_SOURCE_DIR}/src/cpp" "${source}/src/cpp" SYMBOLIC RESULT linked)
 if(NOT linked STREQUAL "0")
@@ -41,6 +45,17 @@ file(READ "${work}/api_off/build.ninja" off_build)
 # Inspect target rules, not absolute fixture paths that may contain galay-api.
 if(off_build MATCHES "(^|\n)build (galay-api|serde_simdjson):|(^|\n)build src/cpp/galay-api/|(^|\n)build [^\n]*swagger_ui\\.cc[: ]")
     message(FATAL_ERROR "API=OFF introduced API dependencies")
+endif()
+execute_process(COMMAND "${CMAKE_COMMAND}" --build "${work}/api_off"
+    --target plain_http_consumer --parallel 2
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+file(WRITE "${work}/api_off_build.log" "${output}\n${error}")
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Plain HTTP without API/serde failed to build: ${output}\n${error}")
+endif()
+execute_process(COMMAND "${work}/api_off/plain_http_consumer" RESULT_VARIABLE result)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Plain HTTP without API/serde failed to run: ${result}")
 endif()
 check_config(missing_http failure "GALAY_BUILD_API requires GALAY_BUILD_HTTP=ON"
     -DGALAY_BUILD_API=ON -DGALAY_BUILD_HTTP=OFF -DGALAY_BUILD_SERDE=ON)

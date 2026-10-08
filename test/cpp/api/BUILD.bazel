@@ -3,27 +3,38 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_test")
 [
     cc_test(
         name = name,
-        srcs = ["t%d_%s.cc" % (index + 1, name)],
+        srcs = [source, "route_fixture.h"],
         copts = ["-std=c++23", "-UNDEBUG"],
-        deps = ["//src/cpp/galay-api:galay-api"],
-        data = ["//assets/swagger-ui:files"] if name in ["docs", "policy", "policy_document"] else [],
+        deps = ["//src/cpp/galay-api:galay-api"] +
+               (["//src/cpp/galay-http2:galay-http2"] if name == "native_builder" else []),
+        data = ["//assets/swagger-ui:files"] if name == "docs" else [],
         defines = ['GALAY_API_SWAGGER_UI_DIR="assets/swagger-ui"'],
     )
-    for index, name in enumerate(["schema", "openapi", "binding", "http", "docs", "contract", "policy", "policy_document", "embedded"])
+    for name, source in [
+        ("schema", "t1_schema.cc"),
+        ("openapi", "t2_openapi.cc"),
+        ("binding", "t3_binding.cc"),
+        ("http", "t4_http.cc"),
+        ("docs", "t5_docs.cc"),
+        ("contract", "t6_contract.cc"),
+        ("document", "t8_document.cc"),
+        ("embedded", "t9_embedded.cc"),
+        ("native_builder", "t12_native_builder.cc"),
+    ]
 ]
 
 cc_binary(
     name = "startup_server",
     srcs = ["t10_startup.cc"],
     copts = ["-std=c++23", "-UNDEBUG"],
-    deps = ["//src/cpp/galay-api:galay-api"],
+    deps = ["//src/cpp/galay-api:galay-api", "//src/cpp/galay-http2:galay-http2"],
 )
 
 cc_binary(
     name = "transport_server",
     srcs = ["t11_transport_server.cc"],
     copts = ["-std=c++23", "-UNDEBUG"],
-    deps = ["//src/cpp/galay-api:galay-api"],
+    deps = ["//src/cpp/galay-api:galay-api", "//src/cpp/galay-http2:galay-http2"],
 )
 
 sh_test(

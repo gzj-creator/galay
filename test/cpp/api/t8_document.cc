@@ -1,5 +1,5 @@
-#include <galay/cpp/galay-api/api_router.h>
-#include <galay/cpp/galay-api/docs.h>
+#include "route_fixture.h"
+#include <galay/cpp/galay-http/server/api_contract.h>
 #include <galay/cpp/galay-http/protoc/http_response.h>
 #include <serde/json/json.hpp>
 #include <serde/json/stream.hpp>
@@ -73,18 +73,18 @@ using namespace galay::api;
 using namespace galay::http;
 using galay::kernel::Task;
 
-static_assert(std::same_as<decltype(PreparedApi::document), std::shared_ptr<const std::string>>);
+static_assert(std::same_as<decltype(router_detail::PreparedRoutes::document), std::shared_ptr<const std::string>>);
 
 void require(bool condition, std::string_view message) {
     if (condition) return;
-    if (std::fprintf(stderr, "api.policy_document: %.*s\n", static_cast<int>(message.size()), message.data()) < 0) {
+    if (std::fprintf(stderr, "api.document: %.*s\n", static_cast<int>(message.size()), message.data()) < 0) {
         std::exit(2);
     }
     std::exit(1);
 }
 
 ApiInfo info() {
-    return {.title = "Policy document", .version = "1.0.0", .description = "Frozen typed operations"};
+    return {.title = "Native server document", .version = "1.0.0", .description = "Frozen typed operations"};
 }
 
 Task<ApiResult<fixture::Payload>> read(ApiContext&, fixture::Parameters input) {
@@ -109,30 +109,31 @@ Task<void> raw(HttpConn&, HttpRequest) {
     co_return;
 }
 
-PreparedApi prepared() {
-    ApiBuilder builder(info());
+router_detail::PreparedRoutes prepared() {
+    fixture::ContractRoutes builder(info());
+    builder.docs({.spec_path = "/reference.json", .ui_path = "/reference"});
     const auto parameters = InputBinding<fixture::Parameters>{}
         .path<&fixture::Parameters::id>("id").query<&fixture::Parameters::count>("count");
-    require(builder.add<HttpMethod::GET, fixture::Parameters, fixture::Payload>(
+    require(builder.add_api<HttpMethod::GET, fixture::Parameters, fixture::Payload>(
         "/items/:id", read, Operation{.id = "getItem", .errors = {{404, "Not found"}}}, parameters).has_value(), "add GET");
-    require(builder.add<HttpMethod::HEAD, fixture::Parameters, fixture::Payload>(
+    require(builder.add_api<HttpMethod::HEAD, fixture::Parameters, fixture::Payload>(
         "/items/:id", read, Operation{.id = "headItem", .errors = {{404, "Not found"}}}, parameters).has_value(), "add HEAD");
-    require(builder.add<HttpMethod::DELETE, fixture::Parameters, NoContent>(
+    require(builder.add_api<HttpMethod::DELETE, fixture::Parameters, NoContent>(
         "/items/:id", remove, Operation{.id = "deleteItem", .success_status = 204,
             .errors = {{409, "Conflict"}}}, parameters).has_value(), "add DELETE");
-    require(builder.add<HttpMethod::POST, fixture::Payload, fixture::Payload>(
+    require(builder.add_api<HttpMethod::POST, fixture::Payload, fixture::Payload>(
         "/items", write, Operation{.id = "createItem", .success_status = 201,
             .errors = {{409, "Conflict"}}}).has_value(), "add POST");
-    require(builder.add<HttpMethod::PUT, fixture::Payload, fixture::Payload>(
+    require(builder.add_api<HttpMethod::PUT, fixture::Payload, fixture::Payload>(
         "/items", write, Operation{.id = "replaceItem", .errors = {{409, "Conflict"}}}).has_value(), "add PUT");
-    require(builder.add<HttpMethod::PATCH, fixture::Payload, fixture::Payload>(
+    require(builder.add_api<HttpMethod::PATCH, fixture::Payload, fixture::Payload>(
         "/items", write, Operation{.id = "patchItem", .errors = {{422, "Rejected"}}}).has_value(), "add PATCH");
-    require(builder.add<HttpMethod::OPTIONS, NoInput, NoContent>(
+    require(builder.add_api<HttpMethod::OPTIONS, NoInput, NoContent>(
         "/items", empty, Operation{.id = "optionsItems", .success_status = 204,
             .errors = {{503, "Unavailable"}}}).has_value(), "add OPTIONS");
-    require(builder.add<HttpMethod::TRACE, NoInput, NoContent>(
+    require(builder.add_api<HttpMethod::TRACE, NoInput, NoContent>(
         "/diagnostics", empty, Operation{.id = "traceDiagnostics", .errors = {{503, "Unavailable"}}}).has_value(), "add TRACE");
-    auto result = builder.build();
+    auto result = builder.prepare();
     require(result.has_value(), "build all typed operations");
     return std::move(*result);
 }
@@ -283,99 +284,39 @@ void check_document(std::string_view bytes) {
         require(false, "optional query allows omission, not null, while retaining numeric bounds; actual parameter = " + actual);
     }
     for (const auto path : {"/raw", "/raw/{name}", "/openapi.json", "/docs", "/reference.json", "/reference", "/schema.json"}) {
-        require(!paths.contains(path), "raw and policy-installed routes are not reflected typed operations");
+        require(!paths.contains(path), "raw and document routes are not reflected typed operations");
     }
 }
 
-void check_unchanged(PreparedApi& api, const std::shared_ptr<const std::string>& snapshot,
+void check_unchanged(router_detail::PreparedRoutes& api, const std::shared_ptr<const std::string>& snapshot,
                      const std::string& bytes) {
-    require(api.document == snapshot && *api.document == bytes, "policy retains the identical immutable document and bytes");
-    require(api.endpoints.size() == operations.size(), "policy does not append non-typed endpoint metadata");
+    require(api.document == snapshot && *api.document == bytes, "document installation retains the immutable document and bytes");
+    require(api.endpoints.size() == operations.size(), "document installation does not append non-typed endpoint metadata");
     const auto rendered = render_openapi(info(), api.endpoints);
     require(rendered && *rendered == bytes, "endpoint metadata remains identical to the frozen document");
     for (const auto& operation : operations) {
         const std::string path = operation.path == "/items/{id}" ? "/items/18446744073709551615" : std::string(operation.path);
-        require(api.router.find_handler(operation.method, path).request_handler != nullptr, "typed routes survive builder destruction and policy installation");
+        require(api.router.find_handler(operation.method, path).request_handler != nullptr, "typed routes survive builder destruction and document installation");
     }
     check_document(*api.document);
 }
 
-Task<void> send_spec(std::shared_ptr<const std::string> document, HttpConn& connection) {
-    HttpResponse response;
-    response.header().version() = HttpVersion::HttpVersion_1_1;
-    response.header().code() = HttpStatusCode::OK_200;
-    require(response.header().header_pairs().add_header_pair("Content-Type", "application/json") == kNoError,
-            "custom spec Content-Type");
-    response.set_body_str(std::string(*document));
-    auto writer = connection.get_writer();
-    const auto sent = co_await writer.send_response(std::move(response));
-    require(sent && *sent, "custom spec write");
-}
-
-class SpecOnly {
-public:
-    ApiResult<void> install(PreparedApi& api) {
-        if (api.router.find_handler(HttpMethod::GET, "/schema.json")) {
-            return std::unexpected(ApiError{ApiErrorCode::kRouteConflict, "spec route already exists", 409});
-        }
-        document = api.document;
-        api.router.add_handler<HttpMethod::GET>("/schema.json",
-            [shared = document](HttpConn& connection, HttpRequest) {
-                return send_spec(shared, connection);
-            });
-        return {};
-    }
-
-    std::shared_ptr<const std::string> document;
-};
-
-template<ApiDocsPolicy Policy>
-std::shared_ptr<const std::string> install_and_check(Policy& policy, std::string_view spec_path,
-                                                    std::string_view ui_path, const std::string& baseline) {
+void check_native_document() {
     auto api = prepared();
     const auto snapshot = api.document;
-    require(snapshot && *snapshot == baseline, "all policies start from the same deterministic document");
+    const std::string baseline = *snapshot;
     check_unchanged(api, snapshot, baseline);
     api.router.add_handler<HttpMethod::GET>("/raw", raw);
     api.router.add_handler<HttpMethod::POST>("/raw/:name", raw);
     check_unchanged(api, snapshot, baseline);
-    const auto old_size = api.router.size();
-    const auto installed = policy.install(api);
-    require(installed.has_value(), "install documentation policy");
-    check_unchanged(api, snapshot, baseline);
-    require(api.router.find_handler(HttpMethod::GET, "/raw").handler &&
-            api.router.find_handler(HttpMethod::POST, "/raw/name").handler, "raw routes remain usable but undocumented");
-    if (spec_path.empty()) {
-        require(api.router.size() == old_size && !api.docs_installed, "NoSwagger is a no-op, not a document-generation toggle");
-    } else {
-        require(static_cast<bool>(api.router.find_handler(HttpMethod::GET, std::string(spec_path))), "configured spec route installed");
-        require(api.router.size() > old_size, "documentation policy adds routes");
-    }
-    if (!ui_path.empty()) {
-        require(api.docs_installed && api.router.find_handler(HttpMethod::GET, std::string(ui_path)).request_handler &&
-                api.router.find_handler(HttpMethod::GET, std::string(ui_path) + "/swagger-ui-bundle.js").request_handler,
-                "HttpSwagger installs configured offline UI");
-    } else if (!spec_path.empty()) {
-        require(api.router.size() == old_size + 1, "custom spec-only policy adds no UI or inferred operations");
-    }
-    require(!api.router.find_handler(HttpMethod::GET, "/openapi.json") &&
-            !api.router.find_handler(HttpMethod::GET, "/docs"), "no unconfigured default docs routes");
-    return snapshot;
+    require(api.docs_installed && api.router.find_handler(HttpMethod::GET, "/reference").request_handler,
+        "native builder installs configured offline UI");
+    require(!api.router.find_handler(HttpMethod::GET, "/docs"), "default UI is not installed");
 }
 
 } // namespace
 
 int main() {
-    const std::string baseline = *prepared().document;
-    NoSwagger none;
-    const auto offline = install_and_check(none, {}, {}, baseline);
-    HttpSwagger swagger(DocsConfig{.spec_path = "/reference.json", .ui_path = "/reference"});
-    const auto documented = install_and_check(swagger, "/reference.json", "/reference", baseline);
-    SpecOnly custom;
-    const auto spec_only = install_and_check(custom, "/schema.json", {}, baseline);
-    require(custom.document == spec_only, "custom spec handler owns the same immutable shared document");
-    require(*offline == baseline && *documented == baseline && *spec_only == baseline,
-            "offline documents outlive builders, routers and installed docs handlers");
-    check_document(*documented);
-    require(std::puts("API policy document invariants passed without Runtime or listeners") >= 0, "write success output");
+    check_native_document();
+    require(std::puts("Native builder document invariants passed without Runtime or listeners") >= 0, "write result");
 }

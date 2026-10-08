@@ -115,7 +115,7 @@ McpHttpServer::McpHttpServer(std::string host,
                              std::size_t ioSchedulers,
                              std::size_t parallelSchedulers,
                              bool tcpNoDelay)
-    : m_httpServer(http::HttpServerBuilder().host(std::move(host))
+    : m_httpServer(http::HttpServerBuilder<>().host(std::move(host))
                        .port(static_cast<uint16_t>(port))
                        .backlog(128).io_scheduler_count(ioSchedulers)
                        .parallel_scheduler_count(parallelSchedulers)

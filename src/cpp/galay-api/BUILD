@@ -19,10 +19,8 @@ cc_library(
     strip_include_prefix = ".",
     include_prefix = "galay/cpp/galay-api",
     copts = ["-std=c++23"],
-    defines = ["GALAY_API_HTTP2_FEATURE_ENABLED"],
     deps = [
         "//src/cpp/galay-http:galay-http",
-        "//src/cpp/galay-http2:galay-http2",
         "//src/cpp/galay-serde:galay-serde",
     ],
 )

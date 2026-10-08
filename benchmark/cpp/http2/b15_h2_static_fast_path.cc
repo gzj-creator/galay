@@ -111,7 +111,7 @@ int main(int argc, char* argv[])
         write_file(g_static_root / "128kb.bin", 128 * 1024, '8');
         write_file(g_static_root / "1mb.bin", 1024 * 1024, 'm');
 
-        H2cServer server(H2cServerBuilder()
+        H2cServer server(H2cServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
             .io_scheduler_count(static_cast<size_t>(io_threads))
@@ -133,8 +133,10 @@ int main(int argc, char* argv[])
                 .small_file_threshold = 1024 * 1024,
             })
             .active_conn_handler(fallback_active_handler)
-            .build());
-        server.start();
+            .build_config());
+        if (const auto started = server.start(); !started) {
+            std::cerr << "Server startup failed: " << started.error().message << '\n';
+        }
 
         std::cout << "Server started successfully!\n";
         std::cout << "Runtime Config: io=" << server.get_runtime().get_io_scheduler_count()

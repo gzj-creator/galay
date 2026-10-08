@@ -27,10 +27,6 @@ target_include_directories(galay-api PUBLIC
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_link_libraries(galay-api PUBLIC galay::http galay::serde)
-if(TARGET galay::http2)
-    target_link_libraries(galay-api PUBLIC galay::http2)
-    target_compile_definitions(galay-api PUBLIC GALAY_API_HTTP2_FEATURE_ENABLED)
-endif()
 
 install(FILES "${swagger_directory}/LICENSE" "${swagger_directory}/NOTICE"
     "${swagger_directory}/README.md" "${swagger_directory}/SHA256SUMS"

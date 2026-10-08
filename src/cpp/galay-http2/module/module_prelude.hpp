@@ -75,8 +75,41 @@
 #if __has_include("../../galay-http/protoc/route_params.h")
 #include "../../galay-http/protoc/route_params.h"
 #endif
+#if __has_include("../../galay-http/server/api_binding.h")
+#include "../../galay-http/server/api_binding.h"
+#endif
+#if __has_include("../../galay-http/server/api_contract.h")
+#include "../../galay-http/server/api_contract.h"
+#endif
+#if __has_include("../../galay-http/server/api_error.h")
+#include "../../galay-http/server/api_error.h"
+#endif
+#if __has_include("../../galay-http/server/api_operation.h")
+#include "../../galay-http/server/api_operation.h"
+#endif
+#if __has_include("../../galay-http/server/file_settings.h")
+#include "../../galay-http/server/file_settings.h"
+#endif
+#if __has_include("../../galay-http/server/http_etag.h")
+#include "../../galay-http/server/http_etag.h"
+#endif
+#if __has_include("../../galay-http/server/http_policy.h")
+#include "../../galay-http/server/http_policy.h"
+#endif
+#if __has_include("../../galay-http/server/http_range.h")
+#include "../../galay-http/server/http_range.h"
+#endif
+#if __has_include("../../galay-http/server/http_router.h")
+#include "../../galay-http/server/http_router.h"
+#endif
+#if __has_include("../../galay-http/server/schema_model.h")
+#include "../../galay-http/server/schema_model.h"
+#endif
 #if __has_include("../../galay-http/server/server_listener.h")
 #include "../../galay-http/server/server_listener.h"
+#endif
+#if __has_include("../../galay-http/server/server_routes.h")
+#include "../../galay-http/server/server_routes.h"
 #endif
 #if __has_include("../../galay-kernel/async/async_tcp.h")
 #include "../../galay-kernel/async/async_tcp.h"
@@ -355,6 +388,9 @@
 #if defined(_MSC_VER) && __has_include(<intrin.h>)
 #include <intrin.h>
 #endif
+#if __has_include(<iomanip>)
+#include <iomanip>
+#endif
 #if __has_include(<iterator>)
 #include <iterator>
 #endif
@@ -377,6 +413,9 @@
 #endif
 #if __has_include(<list>)
 #include <list>
+#endif
+#if __has_include(<locale>)
+#include <locale>
 #endif
 #if __has_include(<map>)
 #include <map>
@@ -420,6 +459,9 @@
 #if __has_include(<span>)
 #include <span>
 #endif
+#if __has_include(<sstream>)
+#include <sstream>
+#endif
 #if __has_include(<string>)
 #include <string>
 #endif
@@ -461,6 +503,9 @@
 #endif
 #if __has_include(<thread>)
 #include <thread>
+#endif
+#if __has_include(<time.h>)
+#include <time.h>
 #endif
 #if __has_include(<type_traits>)
 #include <type_traits>

@@ -1,4 +1,4 @@
-#include "docs.h"
+#include <galay/cpp/galay-http/server/api_contract.h>
 #include "ui_assets.h"
 #include <galay/cpp/galay-http/protoc/http_response.h>
 #include <serde/json/json.hpp>
@@ -11,7 +11,7 @@
 #include <tuple>
 #include <unistd.h>
 
-namespace galay::api {
+namespace galay::api::router_detail {
 namespace {
 
 struct UiConfiguration {
@@ -213,16 +213,16 @@ kernel::Task<http::HttpResponseResult> make_resource(std::shared_ptr<const Resou
     co_return response;
 }
 
-ApiResult<void> install_resources(PreparedApi& api, const DocsConfig& config,
+ApiResult<void> install_resources(PreparedRoutes& api, const DocsConfig& config,
                                   const std::string* directory)
 {
     if (api.docs_installed) {
         return std::unexpected(ApiError{ApiErrorCode::kRouteConflict,
-            "docs are already installed on this PreparedApi", 409});
+            "docs are already installed on these routes", 409});
     }
     if (!api.document || api.document->empty()) {
         return std::unexpected(ApiError{ApiErrorCode::kResourceError,
-            "PreparedApi must own a nonempty OpenAPI document", 500});
+            "documentation routes require a nonempty OpenAPI document", 500});
     }
     if (directory && (directory->empty() || directory->find('\0') != std::string::npos)) {
         return std::unexpected(ApiError{ApiErrorCode::kResourceError,
@@ -302,15 +302,15 @@ ApiResult<void> install_resources(PreparedApi& api, const DocsConfig& config,
 
 } // namespace
 
-ApiResult<void> install_docs(PreparedApi& api, const DocsConfig& config)
+ApiResult<void> install_docs(PreparedRoutes& api, const DocsConfig& config)
 {
     return install_resources(api, config, nullptr);
 }
 
-ApiResult<void> install_docs_from_directory(PreparedApi& api, const DocsConfig& config,
+ApiResult<void> install_docs_from_directory(PreparedRoutes& api, const DocsConfig& config,
                                           const std::string& directory)
 {
     return install_resources(api, config, &directory);
 }
 
-} // namespace galay::api
+} // namespace galay::api::router_detail

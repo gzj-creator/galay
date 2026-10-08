@@ -136,7 +136,7 @@ int main()
         return 1;
     }
 
-    H2Server server(H2ServerBuilder()
+    H2Server server(H2ServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .cert_path("test/cpp/http2/test.crt")
@@ -163,9 +163,13 @@ int main()
             }
             co_return;
         })
-        .build());
+        .build_config());
 
-    server.start();
+    if (const auto started = server.start(); !started) {
+
+        std::cerr << "Server startup failed: " << started.error().message << '\n';
+
+    }
     if (!server.is_running()) {
         std::cerr << "[T91] server failed to start\n";
         fs::remove_all(base);

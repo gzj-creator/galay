@@ -112,6 +112,11 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
             TIMEOUT 45
             PROCESSORS 2
         )
+    elseif(TEST_NAME STREQUAL "t198_task_completion_wait_race")
+        set_tests_properties(${CTEST_NAME} PROPERTIES
+            TIMEOUT 30
+            PROCESSORS 2
+        )
     endif()
 endforeach()
 

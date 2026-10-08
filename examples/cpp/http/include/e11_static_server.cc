@@ -43,11 +43,11 @@ int main(int argc, char* argv[]) {
     router.add_handler<HttpMethod::GET>("/", index_handler);
     router.mount("/static", static_dir);
 
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("0.0.0.0")
         .port(port)
         .io_scheduler_count(2)
-        .build());
+        .build_config());
     std::cout << "Static server: http://127.0.0.1:" << port << "/\n";
     std::cout << "Static route:  http://127.0.0.1:" << port << "/static/*\n";
     std::cout << "Directory: " << static_dir << "\n";

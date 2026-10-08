@@ -13,13 +13,25 @@ target_link_libraries(loopback PRIVATE galay::api)
 add_test(NAME installed.loopback COMMAND loopback)
 set_tests_properties(installed.loopback PROPERTIES TIMEOUT 60)
 
+add_executable(no_docs t1_loopback.cc)
+target_link_libraries(no_docs PRIVATE galay::api)
+target_compile_definitions(no_docs PRIVATE GALAY_CONSUMER_NO_DOCS)
+add_test(NAME installed.no_docs COMMAND no_docs)
+set_tests_properties(installed.no_docs PROPERTIES TIMEOUT 60)
+
 add_executable(users e1_users.cc)
 target_link_libraries(users PRIVATE galay::api)
+if(TARGET galay::http2)
+    target_link_libraries(users PRIVATE galay::http2)
+endif()
 add_test(NAME installed.export COMMAND users --export "${CMAKE_CURRENT_BINARY_DIR}/openapi.json")
 
 find_program(node node REQUIRED)
 add_executable(transport_server t11_transport_server.cc)
 target_link_libraries(transport_server PRIVATE galay::api)
+if(TARGET galay::http2)
+    target_link_libraries(transport_server PRIVATE galay::http2)
+endif()
 set(transports http)
 if(TARGET galay::ssl)
     string(APPEND transports ",https")
@@ -37,6 +49,9 @@ set_tests_properties(installed.transports PROPERTIES TIMEOUT 180)
 
 add_executable(startup t10_startup.cc)
 target_link_libraries(startup PRIVATE galay::api)
+if(TARGET galay::http2)
+    target_link_libraries(startup PRIVATE galay::http2)
+endif()
 add_test(NAME installed.startup COMMAND ${CMAKE_COMMAND}
     -DTEST_BINARY=$<TARGET_FILE:startup>
     -DTEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}

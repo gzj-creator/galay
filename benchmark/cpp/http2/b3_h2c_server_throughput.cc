@@ -149,7 +149,7 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
 
     try {
-        H2cServer server(H2cServerBuilder()
+        H2cServer server(H2cServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
             .io_scheduler_count(static_cast<size_t>(io_threads))
@@ -157,9 +157,13 @@ int main(int argc, char* argv[]) {
             .max_concurrent_streams(1000)
             .initial_window_size(65535)
             .active_conn_handler(handle_active_conn)
-            .build());
+            .build_config());
 
-        server.start();
+        if (const auto started = server.start(); !started) {
+
+            std::cerr << "Server startup failed: " << started.error().message << '\n';
+
+        }
 
         std::cout << "Server started successfully!\n";
         std::cout << "Runtime Config: io=" << server.get_runtime().get_io_scheduler_count()

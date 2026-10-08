@@ -1,8 +1,9 @@
 # API 验证记录
 
-本页前半部分保留最初外置目录版本和策略增补的历史证据；涉及资源目录或
-`--assets` 的旧命令不是当前接口。默认内嵌版本的实际结果见末尾
-“默认内嵌 UI”一节，包含部署无资源、安装搬迁、构建校验和浏览器验收。
+本页保留最初外置目录版本和策略增补的历史证据；涉及 `ApiServer`、policy、
+`PreparedApi` 或 `--assets` 的旧命令不是当前接口。当前接口已统一到四种原生
+server builder；实际结果见末尾“原生 Builder 统一注册验收（2026-10-08）”，
+包含部署无资源、安装搬迁、构建校验和浏览器验收。
 
 本页记录 HTTP/1 首版 P1–P4 与 `ApiServer<Policy>` 增补的实际执行结果。
 基线与逐轮红色测试、GO / NO-GO 见
@@ -704,3 +705,206 @@ disabled 仍是未覆盖项。h2c 使用现有 prior knowledge，不新增 Upgra
 `4d46496e0c93f4cc0b4f8948814af2ab7bcec288` / peeled commit
 `178c8b391f43e50b2f6967e78ffb0e14f30f9db0` 不变。原有用户服务PID503632 / 18080
 保持运行，验收 fixture 使用独立私有端口并已清理；serde submodule 无改动。
+
+## 原生 Builder 统一注册验收（2026-10-08）
+
+本节对应当前原生 builder 接口，不以此前独立 API server / policy 的验证结果
+代替本次回归。范围限定为统一公开注册、文档开关和原生生命周期；没有实现
+`.api` parser/generator，也没有增加兼容别名、旧名包装或运行期 fallback。
+
+### 当前接口与完成标准
+
+- HTTP、HTTPS、h2c、H2 builder 共用 `ServerRoutes<EnableSwagger>`，模板参数
+  默认 `false`；同一 generated-style 注册函数可以用于两个模式及四种传输。
+- `false` 保留 typed binding、运行期校验、serde codec 和业务错误，不保存
+  文档状态，也没有 `docs` / `export_openapi` 接口；`true` 构建时生成文档、
+  安装资源并预检冲突。普通 handler 不自动成为 OpenAPI operation。
+- `build()` 返回 `ApiResult<std::unique_ptr<NativeServer>>`，构建不监听；失败
+  可修正重试，成功后冻结注册。managed `start()` 返回 `ApiResult<void>`，
+  重复启动、已运行实例和实际启动失败均显式报告，不能破坏低层启动的实例。
+- 只导出原生 handler/static 配置时使用 `build_config()`。API 不再传递链接
+  HTTP2；调用方显式链接 `galay::http2`，由该 target 提供 feature define。
+- 旧公开 builder/server、policy 和 HTTP/2 API adapter 已删除；轻量契约在
+  HTTP server 目录，绑定、codec、OpenAPI、资源实现仍在可选 API 模块。
+
+完成标准为受影响 Release 回归、安装消费、sanitizer、四种 feature 组合、
+离线 UI 和契约验证通过，同时确认纯 HTTP 不引入 API/serde/UI、模块 prelude
+与生成器一致、旧头不再安装以及 diff 无 whitespace 错误。
+
+### Release 与安装消费
+
+GCC/G++ 14、C++23、Linux epoll、Release，C/C++ flags 均为 `-Werror`。
+完成下述 kernel 丢唤醒修复后，`native-api-post-fix-full-build.log` 记录全目标
+增量构建 **809/809 步通过**。此前 622 步构建和 137 项回归是修复前结果，
+不代替最终验收；也不把被中断的 `native-api-full-build.log` 当作成功。
+本次不是 clean 重建，缺 Boost 头文件的 Asio 对照 benchmark 未生成。
+
+```bash
+cmake --build build/naming-release --parallel 1
+ctest --test-dir build/naming-release \
+  -R '^(kernel|api|http|http2|ssl|ws|mcp)\.' \
+  --output-on-failure --parallel 1 \
+  --output-junit native-api-post-fix-regressions.xml
+```
+
+因修复涉及共享任务完成逻辑，受影响集合由 142 项扩大为 346 项：
+**338 Passed、3 原有 Skipped、5 原有 Disabled、0 Failed**，145.94 秒。
+kernel 登记的 204 项中 201 项通过；三个 skip 为
+`kernel.iou_accept_completion_resource`、`kernel.iou_accept_typed_completion`
+和 `kernel.async_file_move`，不能算运行成功。五个 disabled 仍是需要外部
+HTTP fixture 的原有客户端测试。
+API 的 14 项全部通过，包括 native builder、startup、document、四传输、
+configure matrix、embedded generator 和安装消费。完整输出和逐项状态在
+`build/naming-release/native-api-post-fix-regressions.{log,xml}`；未执行上述
+正则之外的全仓 CTest，不以 CTest 将 skip 计入成功的摘要代替实际计数。
+
+新回归覆盖多方法注册的原子性、参数改名和不可比较路径重叠、重复 operationId、
+fuzzy 路径的重复/尾部 slash 别名，以及 exact 路径保留 native slash 区别和
+wildcard/parameter/exact precedence。HTTP2 native handler/static 模式与请求
+路由混用明确失败，修正后可重试。literal slash 的 sanitizer 红色/绿色证据在
+`build/naming-asan/native-builder-literal-{red,green}.{log,xml}`。
+
+安装后删除独立 Swagger metadata，将 prefix 搬迁后重新 `find_package(galay)`、
+`-Werror` 编译并运行。**installed.api、installed.loopback、installed.no_docs、
+installed.export、installed.transports、installed.startup 共 6/6 通过**，4.77 秒。
+`installed.no_docs` 实际请求 typed endpoint 成功，`/openapi.json`、`/docs` 和
+UI 资产为 404。安装脚本还断言八个已删除的 API 头不出现在安装树；日志在
+`build/naming-release/api-install/{install,configure,build,ctest}.log`。
+
+API=OFF、serde=OFF 且 fixture 没有 serde 源码时，plain HTTP builder consumer
+实际编译并启动成功。`readelf` / undefined-symbol 检查没有 API、serde 或
+Swagger 依赖；证据为 `build/naming-release/api-configure/api_off_build.log` 和
+`api_off/plain_http_consumer`，不是仅检查 configure 成功。
+
+### 启停压力发现的任务丢唤醒
+
+feature 矩阵曾在 `api.startup` 超时；十次及一百次重跑通过后，一千次压力
+仍复现，不能当作偶发超时忽略。GDB 显示控制线程挂在
+`close_listeners()` 的 `JoinHandle::wait()` 或连接清理的 `join()`，两条 IO
+scheduler 已空闲；被等待的 TaskState 却已 `m_done=true`、`m_handle=nullptr`。
+关键状态与栈在 `native-api-startup-hang-task-state-final.log` 及
+`native-api-startup-hang-{stacks,debug-stacks}.log`，均位于 Release 验收目录。
+
+新增 `kernel.task_completion_wait_race`，两个 IO scheduler 每轮批量提交
+两个立即完成任务。修复前真实超时 **20.02 秒**，红色证据为
+`native-api-task-completion-race-red-batch.log`。根因是完成状态与惰性 waiter
+指针使用两套 acquire/release 原子，等待方与完成方可能都读到旧状态，
+使已完成任务永远没有唤醒等待方。
+
+修复只调整 `task.cc` 的四个关键内存序：waiter 发布 CAS、完成方读取 waiter、
+完成状态 store，以及持有 waiter mutex 后的 done recheck 使用 `seq_cst`。
+统一顺序保证等待方观察到完成，或完成方观察到 waiter 并通知；未新增锁、
+异常或 TaskState 字段。最终测试同时检查 `wait()` 和 `join()`，设置 30 秒
+CTest 超时避免回归永久阻塞。
+
+- 最终 Release 回归连续 **100/100 通过**，每次十万任务，共一千万任务，
+  156.95 秒；`native-api-task-completion-post-fix-repeat.{log,xml}`。
+- SSL=OFF、HTTP2=ON 的 `api.startup` 连续 **1000/1000 通过**，36.42 秒；
+  `native-api-startup-post-fix-repeat.log`，XML 在对应 matrix build 目录。
+- ASan/UBSan/LSan 下同一任务压力测试连续 **10/10 通过**，共一百万任务，
+  33.76 秒；`build/naming-asan/native-api-task-completion-post-fix-repeat.{log,xml}`。
+
+这些是有界压力测试和真实失败回归，不声称覆盖所有线程交错或性能提升。
+
+### Sanitizer
+
+```bash
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+ctest --test-dir build/naming-asan \
+  -R '^api\.(startup|native_builder|schema|openapi|binding|http|docs|contract|document|embedded|transports)$|^http\.native_builder$|^kernel\.(task_completion_wait_race|joinhandle|taskapi|then_runtime|await_task|then_surface|taskhelp|taskresult_storage|task_lifecycle_matrix)$' \
+  --output-on-failure --parallel 1 \
+  --output-junit native-api-post-fix-sanitizers.xml
+```
+
+修复后重新构建相关目标，ASan、UBSan 和 LeakSanitizer 最终 **21/21 通过**，
+14.39 秒，无 sanitizer 报告。包含原 12 项 typed/doc/native builder 和四传输
+请求，以及九项 kernel 完成、等待、结果存储和生命周期测试；结果在
+`build/naming-asan/native-api-post-fix-sanitizers.{log,xml}`。此前 12 项绿灯是
+修复前结果；本次仍不是全仓 sanitizer，也未执行 ThreadSanitizer。
+
+### 浏览器与实际契约
+
+修复后源码 example 和迁移安装 consumer 各重跑 Playwright，证据在
+`build/naming-release/native-api-post-fix-{browser,installed-browser}.log` 和
+对应同名目录。Chromium 141.0.7390.37，desktop 1440x1000 / mobile 390x844：
+HTTP、HTTPS、H2 的 Swagger UI 和真实 Try it out GET 200 / POST 201 通过，
+零外部请求、浏览器/资源错误和横向溢出。H2 页面、资产、文档及业务请求均
+由 CDP 确认 `h2`，已目视检查 desktop/mobile 执行截图。
+
+四种传输的九个资源与内嵌资源一致，空部署目录无文件抽取，strace 无 UI 文件
+访问。h2c 文档/资源和业务行为使用 Node prior-knowledge 客户端；Chromium 的
+HTTP/1 fallback 404 是已记录的浏览器能力限制，不计为 h2c Try it out 成功。
+安装 consumer 的五个 Galay 共享库均由 `ldd` 确认为移后 prefix 的库，
+其 Swagger share 目录已删除。TLS 浏览器自签名例外不代替严格 CA/hostname
+客户端验证。
+
+本次重新运行 `validate_openapi.py`，
+`build/naming-release/native-api-post-fix-validator.log` 记录 OpenAPI 3.1 的
+**11 operations、128 实际 request/response observations（每传输 32）、45 个
+JSON Schema 正负边界通过**，四种 served/export 字节一致。验证输入来自
+`build/naming-release/test/cpp/api/transport-evidence/`，schema 来自本次导出的
+`native-api-post-fix-schemas.json`，不是复用历史 validator 的计数。对移后安装
+consumer 的独立 evidence 再验一次，同样 128 observations / 45 边界通过，
+见 `native-api-post-fix-installed-validator.log`。
+
+### 四组合 Feature 矩阵
+
+```bash
+cmake -DGALAY_SOURCE_DIR="$PWD" \
+  -DGALAY_BINARY_DIR="$PWD/build/native-api-features" \
+  -DGALAY_CXX_COMPILER=/usr/bin/g++-14 \
+  -DGALAY_C_COMPILER=/usr/bin/gcc-14 \
+  -P test/cpp/api/transport_matrix.cmake
+```
+
+kernel 修复后的矩阵退出 0。SSL/HTTP2 的 OFF/OFF、OFF/ON、ON/OFF、ON/ON
+均 `-Werror` 构建成功，API 各 **14/14 Passed**，CTest 分别 60.68、63.70、
+63.62、68.58 秒；每组合包含安装搬迁、无文档 typed 请求、依赖关闭及四传输中
+可用的协议。总日志 `native-api-feature-matrix-final.log`，逐步日志在
+`build/native-api-features/api-transport-matrix/ssl-*-{configure,build,ctest}.log`。
+旧的 `native-api-feature-matrix-rerun.log` 是修复前结果，不代替本次验收。
+
+首轮矩阵确实因数据盘耗尽报 `No space left on device`，失败证据保留在
+`native-api-feature-matrix.log` 和 matrix 的
+`ssl-OFF-http2-ON-build-disk-full.log`。本次矩阵产物及 mcpp full 缓存迁到
+`/tmp/galay-native-api-verification-20261008.DlG82A/` 所在的另一文件系统，
+原 build/target 路径以符号链接保持可用；没有删除用户文件或历史验收产物。
+
+### mcpp 与模块检查
+
+```bash
+mcpp build --release --features full --jobs 1
+target/x86_64-linux-gnu/356357ce5c57bf92/bin/test_full_import
+target/x86_64-linux-gnu/356357ce5c57bf92/bin/test_kernel_taskresult_storage
+mcpp build --release --features api --jobs 1
+python3 scripts/common/106_gen_module_prelude.py --check
+git diff --check
+```
+
+两个 feature build 均退出 0，日志为
+`build/naming-release/native-api-post-fix-mcpp-{full,api}.log`。Clang 22.1.8，
+full / API 分别 11.52 / 7.55 秒；两份 `task.o` 的时间均晚于修改后的 `task.cc`，
+确认本次 kernel 修复已重新编译。API build 使用先生成的
+`build/api-embedded/swagger_ui.cc`；full import 的原生 builder/template 模式检查
+已编译，二进制及已有 task result storage 测试实际运行退出 0，见
+`native-api-post-fix-mcpp-{full-import,taskresult}.log`。API example 的独立
+`--export` 成功，`native-api-post-fix-mcpp-validator.log` 通过两操作 OpenAPI
+3.1 文档。两次构建包含缓存命中，不声称从零重编全部模块。
+
+已将 mcpp API embedding 注释从“未验证”更新为实际已验证。最终 `mcpp.lock`
+与 HEAD 一致：full build 临时解析 `compat.openssl`，随后 API-only build 不启用
+SSL，锁文件按该命令实际解析的 feature 集合更新；没有手工新增 OpenSSL 锁条目。
+14 个模块 prelude 全部通过生成器一致性检查。
+
+### 未覆盖与工作区
+
+本次验证为 Linux/x86_64 epoll、GCC14 头文件接口及上述 Clang/mcpp 消费；
+未验证 Bazel、macOS/kqueue、io_uring 后端运行、生产 CA 或全仓 sanitizer。
+未实现 `.api` parser/generator；generated-style 注册函数只验证统一 builder
+入口，没有为未来生成器增加额外框架。所有本次验收 fixture 已停止，未遗留
+测试监听服务。
+
+本节记录提交前的验收结果，验收期间没有 commit/tag/push 或版本号修改；serde submodule 仍为
+`e93269257f04166db056da4ef9ee893d8cc096bf`（v0.4.0）。生产新增异常/阻塞锁
+扫描、14 模块 prelude check 和 `git diff --check` 通过。

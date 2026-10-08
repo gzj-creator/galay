@@ -20,6 +20,12 @@ if(NOT result STREQUAL "0")
     message(FATAL_ERROR "Cannot relocate installed package: ${result}")
 endif()
 set(prefix "${relocated}")
+foreach(removed_header IN ITEMS api_server.h docs.h api_contract.h api_error.h
+        binding_contract.h operation.h schema_model.h http2_adapter.h)
+    if(EXISTS "${prefix}/include/galay/cpp/galay-api/${removed_header}")
+        message(FATAL_ERROR "Removed API surface is still installed: ${removed_header}")
+    endif()
+endforeach()
 file(COPY "${CMAKE_CURRENT_LIST_DIR}/consumer" DESTINATION "${work}")
 file(COPY "${GALAY_SOURCE_DIR}/examples/cpp/api/e1_users.cc"
     DESTINATION "${work}/consumer")

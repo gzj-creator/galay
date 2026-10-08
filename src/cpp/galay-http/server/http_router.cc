@@ -472,7 +472,7 @@ bool HttpRouter::is_fuzzy_pattern(const std::string& path) const
            path.find('*') != std::string::npos;
 }
 
-std::vector<std::string> HttpRouter::split_path(const std::string& path) const
+std::vector<std::string> HttpRouter::split_path(const std::string& path)
 {
     std::vector<std::string> segments;
     size_t offset = 0;
@@ -724,7 +724,7 @@ HttpRouteEntry* HttpRouter::search_route_path_recursive(
     return nullptr;
 }
 
-bool HttpRouter::validate_path(const std::string& path, std::string& error) const
+bool HttpRouter::validate_path(const std::string& path, std::string& error)
 {
     // 1. 检查路径是否为空
     if (path.empty()) {
@@ -775,14 +775,14 @@ bool HttpRouter::validate_path(const std::string& path, std::string& error) cons
             std::string paramName = segment.substr(1);
 
             // 检查参数名第一个字符（必须是字母或下划线）
-            if (!std::isalpha(paramName[0]) && paramName[0] != '_') {
+            if (!std::isalpha(static_cast<unsigned char>(paramName[0])) && paramName[0] != '_') {
                 error = "Parameter name '" + paramName + "' must start with a letter or underscore";
                 return false;
             }
 
             // 检查参数名是否合法（只能包含字母、数字、下划线）
             for (char c : paramName) {
-                if (!std::isalnum(c) && c != '_') {
+                if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') {
                     error = "Parameter name '" + paramName + "' contains invalid character '" + std::string(1, c) + "'";
                     return false;
                 }
@@ -814,7 +814,7 @@ bool HttpRouter::validate_path(const std::string& path, std::string& error) cons
         else {
             // 检查是否包含非法字符
             for (char c : segment) {
-                if (!std::isalnum(c) && c != '-' && c != '_' && c != '.' && c != '~') {
+                if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_' && c != '.' && c != '~') {
                     error = "Segment '" + segment + "' contains invalid character '" + std::string(1, c) + "'";
                     return false;
                 }

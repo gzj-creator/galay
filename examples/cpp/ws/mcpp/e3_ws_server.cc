@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        HttpServer server(HttpServerBuilder().host("0.0.0.0").port(port).build());
+        HttpServer server(HttpServerBuilder<>().host("0.0.0.0").port(port).build_config());
         std::cout << "Import WebSocket server: ws://127.0.0.1:" << port << "/ws\n";
         server.start(handle_http_request);
         while (server.is_running()) {

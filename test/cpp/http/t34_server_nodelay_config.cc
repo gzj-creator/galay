@@ -174,13 +174,13 @@ int observe_plain_server_tcp_no_delay(bool tcp_no_delay)
 {
     ProbeState state;
     const uint16_t port = pick_free_port();
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
         .tcp_no_delay(tcp_no_delay)
-        .build());
+        .build_config());
 
     require(server.add_accept_plugin(std::make_unique<NoDelayProbePlugin<AsyncTcpSocket>>(&state)),
             "nodelay probe plugin should register");
@@ -207,13 +207,13 @@ int observe_https_server_tcp_no_delay(bool tcp_no_delay)
 {
     ProbeState state;
     const uint16_t port = pick_free_port();
-    HttpsServer server(HttpsServerBuilder()
+    HttpsServer server(HttpsServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
         .tcp_no_delay(tcp_no_delay)
-        .build());
+        .build_config());
 
     require(server.add_accept_plugin(
                 std::make_unique<NoDelayProbePlugin<galay::ssl::SslSocket>>(&state, false)),
@@ -242,17 +242,17 @@ int observe_https_server_tcp_no_delay(bool tcp_no_delay)
 
 void test_builder_config_surface()
 {
-    auto default_http_config = HttpServerBuilder().build_config();
+    auto default_http_config = HttpServerBuilder<>().build_config();
     require(default_http_config.tcp_no_delay, "HttpServerConfig should enable TCP_NODELAY by default");
 
-    auto disabled_http_config = HttpServerBuilder().tcp_no_delay(false).build_config();
+    auto disabled_http_config = HttpServerBuilder<>().tcp_no_delay(false).build_config();
     require(!disabled_http_config.tcp_no_delay, "HttpServerBuilder should support disabling TCP_NODELAY");
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    auto default_https_config = HttpsServerBuilder().build_config();
+    auto default_https_config = HttpsServerBuilder<>().build_config();
     require(default_https_config.tcp_no_delay, "HttpsServerConfig should enable TCP_NODELAY by default");
 
-    auto disabled_https_config = HttpsServerBuilder().tcp_no_delay(false).build_config();
+    auto disabled_https_config = HttpsServerBuilder<>().tcp_no_delay(false).build_config();
     require(!disabled_https_config.tcp_no_delay, "HttpsServerBuilder should support disabling TCP_NODELAY");
 #endif
 }

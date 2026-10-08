@@ -15,6 +15,7 @@
 
 #include "../kernel/http_conn.h"
 #include "http_router.h"
+#include "server_routes.h"
 #include "http_policy.h"
 #include "server_listener.h"
 #include "../common/http_log.h"
@@ -81,8 +82,11 @@ struct HttpServerConfig
  * @brief HTTP 服务器 builder
  * @details builder 不持有线程或监听 socket；真正的 runtime 和监听资源在 `build()` 后的服务器实例中创建。
  */
-class HttpServerBuilder {
+template<bool EnableSwagger = false>
+class HttpServerBuilder : public server_detail::ServerRoutes<EnableSwagger> {
 public:
+    HttpServerBuilder() = default;
+    explicit HttpServerBuilder(HttpServerConfig config) : m_config(std::move(config)) {}
     HttpServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; } ///< 设置监听地址
     HttpServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; } ///< 设置监听端口
     HttpServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; } ///< 设置 listen backlog
@@ -118,7 +122,7 @@ public:
         m_config.affinity.custom_parallel_cpus = std::move(parallel_cpus);
         return true;
     }
-    HttpServerImpl<AsyncTcpSocket> build() const; ///< 构建 HTTP 服务器实例
+    api::ApiResult<std::unique_ptr<HttpServerImpl<AsyncTcpSocket>>> build();
     HttpServerConfig build_config() const                { return m_config; } ///< 导出配置
 private:
     HttpServerConfig m_config;
@@ -164,6 +168,30 @@ public:
 
     HttpServerImpl(const HttpServerImpl&) = delete;
     HttpServerImpl& operator=(const HttpServerImpl&) = delete;
+
+    HttpServerImpl(const HttpServerConfig& config, HttpRouter&& router) : HttpServerImpl(config)
+    {
+        m_router = std::move(router);
+    }
+
+    api::ApiResult<void> start()
+    {
+        if (m_running.load()) return std::unexpected(api::ApiError{api::ApiErrorCode::kServerError,
+            "server is already running", 409});
+        if (m_start_attempted) return std::unexpected(api::ApiError{api::ApiErrorCode::kServerError,
+            "server has already attempted to start", 409});
+        if (!m_router) return std::unexpected(api::ApiError{api::ApiErrorCode::kInvalidBinding,
+            "server has no registered routes", 500});
+        m_start_attempted = true;
+        auto router = std::move(*m_router);
+        m_router.reset();
+        start(std::move(router));
+        if (!is_running()) {
+            stop();
+            return std::unexpected(api::ApiError{api::ApiErrorCode::kTransportError, m_start_error, 500});
+        }
+        return {};
+    }
 
     /**
      * @brief 以自定义连接处理器启动服务器
@@ -650,12 +678,17 @@ protected:
     std::vector<AsyncTcpSocket> m_listeners;     ///< 每个 IO 调度器独立 listener，stop() 同步关闭
     server_detail::ServerConnections m_connections;
     std::atomic<bool> m_running;            ///< 运行状态标志
+    bool m_start_attempted = false;
 };
 
 // 类型别名 - HTTP (AsyncTcpSocket)
 using HttpConnHandler = HttpConnHandlerImpl<AsyncTcpSocket>;
 using HttpServer = HttpServerImpl<AsyncTcpSocket>;
-inline HttpServer HttpServerBuilder::build() const { return HttpServer(m_config); }
+template<bool EnableSwagger>
+inline api::ApiResult<std::unique_ptr<HttpServer>> HttpServerBuilder<EnableSwagger>::build()
+{
+    return this->template build_native<HttpServer>(m_config, true);
+}
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 /**
@@ -691,8 +724,11 @@ class HttpsServer;
  * @brief HTTPS 服务器 builder
  * @details 除监听配置外，还负责收集 TLS 上下文初始化所需的证书与验证策略。
  */
-class HttpsServerBuilder {
+template<bool EnableSwagger = false>
+class HttpsServerBuilder : public server_detail::ServerRoutes<EnableSwagger> {
 public:
+    HttpsServerBuilder() = default;
+    explicit HttpsServerBuilder(HttpsServerConfig config) : m_config(std::move(config)) {}
     HttpsServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; } ///< 设置监听地址
     HttpsServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; } ///< 设置监听端口
     HttpsServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; } ///< 设置 listen backlog
@@ -721,7 +757,7 @@ public:
     HttpsServerBuilder& ca_path(std::string v)            { m_config.ca_path = std::move(v); return *this; } ///< 设置 CA 证书路径
     HttpsServerBuilder& verify_peer(bool v)               { m_config.verify_peer = v; return *this; } ///< 设置是否校验客户端证书
     HttpsServerBuilder& verify_depth(int v)               { m_config.verify_depth = v; return *this; } ///< 设置证书链校验深度
-    HttpsServer build() const; ///< 构建 HTTPS 服务器实例
+    api::ApiResult<std::unique_ptr<HttpsServer>> build();
     HttpsServerConfig build_config() const                { return m_config; } ///< 导出配置
 private:
     HttpsServerConfig m_config;
@@ -746,6 +782,11 @@ public:
     }
 
     ~HttpsServer() override { stop(); }
+
+    HttpsServer(const HttpsServerConfig& config, HttpRouter&& router) : HttpsServer(config)
+    {
+        m_router = std::move(router);
+    }
 
 protected:
     bool start_internal() override {
@@ -951,7 +992,11 @@ private:
     galay::ssl::SslContext m_ssl_ctx;
 };
 
-inline HttpsServer HttpsServerBuilder::build() const { return HttpsServer(m_config); }
+template<bool EnableSwagger>
+inline api::ApiResult<std::unique_ptr<HttpsServer>> HttpsServerBuilder<EnableSwagger>::build()
+{
+    return this->template build_native<HttpsServer>(m_config, false);
+}
 #endif
 
 } // namespace galay::http

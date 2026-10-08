@@ -75,14 +75,14 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================\n";
 
     try {
-        H2Server server(H2ServerBuilder()
+        H2Server server(H2ServerBuilder<>()
             .host("0.0.0.0")
             .port(static_cast<uint16_t>(port))
             .cert_path(cert_path)
             .key_path(key_path)
             .io_scheduler_count(4)
             .max_concurrent_streams(100)
-            .build());
+            .build_config());
 
         server.start(handle_stream);
 

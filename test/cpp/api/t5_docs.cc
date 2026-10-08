@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-api/docs.h>
+#include <galay/cpp/galay-http/server/api_contract.h>
 #include <galay/cpp/galay-http/server/http_server.h>
 #include <serde/json/json.hpp>
 
@@ -18,6 +18,8 @@
 #include <unistd.h>
 
 using namespace galay::api;
+using galay::api::router_detail::install_docs;
+using galay::api::router_detail::install_docs_from_directory;
 using namespace galay::http;
 namespace fs = std::filesystem;
 using namespace std::chrono_literals;
@@ -120,9 +122,9 @@ public:
     fs::path path;
 };
 
-PreparedApi prepared()
+router_detail::PreparedRoutes prepared()
 {
-    PreparedApi api;
+    router_detail::PreparedRoutes api;
     api.document = std::make_shared<const std::string>(document);
     return api;
 }
@@ -146,7 +148,7 @@ std::vector<std::string> docs_paths(const DocsConfig& config)
     return paths;
 }
 
-void require_uninstalled(PreparedApi& api, const DocsConfig& config,
+void require_uninstalled(router_detail::PreparedRoutes& api, const DocsConfig& config,
                          std::string_view existing = {})
 {
     require(!api.docs_installed, "failed install must not set docs_installed");
@@ -454,8 +456,8 @@ void loopback_and_lifetime(const DocsConfig& config, bool from_directory)
     assets.reset();
 
     const auto port = free_port();
-    HttpServer server(HttpServerBuilder().host("127.0.0.1").port(port)
-                          .io_scheduler_count(1).parallel_scheduler_count(1).build());
+    HttpServer server(HttpServerBuilder<>().host("127.0.0.1").port(port)
+                          .io_scheduler_count(1).parallel_scheduler_count(1).build_config());
     server.start(std::move(detached));
     require(server.is_running(), "docs loopback server failed to start");
     auto spec = request(port, config.spec_path);

@@ -1,6 +1,8 @@
 #include <galay/cpp/galay-api/api_router.h>
-#include <galay/cpp/galay-api/api_server.h>
-#include <galay/cpp/galay-api/docs.h>
+#include <galay/cpp/galay-http/server/http_server.h>
+#ifdef GALAY_HTTP2_FEATURE_ENABLED
+#include <galay/cpp/galay-http2/server/http2_server.h>
+#endif
 #include <serde/reflect/reflect_macros.hpp>
 
 #include <cerrno>
@@ -94,24 +96,23 @@ Task<ApiResult<UserDto>> create_user(ApiContext&, CreateUserInput input)
     co_return UserDto{.id = 100, .name = std::move(input.name), .email = std::move(input.email)};
 }
 
-ApiResult<PreparedApi> prepare_api()
+template<class Builder>
+ApiResult<void> register_api(Builder& builder)
 {
-    ApiBuilder builder(ApiInfo{.title = "Users API", .version = "1.0.0",
-                               .description = "Typed users example across HTTP transports"});
-    auto get = builder.add<HttpMethod::GET, GetUserInput, UserDto>(
+    auto get = builder.template add_api<HttpMethod::GET, GetUserInput, UserDto>(
         "/users/:id", get_user,
         Operation{.id = "getUser", .summary = "Get a user", .tags = {"Users"},
                   .errors = {{404, "User not found"}}},
         InputBinding<GetUserInput>{}.path<&GetUserInput::id>("id")
                                    .query<&GetUserInput::verbose>("verbose"));
     if (!get) return std::unexpected(std::move(get.error()));
-    auto post = builder.add<HttpMethod::POST, CreateUserInput, UserDto>(
+    auto post = builder.template add_api<HttpMethod::POST, CreateUserInput, UserDto>(
         "/users", create_user,
         Operation{.id = "createUser", .summary = "Create a user", .tags = {"Users"},
                   .success_status = 201, .success_description = "User created",
                   .errors = {{409, "Name is reserved"}}});
     if (!post) return std::unexpected(std::move(post.error()));
-    return builder.build();
+    return {};
 }
 
 } // namespace users
@@ -238,6 +239,40 @@ void request_stop(int)
     stopping = 1;
 }
 
+template<class Builder>
+int run_server(Builder& builder, const Options& options)
+{
+    builder.api_info({.title = "Users API", .version = "1.0.0",
+                      .description = "Typed users example across HTTP transports"});
+    const auto registered = users::register_api(builder);
+    if (!registered) return report_error(registered.error());
+    if (options.export_path) {
+        const auto document = builder.export_openapi();
+        if (!document) return report_error(document.error());
+        const auto exported = export_document(*options.export_path, *document);
+        if (!exported) return report_error(exported.error());
+        std::cout << "Exported OpenAPI to " << *options.export_path << '\n';
+        return 0;
+    }
+    builder.host("127.0.0.1").port(options.port).io_scheduler_count(1).parallel_scheduler_count(1);
+    auto built = builder.build();
+    if (!built) return report_error(built.error());
+    auto& server = **built;
+    const auto started = server.start();
+    if (!started) return report_error(started.error());
+    const std::string scheme = options.transport == "https" || options.transport == "h2" ? "https" : "http";
+    std::cout << "Transport: " << options.transport << '\n'
+              << "Swagger UI: " << scheme << "://127.0.0.1:" << options.port << "/docs\n"
+              << "OpenAPI: " << scheme << "://127.0.0.1:" << options.port << "/openapi.json\n";
+    if (options.transport == "h2c") {
+        std::cout << "h2c acceptance uses HTTP/2 prior knowledge; browsers cannot select that transport.\n";
+    }
+    std::cout << std::flush;
+    while (!stopping && server.is_running()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    server.stop();
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -252,64 +287,34 @@ int main(int argc, char** argv)
                   << "       [--transport http|https|h2c|h2] [--cert <pem>] [--key <pem>]\n";
         return 0;
     }
-    auto api = users::prepare_api();
-    if (!api) return report_error(api.error());
-
-    // Export precedes ApiServer construction, docs installation, Runtime and listen.
-    if (options->export_path) {
-        auto exported = export_document(*options->export_path, *api->document);
-        if (!exported) return report_error(exported.error());
-        std::cout << "Exported OpenAPI to " << *options->export_path << '\n';
-        return 0;
-    }
-    if (std::signal(SIGINT, request_stop) == SIG_ERR ||
-        std::signal(SIGTERM, request_stop) == SIG_ERR) {
+    if (std::signal(SIGINT, request_stop) == SIG_ERR || std::signal(SIGTERM, request_stop) == SIG_ERR) {
         std::cerr << "Cannot register shutdown signals\n";
         return 1;
     }
-    ApiServerConfig config;
-    if (options->transport == "http") {
-        config = galay::http::HttpServerBuilder().host("127.0.0.1").port(options->port)
-            .io_scheduler_count(1).parallel_scheduler_count(1).build_config();
+    if (options->transport == "http" || options->export_path) {
+        galay::http::HttpServerBuilder<true> builder;
+        return run_server(builder, *options);
     }
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    else if (options->transport == "https") {
-        config = galay::http::HttpsServerBuilder().host("127.0.0.1").port(options->port)
-            .cert_path(options->cert_path).key_path(options->key_path)
-            .io_scheduler_count(1).parallel_scheduler_count(1).build_config();
+    if (options->transport == "https") {
+        galay::http::HttpsServerBuilder<true> builder;
+        builder.cert_path(options->cert_path).key_path(options->key_path);
+        return run_server(builder, *options);
     }
 #endif
-#ifdef GALAY_API_HTTP2_FEATURE_ENABLED
-    else if (options->transport == "h2c") {
-        config = galay::http2::H2cServerBuilder().host("127.0.0.1").port(options->port)
-            .io_scheduler_count(1).parallel_scheduler_count(1).build_config();
-    }
-#ifdef GALAY_SSL_FEATURE_ENABLED
-    else if (options->transport == "h2") {
-        config = galay::http2::H2ServerBuilder().host("127.0.0.1").port(options->port)
-            .cert_path(options->cert_path).key_path(options->key_path)
-            .io_scheduler_count(1).parallel_scheduler_count(1).build_config();
-    }
-#endif
-#endif
-    else {
-        std::cerr << "Transport is not enabled in this build: " << options->transport << '\n';
-        return 2;
-    }
-    ApiServer<HttpSwagger> server(std::move(config));
-    auto started = server.start(std::move(*api));
-    if (!started) return report_error(started.error());
-    const std::string scheme = options->transport == "https" || options->transport == "h2" ? "https" : "http";
-    std::cout << "Transport: " << options->transport << '\n'
-              << "Swagger UI: " << scheme << "://127.0.0.1:" << options->port << "/docs\n"
-              << "OpenAPI: " << scheme << "://127.0.0.1:" << options->port << "/openapi.json\n";
+#ifdef GALAY_HTTP2_FEATURE_ENABLED
     if (options->transport == "h2c") {
-        std::cout << "h2c acceptance uses HTTP/2 prior knowledge; browsers cannot select that transport.\n";
+        galay::http2::H2cServerBuilder<true> builder;
+        return run_server(builder, *options);
     }
-    std::cout << std::flush;
-    while (!stopping && server.is_running()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    if (options->transport == "h2") {
+        galay::http2::H2ServerBuilder<true> builder;
+        builder.cert_path(options->cert_path).key_path(options->key_path);
+        return run_server(builder, *options);
     }
-    server.stop();
-    return 0;
+#endif
+#endif
+    std::cerr << "Transport is not enabled in this build: " << options->transport << '\n';
+    return 2;
 }

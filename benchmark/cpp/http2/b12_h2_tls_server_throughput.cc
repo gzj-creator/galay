@@ -277,7 +277,7 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================\n\n";
 
     try {
-        H2Server server(H2ServerBuilder()
+        H2Server server(H2ServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
             .cert_path(cert_path)
@@ -288,9 +288,13 @@ int main(int argc, char* argv[]) {
             .initial_window_size(65535)
             .flow_control_target_window(1u << 20)
             .active_conn_handler(handle_active_conn)
-            .build());
+            .build_config());
 
-        server.start();
+        if (const auto started = server.start(); !started) {
+
+            std::cerr << "Server startup failed: " << started.error().message << '\n';
+
+        }
         std::cout << "Server started successfully!\n";
         std::cout << "Runtime Config: io=" << server.get_runtime().get_io_scheduler_count()
                   << " parallel=" << server.get_runtime().get_parallel_scheduler_count()

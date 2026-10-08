@@ -1,13 +1,10 @@
-#include "http2_adapter.h"
-
-#ifdef GALAY_API_HTTP2_FEATURE_ENABLED
-#include "api_router.h"
+#include "http2_router.h"
 
 #include <algorithm>
 #include <array>
 #include <charconv>
 
-namespace galay::api::server_detail {
+namespace galay::http2::server_detail {
 namespace {
 
 std::expected<http::HttpRequest, http::HttpError> normalize_request(http2::Http2Request& source)
@@ -98,9 +95,14 @@ kernel::Task<void> execute_http2_route(std::shared_ptr<http::HttpRouter> router,
     auto request = normalize_request(stream->request());
     http::HttpResponseResult response = std::unexpected(http::HttpError{http::kInternalError});
     if (!request) {
-        auto error = router_detail::encode_error(ApiError{ApiErrorCode::kBadRequest, request.error().message(), 400});
-        if (error) response = router_detail::make_response(400, std::move(*error), true, head);
-        else response = std::unexpected(http::HttpError{http::kInternalError, error.error().message});
+        http::HttpResponse invalid;
+        invalid.header().code() = http::HttpStatusCode::BadRequest_400;
+        const auto added = invalid.header().header_pairs().add_header_pair("Content-Type", "text/plain");
+        if (added != http::kNoError) response = std::unexpected(http::HttpError{added});
+        else {
+            if (!head) invalid.set_body_str(request.error().message());
+            response = std::move(invalid);
+        }
     } else {
         auto match = router->find_handler(request->header().method(), request->header().uri());
         request->set_route_params(std::move(match.params));
@@ -131,5 +133,4 @@ kernel::Task<void> execute_http2_route(std::shared_ptr<http::HttpRouter> router,
     if (!sent) HTTP_LOG_ERROR("[api-h2] [send-task-fail]", "stream={} error={}", stream->stream_id(), sent.error().message());
 }
 
-} // namespace galay::api::server_detail
-#endif
+} // namespace galay::http2::server_detail

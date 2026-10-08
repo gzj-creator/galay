@@ -281,11 +281,11 @@ int main() {
 
 #if defined(USE_KQUEUE) || defined(USE_EPOLL) || defined(USE_IOURING)
     // 配置并启动服务器
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(8080)
         .backlog(128)
-        .build());
+        .build_config());
 
     g_server_running = true;
 

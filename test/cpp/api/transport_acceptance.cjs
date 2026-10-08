@@ -455,9 +455,19 @@ async function main() {
     const hidden_server = await start_server(binary, mode, certificates, output, ['--no-swagger']);
     const hidden_client = await make_client(mode, hidden_server.port, ca);
     try {
-      assert.equal((await hidden_client.request('GET', '/values/7')).status, 200);
+      await expect_json(hidden_client, 'getValue', 'GET', '/values/7', '', 200,
+        { id: 7, title: 'Ada', verbose: true });
+      await expect_json(hidden_client, 'getValue', 'GET', '/values/7?verbose=1', '', 400, 'bad_request');
+      await expect_json(hidden_client, 'postValue', 'POST', '/values/8', '{"display-title":"hidden"}', 201,
+        { id: 8, title: 'hidden', verbose: true });
+      await expect_json(hidden_client, 'postValue', 'POST', '/values/8', '{}', 400, 'bad_request');
+      await expect_json(hidden_client, 'postValue', 'POST', '/values/8', '{}', 415,
+        'unsupported_media_type', 'text/plain');
+      await expect_json(hidden_client, 'businessError', 'GET', '/business', '', 404, 'business_error');
+      await expect_json(hidden_client, 'undeclaredError', 'GET', '/undeclared', '', 500, 'business_error');
+      await expect_json(hidden_client, 'encodingError', 'GET', '/encoding-error', '', 500, 'encoding_error');
       for (const target of ['/openapi.json', '/docs', '/docs/swagger-ui-bundle.js', '/docs/favicon-32x32.png']) {
-        assert.equal((await hidden_client.request('GET', target)).status, 404, 'NoSwagger exposes no documentation');
+        assert.equal((await hidden_client.request('GET', target)).status, 404, 'Swagger-disabled builder exposes no documentation');
       }
     } finally { await hidden_client.close(); await hidden_server.stop(); }
     const missing_port = await free_port();

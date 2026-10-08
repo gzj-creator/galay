@@ -204,7 +204,7 @@ int main()
 {
     const uint16_t port = static_cast<uint16_t>(22000 + (::getpid() % 10000));
 
-    H2cServer server(H2cServerBuilder()
+    H2cServer server(H2cServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
@@ -220,8 +220,10 @@ int main()
             .body = kSmallBody,
         })
         .active_conn_handler(fallback_active_handler)
-        .build());
-    server.start();
+        .build_config());
+    if (const auto started = server.start(); !started) {
+        std::cerr << "Server startup failed: " << started.error().message << '\n';
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();

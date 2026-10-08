@@ -116,14 +116,16 @@ int main() {
 
     const uint16_t port = static_cast<uint16_t>(21000 + (::getpid() % 10000));
 
-    H2cServer server(H2cServerBuilder()
+    H2cServer server(H2cServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(0)
         .stream_handler(handle_stream)
-        .build());
-    server.start();
+        .build_config());
+    if (const auto started = server.start(); !started) {
+        std::cerr << "Server startup failed: " << started.error().message << '\n';
+    }
     const bool listener_ready = wait_for_server_ready(server, std::chrono::seconds(5));
     if (!listener_ready) {
         std::cerr << "[T43] h2c listener did not become ready\n";

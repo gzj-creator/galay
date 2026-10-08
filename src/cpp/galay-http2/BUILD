@@ -13,6 +13,7 @@ cc_library(
     strip_include_prefix = ".",
     include_prefix = "galay/cpp/galay-http2",
     copts = ["-std=c++23"],
+    defines = ["GALAY_HTTP2_FEATURE_ENABLED"],
     deps = [
         "//src/cpp/galay-http:galay-http",
         "//src/cpp/galay-kernel:galay-kernel",

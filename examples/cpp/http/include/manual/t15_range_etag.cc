@@ -248,10 +248,10 @@ int main(int argc, char* argv[]) {
         router.add_handler<HttpMethod::GET>("/files/*", file_handler_with_cors);
 
         // 创建并启动服务器
-        HttpServer server(HttpServerBuilder()
+        HttpServer server(HttpServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
-            .build());
+            .build_config());
 
         std::cout << "========================================\n";
         std::cout << "Server is running on http://0.0.0.0:" << port << "\n";

@@ -29,28 +29,4 @@ http::HttpResponseResult make_response(int status, std::string body, bool json_b
 
 } // namespace router_detail
 
-ApiResult<PreparedApi> ApiBuilder::build() {
-    if (built_) return std::unexpected(ApiError{ApiErrorCode::kFrozenBuilder, "API builder has already been built", 500});
-    auto document = render_openapi(info_, endpoints_);
-    if (!document) return std::unexpected(std::move(document.error()));
-    http::HttpRouter router;
-    for (const auto& route : routes_) {
-        switch (route.method) {
-        case http::HttpMethod::GET: router.add_request_handler<http::HttpMethod::GET>(route.path, route.handler); break;
-        case http::HttpMethod::POST: router.add_request_handler<http::HttpMethod::POST>(route.path, route.handler); break;
-        case http::HttpMethod::HEAD: router.add_request_handler<http::HttpMethod::HEAD>(route.path, route.handler); break;
-        case http::HttpMethod::PUT: router.add_request_handler<http::HttpMethod::PUT>(route.path, route.handler); break;
-        case http::HttpMethod::DELETE: router.add_request_handler<http::HttpMethod::DELETE>(route.path, route.handler); break;
-        case http::HttpMethod::PATCH: router.add_request_handler<http::HttpMethod::PATCH>(route.path, route.handler); break;
-        case http::HttpMethod::OPTIONS: router.add_request_handler<http::HttpMethod::OPTIONS>(route.path, route.handler); break;
-        case http::HttpMethod::TRACE: router.add_request_handler<http::HttpMethod::TRACE>(route.path, route.handler); break;
-        default: return std::unexpected(ApiError{ApiErrorCode::kInvalidMetadata, "unsupported route method", 500});
-        }
-    }
-    auto shared_document = std::make_shared<const std::string>(std::move(*document));
-    built_ = true;
-    routes_.clear();
-    return PreparedApi{std::move(router), std::move(shared_document), std::move(endpoints_)};
-}
-
 } // namespace galay::api

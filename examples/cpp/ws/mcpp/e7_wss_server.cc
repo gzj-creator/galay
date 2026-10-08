@@ -185,13 +185,13 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
 
     try {
-        HttpsServer server(HttpsServerBuilder()
+        HttpsServer server(HttpsServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
             .cert_path(cert_path)
             .key_path(key_path)
             .io_scheduler_count(2)
-            .build());
+            .build_config());
         std::cout << "Import WSS server: wss://127.0.0.1:" << port << "/ws\n";
         server.start(https_handler);
 

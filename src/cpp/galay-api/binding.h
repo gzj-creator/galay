@@ -1,7 +1,7 @@
 #ifndef GALAY_API_BINDING_H
 #define GALAY_API_BINDING_H
 
-#include "binding_contract.h"
+#include <galay/cpp/galay-http/server/api_binding.h>
 #include "schema.h"
 #include <serde/json/json.hpp>
 
@@ -312,7 +312,9 @@ ApiResult<BindingPlan<Input>> InputBinding<Input>::prepare(http::HttpMethod meth
             }
         }
 
-        plan.decode = [members = members_, has_body = plan.body_schema.has_value(),
+        auto runtime_members = members_;
+        for (auto& member : runtime_members) member.describe = {};
+        plan.decode = [members = std::move(runtime_members), has_body = plan.body_schema.has_value(),
                        required = plan.body_required](http::HttpRequest& request) -> ApiResult<Input> {
             Input input{};
             if constexpr (reflect::StaticReflectable<Input>) {

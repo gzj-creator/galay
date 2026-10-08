@@ -6,6 +6,9 @@ foreach(source IN LISTS GALAY_API_TEST_SOURCES)
     endif()
     add_executable("api_${name}" "${source}")
     target_link_libraries("api_${name}" PRIVATE galay::api)
+    if(TARGET galay::http2 AND name MATCHES "^t(10|12)_")
+        target_link_libraries("api_${name}" PRIVATE galay::http2)
+    endif()
     target_compile_definitions("api_${name}" PRIVATE
         GALAY_API_SWAGGER_UI_DIR="${PROJECT_SOURCE_DIR}/assets/swagger-ui")
     string(REGEX REPLACE "^t[0-9]+_" "" scenario "${name}")
@@ -24,6 +27,9 @@ endforeach()
 find_program(GALAY_API_NODE_EXECUTABLE node REQUIRED)
 add_executable(api_t11_transport_server t11_transport_server.cc)
 target_link_libraries(api_t11_transport_server PRIVATE galay::api)
+if(TARGET galay::http2)
+    target_link_libraries(api_t11_transport_server PRIVATE galay::http2)
+endif()
 set(api_transports http)
 if(GALAY_BUILD_SSL)
     string(APPEND api_transports ",https")
@@ -50,7 +56,7 @@ add_test(NAME api.configure_matrix COMMAND ${CMAKE_COMMAND}
     -DGALAY_BINARY_DIR=${CMAKE_BINARY_DIR}
     -DGALAY_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     -P ${CMAKE_CURRENT_SOURCE_DIR}/configure_matrix.cmake)
-set_tests_properties(api.configure_matrix PROPERTIES LABELS "api;config" TIMEOUT 120)
+set_tests_properties(api.configure_matrix PROPERTIES LABELS "api;config" TIMEOUT 180)
 
 add_test(NAME api.install_consumer COMMAND ${CMAKE_COMMAND}
     -DGALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}

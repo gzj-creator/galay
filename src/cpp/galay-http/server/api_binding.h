@@ -1,8 +1,8 @@
-#ifndef GALAY_API_BINDING_CONTRACT_H
-#define GALAY_API_BINDING_CONTRACT_H
+#ifndef GALAY_HTTP_API_BINDING_H
+#define GALAY_HTTP_API_BINDING_H
 
-#include "operation.h"
-#include <galay/cpp/galay-http/protoc/http_request.h>
+#include "api_operation.h"
+#include "../protoc/http_request.h"
 #include <functional>
 
 namespace galay::api {

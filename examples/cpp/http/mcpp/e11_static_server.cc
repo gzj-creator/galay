@@ -42,11 +42,11 @@ int main(int argc, char* argv[]) {
     router.add_handler<HttpMethod::GET>("/", index_handler);
     router.mount("/static", static_dir);
 
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("0.0.0.0")
         .port(port)
         .io_scheduler_count(2)
-        .build());
+        .build_config());
     std::cout << "Import static server: http://127.0.0.1:" << port << "/\n";
     server.start(std::move(router));
 

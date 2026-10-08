@@ -698,12 +698,12 @@ void assert_contains(const std::string& text, const std::string& expected)
 void verify_co_await_request_returns_entity_too_large()
 {
     uint16_t port = pick_free_port();
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
 
     g_stage = 2;
     server.start(reject_oversize_conn_handler);
@@ -735,12 +735,12 @@ void verify_co_await_request_returns_entity_too_large()
 void verify_co_await_chunk_reader_returns_entity_too_large()
 {
     uint16_t port = pick_free_port();
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
 
     g_stage = 2;
     server.start(reject_oversize_chunk_conn_handler);
@@ -764,12 +764,12 @@ void verify_co_await_chunk_reader_returns_entity_too_large()
 void verify_co_await_chunk_reader_streams_large_chunk()
 {
     uint16_t port = pick_free_port();
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
 
     g_stage = 2;
     server.start(large_chunk_conn_handler);
@@ -819,12 +819,12 @@ int main()
 
     uint16_t port = pick_free_port();
 
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
     g_stage = 2;
     server.start(large_upload_conn_handler);
 

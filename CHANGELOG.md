@@ -13,15 +13,20 @@
 
 ### Added
 
-- 类型化 API 和 OpenAPI/Swagger 扩展到 HTTPS（HTTP/1 over TLS）、h2c prior knowledge 和 HTTP/2 over TLS，保留 HTTP/1 明文能力。`ApiServerConfig` 选择现有原生引擎，四种传输复用同一份 DTO、路由登记、参数绑定、校验、JSON 编解码和错误契约。
-- 为原生 `HttpRouter` 增加返回自持响应的 request handler；HTTP/2 适配器处理真实 stream 的完整请求及 HEADERS/DATA 响应，保留 `ApiContext` 借用语义和 `PreparedApi` 原生路由器，不引入第二套反射系统。
+- 类型化 API 和 OpenAPI/Swagger 扩展到 HTTPS（HTTP/1 over TLS）、h2c prior knowledge 和 HTTP/2 over TLS，保留 HTTP/1 明文能力。四种传输复用同一份 DTO、路由登记、参数绑定、校验、JSON 编解码和错误契约。
+- HTTP、HTTPS、h2c、H2 原生 Builder 统一提供 `add_api`、`add_handler` 和 `add_request_handler`，共用 `ServerRoutes<EnableSwagger>`，默认关闭文档；相同注册函数可用于四种传输和两个文档模式。
+- 为原生 `HttpRouter` 增加返回自持响应的 request handler；HTTP/2 原生请求适配处理真实 stream 的完整请求及 HEADERS/DATA 响应，保留 `ApiContext` 借用语义和原生路由器，不引入第二套反射系统。
 
 ### Changed
 
-- 四种传输统一提供 OpenAPI 3.1.0、内嵌 Swagger UI 5.17.14 及离线静态资源；保留 `NoSwagger`、明确的文档路由冲突和显式目录缺资源失败语义，不升级资源或回退 CDN。
-- 原生监听初始化同步报告 socket/bind/listen 及 TLS/ALPN 启动失败原因；预检或文档策略失败可重试，进入原生初始化后的 API server 仍为单次使用，重复停止无副作用并保留共享文档。
+- 四种传输统一提供 OpenAPI 3.1.0、内嵌 Swagger UI 5.17.14 及离线静态资源。`EnableSwagger=false` 保留 typed binding、运行期校验、serde 编解码和业务错误，但不保存文档专用状态、不生成或挂载文档，也不提供 `docs` / `export_openapi`；开启模式支持离线导出及显式资源目录，缺资源明确失败，不升级资源或回退 CDN。
+- 原生 Builder 的 `build()` 返回 `ApiResult<std::unique_ptr<NativeServer>>`，预检路由、文档和资源后才构造服务；失败可修正重试，成功冻结注册。managed `start()` 显式报告重复启动、socket/bind/listen、Runtime 和 TLS/ALPN 错误，不破坏已通过低层接口运行的服务；配置导出统一使用 `build_config()`。
 - typed/request 路由停止时先关闭 listener、在连接 IO owner 上中断收发并异步排空 handler，最后停止 Runtime；排空期间保留定时器，不抢占任意业务协程。连接 handler、协议升级及自定义 fallback 保留原有生命周期责任。
-- 同步 CMake、Bazel、mcpp 的 HTTP2 依赖和 feature 定义，以及受影响模块 prelude、安装消费工程和四传输示例选项。
+- 轻量契约移入 HTTP server 目录，绑定、serde codec、OpenAPI 和资源实现保留在可选 API 模块；API 不再传递依赖 HTTP2，使用者显式链接 `galay::http2`。同步 CMake、Bazel、mcpp 的 feature 定义、模块 prelude、安装消费及 HTTP/HTTP2/WS 示例、测试和 benchmark 调用点，纯 HTTP 不引入 API、serde 或 Swagger。
+
+### Removed
+
+- 删除公开的 `ApiBuilder`、`ApiServer` / `ApiServerConfig`、`PreparedApi`、文档 policy 和独立 API HTTP/2 adapter；构建产物收为内部 `PreparedRoutes`，不保留旧名别名、兼容包装或 fallback。
 
 ### Fixed
 
@@ -30,18 +35,22 @@
 - 修复停止活跃连接时挂起协程及 TLS/stream 资源泄漏、默认 HTTP/1 fallback keepalive 排空超时，以及 stream pool 与 enable_shared_from_this 控制块的所有权循环。
 - 修复 `TaskResumeQueue` 移动 borrowed 引用后的空状态访问，以及 `Bytes` 隐藏终止字节分配的长度溢出；新增对应崩溃及边界回归，保留既有分配失败契约。
 - 修复 API=OFF 配置检查因 fixture 绝对路径包含 galay-api 字样产生的误报，改为检查实际 Ninja target rules。
+- 原生 Builder 统一检查普通/typed/文档路由冲突、重复 operationId、参数改名及不可比较路径重叠；多方法注册失败不留下部分路由，保留 native exact 路径的 slash 区别与 wildcard/parameter/exact precedence，HTTP/2 请求路由不可与 native stream/active handler 或 static mounts 混用。
+- 修复启停压力发现的 kernel 任务完成丢唤醒：waiter 发布、完成标记、完成方读取 waiter 和等待方睡前检查采用统一的 `seq_cst` 顺序，避免任务已完成但同步 `wait()` / `join()` 永久阻塞；新增有界压力回归，不新增锁、异常或 TaskState 字段。
 
 ### Docs
 
-- 更新 API 快速开始、参考、使用指南、示例和能力表；记录 h2c 浏览器连接限制、TLS 测试证书、停止与重试语义，以及实际失败复现、修复和最终验证命令。
+- 更新 API 快速开始、参考、使用指南、示例、能力表及 Swagger 资源说明，统一为原生 Builder 入口；记录文档开关、依赖边界、h2c 浏览器限制、TLS 测试证书、停止与重试语义，以及实际失败复现和最终验收证据。没有实现 `.api` parser/generator。
 
 ### Validation
 
-- GCC14 / C++23 头文件接口 / Linux epoll / Release 共享库全模块、C ABI、测试、示例及可生成 benchmark 构建通过，C/C++ 使用 `-Werror`。此前 clean 构建3928/3928步，最终修改后全目标增量302/302步，日志无 warning/error。
-- 完整串行 CTest 645项登记：604通过、36原有跳过、5原有禁用、0失败；API 14/14，ASan/UBSan及泄漏检查覆盖30个受影响测试并全部通过。SSL/HTTP2四种 ON/OFF 组合各14/14 API测试通过，移后外部消费者5/5通过。
-- 四传输真实 loopback 覆盖成功、绑定/JSON失败、业务错误、404、文档和资源；H2/h2c各验证24并发stream、reset、流控阻塞和连接关闭，TLS验证CA/hostname及ALPN。OpenAPI验证器通过11个operation、96个实际请求响应观察和45个schema边界。
+- GCC14 / C++23 头文件接口 / Linux epoll / Release 共享库全模块、C ABI、测试、示例及可生成 benchmark 构建通过，C/C++ 使用 `-Werror`。四传输初版曾完成 clean 构建3928/3928步及最终增量302/302步；2026-10-08 原生 Builder 与 kernel 修复后的全目标增量构建809/809步通过，不声称本轮 clean 重建。
+- 四传输初版完整串行 CTest 645项：604通过、36原有跳过、5原有禁用、0失败，sanitizer覆盖30项。原生 Builder 和 kernel 修复后扩大回归至346项：338通过、3原有跳过、5原有禁用、0失败；ASan/UBSan/LSan 21/21。修复后的 SSL/HTTP2 四组合各14/14 API测试通过，迁移安装消费者6/6通过，并实际验证 API/serde 均关闭的 plain HTTP 消费者及已删除头不再安装。
+- kernel 完成压力回归修复前真实超时，修复后 Release 连续100次通过，共一千万任务；ASan/UBSan/LSan 连续10次通过，共一百万任务；SSL=OFF、HTTP2=ON 的启动回归连续1000次通过。保留 GDB 完成态与等待线程栈证据，不以重跑掩盖丢唤醒。
+- 四传输真实 loopback 覆盖成功、绑定/JSON失败、业务错误、404、文档和资源；H2/h2c各验证24并发stream、reset、流控阻塞和连接关闭，TLS验证CA/hostname及ALPN。最终源码及安装版 OpenAPI 验证器各通过11个operation、128个实际请求响应观察（每传输32，含无文档模式）和45个schema边界。
 - 源码及迁移安装消费者的 Chromium141桌面/移动端离线UI与HTTP/HTTPS/H2实际GET200/POST201 Try it out通过，H2由CDP确认真实协议；无外部请求或UI文件访问。h2c仅按真实prior knowledge客户端验收，不将浏览器HTTP/1 fallback算作支持。
-- 未验证Bazel、mcpp/原生命名模块及其他编译器/平台；本机无Boost头文件的对照benchmark未生成。完整CTest原有跳过/禁用项及任意业务handler的非抢占边界仍明确保留。
+- Clang22.1.8 / mcpp 的 `full`、`api` Release构建通过，kernel修复重新编译，full import和task result storage实际运行通过；API示例离线导出与两操作文档验证通过，14个模块prelude一致性检查通过。两次构建包含缓存命中，`mcpp.lock`及serde submodule保持不变。
+- 未验证Bazel、macOS/kqueue、当前改动的io_uring后端运行、生产CA或全仓sanitizer，也未对任务完成热路径做修复前后吞吐对比；本机无Boost头文件的对照benchmark未生成。跳过/禁用项及任意业务handler的非抢占边界仍明确保留。
 
 ## [v6.2.0] - 2026-10-07
 

@@ -95,13 +95,13 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================\n\n";
 
     try {
-        HttpsServer server(HttpsServerBuilder()
+        HttpsServer server(HttpsServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
             .cert_path(cert_path)
             .key_path(key_path)
             .io_scheduler_count(static_cast<size_t>(io_threads))
-            .build());
+            .build_config());
 
         server.start(handle_https_request);
         while (g_running) {

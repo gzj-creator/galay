@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-api/api_router.h>
+#include "route_fixture.h"
 #include <galay/cpp/galay-http/server/http_server.h>
 #include <serde/json/json.hpp>
 #include <serde/reflect/reflect_macros.hpp>
@@ -196,19 +196,19 @@ Task<ApiResult<NoContent>> no_content(ApiContext&, NoInput) {
     co_return NoContent{};
 }
 
-PreparedApi prepared(std::shared_ptr<fixture::Lifetime> lifetime) {
-    ApiBuilder builder(ApiInfo{.title = "P2 loopback", .version = "1.0.0"});
+router_detail::PreparedRoutes prepared(std::shared_ptr<fixture::Lifetime> lifetime) {
+    fixture::ContractRoutes builder(ApiInfo{.title = "P2 loopback", .version = "1.0.0"});
     auto get_binding = InputBinding<fixture::GetInput>{};
     get_binding.path<&fixture::GetInput::id>("id").query<&fixture::GetInput::verbose>("verbose");
-    require(builder.add<HttpMethod::GET, fixture::GetInput, fixture::Output>(
+    require(builder.add_api<HttpMethod::GET, fixture::GetInput, fixture::Output>(
         "/users/:id", get, Operation{.id = "getUser"}, get_binding).has_value(), "register GET");
     auto post_binding = InputBinding<fixture::PostInput>{};
     post_binding.path<&fixture::PostInput::id>("id");
-    require(builder.add<HttpMethod::POST, fixture::PostInput, fixture::Output>(
+    require(builder.add_api<HttpMethod::POST, fixture::PostInput, fixture::Output>(
         "/users/:id", post, Operation{.id = "postUser", .success_status = 201}, post_binding).has_value(), "register POST");
 
     // The passed coroutine lambda is temporary. Its closure must stay alive through suspension.
-    require(builder.add<HttpMethod::GET, fixture::GetInput, fixture::Output>(
+    require(builder.add_api<HttpMethod::GET, fixture::GetInput, fixture::Output>(
         "/async/:id", [lifetime](ApiContext& context, fixture::GetInput input) -> Task<ApiResult<fixture::Output>> {
             lifetime->calls.fetch_add(1);
             co_yield true;
@@ -219,26 +219,26 @@ PreparedApi prepared(std::shared_ptr<fixture::Lifetime> lifetime) {
             co_return fixture::Output{input.id, lifetime->label, input.verbose.value_or(false)};
         }, Operation{.id = "asyncUser"}, get_binding).has_value(), "temporary coroutine lambda");
 
-    require(builder.add<HttpMethod::GET, NoInput, NoContent>(
+    require(builder.add_api<HttpMethod::GET, NoInput, NoContent>(
         "/empty", no_content, Operation{.id = "empty"}).has_value(), "NoContent 200");
-    require(builder.add<HttpMethod::GET, NoInput, NoContent>(
+    require(builder.add_api<HttpMethod::GET, NoInput, NoContent>(
         "/no-content", no_content, Operation{.id = "noContent", .success_status = 204}).has_value(), "204");
-    require(builder.add<HttpMethod::POST, NoInput, NoContent>(
+    require(builder.add_api<HttpMethod::POST, NoInput, NoContent>(
         "/reset-content", no_content, Operation{.id = "resetContent", .success_status = 205}).has_value(), "205");
-    require(builder.add<HttpMethod::HEAD, fixture::GetInput, fixture::Output>(
+    require(builder.add_api<HttpMethod::HEAD, fixture::GetInput, fixture::Output>(
         "/head/:id", get, Operation{.id = "headUser"}, get_binding).has_value(), "HEAD typed output");
-    require(builder.add<HttpMethod::GET, NoInput, fixture::Output>(
+    require(builder.add_api<HttpMethod::GET, NoInput, fixture::Output>(
         "/business", [](ApiContext&, NoInput) -> Task<ApiResult<fixture::Output>> {
             co_return std::unexpected(ApiError{ApiErrorCode::kBusinessError, "missing \"user\"\n", 404});
         }, Operation{.id = "business", .errors = {{404, "Not found"}}}).has_value(), "business error");
-    require(builder.add<HttpMethod::GET, NoInput, fixture::Output>(
+    require(builder.add_api<HttpMethod::GET, NoInput, fixture::Output>(
         "/undeclared", [](ApiContext&, NoInput) -> Task<ApiResult<fixture::Output>> {
             co_return std::unexpected(ApiError{ApiErrorCode::kBusinessError, "undeclared", 409});
         }, Operation{.id = "undeclared"}).has_value(), "undeclared business error");
-    require(builder.add<HttpMethod::GET, NoInput, fixture::Output>(
+    require(builder.add_api<HttpMethod::GET, NoInput, fixture::Output>(
         "/task-error", [](ApiContext&, NoInput) -> Task<ApiResult<fixture::Output>> { return {}; },
         Operation{.id = "taskError"}).has_value(), "empty Task scheduling failure");
-    require(builder.add<HttpMethod::GET, fixture::GetInput, fixture::Output>(
+    require(builder.add_api<HttpMethod::GET, fixture::GetInput, fixture::Output>(
         "/schedule-error/:id", [](ApiContext& context, fixture::GetInput input) {
             auto task = get(context, std::move(input));
             // Inject the awaiter's typed scheduling failure without changing a live scheduler.
@@ -248,44 +248,44 @@ PreparedApi prepared(std::shared_ptr<fixture::Lifetime> lifetime) {
             galay::kernel::detail::complete_task_state(ref);
             return task;
         }, Operation{.id = "scheduleError"}, get_binding).has_value(), "typed scheduling error boundary");
-    require(builder.add<HttpMethod::POST, fixture::PostInput, std::string_view>(
+    require(builder.add_api<HttpMethod::POST, fixture::PostInput, std::string_view>(
         "/borrowed/:id", [](ApiContext& context, fixture::PostInput) -> Task<ApiResult<std::string_view>> {
             co_yield true;
             co_return std::string_view(context.request.body_str());
         }, Operation{.id = "borrowedRequest"}, post_binding).has_value(), "request body borrow through suspension");
-    require(builder.add<HttpMethod::GET, NoInput, fixture::Number>(
+    require(builder.add_api<HttpMethod::GET, NoInput, fixture::Number>(
         "/encoding-error", [](ApiContext&, NoInput) -> Task<ApiResult<fixture::Number>> {
             co_return fixture::Number{std::numeric_limits<double>::infinity()};
         }, Operation{.id = "encodingError"}).has_value(), "encoding error");
 
-    auto result = builder.build();
+    auto result = builder.prepare();
     require(result.has_value(), "build API");
-    const auto frozen_add = builder.add<HttpMethod::GET, NoInput, NoContent>(
+    const auto frozen_add = builder.add_api<HttpMethod::GET, NoInput, NoContent>(
         "/later", no_content, Operation{.id = "later"});
     require(!frozen_add && frozen_add.error().code == ApiErrorCode::kFrozenBuilder, "add after build forbidden");
-    const auto frozen_build = builder.build();
+    const auto frozen_build = builder.prepare();
     require(!frozen_build && frozen_build.error().code == ApiErrorCode::kFrozenBuilder, "repeat build forbidden");
     return std::move(*result);
 }
 
 void test_registration_errors() {
-    ApiBuilder builder;
-    const auto typed_204 = builder.add<HttpMethod::GET, NoInput, fixture::Output>(
+    fixture::ContractRoutes builder;
+    const auto typed_204 = builder.add_api<HttpMethod::GET, NoInput, fixture::Output>(
         "/typed-204", [](ApiContext&, NoInput) -> Task<ApiResult<fixture::Output>> { co_return fixture::Output{}; },
         Operation{.id = "typed204", .success_status = 204});
-    const auto typed_205 = builder.add<HttpMethod::GET, NoInput, fixture::Output>(
+    const auto typed_205 = builder.add_api<HttpMethod::GET, NoInput, fixture::Output>(
         "/typed-205", [](ApiContext&, NoInput) -> Task<ApiResult<fixture::Output>> { co_return fixture::Output{}; },
         Operation{.id = "typed205", .success_status = 205});
     require(!typed_204 && !typed_205, "typed outputs on 204/205 rejected instead of discarded");
-    require(builder.add<HttpMethod::GET, NoInput, NoContent>(
+    require(builder.add_api<HttpMethod::GET, NoInput, NoContent>(
         "/same", no_content, Operation{.id = "first"}).has_value(), "initial registration");
-    const auto conflict = builder.add<HttpMethod::GET, NoInput, NoContent>(
+    const auto conflict = builder.add_api<HttpMethod::GET, NoInput, NoContent>(
         "/same", no_content, Operation{.id = "second"});
     require(!conflict && conflict.error().code == ApiErrorCode::kRouteConflict, "duplicate route rejected");
-    const auto duplicate_id = builder.add<HttpMethod::GET, NoInput, NoContent>(
+    const auto duplicate_id = builder.add_api<HttpMethod::GET, NoInput, NoContent>(
         "/other", no_content, Operation{.id = "first"});
     require(!duplicate_id && duplicate_id.error().code == ApiErrorCode::kDuplicateOperation, "duplicate operation rejected");
-    const auto built = builder.build();
+    const auto built = builder.prepare();
     require(built && built->endpoints.size() == 1, "failed adds do not leave partial routes");
 }
 
@@ -309,8 +309,8 @@ void test_loopback() {
     require(!paths.at("/empty").at("get").contains("requestBody"), "NoInput has no request body");
 
     const auto port = free_port();
-    HttpServer server(HttpServerBuilder().host("127.0.0.1").port(port)
-        .io_scheduler_count(1).parallel_scheduler_count(1).build());
+    HttpServer server(HttpServerBuilder<>().host("127.0.0.1").port(port)
+        .io_scheduler_count(1).parallel_scheduler_count(1).build_config());
     server.start(std::move(api.router));
     require(server.is_running(), "HTTP route server starts");
 

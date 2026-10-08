@@ -1,5 +1,6 @@
 #include <cassert>
 #include <chrono>
+#include <coroutine>
 #include <type_traits>
 #include <utility>
 
@@ -21,6 +22,14 @@ import galay.tracing;
 import json;
 import toml;
 
+template<class Builder>
+concept HasDocument = requires(const Builder& builder) { builder.export_openapi(); };
+
+galay::kernel::Task<galay::http::HttpResponseResult> native_response(galay::http::HttpRequest)
+{
+    co_return galay::http::HttpResponse{};
+}
+
 int main()
 {
     const auto page_size = galay::utils::Memory::page_size();
@@ -39,4 +48,17 @@ int main()
     static_assert(sizeof(galay::mongo::MongoConfig) > 0);
     static_assert(sizeof(galay::mongo::protocol::MongoCommandBuilder) > 0);
     static_assert(sizeof(galay::tracing::TraceId) > 0);
+
+    static_assert(!HasDocument<galay::http::HttpServerBuilder<>>);
+    static_assert(HasDocument<galay::http::HttpServerBuilder<true>>);
+    static_assert(!HasDocument<galay::http2::H2cServerBuilder<>>);
+    static_assert(HasDocument<galay::http2::H2cServerBuilder<true>>);
+    galay::http::HttpServerBuilder<> http;
+    const auto registered = http.add_request_handler<galay::http::HttpMethod::GET>("/native", native_response);
+    assert(registered.has_value());
+    const auto duplicate = http.add_request_handler<galay::http::HttpMethod::GET>("/native", native_response);
+    assert(!duplicate && duplicate.error().code == galay::api::ApiErrorCode::kRouteConflict);
+    galay::http2::H2cServerBuilder<> h2c;
+    const auto h2_registered = h2c.add_request_handler<galay::http::HttpMethod::GET>("/native", native_response);
+    assert(h2_registered.has_value());
 }

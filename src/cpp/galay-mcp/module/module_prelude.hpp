@@ -81,6 +81,18 @@
 #if __has_include("../../galay-http/protoc/route_params.h")
 #include "../../galay-http/protoc/route_params.h"
 #endif
+#if __has_include("../../galay-http/server/api_binding.h")
+#include "../../galay-http/server/api_binding.h"
+#endif
+#if __has_include("../../galay-http/server/api_contract.h")
+#include "../../galay-http/server/api_contract.h"
+#endif
+#if __has_include("../../galay-http/server/api_error.h")
+#include "../../galay-http/server/api_error.h"
+#endif
+#if __has_include("../../galay-http/server/api_operation.h")
+#include "../../galay-http/server/api_operation.h"
+#endif
 #if __has_include("../../galay-http/server/file_settings.h")
 #include "../../galay-http/server/file_settings.h"
 #endif
@@ -99,8 +111,14 @@
 #if __has_include("../../galay-http/server/http_server.h")
 #include "../../galay-http/server/http_server.h"
 #endif
+#if __has_include("../../galay-http/server/schema_model.h")
+#include "../../galay-http/server/schema_model.h"
+#endif
 #if __has_include("../../galay-http/server/server_listener.h")
 #include "../../galay-http/server/server_listener.h"
+#endif
+#if __has_include("../../galay-http/server/server_routes.h")
+#include "../../galay-http/server/server_routes.h"
 #endif
 #if __has_include("../../galay-http/utils/http_helper.h")
 #include "../../galay-http/utils/http_helper.h"

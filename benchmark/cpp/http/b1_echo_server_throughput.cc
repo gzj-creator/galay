@@ -98,12 +98,12 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
 
     try {
-        HttpServer server(HttpServerBuilder()
+        HttpServer server(HttpServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
             .io_scheduler_count(static_cast<size_t>(io_threads))
             .parallel_scheduler_count(0)
-            .build());
+            .build_config());
 
 
         server.start(handle_http_request);

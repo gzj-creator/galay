@@ -70,7 +70,7 @@ int main(int argc, char* argv[])
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
-    H2cServer server(H2cServerBuilder()
+    H2cServer server(H2cServerBuilder<>()
         .host("0.0.0.0")
         .port(port)
         .io_scheduler_count(2)
@@ -82,11 +82,13 @@ int main(int argc, char* argv[])
         })
         .static_files("/files", H2StaticFileConfig{.root = static_root})
         .active_conn_handler(fallback_active_handler)
-        .build());
+        .build_config());
 
     std::cout << "Import h2c static server: http://127.0.0.1:" << port << "\n";
     std::cout << "Static root: " << static_root << "\n";
-    server.start();
+    if (const auto started = server.start(); !started) {
+        std::cerr << "Server startup failed: " << started.error().message << '\n';
+    }
     while (g_running.load()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }

@@ -305,12 +305,12 @@ int main()
     upstream_router.add_handler<HttpMethod::GET>("/stream", upstream_stream);
     upstream_router.add_handler<HttpMethod::GET>("/**", upstream_catch_all);
 
-    HttpServer upstream_server(HttpServerBuilder()
+    HttpServer upstream_server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(upstream_port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
     upstream_server.start(std::move(upstream_router));
 
     HttpRouter proxy_router;
@@ -318,12 +318,12 @@ int main()
     proxy_router.proxy("/", "127.0.0.1", upstream_port);
     proxy_router.proxy("/raw", "127.0.0.1", upstream_port, ProxyMode::Raw);
 
-    HttpServer proxy_server(HttpServerBuilder()
+    HttpServer proxy_server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(proxy_port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
     proxy_server.start(std::move(proxy_router));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(400));

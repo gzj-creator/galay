@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-api/api_router.h>
+#include "route_fixture.h"
 #include <galay/cpp/galay-http/server/http_server.h>
 #include <serde/reflect/reflect_macros.hpp>
 
@@ -230,24 +230,24 @@ void test_nested_binding() {
 
 int main() {
     test_nested_binding();
-    ApiBuilder builder(ApiInfo{.title = "Contract", .version = "1.0"});
-    const auto added = builder.add<HttpMethod::GET, NoInput, fixture::DriftOutput>(
+    fixture::ContractRoutes builder(ApiInfo{.title = "Contract", .version = "1.0"});
+    const auto added = builder.add_api<HttpMethod::GET, NoInput, fixture::DriftOutput>(
         "/drift", handler, Operation{.id = "drift"});
     require(added.has_value(), "register drift route");
-    require(builder.add<HttpMethod::GET, NoInput, std::optional<fixture::Mode>>(
+    require(builder.add_api<HttpMethod::GET, NoInput, std::optional<fixture::Mode>>(
         "/enum", [](ApiContext&, NoInput) -> Task<ApiResult<std::optional<fixture::Mode>>> {
             co_return std::optional<fixture::Mode>{fixture::Mode::active};
         }, Operation{.id = "enumDrift"}).has_value(), "register enum route");
-    require(builder.add<HttpMethod::POST, fixture::NestedInput, NoContent>(
+    require(builder.add_api<HttpMethod::POST, fixture::NestedInput, NoContent>(
         "/nested", [](ApiContext&, fixture::NestedInput) -> Task<ApiResult<NoContent>> {
             co_return NoContent{};
         }, Operation{.id = "nestedDrift"}).has_value(), "register nested input route");
-    auto api = builder.build();
+    auto api = builder.prepare();
     require(api.has_value(), "build drift route");
 
     const auto port = free_port();
-    HttpServer server(HttpServerBuilder().host("127.0.0.1").port(port)
-        .io_scheduler_count(1).parallel_scheduler_count(1).build());
+    HttpServer server(HttpServerBuilder<>().host("127.0.0.1").port(port)
+        .io_scheduler_count(1).parallel_scheduler_count(1).build_config());
     server.start(std::move(api->router));
     require(server.is_running(), "start server");
     check_response(request(port), 200, "\"value\":7");

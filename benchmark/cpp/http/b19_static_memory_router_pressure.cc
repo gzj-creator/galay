@@ -402,12 +402,12 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    auto server = HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(2)
         .parallel_scheduler_count(1)
-        .build();
+        .build_config());
     server.start(std::move(router));
 
     std::vector<ThreadResult> results(concurrency);

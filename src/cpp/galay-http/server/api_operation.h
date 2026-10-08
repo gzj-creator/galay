@@ -1,8 +1,8 @@
-#ifndef GALAY_API_OPERATION_H
-#define GALAY_API_OPERATION_H
+#ifndef GALAY_HTTP_API_OPERATION_H
+#define GALAY_HTTP_API_OPERATION_H
 
 #include "schema_model.h"
-#include <galay/cpp/galay-http/protoc/http_base.h>
+#include "../protoc/http_base.h"
 #include <span>
 
 namespace galay::api {

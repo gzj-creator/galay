@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-api/docs.h>
+#include <galay/cpp/galay-http/server/api_contract.h>
 
 #include <array>
 #include <cstdlib>
@@ -31,10 +31,10 @@ int main()
     fs::current_path(directory.data(), error);
     require(!error, "switch to empty deployment directory");
 
-    galay::api::PreparedApi prepared;
+    galay::api::router_detail::PreparedRoutes prepared;
     prepared.document = std::make_shared<const std::string>(
         R"({"openapi":"3.1.0","info":{"title":"Embedded","version":"1"},"paths":{}})");
-    const auto installed = galay::api::HttpSwagger{galay::api::DocsConfig{}}.install(prepared);
+    const auto installed = galay::api::router_detail::install_docs(prepared);
     fs::current_path(previous, error);
     require(!error, "restore working directory");
     require(fs::remove(directory.data(), error) && !error, "remove empty deployment directory");

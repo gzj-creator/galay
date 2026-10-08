@@ -1,5 +1,5 @@
 #include <galay/cpp/galay-api/api_router.h>
-#include <galay/cpp/galay-api/api_server.h>
+#include <galay/cpp/galay-http/server/http_server.h>
 
 #include <arpa/inet.h>
 #include <array>
@@ -11,6 +11,7 @@
 #include <string_view>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <utility>
 
 namespace {
 
@@ -49,7 +50,8 @@ std::uint16_t free_port()
     return port;
 }
 
-galay::http::HttpResponse get(std::uint16_t port, std::string_view path)
+galay::http::HttpResponse get(std::uint16_t port, std::string_view path,
+                             galay::http::HttpStatusCode status = galay::http::HttpStatusCode::OK_200)
 {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     require(fd >= 0, "create client socket");
@@ -81,7 +83,7 @@ galay::http::HttpResponse get(std::uint16_t port, std::string_view path)
     std::vector<iovec> views{{.iov_base = bytes.data(), .iov_len = bytes.size()}};
     const auto [error, consumed] = response.from_io_vec(views);
     require(error == galay::http::kNoError && consumed > 0 && response.is_complete(), "complete HTTP response");
-    require(response.header().code() == galay::http::HttpStatusCode::OK_200, "HTTP status 200");
+    require(response.header().code() == status, "HTTP status");
     return response;
 }
 
@@ -90,26 +92,40 @@ galay::kernel::Task<galay::api::ApiResult<std::string>> value(galay::api::ApiCon
     co_return "installed";
 }
 
-} // namespace
-
-int main()
+template<bool EnableSwagger>
+void run_loopback()
 {
     using namespace galay::api;
-    ApiBuilder builder({.title = "Relocated consumer", .version = "1"});
-    require(builder.add<galay::http::HttpMethod::GET, NoInput, std::string>(
-        "/value", value, Operation{.id = "getValue"}).has_value(), "register typed operation");
-    auto prepared = builder.build();
-    require(prepared.has_value(), "prepare API");
-    const auto document = prepared->document;
     galay::http::HttpServerConfig config;
     config.host = "127.0.0.1";
     config.port = free_port();
     config.io_scheduler_count = 1;
     config.parallel_scheduler_count = 1;
-    ApiServer<HttpSwagger> server(config);
-    require(server.start(std::move(*prepared)).has_value(), "start default Swagger without deployed files");
+    galay::http::HttpServerBuilder<EnableSwagger> builder(config);
+    if constexpr (EnableSwagger) builder.api_info({.title = "Relocated consumer", .version = "1"});
+    require(builder.template add_api<galay::http::HttpMethod::GET, NoInput, std::string>(
+        "/value", value, Operation{.id = "getValue"}).has_value(), "register typed operation");
+    std::string document;
+    if constexpr (EnableSwagger) {
+        auto exported = builder.export_openapi();
+        require(exported.has_value(), "offline document");
+        document = std::move(*exported);
+    }
+    auto built = builder.build();
+    require(built.has_value(), "build native HTTP server");
+    auto& server = **built;
+    require(server.start().has_value(), "start native typed server without deployed files");
     require(get(config.port, "/value").body_str() == "\"installed\"", "typed GET result");
-    require(get(config.port, "/openapi.json").body_str() == *document, "immutable REST document");
+    if constexpr (!EnableSwagger) {
+        for (const auto* path : {"/openapi.json", "/docs", "/docs/swagger-ui.css"}) {
+            const auto missing = get(config.port, path, galay::http::HttpStatusCode::NotFound_404);
+            require(missing.body_str() == "404 Not Found", "disabled mode installs no document resources");
+        }
+        server.stop();
+        require(std::puts("Relocated typed consumer runs without Swagger") >= 0, "write result");
+        return;
+    }
+    require(get(config.port, "/openapi.json").body_str() == document, "immutable REST document");
     require(get(config.port, "/docs").body_str().find("swagger-ui") != std::string::npos, "UI HTML");
     constexpr std::array<std::string_view, 9> names{
         "swagger-ui.css", "swagger-ui-bundle.js", "swagger-ui-standalone-preset.js",
@@ -128,4 +144,15 @@ int main()
     server.stop();
     require(std::puts("Relocated installed API loopback and nine embedded resources passed without share") >= 0,
             "write result");
+}
+
+} // namespace
+
+int main()
+{
+#ifdef GALAY_CONSUMER_NO_DOCS
+    run_loopback<false>();
+#else
+    run_loopback<true>();
+#endif
 }

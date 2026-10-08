@@ -4,5 +4,5 @@ cc_binary(
     name = "users",
     srcs = ["e1_users.cc"],
     copts = ["-std=c++23"],
-    deps = ["//src/cpp/galay-api:galay-api"],
+    deps = ["//src/cpp/galay-api:galay-api", "//src/cpp/galay-http2:galay-http2"],
 )

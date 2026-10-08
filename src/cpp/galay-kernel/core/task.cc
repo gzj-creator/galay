@@ -463,7 +463,7 @@ TaskWaiter& ensure_task_waiter(TaskState& state)
     auto* candidate = new TaskWaiter();
     if (state.m_waiter.compare_exchange_strong(waiter,
                                                candidate,
-                                               std::memory_order_acq_rel,
+                                               std::memory_order_seq_cst,
                                                std::memory_order_acquire)) {
         return *candidate;
     }
@@ -474,7 +474,7 @@ TaskWaiter& ensure_task_waiter(TaskState& state)
 
 void notify_task_waiters(TaskState& state)
 {
-    TaskWaiter* waiter = state.m_waiter.load(std::memory_order_acquire);
+    TaskWaiter* waiter = state.m_waiter.load(std::memory_order_seq_cst);
     if (waiter == nullptr) {
         return;
     }
@@ -584,7 +584,9 @@ void complete_task_state(TaskState* state) noexcept
         return;
     }
 
-    state->m_done.store(true, std::memory_order_release);
+    // Pair completion with waiter publication: either the waiter sees done,
+    // or completion sees the waiter and cannot lose its notification.
+    state->m_done.store(true, std::memory_order_seq_cst);
     notify_task_waiters(*state);
 
     auto schedule_continuation = [](std::optional<TaskRef>& continuation) {
@@ -642,7 +644,7 @@ bool wait_task_completion(const TaskRef& task)
     while (!state->m_done.load(std::memory_order_acquire)) {
         TaskWaiter& waiter = ensure_task_waiter(*state);
         std::unique_lock<std::mutex> lock(waiter.m_mutex);
-        if (state->m_done.load(std::memory_order_acquire)) {
+        if (state->m_done.load(std::memory_order_seq_cst)) {
             return true;
         }
         waiter.m_cv.wait(lock, [state]() {

@@ -70,13 +70,13 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
 
     try {
-        H2cServer server(H2cServerBuilder()
+        H2cServer server(H2cServerBuilder<>()
             .host("0.0.0.0")
             .port(static_cast<uint16_t>(port))
             .io_scheduler_count(4)
             .max_concurrent_streams(100)
             .enable_push(false)
-            .build());
+            .build_config());
 
         std::cout << "Server running on http://0.0.0.0:" << port << "\n";
         std::cout << "Test: curl --http2-prior-knowledge http://localhost:" << port << "/echo -d \"Hello\"\n";

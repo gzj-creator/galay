@@ -26,14 +26,14 @@ license files are vendored. Source maps, npm tooling, upstream HTML, petstore
 initializer and OAuth redirect are not product dependencies. The five browser
 assets, `LICENSE`, `NOTICE`, this `README.md`, and `SHA256SUMS` are compiled into
 the optional API library. Galay generates its own same-origin HTML and
-initializer before registering the document routes. `HttpSwagger{}` and
-`install_docs` use only these embedded bytes: deployments need no UI directory,
+initializer before registering the document routes. Native server builders with
+`EnableSwagger = true` use these embedded bytes by default: deployments need no UI directory,
 source-tree paths, or particular working directory. The nine resources are
 served beneath the configured UI path, including the license, provenance, and
 checksum files. There is no CDN or missing-file fallback.
 
-Applications that explicitly want file-backed resources may implement a custom
-policy using `install_docs_from_directory`. That installer requires all nine
+Applications that explicitly want file-backed resources configure the native
+builder with `docs(config, directory)`. That installer requires all nine
 named files to be nonempty regular files, loads them before registering any
 document routes, and reports file errors without filling gaps from the embedded
 resources. It does not certify custom files against the build-time official

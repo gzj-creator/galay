@@ -191,7 +191,7 @@ bool assert_builder_config_normalization() {
                 "H2ClientBuilder must clamp MAX_FRAME_SIZE");
 #endif
 
-    auto h2c_server = H2cServerBuilder()
+    auto h2c_server = H2cServerBuilder<>()
         .initial_window_size(2147483648u)
         .max_frame_size(kMinFrameSize - 1)
         .build_config();
@@ -201,7 +201,7 @@ bool assert_builder_config_normalization() {
                 "H2cServerBuilder must clamp MAX_FRAME_SIZE");
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    auto h2_server = H2ServerBuilder()
+    auto h2_server = H2ServerBuilder<>()
         .initial_window_size(2147483648u)
         .max_frame_size(kMaxFrameSize + 1)
         .build_config();
@@ -288,7 +288,7 @@ bool assert_h2c_upgrade_applies_peer_settings() {
     g_upgrade_ok = false;
 
     const uint16_t port = static_cast<uint16_t>(22000 + (::getpid() % 10000));
-    H2cServer server(H2cServerBuilder()
+    H2cServer server(H2cServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
@@ -299,9 +299,13 @@ bool assert_h2c_upgrade_applies_peer_settings() {
         .max_header_list_size(1234)
         .enable_push(false)
         .stream_handler(noop_stream_handler)
-        .build());
+        .build_config());
 
-    server.start();
+    if (const auto started = server.start(); !started) {
+
+        std::cerr << "Server startup failed: " << started.error().message << '\n';
+
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     Runtime runtime = RuntimeBuilder().io_scheduler_count(1).parallel_scheduler_count(0).build();

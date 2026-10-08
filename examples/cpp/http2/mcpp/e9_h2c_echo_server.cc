@@ -51,12 +51,12 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
 
     try {
-        H2cServer server(H2cServerBuilder()
+        H2cServer server(H2cServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
             .io_scheduler_count(2)
             .enable_push(false)
-            .build());
+            .build_config());
         std::cout << "Import h2c server: http://127.0.0.1:" << port << "\n";
         server.start(handle_stream);
         while (g_running) {

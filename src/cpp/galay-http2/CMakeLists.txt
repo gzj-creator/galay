@@ -4,6 +4,7 @@ add_library(galay-http2 ${GALAY_HTTP2_SOURCES})
 add_library(galay::http2 ALIAS galay-http2)
 
 target_compile_features(galay-http2 PUBLIC cxx_std_23)
+target_compile_definitions(galay-http2 PUBLIC GALAY_HTTP2_FEATURE_ENABLED)
 target_include_directories(galay-http2
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>

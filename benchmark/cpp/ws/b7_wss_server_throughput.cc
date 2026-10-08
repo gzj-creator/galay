@@ -148,7 +148,7 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
 
     try {
-        HttpsServer server(HttpsServerBuilder()
+        HttpsServer server(HttpsServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
             .cert_path(cert_path)
@@ -156,7 +156,7 @@ int main(int argc, char* argv[]) {
             .io_scheduler_count(static_cast<size_t>(io_threads))
             .parallel_scheduler_count(0)
             .tcp_no_delay(tcp_no_delay)
-            .build());
+            .build_config());
 
         server.start(https_handler);
 

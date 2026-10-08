@@ -1,5 +1,8 @@
 #include <galay/cpp/galay-api/api_router.h>
-#include <galay/cpp/galay-api/api_server.h>
+#include <galay/cpp/galay-http/server/http_server.h>
+#ifdef GALAY_HTTP2_FEATURE_ENABLED
+#include <galay/cpp/galay-http2/server/http2_server.h>
+#endif
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -102,162 +105,108 @@ galay::kernel::Task<ApiResult<std::string>> get_value(ApiContext&, NoInput)
     co_return "value";
 }
 
-PreparedApi prepare_api(bool conflict = false)
+template<class Builder>
+ApiResult<void> register_value(Builder& builder, bool conflict = false)
 {
-    ApiBuilder builder({.title = "Startup acceptance", .version = "1"});
-    const auto added = builder.add<galay::http::HttpMethod::GET, NoInput, std::string>(
+    return builder.template add_api<galay::http::HttpMethod::GET, NoInput, std::string>(
         conflict ? "/docs" : "/value", get_value, Operation{.id = "getValue"});
-    require(added.has_value(), "add startup fixture");
-    auto api = builder.build();
-    require(api.has_value(), "build startup fixture");
-    return std::move(*api);
 }
 
-struct PolicyProbe {
-    int calls = 0;
-    bool reject_first = false;
-};
-
-struct ProbeSwagger {
-    std::shared_ptr<PolicyProbe> probe;
-    ApiResult<void> install(PreparedApi& api)
-    {
-        ++probe->calls;
-        if (probe->reject_first && probe->calls == 1) {
-            return std::unexpected(ApiError{ApiErrorCode::kResourceError, "retryable policy failure", 503});
-        }
-        return install_docs(api);
-    }
-};
-
-template<class Config>
-void test_policy_retry(Config config)
+template<template<bool> class Builder, class Config>
+void test_lifecycle(Config config)
 {
-    PortReservation occupied;
-    config.port = occupied.port;
+    PortReservation reservation;
+    config.port = reservation.port;
+    reservation.release();
 #if defined(__linux__)
     const auto baseline = idle_resources();
 #endif
-    auto probe = std::make_shared<PolicyProbe>(0, true);
-    ApiServer<ProbeSwagger> server(config, ProbeSwagger{probe});
-    server.stop();
-    auto api = prepare_api();
-    const auto document = api.document;
-    const auto* route = api.router.find_handler(galay::http::HttpMethod::GET, "/value").request_handler;
-    const auto rejected = server.start(std::move(api));
-    require(!rejected && rejected.error().code == ApiErrorCode::kResourceError && rejected.error().status == 503,
-            "policy failure precedes native construction even on an occupied port");
-    require(!server.is_running() && !server.document() && probe->calls == 1 &&
-            api.router.find_handler(galay::http::HttpMethod::GET, "/value").request_handler == route,
-            "policy failure retains API and remains retryable");
+    Builder<true> retry(config);
+    require(register_value(retry).has_value(), "register startup route");
+    retry.docs({}, "/definitely-missing-startup-assets");
+    const auto failed_build = retry.build();
+    require(!failed_build && failed_build.error().code == ApiErrorCode::kResourceError,
+        "resource failure is returned before native construction");
 #if defined(__linux__)
-    require(idle_resources() == baseline, "policy failure starts no runtime and leaks no descriptor");
+    require(idle_resources() == baseline, "failed build allocates no runtime or descriptors");
 #endif
-    occupied.release();
-#if defined(__linux__)
-    const auto released = idle_resources();
-#endif
-    const auto started = server.start(std::move(api));
-    require(started && server.is_running() && server.document() == document && probe->calls == 2,
-            "same API and server retry installation and start the selected native transport");
-    auto unused = prepare_api();
-    const auto repeated = server.start(std::move(unused));
-    require(!repeated && repeated.error().code == ApiErrorCode::kServerError && probe->calls == 2 &&
-            unused.router.find_handler(galay::http::HttpMethod::GET, "/value").request_handler,
-            "repeat start neither reinstalls docs nor consumes another API");
+    retry.docs();
+    auto built = retry.build();
+    require(built.has_value(), "same builder retries after fixing resources");
+    auto& server = **built;
+    require(server.start().has_value() && server.is_running(), "native managed server starts");
+    const auto repeated = server.start();
+    require(!repeated && repeated.error().code == ApiErrorCode::kServerError, "repeat start is explicit");
     server.stop();
     server.stop();
-    require(!server.is_running() && server.document() == document, "stop is idempotent and retains offline document");
-    const auto restarted = server.start(std::move(unused));
-    require(!restarted && restarted.error().code == ApiErrorCode::kServerError, "stopped API server is single use");
+    require(!server.start(), "stopped managed server cannot restart");
+    built->reset();
 #if defined(__linux__)
-    require(idle_resources() == released, "stop releases native runtime and listener before API server destruction");
+    require(idle_resources() == baseline, "destruction releases native runtime and listeners");
 #endif
-    const PortReservation available(config.port);
+    Builder<true> conflicting(config);
+    require(register_value(conflicting, true).has_value(), "register docs conflict");
+    const auto conflict = conflicting.build();
+    require(!conflict && conflict.error().code == ApiErrorCode::kRouteConflict, "docs conflict is explicit");
+#if defined(__linux__)
+    require(idle_resources() == baseline, "docs conflict acquires no native resources");
+#endif
+    conflicting.docs({.ui_path = "/reference"});
+    require(conflicting.build().has_value(), "corrected docs path retries without consuming routes");
+
+    Builder<false> native_builder(config);
+    auto native = native_builder.build();
+    require(native.has_value(), "build low-level native server");
+#ifdef GALAY_HTTP2_FEATURE_ENABLED
+    if constexpr (requires { config.stream_handler; }) {
+        (*native)->start([](galay::http2::Http2Stream::ptr) -> galay::kernel::Task<void> { co_return; });
+    } else
+#endif
+    {
+        galay::http::HttpRouter router;
+        router.add_request_handler<galay::http::HttpMethod::GET>("/native",
+            [](galay::http::HttpRequest) -> galay::kernel::Task<galay::http::HttpResponseResult> {
+                co_return galay::http::HttpResponse{};
+            });
+        (*native)->start(std::move(router));
+    }
+    require((*native)->is_running(), "low-level native startup succeeds");
+    const auto already_running = (*native)->start();
+    require(!already_running && already_running.error().code == ApiErrorCode::kServerError &&
+        (*native)->is_running(), "managed startup cannot disturb an already-running native server");
+    (*native)->stop();
 }
 
-template<class Config>
+template<template<bool> class Builder, class Config>
 void test_transport_failure(const Config& config, std::string_view reason)
 {
 #if defined(__linux__)
     const auto baseline = idle_resources();
 #endif
-    auto probe = std::make_shared<PolicyProbe>();
-    ApiServer<ProbeSwagger> server(config, ProbeSwagger{probe});
-    auto api = prepare_api();
-    const auto document = api.document;
-    const auto failed = server.start(std::move(api));
+    Builder<true> builder(config);
+    require(register_value(builder).has_value(), "register failing transport route");
+    auto built = builder.build();
+    require(built.has_value(), "transport initialization is deferred until start");
+    const auto failed = (*built)->start();
     require(!failed && failed.error().code == ApiErrorCode::kTransportError &&
-            failed.error().message.find(reason) != std::string::npos,
-            "native failure must be synchronous and retain its actual cause");
-    require(!server.is_running() && server.document() == document && probe->calls == 1,
-            "failed native initialization freezes the attempt after one docs installation");
-    server.stop();
-    server.stop();
-    auto unused = prepare_api();
-    const auto repeated = server.start(std::move(unused));
-    require(!repeated && repeated.error().code == ApiErrorCode::kServerError && probe->calls == 1 &&
-            unused.router.find_handler(galay::http::HttpMethod::GET, "/value").request_handler,
-            "transport failure cannot be retried on the same API server");
+        failed.error().message.find(reason) != std::string::npos, "start retains actual transport failure");
+    require(!(*built)->is_running() && !(*built)->start(), "failed managed startup is single-use");
+    (*built)->stop();
+    built->reset();
 #if defined(__linux__)
-    require(idle_resources() == baseline, "failed startup releases native runtime and descriptors immediately");
+    require(idle_resources() == baseline, "failed transport destruction leaks no resources");
 #endif
-}
-
-template<class Config>
-void test_docs_conflict(Config config)
-{
-    PortReservation probe;
-    config.port = probe.port;
-    probe.release();
-#if defined(__linux__)
-    const auto baseline = idle_resources();
-#endif
-    ApiServer<HttpSwagger> server(config);
-    auto conflicting = prepare_api(true);
-    const auto failed = server.start(std::move(conflicting));
-    require(!failed && failed.error().code == ApiErrorCode::kRouteConflict && !server.document(),
-            "docs conflict is explicit before native initialization on every transport");
-#if defined(__linux__)
-    require(idle_resources() == baseline, "docs conflict creates no listener or runtime");
-#endif
-    auto api = prepare_api();
-    const auto started = server.start(std::move(api));
-    require(started && server.is_running(), "docs conflict remains retryable with a corrected API");
-    server.stop();
-}
-
-template<class Config>
-void test_lifecycle(Config config)
-{
-    if constexpr (!std::same_as<Config, galay::http::HttpServerConfig>) {
-        auto probe = std::make_shared<PolicyProbe>();
-        ApiServer<ProbeSwagger> server(config, ProbeSwagger{probe});
-        auto invalid = prepare_api();
-        invalid.router.template add_handler<galay::http::HttpMethod::GET>("/connection",
-            [](galay::http::HttpConn&, galay::http::HttpRequest) -> galay::kernel::Task<void> { co_return; });
-        const auto rejected = server.start(std::move(invalid));
-        require(!rejected && rejected.error().code == ApiErrorCode::kInvalidBinding &&
-                probe->calls == 0 && !server.document() && !server.is_running() &&
-                invalid.router.find_handler(galay::http::HttpMethod::GET, "/connection").handler,
-                "connection-bound routes fail before policy, runtime or router consumption");
-    }
-    test_policy_retry(config);
-    test_docs_conflict(config);
-    const PortReservation occupied;
-    config.port = occupied.port;
-    test_transport_failure(config, "listen");
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-template<class Config>
+template<template<bool> class Builder, class Config>
 void test_tls_failures(Config config, const std::string& directory)
 {
-    PortReservation probe;
-    config.port = probe.port;
-    probe.release();
+    PortReservation reservation;
+    config.port = reservation.port;
+    reservation.release();
     const auto check = [&](Config invalid, std::string_view reason) {
-        test_transport_failure(invalid, reason);
+        test_transport_failure<Builder>(invalid, reason);
         const PortReservation available(invalid.port);
     };
     auto invalid = config;
@@ -287,76 +236,42 @@ void test_tls_failures(Config config, const std::string& directory)
 }
 #endif
 
-#ifdef GALAY_API_HTTP2_FEATURE_ENABLED
-galay::kernel::Task<void> stream_handler(galay::http2::Http2Stream::ptr)
-{
-    co_return;
-}
-
-template<class Config>
-void test_native_handler_conflict(Config config)
-{
-    config.stream_handler = stream_handler;
-    auto probe = std::make_shared<PolicyProbe>();
-    ApiServer<ProbeSwagger> server(config, ProbeSwagger{probe});
-    auto api = prepare_api();
-    const auto rejected = server.start(std::move(api));
-    require(!rejected && rejected.error().code == ApiErrorCode::kInvalidBinding &&
-            probe->calls == 0 && !server.document() && !server.is_running() &&
-            api.router.find_handler(galay::http::HttpMethod::GET, "/value").request_handler,
-            "native HTTP/2 handler overrides fail explicitly before API initialization");
-}
-
-void test_h2c_bind_failure()
-{
-    const PortReservation occupied;
-    galay::http2::H2cServerConfig config;
-    config.host = "127.0.0.1";
-    config.port = occupied.port;
-    config.io_scheduler_count = 2;
-    config.parallel_scheduler_count = 0;
-    galay::http2::H2cServer server(config);
-    server.start(stream_handler);
-    require(!server.is_running(), "h2c bind failure must be reported synchronously by start");
-    require(!server.is_ready(), "failed h2c start must never publish readiness");
-    require(server.start_error().find("listen") != std::string::npos, "native h2c start cause");
-    server.stop();
-    server.stop();
-}
-#endif
-
 } // namespace
 
 int main(int argc, char** argv)
 {
+    using namespace galay::http;
+    const PortReservation occupied;
+    auto http = HttpServerBuilder<>().host("127.0.0.1").port(occupied.port)
+        .io_scheduler_count(2).parallel_scheduler_count(1).build_config();
+    test_lifecycle<HttpServerBuilder>(http);
+    test_transport_failure<HttpServerBuilder>(http, "listen");
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    require(argc == 2, "startup certificate directory argument");
+    require(argc == 2, "certificate directory argument");
     const std::string directory = argv[1];
+    auto https = HttpsServerBuilder<>().host("127.0.0.1").port(occupied.port)
+        .cert_path(directory + "/localhost.crt").key_path(directory + "/localhost.key")
+        .io_scheduler_count(2).parallel_scheduler_count(1).build_config();
+    test_lifecycle<HttpsServerBuilder>(https);
+    test_transport_failure<HttpsServerBuilder>(https, "listen");
+    test_tls_failures<HttpsServerBuilder>(https, directory);
 #else
     require(argc >= 1 && argv != nullptr, "startup arguments");
 #endif
-    test_lifecycle(galay::http::HttpServerBuilder().host("127.0.0.1")
-        .io_scheduler_count(2).parallel_scheduler_count(1).build_config());
+#ifdef GALAY_HTTP2_FEATURE_ENABLED
+    using namespace galay::http2;
+    auto h2c = H2cServerBuilder<>().host("127.0.0.1").port(occupied.port)
+        .io_scheduler_count(2).parallel_scheduler_count(1).build_config();
+    test_lifecycle<H2cServerBuilder>(h2c);
+    test_transport_failure<H2cServerBuilder>(h2c, "listen");
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    const auto https = galay::http::HttpsServerBuilder().host("127.0.0.1")
+    auto h2 = H2ServerBuilder<>().host("127.0.0.1").port(occupied.port)
         .cert_path(directory + "/localhost.crt").key_path(directory + "/localhost.key")
         .io_scheduler_count(2).parallel_scheduler_count(1).build_config();
-    test_lifecycle(https);
-    test_tls_failures(https, directory);
-#endif
-#ifdef GALAY_API_HTTP2_FEATURE_ENABLED
-    test_h2c_bind_failure();
-    test_native_handler_conflict(galay::http2::H2cServerConfig{});
-    test_lifecycle(galay::http2::H2cServerBuilder().host("127.0.0.1")
-        .io_scheduler_count(2).parallel_scheduler_count(1).build_config());
-#ifdef GALAY_SSL_FEATURE_ENABLED
-    const auto h2 = galay::http2::H2ServerBuilder().host("127.0.0.1")
-        .cert_path(directory + "/localhost.crt").key_path(directory + "/localhost.key")
-        .io_scheduler_count(2).parallel_scheduler_count(1).build_config();
-    test_lifecycle(h2);
-    test_native_handler_conflict(h2);
-    test_tls_failures(h2, directory);
+    test_lifecycle<H2ServerBuilder>(h2);
+    test_transport_failure<H2ServerBuilder>(h2, "listen");
+    test_tls_failures<H2ServerBuilder>(h2, directory);
 #endif
 #endif
-    require(std::puts("HTTP transport startup failure regression passed") >= 0, "write result");
+    require(std::puts("Native transport startup regression passed") >= 0, "write result");
 }

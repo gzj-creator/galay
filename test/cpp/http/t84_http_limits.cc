@@ -254,7 +254,7 @@ void verify_policy_surface_compiles() {
             "router policy did not preserve proxy idle limit");
 
     auto server = builder.build();
-    require(!server.is_running(),
+    require(server && !(*server)->is_running(),
             "builder build should create a stopped server instance");
 }
 
@@ -373,13 +373,13 @@ void verify_route_mode_limit_responses()
     policy.request_limits.max_uri_size = 8;
     policy.request_limits.max_body_size = 4;
     uint16_t port = pick_free_port();
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
         .policy(policy)
-        .build());
+        .build_config());
 
     HttpRouter router;
     router.add_handler<HttpMethod::GET, HttpMethod::POST>("/ok", ok_handler);

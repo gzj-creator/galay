@@ -34,6 +34,8 @@
 namespace galay::http
 {
 
+namespace server_detail { template<bool> class ServerRoutes; }
+
 using namespace galay::kernel;
 
 template<typename SocketType>
@@ -104,6 +106,8 @@ struct RouteTrieNode
  */
 class HttpRouter
 {
+    template<bool>
+    friend class server_detail::ServerRoutes;
     template<typename SocketType>
     friend class HttpServerImpl;
 
@@ -284,7 +288,7 @@ private:
      * @param path 路径
      * @return 路径段列表
      */
-    std::vector<std::string> split_path(const std::string& path) const;
+    static std::vector<std::string> split_path(const std::string& path);
 
     /**
      * @brief 验证路径格式是否合法
@@ -292,7 +296,7 @@ private:
      * @param error 错误信息（输出参数）
      * @return 是否合法
      */
-    bool validate_path(const std::string& path, std::string& error) const;
+    static bool validate_path(const std::string& path, std::string& error);
 
     /**
      * @brief 在Trie树中插入路由

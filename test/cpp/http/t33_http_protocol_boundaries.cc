@@ -314,12 +314,12 @@ void test_static_head_does_not_send_body()
     router.mount("/static", dir.string(), setting);
 
     const uint16_t port = reserve_free_port();
-    auto server = HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build();
+        .build_config());
     server.start(std::move(router));
 
     const std::string response = request_head(port);

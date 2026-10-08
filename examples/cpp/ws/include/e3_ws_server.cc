@@ -231,13 +231,13 @@ int main() {
 #if defined(USE_KQUEUE) || defined(USE_EPOLL) || defined(USE_IOURING)
     // 配置服务器
     // 创建 HTTP 服务器
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("0.0.0.0")
         .port(8080)
         .backlog(128)
         .io_scheduler_count(4)
         .parallel_scheduler_count(2)
-        .build());
+        .build_config());
 
     // 启动服务器
 

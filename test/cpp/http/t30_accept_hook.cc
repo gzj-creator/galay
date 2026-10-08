@@ -289,12 +289,12 @@ void test_start_failure_stops_already_started_plugins()
     std::atomic<int> failing_stop_count{0};
 
     uint16_t port = pick_free_port();
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
 
     bool registered_first = server.add_accept_plugin(std::make_unique<FirstPlugin>(&state));
     bool registered_failing =
@@ -326,12 +326,12 @@ int main()
     TestState state;
 
     uint16_t port = pick_free_port();
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
 
     if (server.add_accept_plugin(nullptr)) {
         fail("null plugin registration should be rejected");

@@ -209,7 +209,7 @@ int observe_h2c_server_tcp_no_delay(bool tcp_no_delay)
 {
     ProbeState state;
     const uint16_t port = pick_free_port();
-    H2cServer server(H2cServerBuilder()
+    H2cServer server(H2cServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
@@ -218,12 +218,16 @@ int observe_h2c_server_tcp_no_delay(bool tcp_no_delay)
         .stream_handler([](Http2Stream::ptr) -> Task<void> {
             co_return;
         })
-        .build());
+        .build_config());
 
     require(server.add_accept_plugin(std::make_unique<NoDelayProbePlugin<AsyncTcpSocket>>(&state)),
             "h2c nodelay probe plugin should register");
 
-    server.start();
+    if (const auto started = server.start(); !started) {
+
+        std::cerr << "Server startup failed: " << started.error().message << '\n';
+
+    }
     require(server.is_running(), "h2c server should start for nodelay probe");
 
     const int client_fd = connect_with_retry(port);
@@ -242,7 +246,7 @@ int observe_h2_server_tcp_no_delay(bool tcp_no_delay)
 {
     ProbeState state;
     const uint16_t port = pick_free_port();
-    H2Server server(H2ServerBuilder()
+    H2Server server(H2ServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .cert_path("test/cpp/http2/test.crt")
@@ -253,13 +257,17 @@ int observe_h2_server_tcp_no_delay(bool tcp_no_delay)
         .stream_handler([](Http2Stream::ptr) -> Task<void> {
             co_return;
         })
-        .build());
+        .build_config());
 
     require(server.add_accept_plugin(
                 std::make_unique<NoDelayProbePlugin<galay::ssl::SslSocket>>(&state)),
             "h2 nodelay probe plugin should register");
 
-    server.start();
+    if (const auto started = server.start(); !started) {
+
+        std::cerr << "Server startup failed: " << started.error().message << '\n';
+
+    }
     require(server.is_running(), "h2 server should start for nodelay probe");
 
     const int client_fd = connect_with_retry(port);
@@ -287,7 +295,7 @@ Task<void> idle_h2_connection_handler(Http2ConnContext& ctx)
 int observe_h2_client_tcp_no_delay(bool tcp_no_delay)
 {
     const uint16_t port = pick_free_port();
-    H2Server server(H2ServerBuilder()
+    H2Server server(H2ServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .cert_path("test/cpp/http2/test.crt")
@@ -295,9 +303,13 @@ int observe_h2_client_tcp_no_delay(bool tcp_no_delay)
         .io_scheduler_count(1)
         .parallel_scheduler_count(0)
         .active_conn_handler(idle_h2_connection_handler)
-        .build());
+        .build_config());
 
-    server.start();
+    if (const auto started = server.start(); !started) {
+
+        std::cerr << "Server startup failed: " << started.error().message << '\n';
+
+    }
     require(server.is_running(), "h2 server should start for client nodelay probe");
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -330,10 +342,10 @@ void test_builder_config_surface()
     auto disabled_h2c_client = H2cClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_h2c_client.tcp_no_delay, "H2cClientBuilder should support disabling TCP_NODELAY");
 
-    auto default_h2c_server = H2cServerBuilder().build_config();
+    auto default_h2c_server = H2cServerBuilder<>().build_config();
     require(default_h2c_server.tcp_no_delay, "H2cServerConfig should enable TCP_NODELAY by default");
 
-    auto disabled_h2c_server = H2cServerBuilder().tcp_no_delay(false).build_config();
+    auto disabled_h2c_server = H2cServerBuilder<>().tcp_no_delay(false).build_config();
     require(!disabled_h2c_server.tcp_no_delay, "H2cServerBuilder should support disabling TCP_NODELAY");
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
@@ -343,10 +355,10 @@ void test_builder_config_surface()
     auto disabled_h2_client = H2ClientBuilder().tcp_no_delay(false).build_config();
     require(!disabled_h2_client.tcp_no_delay, "H2ClientBuilder should support disabling TCP_NODELAY");
 
-    auto default_h2_server = H2ServerBuilder().build_config();
+    auto default_h2_server = H2ServerBuilder<>().build_config();
     require(default_h2_server.tcp_no_delay, "H2ServerConfig should enable TCP_NODELAY by default");
 
-    auto disabled_h2_server = H2ServerBuilder().tcp_no_delay(false).build_config();
+    auto disabled_h2_server = H2ServerBuilder<>().tcp_no_delay(false).build_config();
     require(!disabled_h2_server.tcp_no_delay, "H2ServerBuilder should support disabling TCP_NODELAY");
 #endif
 }

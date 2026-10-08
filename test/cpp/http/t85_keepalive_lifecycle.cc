@@ -252,13 +252,13 @@ Task<void> slow_response_handler(HttpConn& conn, HttpRequest)
 
 HttpServer make_server(uint16_t port, HttpServerPolicy policy)
 {
-    return HttpServer(HttpServerBuilder()
+    return HttpServer(HttpServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
         .policy(std::move(policy))
-        .build());
+        .build_config());
 }
 
 HttpRouter make_router()

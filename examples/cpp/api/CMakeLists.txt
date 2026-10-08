@@ -1,2 +1,5 @@
 add_executable(example_api_e1_users e1_users.cc)
 target_link_libraries(example_api_e1_users PRIVATE galay::api)
+if(TARGET galay::http2)
+    target_link_libraries(example_api_e1_users PRIVATE galay::http2)
+endif()

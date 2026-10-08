@@ -1,5 +1,5 @@
-#ifndef GALAY_API_ERROR_H
-#define GALAY_API_ERROR_H
+#ifndef GALAY_HTTP_API_ERROR_H
+#define GALAY_HTTP_API_ERROR_H
 
 #include <expected>
 #include <string>

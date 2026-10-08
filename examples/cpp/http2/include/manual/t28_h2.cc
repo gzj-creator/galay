@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
 
     try {
-        H2Server server(H2ServerBuilder()
+        H2Server server(H2ServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
             .cert_path(cert_path)
@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
             .max_concurrent_streams(100)
             .initial_window_size(65535)
             .enable_push(false)
-            .build());
+            .build_config());
 
         server.start(handle_stream);
 

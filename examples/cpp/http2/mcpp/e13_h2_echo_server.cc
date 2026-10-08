@@ -71,14 +71,14 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
 
     try {
-        H2Server server(H2ServerBuilder()
+        H2Server server(H2ServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
             .cert_path(cert_path)
             .key_path(key_path)
             .io_scheduler_count(2)
             .max_concurrent_streams(100)
-            .build());
+            .build_config());
         std::cout << "Import h2 server: https://127.0.0.1:" << port << "\n";
         server.start(handle_stream);
 

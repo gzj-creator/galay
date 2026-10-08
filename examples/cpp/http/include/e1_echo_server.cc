@@ -90,11 +90,11 @@ int main(int argc, char* argv[]) {
         router.add_handler<HttpMethod::POST>("/echo", echo_handler);
 
         // 创建并启动服务器
-        HttpServer server(HttpServerBuilder()
+        HttpServer server(HttpServerBuilder<>()
             .host("0.0.0.0")
             .port(static_cast<uint16_t>(port))
             .backlog(128)
-            .build());
+            .build_config());
 
         std::cout << "========================================\n";
         std::cout << "Server is running on http://0.0.0.0:" << port << "\n";

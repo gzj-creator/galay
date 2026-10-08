@@ -236,13 +236,13 @@ void test_h2c_accept_plugin_blocks_before_downstream_plugin()
     std::atomic<int> downstream_stop_count{0};
     uint16_t port = pick_free_port();
 
-    H2cServer server(H2cServerBuilder()
+    H2cServer server(H2cServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .io_scheduler_count(2)
         .parallel_scheduler_count(0)
         .stream_handler(unused_stream_handler)
-        .build());
+        .build_config());
 
     bool registered_blacklist =
         server.add_accept_plugin(std::make_unique<OneAndBlockPlugin<AsyncTcpSocket>>(
@@ -254,7 +254,11 @@ void test_h2c_accept_plugin_blocks_before_downstream_plugin()
         fail("h2c accept plugins should register before start");
     }
 
-    server.start();
+    if (const auto started = server.start(); !started) {
+
+        std::cerr << "Server startup failed: " << started.error().message << '\n';
+
+    }
 
     open_and_close(port);
     wait_for_count(downstream_count, 1, "first h2c connection should reach downstream plugin");
@@ -290,7 +294,7 @@ void test_h2_accept_plugin_blocks_before_downstream_plugin()
     const std::string cert_path = resolve_http2_asset("test.crt");
     const std::string key_path = resolve_http2_asset("test.key");
 
-    H2Server server(H2ServerBuilder()
+    H2Server server(H2ServerBuilder<>()
         .host("127.0.0.1")
         .port(port)
         .cert_path(cert_path)
@@ -298,7 +302,7 @@ void test_h2_accept_plugin_blocks_before_downstream_plugin()
         .io_scheduler_count(2)
         .parallel_scheduler_count(0)
         .stream_handler(unused_stream_handler)
-        .build());
+        .build_config());
 
     bool registered_blacklist = server.add_accept_plugin(
         std::make_unique<OneAndBlockPlugin<galay::ssl::SslSocket>>(
@@ -310,7 +314,11 @@ void test_h2_accept_plugin_blocks_before_downstream_plugin()
         fail("h2 accept plugins should register before start");
     }
 
-    server.start();
+    if (const auto started = server.start(); !started) {
+
+        std::cerr << "Server startup failed: " << started.error().message << '\n';
+
+    }
 
     open_and_close(port);
     wait_for_count(downstream_count, 1, "first h2 connection should reach downstream plugin");

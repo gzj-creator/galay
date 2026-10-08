@@ -1,7 +1,7 @@
 #ifndef GALAY_API_SCHEMA_H
 #define GALAY_API_SCHEMA_H
 
-#include "schema_model.h"
+#include <galay/cpp/galay-http/server/schema_model.h>
 #include <serde/reflect/reflect.hpp>
 
 #include <algorithm>

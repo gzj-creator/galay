@@ -1,5 +1,8 @@
 #include <galay/cpp/galay-api/api_router.h>
-#include <galay/cpp/galay-api/api_server.h>
+#include <galay/cpp/galay-http/server/http_server.h>
+#ifdef GALAY_HTTP2_FEATURE_ENABLED
+#include <galay/cpp/galay-http2/server/http2_server.h>
+#endif
 #include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include <serde/reflect/reflect_macros.hpp>
 
@@ -139,34 +142,34 @@ Task<ApiResult<NoContent>> empty_value(ApiContext&, NoInput)
     co_return NoContent{};
 }
 
-ApiResult<PreparedApi> prepare_api()
+template<class Builder>
+ApiResult<void> register_api(Builder& builder)
 {
-    ApiBuilder builder({.title = "Transport acceptance", .version = "1"});
     const auto add_get = [&]<HttpMethod Method>(std::string path, std::string id, auto handler) {
-        return builder.add<Method, GetInput, Output>(std::move(path), handler, Operation{.id = std::move(id)},
+        return builder.template add_api<Method, GetInput, Output>(std::move(path), handler, Operation{.id = std::move(id)},
             InputBinding<GetInput>{}.path<&GetInput::id>("id").query<&GetInput::verbose>("verbose"));
     };
     if (auto added = add_get.template operator()<HttpMethod::GET>("/values/:id", "getValue", get_value); !added) return std::unexpected(added.error());
     if (auto added = add_get.template operator()<HttpMethod::GET>("/slow/:id", "slowValue", slow_value); !added) return std::unexpected(added.error());
     if (auto added = add_get.template operator()<HttpMethod::HEAD>("/head/:id", "headValue", get_value); !added) return std::unexpected(added.error());
     const auto binding = InputBinding<PostInput>{}.path<&PostInput::id>("id").query<&PostInput::verbose>("verbose");
-    if (auto added = builder.add<HttpMethod::POST, PostInput, Output>("/values/:id", post_value,
+    if (auto added = builder.template add_api<HttpMethod::POST, PostInput, Output>("/values/:id", post_value,
         Operation{.id = "postValue", .success_status = 201}, binding); !added) return std::unexpected(added.error());
-    if (auto added = builder.add<HttpMethod::POST, PostInput, std::string_view>("/borrowed/:id", borrowed_value,
+    if (auto added = builder.template add_api<HttpMethod::POST, PostInput, std::string_view>("/borrowed/:id", borrowed_value,
         Operation{.id = "borrowedValue"}, binding); !added) return std::unexpected(added.error());
-    if (auto added = builder.add<HttpMethod::GET, NoInput, Stats>("/stats", statistics,
+    if (auto added = builder.template add_api<HttpMethod::GET, NoInput, Stats>("/stats", statistics,
         Operation{.id = "getStats"}); !added) return std::unexpected(added.error());
-    if (auto added = builder.add<HttpMethod::GET, NoInput, Output>("/business", business_error,
+    if (auto added = builder.template add_api<HttpMethod::GET, NoInput, Output>("/business", business_error,
         Operation{.id = "businessError", .errors = {{404, "not found"}}}); !added) return std::unexpected(added.error());
-    if (auto added = builder.add<HttpMethod::GET, NoInput, Output>("/undeclared", undeclared_error,
+    if (auto added = builder.template add_api<HttpMethod::GET, NoInput, Output>("/undeclared", undeclared_error,
         Operation{.id = "undeclaredError"}); !added) return std::unexpected(added.error());
-    if (auto added = builder.add<HttpMethod::GET, NoInput, double>("/encoding-error", encoding_error,
+    if (auto added = builder.template add_api<HttpMethod::GET, NoInput, double>("/encoding-error", encoding_error,
         Operation{.id = "encodingError"}); !added) return std::unexpected(added.error());
-    if (auto added = builder.add<HttpMethod::GET, NoInput, NoContent>("/no-content", empty_value,
+    if (auto added = builder.template add_api<HttpMethod::GET, NoInput, NoContent>("/no-content", empty_value,
         Operation{.id = "noContent", .success_status = 204}); !added) return std::unexpected(added.error());
-    if (auto added = builder.add<HttpMethod::POST, NoInput, NoContent>("/reset-content", empty_value,
+    if (auto added = builder.template add_api<HttpMethod::POST, NoInput, NoContent>("/reset-content", empty_value,
         Operation{.id = "resetContent", .success_status = 205}); !added) return std::unexpected(added.error());
-    return builder.build();
+    return {};
 }
 
 } // namespace fixture
@@ -185,11 +188,6 @@ public:
     galay::kernel::LogLevel min_level() const override { return galay::kernel::LogLevel::kWarn; }
 };
 
-struct FileSwagger {
-    std::string directory;
-    ApiResult<void> install(PreparedApi& api) const { return install_docs_from_directory(api, {}, directory); }
-};
-
 volatile std::sig_atomic_t stopping = 0;
 void request_stop(int) { stopping = 1; }
 
@@ -199,12 +197,20 @@ int report_error(const ApiError& error)
     return 1;
 }
 
-template<ApiDocsPolicy Policy>
-int run_server(ApiServerConfig config, PreparedApi api, Policy policy)
+template<class Builder>
+int run_server(Builder& builder, const std::string& directory)
 {
-    ApiServer<Policy> server(std::move(config), std::move(policy));
-    const auto result = server.start(std::move(api));
-    if (!result) return report_error(result.error());
+    if constexpr (requires { builder.docs(); }) {
+        builder.api_info({.title = "Transport acceptance", .version = "1"});
+        if (!directory.empty()) builder.docs({}, directory);
+    }
+    const auto registered = fixture::register_api(builder);
+    if (!registered) return report_error(registered.error());
+    auto built = builder.build();
+    if (!built) return report_error(built.error());
+    auto& server = **built;
+    const auto started = server.start();
+    if (!started) return report_error(started.error());
     std::cout << "READY\n" << std::flush;
     while (!stopping && server.is_running()) std::this_thread::sleep_for(std::chrono::milliseconds(5));
     server.stop();
@@ -214,6 +220,41 @@ int run_server(ApiServerConfig config, PreparedApi api, Policy policy)
         return 1;
     }
     return 0;
+}
+
+template<bool EnableSwagger>
+int select_transport(const std::string& transport, std::uint16_t port,
+                     const std::string& certificate, const std::string& key, const std::string& directory)
+{
+    if (transport == "http") {
+        galay::http::HttpServerBuilder<EnableSwagger> builder;
+        builder.host("127.0.0.1").port(port).io_scheduler_count(2).parallel_scheduler_count(1);
+        return run_server(builder, directory);
+    }
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    if (transport == "https") {
+        galay::http::HttpsServerBuilder<EnableSwagger> builder;
+        builder.host("127.0.0.1").port(port).cert_path(certificate).key_path(key)
+            .io_scheduler_count(2).parallel_scheduler_count(1);
+        return run_server(builder, directory);
+    }
+#endif
+#ifdef GALAY_HTTP2_FEATURE_ENABLED
+    if (transport == "h2c") {
+        galay::http2::H2cServerBuilder<EnableSwagger> builder;
+        builder.host("127.0.0.1").port(port).io_scheduler_count(2).parallel_scheduler_count(1).ping_enabled(false);
+        return run_server(builder, directory);
+    }
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    if (transport == "h2") {
+        galay::http2::H2ServerBuilder<EnableSwagger> builder;
+        builder.host("127.0.0.1").port(port).cert_path(certificate).key_path(key)
+            .io_scheduler_count(2).parallel_scheduler_count(1).ping_enabled(false);
+        return run_server(builder, directory);
+    }
+#endif
+#endif
+    return 2;
 }
 
 } // namespace
@@ -242,41 +283,20 @@ int main(int argc, char** argv)
             port = static_cast<std::uint16_t>(number);
         } else return 2;
     }
-    auto prepared = fixture::prepare_api();
-    if (!prepared) return report_error(prepared.error());
     if (!export_path.empty()) {
+        galay::http::HttpServerBuilder<true> builder;
+        builder.api_info({.title = "Transport acceptance", .version = "1"});
+        const auto registered = fixture::register_api(builder);
+        if (!registered) return report_error(registered.error());
+        const auto document = builder.export_openapi();
+        if (!document) return report_error(document.error());
         auto* file = std::fopen(export_path.c_str(), "wb");
         if (!file) return 1;
-        const bool written = std::fwrite(prepared->document->data(), 1, prepared->document->size(), file) == prepared->document->size();
+        const bool written = std::fwrite(document->data(), 1, document->size(), file) == document->size();
         const bool closed = std::fclose(file) == 0;
         return written && closed ? 0 : 1;
     }
     if (!port || std::signal(SIGINT, request_stop) == SIG_ERR || std::signal(SIGTERM, request_stop) == SIG_ERR) return 2;
-    ApiServerConfig config;
-    if (transport == "http") {
-        config = galay::http::HttpServerBuilder().host("127.0.0.1").port(port)
-            .io_scheduler_count(2).parallel_scheduler_count(1).build_config();
-    }
-#ifdef GALAY_SSL_FEATURE_ENABLED
-    else if (transport == "https") {
-        config = galay::http::HttpsServerBuilder().host("127.0.0.1").port(port).cert_path(certificate).key_path(key)
-            .io_scheduler_count(2).parallel_scheduler_count(1).build_config();
-    }
-#endif
-#ifdef GALAY_API_HTTP2_FEATURE_ENABLED
-    else if (transport == "h2c") {
-        config = galay::http2::H2cServerBuilder().host("127.0.0.1").port(port)
-            .io_scheduler_count(2).parallel_scheduler_count(1).ping_enabled(false).build_config();
-    }
-#ifdef GALAY_SSL_FEATURE_ENABLED
-    else if (transport == "h2") {
-        config = galay::http2::H2ServerBuilder().host("127.0.0.1").port(port).cert_path(certificate).key_path(key)
-            .io_scheduler_count(2).parallel_scheduler_count(1).ping_enabled(false).build_config();
-    }
-#endif
-#endif
-    else return 2;
-    if (no_swagger) return run_server(std::move(config), std::move(*prepared), NoSwagger{});
-    if (!directory.empty()) return run_server(std::move(config), std::move(*prepared), FileSwagger{directory});
-    return run_server(std::move(config), std::move(*prepared), HttpSwagger{});
+    return no_swagger ? select_transport<false>(transport, port, certificate, key, directory)
+                      : select_transport<true>(transport, port, certificate, key, directory);
 }

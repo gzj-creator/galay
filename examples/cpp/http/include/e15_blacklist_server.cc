@@ -49,12 +49,12 @@ int main(int argc, char* argv[]) {
     HttpRouter router;
     router.add_handler<HttpMethod::GET>("/", index_handler);
 
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("0.0.0.0")
         .port(port)
         .io_scheduler_count(2)
         .parallel_scheduler_count(1)
-        .build());
+        .build_config());
 
     if (!server.add_accept_plugin(
             std::make_unique<BlackList<galay::async::AsyncTcpSocket>>(config))) {

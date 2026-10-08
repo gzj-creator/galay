@@ -76,11 +76,11 @@ int main(int argc, char* argv[]) {
     router.proxy("/", upstream_host, upstream_port,
                  use_raw_proxy ? ProxyMode::Raw : ProxyMode::Http);
 
-    HttpServer server(HttpServerBuilder()
+    HttpServer server(HttpServerBuilder<>()
         .host("0.0.0.0")
         .port(listen_port)
         .io_scheduler_count(2)
-        .build());
+        .build_config());
     std::cout << "Import proxy listen: http://127.0.0.1:" << listen_port << "\n";
     server.start(std::move(router));
 

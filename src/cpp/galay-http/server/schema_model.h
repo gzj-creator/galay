@@ -1,5 +1,5 @@
-#ifndef GALAY_API_SCHEMA_MODEL_H
-#define GALAY_API_SCHEMA_MODEL_H
+#ifndef GALAY_HTTP_SCHEMA_MODEL_H
+#define GALAY_HTTP_SCHEMA_MODEL_H
 
 #include "api_error.h"
 #include <cstdint>

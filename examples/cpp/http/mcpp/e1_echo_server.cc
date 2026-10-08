@@ -56,11 +56,11 @@ int main(int argc, char* argv[]) {
         router.add_handler<HttpMethod::GET>("/", index_handler);
         router.add_handler<HttpMethod::POST>("/echo", echo_handler);
 
-        HttpServer server(HttpServerBuilder()
+        HttpServer server(HttpServerBuilder<>()
             .host("0.0.0.0")
             .port(port)
             .backlog(128)
-            .build());
+            .build_config());
 
         std::cout << "Import echo server: http://127.0.0.1:" << port << "\n";
         server.start(std::move(router));

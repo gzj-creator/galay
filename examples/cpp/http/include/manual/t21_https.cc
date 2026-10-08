@@ -93,14 +93,14 @@ int main() {
     signal(SIGTERM, signal_handler);
 
     try {
-        HttpsServer server(HttpsServerBuilder()
+        HttpsServer server(HttpsServerBuilder<>()
             .host("0.0.0.0")
             .port(8443)
             .cert_path("test/test.crt")
             .key_path("test/test.key")
             .io_scheduler_count(8)
             .parallel_scheduler_count(0)
-            .build());
+            .build_config());
 
         std::cout << "Starting HTTPS server on port 8443..." << std::endl;
         server.start(https_handler);
