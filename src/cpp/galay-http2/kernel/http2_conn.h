@@ -1498,6 +1498,8 @@ public:
         auto [it, inserted] = m_streams.try_emplace(stream_id);
         if (inserted || !it->second) {
             it->second = stream ? std::move(stream) : Http2Stream::create(stream_id);
+            it->second->m_send_window = static_cast<int32_t>(m_peer_settings.initial_window_size);
+            it->second->m_recv_window = static_cast<int32_t>(m_local_settings.initial_window_size);
         }
         return it->second;
     }

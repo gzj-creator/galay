@@ -289,6 +289,9 @@ namespace galay::http {
          */
         std::map<std::string,std::string>& args();
 
+        // Shared target decoding for parsed HTTP/1 and structured HTTP/2 requests.
+        HttpErrorCode set_request_target(std::string_view target);
+
         /**
          * @brief 获取头部键值对的可变引用
          * @return HeaderPair 引用

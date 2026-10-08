@@ -2397,6 +2397,8 @@ private:
     }
 
     void complete_decoded_headers(const Http2Stream::ptr& stream, bool end_stream) {
+        const bool initial_headers = !stream->is_end_headers_received();
+        stream->set_end_headers_received();
         if (m_conn.is_client()) {
             stream->consume_decoded_headers_as_response();
             auto events = Http2StreamEvent::HeadersReady;
@@ -2426,7 +2428,7 @@ private:
                 return;
             }
             mark_stream_active(stream, events);
-        } else {
+        } else if (initial_headers) {
             queue_stream_handler(stream);
         }
     }

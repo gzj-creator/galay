@@ -678,6 +678,19 @@ namespace galay::http
         return this->m_argList;
     }
 
+    HttpErrorCode HttpRequestHeader::set_request_target(std::string_view target)
+    {
+        if (target.empty()) return kBadRequest;
+        if (m_maxUriSize != 0 && target.size() > m_maxUriSize) return kUriTooLong;
+        auto decoded = convert_from_uri(target, false);
+        if (m_uriDecodeError) return kUriEncodeError;
+        m_uri.clear();
+        m_argList.clear();
+        parse_args(decoded);
+        if (m_uri.empty()) m_uri = std::move(decoded);
+        return kNoError;
+    }
+
 
     HeaderPair& HttpRequestHeader::header_pairs()
     {
@@ -798,14 +811,7 @@ namespace galay::http
 
         case RequestParseState::Uri:
             if (c == ' ') {
-                std::string full_uri = convert_from_uri(m_parseUriStr, false);
-                if (m_uriDecodeError) {
-                    return kUriEncodeError;
-                }
-                parse_args(full_uri);
-                if (m_uri.empty()) {
-                    m_uri = full_uri;
-                }
+                if (const auto error = set_request_target(m_parseUriStr); error != kNoError) return error;
                 m_parseState = RequestParseState::UriSP;
             } else if (c == '\r' || c == '\n') {
                 return kBadRequest;
@@ -1074,14 +1080,7 @@ namespace galay::http
                         return {kBadRequest, -1};
                     }
 
-                    std::string full_uri = convert_from_uri(m_parseUriStr, false);
-                    if (m_uriDecodeError) {
-                        return {kUriEncodeError, -1};
-                    }
-                    parse_args(full_uri);
-                    if (m_uri.empty()) {
-                        m_uri = full_uri;
-                    }
+                    if (const auto error = set_request_target(m_parseUriStr); error != kNoError) return {error, -1};
                     m_parseState = RequestParseState::UriSP;
                     break;
                 }

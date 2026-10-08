@@ -99,6 +99,9 @@
 #if __has_include("../../galay-http/server/http_server.h")
 #include "../../galay-http/server/http_server.h"
 #endif
+#if __has_include("../../galay-http/server/server_listener.h")
+#include "../../galay-http/server/server_listener.h"
+#endif
 #if __has_include("../../galay-http/utils/http_helper.h")
 #include "../../galay-http/utils/http_helper.h"
 #endif
@@ -381,6 +384,9 @@
 #endif
 #if __has_include(<istream>)
 #include <istream>
+#endif
+#if __has_include(<iterator>)
+#include <iterator>
 #endif
 // <libaio.h> 的 io_* 帮助函数是 static inline：在 purview 内展开同样触发 "exporting declaration ... with internal linkage"。
 #if __has_include(<libaio.h>)

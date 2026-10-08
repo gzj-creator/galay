@@ -18,6 +18,9 @@
 #if __has_include("../../galay-kernel/async/async_tcp.h")
 #include "../../galay-kernel/async/async_tcp.h"
 #endif
+#if __has_include("../../galay-kernel/async/async_waiter.h")
+#include "../../galay-kernel/async/async_waiter.h"
+#endif
 #if __has_include("../../galay-kernel/common/concepts.h")
 #include "../../galay-kernel/common/concepts.h"
 #endif
@@ -269,6 +272,9 @@
 #endif
 #if __has_include(<iomanip>)
 #include <iomanip>
+#endif
+#if __has_include(<iterator>)
+#include <iterator>
 #endif
 // <libaio.h> 的 io_* 帮助函数是 static inline：在 purview 内展开同样触发 "exporting declaration ... with internal linkage"。
 #if __has_include(<libaio.h>)

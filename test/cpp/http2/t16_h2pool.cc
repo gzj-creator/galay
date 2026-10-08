@@ -91,6 +91,24 @@ int main() {
     assert(!reused->wait_response_complete().await_ready());
     assert(!reused->get_frame().await_ready());
 
+    Http2Stream::ptr outlives_pool;
+    {
+        auto short_lived_pool = std::make_unique<Http2StreamPool>();
+        std::weak_ptr state = short_lived_pool->m_state;
+        auto cached = short_lived_pool->acquire(5);
+        assert(cached->shared_from_this() == cached);
+        cached.reset();
+        assert(short_lived_pool->available() == 1);
+        outlives_pool = short_lived_pool->acquire(7);
+        assert(outlives_pool->shared_from_this() == outlives_pool);
+        short_lived_pool.reset();
+        assert(state.expired());
+    }
+    assert(outlives_pool);
+    std::weak_ptr<Http2Stream> lifetime = outlives_pool;
+    outlives_pool.reset();
+    assert(lifetime.expired());
+
     galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);

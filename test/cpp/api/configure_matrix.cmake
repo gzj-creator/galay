@@ -38,7 +38,8 @@ endfunction()
 # The fixture deliberately has no serde submodule, yet HTTP without API must configure.
 check_config(api_off success "" -DGALAY_BUILD_API=OFF -DGALAY_BUILD_SERDE=OFF)
 file(READ "${work}/api_off/build.ninja" off_build)
-if(off_build MATCHES "galay-api|serde_simdjson|swagger-ui")
+# Inspect target rules, not absolute fixture paths that may contain galay-api.
+if(off_build MATCHES "(^|\n)build (galay-api|serde_simdjson):|(^|\n)build src/cpp/galay-api/|(^|\n)build [^\n]*swagger_ui\\.cc[: ]")
     message(FATAL_ERROR "API=OFF introduced API dependencies")
 endif()
 check_config(missing_http failure "GALAY_BUILD_API requires GALAY_BUILD_HTTP=ON"

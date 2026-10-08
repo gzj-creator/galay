@@ -23,8 +23,16 @@ set(prefix "${relocated}")
 file(COPY "${CMAKE_CURRENT_LIST_DIR}/consumer" DESTINATION "${work}")
 file(COPY "${GALAY_SOURCE_DIR}/examples/cpp/api/e1_users.cc"
     DESTINATION "${work}/consumer")
+file(COPY "${CMAKE_CURRENT_LIST_DIR}/t10_startup.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/t11_transport_server.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/transport_acceptance.cjs"
+    "${CMAKE_CURRENT_LIST_DIR}/startup_acceptance.cmake"
+    DESTINATION "${work}/consumer")
+file(COPY "${GALAY_SOURCE_DIR}/assets/swagger-ui/" DESTINATION "${work}/reference-assets")
 execute_process(COMMAND "${CMAKE_COMMAND}" -S "${work}/consumer" -B "${work}/build"
     -G Ninja -DCMAKE_CXX_COMPILER=${GALAY_CXX_COMPILER} -DCMAKE_PREFIX_PATH=${prefix}
+    -DCMAKE_CXX_FLAGS=-Werror
+    -DCONSUMER_REFERENCE_ASSETS=${work}/reference-assets
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
 file(WRITE "${work}/configure.log" "${output}\n${error}")
 if(NOT result EQUAL 0)

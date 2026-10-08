@@ -193,46 +193,24 @@ bool endpoint_matches(std::string_view pattern, std::string_view path)
     return pattern.empty() && path.empty();
 }
 
-kernel::Task<void> send_resource(http::HttpConn& connection, http::HttpRequest request,
-                         std::shared_ptr<const Resource> resource)
+kernel::Task<http::HttpResponseResult> make_resource(std::shared_ptr<const Resource> resource)
 {
     http::HttpResponse response;
     response.header().version() = http::HttpVersion::HttpVersion_1_1;
     response.header().code() = http::HttpStatusCode::OK_200;
-    const bool keep_alive = request.header().is_keep_alive() && !request.header().is_connection_close();
     auto& headers = response.header().header_pairs();
-    const std::array<std::pair<std::string, std::string>, 4> fields{{
+    const std::array<std::pair<std::string, std::string>, 3> fields{{
         {"Content-Type", resource->content_type},
         {"X-Content-Type-Options", "nosniff"},
-        {"Cache-Control", "no-store"},
-        {"Connection", keep_alive ? "keep-alive" : "close"}}};
+        {"Cache-Control", "no-store"}}};
     for (const auto& [name, value] : fields) {
         const auto added = headers.add_header_pair(name, value);
         if (added != http::kNoError) {
-            HTTP_LOG_ERROR("[api-docs] [header-fail]", "path={} header={} code={}",
-                           request.header().uri(), name, static_cast<int>(added));
-            const auto closed = co_await connection.close();
-            if (!closed) {
-                HTTP_LOG_ERROR("[api-docs] [close-fail]", "path={} error={}",
-                               request.header().uri(), closed.error().message());
-            }
-            co_return;
+            co_return std::unexpected(http::HttpError{added, "Swagger response header " + name});
         }
     }
     response.set_body_str(std::string(*resource->bytes));
-    auto writer = connection.get_writer();
-    const auto sent = co_await writer.send_response(std::move(response));
-    if (!sent || !*sent) {
-        HTTP_LOG_ERROR("[api-docs] [send-fail]", "path={} error={}",
-                       request.header().uri(), sent ? "HTTP writer returned false" : sent.error().message());
-        const auto closed = co_await connection.close();
-        if (!closed) {
-            HTTP_LOG_ERROR("[api-docs] [close-fail]", "path={} error={}",
-                           request.header().uri(), closed.error().message());
-        }
-    }
-    // Only a failed response terminates early; normal closes remain server-owned.
-    co_return;
+    co_return response;
 }
 
 ApiResult<void> install_resources(PreparedApi& api, const DocsConfig& config,
@@ -306,16 +284,16 @@ ApiResult<void> install_resources(PreparedApi& api, const DocsConfig& config,
             http::HttpMethod::OPTIONS, http::HttpMethod::CONNECT, http::HttpMethod::PATCH,
             http::HttpMethod::PRI, http::HttpMethod::UNKNOWN};
         for (const auto method : methods) {
-            if (api.router.find_handler(method, path).handler != nullptr) {
+            if (api.router.find_handler(method, path)) {
                 return std::unexpected(ApiError{ApiErrorCode::kRouteConflict,
                     "docs path conflicts with an existing router handler: " + path, 409});
             }
         }
     }
     for (const auto& route : routes) {
-        api.router.add_handler<http::HttpMethod::GET>(route.path,
-            [resource = route.resource](http::HttpConn& connection, http::HttpRequest request) {
-                return send_resource(connection, std::move(request), resource);
+        api.router.add_request_handler<http::HttpMethod::GET>(route.path,
+            [resource = route.resource](http::HttpRequest) {
+                return make_resource(resource);
             });
     }
     api.docs_installed = true;

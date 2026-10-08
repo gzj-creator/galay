@@ -1,24 +1,11 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const net = require('node:net');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { free_port, make_client, run, delay } = require('./transport_acceptance.cjs');
 
-async function free_port() {
-  const probe = net.createServer();
-  await new Promise((resolve, reject) => {
-    probe.once('error', reject);
-    probe.listen(0, '127.0.0.1', resolve);
-  });
-  const port = probe.address().port;
-  await new Promise((resolve, reject) => probe.close(error => error ? reject(error) : resolve()));
-  return port;
-}
-
-async function main() {
-  const [binary, assetDirectory, outputDirectory] = process.argv.slice(2);
-  assert(binary && assetDirectory && outputDirectory, 'binary, assets and output directory are required');
+async function verify_browser(binary, assetDirectory, outputDirectory, mode, certificates) {
   await fs.mkdir(outputDirectory, { recursive: true });
   const deployment = await fs.mkdtemp(path.join(path.resolve(outputDirectory), 'empty-deployment-'));
   const expected_assets = new Map();
@@ -27,11 +14,14 @@ async function main() {
     expected_assets.set(name, await fs.readFile(path.join(assetDirectory, name)));
   }
   const port = await free_port();
-  const origin = `http://127.0.0.1:${port}`;
-  const trace_file = process.env.STRACE_OUTPUT && path.resolve(process.env.STRACE_OUTPUT);
+  const secure = mode === 'https' || mode === 'h2';
+  const origin = `${secure ? 'https' : 'http'}://127.0.0.1:${port}`;
+  const trace_file = process.env.STRACE_OUTPUT && `${path.resolve(process.env.STRACE_OUTPUT)}.${mode}`;
+  if (trace_file) await fs.rm(trace_file, { force: true });
   const command = trace_file ? 'strace' : path.resolve(binary);
+  const serve_arguments = ['--port', String(port), '--transport', mode, '--cert', certificates.cert, '--key', certificates.key];
   const arguments_ = trace_file ? ['-f', '-s', '4096', '-o', trace_file, '-e', 'trace=%file',
-    path.resolve(binary), '--port', String(port)] : ['--port', String(port)];
+    path.resolve(binary), ...serve_arguments] : serve_arguments;
   const server = spawn(command, arguments_,
     { cwd: deployment, stdio: ['ignore', 'pipe', 'pipe'] });
   let application_pid = server.pid;
@@ -43,6 +33,7 @@ async function main() {
     server.once('exit', (code, signal) => resolve({ code, signal }));
   });
   let browser;
+  let client;
   try {
     if (trace_file) {
       for (let attempt = 0; attempt < 100; ++attempt) {
@@ -57,33 +48,44 @@ async function main() {
       }
       assert(application_pid !== server.pid, 'strace must report the traced application PID');
     }
-    let spec;
-    for (let attempt = 0; attempt < 200; ++attempt) {
-      if (server.exitCode !== null) throw new Error(`server exited: ${serverLog}`);
-      try {
-        const response = await fetch(`${origin}/openapi.json`);
-        if (response.ok) { spec = await response.text(); break; }
-      } catch (error) {
-        if (attempt === 199) throw error;
-      }
-      await new Promise(resolve => setTimeout(resolve, 50));
+    for (let attempt = 0; !serverLog.includes('Swagger UI: '); ++attempt) {
+      assert(server.exitCode === null && attempt < 200, `server did not become ready: ${serverLog}`);
+      await delay(50);
     }
-    assert(spec, `server did not become ready: ${serverLog}`);
+    client = await make_client(mode, port, await fs.readFile(certificates.cert));
+    const served = await client.request('GET', '/openapi.json');
+    assert.equal(served.status, 200);
+    const spec = served.bytes.toString();
+    run(path.resolve(binary), ['--export', path.join(outputDirectory, 'export-openapi.json')]);
+    assert.equal(await fs.readFile(path.join(outputDirectory, 'export-openapi.json'), 'utf8'), spec);
     await fs.writeFile(path.join(outputDirectory, 'served-openapi.json'), spec);
     for (const [name, expected] of expected_assets) {
-      const response = await fetch(`${origin}/docs/${name}`);
+      const response = await client.request('GET', `/docs/${name}`);
       assert.equal(response.status, 200, name);
-      assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
-      assert.deepEqual(Buffer.from(await response.arrayBuffer()), expected);
+      assert.equal(response.headers['x-content-type-options'], 'nosniff');
+      assert.deepEqual(response.bytes, expected);
     }
-    browser = await chromium.launch({ headless: true });
-    const evidence = { browser: browser.version(), origin, embeddedResources: expected_assets.size,
+    browser = await chromium.launch({ headless: true, args: process.env.CHROMIUM_NET_LOG
+      ? [`--log-net-log=${path.resolve(process.env.CHROMIUM_NET_LOG)}.${mode}`, '--net-log-capture-mode=Everything'] : [] });
+    const evidence = { browser: browser.version(), mode, origin, serverProtocol: client.protocol,
+      selfSignedBrowserCertificateException: secure, embeddedResources: expected_assets.size,
       filesystemTrace: trace_file || null,
       workingDirectory: deployment, viewports: [] };
     for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }],
       ['mobile', { width: 390, height: 844 }]]) {
-      const context = await browser.newContext({ viewport, serviceWorkers: 'block' });
+      const context = await browser.newContext({ viewport, serviceWorkers: 'block', ignoreHTTPSErrors: secure });
       const page = await context.newPage();
+      const cdp = await context.newCDPSession(page);
+      await cdp.send('Network.enable');
+      const protocols = [];
+      const network_events = [];
+      for (const event of ['requestWillBeSent', 'dataReceived', 'loadingFinished', 'loadingFailed']) {
+        cdp.on(`Network.${event}`, value => network_events.push({ event, ...value }));
+      }
+      cdp.on('Network.responseReceived', event => {
+        network_events.push({ event: 'responseReceived', ...event });
+        if (event.response.url.startsWith(origin)) protocols.push({ url: event.response.url, protocol: event.response.protocol });
+      });
       const errors = [];
       const external = [];
       page.on('pageerror', error => errors.push(error.message));
@@ -94,7 +96,24 @@ async function main() {
         return route.continue();
       });
       page.on('response', response => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
-      const response = await page.goto(`${origin}/docs`, { waitUntil: 'networkidle' });
+      let response;
+      try {
+        response = await page.goto(`${origin}/docs`, { waitUntil: 'networkidle' });
+      } catch (error) {
+        await fs.writeFile(path.join(outputDirectory, `${name}-failed.json`),
+          JSON.stringify({ error: error.message, protocols, errors, external, network_events }, null, 2));
+        throw error;
+      }
+      if (mode === 'h2c') {
+        assert.equal(response.status(), 404, 'browser HTTP/1 fallback must not count as h2c UI support');
+        assert(protocols.length > 0 && protocols.every(value => value.protocol === 'http/1.1'));
+        assert.deepEqual(external, []);
+        evidence.browserLimitation = 'Chromium uses HTTP/1.1 on cleartext origins, not h2c prior knowledge';
+        evidence.viewports.push({ name, http1FallbackStatus: 404, protocols, tryItOut: 'not available over browser h2c' });
+        await page.screenshot({ path: path.join(outputDirectory, `${name}-h2c-limitation.png`) });
+        await context.close();
+        continue;
+      }
       assert.equal(response.status(), 200);
       await page.locator('.opblock-get').waitFor({ state: 'visible' });
       await page.locator('.opblock-post').waitFor({ state: 'visible' });
@@ -110,7 +129,7 @@ async function main() {
       assert(layout.width <= layout.viewport + 1, `${name} has horizontal overflow: ${JSON.stringify(layout)}`);
       assert(layout.operations.every(operation => operation.width > 0 && operation.height >= 30), 'visible operation controls');
       await page.screenshot({ path: path.join(outputDirectory, `${name}.png`), fullPage: true });
-      if (name === 'desktop') {
+      {
         const get = page.locator('.opblock-get');
         await get.locator('.opblock-summary').click();
         await get.getByRole('button', { name: /Try it out/i }).click();
@@ -131,20 +150,30 @@ async function main() {
         const created = await postResponse;
         assert.equal(created.status(), 201);
         assert.equal((await created.json()).name, 'Lin');
-        await page.screenshot({ path: path.join(outputDirectory, 'desktop-executed.png'), fullPage: true });
+        await page.screenshot({ path: path.join(outputDirectory, `${name}-executed.png`), fullPage: true });
         evidence.get = 200;
         evidence.post = 201;
       }
       assert.deepEqual(external, [], 'offline UI attempted an external request');
       assert.deepEqual(errors, [], 'UI resource/console errors');
-      evidence.viewports.push({ name, ...layout, externalRequests: external.length, errors: errors.length });
+      const expected_protocol = mode === 'h2' ? 'h2' : 'http/1.1';
+      assert(protocols.length >= 7 && protocols.every(value => value.protocol === expected_protocol),
+        `${mode}: browser docs, resources and Try it out must actually use ${expected_protocol}: ${JSON.stringify(protocols)}`);
+      evidence.viewports.push({ name, ...layout, externalRequests: external.length, errors: errors.length,
+        protocols, tryItOut: { get: 200, post: 201 } });
       await context.close();
     }
     await fs.writeFile(path.join(outputDirectory, 'browser.json'), JSON.stringify(evidence, null, 2));
     console.log(JSON.stringify(evidence, null, 2));
+    return evidence;
   } finally {
     if (browser) await browser.close();
-    if (server.exitCode === null) process.kill(application_pid, 'SIGTERM');
+    if (client) await client.close();
+    if (server.exitCode === null) {
+      try { process.kill(application_pid, 'SIGTERM'); } catch (error) {
+        if (error.code !== 'ESRCH') throw error;
+      }
+    }
     const timer = setTimeout(() => {
       if (server.exitCode === null) {
         try { process.kill(application_pid, 'SIGKILL'); } catch (error) {
@@ -165,6 +194,21 @@ async function main() {
       assert(!paths.some(name => trace.includes(name)), 'startup or requests accessed UI resource files');
     }
   }
+}
+
+async function main() {
+  const [binary, assets, output_, modes = 'http,https,h2,h2c'] = process.argv.slice(2);
+  assert(binary && assets && output_, 'binary, assets and output directory are required');
+  const output = path.resolve(output_);
+  await fs.mkdir(output, { recursive: true });
+  const certificates = { cert: path.join(output, 'localhost.crt'), key: path.join(output, 'localhost.key') };
+  run('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '2', '-subj', '/CN=localhost',
+    '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1', '-out', certificates.cert, '-keyout', certificates.key]);
+  const evidence = [];
+  for (const mode of modes.split(',')) {
+    evidence.push(await verify_browser(binary, assets, path.join(output, mode), mode, certificates));
+  }
+  await fs.writeFile(path.join(output, 'browsers.json'), JSON.stringify(evidence, null, 2));
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

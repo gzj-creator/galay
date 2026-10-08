@@ -1,11 +1,11 @@
 /**
  * @file http2_server.h
- * @brief HTTP/2 服务器，支持 h2c 升级和 TLS ALPN 协商
+ * @brief HTTP/2 服务器，支持 h2c prior knowledge 和 TLS ALPN 协商
  * @author galay-http
  * @version 1.0.0
  *
  * @details 提供 H2cServer 和 H2Server 模板类，支持两种 HTTP/2 服务模式：
- *          1. h2c 模式：通过 HTTP/1.1 Upgrade 升级到 HTTP/2
+ *          1. h2c 模式：通过 prior knowledge 直接使用 HTTP/2
  *          2. TLS 模式：通过 ALPN 协议协商直接使用 HTTP/2
  */
 
@@ -25,6 +25,7 @@
 #include "../../galay-http/kernel/http_conn.h"
 #include "../../galay-http/builder/http_builder.h"
 #include "../../galay-http/plugin/common/defn.h"
+#include "../../galay-http/server/server_listener.h"
 #include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/core/runtime.h"
 #ifdef GALAY_SSL_FEATURE_ENABLED
@@ -63,7 +64,8 @@ using ::galay::utils::RingBuffer;
 
 template<typename SocketType>
 inline Task<void> run_default_http1_fallback_loop(const char* log_tag,
-                                              galay::http::HttpConnImpl<SocketType>&& conn) {
+                                              galay::http::HttpConnImpl<SocketType>&& conn,
+                                              galay::http::server_detail::ServerConnections::Scope& connection_scope) {
     bool keep_alive = true;
     while (keep_alive) {
         galay::http::HttpRequest request;
@@ -94,6 +96,7 @@ inline Task<void> run_default_http1_fallback_loop(const char* log_tag,
             break;
         }
     }
+    connection_scope.release_handle();
     auto close_result = co_await conn.close();
     if (!close_result) {
         HTTP_LOG_WARN("[h1-fallback] [close-fail]",
@@ -270,43 +273,6 @@ inline std::string drain_ring_buffer(RingBuffer<galay::utils::RingBufferBackendS
     return data;
 }
 
-inline void wake_tcp_accept_loops(const std::string& host, uint16_t port, size_t attempts) {
-    if (attempts == 0 || port == 0) {
-        return;
-    }
-
-    const std::string wake_host =
-        (host.empty() || host == "0.0.0.0" || host == "::") ? "127.0.0.1" : host;
-    for (size_t i = 0; i < attempts; ++i) {
-        const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
-        if (fd < 0) {
-            return;
-        }
-
-        sockaddr_in addr{};
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(port);
-        if (::inet_pton(AF_INET, wake_host.c_str(), &addr.sin_addr) == 1) {
-            int connect_result = ::connect(fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr));
-            if (connect_result != 0) {
-                HTTP_LOG_DEBUG("[wake] [connect-fail]", "host={} port={}", wake_host, port);
-            }
-        }
-        if (::close(fd) != 0) {
-            HTTP_LOG_DEBUG("[wake] [close-fail]", "host={} port={}", wake_host, port);
-        }
-    }
-}
-
-inline void wait_for_loop_drain(const std::atomic<size_t>& loop_count,
-                             std::chrono::milliseconds timeout) {
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
-    while (loop_count.load(std::memory_order_acquire) > 0 &&
-           std::chrono::steady_clock::now() < deadline) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-}
-
 /**
  * @brief HTTP/1.1 降级处理器类型
  */
@@ -339,18 +305,20 @@ public:
     H2cServer& operator=(const H2cServer&) = delete;
     
     void start() {
-        start_internal();
+        if (!start_internal()) HTTP_LOG_ERROR("[h2c] [start-fail]", "error={}", m_start_error);
     }
 
     void start(Http2ConnectionHandler handler) {
+        if (m_running.load()) return;
         m_stream_handler = std::move(handler);
         m_active_conn_handler = nullptr;
-        start_internal();
+        if (!start_internal()) HTTP_LOG_ERROR("[h2c] [start-fail]", "error={}", m_start_error);
     }
 
     void start(Http2ActiveConnHandler handler) {
+        if (m_running.load()) return;
         m_active_conn_handler = std::move(handler);
-        start_internal();
+        if (!start_internal()) HTTP_LOG_ERROR("[h2c] [start-fail]", "error={}", m_start_error);
     }
 
     void set_http1_fallback(Http1FallbackHandler handler) {
@@ -360,24 +328,26 @@ public:
     void stop() {
         if (!m_running.load()) {
             stop_started_plugins();
+            m_listeners.clear();
             return;
         }
 
         m_running.store(false);
         HTTP_LOG_INFO("[h2c] [server] [stopping]", "port={}", m_config.port);
 
-        wake_tcp_accept_loops(m_config.host,
-                           m_config.port,
-                           m_server_loop_count.load(std::memory_order_acquire));
-        wait_for_loop_drain(m_server_loop_count, std::chrono::milliseconds(100));
         stop_started_plugins();
+        galay::http::server_detail::close_listeners(m_runtime, m_listeners);
+        m_connections.stop(m_runtime);
         m_runtime.stop();
+        m_listeners.clear();
         HTTP_LOG_INFO("[h2c] [server] [stopped]", "port={}", m_config.port);
     }
     
     bool is_running() const {
         return m_running.load();
     }
+
+    const std::string& start_error() const noexcept { return m_start_error; }
 
     /**
      * @brief 检查至少一个 h2c listener 是否已完成 bind/listen。
@@ -431,28 +401,56 @@ private:
 
     bool start_internal() {
         if (m_running.load()) {
+            m_start_error = "server is already running";
             HTTP_LOG_WARN("[h2c] [server]", "already running");
             return false;
         }
-
+        m_start_error.clear();
         if (!m_stream_handler && !m_active_conn_handler) {
+            m_start_error = "missing HTTP/2 stream handler";
             HTTP_LOG_ERROR("[h2c] [handler]", "missing");
             return false;
         }
 
         auto runtime_start = m_runtime.start();
         if (!runtime_start.has_value()) {
+            m_start_error = "runtime: " + std::string(runtime_start.error().message());
             HTTP_LOG_ERROR("[h2c] [runtime-start-fail]",
                            "error={}",
                            runtime_start.error().message());
             return false;
         }
 
+        m_connections.start(m_runtime);
+
         if (!start_plugins()) {
+            m_start_error = "accept plugin failed to start";
+            m_connections.stop(m_runtime);
             m_runtime.stop();
             return false;
         }
 
+        const size_t io_scheduler_count = m_runtime.get_io_scheduler_count();
+        if (io_scheduler_count == 0) {
+            m_start_error = "server requires at least one IO scheduler";
+            stop_started_plugins();
+            m_connections.stop(m_runtime);
+            m_runtime.stop();
+            return false;
+        }
+        m_listeners.reserve(io_scheduler_count);
+        for (size_t i = 0; i < io_scheduler_count; ++i) {
+            auto listener = galay::http::server_detail::create_listener(m_config.host, m_config.port, m_config.backlog);
+            if (!listener) {
+                m_start_error = "listen " + m_config.host + ":" + std::to_string(m_config.port) + ": " + listener.error().message();
+                stop_started_plugins();
+                m_connections.stop(m_runtime);
+                m_runtime.stop();
+                m_listeners.clear();
+                return false;
+            }
+            m_listeners.push_back(std::move(*listener));
+        }
         m_running.store(true);
         HTTP_LOG_INFO("[server] [listen] [h2c]",
                       "host={} port={}",
@@ -460,34 +458,19 @@ private:
                       m_config.port);
 
         // Spawn one server_loop per IO scheduler with SO_REUSEPORT
-        size_t io_scheduler_count = m_runtime.get_io_scheduler_count();
         for (size_t i = 0; i < io_scheduler_count; i++) {
             auto* scheduler = m_runtime.get_io_scheduler(i);
             if (scheduler) {
-                auto loop = server_loop(scheduler);
-                const size_t previous_loop_count =
-                    m_server_loop_count.fetch_add(1, std::memory_order_acq_rel);
-                if (previous_loop_count == std::numeric_limits<size_t>::max()) {
-                    HTTP_LOG_WARN("[h2c] [server-loop-count-overflow]",
-                                  "previous={}",
-                                  previous_loop_count);
-                }
+                auto loop = server_loop(scheduler, &m_listeners[i]);
                 if (!schedule_runtime_task(scheduler, std::move(loop))) {
-                    const size_t before_sub =
-                        m_server_loop_count.fetch_sub(1, std::memory_order_acq_rel);
-                    if (before_sub == 0) {
-                        HTTP_LOG_WARN("[h2c] [server-loop-count-underflow]",
-                                      "previous={}",
-                                      before_sub);
-                    }
+                    m_start_error = "failed to schedule server loop " + std::to_string(i);
                     HTTP_LOG_ERROR("[h2c] [schedule-fail]", "server-loop");
                     m_running.store(false);
-                    wake_tcp_accept_loops(m_config.host,
-                                       m_config.port,
-                                       m_server_loop_count.load(std::memory_order_acquire));
-                    wait_for_loop_drain(m_server_loop_count, std::chrono::milliseconds(100));
                     stop_started_plugins();
+                    galay::http::server_detail::close_listeners(m_runtime, m_listeners);
+                    m_connections.stop(m_runtime);
                     m_runtime.stop();
+                    m_listeners.clear();
                     return false;
                 }
             }
@@ -496,73 +479,17 @@ private:
         return true;
     }
 
-    Task<void> server_loop(IOScheduler* scheduler) {
+    Task<void> server_loop(IOScheduler* scheduler, AsyncTcpSocket* listener_socket) {
+        if (!listener_socket) co_return;
+        auto& listener = *listener_socket;
         // 阶段 1：注册 server_loop 退出守卫，确保循环结束时扣减运行计数
         struct LoopExitGuard {
             H2cServer* server;
-            bool listening = false;
             ~LoopExitGuard() {
-                if (listening) {
-                    server->m_listening_loop_count.fetch_sub(1, std::memory_order_acq_rel);
-                }
-                server->m_server_loop_count.fetch_sub(1, std::memory_order_acq_rel);
+                server->m_listening_loop_count.fetch_sub(1, std::memory_order_acq_rel);
             }
         } guard{this};
-
-        // 阶段 2：创建当前 IO 调度器专属的 listener socket
-        // Each server_loop creates its own listener socket
-        AsyncTcpSocket listener(IPType::IPV4);
-
-        // 阶段 3：配置 listener 复用地址，允许快速重启绑定同一地址
-        auto reuse_result = listener.option().handle_reuse_addr();
-        if (!reuse_result) {
-            HTTP_LOG_ERROR("[socket] [reuseaddr-fail]",
-                           "error={}",
-                           reuse_result.error().message());
-            co_return;
-        }
-
-        // 阶段 4：配置 listener 复用端口，支持多 IO 调度器并行 accept
-        auto reuse_port_result = listener.option().handle_reuse_port();
-        if (!reuse_port_result) {
-            HTTP_LOG_ERROR("[socket] [reuseport-fail]",
-                           "error={}",
-                           reuse_port_result.error().message());
-            co_return;
-        }
-
-        // 阶段 5：设置 listener 为非阻塞模式，交给协程调度器驱动 IO
-        auto nonblock_result = listener.option().handle_non_block();
-        if (!nonblock_result) {
-            HTTP_LOG_ERROR("[socket] [nonblock-fail]",
-                           "error={}",
-                           nonblock_result.error().message());
-            co_return;
-        }
-
-        // 阶段 6：绑定监听地址和端口
-        Host bind_host(IPType::IPV4, m_config.host, m_config.port);
-        auto bind_result = listener.bind(bind_host);
-        if (!bind_result) {
-            HTTP_LOG_ERROR("[bind] [fail]",
-                           "host={} port={} error={}",
-                           m_config.host,
-                           m_config.port,
-                           bind_result.error().message());
-            co_return;
-        }
-
-        // 阶段 7：进入 listen 状态，准备接收 h2c 连接
-        auto listen_result = listener.listen(m_config.backlog);
-        if (!listen_result) {
-            HTTP_LOG_ERROR("[listen] [fail]",
-                           "error={}",
-                           listen_result.error().message());
-            co_return;
-        }
-
         m_listening_loop_count.fetch_add(1, std::memory_order_release);
-        guard.listening = true;
 
         // 阶段 8：主 accept 循环，运行期间持续等待新连接
         while (m_running.load()) {
@@ -617,7 +544,7 @@ private:
             // 阶段 13：把 h2c 连接处理任务轮询分发到 IO 调度器，避免 loopback
             // SO_REUSEPORT 哈希倾斜时所有连接集中在单个 accept scheduler。
             auto* target_scheduler = m_runtime.get_next_io_scheduler();
-            if (!schedule_task(target_scheduler, handle_connection(std::move(client_socket)))) {
+            if (!schedule_runtime_task(target_scheduler, handle_connection(std::move(client_socket)))) {
                 HTTP_LOG_ERROR("[h2c] [schedule-fail]", "handle-connection");
                 auto close_result = co_await client_socket.close();
                 if (!close_result) {
@@ -628,13 +555,6 @@ private:
             }
         }
 
-        // 阶段 13：server_loop 退出前关闭 listener socket
-        auto close_result = co_await listener.close();
-        if (!close_result) {
-            HTTP_LOG_WARN("[socket] [close-fail] [listener]",
-                          "error={}",
-                          close_result.error().message());
-        }
         co_return;
     }
     
@@ -642,11 +562,22 @@ private:
      * @brief 处理新连接
      */
     Task<void> handle_connection(AsyncTcpSocket socket) {
+        auto tracked = co_await m_connections.attach(socket.handle().fd);
+        if (!tracked) {
+            HTTP_LOG_WARN("[h2c] [connection-track-fail]", "error={}", tracked.error().message());
+            auto close_result = co_await socket.close();
+            if (!close_result && close_result.error().code() != kClosed) {
+                HTTP_LOG_WARN("[socket] [close-fail]", "context=h2c-track-fail error={}", close_result.error().message());
+            }
+            co_return;
+        }
+        auto connection_scope = std::move(*tracked);
         Http2ConnImpl<AsyncTcpSocket> conn(std::move(socket));
 
         // 配置本地设置
         auto local_settings = Http2Conn::make_settings_frame_from_config(m_config);
         if (conn.apply_local_settings(local_settings) != Http2ErrorCode::NoError) {
+            connection_scope.release_handle();
             auto close_result = co_await conn.close();
             if (!close_result) {
                 HTTP_LOG_WARN("[h2c] [close-fail]",
@@ -669,6 +600,7 @@ private:
                     upgrade_request.header_pairs().get_value("HTTP2-Settings"));
                 if (!decoded.has_value() ||
                     conn.apply_peer_settings(*decoded) != Http2ErrorCode::NoError) {
+                    connection_scope.release_handle();
                     auto close_result = co_await conn.close();
                     if (!close_result) {
                         HTTP_LOG_WARN("[h2c] [close-fail]",
@@ -688,6 +620,7 @@ private:
                 co_await mgr->start(m_stream_handler);
             }
             HTTP_LOG_DEBUG("[h2] [stream-mgr]", "stopped");
+            connection_scope.release_handle();
             auto close_result = co_await conn.close();
             if (!close_result) {
                 HTTP_LOG_WARN("[h2c] [close-fail]",
@@ -697,10 +630,11 @@ private:
             break;
         }
         case DetectedProtocol::Http1:
-            co_await handle_http1_fallback(std::move(conn), std::move(upgrade_request));
+            co_await handle_http1_fallback(std::move(conn), std::move(upgrade_request), connection_scope);
             break;
         default:
             HTTP_LOG_ERROR("[protocol] [detect-fail]", "h2c unknown");
+            connection_scope.release_handle();
             auto close_result = co_await conn.close();
             if (!close_result) {
                 HTTP_LOG_WARN("[h2c] [close-fail]",
@@ -877,17 +811,20 @@ private:
     }
 
     Task<void> handle_http1_fallback(Http2ConnImpl<AsyncTcpSocket>&& h2_conn,
-                                   galay::http::HttpRequestHeader first_request_header) {
+                                   galay::http::HttpRequestHeader first_request_header,
+                                   galay::http::server_detail::ServerConnections::Scope& connection_scope) {
         galay::http::HttpConnImpl<AsyncTcpSocket> conn(
             std::move(h2_conn.socket()), std::move(h2_conn.ring_buffer()));
 
         if (m_http1_fallback) {
+            // Custom fallback owns connection lifetime, including protocol upgrades.
+            connection_scope.finish();
             co_await m_http1_fallback(std::move(conn), std::move(first_request_header));
             co_return;
         }
 
         // 默认行为：进入 HTTP/1.1 处理链路，而不是直接返回 505。
-        co_await run_default_http1_fallback_loop("[h2c] [h1-fallback]", std::move(conn));
+        co_await run_default_http1_fallback_loop("[h2c] [h1-fallback]", std::move(conn), connection_scope);
         co_return;
     }
 
@@ -937,8 +874,10 @@ private:
     std::vector<std::unique_ptr<galay::http::plugin::AcceptPlugin<AsyncTcpSocket>>> m_accept_plugins;
     std::size_t m_started_plugin_count = 0;
     std::atomic<bool> m_running;
-    std::atomic<size_t> m_server_loop_count{0};
     std::atomic<size_t> m_listening_loop_count{0};
+    std::vector<AsyncTcpSocket> m_listeners;
+    galay::http::server_detail::ServerConnections m_connections;
+    std::string m_start_error;
 };
 
 inline H2cServer H2cServerBuilder::build() const {
@@ -1101,18 +1040,20 @@ public:
     H2Server& operator=(const H2Server&) = delete;
 
     void start() {
-        start_internal();
+        if (!start_internal()) HTTP_LOG_ERROR("[h2] [start-fail]", "error={}", m_start_error);
     }
 
     void start(Http2ConnectionHandler handler) {
+        if (m_running.load()) return;
         m_stream_handler = std::move(handler);
         m_active_conn_handler = nullptr;
-        start_internal();
+        if (!start_internal()) HTTP_LOG_ERROR("[h2] [start-fail]", "error={}", m_start_error);
     }
 
     void start(Http2ActiveConnHandler handler) {
+        if (m_running.load()) return;
         m_active_conn_handler = std::move(handler);
-        start_internal();
+        if (!start_internal()) HTTP_LOG_ERROR("[h2] [start-fail]", "error={}", m_start_error);
     }
 
     void set_http1_fallback(
@@ -1123,20 +1064,27 @@ public:
     void stop() {
         if (!m_running.load()) {
             stop_started_plugins();
+            m_listeners.clear();
             return;
         }
 
         m_running.store(false);
-        wake_tcp_accept_loops(m_config.host,
-                           m_config.port,
-                           m_server_loop_count.load(std::memory_order_acquire));
-        wait_for_loop_drain(m_server_loop_count, std::chrono::milliseconds(100));
         stop_started_plugins();
+        galay::http::server_detail::close_listeners(m_runtime, m_listeners);
+        m_connections.stop(m_runtime);
         m_runtime.stop();
+        m_listeners.clear();
     }
 
     bool is_running() const {
         return m_running.load();
+    }
+
+    const std::string& start_error() const noexcept { return m_start_error; }
+
+    bool is_ready() const {
+        return m_running.load(std::memory_order_acquire) &&
+               m_listening_loop_count.load(std::memory_order_acquire) > 0;
     }
 
     Runtime& get_runtime() {
@@ -1191,9 +1139,12 @@ private:
 
     bool start_internal() {
         if (m_running.load()) {
+            m_start_error = "server is already running";
             return false;
         }
+        m_start_error.clear();
         if (!m_stream_handler && !m_active_conn_handler) {
+            m_start_error = "missing HTTP/2 stream handler";
             return false;
         }
         if (!init_ssl_context()) {
@@ -1202,45 +1153,54 @@ private:
 
         auto runtime_start = m_runtime.start();
         if (!runtime_start.has_value()) {
+            m_start_error = "runtime: " + std::string(runtime_start.error().message());
             HTTP_LOG_ERROR("[h2] [runtime-start-fail]",
                            "error={}",
                            runtime_start.error().message());
             return false;
         }
+        m_connections.start(m_runtime);
         configure_low_latency_io_timers();
         if (!start_plugins()) {
+            m_start_error = "accept plugin failed to start";
+            m_connections.stop(m_runtime);
             m_runtime.stop();
             return false;
         }
+        const size_t io_scheduler_count = m_runtime.get_io_scheduler_count();
+        if (io_scheduler_count == 0) {
+            m_start_error = "server requires at least one IO scheduler";
+            stop_started_plugins();
+            m_connections.stop(m_runtime);
+            m_runtime.stop();
+            return false;
+        }
+        m_listeners.reserve(io_scheduler_count);
+        for (size_t i = 0; i < io_scheduler_count; ++i) {
+            auto listener = galay::http::server_detail::create_listener(m_config.host, m_config.port, m_config.backlog);
+            if (!listener) {
+                m_start_error = "listen " + m_config.host + ":" + std::to_string(m_config.port) + ": " + listener.error().message();
+                stop_started_plugins();
+                m_connections.stop(m_runtime);
+                m_runtime.stop();
+                m_listeners.clear();
+                return false;
+            }
+            m_listeners.push_back(std::move(*listener));
+        }
         m_running.store(true);
-
-        size_t io_scheduler_count = m_runtime.get_io_scheduler_count();
         for (size_t i = 0; i < io_scheduler_count; i++) {
             auto* scheduler = m_runtime.get_io_scheduler(i);
             if (scheduler) {
-                auto loop = server_loop(scheduler);
-                const size_t previous_loop_count =
-                    m_server_loop_count.fetch_add(1, std::memory_order_acq_rel);
-                if (previous_loop_count == std::numeric_limits<size_t>::max()) {
-                    HTTP_LOG_WARN("[h2] [server-loop-count-overflow]",
-                                  "previous={}",
-                                  previous_loop_count);
-                }
+                auto loop = server_loop(scheduler, &m_listeners[i]);
                 if (!schedule_runtime_task(scheduler, std::move(loop))) {
-                    const size_t before_sub =
-                        m_server_loop_count.fetch_sub(1, std::memory_order_acq_rel);
-                    if (before_sub == 0) {
-                        HTTP_LOG_WARN("[h2] [server-loop-count-underflow]",
-                                      "previous={}",
-                                      before_sub);
-                    }
+                    m_start_error = "failed to schedule server loop " + std::to_string(i);
                     m_running.store(false);
-                    wake_tcp_accept_loops(m_config.host,
-                                       m_config.port,
-                                       m_server_loop_count.load(std::memory_order_acquire));
-                    wait_for_loop_drain(m_server_loop_count, std::chrono::milliseconds(100));
                     stop_started_plugins();
+                    galay::http::server_detail::close_listeners(m_runtime, m_listeners);
+                    m_connections.stop(m_runtime);
                     m_runtime.stop();
+                    m_listeners.clear();
                     return false;
                 }
             }
@@ -1250,26 +1210,31 @@ private:
 
     bool init_ssl_context() {
         if (!m_ssl_ctx.is_valid()) {
+            m_start_error = "TLS context: " + m_ssl_ctx.error().message();
             return false;
         }
 
         if (m_config.cert_path.empty() || m_config.key_path.empty()) {
+            m_start_error = "TLS requires both cert_path and key_path";
             return false;
         }
 
         auto cert_result = m_ssl_ctx.load_certificate(m_config.cert_path);
         if (!cert_result) {
+            m_start_error = "TLS certificate " + m_config.cert_path + ": " + cert_result.error().message();
             return false;
         }
 
         auto key_result = m_ssl_ctx.load_private_key(m_config.key_path);
         if (!key_result) {
+            m_start_error = "TLS private key " + m_config.key_path + ": " + key_result.error().message();
             return false;
         }
 
         if (!m_config.ca_path.empty()) {
             auto ca_result = m_ssl_ctx.load_ca_certificate(m_config.ca_path);
             if (!ca_result) {
+                m_start_error = "TLS CA " + m_config.ca_path + ": " + ca_result.error().message();
                 return false;
             }
         }
@@ -1283,58 +1248,30 @@ private:
 
         auto alpn_result = m_ssl_ctx.set_alpn_protocols({"h2", "http/1.1"});
         if (!alpn_result) {
+            m_start_error = "TLS ALPN: " + alpn_result.error().message();
             return false;
         }
         auto alpn_select_result = m_ssl_ctx.set_alpn_select_protocols({"h2", "http/1.1"});
         if (!alpn_select_result) {
+            m_start_error = "TLS ALPN selection: " + alpn_select_result.error().message();
             return false;
         }
 
         return true;
     }
 
-    Task<void> server_loop(IOScheduler* scheduler) {
+    Task<void> server_loop(IOScheduler* scheduler, AsyncTcpSocket* listener_socket) {
+        if (!listener_socket) co_return;
+        auto& listener = *listener_socket;
         // 阶段 1：注册 server_loop 退出守卫，确保循环结束时扣减运行计数
         struct LoopExitGuard {
             H2Server* server;
             ~LoopExitGuard() {
-                server->m_server_loop_count.fetch_sub(1, std::memory_order_acq_rel);
+                server->m_listening_loop_count.fetch_sub(1, std::memory_order_acq_rel);
             }
         } guard{this};
 
-        // 阶段 2：创建当前 IO 调度器专属的 TCP listener socket
-        AsyncTcpSocket listener(IPType::IPV4);
-
-        // 阶段 3：配置 listener 复用地址，允许快速重启绑定同一地址
-        auto reuse_result = listener.option().handle_reuse_addr();
-        if (!reuse_result) {
-            co_return;
-        }
-
-        // 阶段 4：配置 listener 复用端口，支持多 IO 调度器并行 accept
-        auto reuse_port_result = listener.option().handle_reuse_port();
-        if (!reuse_port_result) {
-            co_return;
-        }
-
-        // 阶段 5：设置 listener 为非阻塞模式，交给协程调度器驱动 IO
-        auto nonblock_result = listener.option().handle_non_block();
-        if (!nonblock_result) {
-            co_return;
-        }
-
-        // 阶段 6：绑定监听地址和端口
-        Host bind_host(IPType::IPV4, m_config.host, m_config.port);
-        auto bind_result = listener.bind(bind_host);
-        if (!bind_result) {
-            co_return;
-        }
-
-        // 阶段 7：进入 listen 状态，准备接收 TLS HTTP/2 连接
-        auto listen_result = listener.listen(m_config.backlog);
-        if (!listen_result) {
-            co_return;
-        }
+        m_listening_loop_count.fetch_add(1, std::memory_order_release);
 
         // 阶段 8：主 accept 循环，运行期间持续等待新连接
         while (m_running.load()) {
@@ -1380,7 +1317,7 @@ private:
                 target_scheduler = scheduler;
             }
             // 阶段 14：投递 TLS HTTP/2 连接处理任务，投递失败时关闭客户端 socket
-            if (!schedule_task(target_scheduler, handle_connection(std::move(client_socket)))) {
+            if (!schedule_runtime_task(target_scheduler, handle_connection(std::move(client_socket)))) {
                 auto close_result = co_await client_socket.close();
                 if (!close_result) {
                     HTTP_LOG_WARN("[socket] [close-fail] [client]",
@@ -1390,13 +1327,6 @@ private:
             }
         }
 
-        // 阶段 14：server_loop 退出前关闭 listener socket
-        auto close_result = co_await listener.close();
-        if (!close_result) {
-            HTTP_LOG_WARN("[socket] [close-fail] [listener]",
-                          "error={}",
-                          close_result.error().message());
-        }
         co_return;
     }
 
@@ -1417,8 +1347,19 @@ private:
     }
 
     Task<void> handle_connection(galay::ssl::SslSocket socket) {
+        auto tracked = co_await m_connections.attach(socket.handle().fd);
+        if (!tracked) {
+            HTTP_LOG_WARN("[h2] [connection-track-fail]", "error={}", tracked.error().message());
+            auto close_result = co_await socket.close();
+            if (!close_result && close_result.error().code() != kClosed) {
+                HTTP_LOG_WARN("[socket] [close-fail]", "context=h2-track-fail error={}", close_result.error().message());
+            }
+            co_return;
+        }
+        auto connection_scope = std::move(*tracked);
         auto handshake_result = co_await socket.handshake();
         if (!handshake_result) {
+            connection_scope.release_handle();
             auto close_result = co_await socket.close();
             if (!close_result) {
                 HTTP_LOG_WARN("[ssl] [close-fail]",
@@ -1430,7 +1371,7 @@ private:
 
         std::string alpn = socket.get_alpn_protocol();
         if (alpn != "h2") {
-            co_await handle_http1_fallback(std::move(socket));
+            co_await handle_http1_fallback(std::move(socket), connection_scope);
             co_return;
         }
 
@@ -1439,6 +1380,7 @@ private:
         co_await read_connection_preface(socket, preface, preface_ok);
         if (!preface_ok ||
             std::memcmp(preface.data(), kHttp2ConnectionPreface.data(), kHttp2ConnectionPrefaceLength) != 0) {
+            connection_scope.release_handle();
             auto close_result = co_await socket.close();
             if (!close_result) {
                 HTTP_LOG_WARN("[ssl] [close-fail]",
@@ -1452,6 +1394,7 @@ private:
         auto local_settings =
             Http2ConnImpl<galay::ssl::SslSocket>::make_settings_frame_from_config(m_config);
         if (conn.apply_local_settings(local_settings) != Http2ErrorCode::NoError) {
+            connection_scope.release_handle();
             auto close_result = co_await conn.close();
             if (!close_result) {
                 HTTP_LOG_WARN("[h2] [close-fail]",
@@ -1464,6 +1407,7 @@ private:
 
         auto settings_result = co_await conn.send_settings();
         if (!settings_result) {
+            connection_scope.release_handle();
             auto close_result = co_await conn.close();
             if (!close_result) {
                 HTTP_LOG_WARN("[h2] [close-fail]",
@@ -1480,6 +1424,7 @@ private:
         } else {
             co_await mgr->start(m_stream_handler);
         }
+        connection_scope.release_handle();
         auto close_result = co_await conn.close();
         if (!close_result) {
             HTTP_LOG_WARN("[h2] [close-fail]",
@@ -1489,13 +1434,15 @@ private:
         co_return;
     }
 
-    Task<void> handle_http1_fallback(galay::ssl::SslSocket socket) {
+    Task<void> handle_http1_fallback(galay::ssl::SslSocket socket,
+                                   galay::http::server_detail::ServerConnections::Scope& connection_scope) {
         galay::http::HttpConnImpl<galay::ssl::SslSocket> conn(std::move(socket));
         if (m_http1_fallback) {
+            connection_scope.finish();
             co_await m_http1_fallback(std::move(conn));
             co_return;
         }
-        co_await run_default_http1_fallback_loop("[h2] [h1-fallback]", std::move(conn));
+        co_await run_default_http1_fallback_loop("[h2] [h1-fallback]", std::move(conn), connection_scope);
         co_return;
     }
 
@@ -1544,7 +1491,10 @@ private:
     std::vector<std::unique_ptr<galay::http::plugin::AcceptPlugin<galay::ssl::SslSocket>>> m_accept_plugins;
     std::size_t m_started_plugin_count = 0;
     std::atomic<bool> m_running;
-    std::atomic<size_t> m_server_loop_count{0};
+    std::atomic<size_t> m_listening_loop_count{0};
+    std::vector<AsyncTcpSocket> m_listeners;
+    galay::http::server_detail::ServerConnections m_connections;
+    std::string m_start_error;
     galay::ssl::SslContext m_ssl_ctx;
 };
 

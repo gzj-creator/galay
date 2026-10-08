@@ -2005,12 +2005,18 @@ public:
             stream = new Http2Stream(stream_id);
         }
 
-        auto state = m_state;
-        return Http2Stream::ptr(stream, [state = std::move(state)](Http2Stream* ptr) mutable {
+        // Cached streams retain enable_shared_from_this's weak control block.
+        // The deleter must not keep the cache alive through that control block.
+        std::weak_ptr<State> state = m_state;
+        return Http2Stream::ptr(stream, [state = std::move(state)](Http2Stream* ptr) {
             if (!ptr) {
                 return;
             }
-            state->free_list.push_back(ptr);
+            if (auto cache = state.lock()) {
+                cache->free_list.push_back(ptr);
+            } else {
+                delete ptr;
+            }
         });
     }
 

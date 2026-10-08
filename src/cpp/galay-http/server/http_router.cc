@@ -337,6 +337,11 @@ HttpRouter::HttpRouter()
 
 void HttpRouter::add_handler_internal(HttpMethod method, const std::string& path, HttpRouteHandler handler)
 {
+    add_route(method, path, HttpRouteEntry{std::move(handler), {}});
+}
+
+void HttpRouter::add_route(HttpMethod method, const std::string& path, HttpRouteEntry handlers)
+{
     // 验证路径格式
     std::string error;
     if (!validate_path(path, error)) {
@@ -353,7 +358,7 @@ void HttpRouter::add_handler_internal(HttpMethod method, const std::string& path
         }
 
         auto segments = split_path(path);
-        insert_route(root.get(), segments, handler);
+        insert_route(root.get(), segments, std::move(handlers));
         m_routeCount++;
     } else {
         // 精确匹配路由 - 使用unordered_map
@@ -368,7 +373,7 @@ void HttpRouter::add_handler_internal(HttpMethod method, const std::string& path
                           path);
         }
 
-        methodRoutes[path] = handler;
+        methodRoutes[path] = std::move(handlers);
 
         // 只有新路由才增加计数
         if (isNewRoute) {
@@ -386,7 +391,9 @@ RouteMatch HttpRouter::find_handler(HttpMethod method, const std::string& path)
     if (methodIt != m_exactRoutes.end()) {
         auto pathIt = methodIt->second.find(path);
         if (pathIt != methodIt->second.end()) {
-            result.handler = &pathIt->second;
+            auto& entry = pathIt->second;
+            result.handler = entry.handler ? &entry.handler : nullptr;
+            result.request_handler = entry.request_handler ? &entry.request_handler : nullptr;
             return result;
         }
     }
@@ -394,10 +401,35 @@ RouteMatch HttpRouter::find_handler(HttpMethod method, const std::string& path)
     // 2. 尝试模糊匹配 - 使用Trie树（O(k)，k为路径段数）
     auto fuzzyIt = m_fuzzyRoutes.find(method);
     if (fuzzyIt != m_fuzzyRoutes.end() && fuzzyIt->second) {
-        result.handler = search_route_path(fuzzyIt->second.get(), path, result.params);
+        if (auto* entry = search_route_path(fuzzyIt->second.get(), path, result.params)) {
+            result.handler = entry->handler ? &entry->handler : nullptr;
+            result.request_handler = entry->request_handler ? &entry->request_handler : nullptr;
+        }
     }
 
     return result;  // 未找到，handler为nullptr
+}
+
+bool HttpRouter::has_connection_handlers() const
+{
+    if (m_fallbackProxyHandlerState && m_fallbackProxyHandlerState->has_value()) return true;
+    for (const auto& [method, routes] : m_exactRoutes) {
+        for (const auto& [path, entry] : routes) {
+            if (entry.handler) return true;
+        }
+    }
+    const auto contains = [](auto&& self, const RouteTrieNode* node) -> bool {
+        if (!node) return false;
+        if (node->handlers.handler) return true;
+        for (const auto& [segment, child] : node->children) {
+            if (self(self, child.get())) return true;
+        }
+        return false;
+    };
+    for (const auto& [method, root] : m_fuzzyRoutes) {
+        if (contains(contains, root.get())) return true;
+    }
+    return false;
 }
 
 bool HttpRouter::del_handler(HttpMethod method, const std::string& path)
@@ -466,7 +498,7 @@ std::vector<std::string> HttpRouter::split_path(const std::string& path) const
 }
 
 void HttpRouter::insert_route(RouteTrieNode* root, const std::vector<std::string>& segments,
-                             HttpRouteHandler handler)
+                             HttpRouteEntry handlers)
 {
     RouteTrieNode* node = root;
     std::vector<std::string> paramNames;
@@ -505,18 +537,18 @@ void HttpRouter::insert_route(RouteTrieNode* root, const std::vector<std::string
 
     // 标记为路径终点并设置处理函数
     node->isEnd = true;
-    node->handler = handler;
+    node->handlers = std::move(handlers);
     node->paramNames = std::move(paramNames);
 }
 
-HttpRouteHandler* HttpRouter::search_route(RouteTrieNode* root, const std::vector<std::string>& segments,
+HttpRouteEntry* HttpRouter::search_route(RouteTrieNode* root, const std::vector<std::string>& segments,
                                           RouteParams& params)
 {
     params.clear();
     std::vector<std::string> paramValues;
 
     // 使用递归进行深度优先搜索，收集参数值到 paramValues
-    auto dfs = [&](auto&& self, RouteTrieNode* node, size_t depth) -> HttpRouteHandler* {
+    auto dfs = [&](auto&& self, RouteTrieNode* node, size_t depth) -> HttpRouteEntry* {
 
         // 到达路径末尾
         if (depth == segments.size()) {
@@ -528,7 +560,7 @@ HttpRouteHandler* HttpRouter::search_route(RouteTrieNode* root, const std::vecto
                         return nullptr;
                     }
                 }
-                return &node->handler;
+                return &node->handlers;
             }
             return nullptr;
         }
@@ -563,7 +595,7 @@ HttpRouteHandler* HttpRouter::search_route(RouteTrieNode* root, const std::vecto
         if (greedyIt != node->children.end()) {
             auto* greedyNode = greedyIt->second.get();
             if (greedyNode->isEnd) {
-                return &greedyNode->handler;
+                return &greedyNode->handlers;
             }
         }
 
@@ -614,7 +646,7 @@ RouteTrieNode* find_child_by_segment(RouteTrieNode* node, std::string_view segme
 
 } // namespace
 
-HttpRouteHandler* HttpRouter::search_route_path(RouteTrieNode* root,
+HttpRouteEntry* HttpRouter::search_route_path(RouteTrieNode* root,
                                               std::string_view path,
                                               RouteParams& params)
 {
@@ -624,7 +656,7 @@ HttpRouteHandler* HttpRouter::search_route_path(RouteTrieNode* root,
     return search_route_path_recursive(root, path, 0, paramValues, params);
 }
 
-HttpRouteHandler* HttpRouter::search_route_path_recursive(
+HttpRouteEntry* HttpRouter::search_route_path_recursive(
     RouteTrieNode* node,
     std::string_view path,
     size_t offset,
@@ -648,7 +680,7 @@ HttpRouteHandler* HttpRouter::search_route_path_recursive(
                 return nullptr;
             }
         }
-        return &node->handler;
+        return &node->handlers;
     }
 
     if (auto* exact = find_child_by_segment(node, segment)) {
@@ -685,7 +717,7 @@ HttpRouteHandler* HttpRouter::search_route_path_recursive(
     if (auto greedyIt = node->children.find("**"); greedyIt != node->children.end()) {
         auto* greedyNode = greedyIt->second.get();
         if (greedyNode != nullptr && greedyNode->isEnd) {
-            return &greedyNode->handler;
+            return &greedyNode->handlers;
         }
     }
 

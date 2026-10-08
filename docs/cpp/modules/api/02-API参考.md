@@ -17,7 +17,7 @@
 | `Operation` | operationId、说明、tags、成功状态及 `errors` |
 | `InputBinding<I>` | `.path<&I::member>(name)`、`.query<&I::member>(name)` |
 | `NoInput` / `NoContent` | 显式表示无输入 / 无 body 输出 |
-| `ApiContext` | handler 完成前借用的只读 `HttpRequest&` |
+| `ApiContext` | 响应编码完成前借用的只读语义请求 `HttpRequest&`，H2 也使用此视图 |
 | `PreparedApi` | 自持 router、`shared_ptr<const string>` document 和 endpoints |
 | `DocsConfig` | spec/UI 路径，不包含资源目录 |
 | `NoSwagger` | 默认空策略，不自动安装也不移除路由 |
@@ -25,7 +25,8 @@
 | `install_docs(api, config = {})` | 使用内嵌资源原子安装文档路由 |
 | `install_docs_from_directory(api, config, directory)` | 显式加载完整文件资源，不使用 fallback |
 | `ApiDocsPolicy` | 约束对象类型、可移动性和精确的 install 返回类型 |
-| `ApiServer<Policy = NoSwagger>` | 启动前安装策略，随后持有 HTTP/1 server |
+| `ApiServerConfig` | 已启用的 HTTP、HTTPS、h2c、H2 原生配置的 `std::variant` |
+| `ApiServer<Policy = NoSwagger>` | 启动前安装策略，随后持有所选原生 server |
 
 `ApiErrorCode` 枚举类型使用 `PascalCase`，枚举项使用 `k` 前缀加
 `PascalCase`，例如 `ApiErrorCode::kBusinessError`、`ApiErrorCode::kBadRequest`；
@@ -121,7 +122,7 @@ concept ApiDocsPolicy = std::is_object_v<Policy> &&
 template<ApiDocsPolicy Policy = NoSwagger>
 class ApiServer {
 public:
-    explicit ApiServer(http::HttpServerConfig config = {}, Policy policy = Policy{});
+    explicit ApiServer(ApiServerConfig config = http::HttpServerConfig{}, Policy policy = Policy{});
     ApiResult<void> start(PreparedApi&& api);
     void stop();
     bool is_running() const noexcept;
@@ -129,10 +130,14 @@ public:
 };
 ```
 
-使用 `http::HttpServerBuilder().build_config()` 传入配置，而非会构造底层
-server 和 Runtime 的 `build()`。`ApiServer` 构造只保存配置和策略，不创建
+传入 `http::HttpServerConfig`、`http::HttpsServerConfig`、
+`http2::H2cServerConfig` 或 `http2::H2ServerConfig`，也可使用对应 builder 的
+`build_config()`；不要使用会构造底层 server 和 Runtime 的 `build()`。
+TLS 配置仅在 `GALAY_SSL_FEATURE_ENABLED` 下存在；H2 配置仅在
+`GALAY_API_HTTP2_FEATURE_ENABLED` 下存在，由 `galay::api` target 按构建选项
+传递，不由应用猜测宏。`ApiServer` 构造只保存配置和策略，不创建
 Runtime；`start` 先验证 `PreparedApi` 并执行自持策略的 `install`，成功后
-才创建 HTTP server 和 Runtime。server 不可复制或移动，也没有新增 virtual
+才创建所选原生 server 和 Runtime。server 不可复制或移动，也没有新增 virtual
 方法。
 
 - 未初始化阶段：`PreparedApi` 校验或策略安装失败时，原样返回错误，不创建
@@ -145,21 +150,50 @@ Runtime；`start` 先验证 `PreparedApi` 并执行自持策略的 `install`，�
 - 单次初始化阶段：策略安装成功后，实例创建底层 server 并调用底层启动；
   从此实例只能使用一次，包括监听失败、运行中或 `stop` 之后。即使监听
   失败，后续 `start` 也返回 `ApiErrorCode::kServerError`；`stop` 不支持 restart。
-- 底层失败：首次底层启动失败返回 `ApiErrorCode::kTransportError`，此时 router 已消费，
+- 底层失败：证书/私钥/CA、socket、bind/listen 或调度启动失败同步返回
+  `ApiErrorCode::kTransportError`，message 保留原生错误原因；已创建的 Runtime、
+  listener 和 TLS 状态随失败清理，不保留到 `ApiServer` 析构才释放。此时 router 已消费，
   不能重用原 `PreparedApi`。重启必须重新 build API 并创建新 server。
 - `document()`：构造后或预检/安装失败时为空，策略安装成功后、底层启动前
   就保存同一份不可变共享文档；底层监听失败或 `stop()` 后仍可读取。调用方
   应检查指针后再解引用。
 
-策略对象按值自持且地址稳定，底层 HTTP server 在策略销毁前停止并销毁。
+`stop()` 可在未启动、启动失败或已停止时重复调用；完成后释放原生实例，
+但不解除单次初始化标记，也不清除 `document()`。启动和停止属于控制线程
+操作，不应在业务协程中同步调用。
+
+对于 typed/request 路由，停止先关闭 listener，再在连接所属 IO scheduler
+上中断 socket 收发，等待连接和 stream handler 完成，最后停止 Runtime。
+排空期间 Runtime 和定时器仍可运行，避免销毁挂起协程的请求、响应或 TLS
+状态。停止不会抢占任意业务 handler；应用应保证 handler 最终返回，并自行
+管理独立后台任务，因此 `stop()` 的耗时取决于仍在执行的业务。
+原生连接 handler、协议升级及自定义 HTTP/1 fallback 可以接管 socket，
+其连接/任务生命周期仍由原生调用方负责；这不是 HTTPS/H2 typed 路由入口。
+
+策略对象按值自持且地址稳定，底层 server 在策略销毁前停止并销毁。
 自定义 handler 可借用 server 自持策略，但不能借用调用方临时策略、
 builder 或 `install` 参数的 `PreparedApi&`。文档和资源应捕获不可变共享
 对象，不能依赖局部变量或已被移动的 prepared 对象。
 
 文档只包含同一个 `ApiBuilder` 登记的全部 typed endpoint；不自动反射
 裸 `HttpRouter::add_handler`，也不把文档策略新建的非 typed 路由虚构成
-DTO 操作。`ApiServer` 是 `galay-api` 的上层组合，不更改底层 `HttpServer`
-模板或为 `galay-http` 增加 serde / Swagger 依赖。
+DTO 操作。`ApiServer` 是 `galay-api` 的上层组合；底层 `galay-http`/`galay-http2`
+不依赖 serde、OpenAPI 或 Swagger。
+
+`PreparedApi::router` 仍是 `HttpRouter`，没有另造路由或反射系统。
+`HttpRouter::add_request_handler` 返回自持 `HttpResponseResult`，typed endpoint
+和文档使用此路径。HTTP/1 仍可使用原有连接 handler；HTTPS/H2 typed server
+拒绝这种绑定到 `HttpConn` 的 handler。H2 配置中的原生 stream/active handler、
+static routes 和 static mounts 也不能覆盖 `ApiServer` 的分发，冲突返回
+`ApiErrorCode::kInvalidBinding`，不静默忽略配置。
+
+H2 适配器在真实 stream 上等待完整请求，把 pseudo headers、headers 和自持
+body 规范化为同一语义请求，复用绑定、校验、JSON 编解码和错误映射；响应
+使用原生 HEADERS/DATA 及流量控制。每个 stream 分别持有路由表和请求生命周期。
+RST_STREAM 或连接关闭会结束接收/发送等待，handler 挂起后也会再次检查关闭
+状态，不发送已取消响应。reset 不会抢占任意业务协程，应用 handler 的取消和
+后台任务管理仍由应用负责。声明 Content-Length 与 DATA 长度不一致时 reset
+该 stream，不调用业务 handler。
 
 ## 独立文档安装
 
@@ -221,4 +255,4 @@ SHA256SUMS
 不生成 schema、不修改注册表，也不使用阻塞锁。普通 lambda 调用独立
 协程函数并按值传递共享资源，复制 route handler 或移动 router 不会使
 资产失效。发送结果和异常连接清理结果均检查；正常连接关闭仍由
-HTTP server 管理。
+所选原生 server 管理。

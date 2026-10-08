@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_test")
 
 [
     cc_test(
@@ -11,3 +11,31 @@ load("@rules_cc//cc:defs.bzl", "cc_test")
     )
     for index, name in enumerate(["schema", "openapi", "binding", "http", "docs", "contract", "policy", "policy_document", "embedded"])
 ]
+
+cc_binary(
+    name = "startup_server",
+    srcs = ["t10_startup.cc"],
+    copts = ["-std=c++23", "-UNDEBUG"],
+    deps = ["//src/cpp/galay-api:galay-api"],
+)
+
+cc_binary(
+    name = "transport_server",
+    srcs = ["t11_transport_server.cc"],
+    copts = ["-std=c++23", "-UNDEBUG"],
+    deps = ["//src/cpp/galay-api:galay-api"],
+)
+
+sh_test(
+    name = "startup",
+    srcs = ["transport_acceptance.sh"],
+    args = ["startup"],
+    data = [":startup_server", "startup_acceptance.cmake"],
+)
+
+sh_test(
+    name = "transports",
+    srcs = ["transport_acceptance.sh"],
+    args = ["transports"],
+    data = [":transport_server", "transport_acceptance.cjs", "//assets/swagger-ui:files"],
+)

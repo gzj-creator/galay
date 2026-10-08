@@ -17,6 +17,7 @@
 #include "http_policy.h"
 #include "http_range.h"
 #include "../protoc/http_request.h"
+#include "../protoc/http_response.h"
 #include "../protoc/http_base.h"
 #include "../../galay-kernel/core/task.h"
 #include <functional>
@@ -44,6 +45,14 @@ class HttpServerImpl;
  */
 using HttpRouteHandler = std::function<Task<void>(HttpConn&, HttpRequest)>;
 
+using HttpResponseResult = std::expected<HttpResponse, HttpError>;
+using HttpRequestHandler = std::function<Task<HttpResponseResult>(HttpRequest)>;
+
+struct HttpRouteEntry {
+    HttpRouteHandler handler;
+    HttpRequestHandler request_handler;
+};
+
 /**
  * @brief 代理转发模式
  * @details
@@ -63,6 +72,9 @@ struct RouteMatch
 {
     HttpRouteHandler* handler = nullptr; ///< 匹配到的处理器指针
     RouteParams params;  ///< 路径参数，例如 /user/:id 中的 id
+    HttpRequestHandler* request_handler = nullptr;
+
+    explicit operator bool() const noexcept { return handler || request_handler; }
 };
 
 /**
@@ -71,7 +83,7 @@ struct RouteMatch
 struct RouteTrieNode
 {
     std::unordered_map<std::string, std::unique_ptr<RouteTrieNode>> children;  ///< 子节点
-    HttpRouteHandler handler;                                                   ///< 处理函数
+    HttpRouteEntry handlers;
     std::vector<std::string> paramNames;                                        ///< 该路由的参数名序列（仅isEnd节点）
     bool isEnd = false;                                                         ///< 是否为路径终点
     bool isParam = false;                                                       ///< 是否为参数节点（:id）
@@ -128,6 +140,14 @@ public:
     void add_handler(const std::string& path, HttpRouteHandler handler) {
         (add_handler_internal(Methods, path, handler), ...);
     }
+
+    // Request handlers return an owned response; the protocol server performs I/O.
+    template<HttpMethod... Methods>
+    void add_request_handler(const std::string& path, HttpRequestHandler handler) {
+        (add_route(Methods, path, HttpRouteEntry{{}, handler}), ...);
+    }
+
+    bool has_connection_handlers() const;
 
     /**
      * @brief 查找路由处理器
@@ -250,6 +270,7 @@ private:
      * @param handler 处理函数
      */
     void add_handler_internal(HttpMethod method, const std::string& path, HttpRouteHandler handler);
+    void add_route(HttpMethod method, const std::string& path, HttpRouteEntry handlers);
 
     /**
      * @brief 判断路径是否为模糊匹配模式
@@ -280,7 +301,7 @@ private:
      * @param handler 处理函数
      */
     void insert_route(RouteTrieNode* root, const std::vector<std::string>& segments,
-                     HttpRouteHandler handler);
+                     HttpRouteEntry handlers);
 
     /**
      * @brief 在Trie树中查找路由
@@ -289,7 +310,7 @@ private:
      * @param params 输出参数：提取的路径参数
      * @return 处理函数指针，未找到返回nullptr
      */
-    HttpRouteHandler* search_route(RouteTrieNode* root, const std::vector<std::string>& segments,
+    HttpRouteEntry* search_route(RouteTrieNode* root, const std::vector<std::string>& segments,
                                   RouteParams& params);
 
     /**
@@ -299,11 +320,11 @@ private:
      * @param params 输出参数：提取的路径参数
      * @return 处理函数指针，未找到返回nullptr
      */
-    HttpRouteHandler* search_route_path(RouteTrieNode* root,
+    HttpRouteEntry* search_route_path(RouteTrieNode* root,
                                       std::string_view path,
                                       RouteParams& params);
 
-    HttpRouteHandler* search_route_path_recursive(RouteTrieNode* node,
+    HttpRouteEntry* search_route_path_recursive(RouteTrieNode* node,
                                                std::string_view path,
                                                size_t offset,
                                                std::vector<std::string_view>& paramValues,
@@ -422,7 +443,7 @@ private:
 private:
     // 精确匹配路由表：HttpMethod -> (path -> handler)
     // 使用 unordered_map 实现 O(1) 查找
-    std::unordered_map<HttpMethod, std::unordered_map<std::string, HttpRouteHandler>> m_exactRoutes;
+    std::unordered_map<HttpMethod, std::unordered_map<std::string, HttpRouteEntry>> m_exactRoutes;
 
     // 模糊匹配路由树：HttpMethod -> Trie树根节点
     // 使用 Trie树 实现 O(k) 查找（k为路径段数）

@@ -318,6 +318,7 @@ sources = [
     "src/cpp/galay-http2/module/*.cppm",
 ]
 implies = ["http"]
+defines = ["GALAY_API_HTTP2_FEATURE_ENABLED"]
 
 [features.redis]
 # The unified async client contains both Redis and Rediss implementations;

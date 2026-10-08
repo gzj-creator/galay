@@ -484,6 +484,13 @@ bool run_resume_queue_ownership_scenario() {
         std::cerr << "[T97] invalid aligned promise view\n";
         return false;
     }
+    TaskRef moved_borrowed(reinterpret_cast<TaskState*>(
+        reinterpret_cast<uintptr_t>(state) | 1U), false);
+    if (queue.push(std::move(moved_borrowed)) || !queue.empty() ||
+        state->m_refs.load() != 1 || state->m_resume_queue_claimed.load()) {
+        std::cerr << "[T97] moved borrowed reference must be rejected without ownership\n";
+        return false;
+    }
     // Passing the const borrowed view by value must materialize an owning ref.
     if (!queue.push(borrowed) || state->m_refs.load() != 2 ||
         !borrowed.is_valid() || queue.push(borrowed) || state->m_refs.load() != 2) {

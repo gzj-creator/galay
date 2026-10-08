@@ -97,7 +97,7 @@ Task<ApiResult<UserDto>> create_user(ApiContext&, CreateUserInput input)
 ApiResult<PreparedApi> prepare_api()
 {
     ApiBuilder builder(ApiInfo{.title = "Users API", .version = "1.0.0",
-                               .description = "Typed HTTP/1 users example"});
+                               .description = "Typed users example across HTTP transports"});
     auto get = builder.add<HttpMethod::GET, GetUserInput, UserDto>(
         "/users/:id", get_user,
         Operation{.id = "getUser", .summary = "Get a user", .tags = {"Users"},
@@ -120,6 +120,9 @@ namespace {
 
 struct Options {
     std::optional<std::string> export_path;
+    std::string transport = "http";
+    std::string cert_path;
+    std::string key_path;
     std::uint16_t port = 8087;
     bool help = false;
 };
@@ -128,13 +131,17 @@ std::expected<Options, std::string> parse_arguments(int argc, char** argv)
 {
     Options options;
     bool port_set = false;
+    bool transport_set = false;
+    bool cert_set = false;
+    bool key_set = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view option = argv[index];
         if (option == "--help") {
             options.help = true;
             continue;
         }
-        if (option != "--export" && option != "--port") {
+        if (option != "--export" && option != "--port" && option != "--transport" &&
+            option != "--cert" && option != "--key") {
             return std::unexpected("Unknown option: " + std::string(option));
         }
         if (index + 1 == argc || std::string_view(argv[index + 1]).empty()) {
@@ -144,7 +151,7 @@ std::expected<Options, std::string> parse_arguments(int argc, char** argv)
         if (option == "--export") {
             if (options.export_path) return std::unexpected("Duplicate --export");
             options.export_path = value;
-        } else {
+        } else if (option == "--port") {
             if (port_set) return std::unexpected("Duplicate --port");
             port_set = true;
             unsigned int port = 0;
@@ -154,6 +161,21 @@ std::expected<Options, std::string> parse_arguments(int argc, char** argv)
                 return std::unexpected("--port must be an integer from 1 to 65535");
             }
             options.port = static_cast<std::uint16_t>(port);
+        } else if (option == "--transport") {
+            if (transport_set) return std::unexpected("Duplicate --transport");
+            transport_set = true;
+            if (value != "http" && value != "https" && value != "h2c" && value != "h2") {
+                return std::unexpected("--transport must be http, https, h2c or h2");
+            }
+            options.transport = value;
+        } else if (option == "--cert") {
+            if (cert_set) return std::unexpected("Duplicate --cert");
+            cert_set = true;
+            options.cert_path = value;
+        } else {
+            if (key_set) return std::unexpected("Duplicate --key");
+            key_set = true;
+            options.key_path = value;
         }
     }
     return options;
@@ -226,7 +248,8 @@ int main(int argc, char** argv)
         return 2;
     }
     if (options->help) {
-        std::cout << "Usage: example_api_e1_users [--export <path>] [--port <1-65535>]\n";
+        std::cout << "Usage: example_api_e1_users [--export <path>] [--port <1-65535>]\n"
+                  << "       [--transport http|https|h2c|h2] [--cert <pem>] [--key <pem>]\n";
         return 0;
     }
     auto api = users::prepare_api();
@@ -244,13 +267,46 @@ int main(int argc, char** argv)
         std::cerr << "Cannot register shutdown signals\n";
         return 1;
     }
-    ApiServer<HttpSwagger> server(galay::http::HttpServerBuilder()
-        .host("127.0.0.1").port(options->port)
-        .io_scheduler_count(1).parallel_scheduler_count(1).build_config());
+    ApiServerConfig config;
+    if (options->transport == "http") {
+        config = galay::http::HttpServerBuilder().host("127.0.0.1").port(options->port)
+            .io_scheduler_count(1).parallel_scheduler_count(1).build_config();
+    }
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    else if (options->transport == "https") {
+        config = galay::http::HttpsServerBuilder().host("127.0.0.1").port(options->port)
+            .cert_path(options->cert_path).key_path(options->key_path)
+            .io_scheduler_count(1).parallel_scheduler_count(1).build_config();
+    }
+#endif
+#ifdef GALAY_API_HTTP2_FEATURE_ENABLED
+    else if (options->transport == "h2c") {
+        config = galay::http2::H2cServerBuilder().host("127.0.0.1").port(options->port)
+            .io_scheduler_count(1).parallel_scheduler_count(1).build_config();
+    }
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    else if (options->transport == "h2") {
+        config = galay::http2::H2ServerBuilder().host("127.0.0.1").port(options->port)
+            .cert_path(options->cert_path).key_path(options->key_path)
+            .io_scheduler_count(1).parallel_scheduler_count(1).build_config();
+    }
+#endif
+#endif
+    else {
+        std::cerr << "Transport is not enabled in this build: " << options->transport << '\n';
+        return 2;
+    }
+    ApiServer<HttpSwagger> server(std::move(config));
     auto started = server.start(std::move(*api));
     if (!started) return report_error(started.error());
-    std::cout << "Swagger UI: http://127.0.0.1:" << options->port << "/docs\n"
-              << "OpenAPI: http://127.0.0.1:" << options->port << "/openapi.json\n" << std::flush;
+    const std::string scheme = options->transport == "https" || options->transport == "h2" ? "https" : "http";
+    std::cout << "Transport: " << options->transport << '\n'
+              << "Swagger UI: " << scheme << "://127.0.0.1:" << options->port << "/docs\n"
+              << "OpenAPI: " << scheme << "://127.0.0.1:" << options->port << "/openapi.json\n";
+    if (options->transport == "h2c") {
+        std::cout << "h2c acceptance uses HTTP/2 prior knowledge; browsers cannot select that transport.\n";
+    }
+    std::cout << std::flush;
     while (!stopping && server.is_running()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }

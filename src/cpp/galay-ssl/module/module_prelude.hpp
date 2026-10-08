@@ -209,6 +209,9 @@
 #ifdef BLOCK_SIZE
 #undef BLOCK_SIZE
 #endif
+#if __has_include(<limits>)
+#include <limits>
+#endif
 #if __has_include(<linux/time_types.h>)
 #include <linux/time_types.h>
 #endif

@@ -9,7 +9,46 @@
 
 using namespace galay::http2;
 
+void test_dynamic_table_growth()
+{
+    HpackDynamicTable table;
+    for (std::size_t count = 1; count <= 40; ++count) {
+        table.add({"x-sequence", std::to_string(count)});
+        assert(table.count() == count);
+        for (std::size_t index = 0; index < count; ++index) {
+            const auto* field = table.get(index);
+            assert(field && field->name == "x-sequence");
+            assert(field->value == std::to_string(count - index));
+            const auto found = table.find(field->name, field->value);
+            assert(found.first == index && !found.second);
+        }
+    }
+
+    table.set_max_size(256);
+    for (std::size_t count = 41; count <= 80; ++count) {
+        table.add({"x-sequence", std::to_string(count)});
+        assert(table.current_size() <= table.max_size());
+        for (std::size_t index = 0; index < table.count(); ++index) {
+            const auto* field = table.get(index);
+            assert(field && field->value == std::to_string(count - index));
+        }
+    }
+
+    HpackEncoder encoder;
+    HpackDecoder decoder;
+    for (int count = 1; count <= 40; ++count) {
+        const Http2HeaderField field{"x-sequence", std::to_string(count)};
+        const auto decoded = decoder.decode(encoder.encode({field}));
+        assert(decoded && *decoded == std::vector<Http2HeaderField>{field});
+        // RFC 7541 index 62 is always the newest entry, independently of growth.
+        assert(encoder.encode({field}) == std::string(1, static_cast<char>(0xbe)));
+        const auto newest = decoder.decode(std::string(1, static_cast<char>(0xbe)));
+        assert(newest && *newest == std::vector<Http2HeaderField>{field});
+    }
+}
+
 int main() {
+    test_dynamic_table_growth();
     // 1) Round-trip contract
     HpackEncoder encoder;
     HpackDecoder decoder;

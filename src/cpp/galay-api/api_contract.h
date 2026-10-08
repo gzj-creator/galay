@@ -7,7 +7,8 @@
 namespace galay::api {
 
 struct ApiContext {
-    // Borrowed only until the handler Task completes; never retain this reference.
+    // Owned by the route coroutine, including normalized HTTP/2 requests.
+    // Borrowed through response encoding only; never retain this reference.
     const http::HttpRequest& request;
 };
 
@@ -33,7 +34,7 @@ private:
     struct RegisteredRoute {
         http::HttpMethod method;
         std::string path;
-        http::HttpRouteHandler handler;
+        http::HttpRequestHandler handler;
     };
     ApiInfo info_;
     bool built_ = false;

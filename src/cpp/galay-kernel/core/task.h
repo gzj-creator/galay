@@ -1024,11 +1024,11 @@ public:
 
     [[nodiscard]] bool push(TaskRef task) noexcept
     {
-        if (!task.is_valid()) {
+        TaskState* state = TaskRefStorageAccess::release_state(task);
+        if (state == nullptr) {
             return false;
         }
 
-        TaskState* state = TaskRefStorageAccess::release_state(task);
         bool expected = false;
         if (state->m_resume_queue_claimed.load(std::memory_order_acquire) ||
             !state->m_resume_queue_claimed.compare_exchange_strong(

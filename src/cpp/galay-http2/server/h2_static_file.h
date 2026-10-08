@@ -38,7 +38,7 @@ struct H2StaticFileRequest {
  * @brief HTTP/2 静态文件小文件 body 的异步发布槽。
  *
  * @details cache 元数据只由连接 IO owner 同步访问；body 由 blocking worker 读完后
- *          通过 atomic<shared_ptr> 发布，后续连接可安全复用同一份小文件内容。
+ *          通过标量原子状态一次性发布，后续连接可安全复用同一份小文件内容。
  * @note load() 返回拥有该快照的 shared_ptr，便于异步发送队列跨线程持有 body 生命周期。
  */
 class H2StaticFileBodyCacheSlot {
@@ -50,24 +50,34 @@ public:
     H2StaticFileBodyCacheSlot& operator=(H2StaticFileBodyCacheSlot&&) = delete;
 
     std::shared_ptr<const std::string> load() const noexcept {
-        return std::atomic_load_explicit(&m_body, std::memory_order_acquire);
+        if (m_state.load(std::memory_order_acquire) != State::kReady) {
+            return {};
+        }
+        return m_body;
     }
 
     bool store_if_empty(std::shared_ptr<const std::string> body) noexcept {
         if (!body) {
             return false;
         }
-        std::shared_ptr<const std::string> expected;
-        return std::atomic_compare_exchange_strong_explicit(
-            &m_body,
-            &expected,
-            std::move(body),
-            std::memory_order_acq_rel,
-            std::memory_order_acquire);
+        auto expected = State::kEmpty;
+        if (!m_state.compare_exchange_strong(expected, State::kPublishing,
+                                             std::memory_order_relaxed,
+                                             std::memory_order_relaxed)) {
+            return false;
+        }
+        m_body = std::move(body);
+        m_state.store(State::kReady, std::memory_order_release);
+        return true;
     }
 
 private:
-    std::shared_ptr<const std::string> m_body;  ///< 通过 shared_ptr 原子自由函数发布和读取
+    enum class State : uint8_t { kEmpty, kPublishing, kReady };
+
+    // The winning writer publishes once. Readers never wait for publication,
+    // and m_body is immutable after the release/acquire handoff.
+    std::atomic<State> m_state{State::kEmpty};
+    std::shared_ptr<const std::string> m_body;
 };
 
 struct H2StaticFileLookup {

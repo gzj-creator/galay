@@ -25,7 +25,7 @@ option(GALAY_BUILD_KERNEL "Build the kernel module" ON)
 option(GALAY_BUILD_SSL "Build the ssl module" ON)
 # 是否构建 HTTP C++ 模块。
 option(GALAY_BUILD_HTTP "Build the http module" ON)
-# Type-driven HTTP/1 REST endpoints and offline OpenAPI documentation.
+# Type-driven HTTP endpoints and offline OpenAPI documentation.
 option(GALAY_BUILD_API "Build the typed REST API and documentation module" OFF)
 # 是否构建 WebSocket C++ 模块。
 option(GALAY_BUILD_WS "Build the websocket module" ON)

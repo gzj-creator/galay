@@ -4868,17 +4868,15 @@ void HpackDynamicTable::add(const Http2HeaderField& field)
         // 缓冲区有空位，直接覆盖
         m_ring[m_head] = field;
     } else {
-        // 缓冲区满了，需要扩展：线性化为逻辑顺序（最新→最旧），再追加新条目
+        // Linearize oldest to newest so get(0) still precedes m_head after growth.
         std::vector<Http2HeaderField> new_ring;
         size_t new_cap = m_count == 0 ? 8 : m_count * 2;
         new_ring.resize(new_cap);
-        // slot 0 = 新条目
-        new_ring[0] = field;
-        // slot 1..m_count = 旧的逻辑顺序（get(0)..get(m_count-1)）
         for (size_t i = 0; i < m_count; ++i) {
             size_t old_idx = (m_head + m_ring.size() - 1 - i) % m_ring.size();
-            new_ring[1 + i] = std::move(m_ring[old_idx]);
+            new_ring[m_count - 1 - i] = std::move(m_ring[old_idx]);
         }
+        new_ring[m_count] = field;
         m_ring = std::move(new_ring);
         m_head = (m_count + 1) % m_ring.size();
         m_count++;

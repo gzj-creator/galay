@@ -153,7 +153,7 @@ void require_uninstalled(PreparedApi& api, const DocsConfig& config,
     require(*api.document == document, "failed install must not change document");
     for (const auto& path : docs_paths(config)) {
         if (path == existing) continue;
-        require(api.router.find_handler(HttpMethod::GET, path).handler == nullptr,
+        require(!api.router.find_handler(HttpMethod::GET, path),
                 "failed install partially registered " + path);
     }
 }
@@ -229,7 +229,7 @@ void invalid_paths_and_document()
             require(!result && result.error().code == ApiErrorCode::kInvalidPath,
                     "unsafe or unrouteable docs path must fail explicitly");
             require(!api.docs_installed, "invalid path must not install docs");
-            require(api.router.find_handler(HttpMethod::GET, "/openapi.json").handler == nullptr,
+            require(!api.router.find_handler(HttpMethod::GET, "/openapi.json"),
                     "invalid path must not partially register docs");
         }
     }
@@ -248,7 +248,7 @@ void invalid_paths_and_document()
         auto result = install_docs(api, config);
         require(!result, "absent document must fail");
         require(!api.docs_installed, "absent document must not install routes");
-        require(api.router.find_handler(HttpMethod::GET, config.ui_path).handler == nullptr,
+        require(!api.router.find_handler(HttpMethod::GET, config.ui_path),
                 "absent document must not install UI");
     }
     auto long_api = prepared();
@@ -438,15 +438,15 @@ void loopback_and_lifetime(const DocsConfig& config, bool from_directory)
         require(api.docs_installed, "success must mark docs installed");
         for (const auto& path : docs_paths(config)) {
             const auto match = api.router.find_handler(HttpMethod::GET, path);
-            require(match.handler != nullptr, "docs route not registered: " + path);
-            detached.add_handler<HttpMethod::GET>(path, *match.handler);
+            require(match.request_handler != nullptr, "docs route not registered: " + path);
+            detached.add_request_handler<HttpMethod::GET>(path, *match.request_handler);
         }
         auto repeated_config = config;
         repeated_config.ui_path = "/second-docs";
         auto repeated = install_docs(api, repeated_config);
         require(!repeated && repeated.error().code == ApiErrorCode::kRouteConflict,
                 "install_docs must reject a second installation even at different paths");
-        require(api.router.find_handler(HttpMethod::GET, "/second-docs").handler == nullptr,
+        require(!api.router.find_handler(HttpMethod::GET, "/second-docs"),
                 "second install must not mutate router");
         api.router.clear();
         api.document.reset();

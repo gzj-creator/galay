@@ -295,7 +295,7 @@ void check_unchanged(PreparedApi& api, const std::shared_ptr<const std::string>&
     require(rendered && *rendered == bytes, "endpoint metadata remains identical to the frozen document");
     for (const auto& operation : operations) {
         const std::string path = operation.path == "/items/{id}" ? "/items/18446744073709551615" : std::string(operation.path);
-        require(api.router.find_handler(operation.method, path).handler != nullptr, "typed routes survive builder destruction and policy installation");
+        require(api.router.find_handler(operation.method, path).request_handler != nullptr, "typed routes survive builder destruction and policy installation");
     }
     check_document(*api.document);
 }
@@ -315,7 +315,7 @@ Task<void> send_spec(std::shared_ptr<const std::string> document, HttpConn& conn
 class SpecOnly {
 public:
     ApiResult<void> install(PreparedApi& api) {
-        if (api.router.find_handler(HttpMethod::GET, "/schema.json").handler) {
+        if (api.router.find_handler(HttpMethod::GET, "/schema.json")) {
             return std::unexpected(ApiError{ApiErrorCode::kRouteConflict, "spec route already exists", 409});
         }
         document = api.document;
@@ -348,18 +348,18 @@ std::shared_ptr<const std::string> install_and_check(Policy& policy, std::string
     if (spec_path.empty()) {
         require(api.router.size() == old_size && !api.docs_installed, "NoSwagger is a no-op, not a document-generation toggle");
     } else {
-        require(api.router.find_handler(HttpMethod::GET, std::string(spec_path)).handler != nullptr, "configured spec route installed");
+        require(static_cast<bool>(api.router.find_handler(HttpMethod::GET, std::string(spec_path))), "configured spec route installed");
         require(api.router.size() > old_size, "documentation policy adds routes");
     }
     if (!ui_path.empty()) {
-        require(api.docs_installed && api.router.find_handler(HttpMethod::GET, std::string(ui_path)).handler &&
-                api.router.find_handler(HttpMethod::GET, std::string(ui_path) + "/swagger-ui-bundle.js").handler,
+        require(api.docs_installed && api.router.find_handler(HttpMethod::GET, std::string(ui_path)).request_handler &&
+                api.router.find_handler(HttpMethod::GET, std::string(ui_path) + "/swagger-ui-bundle.js").request_handler,
                 "HttpSwagger installs configured offline UI");
     } else if (!spec_path.empty()) {
         require(api.router.size() == old_size + 1, "custom spec-only policy adds no UI or inferred operations");
     }
-    require(!api.router.find_handler(HttpMethod::GET, "/openapi.json").handler &&
-            !api.router.find_handler(HttpMethod::GET, "/docs").handler, "no unconfigured default docs routes");
+    require(!api.router.find_handler(HttpMethod::GET, "/openapi.json") &&
+            !api.router.find_handler(HttpMethod::GET, "/docs"), "no unconfigured default docs routes");
     return snapshot;
 }
 

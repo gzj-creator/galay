@@ -362,3 +362,345 @@ API OFF HTTP增量构建为no work to do，不冒称全量重编译。
 
 发布复验 **GO**；仍只覆盖GCC14/include/Linux epoll/共享库，未扩大原有
 未验证平台、模块组合或性能结论。计划和原始证据仍被忽略，不强制加入提交。
+
+## 四传输增补（2026-10-07）
+
+本轮基于实际代码继续实现 HTTP/1 明文、HTTPS（HTTP/1 over TLS）、h2c
+prior knowledge 和 H2 over TLS。没有升级 OpenAPI 3.1.0 或 Swagger UI
+5.17.14，没有新增 Upgrade、AsyncAPI、WS 消息契约、OAuth 服务端或 C ABI。
+基线工作区干净；原有用户演示 PID 503632 / 18080 不停止、不占用。
+所有新增 loopback 和浏览器 fixture 从操作系统申请私有端口，生成自己的
+本地证书，清理自己的进程，不依赖现有演示。
+
+### 设计与回归
+
+- `ApiContext` 保留借用语义请求；H2 adapter 在协程 frame 内持有规范化的
+  `HttpRequest`。`PreparedApi` 保留原生 `HttpRouter`，typed/doc handler 改为
+  返回自持响应，四种传输复用同一条绑定/校验/JSON/错误映射链路。
+- `ApiServerConfig` 选择已启用的原生引擎。预检/策略失败可重试；进入原生
+  初始化后仍保持单次使用；启动失败/stop 立即释放 Runtime、TLS 和 listener，
+  共享 document 不清除。原生 bind/listen 失败同步保留原因。
+- HTTP/2 使用真实 stream、HEADERS/DATA 和流量控制；完整请求之后才绑定。
+  reset/peer close 唤醒接收或发送等待，挂起业务返回后检查关闭状态，不向
+  已取消的 stream 发响应。reset 不抢占任意业务协程。
+
+实际红色证据与修复（失败未降级为成功）：
+
+1. `api.startup` 首次失败于 h2c 把 bind 失败报告为 running；监听改为同步
+   初始化。扩展后四传输启动、策略重试、冲突、证书/私钥/CA 失败及
+   `/proc/self/fd`、线程回收检查通过，见 `api-startup-expanded.log`。
+2. Node/nghttp2 的连续资源请求暴露 HPACK 动态表扩容颠倒索引顺序。
+   `http2.hpack` 先以独立 newest-index 期望复现，随后修复扩容复制顺序；
+   红色证据 `api-hpack-red.log`，四传输复验 `api-transports-expanded.log`。
+3. trailing HEADERS 曾再次 spawn handler；`http2.protocol_correctness` 的
+   请求完成/调用次数回归先失败，随后按 initial-headers 标记只登记一次，
+   见 `api-trailers-red.log` 和 `api-trailers-green.log`。
+4. 浏览器 H2 首次 `page.goto(/docs, networkidle)` 真实超时 30 秒。
+   Chromium netlog 显示 ALPN `h2`、peer INITIAL_WINDOW_SIZE=6291456，但三项
+   大资源均只发送 65535 字节。根因是 SETTINGS 更新了已有 stream，未更新
+   后续新建/pool stream 的窗口。`api-new-window-red.log` 复现 0/4096/6MiB/
+   最大窗口初始化失败，修复在原生 `create_stream` 初始化双向窗口。
+   未更改浏览器超时、协议断言或改用 HTTP/1 fallback。
+5. 缓存的 deprecated shared_ptr 原子自由函数替换为单次发布的标量原子
+   状态：Empty/Publishing/Ready，release/acquire 之后只读普通 immutable
+   shared_ptr。读者不自旋、不阻塞；发布期间允许 cache miss，发送仍持有
+   自己的 body。`http2.h2_body_cache` 覆盖 16 writers / 8 readers / 20 rounds、
+   唯一发布、null、空 body 和 slot 销毁后的 snapshot 生命周期。
+6. GCC 的 `TaskResumeQueue` 原子访问 overflow warning 不是靠关闭诊断处理：
+   `release_state` 可能因 borrowed view 返回 null。移动 borrowed view 的
+   `kernel.ringfb` 真实 SEGFAULT 见 `api-resume-borrowed-red.log`；随后检查
+   转移结果，绿灯见 `api-resume-borrowed-green.log`。
+
+扩展 validator 已实际运行：
+
+```bash
+PYTHONPATH=build/api-docs-tools/python python3 test/cpp/api/validate_openapi.py \
+  build/naming-release/test/cpp/api/transport-evidence/openapi.json \
+  --served build/naming-release/test/cpp/api/transport-evidence/http-openapi.json \
+  --served build/naming-release/test/cpp/api/transport-evidence/https-openapi.json \
+  --served build/naming-release/test/cpp/api/transport-evidence/h2c-openapi.json \
+  --served build/naming-release/test/cpp/api/transport-evidence/h2-openapi.json \
+  --observations build/naming-release/test/cpp/api/transport-evidence/observations.json
+```
+
+`api-validator-initial.log`：OpenAPIV31SpecValidator 通过 11 operations；四份
+served 与 export 逐字节一致，96 条实际 request/response 观察（每传输 24）
+与参数类型/来源、body schema、成功状态、错误响应和无 body 契约一致。
+
+### 浏览器与警告复验
+
+浏览器的窗口修复后，实际执行（不是 HTTP/1 降级结果）：
+
+```bash
+PLAYWRIGHT_MODULE=$PWD/build/api-docs-tools/node_modules/playwright \
+PLAYWRIGHT_BROWSERS_PATH=$PWD/build/api-docs-tools/browsers \
+STRACE_OUTPUT=$PWD/build/naming-release/api-browser-final-files.strace \
+node test/cpp/api/browser_acceptance.cjs \
+  build/naming-release/examples/cpp/api/example_api_e1_users assets/swagger-ui \
+  build/naming-release/api-browser-final-transports
+```
+
+`api-browser-final.log` 返回 0。Chromium 141.0.7390.37 在 desktop 1440x1000 和
+mobile 390x844 上，HTTP、HTTPS、H2 的页面、初始化脚本、文档、资产及真实
+GET 200 / POST 201 Try it out 全部通过；CDP 对每个响应断言 HTTP/HTTPS 为
+`http/1.1`、H2 为 `h2`，零外部请求、零 JS/资源错误、无水平溢出。已查看
+H2 desktop/mobile 的执行后截图。Node 同时以真实 h2c prior knowledge 请求
+文档及九资产；Chromium 明文导航返回原生 HTTP/1 fallback 404，在证据中标明
+浏览器限制，不将其计为 h2c UI/Try it out 通过。HTTPS/H2 浏览器显式使用本地
+自签名证书例外；证书信任和主机名验证由独立 Node TLS 客户端严格检查。
+每种模式在空工作目录运行，`strace` 确认启动和请求不打开 UI 资源文件，也
+没有解压/落盘文件。复跑 trace 时先删除本 fixture 的旧 trace，避免把旧 PID
+当作当前子进程；首次复跑的清理 `ESRCH` 是测试程序错误，修复后重新运行。
+
+全量构建将 C/C++ warning 作为错误，不使用诊断屏蔽：
+
+```bash
+cmake --build build/naming-release --clean-first --parallel 1
+```
+
+首轮真实失败在 3935/3936 的 `benchmark_utils_move_clone_contracts`，日志
+`api-full-build.log` 保留 `Bytes::assign_owned` 的 `-Werror=stringop-overflow`
+证据。`length + 1` 可能先溢出再分配，修复将隐藏 terminator 长度交给原有
+`malloc_bytes(length, spare_bytes)`，在加法前验证 `ptrdiff_t` 可表示的分配
+上限。保留既有分配失败 `std::bad_alloc` 行为，没有新增生产 throw/try/catch；
+本轮不迁移 Bytes 的既有分配接口。新增最大 size_t/ptrdiff_t 边界测试，目标
+重编译 `api-bytes-warning-fixed.log` 与 clean 重编译
+`api-bytes-warning-clean.log` 均返回 0，未 suppress warning。
+
+受影响模块第一次 CTest 还发现 `http.server_nodelay_config` 失败：既有原生
+HTTPS accept-plugin 探测故意不配置证书并在 TLS 握手前拒绝连接。证书完整性
+检查收窄到 HTTPS 路由模式，保留既有低层 handler/plugin 能力；typed HTTPS
+仍必须提供证书和私钥。`api-affected-ctest.log` 保留初次失败，不将其改为 skip。
+
+### 全量构建和 CTest 最终结果
+
+2026-10-07，GCC/G++ 14、Linux epoll、Release、C++23 头文件接口；所有
+C++ 模块（含 API/SSL/HTTP2/serde）、C ABI、测试、示例和 benchmark 均启用。
+`build/naming-release/CMakeCache.txt` 的 C/C++ flags 均为 `-Werror`，未增加
+warning suppression。Boost.Asio 对照 benchmark 因本机缺少 Boost 头文件
+按原有配置规则不生成，不将它算作已编译目标。原生命名模块构建未启用。
+
+```bash
+cmake --build build/naming-release --parallel 1 \
+  > build/naming-release/api-full-build-final.log 2>&1
+ctest --test-dir build/naming-release --output-on-failure --parallel 1 \
+  --output-junit api-full-ctest-final.xml \
+  > build/naming-release/api-full-ctest-final.log 2>&1
+ctest --test-dir build/naming-release \
+  -R '^(http|http2|ssl)\.|^kernel.ringfb$|^utils.(resource_error_boundaries|buffer_queue_ring|move_clone_contracts)$' \
+  --output-on-failure --parallel 1 \
+  > build/naming-release/api-protocol-regressions-green.log 2>&1
+```
+
+最终全目标构建 3928/3928 完成、退出 0，完整日志没有 `warning:`、`error:`
+或 `FAILED:`。此前 clean benchmark 验证清理了整个 Ninja 工程，因此本次
+不是只编译 API 的增量检查；边界测试和 benchmark 的提前重编译证据另见
+`api-bytes-warning-clean.log` / `api-bytes-warning-fixed.log`。
+扫描 `src/cpp`、`test/cpp`、`examples/cpp`、`benchmark/cpp`，没有原子
+shared_ptr 或其 atomic free functions。C ABI 的标量原子不在替换范围内。
+
+完整 CTest **645 项登记：604 Passed、36 原有 Skipped、5 原有 Disabled、
+0 Failed**，336.38 秒、退出 0。没有传入排除、failover 或 skip 参数，没有
+修改外部 fixture 的注册规则。36 项未运行涉及 C Postgres 1、kernel
+io_uring/AIO 3、Redis 6、RPC/etcd 1、MySQL 10、Postgres 6、Mongo 1、etcd 8；
+这些后端/外部服务能力不因本轮验收变成通过。5 个 disabled HTTP 客户端
+原本依赖外部 8080 fixture。逐项名称、状态、输出在
+`api-full-ctest-final.xml` 和完整日志中，不把 CTest 的 “640 tests” 简写成
+640 项实际通过。API 的 14 项全部通过；受影响协议复验 94 Passed、5 个
+相同的 Disabled、0 Failed，9.43 秒。
+
+### 迁移安装和浏览器最终结果
+
+完整 CTest 中的 `api.install_consumer` 115.07 秒通过。实际安装后删除
+独立 UI metadata 目录，将 prefix 迁到 `api-install/relocated-prefix`，外部
+工程仅依赖 `find_package(galay)` / `galay::api`，以 `-Werror` 构建。
+消费工程 5/5 Passed，包含四传输真实 loopback、启动失败/清理、独立导出；
+`ldd api-install/build/users` 的五个 Galay 共享库均来自迁移后的 prefix。
+
+安装消费者还独立执行浏览器验证：
+
+```bash
+PLAYWRIGHT_MODULE=$PWD/build/api-docs-tools/node_modules/playwright \
+PLAYWRIGHT_BROWSERS_PATH=$PWD/build/api-docs-tools/browsers \
+STRACE_OUTPUT=$PWD/build/naming-release/api-browser-installed-files.strace \
+node test/cpp/api/browser_acceptance.cjs \
+  build/naming-release/api-install/build/users assets/swagger-ui \
+  build/naming-release/api-browser-installed-transports \
+  > build/naming-release/api-browser-installed-final.log 2>&1
+```
+
+退出 0。HTTP/HTTPS/H2 在两个 viewport 上的离线 UI 和真实 GET 200 / POST
+201 均通过，CDP 对 H2 全链路断言 `h2`，零外部请求/错误/水平溢出。
+已目视检查安装后 H2 的 desktop/mobile 执行截图。四传输九个资源逐字节
+相同，空工作目录没有文件抽取，strace 无 UI 文件访问；h2c 的 Chromium
+404/连接限制单独记录，不计为浏览器成功。
+
+完整 CTest 产生的新实际请求证据再次由已有验证器检查：
+`api-validator-final.log` 为 11 operations、96 request/response observations
+（每传输 24）、45 个 schema 正负边界全部通过，四种 served/export 一致。
+
+## 最终排空与无警告复验（2026-10-08）
+
+以下结果覆盖上一节之后的连接排空、stream pool 生命周期及更严格的停止
+断言；上一节日志仍保留，不能代替修改后的复验。
+
+### Sanitizer 发现与修复
+
+第一轮完整受影响 sanitizer 集合真实为 27 Passed / 2 Failed，红色日志保留
+在 `build/naming-asan/api-sanitizers-ctest.log`：
+
+- `api.transports` 在活跃 HTTP/1 handler 停止时泄漏 36644 bytes / 31 allocations。
+  直接停止 Runtime 会截断挂起的嵌套任务及定时器。原生服务器现在在连接的
+  IO owner 上登记生命周期，停止 listener 后非阻塞 shutdown 连接，异步等待
+  连接/stream handler 完成，再停止 Runtime；同步 join 仅在控制线程执行。
+  不引入协程阻塞锁、原子 shared_ptr 或抢占任意业务 handler。
+- `http2.protocol_correctness` 泄漏 5880 bytes / 7 allocations。缓存 stream 的
+  `enable_shared_from_this` weak control block 与 deleter 强持有 pool state
+  形成循环。deleter 改持 weak state；pool 仍活着时归还 stream，pool 已销毁
+  时删除 stream。`http2.h2pool` 增加 pool state 释放、缓存后重用及 stream
+  晚于 pool 销毁的断言。
+
+扩大 loopback 停止测试后，h2c 的原生 HTTP/1 默认 fallback keepalive 曾使
+停止超时，见 `api-idle-fallback-before.log/xml`。将同一个连接 Scope 保留到
+默认 fallback 完成并在 close 前解除 descriptor 登记；修复后原测试通过，
+见 `api-idle-fallback-after.log/xml`，未增加超时或改成 skip。
+
+最终 fixture 同时保留 idle socket、未完成 TLS handshake、未完成 H2 preface、
+原生默认 HTTP/1 fallback keepalive、部分 JSON 请求、挂起业务和流控阻塞的
+Swagger 大资源。两次 `stop()` 后必须 `active == 0` 且 `completed == started`；
+reset 和停止只中断 IO，不抢占业务。连接 handler/自定义 fallback 可接管
+socket，其原有生命周期责任未迁移到 typed API。
+
+```bash
+cmake --build build/naming-asan --parallel 1 --target test/cpp/api/all \
+  t3_hpack t16_h2pool t27_protocol_correctness t28_h2_body_cache t97_ringfb \
+  t14_resource_error_boundaries t17_move_clone_contracts t6_buffer_queue_ring \
+  t6_router t7_router_check t33_http_protocol_boundaries t34_server_nodelay_config \
+  t85_keepalive_lifecycle t26_h2static_tls t24_h2static_file t92_http2_nodelay_config \
+  t2_loopback t12_handshake t14_security_lifecycle \
+  > build/naming-asan/api-sanitizers-final-build.log 2>&1
+env ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+  ctest --test-dir build/naming-asan --parallel 1 --output-on-failure \
+  --output-junit api-sanitizers-final.xml \
+  -R '^api\.(startup|schema|openapi|binding|http|docs|contract|policy|policy_document|embedded|transports)$|^http2\.(hpack|h2pool|protocol_correctness|h2_body_cache|h2static_tls|h2static_file|http2_nodelay_config)$|^http\.(router|router_check|http_protocol_boundaries|server_nodelay_config|keepalive_lifecycle)$|^ssl\.t(2\.loopback|12\.handshake|14\.security\.lifecycle)$|^kernel\.ringfb$|^utils\.(resource_error_boundaries|buffer_queue_ring|move_clone_contracts)$' \
+  > build/naming-asan/api-sanitizers-final.log 2>&1
+```
+
+最终串行构建 57/57 步、退出 0；ASan+UBSan **30/30 Passed**，16.24 秒，
+包括四传输真实 loopback、启动失败清理、stream pool 和缓存并发测试。泄漏
+检测始终开启，零 sanitizer 报告、零 skipped/disabled；这是受影响集合，
+不是把完整仓库 CTest 都声称为 sanitizer 覆盖。
+
+### 全目标构建和完整 CTest
+
+使用上一节相同的全模块 Release/GCC14/Linux epoll 配置，C/C++ `-Werror`、
+C ABI/测试/示例/benchmark 开启，未加 `-Wno-*` 或 pragma 屏蔽。本轮是在
+此前 3928/3928 clean 全量构建基础上，对最终生命周期修改执行全目标增量：
+
+```bash
+cmake --build build/naming-release --parallel 1 \
+  > build/naming-release/api-full-build-delivery.log 2>&1
+ctest --test-dir build/naming-release --parallel 1 --output-on-failure \
+  --output-junit api-full-ctest-delivery.xml \
+  > build/naming-release/api-full-ctest-delivery.log 2>&1
+```
+
+最终全目标增量 **302/302 步**、退出 0；日志无 `warning:` / `error:` / `FAILED:`。
+HTTP、HTTP2、MCP 的传递依赖、示例及 benchmark 均在受影响重编译范围内，
+没有只构建 API 后声称全仓通过。源码扫描确认 `src/cpp`、`test/cpp`、
+`examples/cpp`、`benchmark/cpp` 无原子 shared_ptr 或其 atomic free functions。
+普通只读 shared_ptr 和标量/原始指针原子仍按其实际所有权和同步契约使用。
+
+完整 CTest **645 项登记：604 Passed、36 原有 Skipped、5 原有 Disabled、
+0 Failed**，310.08 秒、退出 0。未使用排除参数，未修改外部服务测试的 gating；
+未运行项目及原因与上一节相同，逐项在 delivery XML/log 保留。
+API **14/14 Passed**；`api.install_consumer` 118.35 秒通过，其外部消费工程
+**5/5 Passed**，4.89 秒，四传输和启动清理使用最终源码。
+
+### 离线 UI、安装迁移与实际契约
+
+分别使用最终源码示例与重新安装迁移后的 consumer 执行浏览器验收：
+
+```bash
+env PLAYWRIGHT_MODULE=$PWD/build/api-docs-tools/node_modules/playwright \
+  PLAYWRIGHT_BROWSERS_PATH=$PWD/build/api-docs-tools/browsers \
+  STRACE_OUTPUT=$PWD/build/naming-release/api-browser-source-files-delivery.strace \
+  node test/cpp/api/browser_acceptance.cjs \
+  build/naming-release/examples/cpp/api/example_api_e1_users assets/swagger-ui \
+  build/naming-release/api-browser-source-delivery \
+  > build/naming-release/api-browser-source-delivery.log 2>&1
+env PLAYWRIGHT_MODULE=$PWD/build/api-docs-tools/node_modules/playwright \
+  PLAYWRIGHT_BROWSERS_PATH=$PWD/build/api-docs-tools/browsers \
+  STRACE_OUTPUT=$PWD/build/naming-release/api-browser-installed-files-delivery.strace \
+  node test/cpp/api/browser_acceptance.cjs \
+  build/naming-release/api-install/build/users assets/swagger-ui \
+  build/naming-release/api-browser-installed-delivery \
+  > build/naming-release/api-browser-installed-delivery.log 2>&1
+```
+
+两个命令均退出 0。Chromium 141.0.7390.37 的 desktop 1440x1000 / mobile
+390x844 上，HTTP/HTTPS/H2 均真实 Try it out GET 200 / POST 201。H2 所有
+页面、资产、文档及业务响应由 CDP 断言 `h2`，HTTP/HTTPS 为 `http/1.1`。
+零外部请求、零浏览器错误、无横向溢出；已目视检查源码及迁移消费者 H2
+desktop/mobile 执行截图。h2c prior knowledge 文档/九资产由 Node 验证，
+Chromium 的 HTTP/1 fallback 404 只记录连接能力限制，不算 h2c Try it out。
+两套 fixture 在空目录运行，无 UI 文件访问或资源抽取；`ldd` 确认消费者
+五个 Galay 库均从 `api-install/relocated-prefix` 加载，该 prefix 无 Swagger
+share 目录。TLS 浏览器自签名证书例外不代替严格 CA/hostname 客户端验收。
+
+```bash
+build/naming-release/test/cpp/api/api_t1_schema --export-schemas \
+  build/naming-release/api-transport-schemas-delivery.json
+env PYTHONPATH=$PWD/build/api-docs-tools/python \
+  python3 test/cpp/api/validate_openapi.py \
+  build/naming-release/test/cpp/api/transport-evidence/openapi.json \
+  --served build/naming-release/test/cpp/api/transport-evidence/http-openapi.json \
+  --served build/naming-release/test/cpp/api/transport-evidence/https-openapi.json \
+  --served build/naming-release/test/cpp/api/transport-evidence/h2c-openapi.json \
+  --served build/naming-release/test/cpp/api/transport-evidence/h2-openapi.json \
+  --schemas build/naming-release/api-transport-schemas-delivery.json \
+  --observations build/naming-release/test/cpp/api/transport-evidence/observations.json \
+  > build/naming-release/api-validator-delivery.log 2>&1
+```
+
+schema 导出及 validator 均退出 0：11 operations、96 observations（每传输24）
+及45个 schema 正负边界通过，served/export 字节一致。把上述 evidence 前缀
+替换为 `build/naming-release/api-install/build/transport-evidence` 后再次运行
+同一验证器，`api-validator-installed-delivery.log` 同样通过96个实际观察。
+H2/h2c evidence 各记录24并发 stream（peak24）、trailers、长度不符 reset、
+未完成 body reset、业务挂起 reset、流控阻塞资源 reset 及3次 abrupt peer close。
+成功状态、绑定来源、JSON/DTO 失败与业务错误均与文档一致。
+
+### Feature 矩阵和未覆盖范围
+
+```bash
+cmake -DGALAY_SOURCE_DIR=$PWD \
+  -DGALAY_BINARY_DIR=/tmp/galay-api-transport-validation \
+  -DGALAY_CXX_COMPILER=/usr/bin/g++-14 -DGALAY_C_COMPILER=/usr/bin/gcc-14 \
+  -P test/cpp/api/transport_matrix.cmake \
+  > build/naming-release/api-transport-matrix-delivery.log 2>&1
+python3 scripts/common/106_gen_module_prelude.py --check
+git diff --check
+```
+
+矩阵退出 0。SSL/HTTP2 的 OFF/OFF、OFF/ON、ON/OFF、ON/ON 各执行
+`-Werror` API 构建及 **14/14 Passed**（包括移后安装消费），分别96.74、126.86、
+105.60、149.65秒；各构建及消费者 build.log 无 warning/error。细节在
+`/tmp/galay-api-transport-validation/api-transport-matrix/ssl-*-{configure,build,ctest}.log`。
+API=OFF configure 检查现在匹配 Ninja target rules，避免绝对 fixture 路径中
+`galay-api` 字样造成错误依赖判断；缺 HTTP/serde/构建期 UI 的失败仍明确。
+14个模块 prelude 全部与生成器一致，diff whitespace 检查通过。
+
+本机验证限定 GCC14、C++23 头文件接口、Linux epoll、共享库；未验证 Bazel、
+mcpp/原生命名模块、其他编译器/平台、生产 CA 配置或性能提升。Boost.Asio
+对照 benchmark 因本机无 Boost 头文件未生成，未把它算作全目标已编译。
+sanitizer 仅覆盖上述30个受影响行为测试；全仓的36项原有 skips 和5项
+disabled 仍是未覆盖项。h2c 使用现有 prior knowledge，不新增 Upgrade；
+浏览器不能直连 h2c。自定义连接 handler 的任务/升级生命周期由原生调用方
+负责；typed handler 必须最终返回，停止等待但不会任意抢占。
+
+以上验收完成时尚未 commit/tag/push；`v6.2.0` annotated ref
+`4d46496e0c93f4cc0b4f8948814af2ab7bcec288` / peeled commit
+`178c8b391f43e50b2f6967e78ffb0e14f30f9db0` 不变。原有用户服务PID503632 / 18080
+保持运行，验收 fixture 使用独立私有端口并已清理；serde submodule 无改动。

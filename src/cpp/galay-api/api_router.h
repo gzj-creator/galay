@@ -11,8 +11,7 @@ namespace galay::api {
 namespace router_detail {
 
 ApiResult<std::string> encode_error(const ApiError& error);
-kernel::Task<ApiResult<void>> send_response(http::HttpConn& connection, int status,
-    std::string body, bool json_body, bool head, bool keep_alive);
+http::HttpResponseResult make_response(int status, std::string body, bool json_body, bool head);
 
 template<class Input, class Handler>
 struct RouteState {
@@ -23,10 +22,8 @@ struct RouteState {
 
 // By-value parameters belong to the coroutine frame, not to a temporary lambda closure.
 template<class Input, class Output, class Handler>
-kernel::Task<void> execute_route(std::shared_ptr<RouteState<Input, Handler>> state,
-                                http::HttpConn& connection, http::HttpRequest request,
-                                bool head) {
-    const bool keep_alive = request.header().is_keep_alive() && !request.header().is_connection_close();
+kernel::Task<http::HttpResponseResult> execute_route(std::shared_ptr<RouteState<Input, Handler>> state,
+                                                   http::HttpRequest request, bool head) {
     int status = state->operation.success_status;
     std::string body;
     bool json_body = false;
@@ -77,12 +74,7 @@ kernel::Task<void> execute_route(std::shared_ptr<RouteState<Input, Handler>> sta
                 if (!encoded) {
                     HTTP_LOG_ERROR("[api] [error-encode-fail]", "operation={} error={}",
                                   state->operation.id, encoded.error().message);
-                    const auto closed = co_await connection.close();
-                    if (!closed) {
-                        HTTP_LOG_ERROR("[api] [close-fail]", "operation={} error={}", state->operation.id,
-                                      closed.error().message());
-                    }
-                    co_return;
+                    co_return std::unexpected(http::HttpError{http::kInternalError, encoded.error().message});
                 }
             }
             body = std::move(*encoded);
@@ -90,18 +82,7 @@ kernel::Task<void> execute_route(std::shared_ptr<RouteState<Input, Handler>> sta
         }
     }
 
-    const auto sent = co_await send_response(connection, status, std::move(body), json_body, head, keep_alive);
-    if (!sent || !*sent) {
-        HTTP_LOG_ERROR("[api] [send-fail]", "operation={} error={}", state->operation.id,
-                      sent ? sent->error().message : std::string(sent.error().message()));
-        // A partially written response cannot be reused; normal closes remain server-owned.
-        const auto closed = co_await connection.close();
-        if (!closed) {
-            HTTP_LOG_ERROR("[api] [close-fail]", "operation={} error={}", state->operation.id,
-                          closed.error().message());
-        }
-    }
-    co_return;
+    co_return make_response(status, std::move(body), json_body, head);
 }
 
 } // namespace router_detail
@@ -128,8 +109,8 @@ ApiResult<void> ApiBuilder::add(std::string path, Handler handler, Operation ope
 
         auto state = std::make_shared<router_detail::RouteState<Input, Handler>>(
             router_detail::RouteState<Input, Handler>{std::move(handler), std::move(*plan), std::move(operation)});
-        http::HttpRouteHandler route = [state = std::move(state)](http::HttpConn& connection, http::HttpRequest request) {
-            return router_detail::execute_route<Input, Output>(state, connection, std::move(request), Method == http::HttpMethod::HEAD);
+        http::HttpRequestHandler route = [state = std::move(state)](http::HttpRequest request) {
+            return router_detail::execute_route<Input, Output>(state, std::move(request), Method == http::HttpMethod::HEAD);
         };
         endpoints_.push_back(std::move(endpoint));
         routes_.push_back(RegisteredRoute{Method, std::move(path), std::move(route)});

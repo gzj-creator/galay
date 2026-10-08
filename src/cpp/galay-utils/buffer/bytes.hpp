@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <new>
 #include <string>
 #include <string_view>
@@ -96,16 +97,20 @@ struct ByteMetaData {
 /**
  * @brief Allocate raw byte metadata with the requested capacity
  * @param length Capacity to allocate
+ * @param spare_bytes Extra allocated bytes not included in the visible capacity
  * @return Metadata with size 0 and capacity `length`; empty when length is 0
  * @throws std::bad_alloc when allocation fails
  */
-inline ByteMetaData malloc_bytes(size_t length) {
+inline ByteMetaData malloc_bytes(size_t length, size_t spare_bytes = 0) {
     ByteMetaData meta;
     if (length == 0) {
         return meta;
     }
 
-    meta.data = static_cast<uint8_t*>(std::malloc(length));
+    constexpr auto maximum = static_cast<size_t>(std::numeric_limits<std::ptrdiff_t>::max());
+    if (spare_bytes <= maximum && length <= maximum - spare_bytes) {
+        meta.data = static_cast<uint8_t*>(std::malloc(length + spare_bytes));
+    }
     if (meta.data == nullptr) {
         throw std::bad_alloc();
     }
@@ -451,8 +456,7 @@ private:
             return;
         }
 
-        m_meta = malloc_bytes(length + 1);
-        m_meta.capacity = length;
+        m_meta = malloc_bytes(length, 1);
         std::memcpy(m_meta.data, data, length);
         m_meta.size = length;
         m_meta.data[m_meta.size] = '\0';

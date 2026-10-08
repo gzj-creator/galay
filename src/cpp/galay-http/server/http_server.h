@@ -16,6 +16,7 @@
 #include "../kernel/http_conn.h"
 #include "http_router.h"
 #include "http_policy.h"
+#include "server_listener.h"
 #include "../common/http_log.h"
 #include "../builder/http_builder.h"
 #include "../utils/http_helper.h"
@@ -170,8 +171,9 @@ public:
      * @note handler 必须可安全复制或移动到服务器内部，且不应捕获悬空引用
      */
     void start(HttpConnHandler handler) {
+        if (m_running.load()) return;
         m_handler = handler;
-        start_internal();
+        if (!start_internal()) HTTP_LOG_ERROR("[server] [start-fail]", "error={}", m_start_error);
     }
 
     /**
@@ -183,12 +185,29 @@ public:
      * - 进行路由匹配和缺省 404 响应
      * - 在循环结束后关闭连接
      *
-     * 该模式当前仅支持明文 `AsyncTcpSocket` 路由处理；HTTPS 仍应通过显式 handler 控制读写流程。
+     * 连接 handler 使用明文 HttpConn；request handler 同时支持 HTTP 和 HTTPS。
      */
     void start(HttpRouter&& router) {
+        if (m_running.load()) return;
         m_router = std::move(router);
 
-        m_handler = [this](HttpConnImpl<SocketType> conn) -> Task<void> {
+        m_handler = [this, drain_connections = !m_router->has_connection_handlers()](HttpConnImpl<SocketType> conn) -> Task<void> {
+            // Connection-bound handlers may transfer the socket to another protocol.
+            std::optional<server_detail::ServerConnections::Scope> connection_scope;
+            if (drain_connections) {
+                auto tracked = co_await m_connections.attach(conn.get_socket().handle().fd);
+                if (!tracked) {
+                    HTTP_LOG_WARN("[server] [connection-track-fail]", "error={}", tracked.error().message());
+                    auto close_result = co_await conn.close();
+                    if (!close_result && close_result.error().code() != kClosed) {
+                        HTTP_LOG_WARN("[socket] [close-fail]",
+                                      "context=connection-track-fail error={}",
+                                      close_result.error().message());
+                    }
+                    co_return;
+                }
+                connection_scope.emplace(std::move(*tracked));
+            }
             bool keep_alive = true;
             size_t handled_requests = 0;
             HttpReaderSetting reader_setting;
@@ -259,14 +278,16 @@ public:
                 keep_alive = request.header().is_keep_alive() && !request.header().is_connection_close();
                 ++handled_requests;
 
-                auto [handler, params] = m_router->find_handler(request.header().method(), request.header().uri());
-                request.set_route_params(std::move(params));
+                const bool head = request.header().method() == HttpMethod::HEAD;
+                auto match = m_router->find_handler(request.header().method(), request.header().uri());
+                request.set_route_params(std::move(match.params));
+                auto* handler = match.handler;
 
-                if (!handler && m_router->has_fallback_proxy()) {
+                if (!match && m_router->has_fallback_proxy()) {
                     handler = m_router->fallback_proxy_handler();
                 }
 
-                if (!handler) {
+                if (!handler && !match.request_handler) {
 
                     auto response = Http1_1ResponseBuilder()
                         .status(HttpStatusCode::NotFound_404)
@@ -286,9 +307,38 @@ public:
                     continue;
                 }
 
-                if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
-                    co_await (*handler)(conn, std::move(request));
+                if (match.request_handler) {
+                    auto handled = co_await (*match.request_handler)(std::move(request));
+                    if (!handled || !*handled) {
+                        HTTP_LOG_ERROR("[route] [handler-fail]", "error={}",
+                            handled ? handled->error().message() : std::string(handled.error().message()));
+                        break;
+                    }
+                    auto response = std::move(**handled);
+                    const auto connection_header = response.header().header_pairs().add_header_pair(
+                        "Connection", keep_alive ? "keep-alive" : "close");
+                    if (connection_header != kNoError) {
+                        HTTP_LOG_ERROR("[route] [header-fail]", "code={}", static_cast<int>(connection_header));
+                        break;
+                    }
+                    auto writer = conn.get_writer();
+                    // The writer adds Content-Length, which is forbidden for 204.
+                    const auto sent = head || response.header().code() == HttpStatusCode::NoContent_204
+                        ? co_await writer.send(response.header().to_string())
+                        : co_await writer.send_response(std::move(response));
+                    if (!sent || !*sent) {
+                        HTTP_LOG_ERROR("[send] [fail]", "error={}",
+                            sent ? "HTTP writer returned false" : sent.error().message());
+                        break;
+                    }
+                } else if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
+                    const auto handled = co_await (*handler)(conn, std::move(request));
+                    if (!handled) {
+                        HTTP_LOG_ERROR("[route] [handler-task-fail]", "error={}", handled.error().message());
+                        break;
+                    }
                 } else {
+                    HTTP_LOG_ERROR("[route] [handler-fail]", "HTTPS requires a request handler, not HttpConn");
                     break;
                 }
 
@@ -297,6 +347,7 @@ public:
                 }
             }
 
+            if (connection_scope) connection_scope->release_handle();
             auto close_result = co_await conn.close();
             if (!close_result) {
                 HTTP_LOG_ERROR("[socket] [close-fail]",
@@ -306,7 +357,7 @@ public:
             co_return;
         };
 
-        start_internal();
+        if (!start_internal()) HTTP_LOG_ERROR("[server] [start-fail]", "error={}", m_start_error);
     }
 
     /**
@@ -342,7 +393,8 @@ public:
         m_running.store(false);
 
         stop_started_plugins();
-        close_listeners();
+        server_detail::close_listeners(m_runtime, m_listeners);
+        m_connections.stop(m_runtime);
         m_runtime.stop();
         m_listeners.clear();
 
@@ -355,6 +407,8 @@ public:
     bool is_running() const {
         return m_running.load();
     }
+
+    const std::string& start_error() const noexcept { return m_start_error; }
 
     /**
      * @brief 获取内部 Runtime 引用
@@ -383,44 +437,6 @@ protected:
         return scheduler->schedule(std::move(task_ref));
     }
 
-    Task<void> close_listener(AsyncTcpSocket* listener) {
-        if (listener == nullptr || listener->handle() == GHandle::invalid()) {
-            co_return;
-        }
-        auto close_result = co_await listener->close();
-        if (!close_result && close_result.error().code() != kClosed) {
-            HTTP_LOG_WARN("[socket] [close-fail]",
-                          "context=server-listener error={}",
-                          close_result.error().message());
-        }
-        co_return;
-    }
-
-    void close_listeners() {
-        std::vector<JoinHandle<void>> pending;
-        pending.reserve(m_listeners.size());
-        for (size_t i = 0; i < m_listeners.size(); ++i) {
-            auto* scheduler = m_runtime.get_io_scheduler(i);
-            auto task = close_listener(&m_listeners[i]);
-            if (scheduler == nullptr || !task.is_valid()) {
-                continue;
-            }
-            const TaskRef& task_ref = galay::kernel::detail::TaskAccess::task_ref(task);
-            galay::kernel::detail::set_task_runtime(task_ref, &m_runtime);
-            galay::kernel::detail::set_task_scheduler(task_ref, scheduler);
-            if (scheduler->schedule(task_ref)) {
-                pending.emplace_back(
-                    galay::kernel::detail::TaskAccess::detach_task(std::move(task)));
-            }
-        }
-        for (const auto& task : pending) {
-            auto wait_result = task.wait();
-            if (!wait_result) {
-                HTTP_LOG_WARN("[runtime] [wait-fail]", "context=server-listener-close");
-            }
-        }
-    }
-
     /**
      * @brief 内部启动实现
      * @return 成功返回 true
@@ -428,37 +444,53 @@ protected:
      */
     virtual bool start_internal() {
         if (m_running.load()) {
+            m_start_error = "server is already running";
             return false;
         }
-
+        m_start_error.clear();
         if (!m_handler) {
+            m_start_error = "missing connection handler";
             return false;
         }
 
 
         auto runtime_start = m_runtime.start();
         if (!runtime_start.has_value()) {
+            m_start_error = "runtime: " + std::string(runtime_start.error().message());
             HTTP_LOG_ERROR("[runtime] [start-fail]",
                            "error={}",
                            runtime_start.error().message());
             return false;
         }
 
+        m_connections.start(m_runtime);
+
         if (!start_plugins()) {
+            m_start_error = "accept plugin failed to start";
+            m_connections.stop(m_runtime);
             m_runtime.stop();
             return false;
         }
 
         size_t io_scheduler_count = m_runtime.get_io_scheduler_count();
+        if (io_scheduler_count == 0) {
+            m_start_error = "server requires at least one IO scheduler";
+            stop_started_plugins();
+            m_connections.stop(m_runtime);
+            m_runtime.stop();
+            return false;
+        }
         m_listeners.clear();
         m_listeners.reserve(io_scheduler_count);
         for (size_t i = 0; i < io_scheduler_count; i++) {
-            auto listener = create_listener_socket();
+            auto listener = server_detail::create_listener(m_config.host, m_config.port, m_config.backlog);
             if (!listener) {
+                m_start_error = "listen " + m_config.host + ":" + std::to_string(m_config.port) + ": " + listener.error().message();
                 HTTP_LOG_ERROR("[socket] [listen-fail]",
                                "error={}",
                                listener.error().message());
                 stop_started_plugins();
+                m_connections.stop(m_runtime);
                 m_runtime.stop();
                 m_listeners.clear();
                 return false;
@@ -478,7 +510,10 @@ protected:
                                    "context=server-loop index={}",
                                    i);
                     m_running.store(false);
+                    m_start_error = "failed to schedule server loop " + std::to_string(i);
                     stop_started_plugins();
+                    server_detail::close_listeners(m_runtime, m_listeners);
+                    m_connections.stop(m_runtime);
                     m_runtime.stop();
                     m_listeners.clear();
                     return false;
@@ -604,31 +639,8 @@ protected:
         co_return true;
     }
 
-    std::expected<AsyncTcpSocket, IOError> create_listener_socket() {
-        auto listener = AsyncTcpSocket::create(IPType::IPV4);
-        if (!listener) {
-            return std::unexpected(listener.error());
-        }
-        if (auto result = listener->option().handle_reuse_addr(); !result) {
-            return std::unexpected(result.error());
-        }
-        if (auto result = listener->option().handle_reuse_port(); !result) {
-            return std::unexpected(result.error());
-        }
-        if (auto result = listener->option().handle_non_block(); !result) {
-            return std::unexpected(result.error());
-        }
-        Host bind_host(IPType::IPV4, m_config.host, m_config.port);
-        if (auto result = listener->bind(bind_host); !result) {
-            return std::unexpected(result.error());
-        }
-        if (auto result = listener->listen(m_config.backlog); !result) {
-            return std::unexpected(result.error());
-        }
-        return std::move(*listener);
-    }
-
 protected:
+    std::string m_start_error;
     Runtime m_runtime;                      ///< 内部 Runtime 实例
     HttpServerConfig m_config;              ///< 服务器配置
     HttpConnHandler m_handler;                  ///< 连接处理器
@@ -636,6 +648,7 @@ protected:
     std::size_t m_started_plugin_count = 0;  ///< 已成功启动且需要反序停止的插件数量
     std::optional<HttpRouter> m_router;     ///< 路由表（路由模式下使用）
     std::vector<AsyncTcpSocket> m_listeners;     ///< 每个 IO 调度器独立 listener，stop() 同步关闭
+    server_detail::ServerConnections m_connections;
     std::atomic<bool> m_running;            ///< 运行状态标志
 };
 
@@ -661,6 +674,7 @@ struct HttpsServerConfig
     std::string ca_path;                        ///< CA 证书路径（用于客户端证书校验）
     HttpReaderSetting reader_setting;           ///< TLS 连接的读取器配置
     HttpWriterSetting writer_setting;           ///< TLS 连接的写入器配置
+    HttpServerPolicy policy;
     RuntimeAffinityConfig affinity;             ///< 调度器绑核策略
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< IO 调度器数量
     size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< 计算调度器数量
@@ -685,6 +699,7 @@ public:
     HttpsServerBuilder& tcp_no_delay(bool v)               { m_config.tcp_no_delay = v; return *this; } ///< 设置已接受连接是否启用 TCP_NODELAY
     HttpsServerBuilder& io_scheduler_count(size_t v)       { m_config.io_scheduler_count = v; return *this; } ///< 设置 IO 调度器数量
     HttpsServerBuilder& parallel_scheduler_count(size_t v)  { m_config.parallel_scheduler_count = v; return *this; } ///< 设置计算调度器数量
+    HttpsServerBuilder& policy(HttpServerPolicy v)       { m_config.policy = std::move(v); return *this; }
     HttpsServerBuilder& sequential_affinity(size_t io_count, size_t parallel_count) {
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Sequential;
         m_config.affinity.seq_io_count = io_count;
@@ -730,10 +745,17 @@ public:
     {
     }
 
-    ~HttpsServer() override = default;
+    ~HttpsServer() override { stop(); }
 
 protected:
     bool start_internal() override {
+        if (m_running.load()) return false;
+        m_start_error.clear();
+        // Raw accept-plugin probes can omit identity; routed TLS cannot.
+        if (m_router && (m_https_config.cert_path.empty() || m_https_config.key_path.empty())) {
+            m_start_error = "TLS requires both cert_path and key_path";
+            return false;
+        }
         // 初始化 SSL 上下文
         if (!init_ssl_context()) {
             return false;
@@ -823,8 +845,24 @@ protected:
 
 private:
     Task<void> handle_ssl_connection(galay::ssl::SslSocket socket) {
+        std::optional<server_detail::ServerConnections::Scope> connection_scope;
+        if (m_router && !m_router->has_connection_handlers()) {
+            auto tracked = co_await m_connections.attach(socket.handle().fd);
+            if (!tracked) {
+                HTTP_LOG_WARN("[ssl] [connection-track-fail]", "error={}", tracked.error().message());
+                auto close_result = co_await socket.close();
+                if (!close_result && close_result.error().code() != kClosed) {
+                    HTTP_LOG_WARN("[socket] [close-fail]",
+                                  "context=ssl-track-fail error={}",
+                                  close_result.error().message());
+                }
+                co_return;
+            }
+            connection_scope.emplace(std::move(*tracked));
+        }
         auto handshake_result = co_await socket.handshake();
         if (!handshake_result) {
+            if (connection_scope) connection_scope->release_handle();
             HTTP_LOG_WARN("[ssl] [handshake] [fail]", "error={}", handshake_result.error().message());
             auto close_result = co_await socket.close();
             if (!close_result) {
@@ -838,6 +876,8 @@ private:
 
         // 创建连接并调用处理器
         HttpConnImpl<galay::ssl::SslSocket> conn(std::move(socket));
+        // The route handler attaches its own scope on the same IO owner.
+        if (connection_scope) connection_scope->release_handle();
         co_await m_handler(std::move(conn));
         co_return;
     }
@@ -851,11 +891,13 @@ private:
         base_config.io_scheduler_count = config.io_scheduler_count;
         base_config.parallel_scheduler_count = config.parallel_scheduler_count;
         base_config.affinity = config.affinity;
+        base_config.policy = config.policy;
         return base_config;
     }
 
     bool init_ssl_context() {
         if (!m_ssl_ctx.is_valid()) {
+            m_start_error = "TLS context: " + m_ssl_ctx.error().message();
             return false;
         }
 
@@ -863,6 +905,7 @@ private:
         if (!m_https_config.cert_path.empty()) {
             auto result = m_ssl_ctx.load_certificate(m_https_config.cert_path);
             if (!result) {
+                m_start_error = "TLS certificate " + m_https_config.cert_path + ": " + result.error().message();
                 HTTP_LOG_ERROR("[ssl] [cert] [fail]", "path={}", m_https_config.cert_path);
                 return false;
             }
@@ -872,6 +915,7 @@ private:
         if (!m_https_config.key_path.empty()) {
             auto result = m_ssl_ctx.load_private_key(m_https_config.key_path);
             if (!result) {
+                m_start_error = "TLS private key " + m_https_config.key_path + ": " + result.error().message();
                 HTTP_LOG_ERROR("[ssl] [key] [fail]", "path={}", m_https_config.key_path);
                 return false;
             }
@@ -881,6 +925,7 @@ private:
         if (!m_https_config.ca_path.empty()) {
             auto result = m_ssl_ctx.load_ca_certificate(m_https_config.ca_path);
             if (!result) {
+                m_start_error = "TLS CA " + m_https_config.ca_path + ": " + result.error().message();
                 HTTP_LOG_ERROR("[ssl] [ca] [fail]", "path={}", m_https_config.ca_path);
                 return false;
             }
@@ -894,6 +939,11 @@ private:
             m_ssl_ctx.set_verify_mode(galay::ssl::SslVerifyMode::None);
         }
 
+        const auto alpn = m_ssl_ctx.set_alpn_select_protocols({"http/1.1"});
+        if (!alpn) {
+            m_start_error = "TLS ALPN: " + alpn.error().message();
+            return false;
+        }
         return true;
     }
 

@@ -11,6 +11,38 @@
 
 ## [Unreleased]
 
+### Added
+
+- 类型化 API 和 OpenAPI/Swagger 扩展到 HTTPS（HTTP/1 over TLS）、h2c prior knowledge 和 HTTP/2 over TLS，保留 HTTP/1 明文能力。`ApiServerConfig` 选择现有原生引擎，四种传输复用同一份 DTO、路由登记、参数绑定、校验、JSON 编解码和错误契约。
+- 为原生 `HttpRouter` 增加返回自持响应的 request handler；HTTP/2 适配器处理真实 stream 的完整请求及 HEADERS/DATA 响应，保留 `ApiContext` 借用语义和 `PreparedApi` 原生路由器，不引入第二套反射系统。
+
+### Changed
+
+- 四种传输统一提供 OpenAPI 3.1.0、内嵌 Swagger UI 5.17.14 及离线静态资源；保留 `NoSwagger`、明确的文档路由冲突和显式目录缺资源失败语义，不升级资源或回退 CDN。
+- 原生监听初始化同步报告 socket/bind/listen 及 TLS/ALPN 启动失败原因；预检或文档策略失败可重试，进入原生初始化后的 API server 仍为单次使用，重复停止无副作用并保留共享文档。
+- typed/request 路由停止时先关闭 listener、在连接 IO owner 上中断收发并异步排空 handler，最后停止 Runtime；排空期间保留定时器，不抢占任意业务协程。连接 handler、协议升级及自定义 fallback 保留原有生命周期责任。
+- 同步 CMake、Bazel、mcpp 的 HTTP2 依赖和 feature 定义，以及受影响模块 prelude、安装消费工程和四传输示例选项。
+
+### Fixed
+
+- HTTP/2 静态文件缓存移除 deprecated shared_ptr 原子自由函数，改用标量原子状态一次性发布不可变普通 shared_ptr，release/acquire 后只读，读者不自旋或阻塞；不使用原子共享指针或诊断屏蔽消除 warning。
+- 修复 HPACK 动态表扩容后的索引顺序、trailing HEADERS 重复派发 handler，以及新建/pool stream 未应用已协商初始流控窗口导致 Swagger 大资源发送停滞的问题。
+- 修复停止活跃连接时挂起协程及 TLS/stream 资源泄漏、默认 HTTP/1 fallback keepalive 排空超时，以及 stream pool 与 enable_shared_from_this 控制块的所有权循环。
+- 修复 `TaskResumeQueue` 移动 borrowed 引用后的空状态访问，以及 `Bytes` 隐藏终止字节分配的长度溢出；新增对应崩溃及边界回归，保留既有分配失败契约。
+- 修复 API=OFF 配置检查因 fixture 绝对路径包含 galay-api 字样产生的误报，改为检查实际 Ninja target rules。
+
+### Docs
+
+- 更新 API 快速开始、参考、使用指南、示例和能力表；记录 h2c 浏览器连接限制、TLS 测试证书、停止与重试语义，以及实际失败复现、修复和最终验证命令。
+
+### Validation
+
+- GCC14 / C++23 头文件接口 / Linux epoll / Release 共享库全模块、C ABI、测试、示例及可生成 benchmark 构建通过，C/C++ 使用 `-Werror`。此前 clean 构建3928/3928步，最终修改后全目标增量302/302步，日志无 warning/error。
+- 完整串行 CTest 645项登记：604通过、36原有跳过、5原有禁用、0失败；API 14/14，ASan/UBSan及泄漏检查覆盖30个受影响测试并全部通过。SSL/HTTP2四种 ON/OFF 组合各14/14 API测试通过，移后外部消费者5/5通过。
+- 四传输真实 loopback 覆盖成功、绑定/JSON失败、业务错误、404、文档和资源；H2/h2c各验证24并发stream、reset、流控阻塞和连接关闭，TLS验证CA/hostname及ALPN。OpenAPI验证器通过11个operation、96个实际请求响应观察和45个schema边界。
+- 源码及迁移安装消费者的 Chromium141桌面/移动端离线UI与HTTP/HTTPS/H2实际GET200/POST201 Try it out通过，H2由CDP确认真实协议；无外部请求或UI文件访问。h2c仅按真实prior knowledge客户端验收，不将浏览器HTTP/1 fallback算作支持。
+- 未验证Bazel、mcpp/原生命名模块及其他编译器/平台；本机无Boost头文件的对照benchmark未生成。完整CTest原有跳过/禁用项及任意业务handler的非抢占边界仍明确保留。
+
 ## [v6.2.0] - 2026-10-07
 
 ### Changed

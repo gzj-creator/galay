@@ -4,6 +4,8 @@ import argparse
 from copy import deepcopy
 import json
 from pathlib import Path
+import re
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from jsonschema import Draft202012Validator
 from openapi_spec_validator import OpenAPIV31SpecValidator
@@ -11,6 +13,89 @@ from openapi_spec_validator import OpenAPIV31SpecValidator
 
 def validate_schema(schema):
     Draft202012Validator.check_schema(schema)
+
+
+def validate_observations(document, path):
+    operations = {}
+    for template, item in document["paths"].items():
+        for method, operation in item.items():
+            if "operationId" in operation:
+                assert operation["operationId"] not in operations
+                operations[operation["operationId"]] = (template, method, operation)
+    counts = {}
+    for observation in json.loads(path.read_text(encoding="utf-8")):
+        template, method, operation = operations[observation["operationId"]]
+        request = observation["request"]
+        assert request["method"].lower() == method
+        # The acceptance fixtures use only unreserved percent encodings; query
+        # edge cases remain governed by the shared native URI parser, not this tool.
+        target = urlsplit(unquote(request["target"]))
+        pattern = re.escape(template)
+        for parameter in operation.get("parameters", []):
+            if parameter["in"] == "path":
+                pattern = pattern.replace(re.escape("{" + parameter["name"] + "}"),
+                                          "(?P<" + parameter["name"] + ">[^/]+)")
+        matched = re.fullmatch(pattern, target.path)
+        assert matched, f"actual target differs from operation: {observation}"
+        query = parse_qs(target.query, keep_blank_values=True)
+        valid = True
+        bound = {}
+        for parameter in operation.get("parameters", []):
+            values = [matched[parameter["name"]]] if parameter["in"] == "path" else query.get(parameter["name"], [])
+            if not values:
+                valid &= not parameter.get("required", False)
+                continue
+            value = values[-1]
+            schema = parameter["schema"]
+            kind = schema["type"]
+            if kind == "integer":
+                if not re.fullmatch(r"-?[0-9]+", value):
+                    valid = False
+                    continue
+                value = int(value)
+            elif kind == "boolean":
+                if value not in ("true", "false"):
+                    valid = False
+                    continue
+                value = value == "true"
+            elif kind == "number":
+                value = float(value)
+            bound[parameter["name"]] = value
+            valid &= Draft202012Validator(schema).is_valid(value)
+        body = request["body"]
+        contract = operation.get("requestBody")
+        supported_media = not body or (contract is not None and request["contentType"].split(";")[0] == "application/json")
+        if contract:
+            if not body:
+                valid &= not contract.get("required", False)
+            else:
+                try:
+                    instance = json.loads(body)
+                except json.JSONDecodeError:
+                    valid = False
+                else:
+                    valid &= Draft202012Validator(contract["content"]["application/json"]["schema"]).is_valid(instance)
+        elif body:
+            valid = False
+        status = observation["status"]
+        assert str(status) in operation["responses"], f"undocumented actual status: {observation}"
+        if status == 400:
+            assert not valid, f"binding rejected document-valid input: {observation}"
+        elif status == 415:
+            assert not supported_media, f"media rejection disagrees with document: {observation}"
+        else:
+            assert valid, f"binding accepted document-invalid input: {observation}"
+        response = operation["responses"][str(status)]
+        if "content" in response:
+            Draft202012Validator(response["content"]["application/json"]["schema"]).validate(observation["response"])
+        else:
+            assert observation.get("bytes") == 0 and observation["response"] is None, "bodyless response differs from document"
+        if 200 <= status < 300 and isinstance(observation["response"], dict) and "id" in bound:
+            assert observation["response"]["id"] == bound["id"], "runtime path binding differs from the documented source"
+        transport = observation["transport"]
+        counts[transport] = counts.get(transport, 0) + 1
+    assert counts and all(count >= 20 for count in counts.values()), counts
+    print(f"Actual request/response GO: {sum(counts.values())} observations, transport counts={counts}")
 
 
 def validate_boundaries(path):
@@ -79,8 +164,9 @@ def validate_boundaries(path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("document", type=Path)
-    parser.add_argument("--served", type=Path)
+    parser.add_argument("--served", type=Path, action="append", default=[])
     parser.add_argument("--schemas", type=Path)
+    parser.add_argument("--observations", type=Path)
     args = parser.parse_args()
     document = json.loads(args.document.read_text(encoding="utf-8"))
     assert document["openapi"] == "3.1.0"
@@ -97,9 +183,12 @@ def main():
             for response in operation["responses"].values():
                 for media in response.get("content", {}).values():
                     validate_schema(media["schema"])
-    if args.served:
-        served = json.loads(args.served.read_text(encoding="utf-8"))
+    for served_path in args.served:
+        assert served_path.read_bytes() == args.document.read_bytes(), "served and exported OpenAPI bytes differ"
+        served = json.loads(served_path.read_text(encoding="utf-8"))
         assert served == document, "served and exported OpenAPI documents differ"
+    if args.observations:
+        validate_observations(document, args.observations)
     if args.schemas:
         validate_boundaries(args.schemas)
     print(f"OpenAPI 3.1 GO: {operations} operations; schemas valid; offline equality checked={bool(args.served)}")

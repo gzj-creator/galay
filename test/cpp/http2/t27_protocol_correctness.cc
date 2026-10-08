@@ -144,6 +144,27 @@ void test_pending_data_waiter_notified_on_close()
     assert(wait.m_waiter->is_ready());
 }
 
+void test_trailers_do_not_spawn_second_handler()
+{
+    AsyncTcpSocket socket(GHandle{-1});
+    Http2Conn conn(std::move(socket));
+    Http2StreamManager manager(conn);
+    auto stream = conn.create_stream(3);
+    stream->on_headers_received(false);
+    stream->set_decoded_headers({{":method", "POST"}, {":path", "/values/8"},
+        {"content-type", "application/json"}});
+    manager.complete_decoded_headers(stream, false);
+    assert(manager.m_pending_spawns.size() == 1);
+    assert(!stream->is_request_completed());
+    stream->append_request_data(std::string("{}"));
+    stream->on_headers_received(true);
+    stream->set_decoded_headers({{"x-trailer", "complete"}});
+    manager.complete_decoded_headers(stream, true);
+    assert(stream->is_request_completed());
+    assert(stream->request().get_header("x-trailer") == "complete");
+    assert(manager.m_pending_spawns.size() == 1);
+}
+
 void test_incoming_data_checks_connection_recv_window_first()
 {
     AsyncTcpSocket socket(GHandle{-1});
@@ -245,6 +266,31 @@ void test_settings_initial_window_delta_applies_to_existing_streams()
     assert(conn.peer_settings().initial_window_size == kDefaultInitialWindowSize + 1000);
 }
 
+void test_new_streams_use_negotiated_windows()
+{
+    AsyncTcpSocket socket(GHandle{-1});
+    Http2Conn conn(std::move(socket));
+    Http2StreamPool pool;
+    Http2SettingsFrame local;
+    local.add_setting(Http2SettingsId::InitialWindowSize, 16384);
+    assert(conn.apply_local_settings(local) == Http2ErrorCode::NoError);
+    for (const uint32_t window : {0u, 4096u, 6291456u, kMaxStreamId}) {
+        Http2SettingsFrame peer;
+        peer.add_setting(Http2SettingsId::InitialWindowSize, window);
+        assert(conn.apply_peer_settings(peer) == Http2ErrorCode::NoError);
+        auto fresh = conn.create_stream(1);
+        auto reused = conn.create_stream(3, pool.acquire(3));
+        assert(fresh->send_window() == static_cast<int32_t>(window));
+        assert(reused->send_window() == static_cast<int32_t>(window));
+        assert(fresh->recv_window() == 16384 && reused->recv_window() == 16384);
+        fresh->adjust_send_window(-1);
+        assert(conn.create_stream(1) == fresh);
+        assert(fresh->send_window() == static_cast<int32_t>(window) - 1);
+        conn.remove_stream(1);
+        conn.remove_stream(3);
+    }
+}
+
 void test_unknown_extension_frame_is_consumed_and_ignored()
 {
     AsyncTcpSocket socket(GHandle{-1});
@@ -312,10 +358,12 @@ int main()
     test_outbound_data_waits_for_stream_window();
     test_outbound_data_waits_for_connection_window();
     test_pending_data_waiter_notified_on_close();
+    test_trailers_do_not_spawn_second_handler();
     test_incoming_data_checks_connection_recv_window_first();
     test_incoming_data_checks_stream_recv_window();
     test_window_update_overflow();
     test_settings_initial_window_delta_applies_to_existing_streams();
+    test_new_streams_use_negotiated_windows();
     test_unknown_extension_frame_is_consumed_and_ignored();
     test_data_builder_splits_payload_at_default_max_frame_size();
     test_send_data_frame_rejects_insufficient_send_window();
