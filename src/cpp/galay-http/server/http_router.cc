@@ -1429,9 +1429,15 @@ HttpRouteHandler HttpRouter::create_proxy_handler(const std::string& routePrefix
 
             auto& upstream_reader = session_result.value()->get_reader();
             upstream_response.reset();
+            const bool is_head_request = req.header().method() == HttpMethod::HEAD;
             bool recv_ok = false;
             while (true) {
-                auto recv_result = co_await upstream_reader.get_response(upstream_response);
+                // HEAD 响应没有 body，只等响应头即可；get_response 会按 Content-Length
+                // 等待不存在的 body 而挂起。
+                std::expected<bool, HttpError> recv_result =
+                    is_head_request
+                        ? co_await upstream_reader.get_response_header(upstream_response.header())
+                        : co_await upstream_reader.get_response(upstream_response);
                 if (!recv_result) {
                     HTTP_LOG_WARN("[proxy] [recv-fail]",
                                   "error={}",

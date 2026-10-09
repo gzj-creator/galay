@@ -34,6 +34,7 @@
 ### Fixed
 
 - 修复 HTTP/1 HEAD 响应按 `Content-Length` / chunked 等待实际响应体的问题；响应解析接收请求方法，TCP/SSL 会话及预序列化请求在完整响应头后返回空 body，保留长度与传输元数据，不消费后续响应，`clone()` / `reset()` 同步维护完成状态。
+- 修复 HTTP 代理转发 HEAD 请求时按响应长度等待不存在的响应体，改为在收到完整上游响应头后继续转发，避免代理协程挂起。
 - HTTP methods 测试等待全部请求结束并检查连接、响应状态、HEAD 空 body 和清理结果；新增自带 HTTP/1.1 服务的验收，核对成功、HTTP 500、响应前断连及服务不可达的退出码与完成计数，避免仅打印失败却返回成功。新增 HEAD 分段头、TCP/SSL、后续 GET 响应与 clone/reset 回归。
 - 修复 C bounded-channel benchmark 在空队列读取后观察生产完成、遗漏最后发布消息的排空竞态，新增确定性回归；样本消息数与同组 benchmark 对齐为两百万，保留超时、计数与校验和检查并补充失败诊断。RPC managed-client 回环测试改用系统分配的空闲端口，避免 PID 推算端口导致 `EADDRINUSE`。
 - 修复 io_uring `SEND_ZC` 在 notification CQE 释放借用 buffer 前恢复协程的问题；等待结果与 notification 后交付原始发送结果，覆盖 CQE 顺序、过期 generation、部分发送及无 notification 的终态，避免 TLS 复用 buffer 导致密文损坏。定时 sequence `RECV` 改为可读事件驱动，仅由有效 owner 执行非阻塞接收，避免超时后的旧请求消耗数据或访问已释放 buffer。
