@@ -44,7 +44,7 @@ if(TARGET galay::http2)
 endif()
 add_test(NAME installed.transports COMMAND ${node}
     ${CMAKE_CURRENT_SOURCE_DIR}/transport_acceptance.cjs $<TARGET_FILE:transport_server>
-    ${CONSUMER_REFERENCE_ASSETS} ${CMAKE_CURRENT_BINARY_DIR}/transport-evidence ${transports})
+    ${CMAKE_CURRENT_BINARY_DIR}/transport-evidence ${transports})
 set_tests_properties(installed.transports PROPERTIES TIMEOUT 180)
 
 add_executable(startup t10_startup.cc)

@@ -3,16 +3,12 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
-const { free_port, make_client, run, delay } = require('./transport_acceptance.cjs');
+const { free_port, make_client, run, delay, verify_assets } = require('./transport_acceptance.cjs');
 
-async function verify_browser(binary, assetDirectory, outputDirectory, mode, certificates) {
+async function verify_browser(binary, outputDirectory, mode, certificates) {
   await fs.mkdir(outputDirectory, { recursive: true });
   const deployment = await fs.mkdtemp(path.join(path.resolve(outputDirectory), 'empty-deployment-'));
-  const expected_assets = new Map();
-  for (const name of ['swagger-ui.css', 'swagger-ui-bundle.js', 'swagger-ui-standalone-preset.js',
-    'favicon-16x16.png', 'favicon-32x32.png', 'LICENSE', 'NOTICE', 'README.md', 'SHA256SUMS']) {
-    expected_assets.set(name, await fs.readFile(path.join(assetDirectory, name)));
-  }
+  let expected_assets;
   const port = await free_port();
   const secure = mode === 'https' || mode === 'h2';
   const origin = `${secure ? 'https' : 'http'}://127.0.0.1:${port}`;
@@ -53,18 +49,13 @@ async function verify_browser(binary, assetDirectory, outputDirectory, mode, cer
       await delay(50);
     }
     client = await make_client(mode, port, await fs.readFile(certificates.cert));
+    expected_assets = await verify_assets(client);
     const served = await client.request('GET', '/openapi.json');
     assert.equal(served.status, 200);
     const spec = served.bytes.toString();
     run(path.resolve(binary), ['--export', path.join(outputDirectory, 'export-openapi.json')]);
     assert.equal(await fs.readFile(path.join(outputDirectory, 'export-openapi.json'), 'utf8'), spec);
     await fs.writeFile(path.join(outputDirectory, 'served-openapi.json'), spec);
-    for (const [name, expected] of expected_assets) {
-      const response = await client.request('GET', `/docs/${name}`);
-      assert.equal(response.status, 200, name);
-      assert.equal(response.headers['x-content-type-options'], 'nosniff');
-      assert.deepEqual(response.bytes, expected);
-    }
     browser = await chromium.launch({ headless: true, args: process.env.CHROMIUM_NET_LOG
       ? [`--log-net-log=${path.resolve(process.env.CHROMIUM_NET_LOG)}.${mode}`, '--net-log-capture-mode=Everything'] : [] });
     const evidence = { browser: browser.version(), mode, origin, serverProtocol: client.protocol,
@@ -190,15 +181,15 @@ async function verify_browser(binary, assetDirectory, outputDirectory, mode, cer
     assert.equal(result.code, 0, `server cleanup failed: ${JSON.stringify(result)} ${serverLog}`);
     if (trace_file) {
       const trace = await fs.readFile(trace_file, 'utf8');
-      const paths = [...expected_assets.keys(), 'assets/swagger-ui', 'share/galay/swagger-ui'];
+      const paths = [...(expected_assets?.keys() || []), 'swagger-ui'];
       assert(!paths.some(name => trace.includes(name)), 'startup or requests accessed UI resource files');
     }
   }
 }
 
 async function main() {
-  const [binary, assets, output_, modes = 'http,https,h2,h2c'] = process.argv.slice(2);
-  assert(binary && assets && output_, 'binary, assets and output directory are required');
+  const [binary, output_, modes = 'http,https,h2,h2c'] = process.argv.slice(2);
+  assert(binary && output_, 'binary and output directory are required');
   const output = path.resolve(output_);
   await fs.mkdir(output, { recursive: true });
   const certificates = { cert: path.join(output, 'localhost.crt'), key: path.join(output, 'localhost.key') };
@@ -206,7 +197,7 @@ async function main() {
     '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1', '-out', certificates.cert, '-keyout', certificates.key]);
   const evidence = [];
   for (const mode of modes.split(',')) {
-    evidence.push(await verify_browser(binary, assets, path.join(output, mode), mode, certificates));
+    evidence.push(await verify_browser(binary, path.join(output, mode), mode, certificates));
   }
   await fs.writeFile(path.join(output, 'browsers.json'), JSON.stringify(evidence, null, 2));
 }

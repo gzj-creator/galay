@@ -9,8 +9,6 @@ foreach(source IN LISTS GALAY_API_TEST_SOURCES)
     if(TARGET galay::http2 AND name MATCHES "^t(10|12)_")
         target_link_libraries("api_${name}" PRIVATE galay::http2)
     endif()
-    target_compile_definitions("api_${name}" PRIVATE
-        GALAY_API_SWAGGER_UI_DIR="${PROJECT_SOURCE_DIR}/assets/swagger-ui")
     string(REGEX REPLACE "^t[0-9]+_" "" scenario "${name}")
     if(name STREQUAL "t10_startup")
         add_test(NAME "api.${scenario}" COMMAND ${CMAKE_COMMAND}
@@ -42,14 +40,8 @@ if(GALAY_BUILD_HTTP2)
 endif()
 add_test(NAME api.transports COMMAND ${GALAY_API_NODE_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/transport_acceptance.cjs $<TARGET_FILE:api_t11_transport_server>
-    ${PROJECT_SOURCE_DIR}/assets/swagger-ui ${CMAKE_CURRENT_BINARY_DIR}/transport-evidence ${api_transports})
+    ${CMAKE_CURRENT_BINARY_DIR}/transport-evidence ${api_transports})
 set_tests_properties(api.transports PROPERTIES LABELS "api;integration" TIMEOUT 180)
-
-add_test(NAME api.embedded_generator COMMAND ${CMAKE_COMMAND}
-    -DGALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}
-    -DGALAY_BINARY_DIR=${CMAKE_BINARY_DIR}
-    -P ${CMAKE_CURRENT_SOURCE_DIR}/embedded_generator.cmake)
-set_tests_properties(api.embedded_generator PROPERTIES LABELS "api;config" TIMEOUT 120)
 
 add_test(NAME api.configure_matrix COMMAND ${CMAKE_COMMAND}
     -DGALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}

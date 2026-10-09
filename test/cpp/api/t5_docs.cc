@@ -1,5 +1,6 @@
 #include <galay/cpp/galay-http/server/api_contract.h>
 #include <galay/cpp/galay-http/server/http_server.h>
+#include <galay/cpp/galay-api/ui_assets.h>
 #include <serde/json/json.hpp>
 
 #include <arpa/inet.h>
@@ -56,23 +57,6 @@ void close_fd(int fd)
     require(::close(fd) == 0, "close failed: " + std::to_string(errno));
 }
 
-std::string read_file(const fs::path& path)
-{
-    std::ifstream input(path, std::ios::binary);
-    require(input.is_open(), "cannot open " + path.string());
-    std::string result;
-    std::array<char, 8192> buffer{};
-    while (input.read(buffer.data(), buffer.size()) || input.gcount() != 0) {
-        // append returns the destination reference, not a recoverable result.
-        (void)result.append(buffer.data(), static_cast<std::size_t>(input.gcount()));
-    }
-    require(input.eof() && !input.bad(), "cannot read " + path.string());
-    input.clear();
-    input.close();
-    require(!input.fail(), "cannot close " + path.string());
-    return result;
-}
-
 class Assets {
 public:
     Assets()
@@ -84,9 +68,8 @@ public:
         const char* created = ::mkdtemp(name.data());
         require(created != nullptr, "mkdtemp failed");
         path = created;
-        for (const auto asset : asset_names) {
-            const auto content = read_file(fs::path(GALAY_API_SWAGGER_UI_DIR) / asset);
-            write(asset, content);
+        for (const auto& asset : docs_detail::embedded_assets()) {
+            write(asset.name, asset.bytes);
         }
     }
 
@@ -420,7 +403,10 @@ void loopback_and_lifetime(const DocsConfig& config, bool from_directory)
     if (from_directory) assets = std::make_unique<Assets>();
     std::array<std::string, asset_names.size()> expected_assets;
     for (std::size_t i = 0; i < asset_names.size(); ++i) {
-        expected_assets[i] = read_file(fs::path(GALAY_API_SWAGGER_UI_DIR) / asset_names[i]);
+        const auto embedded = docs_detail::embedded_assets();
+        require(embedded.size() == asset_names.size() && embedded[i].name == asset_names[i],
+                "built-in resources must contain the complete named asset set");
+        expected_assets[i] = embedded[i].bytes;
         if (i == 3 || i == 4) {
             require(expected_assets[i].find('\0') != std::string::npos,
                     "PNG fixtures must exercise embedded NUL bytes");
@@ -504,7 +490,7 @@ void loopback_and_lifetime(const DocsConfig& config, bool from_directory)
         auto resource = request(port, child(config.ui_path, asset_names[i]));
         require(resource.body_str() == expected_assets[i],
                 from_directory ? "explicit custom resource must survive owners and disk removal, not use embedded bytes"
-                               : "embedded browser and metadata bytes must exactly match official fixtures, including NUL");
+                               : "served browser and metadata bytes must exactly match the built-in resources, including NUL");
         require(resource.header().header_pairs().get_value("Content-Type") == content_types[i],
                 "every browser and metadata resource must use the expected Content-Type");
         require(resource.header().header_pairs().get_value("X-Content-Type-Options") == "nosniff",

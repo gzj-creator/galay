@@ -7,12 +7,11 @@ file(WRITE "${work}/install.log" "${output}\n${error}")
 if(NOT result EQUAL 0)
     message(FATAL_ERROR "API install failed: ${output}\n${error}")
 endif()
-# The fixture owns these paths: remove separately installed metadata and
-# relocate the package before find_package, building and running the consumer.
-file(REMOVE_RECURSE "${prefix}/share/galay/swagger-ui")
+# The built-in resources must not create a separate installed resource directory.
 if(EXISTS "${prefix}/share/galay/swagger-ui")
-    message(FATAL_ERROR "Cannot remove consumer fixture metadata directory")
+    message(FATAL_ERROR "Built-in Swagger UI unexpectedly installed a resource directory")
 endif()
+# Relocate the package before find_package, building and running the consumer.
 set(relocated "${work}/relocated-prefix")
 file(REMOVE_RECURSE "${relocated}")
 file(RENAME "${prefix}" "${relocated}" RESULT result)
@@ -34,11 +33,9 @@ file(COPY "${CMAKE_CURRENT_LIST_DIR}/t10_startup.cc"
     "${CMAKE_CURRENT_LIST_DIR}/transport_acceptance.cjs"
     "${CMAKE_CURRENT_LIST_DIR}/startup_acceptance.cmake"
     DESTINATION "${work}/consumer")
-file(COPY "${GALAY_SOURCE_DIR}/assets/swagger-ui/" DESTINATION "${work}/reference-assets")
 execute_process(COMMAND "${CMAKE_COMMAND}" -S "${work}/consumer" -B "${work}/build"
     -G Ninja -DCMAKE_CXX_COMPILER=${GALAY_CXX_COMPILER} -DCMAKE_PREFIX_PATH=${prefix}
     -DCMAKE_CXX_FLAGS=-Werror
-    -DCONSUMER_REFERENCE_ASSETS=${work}/reference-assets
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
 file(WRITE "${work}/configure.log" "${output}\n${error}")
 if(NOT result EQUAL 0)

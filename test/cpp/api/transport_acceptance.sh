@@ -9,4 +9,4 @@ fi
 
 # The existing Bazel protocol targets do not enable the SSL feature.
 exec node test/cpp/api/transport_acceptance.cjs test/cpp/api/transport_server \
-  assets/swagger-ui "$TEST_TMPDIR/transport-evidence" http,h2c
+  "$TEST_TMPDIR/transport-evidence" http,h2c

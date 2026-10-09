@@ -18,9 +18,10 @@
 自持最终路由和资源。普通 `add_handler` / `add_request_handler` 参与冲突检查，
 但没有 DTO 元数据，不会自动变成 OpenAPI 操作。
 
-默认资源固定为 `swagger-ui-dist@5.17.14`，构建校验七项上游 SHA256 并内嵌九个
-服务资源。部署不需要额外 JS、CSS、图标、源码路径或特定工作目录，不使用
-CDN。显式 `docs(config, directory)` 使用完整外置资源，缺项失败，不回退。
+默认资源固定为 `swagger-ui-dist@5.17.14`，九个服务资源已作为源码内置到
+`galay-api`。部署和构建都不需要 `assets` 目录、额外 JS、CSS、图标、源码路径
+或特定工作目录，不使用 CDN。显式 `docs(config, directory)` 仍可使用完整外置
+资源，缺项失败，不回退。
 
 `GALAY_BUILD_API` 默认 `OFF`，启用时要求 HTTP 和 serde。类型化应用包含
 `galay-api/api_router.h` 及所选原生 server 头，链接 `galay::api`；使用 HTTP/2

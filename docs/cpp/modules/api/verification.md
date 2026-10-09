@@ -1,5 +1,37 @@
 # API 验证记录
 
+2026-10-09 起，Swagger UI 资源直接固化在 `galay-api/ui_assets.cc` 中，`assets`
+目录与构建期生成脚本已移除。本文中的旧资源路径、生成器测试及浏览器命令
+保留为历史执行记录。当前浏览器验收命令不再接收资源目录：
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH=$PWD/build/api-docs-tools/browsers \
+PLAYWRIGHT_MODULE=$PWD/build/api-docs-tools/node_modules/playwright \
+node test/cpp/api/browser_acceptance.cjs \
+  build/api-docs/examples/cpp/api/example_api_e1_users \
+  build/api-docs/browser-evidence http
+```
+
+`api.transports` 和浏览器脚本通过 HTTP 响应及固定 SHA256 校验七项上游资源；
+来源及升级说明见 `src/cpp/galay-api/SWAGGER_UI.md`。
+
+2026-10-09 删除资源目录后的复验通过：
+
+- `build/api-docs` 的 `api.docs`、`api.embedded`、`api.transports`、
+  `api.configure_matrix`、`api.install_consumer` 五项通过。配置矩阵中的独立
+  源码目录没有 `assets`，可构建并运行内置资源消费者；安装消费检查不应安装
+  `share/galay/swagger-ui`，搬迁后六项消费者测试通过。
+- `build/naming-release` 的 docs、embedded、transports 三项通过，传输验收覆盖
+  HTTP、HTTPS、h2c 和 h2，全部内置上游资源的 SHA256 一致。
+- Chromium 141 的 HTTP、HTTPS、h2 桌面 1440x1000 与手机 390x844 验收通过，
+  GET 200、POST 201，无横向溢出、外部请求或控制台错误。h2c 客户端校验通过；
+  Chromium 使用 HTTP/1.1 的限制按原预期记录，不计为浏览器 h2c 支持。
+- 运行于空目录，`strace` 未发现 UI 文件读取，目录未生成或解包资源。
+  截图、浏览器记录及文件系统跟踪位于
+  `build/naming-release/browser-without-assets/`。
+- `mcpp build --features api --configure-only --offline` 通过；本机没有 Bazel，
+  对应规则已清理资源目录和生成脚本依赖，未执行 Bazel 构建。
+
 本页保留最初外置目录版本和策略增补的历史证据；涉及 `ApiServer`、policy、
 `PreparedApi` 或 `--assets` 的旧命令不是当前接口。当前接口已统一到四种原生
 server builder；实际结果见末尾“原生 Builder 统一注册验收（2026-10-08）”，

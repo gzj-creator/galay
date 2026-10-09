@@ -7,8 +7,6 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_test")
         copts = ["-std=c++23", "-UNDEBUG"],
         deps = ["//src/cpp/galay-api:galay-api"] +
                (["//src/cpp/galay-http2:galay-http2"] if name == "native_builder" else []),
-        data = ["//assets/swagger-ui:files"] if name == "docs" else [],
-        defines = ['GALAY_API_SWAGGER_UI_DIR="assets/swagger-ui"'],
     )
     for name, source in [
         ("schema", "t1_schema.cc"),
@@ -48,5 +46,5 @@ sh_test(
     name = "transports",
     srcs = ["transport_acceptance.sh"],
     args = ["transports"],
-    data = [":transport_server", "transport_acceptance.cjs", "//assets/swagger-ui:files"],
+    data = [":transport_server", "transport_acceptance.cjs"],
 )

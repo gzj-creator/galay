@@ -297,13 +297,10 @@ sources = [
     "src/cpp/galay-http/module/*.cppm",
 ]
 
-# API embedding requires an explicit prebuild generation step. The generated
-# source is consumed by the API feature and was verified by the release build:
-# cmake -DASSET_DIR=assets/swagger-ui -DOUTPUT_FILE=build/api-embedded/swagger_ui.cc
-#       -P cmake/EmbedSwaggerUi.cmake
+# API browser resources are checked into the source tree; no prebuild step is needed.
 # No galay.api module facade is provided in this release.
 [features.api]
-sources = ["src/cpp/galay-api/*.cc", "build/api-embedded/swagger_ui.cc"]
+sources = ["src/cpp/galay-api/*.cc"]
 implies = ["http", "serde"]
 
 [features.websocket]

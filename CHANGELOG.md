@@ -19,6 +19,7 @@
 
 ### Changed
 
+- Swagger UI 5.17.14 的 JS、CSS、favicon 和许可证等九项资源直接固化到 `galay-api/ui_assets.cc`，CMake、Bazel 和 mcpp 直接编译源码；构建、安装及默认运行均不再依赖外部资源目录或预生成步骤，保留完整显式自定义资源目录入口。
 - kernel 任务完成通知以单个 32 位原子状态统一未完成、已注册阻塞等待者和已完成三种状态，替代 `m_done` 与惰性 `TaskWaiter` 的跨原子握手；完成方使用 release exchange，仅有等待者时通知，等待方使用 acquire CAS / `atomic::wait`，移除完成路径的 mutex/CV 及等待器分配，保持结果可见性和不丢唤醒语义。同步迁移完成状态查询及源码契约，`TaskState` 在本机仍为 128 字节、64 字节对齐。
 - 四种传输统一提供 OpenAPI 3.1.0、内嵌 Swagger UI 5.17.14 及离线静态资源。`EnableSwagger=false` 保留 typed binding、运行期校验、serde 编解码和业务错误，但不保存文档专用状态、不生成或挂载文档，也不提供 `docs` / `export_openapi`；开启模式支持离线导出及显式资源目录，缺资源明确失败，不升级资源或回退 CDN。
 - 原生 Builder 的 `build()` 返回 `ApiResult<std::unique_ptr<NativeServer>>`，预检路由、文档和资源后才构造服务；失败可修正重试，成功冻结注册。managed `start()` 显式报告重复启动、socket/bind/listen、Runtime 和 TLS/ALPN 错误，不破坏已通过低层接口运行的服务；配置导出统一使用 `build_config()`。
@@ -27,6 +28,7 @@
 
 ### Removed
 
+- 删除 `assets/swagger-ui` 目录、构建期资源生成脚本及对应生成器测试，不再安装额外的 `share/galay/swagger-ui` 目录。
 - 删除公开的 `ApiBuilder`、`ApiServer` / `ApiServerConfig`、`PreparedApi`、文档 policy 和独立 API HTTP/2 adapter；构建产物收为内部 `PreparedRoutes`，不保留旧名别名、兼容包装或 fallback。
 
 ### Fixed
@@ -46,11 +48,13 @@
 
 ### Docs
 
+- 更新 API 构建、安装和资源使用文档，新增内置 Swagger UI 来源、许可证及升级说明；保留历史验收记录并补充删除资源目录后的验证结果。
 - 更新协程文档并新增任务完成通知协议说明，记录单原子修改序与 release/acquire 的正确性依据、多等待者及生命周期边界、验证证据和本地性能测量限制。
 - 更新 API 快速开始、参考、使用指南、示例、能力表及 Swagger 资源说明，统一为原生 Builder 入口；记录文档开关、依赖边界、h2c 浏览器限制、TLS 测试证书、停止与重试语义，以及实际失败复现和最终验收证据。没有实现 `.api` parser/generator。
 
 ### Validation
 
+- Swagger UI 资源调整通过 docs、embedded、transports、configure_matrix、install_consumer 五项回归，无 `assets` 的独立源码目录可构建运行，搬迁安装消费者六项通过；HTTP、HTTPS、h2c、h2 七项上游资源 SHA256 一致。Chromium 141 桌面及手机的 HTTP、HTTPS、h2 页面和 GET/POST 调试通过，无外部请求、控制台错误或 UI 文件访问；h2c 仅计客户端验收。mcpp API 离线配置检查通过，未执行 Bazel 构建。
 - 2026-10-09 Linux / GCC14 / C++23 / Release / `-Werror` 的 io_uring 配置全目标构建通过，包含启用的库、C API、测试、示例与 benchmark；最终 CTest 654 项：616 通过、33 项外部集成门控跳过、5 项禁用、0 失败。原生 C++ modules 模式未启用；未做后端或性能对比。
 - SEND_ZC、共享定时器、超时 sequence 接收三项新增底层回归通过 ASan/UBSan/泄漏检查；HTTP/2 TLS 多路复用、分段写入及主动 reset 压测三轮通过，35 秒轮次 echo 137,846/137,846、typed API 139,611/139,611，零错误。静态文件 64 KiB × 1,000 请求三轮及 1 MiB × 128 请求均零错误、零 fallback；TCP 三轮计数一致且零丢失，UDP 保留实际丢包报告。
 - 私有双节点 etcd 夹具验证 4,000 次 KV 操作与 2,000 次并发 RPC 调用均零错误；外部数据库门控测试结果单独记录，不计入默认 CTest 通过数。207 个 benchmark 目标的执行覆盖无遗漏、最新记录无失败，统计合并此前全量执行与修复后的相关重跑，未在最终修改后重新执行全部 benchmark；API transport 与大 PUT 夹具修复各连续 10 次通过。

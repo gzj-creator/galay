@@ -6,10 +6,41 @@ const http = require('node:http');
 const https = require('node:https');
 const http2 = require('node:http2');
 const tls = require('node:tls');
+const { createHash } = require('node:crypto');
 const { spawn, spawnSync } = require('node:child_process');
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 const observations = [];
+
+// Pinned upstream hashes verify the compiled resources without disk fixtures.
+const asset_hashes = new Map([
+  ['swagger-ui.css', '40170f0ee859d17f92131ba707329a88a070e4f66874d11365e9a77d232f6117'],
+  ['swagger-ui-bundle.js', 'c2e4a9ef08144839ff47c14202063ecfe4e59e70a4e7154a26bd50d880c88ba1'],
+  ['swagger-ui-standalone-preset.js', '33b7a6f5afcac4902fdf93281be2d2e12db15f241d384606e6e6d17745b7f86f'],
+  ['favicon-16x16.png', 'af24ad604dd7b3bcda8f975ab973075f4a2f70a4087944a12f8ef8b63a3e07c2'],
+  ['favicon-32x32.png', '3ed612f41e050ca5e7000cad6f1cbe7e7da39f65fca99c02e99e6591056e5837'],
+  ['LICENSE', 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30'],
+  ['NOTICE', '0d20d1adef18aee3f40dd258172155521ce702ac445cb5f7b7d60ed32dad2fb2'],
+]);
+
+async function verify_assets(client) {
+  const assets = new Map();
+  for (const name of [...asset_hashes.keys(), 'README.md', 'SHA256SUMS']) {
+    const resource = await client.request('GET', `/docs/${name}`);
+    assert.equal(resource.status, 200, name);
+    assert.equal(resource.headers['x-content-type-options'], 'nosniff');
+    assert(resource.bytes.length > 0, `${name} must be nonempty`);
+    if (asset_hashes.has(name)) {
+      assert.equal(createHash('sha256').update(resource.bytes).digest('hex'), asset_hashes.get(name),
+        `${name} must match the pinned upstream distribution`);
+    }
+    assets.set(name, resource.bytes);
+  }
+  const manifest = [...asset_hashes].map(([name, hash]) => `${hash}  ${name}\n`).join('');
+  assert.equal(assets.get('SHA256SUMS').toString(), manifest);
+  assert.match(assets.get('README.md').toString(), /swagger-ui-dist@5\.17\.14/);
+  return assets;
+}
 
 function run(command, args) {
   const result = spawnSync(command, args, { encoding: 'utf8' });
@@ -433,7 +464,8 @@ async function test_live_stop(server, client, mode, ca) {
 }
 
 async function main() {
-  const [binary_, asset_directory, output_, modes_ = 'http,https,h2c,h2'] = process.argv.slice(2);
+  const [binary_, output_, modes_ = 'http,https,h2c,h2'] = process.argv.slice(2);
+  assert(binary_ && output_, 'binary and output directory are required');
   const binary = path.resolve(binary_);
   const output = path.resolve(output_);
   await fs.mkdir(output, { recursive: true });
@@ -444,17 +476,14 @@ async function main() {
   const document_path = path.join(output, 'openapi.json');
   run(binary, ['--export', document_path]);
   const document = await fs.readFile(document_path, 'utf8');
-  const assets = new Map();
-  for (const name of ['swagger-ui.css', 'swagger-ui-bundle.js', 'swagger-ui-standalone-preset.js',
-    'favicon-16x16.png', 'favicon-32x32.png', 'LICENSE', 'NOTICE', 'README.md', 'SHA256SUMS']) {
-    assets.set(name, await fs.readFile(path.join(asset_directory, name)));
-  }
   const evidence = { node: process.version, transports: [] };
   for (const mode of modes_.split(',')) {
     const server = await start_server(binary, mode, certificates, output);
     const client = await make_client(mode, server.port, ca);
+    let assets;
     let streams, tls_checks, stopping;
     try {
+      assets = await verify_assets(client);
       await test_requests(client, document, assets, output, mode);
       if (client.session) streams = await test_streams(client, mode, server.port, ca, assets);
       if (mode === 'https' || mode === 'h2') tls_checks = await verify_alpn(mode, server.port, ca);
@@ -498,5 +527,5 @@ async function main() {
   console.log(JSON.stringify(evidence, null, 2));
 }
 
-module.exports = { delay, free_port, start_server, make_client, run };
+module.exports = { delay, free_port, start_server, make_client, run, verify_assets };
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });

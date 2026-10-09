@@ -43,7 +43,7 @@ endfunction()
 check_config(api_off success "" -DGALAY_BUILD_API=OFF -DGALAY_BUILD_SERDE=OFF)
 file(READ "${work}/api_off/build.ninja" off_build)
 # Inspect target rules, not absolute fixture paths that may contain galay-api.
-if(off_build MATCHES "(^|\n)build (galay-api|serde_simdjson):|(^|\n)build src/cpp/galay-api/|(^|\n)build [^\n]*swagger_ui\\.cc[: ]")
+if(off_build MATCHES "(^|\n)build (galay-api|serde_simdjson):|(^|\n)build src/cpp/galay-api/")
     message(FATAL_ERROR "API=OFF introduced API dependencies")
 endif()
 execute_process(COMMAND "${CMAKE_COMMAND}" --build "${work}/api_off"
@@ -64,7 +64,7 @@ check_config(missing_serde_option failure "GALAY_BUILD_API requires GALAY_BUILD_
 check_config(missing_serde_source failure "Galay serde submodule is missing"
     -DGALAY_BUILD_API=ON -DGALAY_BUILD_SERDE=ON)
 
-# API=ON requires build-time vendored resources, not an installed runtime path.
+# The API source fixture deliberately has no assets directory.
 set(source "${work}/source-with-serde")
 file(MAKE_DIRECTORY "${source}/src" "${source}/thirdparty")
 file(COPY "${GALAY_SOURCE_DIR}/CMakeLists.txt" DESTINATION "${source}")
@@ -72,9 +72,25 @@ file(COPY "${GALAY_SOURCE_DIR}/cmake" DESTINATION "${source}")
 foreach(pair IN ITEMS "src/cpp" "thirdparty/concurrentqueue" "thirdparty/serde")
     file(CREATE_LINK "${GALAY_SOURCE_DIR}/${pair}" "${source}/${pair}" SYMBOLIC RESULT linked)
     if(NOT linked STREQUAL "0")
-        message(FATAL_ERROR "Cannot create missing-UI configure fixture: ${linked}")
+        message(FATAL_ERROR "Cannot create asset-free configure fixture: ${linked}")
     endif()
 endforeach()
-check_config(missing_ui_resources failure "galay-api requires vendored Swagger UI resource"
+file(APPEND "${source}/CMakeLists.txt" "
+add_executable(embedded_consumer \"${GALAY_SOURCE_DIR}/test/cpp/api/t9_embedded.cc\")
+target_link_libraries(embedded_consumer PRIVATE galay::api)
+")
+check_config(without_ui_resources success ""
     -DGALAY_BUILD_API=ON -DGALAY_BUILD_SERDE=ON)
-message(STATUS "API configure matrix: OFF independent; missing HTTP/serde/build-time UI dependencies explicit")
+execute_process(COMMAND "${CMAKE_COMMAND}" --build "${work}/without_ui_resources"
+    --target embedded_consumer --parallel 2
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+file(WRITE "${work}/without_ui_resources_build.log" "${output}\n${error}")
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "API without assets failed to build: ${output}\n${error}")
+endif()
+execute_process(COMMAND "${work}/without_ui_resources/embedded_consumer"
+    RESULT_VARIABLE result)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "API without assets failed to run: ${result}")
+endif()
+message(STATUS "API configure matrix: OFF independent; missing HTTP/serde explicit; API builds and runs without assets")
