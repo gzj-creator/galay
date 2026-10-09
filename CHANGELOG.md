@@ -31,6 +31,11 @@
 
 ### Fixed
 
+- 修复 io_uring `SEND_ZC` 在 notification CQE 释放借用 buffer 前恢复协程的问题；等待结果与 notification 后交付原始发送结果，覆盖 CQE 顺序、过期 generation、部分发送及无 notification 的终态，避免 TLS 复用 buffer 导致密文损坏。定时 sequence `RECV` 改为可读事件驱动，仅由有效 owner 执行非阻塞接收，避免超时后的旧请求消耗数据或访问已释放 buffer。
+- 修复多个 Runtime 共用全局 TimerScheduler 时，一个 Runtime 停止会关闭其他使用者定时器的问题；启停在控制线程串行计数，最后一个使用者释放时才停止线程，消除 HTTP/2 停机期间定时器失效造成的 IO 饥饿。
+- 修复七个 etcd awaitable 的 `await_ready` / `await_suspend` 递归调用，显式派发至对应基类；RPC channel 关闭先 shutdown 中断收发，保留 IOController 至后台 reader/writer 排空后再 close，避免挂起读取恢复时 use-after-free，并保留主动关闭的 UNAVAILABLE 错误契约。
+- HTTP/2 客户端启动时发送配置的连接接收窗口 WINDOW_UPDATE；静态文件 benchmark 按文件大小配置连接与 stream 窗口并校验全部响应字节，保留默认窗口不足时的既有 fallback。TCP 公平性 benchmark 保留超时前的部分读取并收完整回复后再发送；UDP benchmark 校验 payload、客户端身份、长度与计数守恒，单独报告压力丢包；所有权 benchmark 改为检查惰性 timer 的配置状态。
+- 新增 SEND_ZC 完成、sequence 接收超时、共享定时器生命周期、客户端连接窗口、etcd awaitable 派发及 RPC close 生命周期六项回归，扩展可变发送 buffer 复用检查；API transport 验收等待客户端 close 事件，大 PUT 测试客户端重试 EINTR，保留超时与响应断言。
 - HTTP/2 静态文件缓存移除 deprecated shared_ptr 原子自由函数，改用标量原子状态一次性发布不可变普通 shared_ptr，release/acquire 后只读，读者不自旋或阻塞；不使用原子共享指针或诊断屏蔽消除 warning。
 - 修复 HPACK 动态表扩容后的索引顺序、trailing HEADERS 重复派发 handler，以及新建/pool stream 未应用已协商初始流控窗口导致 Swagger 大资源发送停滞的问题。
 - 修复停止活跃连接时挂起协程及 TLS/stream 资源泄漏、默认 HTTP/1 fallback keepalive 排空超时，以及 stream pool 与 enable_shared_from_this 控制块的所有权循环。
@@ -46,6 +51,9 @@
 
 ### Validation
 
+- 2026-10-09 Linux / GCC14 / C++23 / Release / `-Werror` 的 io_uring 配置全目标构建通过，包含启用的库、C API、测试、示例与 benchmark；最终 CTest 654 项：616 通过、33 项外部集成门控跳过、5 项禁用、0 失败。原生 C++ modules 模式未启用；未做后端或性能对比。
+- SEND_ZC、共享定时器、超时 sequence 接收三项新增底层回归通过 ASan/UBSan/泄漏检查；HTTP/2 TLS 多路复用、分段写入及主动 reset 压测三轮通过，35 秒轮次 echo 137,846/137,846、typed API 139,611/139,611，零错误。静态文件 64 KiB × 1,000 请求三轮及 1 MiB × 128 请求均零错误、零 fallback；TCP 三轮计数一致且零丢失，UDP 保留实际丢包报告。
+- 私有双节点 etcd 夹具验证 4,000 次 KV 操作与 2,000 次并发 RPC 调用均零错误；外部数据库门控测试结果单独记录，不计入默认 CTest 通过数。207 个 benchmark 目标的执行覆盖无遗漏、最新记录无失败，统计合并此前全量执行与修复后的相关重跑，未在最终修改后重新执行全部 benchmark；API transport 与大 PUT 夹具修复各连续 10 次通过。
 - 本次完成通知优化在 Linux x86_64 / GCC14 / C++23 / epoll / Release / `-Werror` 下通过 kernel 19/19、Redis topology 1/1；ASan/UBSan/LSan 5/5，TSan 在以 `setarch x86_64 -R` 避免启动地址映射冲突后 4/4，无 suppressions。扩展 T198 覆盖完成先于等待、无效与重复等待、堆结果、八个共享等待者、结果可见性及引用释放，保留双 IO scheduler 共十万任务压力；14 个模块 prelude 检查及 LLVM22/libc++ kernel 模块与 import 消费者编译通过，未完成模块链接运行或其他平台/后端运行验证。本地探针中已注册等待者的完成耗时约下降 75%，无等待者约下降 3%，完整任务生命周期基本不变，不据此宣称应用吞吐改善。
 - GCC14 / C++23 头文件接口 / Linux epoll / Release 共享库全模块、C ABI、测试、示例及可生成 benchmark 构建通过，C/C++ 使用 `-Werror`。四传输初版曾完成 clean 构建3928/3928步及最终增量302/302步；2026-10-08 原生 Builder 与 kernel 修复后的全目标增量构建809/809步通过，不声称本轮 clean 重建。
 - 四传输初版完整串行 CTest 645项：604通过、36原有跳过、5原有禁用、0失败，sanitizer覆盖30项。原生 Builder 和 kernel 修复后扩大回归至346项：338通过、3原有跳过、5原有禁用、0失败；ASan/UBSan/LSan 21/21。修复后的 SSL/HTTP2 四组合各14/14 API测试通过，迁移安装消费者6/6通过，并实际验证 API/serde 均关闭的 plain HTTP 消费者及已删除头不再安装。

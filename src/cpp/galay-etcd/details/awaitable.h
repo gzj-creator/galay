@@ -145,7 +145,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return await_suspend(handle);
+        return IoAwaitableBase::await_suspend(handle);
     }
     EtcdBoolResult await_resume();
 };
@@ -233,7 +233,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return await_suspend(handle);
+        return JsonOpAwaitableBase::await_suspend(handle);
     }
     EtcdBoolResult await_resume();
 };
@@ -259,7 +259,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return await_suspend(handle);
+        return JsonOpAwaitableBase::await_suspend(handle);
     }
     EtcdGetResult await_resume();
 };
@@ -284,7 +284,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return await_suspend(handle);
+        return JsonOpAwaitableBase::await_suspend(handle);
     }
     EtcdDeleteResult await_resume();
 };
@@ -307,7 +307,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return await_suspend(handle);
+        return JsonOpAwaitableBase::await_suspend(handle);
     }
     EtcdLeaseGrantResult await_resume();
 };
@@ -330,7 +330,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return await_suspend(handle);
+        return JsonOpAwaitableBase::await_suspend(handle);
     }
     EtcdLeaseGrantResult await_resume();
 
@@ -357,7 +357,7 @@ public:
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle)
     {
-        return await_suspend(handle);
+        return JsonOpAwaitableBase::await_suspend(handle);
     }
     EtcdPipelineResult await_resume();
 

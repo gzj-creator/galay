@@ -5,6 +5,7 @@
  * 通过条件：客户端按顺序收到两段完整 payload，服务端协程正常结束，测试返回 0。
  */
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -122,16 +123,21 @@ Task<void> send_two_chunks() {
     AsyncTcpSocket client(acceptResult.value());
     client.option().handle_non_block();
 
-    auto first = co_await client.send(first_payload().data(), first_payload().size());
-    if (!first || first.value() != first_payload().size()) {
+    // Reuse the same mutable storage immediately after the result CQE. A
+    // send_zc implementation must wait for its notification CQE before
+    // waking this coroutine, otherwise the first payload is overwritten.
+    std::string reusable_payload = first_payload();
+    auto first = co_await client.send(reusable_payload.data(), reusable_payload.size());
+    if (!first || first.value() != reusable_payload.size()) {
         record_failure("first send failed or partial");
         co_await client.close();
         co_await listener.close();
         co_return;
     }
 
-    auto second = co_await client.send(second_payload().data(), second_payload().size());
-    if (!second || second.value() != second_payload().size()) {
+    std::fill(reusable_payload.begin(), reusable_payload.end(), 'z');
+    auto second = co_await client.send(reusable_payload.data(), reusable_payload.size());
+    if (!second || second.value() != reusable_payload.size()) {
         record_failure("second send failed or partial");
         co_await client.close();
         co_await listener.close();

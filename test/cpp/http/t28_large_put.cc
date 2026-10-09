@@ -658,6 +658,9 @@ void send_all(int fd, const std::string& data)
     size_t sent = 0;
     while (sent < data.size()) {
         ssize_t n = ::send(fd, data.data() + sent, data.size() - sent, 0);
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
         if (n <= 0) {
             std::cerr << "[T79] send failed after " << sent
                       << " bytes, errno=" << errno << " (" << std::strerror(errno) << ")\n";
@@ -673,6 +676,9 @@ std::string recv_until_closed(int fd)
     char buffer[8192];
     while (true) {
         ssize_t n = ::recv(fd, buffer, sizeof(buffer), 0);
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
         if (n == 0) {
             break;
         }

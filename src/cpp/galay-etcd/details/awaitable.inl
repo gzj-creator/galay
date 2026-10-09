@@ -130,7 +130,7 @@ details::PutAwaitable::PutAwaitable(AsyncEtcdClient& client,
 
 bool details::PutAwaitable::await_ready() const noexcept
 {
-    return await_ready();
+    return JsonOpAwaitableBase::await_ready();
 }
 
 EtcdBoolResult details::PutAwaitable::await_resume()
@@ -336,7 +336,7 @@ details::CloseAwaitable::CloseAwaitable(AsyncEtcdClient& client)
 
 bool details::CloseAwaitable::await_ready() const noexcept
 {
-    return await_ready();
+    return IoAwaitableBase::await_ready();
 }
 
 EtcdBoolResult details::CloseAwaitable::await_resume()
@@ -383,7 +383,7 @@ details::GetAwaitable::GetAwaitable(AsyncEtcdClient& client,
 
 bool details::GetAwaitable::await_ready() const noexcept
 {
-    return await_ready();
+    return JsonOpAwaitableBase::await_ready();
 }
 
 EtcdGetResult details::GetAwaitable::await_resume()
@@ -419,7 +419,7 @@ details::DeleteAwaitable::DeleteAwaitable(AsyncEtcdClient& client,
 
 bool details::DeleteAwaitable::await_ready() const noexcept
 {
-    return await_ready();
+    return JsonOpAwaitableBase::await_ready();
 }
 
 EtcdDeleteResult details::DeleteAwaitable::await_resume()
@@ -454,7 +454,7 @@ details::GrantLeaseAwaitable::GrantLeaseAwaitable(
 
 bool details::GrantLeaseAwaitable::await_ready() const noexcept
 {
-    return await_ready();
+    return JsonOpAwaitableBase::await_ready();
 }
 
 EtcdLeaseGrantResult details::GrantLeaseAwaitable::await_resume()
@@ -495,7 +495,7 @@ details::KeepAliveAwaitable::KeepAliveAwaitable(
 
 bool details::KeepAliveAwaitable::await_ready() const noexcept
 {
-    return await_ready();
+    return JsonOpAwaitableBase::await_ready();
 }
 
 EtcdLeaseGrantResult details::KeepAliveAwaitable::await_resume()
@@ -540,7 +540,7 @@ details::PipelineAwaitable::PipelineAwaitable(AsyncEtcdClient& client,
 
 bool details::PipelineAwaitable::await_ready() const noexcept
 {
-    return await_ready();
+    return JsonOpAwaitableBase::await_ready();
 }
 
 EtcdPipelineResult details::PipelineAwaitable::await_resume()

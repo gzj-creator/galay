@@ -406,7 +406,18 @@ async function test_live_stop(server, client, mode, ca) {
     }
     await wait_for(client, value => value.active > 0);
   }
+  // Process exit and peer socket close events can arrive in different event-loop turns.
+  const connections_closed = Promise.all(sockets.map(socket => socket.destroyed
+    ? Promise.resolve() : new Promise(resolve => socket.once('close', resolve))));
   const log = await server.stop();
+  let close_timer;
+  try {
+    await Promise.race([connections_closed, new Promise((_, reject) => {
+      close_timer = setTimeout(() => reject(new Error(`stop left live ${mode} connections open`)), 5000);
+    })]);
+  } finally {
+    clearTimeout(close_timer);
+  }
   for (const socket of sockets) {
     assert(socket.destroyed, 'stop closes live HTTP connections as well as listeners');
   }

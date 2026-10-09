@@ -145,6 +145,9 @@ set_tests_properties(kernel.runtime_pending_accept_lsan kernel.accept_completion
 set_tests_properties(kernel.iou_accept_completion_resource kernel.iou_accept_typed_completion
     PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
 set_tests_properties(kernel.scheduler_config PROPERTIES TIMEOUT 30 SKIP_RETURN_CODE 77)
+set_tests_properties(kernel.iouring_send_zc_completion PROPERTIES TIMEOUT 5)
+set_tests_properties(kernel.runtime_timer_lifetime PROPERTIES TIMEOUT 5)
+set_tests_properties(kernel.iouring_sequence_recv_timeout PROPERTIES TIMEOUT 5)
 set_tests_properties(kernel.async_file_move PROPERTIES TIMEOUT 15 SKIP_RETURN_CODE 77)
 # The 24 recycled-block cases transfer 120 million messages in Debug builds.
 set_tests_properties(kernel.prefetch PROPERTIES TIMEOUT 120 PROCESSORS 2)

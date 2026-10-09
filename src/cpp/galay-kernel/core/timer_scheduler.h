@@ -29,6 +29,7 @@
 #include "../common/timer_manager_mt.hpp"
 #include <thread>
 #include <atomic>
+#include <mutex>
 
 namespace galay::kernel
 {
@@ -58,14 +59,14 @@ public:
     TimerScheduler& operator=(TimerScheduler&&) = delete;
 
     /**
-     * @brief 启动定时轮线程
-     * @note 应在程序初始化时调用
+     * @brief 获取定时轮使用权，首个使用者启动线程
+     * @note 每次调用必须与 stop() 配对，在控制线程调用
      */
     void start();
 
     /**
-     * @brief 停止定时轮线程
-     * @note 应在程序退出时调用
+     * @brief 释放定时轮使用权，最后一个使用者停止线程
+     * @note 在控制线程调用
      */
     void stop();
 
@@ -120,6 +121,9 @@ private:
     void timer_loop();
 
 private:
+    // Runtime lifecycle calls already join worker threads; serialize only that path.
+    std::mutex m_lifecycle_mutex;
+    size_t m_users = 0;
     std::thread m_thread;                           ///< 定时轮线程
     ThreadSafeTimerManager m_timerManager;          ///< 线程安全定时轮管理器
     std::atomic<bool> m_running{false};             ///< 运行状态

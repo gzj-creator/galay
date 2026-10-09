@@ -109,16 +109,33 @@ UdpStatsSnapshot snapshot_stats() {
     };
 }
 
-// A successful UDP pressure run is only publishable after the fixed drain
-// window has reconciled every measured request and reply.  The measurement
-// window itself may legitimately end with packets still in flight.
+// UDP may drop requests or replies under pressure. Validate conservation and
+// exact payload lengths while reporting loss separately from runtime errors.
 bool settled_counters_match(const UdpStatsSnapshot& values) noexcept {
-    return values.client_sent == values.client_received &&
-           values.client_received == values.server_received &&
+    return values.client_sent > 0 && values.client_received > 0 &&
+           values.client_sent >= values.server_received &&
            values.server_received == values.server_sent &&
-           values.client_bytes_sent == values.client_bytes_received &&
-           values.client_bytes_received == values.server_bytes_received &&
-           values.server_bytes_received == values.server_bytes_sent;
+           values.server_sent >= values.client_received &&
+           values.client_bytes_sent == values.client_sent * MESSAGE_SIZE &&
+           values.client_bytes_received == values.client_received * MESSAGE_SIZE &&
+           values.server_bytes_received == values.server_received * MESSAGE_SIZE &&
+           values.server_bytes_sent == values.server_sent * MESSAGE_SIZE;
+}
+
+bool valid_payload(const char* data, size_t length, int expected_client = -1)
+{
+    if (length != MESSAGE_SIZE ||
+        (data[0] != kMeasuredMarker && data[0] != kWarmupMarker)) {
+        return false;
+    }
+    uint32_t client_id = 0;
+    std::memcpy(&client_id, data + 1, sizeof(client_id));
+    if (client_id >= NUM_CLIENTS ||
+        (expected_client >= 0 && client_id != static_cast<uint32_t>(expected_client))) {
+        return false;
+    }
+    return std::all_of(data + 1 + sizeof(client_id), data + length,
+        [client_id](char byte) { return byte == static_cast<char>('a' + client_id % 26); });
 }
 
 void reset_stats() noexcept {
@@ -219,6 +236,10 @@ Task<void> udp_server_worker(int worker_id) {
         }
 
         size_t bytes = recvResult.value();
+        if (!valid_payload(buffer, bytes)) {
+            add_counter(g_errors);
+            continue;
+        }
         const bool measured_packet = bytes == MESSAGE_SIZE &&
                                      buffer[0] == kMeasuredMarker &&
                                      count_traffic(g_phase.load(std::memory_order_acquire));
@@ -287,17 +308,9 @@ Task<void> udp_benchmark_client(int client_id) {
     Host serverHost(IPType::IPV4, "127.0.0.1", 9090);
 
     // 准备测试数据
-    std::vector<char> message(MESSAGE_SIZE);
-    const int message_length = snprintf(
-        message.data(), message.size(), "Client-%d-Message", client_id);
-    if (message_length < 0 || static_cast<size_t>(message_length) >= message.size()) {
-        add_counter(g_errors);
-        mark_client_startup_failed();
-        if (g_client_completion) {
-            g_client_completion->arrive();
-        }
-        co_return;
-    }
+    std::vector<char> message(MESSAGE_SIZE, static_cast<char>('a' + client_id % 26));
+    const auto payload_client_id = static_cast<uint32_t>(client_id);
+    std::memcpy(message.data() + 1, &payload_client_id, sizeof(payload_client_id));
 
     char recv_buffer[MESSAGE_SIZE];
     uint64_t measured_sent = 0;
@@ -342,6 +355,10 @@ Task<void> udp_benchmark_client(int client_id) {
                                     .timeout(CLIENT_RECV_TIMEOUT);
             if (recvResult) {
                 const size_t bytes = recvResult.value();
+                if (!valid_payload(recv_buffer, bytes, client_id) || from.port() != 9090) {
+                    add_counter(g_errors);
+                    continue;
+                }
                 if (bytes == MESSAGE_SIZE && recv_buffer[0] == kMeasuredMarker &&
                     count_traffic(g_phase.load(std::memory_order_acquire))) {
                     ++measured_received;
@@ -370,6 +387,10 @@ Task<void> udp_benchmark_client(int client_id) {
             continue;
         }
         const size_t bytes = recvResult.value();
+        if (!valid_payload(recv_buffer, bytes, client_id) || from.port() != 9090) {
+            add_counter(g_errors);
+            continue;
+        }
         if (bytes == MESSAGE_SIZE && recv_buffer[0] == kMeasuredMarker &&
             count_traffic(g_phase.load(std::memory_order_acquire))) {
             ++measured_received;

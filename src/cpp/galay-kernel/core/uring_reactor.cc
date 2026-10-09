@@ -232,6 +232,19 @@ inline auto cqe_buffer_id(const struct io_uring_cqe* cqe) -> uint16_t {
     return static_cast<uint16_t>(cqe->flags >> IORING_CQE_BUFFER_SHIFT);
 }
 
+inline bool try_immediate_recv(int fd, RecvIOContext* ctx, int& res) {
+    const auto count = ::recv(fd, ctx->m_buffer, ctx->m_length, MSG_DONTWAIT);
+    if (count >= 0) {
+        res = static_cast<int>(count);
+        return true;
+    }
+    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+        return false;
+    }
+    res = -errno;
+    return true;
+}
+
 inline bool try_immediate_readv(int fd, ReadvIOContext* ctx, int& res) {
     if (ctx == nullptr || ctx->m_iovecs.empty()) {
         res = 0;
@@ -1055,6 +1068,18 @@ int IOUringReactor::submit_sequence_sqe(IOController::Index slot,
                                       IOContextBase* ctx,
                                       IOController* controller,
                                       SequenceAwaitableBase* owner) {
+    if (type == RECV) {
+        auto* recv_ctx = static_cast<RecvIOContext*>(ctx);
+        int immediate_res = 0;
+        if (try_immediate_recv(controller->m_handle.fd, recv_ctx, immediate_res)) {
+            io_uring_cqe ready_cqe{};
+            ready_cqe.res = immediate_res;
+            if (owner->on_active_event(&ready_cqe, controller->m_handle) == SequenceProgress::kCompleted) {
+                return kImmediateReady;
+            }
+            return add_sequence(controller);
+        }
+    }
     if (type == READV) {
         // 这里的 Sequence READV 由就绪事件驱动；completion 由非阻塞 socket read 产生，
         // 因此分阶段推进 sequence 不会漏掉已就绪字节。
@@ -1084,8 +1109,8 @@ int IOUringReactor::submit_sequence_sqe(IOController::Index slot,
 
     switch (type) {
     case RECV: {
-        auto* c = static_cast<RecvIOContext*>(ctx);
-        io_uring_prep_recv(sqe, controller->m_handle.fd, c->m_buffer, c->m_length, 0);
+        // Timed sequences must not let a stale CQE consume bytes into a freed buffer.
+        io_uring_prep_poll_add(sqe, controller->m_handle.fd, POLLIN);
         break;
     }
     case SEND: {
@@ -1265,11 +1290,15 @@ void IOUringReactor::process_completion(struct io_uring_cqe* cqe) {
     HandleRecycleGuard recycle_guard{handle};
     const bool notification = (cqe->flags & IORING_CQE_F_NOTIF) != 0;
     const bool more = (cqe->flags & IORING_CQE_F_MORE) != 0;
+    io_uring_cqe dispatch_cqe = *cqe;
     if (notification) {
         handle->notify_received = true;
         if (!handle->result_completed) {
             recycle_guard.handle = nullptr;
+            return;
         }
+        dispatch_cqe.res = handle->result_value;
+        dispatch_cqe.flags = handle->result_flags;
     } else if (handle->persistent) {
         if (more) {
             recycle_guard.handle = nullptr;
@@ -1277,11 +1306,19 @@ void IOUringReactor::process_completion(struct io_uring_cqe* cqe) {
             handle->persistent = false;
         }
     } else if (handle->notify_expected) {
+        handle->result_value = cqe->res;
+        handle->result_flags = cqe->flags & ~IORING_CQE_F_NOTIF;
         handle->result_completed = true;
-        if (!handle->notify_received) {
+        // send_zc with REPORT_USAGE returns a result CQE followed by a
+        // notification CQE. Do not wake the awaitable while the kernel may
+        // still read its borrowed buffer. A terminal result without MORE
+        // cannot produce a notification, so it is safe to deliver directly.
+        if (!handle->notify_received && more) {
             recycle_guard.handle = nullptr;
+            return;
         }
     }
+    cqe = &dispatch_cqe;
     auto* state = handle->state;
     auto* controller = state != nullptr &&
             state->generation.load(std::memory_order_acquire) == handle->generation
@@ -1296,10 +1333,6 @@ void IOUringReactor::process_completion(struct io_uring_cqe* cqe) {
                     m_last_error_code, kDisconnectError, static_cast<uint32_t>(errno));
             }
         }
-        return;
-    }
-
-    if (notification) {
         return;
     }
 
@@ -1480,16 +1513,18 @@ void IOUringReactor::process_completion(struct io_uring_cqe* cqe) {
         controller->advance_sqe_generation(slot);
 
         SequenceProgress progress = SequenceProgress::kNeedWait;
-        if (slot == IOController::READ && event_type == READV) {
+        if (slot == IOController::READ && (event_type == READV || event_type == RECV)) {
             io_uring_cqe ready_cqe = *cqe;
             bool deliver = cqe->res < 0;
             if (cqe->res >= 0) {
                 auto* task = sequence->front();
-                auto* readv_ctx = task != nullptr
-                    ? static_cast<ReadvIOContext*>(task->context)
-                    : nullptr;
                 int immediate_res = 0;
-                if (try_immediate_readv(controller->m_handle.fd, readv_ctx, immediate_res)) {
+                const bool ready = task != nullptr && (event_type == RECV
+                    ? try_immediate_recv(controller->m_handle.fd,
+                        static_cast<RecvIOContext*>(task->context), immediate_res)
+                    : try_immediate_readv(controller->m_handle.fd,
+                        static_cast<ReadvIOContext*>(task->context), immediate_res));
+                if (ready) {
                     ready_cqe.res = immediate_res;
                     deliver = true;
                 }

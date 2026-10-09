@@ -25,12 +25,14 @@
 #include "../../galay-kernel/core/scheduler.hpp"
 
 #include <atomic>
+#include <cerrno>
 #include <expected>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <unordered_map>
 #include <vector>
+#include <sys/socket.h>
 
 namespace galay::rpc
 {
@@ -607,7 +609,7 @@ public:
 
     /**
      * @brief 关闭底层socket并等待通道循环退出
-     * @return close结果；循环等待失败时仍返回socket close错误
+     * @return close结果；后台循环未退出时返回超时并保留socket
      *
      * @details reader/writer loop捕获this，close必须在RpcClient析构前给它们退出机会，
      *          否则局部客户端销毁后后台loop可能继续访问通道状态。等待通过sleep挂起，
@@ -615,14 +617,29 @@ public:
      */
     Task<std::expected<void, IOError>> close() {
         request_shutdown();
+        std::optional<IOError> shutdown_error;
+        if (m_socket && m_socket->handle().fd >= 0) {
+            int shutdown_result;
+            do {
+                shutdown_result = ::shutdown(m_socket->handle().fd, SHUT_RDWR);
+            } while (shutdown_result < 0 && errno == EINTR);
+            if (shutdown_result < 0 && errno != ENOTCONN) {
+                shutdown_error.emplace(kDisconnectError, errno);
+            }
+        }
+        // The reader owns awaitables that reference the socket's IOController.
+        // Drain both background loops before destroying that controller; closing
+        // the socket first lets a pending timeout resume into freed state.
+        auto drain_result = co_await wait_for_background_tasks(std::chrono::milliseconds(1000));
+        if (!drain_result.has_value() || !drain_result.value().has_value()) {
+            co_return std::unexpected(IOError(kTimeout, 0));
+        }
         std::expected<void, IOError> close_result = {};
         if (m_socket) {
             close_result = co_await m_socket->close();
         }
-
-        auto drain_result = co_await wait_for_background_tasks(std::chrono::milliseconds(1000));
-        if (!drain_result.has_value() || !drain_result.value().has_value()) {
-            co_return std::unexpected(IOError(kTimeout, 0));
+        if (close_result && shutdown_error) {
+            co_return std::unexpected(*shutdown_error);
         }
         co_return close_result;
     }
@@ -856,8 +873,7 @@ private:
             auto header_result = co_await GetRpcHeaderAwaitable<SocketType, Strategy>(*m_ring_buffer, header, *m_socket)
                 .timeout(std::chrono::milliseconds(50));
             if (!header_result.has_value()) {
-                if (header_result.error().code() == RpcErrorCode::DEADLINE_EXCEEDED &&
-                    m_shutdown_requested.load(std::memory_order_acquire)) {
+                if (m_shutdown_requested.load(std::memory_order_acquire)) {
                     break;
                 }
                 if (header_result.error().code() == RpcErrorCode::DEADLINE_EXCEEDED) {
@@ -924,6 +940,9 @@ private:
                     body.size(),
                     *m_socket);
                 if (!body_result.has_value()) {
+                    if (m_shutdown_requested.load(std::memory_order_acquire)) {
+                        break;
+                    }
                     auto locked = co_await m_state_mutex.lock();
                     if (!locked.has_value()) {
                         request_shutdown();

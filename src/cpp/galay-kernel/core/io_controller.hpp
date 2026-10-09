@@ -98,7 +98,9 @@ struct SqeRequestHandle {
     bool persistent = false;  ///< 是否绑定到会产生多次 CQE 的持久请求
     bool notify_expected = false;  ///< 当前请求是否还在等待 zero-copy notification CQE
     bool notify_received = false;  ///< 是否已经收到 zero-copy notification CQE
-    bool result_completed = false;  ///< 业务完成 CQE 是否已经处理完毕
+    bool result_completed = false;  ///< 是否已收到业务结果 CQE
+    int result_value = 0;  ///< 延迟到 notification 后交付的业务结果
+    unsigned result_flags = 0;  ///< 延迟结果的 CQE flags（不含 notification 标记）
 
     void recycle() noexcept;  ///< 将请求句柄归还到所属池
 };
@@ -162,6 +164,8 @@ struct SqeHandleArena {
         handle->notify_expected = false;
         handle->notify_received = false;
         handle->result_completed = false;
+        handle->result_value = 0;
+        handle->result_flags = 0;
         handle->next_free = m_free;
         m_free = handle;
     }

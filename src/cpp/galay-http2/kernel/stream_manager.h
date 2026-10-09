@@ -608,15 +608,16 @@ private:
         if (m_next_local_stream_id == 0) {
             m_next_local_stream_id = m_conn.is_client() ? 3 : 2;
         }
-        if (!m_conn.is_client()) {
-            const uint32_t target_window = m_conn.runtime_config().flow_control_target_window;
-            const int32_t current_window = m_conn.conn_recv_window();
-            if (target_window > 0 && static_cast<int32_t>(target_window) > current_window) {
-                const auto increment = static_cast<uint32_t>(
-                    static_cast<int64_t>(target_window) - current_window);
-                enqueue_window_update_action(0, increment);
-                m_conn.adjust_conn_recv_window(static_cast<int32_t>(increment));
-            }
+        const uint32_t target_window = std::min<uint32_t>(
+            m_conn.runtime_config().flow_control_target_window, 2147483647u);
+        const int32_t current_window = m_conn.conn_recv_window();
+        if (target_window > 0 && static_cast<int32_t>(target_window) > current_window) {
+            const auto increment = static_cast<uint32_t>(
+                static_cast<int64_t>(target_window) - current_window);
+            Http2WindowUpdateFrame frame;
+            frame.set_window_size_increment(increment);
+            enqueue_send_frame(std::move(frame));
+            m_conn.adjust_conn_recv_window(static_cast<int32_t>(increment));
         }
         m_conn.reserve_streams(
             static_cast<size_t>(std::max<uint32_t>(m_conn.local_settings().max_concurrent_streams, 64u)) + 8);

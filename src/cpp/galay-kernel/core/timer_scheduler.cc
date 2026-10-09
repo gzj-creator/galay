@@ -44,16 +44,15 @@ TimerScheduler::~TimerScheduler()
 
 /**
  * @brief 启动定时轮后台线程
- * @details 使用 compare_exchange_strong 保证只启动一次。若已在运行则直接返回。
- * 启动后创建独立线程执行 timer_loop()。
+ * @details 累计使用者，首次获取时创建线程执行 timer_loop()。
  */
 void TimerScheduler::start()
 {
-    bool expected = false;
-    if (!m_running.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
-        return;  // 已经在运行
+    const std::lock_guard lock(m_lifecycle_mutex);
+    if (m_users++ != 0) {
+        return;
     }
-
+    m_running.store(true, std::memory_order_release);
     m_stopFlag.store(false, std::memory_order_release);
 
     m_thread = std::thread([this]() {
@@ -63,15 +62,15 @@ void TimerScheduler::start()
 
 /**
  * @brief 停止定时轮后台线程
- * @details 设置停止标志后 join 等待线程退出。使用 compare_exchange_strong 保证只停止一次。
+ * @details 最后一个使用者释放时设置停止标志并 join 等待线程退出。
  */
 void TimerScheduler::stop()
 {
-    bool expected = true;
-    if (!m_running.compare_exchange_strong(expected, false, std::memory_order_acq_rel)) {
-        return;  // 已经停止
+    const std::lock_guard lock(m_lifecycle_mutex);
+    if (m_users == 0 || --m_users != 0) {
+        return;
     }
-
+    m_running.store(false, std::memory_order_release);
     m_stopFlag.store(true, std::memory_order_release);
 
     // 等待线程结束

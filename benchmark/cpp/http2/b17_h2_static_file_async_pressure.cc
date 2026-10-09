@@ -6,12 +6,14 @@
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <cerrno>
+#include <algorithm>
 #include <charconv>
 #include <chrono>
 #include <expected>
 #include <filesystem>
 #include <fcntl.h>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -114,7 +116,11 @@ Task<void> run_client(uint16_t port,
                      size_t file_size,
                      BenchState* state)
 {
-    H2cClient<> client(H2cClientBuilder().build());
+    const auto window = static_cast<uint32_t>(std::max<size_t>(1024 * 1024, file_size * 2));
+    H2cClient<> client(H2cClientBuilder()
+        .initial_window_size(window)
+        .flow_control_target_window(window)
+        .build());
     auto connect_result = co_await client.connect("127.0.0.1", port);
     if (!connect_result) {
         ++state->errors;
@@ -142,7 +148,8 @@ Task<void> run_client(uint16_t port,
             ++state->errors;
             continue;
         }
-        if (file_size > 0 && stream->response().body.front() != 'x') {
+        if (!std::all_of(stream->response().body.begin(), stream->response().body.end(),
+                [](char byte) { return byte == 'x'; })) {
             ++state->errors;
             continue;
         }
@@ -187,6 +194,10 @@ int main(int argc, char** argv)
     }
     if (requests == 0) {
         std::cerr << "requests must be greater than zero\n";
+        return 1;
+    }
+    if (file_size > static_cast<size_t>(std::numeric_limits<int32_t>::max()) / 2) {
+        std::cerr << "file size exceeds the configured flow-control window\n";
         return 1;
     }
 

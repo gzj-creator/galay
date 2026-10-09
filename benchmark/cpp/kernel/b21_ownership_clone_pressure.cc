@@ -130,7 +130,7 @@ bool bench_timer_awaitable_construction(std::size_t iterations)
         char buffer = 0;
         IOController controller(GHandle{.fd = -1});
         auto timed_recv = RecvAwaitable(&controller, &buffer, 1).timeout(1ms);
-        if (timed_recv.m_inner.m_controller != &controller || !timed_recv.m_timer) {
+        if (timed_recv.m_inner.m_controller != &controller || timed_recv.m_duration != 1ms) {
             std::cerr << "[B21] WithTimeout<RecvAwaitable> construction lost state\n";
             return false;
         }
