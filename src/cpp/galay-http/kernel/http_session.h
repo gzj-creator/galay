@@ -25,6 +25,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 #include "../../galay-ssl/async/ssl_await.h"
@@ -68,7 +69,11 @@ struct HttpSessionState {
      */
     HttpSessionState(HttpSessionImpl<SocketType>& session, std::string&& serialized_request)
         : m_session(&session)
-        , m_send_buffer(std::move(serialized_request)) {}
+        , m_send_buffer(std::move(serialized_request)) {
+        const std::string_view request_line(m_send_buffer);
+        m_request.header().method() = string_to_http_method(
+            request_line.substr(0, request_line.find(' ')));
+    }
 
     bool send_completed() const { ///< 判断请求是否已完全发送
         return m_send_offset >= m_send_buffer.size();
@@ -101,7 +106,8 @@ struct HttpSessionState {
         }
 
         auto [error_code, consumed] =
-            m_response.from_io_vec(m_parse_iovecs, m_session->get_reader_setting().get_max_body_size());
+            m_response.from_io_vec(m_parse_iovecs, m_session->get_reader_setting().get_max_body_size(),
+                                   m_request.header().method());
         if (consumed > 0) {
             m_session->get_ring_buffer().consume(static_cast<size_t>(consumed));
         }

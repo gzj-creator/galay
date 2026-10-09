@@ -1,601 +1,127 @@
-/**
- * @file test_http_methods.cc
- * @brief 测试 HttpClient 的所有 HTTP 方法
- */
-
 #include <galay/cpp/galay-http/client/http_client.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
-#include <iostream>
+
+#include <array>
+#include <atomic>
 #include <chrono>
+#include <cstdlib>
+#include <iostream>
+#include <thread>
 
 using namespace galay::http;
 using namespace galay::kernel;
 using namespace galay::async;
 using namespace std::chrono_literals;
 
-// 测试服务器配置
-constexpr const char* TEST_HOST = "127.0.0.1";
-constexpr uint16_t TEST_PORT = 8080;
+namespace {
 
-/**
- * @brief 测试 GET 方法
- */
-Task<void> test_get_method(IOScheduler* scheduler)
+constexpr std::array kMethods{HttpMethod::GET, HttpMethod::POST, HttpMethod::PUT,
+    HttpMethod::DELETE, HttpMethod::HEAD, HttpMethod::OPTIONS, HttpMethod::PATCH,
+    HttpMethod::TRACE, HttpMethod::CONNECT};
+
+struct TestState {
+    std::atomic<bool> done{false};
+    size_t passed = 0;
+    size_t failed = 0;
+};
+
+auto make_method_request(HttpSession& session, HttpMethod method)
 {
-    std::cout << "=== Test 1: GET Method ===" << std::endl;
-
-    AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handle_non_block();
-
-    Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
-    auto connect_result = co_await socket.connect(host);
-
-    if (!connect_result) {
-        std::cout << "⚠ Cannot connect to server (skipping test)" << std::endl;
-        std::cout << std::endl;
-        co_return;
+    switch (method) {
+    case HttpMethod::GET: return session.get("/api/data");
+    case HttpMethod::POST: return session.post("/api/data", R"({"value":123})", "application/json");
+    case HttpMethod::PUT: return session.put("/api/data/1", R"({"value":456})", "application/json");
+    case HttpMethod::DELETE: return session.del("/api/data/1");
+    case HttpMethod::HEAD: return session.head("/api/data");
+    case HttpMethod::OPTIONS: return session.options("/api/data");
+    case HttpMethod::PATCH: return session.patch("/api/data/1", R"({"value":789})", "application/json");
+    case HttpMethod::TRACE: return session.trace("/api/data");
+    case HttpMethod::CONNECT: return session.tunnel("example.com:443");
+    default: std::abort();
     }
-
-    std::cout << "✓ Connected to server" << std::endl;
-
-    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
-    auto session_result = client.get_session();
-    if (!session_result) {
-        co_await client.close();
-        co_return;
-    }
-    auto& session = *session_result.value();
-    int loop_count = 0;
-    while (true) {
-        loop_count++;
-        auto result = co_await session.get("/api/data");
-
-        if (!result) {
-            std::cout << "❌ GET request failed: " << result.error().message() << std::endl;
-            break;
-        } else if (result.value().has_value()) {
-            auto& response = result.value().value();
-            std::cout << "✓ GET request succeeded" << std::endl;
-            std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-            std::cout << "  Body length: " << response.get_body_str().length() << " bytes" << std::endl;
-            std::cout << "  Loops: " << loop_count << std::endl;
-            break;
-        }
-
-        if (loop_count > 100) {
-            std::cout << "❌ Too many loops" << std::endl;
-            break;
-        }
-    }
-
-    co_await client.close();
-    std::cout << std::endl;
-    co_return;
 }
 
-/**
- * @brief 测试 POST 方法
- */
-Task<void> test_post_method(IOScheduler* scheduler)
+Task<void> run_methods(TestState* state)
 {
-    std::cout << "=== Test 2: POST Method ===" << std::endl;
-
-    AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handle_non_block();
-
-    Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
-    auto connect_result = co_await socket.connect(host);
-
-    if (!connect_result) {
-        std::cout << "⚠ Cannot connect to server (skipping test)" << std::endl;
-        std::cout << std::endl;
-        co_return;
-    }
-
-    std::cout << "✓ Connected to server" << std::endl;
-
-    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
-
-    std::string body = R"({"name": "test", "value": 123})";
-    auto session_result = client.get_session();
-    if (!session_result) {
-        co_await client.close();
-        co_return;
-    }
-    auto& session = *session_result.value();
-    int loop_count = 0;
-    while (true) {
-        loop_count++;
-        auto result = co_await session.post("/api/data", body, "application/json");
-
-        if (!result) {
-            std::cout << "❌ POST request failed: " << result.error().message() << std::endl;
-            break;
-        } else if (result.value().has_value()) {
-            auto& response = result.value().value();
-            std::cout << "✓ POST request succeeded" << std::endl;
-            std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-            std::cout << "  Loops: " << loop_count << std::endl;
-            break;
+    for (const auto method : kMethods) {
+        const std::string name = http_method_to_string(method);
+        AsyncTcpSocket socket(IPType::IPV4);
+        const auto nonblocking = socket.option().handle_non_block();
+        if (!nonblocking) {
+            ++state->failed;
+            std::cerr << name << " nonblocking setup failed\n";
+            const auto closed = co_await socket.close();
+            if (!closed) ++state->failed;
+            continue;
         }
-
-        if (loop_count > 100) {
-            std::cout << "❌ Too many loops" << std::endl;
-            break;
+        const auto connected = co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", 8080)).timeout(1s);
+        if (!connected) {
+            ++state->failed;
+            std::cerr << name << " connect failed: " << connected.error().message() << '\n';
+            const auto closed = co_await socket.close();
+            if (!closed) ++state->failed;
+            continue;
         }
-    }
-
-    co_await client.close();
-    std::cout << std::endl;
-    co_return;
-}
-
-/**
- * @brief 测试 PUT 方法
- */
-Task<void> test_put_method(IOScheduler* scheduler)
-{
-    std::cout << "=== Test 3: PUT Method ===" << std::endl;
-
-    AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handle_non_block();
-
-    Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
-    auto connect_result = co_await socket.connect(host);
-
-    if (!connect_result) {
-        std::cout << "⚠ Cannot connect to server (skipping test)" << std::endl;
-        std::cout << std::endl;
-        co_return;
-    }
-
-    std::cout << "✓ Connected to server" << std::endl;
-
-    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
-
-    std::string body = R"({"name": "updated", "value": 456})";
-    auto session_result = client.get_session();
-    if (!session_result) {
-        co_await client.close();
-        co_return;
-    }
-    auto& session = *session_result.value();
-    int loop_count = 0;
-    while (true) {
-        loop_count++;
-        auto result = co_await session.put("/api/data/1", body, "application/json");
-
-        if (!result) {
-            std::cout << "❌ PUT request failed: " << result.error().message() << std::endl;
-            break;
-        } else if (result.value().has_value()) {
-            auto& response = result.value().value();
-            std::cout << "✓ PUT request succeeded" << std::endl;
-            std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-            std::cout << "  Loops: " << loop_count << std::endl;
-            break;
-        }
-
-        if (loop_count > 100) {
-            std::cout << "❌ Too many loops" << std::endl;
-            break;
-        }
-    }
-
-    co_await client.close();
-    std::cout << std::endl;
-    co_return;
-}
-
-/**
- * @brief 测试 DELETE 方法
- */
-Task<void> test_delete_method(IOScheduler* scheduler)
-{
-    std::cout << "=== Test 4: DELETE Method ===" << std::endl;
-
-    AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handle_non_block();
-
-    Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
-    auto connect_result = co_await socket.connect(host);
-
-    if (!connect_result) {
-        std::cout << "⚠ Cannot connect to server (skipping test)" << std::endl;
-        std::cout << std::endl;
-        co_return;
-    }
-
-    std::cout << "✓ Connected to server" << std::endl;
-
-    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
-    auto session_result = client.get_session();
-    if (!session_result) {
-        co_await client.close();
-        co_return;
-    }
-    auto& session = *session_result.value();
-    int loop_count = 0;
-    while (true) {
-        loop_count++;
-        auto result = co_await session.del("/api/data/1");
-
-        if (!result) {
-            std::cout << "❌ DELETE request failed: " << result.error().message() << std::endl;
-            break;
-        } else if (result.value().has_value()) {
-            auto& response = result.value().value();
-            std::cout << "✓ DELETE request succeeded" << std::endl;
-            std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-            std::cout << "  Loops: " << loop_count << std::endl;
-            break;
-        }
-
-        if (loop_count > 100) {
-            std::cout << "❌ Too many loops" << std::endl;
-            break;
-        }
-    }
-
-    co_await client.close();
-    std::cout << std::endl;
-    co_return;
-}
-
-/**
- * @brief 测试 HEAD 方法
- */
-Task<void> test_head_method(IOScheduler* scheduler)
-{
-    std::cout << "=== Test 5: HEAD Method ===" << std::endl;
-
-    AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handle_non_block();
-
-    Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
-    auto connect_result = co_await socket.connect(host);
-
-    if (!connect_result) {
-        std::cout << "⚠ Cannot connect to server (skipping test)" << std::endl;
-        std::cout << std::endl;
-        co_return;
-    }
-
-    std::cout << "✓ Connected to server" << std::endl;
-
-    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
-    auto session_result = client.get_session();
-    if (!session_result) {
-        co_await client.close();
-        co_return;
-    }
-    auto& session = *session_result.value();
-    int loop_count = 0;
-    while (true) {
-        loop_count++;
-        auto result = co_await session.head("/api/data");
-
-        if (!result) {
-            std::cout << "❌ HEAD request failed: " << result.error().message() << std::endl;
-            break;
-        } else if (result.value().has_value()) {
-            auto& response = result.value().value();
-            std::cout << "✓ HEAD request succeeded" << std::endl;
-            std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-            std::cout << "  Body length: " << response.get_body_str().length() << " bytes (should be 0)" << std::endl;
-            std::cout << "  Loops: " << loop_count << std::endl;
-            break;
-        }
-
-        if (loop_count > 100) {
-            std::cout << "❌ Too many loops" << std::endl;
-            break;
-        }
-    }
-
-    co_await client.close();
-    std::cout << std::endl;
-    co_return;
-}
-
-/**
- * @brief 测试 OPTIONS 方法
- */
-Task<void> test_options_method(IOScheduler* scheduler)
-{
-    std::cout << "=== Test 6: OPTIONS Method ===" << std::endl;
-
-    AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handle_non_block();
-
-    Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
-    auto connect_result = co_await socket.connect(host);
-
-    if (!connect_result) {
-        std::cout << "⚠ Cannot connect to server (skipping test)" << std::endl;
-        std::cout << std::endl;
-        co_return;
-    }
-
-    std::cout << "✓ Connected to server" << std::endl;
-
-    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
-    auto session_result = client.get_session();
-    if (!session_result) {
-        co_await client.close();
-        co_return;
-    }
-    auto& session = *session_result.value();
-    int loop_count = 0;
-    while (true) {
-        loop_count++;
-        auto result = co_await session.options("/api/data");
-
-        if (!result) {
-            std::cout << "❌ OPTIONS request failed: " << result.error().message() << std::endl;
-            break;
-        } else if (result.value().has_value()) {
-            auto& response = result.value().value();
-            std::cout << "✓ OPTIONS request succeeded" << std::endl;
-            std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-
-            // 查找 Allow 头
-            auto& headers = response.header().header_pairs();
-            if (headers.has_key("Allow")) {
-                std::cout << "  Allow: " << headers.get_value("Allow") << std::endl;
+        HttpClient client(std::move(socket), HttpClientBuilder().build_config());
+        const auto session_result = client.get_session();
+        bool passed = false;
+        if (!session_result) {
+            std::cerr << name << " session failed: " << session_result.error().message() << '\n';
+        } else {
+            auto& session = **session_result;
+            auto response = co_await make_method_request(session, method).timeout(1s);
+            if (!response) {
+                std::cerr << name << " request failed: " << response.error().message() << '\n';
+            } else if (!response->has_value()) {
+                std::cerr << name << " returned no response\n";
+            } else {
+                const int status = static_cast<int>((**response).header().code());
+                passed = status >= 200 && status < 300 &&
+                    (method != HttpMethod::HEAD || (**response).body_str().empty());
+                if (!passed) std::cerr << name << " invalid response, status=" << status << '\n';
             }
-
-            std::cout << "  Loops: " << loop_count << std::endl;
-            break;
         }
-
-        if (loop_count > 100) {
-            std::cout << "❌ Too many loops" << std::endl;
-            break;
+        const auto closed = co_await client.close();
+        if (!closed) {
+            std::cerr << name << " close failed: " << closed.error().message() << '\n';
+            passed = false;
+        }
+        if (passed) {
+            ++state->passed;
+            std::cout << name << " passed\n";
+        } else {
+            ++state->failed;
         }
     }
-
-    co_await client.close();
-    std::cout << std::endl;
-    co_return;
+    state->done.store(true, std::memory_order_release);
 }
 
-/**
- * @brief 测试 PATCH 方法
- */
-Task<void> test_patch_method(IOScheduler* scheduler)
-{
-    std::cout << "=== Test 7: PATCH Method ===" << std::endl;
-
-    AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handle_non_block();
-
-    Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
-    auto connect_result = co_await socket.connect(host);
-
-    if (!connect_result) {
-        std::cout << "⚠ Cannot connect to server (skipping test)" << std::endl;
-        std::cout << std::endl;
-        co_return;
-    }
-
-    std::cout << "✓ Connected to server" << std::endl;
-
-    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
-
-    std::string body = R"({"value": 789})";
-    auto session_result = client.get_session();
-    if (!session_result) {
-        co_await client.close();
-        co_return;
-    }
-    auto& session = *session_result.value();
-    int loop_count = 0;
-    while (true) {
-        loop_count++;
-        auto result = co_await session.patch("/api/data/1", body, "application/json");
-
-        if (!result) {
-            std::cout << "❌ PATCH request failed: " << result.error().message() << std::endl;
-            break;
-        } else if (result.value().has_value()) {
-            auto& response = result.value().value();
-            std::cout << "✓ PATCH request succeeded" << std::endl;
-            std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-            std::cout << "  Loops: " << loop_count << std::endl;
-            break;
-        }
-
-        if (loop_count > 100) {
-            std::cout << "❌ Too many loops" << std::endl;
-            break;
-        }
-    }
-
-    co_await client.close();
-    std::cout << std::endl;
-    co_return;
-}
-
-/**
- * @brief 测试 TRACE 方法
- */
-Task<void> test_trace_method(IOScheduler* scheduler)
-{
-    std::cout << "=== Test 8: TRACE Method ===" << std::endl;
-
-    AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handle_non_block();
-
-    Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
-    auto connect_result = co_await socket.connect(host);
-
-    if (!connect_result) {
-        std::cout << "⚠ Cannot connect to server (skipping test)" << std::endl;
-        std::cout << std::endl;
-        co_return;
-    }
-
-    std::cout << "✓ Connected to server" << std::endl;
-
-    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
-    auto session_result = client.get_session();
-    if (!session_result) {
-        co_await client.close();
-        co_return;
-    }
-    auto& session = *session_result.value();
-    int loop_count = 0;
-    while (true) {
-        loop_count++;
-        auto result = co_await session.trace("/api/data");
-
-        if (!result) {
-            std::cout << "❌ TRACE request failed: " << result.error().message() << std::endl;
-            break;
-        } else if (result.value().has_value()) {
-            auto& response = result.value().value();
-            std::cout << "✓ TRACE request succeeded" << std::endl;
-            std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-            std::cout << "  Loops: " << loop_count << std::endl;
-            break;
-        }
-
-        if (loop_count > 100) {
-            std::cout << "❌ Too many loops" << std::endl;
-            break;
-        }
-    }
-
-    co_await client.close();
-    std::cout << std::endl;
-    co_return;
-}
-
-/**
- * @brief 测试 CONNECT 方法
- */
-Task<void> test_connect_method(IOScheduler* scheduler)
-{
-    std::cout << "=== Test 9: CONNECT Method ===" << std::endl;
-
-    AsyncTcpSocket socket(IPType::IPV4);
-    socket.option().handle_non_block();
-
-    Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
-    auto connect_result = co_await socket.connect(host);
-
-    if (!connect_result) {
-        std::cout << "⚠ Cannot connect to server (skipping test)" << std::endl;
-        std::cout << std::endl;
-        co_return;
-    }
-
-    std::cout << "✓ Connected to server" << std::endl;
-
-    HttpClient client(std::move(socket), HttpClientBuilder().build_config());
-    auto session_result = client.get_session();
-    if (!session_result) {
-        co_await client.close();
-        co_return;
-    }
-    auto& session = *session_result.value();
-    int loop_count = 0;
-    while (true) {
-        loop_count++;
-        auto result = co_await session.tunnel("example.com:443");
-
-        if (!result) {
-            std::cout << "❌ CONNECT request failed: " << result.error().message() << std::endl;
-            break;
-        } else if (result.value().has_value()) {
-            auto& response = result.value().value();
-            std::cout << "✓ CONNECT request succeeded" << std::endl;
-            std::cout << "  Status: " << static_cast<int>(response.header().code()) << std::endl;
-            std::cout << "  Loops: " << loop_count << std::endl;
-            break;
-        }
-
-        if (loop_count > 100) {
-            std::cout << "❌ Too many loops" << std::endl;
-            break;
-        }
-    }
-
-    co_await client.close();
-    std::cout << std::endl;
-    co_return;
-}
+} // namespace
 
 int main()
 {
-    std::cout << "========================================" << std::endl;
-    std::cout << "HTTP Methods Test" << std::endl;
-    std::cout << "========================================" << std::endl;
-    std::cout << std::endl;
-    std::cout << "Note: This test requires a test server running on "
-              << TEST_HOST << ":" << TEST_PORT << std::endl;
-    std::cout << std::endl;
-
-    try {
-        Runtime runtime;
-        runtime.start();
-
-        auto* scheduler = runtime.get_next_io_scheduler();
-        if (!scheduler) {
-            std::cerr << "No IO scheduler available" << std::endl;
-            return 1;
-        }
-
-        // 运行所有测试
-        schedule_task(scheduler, test_get_method(scheduler));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        schedule_task(scheduler, test_post_method(scheduler));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        schedule_task(scheduler, test_put_method(scheduler));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        schedule_task(scheduler, test_delete_method(scheduler));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        schedule_task(scheduler, test_head_method(scheduler));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        schedule_task(scheduler, test_options_method(scheduler));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        schedule_task(scheduler, test_patch_method(scheduler));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        schedule_task(scheduler, test_trace_method(scheduler));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        schedule_task(scheduler, test_connect_method(scheduler));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        runtime.stop();
-
-        std::cout << "========================================" << std::endl;
-        std::cout << "Summary: All HTTP Methods Tested" << std::endl;
-        std::cout << "========================================" << std::endl;
-        std::cout << std::endl;
-        std::cout << "✓ GET    - Retrieve resource" << std::endl;
-        std::cout << "✓ POST   - Create resource" << std::endl;
-        std::cout << "✓ PUT    - Update resource" << std::endl;
-        std::cout << "✓ DELETE - Delete resource" << std::endl;
-        std::cout << "✓ HEAD   - Get resource metadata" << std::endl;
-        std::cout << "✓ OPTIONS - Query supported methods" << std::endl;
-        std::cout << "✓ PATCH  - Partial update" << std::endl;
-        std::cout << "✓ TRACE  - Diagnostic trace" << std::endl;
-        std::cout << "✓ CONNECT - Establish tunnel" << std::endl;
-        std::cout << "========================================" << std::endl;
-
-    } catch (const std::exception& e) {
-        std::cerr << "Fatal error: " << e.what() << std::endl;
+    Runtime runtime;
+    const auto started = runtime.start();
+    if (!started) {
+        std::cerr << "Runtime start failed\n";
         return 1;
     }
-
-    return 0;
+    auto* scheduler = runtime.get_next_io_scheduler();
+    TestState state;
+    if (!scheduler || !schedule_task(scheduler, run_methods(&state))) {
+        runtime.stop();
+        return 1;
+    }
+    const auto deadline = std::chrono::steady_clock::now() + 20s;
+    while (!state.done.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(1ms);
+    }
+    const bool completed = state.done.load(std::memory_order_acquire);
+    runtime.stop();
+    if (!completed) {
+        std::cerr << "HTTP methods did not complete before deadline\n";
+        return 1;
+    }
+    std::cout << "HTTP methods passed=" << state.passed << " failed=" << state.failed << '\n';
+    return state.failed == 0 && state.passed == kMethods.size() ? 0 : 1;
 }

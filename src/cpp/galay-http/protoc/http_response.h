@@ -111,10 +111,12 @@ public:
      * @brief 从 iovec 数组增量解析响应，并检查 body 大小限制
      * @param iovecs 离散缓冲区数组
      * @param max_body_size 最大 body 字节数，0 表示不限制
+     * @param request_method 对应请求的方法；HEAD 只解析响应头，保留 body 元数据
      * @return pair.first 为错误码，pair.second 为消耗的字节数（-1 错误，0 不完整）
      */
     std::pair<HttpErrorCode, ssize_t> from_io_vec(const std::vector<iovec>& iovecs,
-                                                size_t max_body_size);
+                                                size_t max_body_size,
+                                                HttpMethod request_method = HttpMethod::GET);
 
     /**
      * @brief 检查响应是否解析完成（header + body）
@@ -135,6 +137,7 @@ private:
     size_t m_headerLength = 0;            ///< header 的字节长度
     ChunkParser m_chunkParser;            ///< chunked body 增量解析状态
     bool m_headerParsed = false;          ///< header 是否已解析完成
+    bool m_body_suppressed = false;
 };
 
 }

@@ -33,6 +33,9 @@
 
 ### Fixed
 
+- 修复 HTTP/1 HEAD 响应按 `Content-Length` / chunked 等待实际响应体的问题；响应解析接收请求方法，TCP/SSL 会话及预序列化请求在完整响应头后返回空 body，保留长度与传输元数据，不消费后续响应，`clone()` / `reset()` 同步维护完成状态。
+- HTTP methods 测试等待全部请求结束并检查连接、响应状态、HEAD 空 body 和清理结果；新增自带 HTTP/1.1 服务的验收，核对成功、HTTP 500、响应前断连及服务不可达的退出码与完成计数，避免仅打印失败却返回成功。新增 HEAD 分段头、TCP/SSL、后续 GET 响应与 clone/reset 回归。
+- 修复 C bounded-channel benchmark 在空队列读取后观察生产完成、遗漏最后发布消息的排空竞态，新增确定性回归；样本消息数与同组 benchmark 对齐为两百万，保留超时、计数与校验和检查并补充失败诊断。RPC managed-client 回环测试改用系统分配的空闲端口，避免 PID 推算端口导致 `EADDRINUSE`。
 - 修复 io_uring `SEND_ZC` 在 notification CQE 释放借用 buffer 前恢复协程的问题；等待结果与 notification 后交付原始发送结果，覆盖 CQE 顺序、过期 generation、部分发送及无 notification 的终态，避免 TLS 复用 buffer 导致密文损坏。定时 sequence `RECV` 改为可读事件驱动，仅由有效 owner 执行非阻塞接收，避免超时后的旧请求消耗数据或访问已释放 buffer。
 - 修复多个 Runtime 共用全局 TimerScheduler 时，一个 Runtime 停止会关闭其他使用者定时器的问题；启停在控制线程串行计数，最后一个使用者释放时才停止线程，消除 HTTP/2 停机期间定时器失效造成的 IO 饥饿。
 - 修复七个 etcd awaitable 的 `await_ready` / `await_suspend` 递归调用，显式派发至对应基类；RPC channel 关闭先 shutdown 中断收发，保留 IOController 至后台 reader/writer 排空后再 close，避免挂起读取恢复时 use-after-free，并保留主动关闭的 UNAVAILABLE 错误契约。
@@ -48,12 +51,14 @@
 
 ### Docs
 
+- 补充 HTTP 会话 `head(...)` 入口及响应头完成、空响应体、元数据保留和预序列化 HEAD 请求语义。
 - 更新 API 构建、安装和资源使用文档，新增内置 Swagger UI 来源、许可证及升级说明；保留历史验收记录并补充删除资源目录后的验证结果。
 - 更新协程文档并新增任务完成通知协议说明，记录单原子修改序与 release/acquire 的正确性依据、多等待者及生命周期边界、验证证据和本地性能测量限制。
 - 更新 API 快速开始、参考、使用指南、示例、能力表及 Swagger 资源说明，统一为原生 Builder 入口；记录文档开关、依赖边界、h2c 浏览器限制、TLS 测试证书、停止与重试语义，以及实际失败复现和最终验收证据。没有实现 `.api` parser/generator。
 
 ### Validation
 
+- 2026-10-09 Linux / GCC14 / epoll / Release / C/C++ `-Werror` 全目标构建通过；修复后完整 CTest 655 项：614 通过、36 跳过、5 禁用、0 失败。HEAD、methods 验收与 RPC 端口回归各连续 10 次通过；此前 207 个 benchmark 全量执行记录保留，修复后全部 12 个 HTTP benchmark 目标复跑通过。响应体校验的 HTTP/HTTPS 30 秒负载分别完成 258,099 / 155,938 次请求，静态文件 10 秒完成 67,857 次，均计数守恒且零错误；本轮未跑 sanitizer、原生 C++ modules 或后端性能对比。
 - Swagger UI 资源调整通过 docs、embedded、transports、configure_matrix、install_consumer 五项回归，无 `assets` 的独立源码目录可构建运行，搬迁安装消费者六项通过；HTTP、HTTPS、h2c、h2 七项上游资源 SHA256 一致。Chromium 141 桌面及手机的 HTTP、HTTPS、h2 页面和 GET/POST 调试通过，无外部请求、控制台错误或 UI 文件访问；h2c 仅计客户端验收。mcpp API 离线配置检查通过，未执行 Bazel 构建。
 - 2026-10-09 Linux / GCC14 / C++23 / Release / `-Werror` 的 io_uring 配置全目标构建通过，包含启用的库、C API、测试、示例与 benchmark；最终 CTest 654 项：616 通过、33 项外部集成门控跳过、5 项禁用、0 失败。原生 C++ modules 模式未启用；未做后端或性能对比。
 - SEND_ZC、共享定时器、超时 sequence 接收三项新增底层回归通过 ASan/UBSan/泄漏检查；HTTP/2 TLS 多路复用、分段写入及主动 reset 压测三轮通过，35 秒轮次 echo 137,846/137,846、typed API 139,611/139,611，零错误。静态文件 64 KiB × 1,000 请求三轮及 1 MiB × 128 请求均零错误、零 fallback；TCP 三轮计数一致且零丢失，UDP 保留实际丢包报告。

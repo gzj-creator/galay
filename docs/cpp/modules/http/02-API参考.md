@@ -376,6 +376,7 @@ auto session = client.get_session();
 - `post(const std::string& uri, std::string&& body, ...)`
 - `put(...)`
 - `del(...)`
+- `head(...)`
 - `send_request(HttpRequest&)`
 - `send_serialized_request(std::string)`
 - `get_response(HttpResponse&)`
@@ -384,6 +385,7 @@ auto session = client.get_session();
 关键语义：
 
 - 常规调用优先使用 `get()` / `post()` / `put()` 这类按语义构造请求的入口。
+- `head(...)` 在响应头完整后返回空响应体，保留 `Content-Length` / `Transfer-Encoding` 元数据，不等待这些字段描述的响应体；预序列化的 HEAD 请求遵循相同语义。
 - `post(..., std::string&& body, ...)` 会把请求体直接移动进内部 `HttpRequest`，适合热点路径减少一次 body 拷贝。
 - `send_serialized_request(std::string)` 属于高级入口：调用方直接提供完整 HTTP/1.x 请求报文，`HttpSession` 只负责发送、超时控制和响应解析，不再帮你构造请求头。
 - 使用 `send_serialized_request(...)` 时，调用方必须自行保证请求行、Header、空行、Body 和 `Content-Length` 一致；该接口不会再校正这些字段。

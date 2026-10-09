@@ -20,6 +20,7 @@ namespace galay::http
         copy.m_headerLength = m_headerLength;
         copy.m_chunkParser = m_chunkParser.clone();
         copy.m_headerParsed = m_headerParsed;
+        copy.m_body_suppressed = m_body_suppressed;
         return copy;
     }
 
@@ -74,7 +75,8 @@ namespace galay::http
     }
 
     std::pair<HttpErrorCode, ssize_t> HttpResponse::from_io_vec(const std::vector<iovec>& iovecs,
-                                                              size_t max_body_size)
+                                                              size_t max_body_size,
+                                                              HttpMethod request_method)
     {
         ssize_t newly_consumed = 0;
         size_t header_bytes = 0;  // 本次调用中需要跳过的header字节数
@@ -94,6 +96,10 @@ namespace galay::http
             header_bytes = header_consumed;
             newly_consumed = header_consumed;
             m_headerParsed = true;
+            m_body_suppressed = request_method == HttpMethod::HEAD;
+            if (m_body_suppressed) {
+                return {kNoError, newly_consumed};
+            }
             if (const auto* te = detail::get_header_value_ptr_loose(m_header.header_pairs(), "transfer-encoding");
                 te != nullptr) {
                 is_chunked = detail::header_value_contains_token(*te, "chunked");
@@ -125,6 +131,9 @@ namespace galay::http
                 m_body.reserve(std::min(m_contentLength, kInitialBodyReserveLimit));
             }
         } else {
+            if (m_body_suppressed) {
+                return {kNoError, 0};
+            }
             if (const auto* te = detail::get_header_value_ptr_loose(m_header.header_pairs(), "transfer-encoding");
                 te != nullptr) {
                 is_chunked = detail::header_value_contains_token(*te, "chunked");
@@ -205,6 +214,9 @@ namespace galay::http
         if (!m_headerParsed) {
             return false;
         }
+        if (m_body_suppressed) {
+            return true;
+        }
         if (m_header.is_chunked()) {
             return false; // chunked需要单独处理
         }
@@ -218,6 +230,7 @@ namespace galay::http
         m_contentLength = 0;
         m_bodyParsed = 0;
         m_headerParsed = false;
+        m_body_suppressed = false;
         m_chunkParser.reset();
     }
 }

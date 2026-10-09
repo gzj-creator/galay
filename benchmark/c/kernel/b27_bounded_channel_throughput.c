@@ -12,7 +12,7 @@
 enum {
     MAX_PRODUCER_COUNT = 4,
     MAX_CONSUMER_COUNT = 4,
-    MESSAGES_PER_SAMPLE = 10000000,
+    MESSAGES_PER_SAMPLE = 2000000,
     CHANNEL_CAPACITY = 4096,
     WARMUP_SAMPLES = 1,
     MEASURED_SAMPLES = 5,
@@ -128,6 +128,9 @@ static void* consumer_main(void* arg)
 
     uint32_t failed_attempts = 0;
     for (;;) {
+        // Observe producer completion before checking the queue for its final drain.
+        const bool producers_finished =
+            atomic_load(&shared->producers_done) == shared->producer_count;
         galay_c_channel_message_t message = {0};
         C_IOResult result =
             galay_c_mpmc_bounded_channel_try_recv(shared->channel, &message);
@@ -144,7 +147,7 @@ static void* consumer_main(void* arg)
             consumer->sum = sum;
             return 0;
         }
-        if (atomic_load(&shared->producers_done) == shared->producer_count) {
+        if (producers_finished) {
             consumer->received = received;
             consumer->sum = sum;
             return 0;
@@ -265,6 +268,14 @@ static RunResult run_sample(int producer_count, int consumer_count)
 
     C_IOResult destroyed = galay_c_mpmc_bounded_channel_destroy(&channel);
     if (destroyed.code != C_IOResultOk) {
+        run.valid = false;
+    }
+    if (!run.valid && fprintf(stderr,
+            "bounded_channel_throughput invalid producers=%d consumers=%d failed=%d "
+            "sent=%zu received=%zu sum=%llu expected_sum=%llu elapsed_us=%lld\n",
+            producer_count, consumer_count, atomic_load(&shared.failed), run.sent,
+            run.received, (unsigned long long)run.sum, (unsigned long long)expected_sum,
+            (long long)run.elapsed_us) < 0) {
         run.valid = false;
     }
     return run;

@@ -82,3 +82,8 @@ foreach(test_source ${GALAY_HTTP_TEST_SOURCES})
         set_tests_properties("http.${scenario_name}" PROPERTIES LABELS "http;unit")
     endif()
 endforeach()
+
+add_test(NAME http.methods_result COMMAND python3 -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/methods_result_acceptance.py $<TARGET_FILE:t5_methods>)
+set_tests_properties(http.methods_result PROPERTIES
+    LABELS "http;integration" RESOURCE_LOCK galay_loopback_port_8080 TIMEOUT 120)

@@ -5,10 +5,15 @@
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
+#include <cstring>
+#include <expected>
 #include <iostream>
 #include <string>
 #include <thread>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 using namespace galay::kernel;
@@ -37,9 +42,22 @@ struct TestState {
     std::string error;
 };
 
-uint16_t loopback_port()
+std::expected<uint16_t, std::string> loopback_port()
 {
-    return static_cast<uint16_t>(42000 + (::getpid() % 5000));
+    const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return std::unexpected(std::strerror(errno));
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socklen_t length = sizeof(address);
+    if (::bind(fd, reinterpret_cast<sockaddr*>(&address), length) != 0 ||
+        ::getsockname(fd, reinterpret_cast<sockaddr*>(&address), &length) != 0) {
+        std::string error = std::strerror(errno);
+        if (::close(fd) != 0) error += std::string("; close: ") + std::strerror(errno);
+        return std::unexpected(std::move(error));
+    }
+    if (::close(fd) != 0) return std::unexpected(std::strerror(errno));
+    return ntohs(address.sin_port);
 }
 
 void fail(TestState* state, std::string message)
@@ -153,7 +171,12 @@ Task<void> run_managed_checks(uint16_t port, TestState* state)
 
 int main()
 {
-    const uint16_t port = loopback_port();
+    const auto selected_port = loopback_port();
+    if (!selected_port) {
+        std::cerr << "failed to select managed server port: " << selected_port.error() << '\n';
+        return 1;
+    }
+    const uint16_t port = *selected_port;
 
     auto server = RpcServerBuilder()
         .host("127.0.0.1")
