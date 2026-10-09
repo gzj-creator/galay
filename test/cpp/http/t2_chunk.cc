@@ -6,6 +6,9 @@
 #include <iostream>
 #include <cassert>
 #include <cstring>
+#include <array>
+#include <cstddef>
+#include <string>
 #include <galay/cpp/galay-http/protoc/http_chunk.h>
 
 using namespace galay::http;
@@ -33,6 +36,62 @@ void test_chunk_to_chunk() {
     std::string expected3 = "6\r\nWorld!\r\n";
     assert(chunk3 == expected3);
     std::cout << "  ✓ Chunk from buffer: " << chunk3.size() << " bytes" << std::endl;
+}
+
+bool test_chunk_output_boundaries() {
+    std::cout << "\nTesting chunk output boundaries and binary payloads..." << std::endl;
+
+    struct ChunkLengthCase {
+        std::size_t length;
+        const char* hex_length;
+    };
+    constexpr std::array<ChunkLengthCase, 12> length_cases{{
+        {0, "0"},
+        {1, "1"},
+        {10, "a"},
+        {11, "b"},
+        {15, "f"},
+        {16, "10"},
+        {255, "ff"},
+        {256, "100"},
+        {4095, "fff"},
+        {4096, "1000"},
+        {65535, "ffff"},
+        {65536, "10000"},
+    }};
+
+    for (const auto& length_case : length_cases) {
+        for (const bool binary : std::array<bool, 2>{false, true}) {
+            std::string payload(length_case.length, 'x');
+            if (binary) {
+                for (std::size_t index = 0; index < payload.size(); ++index) {
+                    payload[index] = static_cast<char>(index % 256);
+                }
+            }
+            const std::string expected = std::string(length_case.hex_length)
+                + "\r\n" + payload + "\r\n";
+            const std::string string_chunk = Chunk::to_chunk(payload, false);
+            const std::string buffer_chunk = Chunk::to_chunk(payload.data(), payload.size(), false);
+            if (string_chunk != expected || buffer_chunk != expected) {
+                std::cerr << "Chunk output mismatch: length=" << length_case.length
+                          << ", binary=" << binary << std::endl;
+                return false;
+            }
+
+            // End markers must discard a supplied payload, including binary data.
+            const std::string string_end = Chunk::to_chunk(payload, true);
+            const std::string buffer_end = Chunk::to_chunk(payload.data(), payload.size(), true);
+            if (string_end != "0\r\n\r\n" || buffer_end != "0\r\n\r\n") {
+                std::cerr << "Chunk end marker mismatch: length=" << length_case.length
+                          << ", binary=" << binary << std::endl;
+                return false;
+            }
+        }
+    }
+
+    std::cout << "  ✓ 96 output checks passed, including lowercase hex and binary data"
+              << std::endl;
+    return true;
 }
 
 void test_chunk_from_io_vec() {
@@ -142,6 +201,9 @@ int main() {
 
     try {
         test_chunk_to_chunk();
+        if (!test_chunk_output_boundaries()) {
+            return 1;
+        }
         test_chunk_from_io_vec();
         test_chunk_roundtrip();
 

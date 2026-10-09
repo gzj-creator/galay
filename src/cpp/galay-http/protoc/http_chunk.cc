@@ -1,8 +1,6 @@
 #include "http_chunk.h"
 #include "../common/macro.hpp"
 #include <charconv>
-#include <sstream>
-#include <iomanip>
 #include <limits>
 
 #if defined(GALAY_HTTP_SIMD_X86)
@@ -383,9 +381,23 @@ std::string Chunk::to_chunk(const char* data, size_t length, bool is_last)
         return "0\r\n\r\n";
     }
 
-    std::ostringstream oss;
-    oss << std::hex << length << "\r\n";
-    std::string result = oss.str();
+    // hex 前缀写入栈缓冲，避免每 chunk 构造 ostringstream（stringbuf 分配 + locale + vtable），
+    // 并预留最终长度避免追加 payload 时重新分配。
+    char prefix[32];
+    // size_t 的十六进制最长 16 位，prefix 预留 30 位可用空间，to_chars 不会失败。
+    const auto [ptr, ec] = std::to_chars(prefix, prefix + sizeof(prefix) - 2, length, 16);
+    if (ec != std::errc{}) {
+        return {};
+    }
+    const size_t prefix_size = static_cast<size_t>(ptr - prefix);
+    prefix[prefix_size] = '\r';
+    prefix[prefix_size + 1] = '\n';
+
+    // 最终长度 = hex 前缀 + CRLF + payload + 结尾 CRLF，少留一个字节都会让最后的
+    // append 触发重新分配。
+    std::string result;
+    result.reserve(length + prefix_size + 4);
+    result.append(prefix, prefix_size + 2);
     result.append(data, length);
     result.append("\r\n");
     return result;

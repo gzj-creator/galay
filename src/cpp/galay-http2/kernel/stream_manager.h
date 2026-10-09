@@ -608,6 +608,7 @@ private:
         if (m_next_local_stream_id == 0) {
             m_next_local_stream_id = m_conn.is_client() ? 3 : 2;
         }
+        // 接收窗口按 int32 记账，上限必须夹到 INT32_MAX，否则 increment 转回 int32 会溢出成负数。
         const uint32_t target_window = std::min<uint32_t>(
             m_conn.runtime_config().flow_control_target_window, 2147483647u);
         const int32_t current_window = m_conn.conn_recv_window();

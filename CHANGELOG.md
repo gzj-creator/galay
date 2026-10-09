@@ -19,6 +19,7 @@
 
 ### Changed
 
+- HTTP chunk 编码改用 `std::to_chars` 写入栈缓冲，按十六进制前缀、两组 CRLF 与 payload 完整预留输出空间，避免追加末尾 CRLF 时再次分配并复制 payload；服务端 header 指针查找直接使用小写 key 的 `std::string_view`，仅对含大写的 key 构造规范化副本。
 - Swagger UI 5.17.14 的 JS、CSS、favicon 和许可证等九项资源直接固化到 `galay-api/ui_assets.cc`，CMake、Bazel 和 mcpp 直接编译源码；构建、安装及默认运行均不再依赖外部资源目录或预生成步骤，保留完整显式自定义资源目录入口。
 - kernel 任务完成通知以单个 32 位原子状态统一未完成、已注册阻塞等待者和已完成三种状态，替代 `m_done` 与惰性 `TaskWaiter` 的跨原子握手；完成方使用 release exchange，仅有等待者时通知，等待方使用 acquire CAS / `atomic::wait`，移除完成路径的 mutex/CV 及等待器分配，保持结果可见性和不丢唤醒语义。同步迁移完成状态查询及源码契约，`TaskState` 在本机仍为 128 字节、64 字节对齐。
 - 四种传输统一提供 OpenAPI 3.1.0、内嵌 Swagger UI 5.17.14 及离线静态资源。`EnableSwagger=false` 保留 typed binding、运行期校验、serde 编解码和业务错误，但不保存文档专用状态、不生成或挂载文档，也不提供 `docs` / `export_openapi`；开启模式支持离线导出及显式资源目录，缺资源明确失败，不升级资源或回退 CDN。
@@ -59,6 +60,7 @@
 
 ### Validation
 
+- 2026-10-10 HTTP 热路径优化补齐落盘回归：chunk 的 12 个长度、文本与二进制 payload、两个重载及结束块共 96 个输出检查通过；64 KiB chunk 两个重载均只分配一次，服务端长小写 common/map header 命中与缺失均零分配，大小写及客户端查找语义通过。Linux / GCC14 / C++23 / io_uring / Release / `-Werror` 相关构建及 HTTP/HTTP2/MCP 的 98 项 unit CTest 全部通过；临时还原 `reserve(... + 2)` 或旧 header 规范化副本时，新分配回归均按预期失败，样式审计与 `git diff --check` 通过。
 - 2026-10-09 Linux / GCC14 / epoll / Release / C/C++ `-Werror` 全目标构建通过；修复后完整 CTest 655 项：614 通过、36 跳过、5 禁用、0 失败。HEAD、methods 验收与 RPC 端口回归各连续 10 次通过；此前 207 个 benchmark 全量执行记录保留，修复后全部 12 个 HTTP benchmark 目标复跑通过。响应体校验的 HTTP/HTTPS 30 秒负载分别完成 258,099 / 155,938 次请求，静态文件 10 秒完成 67,857 次，均计数守恒且零错误；本轮未跑 sanitizer、原生 C++ modules 或后端性能对比。
 - Swagger UI 资源调整通过 docs、embedded、transports、configure_matrix、install_consumer 五项回归，无 `assets` 的独立源码目录可构建运行，搬迁安装消费者六项通过；HTTP、HTTPS、h2c、h2 七项上游资源 SHA256 一致。Chromium 141 桌面及手机的 HTTP、HTTPS、h2 页面和 GET/POST 调试通过，无外部请求、控制台错误或 UI 文件访问；h2c 仅计客户端验收。mcpp API 离线配置检查通过，未执行 Bazel 构建。
 - 2026-10-09 Linux / GCC14 / C++23 / Release / `-Werror` 的 io_uring 配置全目标构建通过，包含启用的库、C API、测试、示例与 benchmark；最终 CTest 654 项：616 通过、33 项外部集成门控跳过、5 项禁用、0 失败。原生 C++ modules 模式未启用；未做后端或性能对比。

@@ -37,7 +37,7 @@ namespace galay::http
     }
 
     // 快速匹配常见 header（假设 key 已是小写）
-    CommonHeaderIndex match_common_header(const std::string& key) {
+    CommonHeaderIndex match_common_header(std::string_view key) {
         const size_t len = key.size();
         if (len < 4 || len > 19) return CommonHeaderIndex::NotCommon;
 
@@ -398,15 +398,16 @@ namespace galay::http
 
     const std::string* HeaderPair::get_value_ptr(const std::string& key) const
     {
-        // ServerSide 模式：先尝试 fast-path
+        // ServerSide 模式：先尝试 fast-path。仅当 key 含大写时才分配规范化副本，
+        // 常见的小写 key 直接原样匹配，避免每次查找都 malloc。
         if (m_mode == Mode::ServerSide) {
-            // 需要先转小写再匹配
-            std::string normalized;
-            if (has_upper_ascii(key)) {
-                normalized = to_lower_ascii(key);
-            } else {
-                normalized = key;
+            const bool needs_lower = has_upper_ascii(key);
+            std::string lowered;
+            if (needs_lower) {
+                lowered = to_lower_ascii(key);
             }
+            const std::string_view normalized = needs_lower ? std::string_view(lowered)
+                                                            : std::string_view(key);
 
             CommonHeaderIndex idx = match_common_header(normalized);
             if (idx != CommonHeaderIndex::NotCommon) {
