@@ -217,6 +217,10 @@ public:
      */
     void tick()
     {
+        // New timers must not be swept through slots belonging to an idle past.
+        if (m_wheelSize.load(std::memory_order_relaxed) == 0) {
+            reset();
+        }
         // 1. 处理待添加的定时器
         process_pending_timers();
 
@@ -319,13 +323,8 @@ private:
         }
 
         uint64_t remainingNs = expireTimeNs - nowNs;
-        uint64_t delayTicks = remainingNs / m_tickDuration;
-
-        if (delayTicks == 0) {
-            // 不足一个 tick，立即执行
-            timer->handle_timeout();
-            return;
-        }
+        // Round up so a timer is never placed in a slot before its deadline.
+        uint64_t delayTicks = (remainingNs + m_tickDuration - 1) / m_tickDuration;
 
         // 检查是否超出最大范围
         if (delayTicks >= WHEEL5_SPAN) {
@@ -432,13 +431,9 @@ private:
             }
 
             uint64_t remainingNs = expireTimeNs - nowNs;
-            uint64_t remainingTicks = remainingNs / m_tickDuration;
-
-            if (remainingTicks == 0) {
-                timer->handle_timeout();
-                m_wheelSize.fetch_sub(1, std::memory_order_relaxed);
-                continue;
-            }
+            // Preserve the deadline when cascading between wheel levels.
+            uint64_t remainingTicks =
+                (remainingNs + m_tickDuration - 1) / m_tickDuration;
 
             uint64_t absoluteTick = m_currentTick + remainingTicks;
 
