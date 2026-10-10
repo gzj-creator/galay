@@ -19,6 +19,7 @@
 
 ### Changed
 
+- 跟进 serde `v0.5.0` 发布，更新子模块至该版本提交，并将 Bazel 的 serde 依赖声明同步为 `0.5.0`。
 - C++ MCP 的通用 JSON 解析、动态值、序列化与 JSON Schema 构建全部移交 serde；MCP 仅保留协议类型、反射字段映射及语义校验。v1/v2 客户端、HTTP/stdio 服务端直接使用 serde，协议编解码入口统一为 `encode` / `decode`，Schema 使用 `<serde/json/schema.hpp>` 的 `json::SchemaBuilder`，同步更新 serde 子模块引用。
 - HTTP chunk 编码改用 `std::to_chars` 写入栈缓冲，按十六进制前缀、两组 CRLF 与 payload 完整预留输出空间，避免追加末尾 CRLF 时再次分配并复制 payload；服务端 header 指针查找直接使用小写 key 的 `std::string_view`，仅对含大写的 key 构造规范化副本。
 - Swagger UI 5.17.14 的 JS、CSS、favicon 和许可证等九项资源直接固化到 `galay-api/ui_assets.cc`，CMake、Bazel 和 mcpp 直接编译源码；构建、安装及默认运行均不再依赖外部资源目录或预生成步骤，保留完整显式自定义资源目录入口。
