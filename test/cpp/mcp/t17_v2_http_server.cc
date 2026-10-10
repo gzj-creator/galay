@@ -142,7 +142,7 @@ std::string make_body(std::string_view method, std::string_view fields)
     request.id = 1;
     request.method = std::string(method);
     request.params = std::move(params.value());
-    return request.to_json();
+    return request.encode();
 }
 
 } // namespace

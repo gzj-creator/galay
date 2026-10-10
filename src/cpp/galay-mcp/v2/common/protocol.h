@@ -7,7 +7,7 @@
 #define GALAY_MCP_V2_PROTOCOL_H
 
 #include "../../common/mcp_error.h"
-#include "../../common/mcp_json.h"
+#include <serde/json/json.hpp>
 
 #include <cstdint>
 #include <expected>
@@ -67,8 +67,8 @@ struct Implementation {
     std::optional<std::string> websiteUrl;
     std::string icons;
 
-    std::string to_json() const;
-    static std::expected<Implementation, McpError> from_json(const json::Json& element);
+    std::string encode() const;
+    static std::expected<Implementation, McpError> decode(const json::Json& element);
 };
 
 /** @brief 每个 2026-07-28 请求必须携带的元数据。 */
@@ -79,8 +79,8 @@ struct RequestMeta {
     std::optional<std::string> logLevel;
     std::optional<RequestId> progressToken;
 
-    std::string to_json() const;
-    static std::expected<RequestMeta, McpError> from_json(const json::Json& element);
+    std::string encode() const;
+    static std::expected<RequestMeta, McpError> decode(const json::Json& element);
 };
 
 /** @brief 服务器发现所返回的能力集合。 */
@@ -96,8 +96,8 @@ struct ServerCapabilities {
     bool resourceSubscriptions = false;
     bool promptsListChanged = false;
 
-    std::string to_json() const;
-    static std::expected<ServerCapabilities, McpError> from_json(const json::Json& element);
+    std::string encode() const;
+    static std::expected<ServerCapabilities, McpError> decode(const json::Json& element);
 };
 
 /** @brief 2026-07-28 工具描述；JSON Schema 以已校验的原始 JSON 保存。 */
@@ -111,8 +111,8 @@ struct Tool {
     std::optional<std::string> icons;
     std::optional<std::string> meta;
 
-    std::string to_json() const;
-    static std::expected<Tool, McpError> from_json(const json::Json& element);
+    std::string encode() const;
+    static std::expected<Tool, McpError> decode(const json::Json& element);
 };
 
 struct Resource {
@@ -126,8 +126,8 @@ struct Resource {
     std::optional<std::string> icons;
     std::optional<std::string> meta;
 
-    std::string to_json() const;
-    static std::expected<Resource, McpError> from_json(const json::Json& element);
+    std::string encode() const;
+    static std::expected<Resource, McpError> decode(const json::Json& element);
 };
 
 struct PromptArgument {
@@ -136,8 +136,8 @@ struct PromptArgument {
     std::optional<std::string> description;
     bool required = false;
 
-    std::string to_json() const;
-    static std::expected<PromptArgument, McpError> from_json(const json::Json& element);
+    std::string encode() const;
+    static std::expected<PromptArgument, McpError> decode(const json::Json& element);
 };
 
 struct Prompt {
@@ -148,8 +148,8 @@ struct Prompt {
     std::optional<std::string> icons;
     std::optional<std::string> meta;
 
-    std::string to_json() const;
-    static std::expected<Prompt, McpError> from_json(const json::Json& element);
+    std::string encode() const;
+    static std::expected<Prompt, McpError> decode(const json::Json& element);
 };
 
 enum class CacheScope {
@@ -170,7 +170,6 @@ struct ResultView {
 };
 
 struct ParsedResult {
-    JsonDocument document;
     ResultView result;
 
     ParsedResult() = default;
@@ -189,8 +188,8 @@ struct DiscoverResult {
     uint64_t ttlMs = 0;
     CacheScope cacheScope{CacheScope::Private};
 
-    std::string to_json() const;
-    static std::expected<DiscoverResult, McpError> from_json(const json::Json& element);
+    std::string encode() const;
+    static std::expected<DiscoverResult, McpError> decode(const json::Json& element);
 };
 
 /** @brief tools/resources/prompts 列表结果的公共编码器。 */
@@ -202,7 +201,7 @@ struct ListResult {
     CacheScope cacheScope{CacheScope::Private};
     std::optional<Implementation> serverInfo;
 
-    std::string to_json() const;
+    std::string encode() const;
 };
 
 struct JsonRpcRequest {
@@ -210,7 +209,7 @@ struct JsonRpcRequest {
     std::string method;
     std::optional<std::string> params;
 
-    std::string to_json() const;
+    std::string encode() const;
 };
 
 /** @brief 工具执行结果。content 中每项必须是一个完整内容块 JSON 对象。 */
@@ -221,7 +220,7 @@ struct ToolCallResult {
     std::optional<Implementation> serverInfo;
 
     static ToolCallResult text(std::string value);
-    std::string to_json() const;
+    std::string encode() const;
 };
 
 /** @brief 资源读取结果。contents 中每项必须是 Text/BlobResourceContents JSON。 */
@@ -234,7 +233,7 @@ struct ReadResourceResult {
     static ReadResourceResult text(std::string uri,
                                    std::string value,
                                    std::optional<std::string> mimeType = std::nullopt);
-    std::string to_json() const;
+    std::string encode() const;
 };
 
 /** @brief 提示获取结果。messages 中每项必须是完整 PromptMessage JSON。 */
@@ -243,7 +242,7 @@ struct GetPromptResult {
     std::optional<std::string> description;
     std::optional<Implementation> serverInfo;
 
-    std::string to_json() const;
+    std::string encode() const;
 };
 
 struct RequestView {
@@ -254,7 +253,6 @@ struct RequestView {
 };
 
 struct ParsedRequest {
-    JsonDocument document;
     RequestView request;
 
     ParsedRequest() = default;
@@ -273,7 +271,6 @@ struct ResponseView {
 };
 
 struct ParsedResponse {
-    JsonDocument document;
     ResponseView response;
 
     ParsedResponse() = default;
@@ -290,8 +287,8 @@ struct SubscriptionFilter {
     bool resourcesListChanged = false;
     bool promptsListChanged = false;
 
-    std::string to_json() const;
-    static std::expected<SubscriptionFilter, McpError> from_json(
+    std::string encode() const;
+    static std::expected<SubscriptionFilter, McpError> decode(
         const json::Json& element);
 };
 
@@ -382,5 +379,7 @@ std::expected<std::optional<std::string>, McpError> parse_sse_event(
     std::string_view event);
 
 } // namespace galay::mcp::v2
+
+#include "protocol_fields.h"
 
 #endif // GALAY_MCP_V2_PROTOCOL_H

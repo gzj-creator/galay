@@ -11,26 +11,7 @@ std::string empty_object_string() {
 }
 
 std::string make_result_response(int64_t id, std::string_view resultJson) {
-    std::string response;
-    auto writer = make_json_writer(response);
-    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-    (void)writer.start_object();
-    (void)writer.key("jsonrpc");
-    (void)writer.string(JSONRPC_VERSION);
-    (void)writer.key("id");
-    (void)writer.number(id);
-    (void)writer.key("result");
-    if (resultJson.empty()) {
-        (void)writer.start_object();
-        (void)writer.end_object();
-    } else {
-        (void)writer.raw(resultJson);
-    }
-    (void)writer.end_object();
-    if (!writer.finish()) {
-        return std::string{};
-    }
-    return response;
+    return protocol::make_result_response(id, resultJson.empty() ? "{}" : std::string(resultJson)).encode();
 }
 
 } // namespace
@@ -357,7 +338,7 @@ std::string McpHttpServer::handle_initialize(const JsonRpcRequestView& request, 
                                   "Invalid parameters", "Missing params");
     }
 
-    auto paramsExp = InitializeParams::from_json(request.params);
+    auto paramsExp = InitializeParams::decode(request.params);
     if (!paramsExp) {
         MCP_LOG_WARN("[http_server]", "initialize params parse failed id={} error={}",
                      request.id.value(),
@@ -417,23 +398,13 @@ galay::kernel::Task<void> McpHttpServer::handle_tools_call(const JsonRpcRequestV
             co_return;
         }
 
-        json::Json paramsObj = request.params;
-        if (!paramsObj.is_object()) {
-            MCP_LOG_WARN("[http_server]", "tools/call params not object id={}", request.id.value());
+        auto params = json::decode<NamedArguments>(request.params);
+        if (!params) {
             responseJson = create_error_response(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                                      "Invalid parameters", "Params must be object");
+                                      "Invalid parameters", params.error());
             co_return;
         }
-
-        std::string toolName;
-        auto nameVal = paramsObj.at("name").as_string();
-        if (!nameVal) {
-            MCP_LOG_WARN("[http_server]", "tools/call missing tool name id={}", request.id.value());
-            responseJson = create_error_response(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                                      "Invalid parameters", "Missing tool name");
-            co_return;
-        }
-        toolName = std::string(*nameVal);
+        const std::string& toolName = params->name;
 
         auto it = m_tools.find(toolName);
         if (it == m_tools.end()) {
@@ -445,15 +416,10 @@ galay::kernel::Task<void> McpHttpServer::handle_tools_call(const JsonRpcRequestV
 
         const auto& handler = it->second.handler;
 
-        json::Json arguments = empty_json_object();
-        json::Json argsElement = paramsObj.at("arguments");
-        if (argsElement.valid()) {
-            arguments = argsElement;
-        }
 
         // 调用工具处理函数（协程）
         std::expected<std::string, McpError> result;
-        co_await handler(arguments, result);
+        co_await handler(params->arguments, result);
 
         if (!result) {
             MCP_LOG_WARN("[http_server]", "tool handler failed id={} tool={} error={}",
@@ -473,7 +439,7 @@ galay::kernel::Task<void> McpHttpServer::handle_tools_call(const JsonRpcRequestV
         content.text = result.value();
         callResult.content.push_back(content);
 
-        responseJson = make_result_response(request.id.value(), callResult.to_json());
+        responseJson = make_result_response(request.id.value(), callResult.encode());
 
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[http_server]", "tools/call threw id={} error={}", request.id.value(), e.what());
@@ -518,23 +484,13 @@ galay::kernel::Task<void> McpHttpServer::handle_resources_read(const JsonRpcRequ
             co_return;
         }
 
-        json::Json paramsObj = request.params;
-        if (!paramsObj.is_object()) {
-            MCP_LOG_WARN("[http_server]", "resources/read params not object id={}", request.id.value());
+        auto params = json::decode<ResourceParams>(request.params);
+        if (!params) {
             responseJson = create_error_response(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                                      "Invalid parameters", "Params must be object");
+                                      "Invalid parameters", params.error());
             co_return;
         }
-
-        std::string uri;
-        auto uriVal = paramsObj.at("uri").as_string();
-        if (!uriVal) {
-            MCP_LOG_WARN("[http_server]", "resources/read missing uri id={}", request.id.value());
-            responseJson = create_error_response(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                                      "Invalid parameters", "Missing uri");
-            co_return;
-        }
-        uri = std::string(*uriVal);
+        const std::string& uri = params->uri;
 
         auto it = m_resources.find(uri);
         if (it == m_resources.end()) {
@@ -566,23 +522,15 @@ galay::kernel::Task<void> McpHttpServer::handle_resources_read(const JsonRpcRequ
         content.type = ContentType::Text;
         content.text = result.value();
 
-        std::string resultJson;
-        auto resultWriter = make_json_writer(resultJson);
-        // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-        (void)resultWriter.start_object();
-        (void)resultWriter.key("contents");
-        (void)resultWriter.start_array();
-        (void)resultWriter.raw(content.to_json());
-        (void)resultWriter.end_array();
-        (void)resultWriter.end_object();
-        if (!resultWriter.finish()) {
+        auto result_body = json::serialize(std::map<std::string, std::vector<Content>>{{"contents", {content}}});
+        if (!result_body) {
             MCP_LOG_ERROR("[http_server]", "result encode failed id={}", request.id.value());
             responseJson = create_error_response(request.id.value(), ErrorCodes::INTERNAL_ERROR,
                                       "Internal error", "");
             co_return;
         }
 
-        responseJson = make_result_response(request.id.value(), std::move(resultJson));
+        responseJson = make_result_response(request.id.value(), *result_body);
 
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[http_server]", "resources/read threw id={} error={}", request.id.value(), e.what());
@@ -627,29 +575,13 @@ galay::kernel::Task<void> McpHttpServer::handle_prompts_get(const JsonRpcRequest
             co_return;
         }
 
-        json::Json paramsObj = request.params;
-        if (!paramsObj.is_object()) {
-            MCP_LOG_WARN("[http_server]", "prompts/get params not object id={}", request.id.value());
+        auto params = json::decode<NamedArguments>(request.params);
+        if (!params) {
             responseJson = create_error_response(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                                      "Invalid parameters", "Params must be object");
+                                      "Invalid parameters", params.error());
             co_return;
         }
-
-        std::string name;
-        auto nameVal = paramsObj.at("name").as_string();
-        if (!nameVal) {
-            MCP_LOG_WARN("[http_server]", "prompts/get missing name id={}", request.id.value());
-            responseJson = create_error_response(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                                      "Invalid parameters", "Missing prompt name");
-            co_return;
-        }
-        name = std::string(*nameVal);
-
-        json::Json arguments = empty_json_object();
-        json::Json argsElement = paramsObj.at("arguments");
-        if (argsElement.valid()) {
-            arguments = argsElement;
-        }
+        const std::string& name = params->name;
 
         auto it = m_prompts.find(name);
         if (it == m_prompts.end()) {
@@ -663,7 +595,7 @@ galay::kernel::Task<void> McpHttpServer::handle_prompts_get(const JsonRpcRequest
 
         // 调用提示获取函数（协程）
         std::expected<std::string, McpError> result;
-        co_await getter(name, arguments, result);
+        co_await getter(name, params->arguments, result);
 
         if (!result) {
             MCP_LOG_WARN("[http_server]", "prompt getter failed id={} name={} error={}",
@@ -698,7 +630,7 @@ std::string McpHttpServer::handle_ping(const JsonRpcRequestView& request) {
 std::string McpHttpServer::create_error_response(int64_t id, int code,
                                         const std::string& message,
                                         const std::string& details) {
-    return protocol::make_error_response(id, code, message, details).to_json();
+    return protocol::make_error_response(id, code, message, details).encode();
 }
 
 const std::string& McpHttpServer::get_tools_list_result() {

@@ -3,7 +3,7 @@
  * @brief 锁定 MCP 拥有状态类型的 move-only 与显式 clone 边界。
  */
 
-#include <galay/cpp/galay-mcp/common/json_parser.h>
+#include <galay/cpp/galay-mcp/common/request_codec.h>
 #include <galay/cpp/galay-mcp/common/schema_builder.h>
 
 #include <concepts>
@@ -15,21 +15,8 @@
 using galay::mcp::ParsedJsonRpcRequest;
 using galay::mcp::ParsedJsonRpcResponse;
 using galay::mcp::PromptArgumentBuilder;
-using galay::mcp::SchemaBuilder;
 using galay::mcp::parse_json_rpc_request;
 using galay::mcp::parse_json_rpc_response;
-
-static_assert(!std::copy_constructible<json::stream::StreamWriter>);
-static_assert(!std::is_copy_assignable_v<json::stream::StreamWriter>);
-static_assert(std::movable<json::stream::StreamWriter>);
-static_assert(std::is_nothrow_move_constructible_v<json::stream::StreamWriter>);
-static_assert(std::is_nothrow_move_assignable_v<json::stream::StreamWriter>);
-
-static_assert(!std::copy_constructible<SchemaBuilder>);
-static_assert(!std::is_copy_assignable_v<SchemaBuilder>);
-static_assert(std::movable<SchemaBuilder>);
-static_assert(std::is_nothrow_move_constructible_v<SchemaBuilder>);
-static_assert(std::is_nothrow_move_assignable_v<SchemaBuilder>);
 
 static_assert(!std::copy_constructible<PromptArgumentBuilder>);
 static_assert(!std::is_copy_assignable_v<PromptArgumentBuilder>);
@@ -45,9 +32,6 @@ static_assert(!std::copy_constructible<ParsedJsonRpcResponse>);
 static_assert(!std::is_copy_assignable_v<ParsedJsonRpcResponse>);
 static_assert(std::movable<ParsedJsonRpcResponse>);
 
-static_assert(requires(const SchemaBuilder& builder) {
-    { builder.clone() } -> std::same_as<SchemaBuilder>;
-});
 static_assert(requires(const PromptArgumentBuilder& builder) {
     { builder.clone() } -> std::same_as<PromptArgumentBuilder>;
 });
@@ -61,63 +45,6 @@ bool require(bool condition, std::string_view message)
         return false;
     }
     return true;
-}
-
-bool contains(std::string_view text, std::string_view needle)
-{
-    return text.find(needle) != std::string_view::npos;
-}
-
-bool json_writer_sinks_are_independent()
-{
-    std::string originalJson;
-    std::string cloneJson;
-    auto writer = galay::mcp::make_json_writer(originalJson);
-    auto copy = galay::mcp::make_json_writer(cloneJson);
-
-    (void)writer.start_object();
-    (void)writer.key("before");
-    (void)writer.string("copy");
-    (void)writer.key("after");
-    (void)writer.string("original");
-    (void)writer.end_object();
-
-    (void)copy.start_object();
-    (void)copy.key("before");
-    (void)copy.string("copy");
-    (void)copy.key("after");
-    (void)copy.string("clone");
-    (void)copy.end_object();
-
-    if (!require(writer.finish().has_value(), "first JSON writer failed to finish") ||
-        !require(copy.finish().has_value(), "second JSON writer failed to finish")) {
-        return false;
-    }
-
-    return require(contains(originalJson, R"("after":"original")"),
-                   "first JSON writer did not keep later mutation") &&
-           require(contains(cloneJson, R"("after":"clone")"),
-                   "second JSON writer did not accept independent mutation") &&
-           require(!contains(cloneJson, "original"),
-                   "second JSON writer observed the first writer's later mutation");
-}
-
-bool schema_builder_clone_is_independent()
-{
-    SchemaBuilder builder;
-    builder.add_string("name", "Name", true);
-
-    SchemaBuilder copy = builder.clone();
-    builder.add_integer("age", "Age", false);
-
-    const auto originalSchema = builder.build();
-    const auto cloneSchema = copy.build();
-    return require(contains(originalSchema, R"("age")"),
-                   "original SchemaBuilder did not keep later property") &&
-           require(!contains(cloneSchema, R"("age")"),
-                   "cloned SchemaBuilder observed original's later property") &&
-           require(contains(cloneSchema, R"("name")"),
-                   "cloned SchemaBuilder lost existing property");
 }
 
 bool prompt_argument_builder_clone_is_independent()
@@ -182,12 +109,6 @@ bool moved_parsed_response_keeps_views_readable()
 
 int main()
 {
-    if (!json_writer_sinks_are_independent()) {
-        return 1;
-    }
-    if (!schema_builder_clone_is_independent()) {
-        return 1;
-    }
     if (!prompt_argument_builder_clone_is_independent()) {
         return 1;
     }

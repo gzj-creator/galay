@@ -1,5 +1,5 @@
 #include <galay/cpp/galay-kernel/core/runtime.h>
-#include <galay/cpp/galay-mcp/common/mcp_json.h>
+#include <galay/cpp/galay-mcp/common/request_codec.h>
 #include <galay/cpp/galay-etcd/base/etcd_internal.h>
 #include <serde/json/json.hpp>
 #include <serde/reflect/reflect_macros.hpp>
@@ -27,13 +27,14 @@ int main() {
     const auto port = document->at("port").as_int64();
     assert(port);
     assert(*port == config.port);
-    const auto mcp_document = galay::mcp::JsonDocument::parse(*text);
-    assert(mcp_document);
-    const json::Json& object = mcp_document->root();
+    const auto request = galay::mcp::parse_json_rpc_request(
+        R"({"jsonrpc":"2.0","id":1,"method":"configure","params":)" + *text + "}");
+    assert(request);
+    const json::Json& object = request->request.params;
     assert(object.is_object());
     const auto mcp_port = object.at("port").as_int64();
     assert(mcp_port);
     assert(*mcp_port == config.port);
     assert(*mcp_port == *port);
-    assert(!galay::mcp::JsonDocument::parse("{"));
+    assert(!galay::mcp::parse_json_rpc_request("{"));
 }

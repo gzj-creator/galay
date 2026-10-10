@@ -9,11 +9,10 @@
 
 当前对外头文件包括：
 
-- `galay-mcp/common/mcp_json.h`
 - `galay-mcp/common/mcp_base.h`
 - `galay-mcp/common/mcp_error.h`
 - `galay-mcp/common/schema_builder.h`
-- `galay-mcp/common/json_parser.h`
+- `galay-mcp/common/request_codec.h`
 - `galay-mcp/common/protocol_utils.h`
 - `galay-mcp/v1/client/client.h`
 - `galay-mcp/v1/server/stdio_server.h`
@@ -75,7 +74,7 @@ v2 的成功结果带 `resultType`；`tools/list`、`resources/list`、
 `resources/templates/list`、`completion/complete` 等未注册的 v2 方法会显式返回
 `-32601`。
 
-来源：`galay-mcp/common/mcp_json.h`、`galay-mcp/common/mcp_base.h`
+来源：`galay-mcp/common/mcp_base.h`；JSON 操作直接使用 `<serde/json/json.hpp>`。
 
 ```cpp
 // JSON 文本使用 std::string，DOM 使用 serde 的 json::Json。
@@ -144,26 +143,9 @@ enum class ContentType {
 | `Image` | `data` + `mimeType` |
 | `Resource` | `uri` |
 
-### `mcp_json.h` 公开入口
+### serde 编解码入口
 
-```cpp
-class JsonDocument {
-public:
-    static std::expected<JsonDocument, McpError> parse(std::string_view json);
-    const json::Json& root() const noexcept;
-    json::Json& root() noexcept;
-};
-
-json::stream::StreamWriter make_json_writer(std::string& out);
-const json::Json& empty_json_object();
-```
-
-说明：
-
-- `JsonDocument::parse(...)` 失败时返回 `McpError::parse_error(...)`；`root()` 持有 serde DOM 存储，移动文档不失效派生子值。
-- JSON 类型检查和读取直接使用 `json::Json::is_object()`、`operator[]`、`as_string()`、`as_int64()` 等 serde 接口，检查转换结果。
-- `make_json_writer(out)` 绑定调用方字符串，使用 serde `StreamWriter::start_object()`、`key()`、`number()` 等蛇形接口；错误粘滞，最终必须检查 `finish()`。
-- `empty_json_object()` 返回常驻的 `{}` 值。旧 `JsonWriter`、`JsonHelper` 和 simdjson 类型别名已经移除，不提供旧名或另一套包装。
+MCP 的协议字段映射在 `protocol_fields.h` 中声明。通用 JSON 解析、动态值、编码与字段解码由 serde 的 `json::parse`、`json::Json`、`json::serialize`、`json::decode` 和 `json::deserialize` 提供。serde 返回 `std::expected<T, std::string>`；MCP 在协议边界将错误转换成 `McpError`。
 
 公开数据结构包括：
 
@@ -184,18 +166,18 @@ const json::Json& empty_json_object();
 - `JsonRpcNotification`
 - `JsonRpcError`
 
-这些结构都提供 `to_json()`；除 `JsonRpcRequest` / `JsonRpcNotification` 外，多数也提供 `from_json(const json::Json&)`。
+这些结构都提供 `encode()`；除 `JsonRpcRequest` / `JsonRpcNotification` 外，多数也提供 `decode(const json::Json&)`，实现直接调用 serde。
 
 常用结构的字段要求可按以下速查：
 
 | 类型 | 必需字段 / 成功返回形状 | 可选字段 / 边界 |
 | --- | --- | --- |
 | `Content` | `type` 必需；`text` / `image` / `resource` 三种分支分别要求 `text`、`data`+`mimeType`、`uri` | 未知 `type` 会返回 `invalid_message("Unknown content type")` |
-| `Tool` | `name`、`description` | `inputSchema` 在 `from_json` 中是可选原始 JSON |
+| `Tool` | `name`、`description` | `inputSchema` 在 `decode` 中是可选原始 JSON |
 | `Resource` | `uri`、`name`、`description`、`mimeType` | 无 |
 | `PromptArgument` | `name`、`description` | `required` 缺省时为 `false` |
 | `Prompt` | `name`、`description` | `arguments` 缺省时为空数组 |
-| `ClientInfo` / `ServerInfo` | `name`、`version` | `ServerInfo.capabilities` 在 `from_json` 中是可选原始 JSON |
+| `ClientInfo` / `ServerInfo` | `name`、`version` | `ServerInfo.capabilities` 在 `decode` 中是可选原始 JSON |
 | `ServerCapabilities` | 顶层对象 | 只检查 `tools` / `resources` / `prompts` / `logging` 字段是否“存在且非 null”，不解析其内部子字段 |
 | `InitializeParams` | `protocolVersion`、`clientInfo` | `capabilities` 缺省时按空对象处理 |
 | `InitializeResult` | `protocolVersion`、`serverInfo`、`capabilities` | 无 |
@@ -278,9 +260,9 @@ public:
 
 ## 4. `SchemaBuilder` 与 `PromptArgumentBuilder`
 
-来源：`galay-mcp/common/schema_builder.h`
+来源：`<serde/json/schema.hpp>` 的 `json::SchemaBuilder` 与 `galay-mcp/common/schema_builder.h` 的 `PromptArgumentBuilder`。
 
-### `SchemaBuilder`
+### `json::SchemaBuilder`
 
 ```cpp
 class SchemaBuilder {
@@ -293,6 +275,7 @@ public:
     SchemaBuilder& add_object(const std::string& name, const std::string& description, const std::string& objectSchema, bool required = false);
     SchemaBuilder& add_object(const std::string& name, const std::string& description, const SchemaBuilder& objectSchema, bool required = false);
     SchemaBuilder& add_enum(const std::string& name, const std::string& description, const std::vector<std::string>& enumValues, bool required = false);
+    json::result<std::string> encode() const;
     std::string build() const;
 };
 ```
@@ -302,7 +285,7 @@ public:
 - `add_array(...)` 的第三个参数是 `itemType`，默认 `"string"`。
 - `add_object(...)` 支持直接传入已有 schema JSON，或传入另一个 `SchemaBuilder`。
 - `build()` 生成最终 JSON Schema 字符串。
-- 头文件中的 `PropertyKind` / `Property` 是 `SchemaBuilder` 私有实现细节：前者表示属性类别，后者保存每个属性的名称、描述、`required`、数组 item 类型、枚举值和对象 schema；调用方只能通过 `add_string` / `add_number` / `add_integer` / `add_boolean` / `add_array` / `add_object` / `add_enum` 间接生成它们。
+- `encode()` 显式返回 serde 错误；JSON Schema 构建实现归 serde 所有。
 
 ### `PromptArgumentBuilder`
 
@@ -314,9 +297,9 @@ public:
 };
 ```
 
-## 5. `McpJsonParser`
+## 5. 协议解码与校验
 
-来源：`galay-mcp/common/json_parser.h`
+来源：`galay-mcp/common/request_codec.h`
 
 ```cpp
 struct JsonRpcRequestView {
@@ -327,7 +310,6 @@ struct JsonRpcRequestView {
 };
 
 struct ParsedJsonRpcRequest {
-    JsonDocument document;
     JsonRpcRequestView request;
 };
 
@@ -335,12 +317,11 @@ struct JsonRpcResponseView {
     int64_t id = 0;
     json::Json result;
     json::Json error;
-    bool has_result = false;
-    bool has_error = false;
+    bool hasResult = false;
+    bool hasError = false;
 };
 
 struct ParsedJsonRpcResponse {
-    JsonDocument document;
     JsonRpcResponseView response;
 };
 
@@ -350,8 +331,7 @@ std::expected<ParsedJsonRpcResponse, McpError> parse_json_rpc_response(std::stri
 
 生命周期说明：
 
-- `JsonRpcRequestView` / `JsonRpcResponseView` 中的 `json::Json` 都借用自对应的 `JsonDocument`。
-- 不要让 `request.params`、`response.result`、`response.error` 脱离 `ParsedJsonRpcRequest::document` 或 `ParsedJsonRpcResponse::document` 的生命周期。
+- `request.params`、`response.result` 和 `response.error` 的存储由 serde 管理，解码后不依赖原始输入字符串的生命周期。
 - `parse_json_rpc_request(...)` 要求顶层是对象、`method` 必须存在且为字符串、`id` 若存在必须是 `int64`。
 - `parse_json_rpc_response(...)` 要求顶层是对象，且 `id` 必须存在并为 `int64`。
 
@@ -482,7 +462,7 @@ public:
 
 - `McpClient` 是唯一公开 MCP 客户端；默认构造配置为 stdio 模式。
 - 拷贝 / 移动被禁用。
-- 请求 / 响应解析直接依赖 `json_parser.h` 中的解析 helper。
+- 请求 / 响应解析直接依赖 `request_codec.h` 中的解析 helper。
 - HTTP 模式对象调用这些同步 stdio API 会返回 `InvalidTransportMode`。
 
 ### 入口、前置条件与返回
@@ -685,9 +665,8 @@ public:
 模块 `galay.mcp` 重新导出以下公共头：
 
 - `mcp_error.h`
-- `mcp_json.h`
 - `mcp_base.h`
-- `json_parser.h`
+- `request_codec.h`
 - `schema_builder.h`
 - `protocol_utils.h`
 - `client.h`

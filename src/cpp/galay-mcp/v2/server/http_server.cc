@@ -21,7 +21,7 @@ std::expected<json::Json, McpError> object_params(const ParsedRequest& request)
 
 std::expected<std::string, McpError> required(const json::Json& object, const char* key)
 {
-    auto value = object.at(key).as_string();
+    auto value = json::decode_member<std::string>(object, key);
     if (!value) {
         return std::unexpected(McpError::invalid_params(
             std::string("missing or invalid ") + key));
@@ -29,18 +29,11 @@ std::expected<std::string, McpError> required(const json::Json& object, const ch
     return std::string(*value);
 }
 
-std::expected<json::Json, McpError> optional_object(const json::Json& object,
-                                                    const char* key)
+std::expected<json::Json, McpError> request_arguments(const json::Json& object)
 {
-    const json::Json value = object.at(key);
-    if (!value.valid()) {
-        return galay::mcp::empty_json_object();
-    }
-    if (!value.is_object()) {
-        return std::unexpected(McpError::invalid_params(
-            std::string(key) + " must be an object"));
-    }
-    return value;
+    auto value = json::decode<ArgumentsFields>(object);
+    if (!value) return std::unexpected(McpError::invalid_params(value.error()));
+    return std::move(value->arguments);
 }
 
 bool header_value_matches(std::string_view expected,
@@ -63,49 +56,10 @@ bool header_value_matches(std::string_view expected,
            actualValue == expectedValue;
 }
 
-std::string prompt_result(std::string_view value)
-{
-    auto parsed = parse_result(value);
-    if (parsed) {
-        return std::string(value);
-    }
-    auto document = JsonDocument::parse(value);
-    if (!document) {
-        return R"({"resultType":"complete","messages":[]})";
-    }
-    if (!document->root().is_object()) {
-        return R"({"resultType":"complete","messages":[]})";
-    }
-    const json::Json& object = document->root();
-    std::string out;
-    auto writer = make_json_writer(out);
-    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-    std::string raw;
-    (void)writer.start_object();
-    (void)writer.key("resultType");
-    (void)writer.string("complete");
-    object.for_each_member([&](std::string_view fieldKey, const json::Json& member) -> json::result<void> {
-        if (fieldKey == "resultType") {
-            return {};
-        }
-        raw.clear();
-        auto serialized = json::stream::serialize(
-            member, [&](std::string_view chunk) -> json::result<void> {
-                raw.append(chunk);
-                return {};
-            });
-        if (!serialized) {
-            return {};
-        }
-        (void)writer.key(fieldKey);
-        (void)writer.raw(raw);
-        return {};
-    });
-    (void)writer.end_object();
-    if (!writer.finish()) {
-        return R"({"resultType":"complete","messages":[]})";
-    }
-    return out;
+std::string prompt_result(std::string_view fields) {
+    auto value = json::merge_objects(fields, {{"resultType", {"\"complete\""}}});
+    if (!value) return {};
+    return std::move(*value);
 }
 
 } // namespace
@@ -365,10 +319,8 @@ std::expected<void, McpError> McpHttpServer::validate_headers(
             return std::unexpected(McpError::protocol_error("Mcp-Name header mismatch"));
         }
         if (parsed.request.method == Methods::TOOLS_CALL) {
-            json::Json arguments = params.value().at("arguments");
-            if (!arguments.valid()) {
-                arguments = galay::mcp::empty_json_object();
-            }
+            auto arguments = request_arguments(params.value());
+            if (!arguments) return std::unexpected(arguments.error());
             Tool tool;
             auto it = m_tools.find(name.value());
             if (it == m_tools.end()) return {};
@@ -377,7 +329,7 @@ std::expected<void, McpError> McpHttpServer::validate_headers(
             if (!annotations) return std::unexpected(annotations.error());
             const auto& header_pairs = request.header().header_pairs();
             for (const auto& annotation : annotations.value()) {
-                auto bodyValue = argument_header_value(arguments, annotation);
+                auto bodyValue = argument_header_value(*arguments, annotation);
                 if (!bodyValue) return std::unexpected(bodyValue.error());
                 const std::string headerName = "Mcp-Param-" + annotation.name;
                 const bool hasHeader = header_pairs.has_key(headerName);
@@ -429,7 +381,7 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         result.capabilities.resourcesListChanged = !m_resources.empty();
         result.capabilities.resourceSubscriptions = !m_resources.empty();
         result.capabilities.promptsListChanged = !m_prompts.empty();
-        co_return HttpResult{200, make_result_response(id, result.to_json())};
+        co_return HttpResult{200, make_result_response(id, result.encode())};
     }
 
     if (parsed.request.method == Methods::TOOLS_LIST ||
@@ -439,19 +391,19 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         result.field = parsed.request.method == Methods::TOOLS_LIST
             ? "tools" : parsed.request.method == Methods::RESOURCES_LIST ? "resources" : "prompts";
         if (result.field == "tools") {
-            for (const auto& [unused, entry] : m_tools) result.items.push_back(entry.tool.to_json());
+            for (const auto& [unused, entry] : m_tools) result.items.push_back(entry.tool.encode());
         } else if (result.field == "resources") {
-            for (const auto& [unused, entry] : m_resources) result.items.push_back(entry.resource.to_json());
+            for (const auto& [unused, entry] : m_resources) result.items.push_back(entry.resource.encode());
         } else {
-            for (const auto& [unused, entry] : m_prompts) result.items.push_back(entry.prompt.to_json());
+            for (const auto& [unused, entry] : m_prompts) result.items.push_back(entry.prompt.encode());
         }
-        co_return HttpResult{200, make_result_response(id, result.to_json())};
+        co_return HttpResult{200, make_result_response(id, result.encode())};
     }
 
     if (parsed.request.method == Methods::TOOLS_CALL) {
         auto name = required(object, "name");
         if (!name) { co_return error(id, name.error()); }
-        auto arguments = optional_object(object, "arguments");
+        auto arguments = request_arguments(object);
         if (!arguments) { co_return error(id, arguments.error()); }
         ToolHandler handler;
         auto it = m_tools.find(name.value());
@@ -460,7 +412,7 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         std::expected<std::string, McpError> value;
         co_await handler(arguments.value(), value);
         if (!value) co_return error(id, value.error());
-        co_return HttpResult{200, make_result_response(id, ToolCallResult::text(value.value()).to_json())};
+        co_return HttpResult{200, make_result_response(id, ToolCallResult::text(value.value()).encode())};
     }
 
     if (parsed.request.method == Methods::RESOURCES_READ) {
@@ -475,13 +427,13 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         std::expected<std::string, McpError> value;
         co_await reader(uri.value(), value);
         if (!value) co_return error(id, value.error());
-        co_return HttpResult{200, make_result_response(id, ReadResourceResult::text(uri.value(), value.value(), mimeType).to_json())};
+        co_return HttpResult{200, make_result_response(id, ReadResourceResult::text(uri.value(), value.value(), mimeType).encode())};
     }
 
     if (parsed.request.method == Methods::PROMPTS_GET) {
         auto name = required(object, "name");
         if (!name) { co_return error(id, name.error()); }
-        auto arguments = optional_object(object, "arguments");
+        auto arguments = request_arguments(object);
         if (!arguments) { co_return error(id, arguments.error()); }
         PromptGetter getter;
         auto it = m_prompts.find(name.value());
@@ -555,14 +507,8 @@ galay::kernel::Task<void> McpHttpServer::listen(
         co_await send_response(conn, error(request.request.id, params.error()));
         co_return;
     }
-    const json::Json notifications = params.value().at("notifications");
-    if (!notifications.valid()) {
-        co_await send_response(
-            conn, error(request.request.id,
-                        McpError::invalid_params("missing notifications")));
-        co_return;
-    }
-    auto requested = SubscriptionFilter::from_json(notifications);
+    auto requested = json::decode_member<SubscriptionFilter>(*params, "notifications")
+        .transform_error([](const std::string& message) { return McpError::invalid_params(message); });
     if (!requested) {
         co_await send_response(conn, error(request.request.id, requested.error()));
         co_return;

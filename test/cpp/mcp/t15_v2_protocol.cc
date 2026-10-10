@@ -28,10 +28,35 @@ bool require(bool condition, std::string_view message)
 
 int main()
 {
+    const auto tool_result = json::deserialize<json::Object>(v2::ToolCallResult{}.encode());
+    const auto resource_result = json::deserialize<json::Object>(v2::ReadResourceResult{}.encode());
+    const auto empty_prompt_result = json::deserialize<json::Object>(v2::GetPromptResult{}.encode());
+    if (!require(tool_result && tool_result->contains("content") &&
+                     tool_result->at("content").text == "[]" && !tool_result->contains("ttlMs") &&
+                     resource_result && resource_result->contains("contents") &&
+                     resource_result->at("contents").text == "[]" && resource_result->contains("ttlMs") &&
+                     empty_prompt_result && empty_prompt_result->contains("messages") &&
+                     empty_prompt_result->at("messages").text == "[]" && !empty_prompt_result->contains("ttlMs"),
+                 "empty v2 results lost required arrays or gained unrelated cache fields")) {
+        return 1;
+    }
     static_assert(std::string_view(v2::MCP_VERSION) == "2026-07-28");
     static_assert(v2::ErrorCodes::HEADER_MISMATCH == -32020);
     static_assert(v2::ErrorCodes::MISSING_REQUIRED_CLIENT_CAPABILITY == -32021);
     static_assert(v2::ErrorCodes::UNSUPPORTED_PROTOCOL_VERSION == -32022);
+    if (!require(json::deserialize<v2::ArgumentsFields>("{}").has_value() &&
+                     !json::deserialize<v2::ArgumentsFields>(R"({"arguments":null})") &&
+                     !json::deserialize<v2::ArgumentsFields>(R"({"arguments":[]})"),
+                 "v2 arguments did not distinguish absence from null or an array")) {
+        return 1;
+    }
+
+    v2::Tool null_annotation;
+    null_annotation.inputSchema = R"({"type":"object","properties":{"value":{"type":"string","x-mcp-header":null}}})";
+    if (!require(!v2::tool_header_annotations(null_annotation),
+                 "null header annotation was accepted")) {
+        return 1;
+    }
 
     v2::RequestMeta meta;
     meta.protocolVersion = v2::MCP_VERSION;
@@ -43,7 +68,13 @@ int main()
     discover.method = v2::Methods::SERVER_DISCOVER;
     discover.params = v2::make_request_params(meta);
 
-    auto parsed = v2::parse_request(discover.to_json());
+    const auto request_wire = json::serialize(discover);
+    if (!require(request_wire && v2::parse_request(*request_wire).has_value(),
+                 "direct serde serialization lost the JSON-RPC envelope")) {
+        return 1;
+    }
+
+    auto parsed = v2::parse_request(discover.encode());
     if (!require(parsed.has_value(), "valid v2 discover request was rejected")) {
         return 1;
     }
@@ -57,7 +88,7 @@ int main()
     }
 
     discover.id = std::string("discover-8");
-    auto stringId = v2::parse_request(discover.to_json());
+    auto stringId = v2::parse_request(discover.encode());
     if (!require(stringId.has_value() &&
                      std::get<std::string>(stringId->request.id) == "discover-8",
                  "string request id was not preserved")) {
@@ -88,6 +119,10 @@ int main()
                  "non-object business request fields were accepted")) {
         return 1;
     }
+    if (!require(!v2::make_request_params(meta, R"({"_meta":{}})"),
+                 "business fields overwrote reserved request metadata")) {
+        return 1;
+    }
 
     auto unsupported = v2::make_unsupported_protocol_version_response(
         9, "1900-01-01", {v2::MCP_VERSION});
@@ -105,7 +140,7 @@ int main()
     discovery.cacheScope = v2::CacheScope::Public;
     discovery.serverInfo = v2::Implementation{.name = "test-server", .version = "2.0.0"};
 
-    const auto discoveryJson = discovery.to_json();
+    const auto discoveryJson = discovery.encode();
     if (!require(discoveryJson.find("\"resultType\":\"complete\"") != std::string::npos &&
                      discoveryJson.find("\"ttlMs\":30000") != std::string::npos &&
                      discoveryJson.find("\"cacheScope\":\"public\"") != std::string::npos &&
@@ -114,11 +149,11 @@ int main()
         return 1;
     }
 
-    auto discoveryDocument = JsonDocument::parse(discoveryJson);
+    auto discoveryDocument = json::parse(discoveryJson);
     if (!require(discoveryDocument.has_value(), "discover result JSON was malformed")) {
         return 1;
     }
-    auto parsedDiscovery = v2::DiscoverResult::from_json(discoveryDocument->root());
+    auto parsedDiscovery = v2::DiscoverResult::decode(discoveryDocument.value());
     if (!require(parsedDiscovery.has_value() && parsedDiscovery->capabilities.tools &&
                      parsedDiscovery->capabilities.resources &&
                      parsedDiscovery->cacheScope == v2::CacheScope::Public &&
@@ -133,20 +168,20 @@ int main()
     tool.description = "Echo text";
     tool.inputSchema = R"({"type":"object","properties":{"text":{"type":"string"}}})";
     tool.outputSchema = R"({"type":"object"})";
-    auto toolDocument = JsonDocument::parse(tool.to_json());
+    auto toolDocument = json::parse(tool.encode());
     auto parsedTool = toolDocument
-        ? v2::Tool::from_json(toolDocument->root())
-        : std::expected<v2::Tool, McpError>(std::unexpected(toolDocument.error()));
+        ? v2::Tool::decode(toolDocument.value())
+        : std::expected<v2::Tool, McpError>(std::unexpected(McpError::parse_error(toolDocument.error())));
     if (!require(parsedTool.has_value() && parsedTool->name == "echo" &&
                      parsedTool->outputSchema.has_value(),
                  "v2 tool metadata did not round trip")) {
         return 1;
     }
 
-    auto invalidToolDocument = JsonDocument::parse(
+    auto invalidToolDocument = json::parse(
         R"({"name":"bad","inputSchema":{"type":"string"}})");
     if (!require(invalidToolDocument.has_value() &&
-                     !v2::Tool::from_json(invalidToolDocument->root()).has_value(),
+                     !v2::Tool::decode(invalidToolDocument.value()).has_value(),
                  "tool inputSchema without object root was accepted")) {
         return 1;
     }
@@ -156,10 +191,10 @@ int main()
     resource.name = "hello";
     resource.mimeType = "text/plain";
     resource.size = 5;
-    auto resourceDocument = JsonDocument::parse(resource.to_json());
+    auto resourceDocument = json::parse(resource.encode());
     auto parsedResource = resourceDocument
-        ? v2::Resource::from_json(resourceDocument->root())
-        : std::expected<v2::Resource, McpError>(std::unexpected(resourceDocument.error()));
+        ? v2::Resource::decode(resourceDocument.value())
+        : std::expected<v2::Resource, McpError>(std::unexpected(McpError::parse_error(resourceDocument.error())));
     if (!require(parsedResource.has_value() && parsedResource->size == 5,
                  "v2 resource metadata did not round trip")) {
         return 1;
@@ -169,10 +204,10 @@ int main()
     prompt.name = "review";
     prompt.arguments.push_back(v2::PromptArgument{
         .name = "code", .description = "Code to review", .required = true});
-    auto promptDocument = JsonDocument::parse(prompt.to_json());
+    auto promptDocument = json::parse(prompt.encode());
     auto parsedPrompt = promptDocument
-        ? v2::Prompt::from_json(promptDocument->root())
-        : std::expected<v2::Prompt, McpError>(std::unexpected(promptDocument.error()));
+        ? v2::Prompt::decode(promptDocument.value())
+        : std::expected<v2::Prompt, McpError>(std::unexpected(McpError::parse_error(promptDocument.error())));
     if (!require(parsedPrompt.has_value() && parsedPrompt->arguments.size() == 1 &&
                      parsedPrompt->arguments.front().required,
                  "v2 prompt metadata did not round trip")) {
@@ -184,11 +219,11 @@ int main()
     filter.promptsListChanged = true;
     filter.resourcesListChanged = true;
     filter.resourceSubscriptions = {"mem://hello", "mem://config"};
-    auto filterDocument = JsonDocument::parse(filter.to_json());
+    auto filterDocument = json::parse(filter.encode());
     auto parsedFilter = filterDocument
-        ? v2::SubscriptionFilter::from_json(filterDocument->root())
+        ? v2::SubscriptionFilter::decode(filterDocument.value())
         : std::expected<v2::SubscriptionFilter, McpError>(
-              std::unexpected(filterDocument.error()));
+              std::unexpected(McpError::parse_error(filterDocument.error())));
     if (!require(parsedFilter.has_value() && parsedFilter->toolsListChanged &&
                      parsedFilter->promptsListChanged &&
                      parsedFilter->resourcesListChanged &&
@@ -196,10 +231,10 @@ int main()
                  "subscription filter did not round trip")) {
         return 1;
     }
-    auto malformedFilter = JsonDocument::parse(
+    auto malformedFilter = json::parse(
         R"({"toolsListChanged":"yes","resourceSubscriptions":[7]})");
     if (!require(malformedFilter.has_value() &&
-                     !v2::SubscriptionFilter::from_json(malformedFilter->root()).has_value(),
+                     !v2::SubscriptionFilter::decode(malformedFilter.value()).has_value(),
                  "malformed subscription filter was accepted")) {
         return 1;
     }
@@ -253,7 +288,7 @@ int main()
     list.items = {R"({"name":"echo","inputSchema":{"type":"object"}})"};
     list.ttlMs = 1000;
     list.cacheScope = v2::CacheScope::Private;
-    const auto listJson = list.to_json();
+    const auto listJson = list.encode();
     if (!require(listJson.find("\"resultType\":\"complete\"") != std::string::npos &&
                      listJson.find("\"cacheScope\":\"private\"") != std::string::npos,
                  "cacheable list result is missing required v2 fields")) {
@@ -280,7 +315,7 @@ int main()
 
     auto callResult = v2::ToolCallResult::text("hello");
     callResult.structuredContent = R"({"echo":"hello"})";
-    const auto callResponse = v2::make_result_response(std::string("call-1"), callResult.to_json());
+    const auto callResponse = v2::make_result_response(std::string("call-1"), callResult.encode());
     auto parsedCallResponse = v2::parse_response(callResponse);
     if (!require(parsedCallResponse.has_value() && parsedCallResponse->response.hasResult &&
                      !parsedCallResponse->response.hasError &&
@@ -312,13 +347,13 @@ int main()
                  "valid x-mcp-header annotations were rejected")) {
         return 1;
     }
-    auto argumentsDocument = JsonDocument::parse(
+    auto argumentsDocument = json::parse(
         R"({"region":"us west","count":42,"enabled":true})");
     if (!require(argumentsDocument.has_value(), "header argument JSON was malformed")) {
         return 1;
     }
     for (const auto& annotation : annotations.value()) {
-        auto value = v2::argument_header_value(argumentsDocument->root(), annotation);
+        auto value = v2::argument_header_value(argumentsDocument.value(), annotation);
         if (!require(value.has_value() && value->has_value(),
                      "annotated argument was not extracted")) {
             return 1;
@@ -351,7 +386,7 @@ int main()
     }
 
     const auto readResult = v2::ReadResourceResult::text("mem://hello", "hello", "text/plain");
-    const auto readJson = readResult.to_json();
+    const auto readJson = readResult.encode();
     if (!require(readJson.find("\"resultType\":\"complete\"") != std::string::npos &&
                      readJson.find("\"uri\":\"mem://hello\"") != std::string::npos &&
                      readJson.find("\"text\":\"hello\"") != std::string::npos,
@@ -361,7 +396,7 @@ int main()
 
     v2::GetPromptResult prompt_result;
     prompt_result.messages = {R"({"role":"user","content":{"type":"text","text":"Review"}})"};
-    if (!require(prompt_result.to_json().find("\"resultType\":\"complete\"") !=
+    if (!require(prompt_result.encode().find("\"resultType\":\"complete\"") !=
                      std::string::npos,
                  "v2 prompt result is missing resultType")) {
         return 1;

@@ -12,7 +12,8 @@
 #ifndef GALAY_MCP_COMMON_MCPBASE_H
 #define GALAY_MCP_COMMON_MCPBASE_H
 
-#include "mcp_json.h"
+#include "mcp_error.h"
+#include <serde/json/json.hpp>
 #include "../../galay-kernel/core/task.h"
 #include <expected>
 #include <functional>
@@ -76,13 +77,13 @@ struct Content {
      * @brief 序列化为JSON字符串
      * @return JSON格式字符串
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element JSON元素
      * @return 成功返回Content，失败返回McpError
      */
-    static std::expected<Content, McpError> from_json(const json::Json& element);
+    static std::expected<Content, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -98,13 +99,13 @@ struct Tool {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 Tool，失败时返回 McpError 错误
      */
-    static std::expected<Tool, McpError> from_json(const json::Json& element);
+    static std::expected<Tool, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -121,13 +122,13 @@ struct Resource {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 Resource，失败时返回 McpError 错误
      */
-    static std::expected<Resource, McpError> from_json(const json::Json& element);
+    static std::expected<Resource, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -143,13 +144,13 @@ struct PromptArgument {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 PromptArgument，失败时返回 McpError 错误
      */
-    static std::expected<PromptArgument, McpError> from_json(const json::Json& element);
+    static std::expected<PromptArgument, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -165,13 +166,13 @@ struct Prompt {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 Prompt，失败时返回 McpError 错误
      */
-    static std::expected<Prompt, McpError> from_json(const json::Json& element);
+    static std::expected<Prompt, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -186,13 +187,13 @@ struct ClientInfo {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 ClientInfo，失败时返回 McpError 错误
      */
-    static std::expected<ClientInfo, McpError> from_json(const json::Json& element);
+    static std::expected<ClientInfo, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -208,13 +209,13 @@ struct ServerInfo {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 ServerInfo，失败时返回 McpError 错误
      */
-    static std::expected<ServerInfo, McpError> from_json(const json::Json& element);
+    static std::expected<ServerInfo, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -231,13 +232,13 @@ struct ServerCapabilities {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 ServerCapabilities，失败时返回 McpError 错误
      */
-    static std::expected<ServerCapabilities, McpError> from_json(const json::Json& element);
+    static std::expected<ServerCapabilities, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -253,13 +254,13 @@ struct InitializeParams {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 InitializeParams，失败时返回 McpError 错误
      */
-    static std::expected<InitializeParams, McpError> from_json(const json::Json& element);
+    static std::expected<InitializeParams, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -275,13 +276,13 @@ struct InitializeResult {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 InitializeResult，失败时返回 McpError 错误
      */
-    static std::expected<InitializeResult, McpError> from_json(const json::Json& element);
+    static std::expected<InitializeResult, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -296,13 +297,13 @@ struct ToolCallParams {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 ToolCallParams，失败时返回 McpError 错误
      */
-    static std::expected<ToolCallParams, McpError> from_json(const json::Json& element);
+    static std::expected<ToolCallParams, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -317,13 +318,13 @@ struct ToolCallResult {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 ToolCallResult，失败时返回 McpError 错误
      */
-    static std::expected<ToolCallResult, McpError> from_json(const json::Json& element);
+    static std::expected<ToolCallResult, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -340,7 +341,7 @@ struct JsonRpcRequest {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
 };
 
 /**
@@ -357,13 +358,13 @@ struct JsonRpcResponse {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 JsonRpcResponse，失败时返回 McpError 错误
      */
-    static std::expected<JsonRpcResponse, McpError> from_json(const json::Json& element);
+    static std::expected<JsonRpcResponse, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -379,7 +380,7 @@ struct JsonRpcNotification {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
 };
 
 /**
@@ -395,13 +396,13 @@ struct JsonRpcError {
      * @brief 序列化为JSON字符串
      * @return 处理后的 std::string 结果
      */
-    std::string to_json() const;
+    std::string encode() const;
     /**
      * @brief 从JSON元素反序列化
      * @param element IO 元素
      * @return 成功时返回 JsonRpcError，失败时返回 McpError 错误
      */
-    static std::expected<JsonRpcError, McpError> from_json(const json::Json& element);
+    static std::expected<JsonRpcError, McpError> decode(const json::Json& element);
 };
 
 /**
@@ -418,5 +419,7 @@ namespace ErrorCodes {
 }
 
 } // namespace galay::mcp
+
+#include "protocol_fields.h"
 
 #endif // GALAY_MCP_COMMON_MCPBASE_H

@@ -197,7 +197,7 @@ galay::kernel::Task<void> worker_task(McpClient& client,
             }
             case Operation::ToolCall: {
                 std::string args;
-                auto argsWriter = make_json_writer(args);
+                auto argsWriter = json::stream::StreamWriter{[&args](std::string_view chunk) -> json::result<void> { args.append(chunk); return {}; }};
                 // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
                 (void)argsWriter.start_object();
                 (void)argsWriter.key("message");

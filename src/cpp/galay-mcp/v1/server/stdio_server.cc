@@ -211,7 +211,7 @@ void McpStdioServer::handle_initialize(const JsonRpcRequestView& request) {
         return;
     }
 
-    auto paramsExp = InitializeParams::from_json(request.params);
+    auto paramsExp = InitializeParams::decode(request.params);
     if (!paramsExp) {
         MCP_LOG_WARN("[stdio_server]", "initialize params parse failed id={} error={}",
                      request.id.value(),
@@ -283,23 +283,13 @@ void McpStdioServer::handle_tools_call(const JsonRpcRequestView& request) {
             return;
         }
 
-        json::Json paramsObj = request.params;
-        if (!paramsObj.is_object()) {
-            MCP_LOG_WARN("[stdio_server]", "tools/call params not object id={}", request.id.value());
+        auto params = json::decode<NamedArguments>(request.params);
+        if (!params) {
             send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                     "Invalid parameters", "Params must be object");
+                     "Invalid parameters", params.error());
             return;
         }
-
-        std::string toolName;
-        auto nameVal = paramsObj.at("name").as_string();
-        if (!nameVal) {
-            MCP_LOG_WARN("[stdio_server]", "tools/call missing tool name id={}", request.id.value());
-            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                     "Invalid parameters", "Missing tool name");
-            return;
-        }
-        toolName = std::string(*nameVal);
+        const std::string& toolName = params->name;
 
         std::shared_lock<std::shared_mutex> lock(m_toolsMutex);
 
@@ -311,14 +301,9 @@ void McpStdioServer::handle_tools_call(const JsonRpcRequestView& request) {
             return;
         }
 
-        json::Json arguments = empty_json_object();
-        json::Json argsElement = paramsObj.at("arguments");
-        if (argsElement.valid()) {
-            arguments = argsElement;
-        }
 
         // 调用工具处理函数
-        auto result = it->second.handler(arguments);
+        auto result = it->second.handler(params->arguments);
 
         if (!result) {
             MCP_LOG_WARN("[stdio_server]", "tool handler failed id={} tool={} error={}",
@@ -339,7 +324,7 @@ void McpStdioServer::handle_tools_call(const JsonRpcRequestView& request) {
 
         JsonRpcResponse response;
         response.id = request.id.value();
-        response.result = callResult.to_json();
+        response.result = callResult.encode();
 
         send_response(response);
 
@@ -390,23 +375,13 @@ void McpStdioServer::handle_resources_read(const JsonRpcRequestView& request) {
             return;
         }
 
-        json::Json paramsObj = request.params;
-        if (!paramsObj.is_object()) {
-            MCP_LOG_WARN("[stdio_server]", "resources/read params not object id={}", request.id.value());
+        auto params = json::decode<ResourceParams>(request.params);
+        if (!params) {
             send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                     "Invalid parameters", "Params must be object");
+                     "Invalid parameters", params.error());
             return;
         }
-
-        std::string uri;
-        auto uriVal = paramsObj.at("uri").as_string();
-        if (!uriVal) {
-            MCP_LOG_WARN("[stdio_server]", "resources/read missing uri id={}", request.id.value());
-            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                     "Invalid parameters", "Missing uri");
-            return;
-        }
-        uri = std::string(*uriVal);
+        const std::string& uri = params->uri;
 
         std::shared_lock<std::shared_mutex> lock(m_resourcesMutex);
 
@@ -436,16 +411,8 @@ void McpStdioServer::handle_resources_read(const JsonRpcRequestView& request) {
         content.type = ContentType::Text;
         content.text = result.value();
 
-        std::string resultJson;
-        auto resultWriter = make_json_writer(resultJson);
-        // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-        (void)resultWriter.start_object();
-        (void)resultWriter.key("contents");
-        (void)resultWriter.start_array();
-        (void)resultWriter.raw(content.to_json());
-        (void)resultWriter.end_array();
-        (void)resultWriter.end_object();
-        if (!resultWriter.finish()) {
+        auto result_body = json::serialize(std::map<std::string, std::vector<Content>>{{"contents", {content}}});
+        if (!result_body) {
             MCP_LOG_ERROR("[stdio_server]", "result encode failed id={}", request.id.value());
             send_error(request.id.value(), ErrorCodes::INTERNAL_ERROR,
                      "Internal error", "");
@@ -454,7 +421,7 @@ void McpStdioServer::handle_resources_read(const JsonRpcRequestView& request) {
 
         JsonRpcResponse response;
         response.id = request.id.value();
-        response.result = std::move(resultJson);
+        response.result = std::move(*result_body);
 
         send_response(response);
 
@@ -505,29 +472,13 @@ void McpStdioServer::handle_prompts_get(const JsonRpcRequestView& request) {
             return;
         }
 
-        json::Json paramsObj = request.params;
-        if (!paramsObj.is_object()) {
-            MCP_LOG_WARN("[stdio_server]", "prompts/get params not object id={}", request.id.value());
+        auto params = json::decode<NamedArguments>(request.params);
+        if (!params) {
             send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                     "Invalid parameters", "Params must be object");
+                     "Invalid parameters", params.error());
             return;
         }
-
-        std::string name;
-        auto nameVal = paramsObj.at("name").as_string();
-        if (!nameVal) {
-            MCP_LOG_WARN("[stdio_server]", "prompts/get missing name id={}", request.id.value());
-            send_error(request.id.value(), ErrorCodes::INVALID_PARAMS,
-                     "Invalid parameters", "Missing prompt name");
-            return;
-        }
-        name = std::string(*nameVal);
-
-        json::Json arguments = empty_json_object();
-        json::Json argsElement = paramsObj.at("arguments");
-        if (argsElement.valid()) {
-            arguments = argsElement;
-        }
+        const std::string& name = params->name;
 
         std::shared_lock<std::shared_mutex> lock(m_promptsMutex);
 
@@ -540,7 +491,7 @@ void McpStdioServer::handle_prompts_get(const JsonRpcRequestView& request) {
         }
 
         // 调用提示获取函数
-        auto result = it->second.getter(name, arguments);
+        auto result = it->second.getter(name, params->arguments);
 
         if (!result) {
             MCP_LOG_WARN("[stdio_server]", "prompt getter failed id={} name={} error={}",
@@ -577,13 +528,13 @@ void McpStdioServer::handle_ping(const JsonRpcRequestView& request) {
 }
 
 void McpStdioServer::send_response(const JsonRpcResponse& response) {
-    std::string message = response.to_json();
+    std::string message = response.encode();
     if (message.size() > m_policy.transport.max_response_bytes) {
         message = protocol::make_error_response(
             response.id,
             ErrorCodes::INVALID_REQUEST,
             "Payload too large",
-            "").to_json();
+            "").encode();
     }
 
     auto result = write_message(message);
@@ -604,7 +555,7 @@ void McpStdioServer::send_notification(const std::string& method, const std::str
     notification.method = method;
     notification.params = params;
 
-    auto result = write_message(notification.to_json());
+    auto result = write_message(notification.encode());
     if (!result) {
         MCP_LOG_ERROR("[stdio_server]", "write notification failed method={} error={}",
                       method,

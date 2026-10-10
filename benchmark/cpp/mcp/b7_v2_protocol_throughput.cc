@@ -37,13 +37,13 @@ int main(int argc, char** argv)
 
     std::uint64_t checksum = 0;
     for (std::size_t i = 0; i < 1'000; ++i) {
-        auto parsed = galay::mcp::v2::parse_request(request.to_json());
+        auto parsed = galay::mcp::v2::parse_request(request.encode());
         if (!parsed) return 1;
         checksum += parsed->request.method.size();
     }
     const auto start = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < iterations; ++i) {
-        const auto wire = request.to_json();
+        const auto wire = request.encode();
         auto parsed = galay::mcp::v2::parse_request(wire);
         if (!parsed) return 1;
         checksum += parsed->request.method.size();

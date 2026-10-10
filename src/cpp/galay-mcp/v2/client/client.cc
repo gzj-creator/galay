@@ -1,4 +1,5 @@
 #include "client.h"
+#include "../../common/mcp_base.h"
 
 #include "../../../galay-http/builder/http_builder.h"
 #include "../../../galay-kernel/core/runtime.h"
@@ -33,196 +34,71 @@ struct StdioRequestLease {
     StdioRequestLease& operator=(const StdioRequestLease&) = delete;
 };
 
-std::expected<std::string, McpError> required_string(const json::Json& object, const char* key)
-{
-    auto value = object.at(key).as_string();
-    if (!value) {
-        return std::unexpected(McpError::invalid_params(
-            std::string("missing or invalid ") + key));
-    }
-    return std::string(*value);
-}
-
 template <typename T>
-std::expected<std::vector<T>, McpError> parse_items(std::string_view result,
-                                                   const char* key,
-                                                   auto parser)
-{
-    auto document = JsonDocument::parse(result);
-    if (!document) return std::unexpected(document.error());
-    if (!document->root().is_object()) {
-        return std::unexpected(McpError::invalid_response("result must be an object"));
+std::expected<std::vector<T>, McpError> parse_items(std::string_view result, const char* key) {
+    auto values = json::deserialize_member<std::vector<json::Json>>(result, key);
+    if (!values) return std::unexpected(McpError::invalid_response(values.error()));
+    std::vector<T> items;
+    items.reserve(values->size());
+    for (const auto& value : *values) {
+        auto item = T::decode(value);
+        if (!item) return std::unexpected(item.error());
+        items.push_back(std::move(*item));
     }
-    const json::Json array = document->root().at(key);
-    if (!array.is_array()) {
-        return std::unexpected(McpError::invalid_response(std::string("missing ") + key));
-    }
-    std::vector<T> values;
-    for (size_t i = 0; i < array.size(); ++i) {
-        const json::Json item = array.at(i);
-        auto value = parser(item);
-        if (!value) return std::unexpected(value.error());
-        values.push_back(std::move(value.value()));
-    }
-    return values;
+    return items;
 }
-
-std::expected<std::string, McpError> first_text(std::string_view result)
-{
-    auto document = JsonDocument::parse(result);
-    if (!document) return std::unexpected(document.error());
-    if (!document->root().is_object()) {
-        return std::unexpected(McpError::invalid_response("result must be an object"));
-    }
-    const json::Json contents = document->root().at("contents");
-    if (!contents.is_array()) {
-        return std::unexpected(McpError::invalid_response("missing contents"));
-    }
-    for (size_t i = 0; i < contents.size(); ++i) {
-        const json::Json item = contents.at(i);
-        if (!item.is_object()) continue;
-        auto text = item.at("text").as_string();
-        if (text) return std::string(*text);
-    }
-    return std::string{};
+std::expected<std::string, McpError> first_text(std::string_view result) {
+    auto values = json::deserialize_member<std::vector<TextResource>>(result, "contents");
+    if (!values) return std::unexpected(McpError::invalid_response(values.error()));
+    if (values->empty()) return std::string{};
+    return std::move(values->front().text);
 }
-
-std::expected<std::string, McpError> parse_rpc_result(std::string_view body,
-                                                    RequestId expectedId)
-{
+std::expected<std::string, McpError> parse_rpc_result(std::string_view body, RequestId expected_id) {
     auto parsed = parse_response(body);
     if (!parsed) return std::unexpected(parsed.error());
-    if (!parsed->response.hasResult) {
-        if (!parsed->response.error.is_object()) {
-            return std::unexpected(McpError::invalid_response("invalid error response"));
-        }
-        const auto code = parsed->response.error.at("code").as_int64();
-        const auto message = parsed->response.error.at("message").as_string();
-        if (!code || !message) {
-            return std::unexpected(McpError::invalid_response("invalid error response"));
-        }
-        return std::unexpected(McpError::from_json_rpc_error(static_cast<int>(*code),
-                                                          std::string(*message)));
+    if (parsed->response.hasError) {
+        auto error = json::decode<galay::mcp::JsonRpcError>(parsed->response.error);
+        if (!error) return std::unexpected(McpError::invalid_response(error.error()));
+        return std::unexpected(McpError::from_json_rpc_error(error->code, error->message,
+            error->data.value_or(std::string{})));
     }
-    if (parsed->response.id != expectedId) {
+    if (parsed->response.id != expected_id)
         return std::unexpected(McpError::invalid_response("mismatched response id"));
-    }
-    std::string result;
-    auto serialized = json::stream::serialize(
-        parsed->response.result, [&](std::string_view chunk) -> json::result<void> {
-            result.append(chunk);
-            return {};
-        });
-    if (!serialized) {
-        return std::unexpected(McpError::invalid_response("invalid result"));
-    }
-    return result;
+    auto result = json::serialize(parsed->response.result);
+    if (!result) return std::unexpected(McpError::invalid_response(result.error()));
+    return std::move(*result);
 }
-
-std::expected<SubscriptionFilter, McpError> parse_acknowledged(
-    std::string_view message, const RequestId& requestId)
-{
-    auto document = JsonDocument::parse(message);
-    if (!document) return std::unexpected(document.error());
-    const json::Json object = document->root();
-    if (!object.is_object()) {
-        return std::unexpected(McpError::invalid_response("SSE message is not an object"));
-    }
-    const auto method = object.at("method").as_string();
-    if (!method || *method != NotificationMethods::SUBSCRIPTIONS_ACKNOWLEDGED) {
+std::expected<SubscriptionFilter, McpError> parse_acknowledged(std::string_view message, const RequestId& request_id) {
+    auto fields = json::deserialize<EnvelopeFields>(message);
+    if (!fields) return std::unexpected(McpError::invalid_response(fields.error()));
+    if (fields->method != NotificationMethods::SUBSCRIPTIONS_ACKNOWLEDGED || !fields->params)
         return std::unexpected(McpError::invalid_response("subscription acknowledgement is not first"));
-    }
-    const json::Json params = object.at("params");
-    if (!params.is_object()) {
-        return std::unexpected(McpError::invalid_response("acknowledgement missing params"));
-    }
-    const json::Json meta = params.at("_meta");
-    const json::Json idElement = meta.is_object()
-        ? meta.at("io.modelcontextprotocol/subscriptionId")
-        : json::Json{};
-    if (!meta.is_object() || !idElement.valid()) {
-        return std::unexpected(McpError::invalid_response("acknowledgement missing subscription id"));
-    }
-    RequestId id;
-    if (auto number = idElement.as_int64()) {
-        id = *number;
-    } else if (auto text = idElement.as_string()) {
-        id = std::string(*text);
-    } else {
-        return std::unexpected(McpError::invalid_response("invalid subscription id"));
-    }
-    if (id != requestId) {
-        return std::unexpected(McpError::invalid_response("mismatched subscription id"));
-    }
-    const json::Json filterElement = params.at("notifications");
-    if (!filterElement.valid()) {
-        return std::unexpected(McpError::invalid_response("acknowledgement missing notifications"));
-    }
-    return SubscriptionFilter::from_json(filterElement);
+    auto params = json::deserialize<SubscriptionParams>(*fields->params);
+    if (!params) return std::unexpected(McpError::invalid_response(params.error()));
+    if (params->meta.id != request_id || !params->notifications)
+        return std::unexpected(McpError::invalid_response("invalid subscription acknowledgement"));
+    return std::move(*params->notifications);
 }
-
-std::expected<bool, McpError> validate_subscription_message(
-    std::string_view message, const RequestId& requestId)
-{
-    auto document = JsonDocument::parse(message);
-    if (!document) return std::unexpected(document.error());
-    const json::Json object = document->root();
-    if (!object.is_object()) {
-        return std::unexpected(McpError::invalid_response("SSE message is not an object"));
-    }
-    const auto method = object.at("method").as_string();
-    if (method) {
-        if (*method == NotificationMethods::SUBSCRIPTIONS_ACKNOWLEDGED) {
-            return std::unexpected(McpError::invalid_response("duplicate subscription acknowledgement"));
-        }
-        if (*method != NotificationMethods::TOOLS_LIST_CHANGED &&
-            *method != NotificationMethods::RESOURCES_LIST_CHANGED &&
-            *method != NotificationMethods::RESOURCES_UPDATED &&
-            *method != NotificationMethods::PROMPTS_LIST_CHANGED) {
+std::expected<bool, McpError> validate_subscription_message(std::string_view message, const RequestId& request_id) {
+    auto fields = json::deserialize<EnvelopeFields>(message);
+    if (!fields) return std::unexpected(McpError::invalid_response(fields.error()));
+    if (fields->method) {
+        const auto& method = *fields->method;
+        if (method != NotificationMethods::TOOLS_LIST_CHANGED && method != NotificationMethods::RESOURCES_LIST_CHANGED &&
+            method != NotificationMethods::RESOURCES_UPDATED && method != NotificationMethods::PROMPTS_LIST_CHANGED)
             return std::unexpected(McpError::invalid_response("unknown subscription notification"));
-        }
-        const json::Json params = object.at("params");
-        if (!params.is_object()) {
-            return std::unexpected(McpError::invalid_response(
-                "subscription notification missing subscription id"));
-        }
-        const json::Json meta = params.at("_meta");
-        if (!meta.is_object()) {
-            return std::unexpected(McpError::invalid_response(
-                "subscription notification missing subscription id"));
-        }
-        const json::Json subscriptionElement =
-            meta.at("io.modelcontextprotocol/subscriptionId");
-        if (!subscriptionElement.valid()) {
-            return std::unexpected(McpError::invalid_response(
-                "subscription notification missing subscription id"));
-        }
-        RequestId notificationId;
-        if (auto number = subscriptionElement.as_int64()) {
-            notificationId = *number;
-        } else if (auto text = subscriptionElement.as_string()) {
-            notificationId = std::string(*text);
-        } else {
-            return std::unexpected(McpError::invalid_response(
-                "invalid subscription notification id"));
-        }
-        if (notificationId != requestId) {
-            return std::unexpected(McpError::invalid_response(
-                "mismatched subscription notification id"));
-        }
+        if (!fields->params) return std::unexpected(McpError::invalid_response("missing subscription params"));
+        auto params = json::deserialize<SubscriptionParams>(*fields->params);
+        if (!params) return std::unexpected(McpError::invalid_response(params.error()));
+        if (params->meta.id != request_id)
+            return std::unexpected(McpError::invalid_response("mismatched subscription notification id"));
         return true;
     }
     auto parsed = parse_response(message);
-    if (!parsed || !parsed->response.hasResult || parsed->response.id != requestId) {
+    if (!parsed || !parsed->response.hasResult || parsed->response.id != request_id)
         return std::unexpected(McpError::invalid_response("invalid subscription completion"));
-    }
-    if (!parsed->response.result.is_object()) {
-        return std::unexpected(McpError::invalid_response("invalid subscription result"));
-    }
-    const auto resultType = parsed->response.result.at("resultType").as_string();
-    if (!resultType || *resultType != "complete") {
-        return std::unexpected(McpError::invalid_response("unexpected subscription result"));
-    }
+    auto type = json::decode_member<std::string>(parsed->response.result, "resultType");
+    if (!type || *type != "complete") return std::unexpected(McpError::invalid_response("unexpected subscription result"));
     return false;
 }
 
@@ -295,7 +171,7 @@ std::expected<std::string, McpError> McpStdioClient::request(std::string_view me
     request.id = id;
     request.method = std::string(method);
     request.params = std::move(params.value());
-    auto writeResult = write(request.to_json());
+    auto writeResult = write(request.encode());
     if (!writeResult) return std::unexpected(writeResult.error());
     while (true) {
         auto line = read();
@@ -311,35 +187,26 @@ std::expected<DiscoverResult, McpError> McpStdioClient::discover()
 {
     auto value = request(Methods::SERVER_DISCOVER);
     if (!value) return std::unexpected(value.error());
-    auto document = JsonDocument::parse(value.value());
-    if (!document) return std::unexpected(document.error());
-    return DiscoverResult::from_json(document->root());
+    auto result = json::deserialize<DiscoverResult>(*value);
+    if (!result) return std::unexpected(McpError::invalid_response(result.error()));
+    return std::move(*result);
 }
 
 std::expected<std::vector<Tool>, McpError> McpStdioClient::list_tools()
 {
     auto value = request(Methods::TOOLS_LIST);
     if (!value) return std::unexpected(value.error());
-    return parse_items<Tool>(value.value(), "tools", [](const json::Json& item) { return Tool::from_json(item); });
+    return parse_items<Tool>(value.value(), "tools");
 }
 
 std::expected<std::string, McpError> McpStdioClient::call_tool(std::string name, std::string arguments)
 {
-    std::string fieldsJson;
-    auto fields = make_json_writer(fieldsJson);
-    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-    (void)fields.start_object();
-    (void)fields.key("name");
-    (void)fields.string(name);
-    (void)fields.key("arguments");
-    (void)fields.raw(arguments.empty() ? "{}" : arguments);
-    (void)fields.end_object();
-    auto finished = fields.finish();
+    auto finished = json::serialize(galay::mcp::PromptParams{name, arguments.empty() ? std::string("{}") : arguments});
     if (!finished) {
         return std::unexpected(McpError::invalid_message(
             "failed to encode JSON: " + finished.error()));
     }
-    auto value = request(Methods::TOOLS_CALL, std::move(fieldsJson));
+    auto value = request(Methods::TOOLS_CALL, std::move(*finished));
     if (!value) return std::unexpected(value.error());
     return value;
 }
@@ -348,24 +215,17 @@ std::expected<std::vector<Resource>, McpError> McpStdioClient::list_resources()
 {
     auto value = request(Methods::RESOURCES_LIST);
     if (!value) return std::unexpected(value.error());
-    return parse_items<Resource>(value.value(), "resources", [](const json::Json& item) { return Resource::from_json(item); });
+    return parse_items<Resource>(value.value(), "resources");
 }
 
 std::expected<std::string, McpError> McpStdioClient::read_resource(std::string uri)
 {
-    std::string fieldsJson;
-    auto fields = make_json_writer(fieldsJson);
-    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-    (void)fields.start_object();
-    (void)fields.key("uri");
-    (void)fields.string(uri);
-    (void)fields.end_object();
-    auto finished = fields.finish();
+    auto finished = json::serialize(galay::mcp::ResourceParams{uri});
     if (!finished) {
         return std::unexpected(McpError::invalid_message(
             "failed to encode JSON: " + finished.error()));
     }
-    auto value = request(Methods::RESOURCES_READ, std::move(fieldsJson));
+    auto value = request(Methods::RESOURCES_READ, std::move(*finished));
     if (!value) return std::unexpected(value.error());
     return first_text(value.value());
 }
@@ -374,26 +234,17 @@ std::expected<std::vector<Prompt>, McpError> McpStdioClient::list_prompts()
 {
     auto value = request(Methods::PROMPTS_LIST);
     if (!value) return std::unexpected(value.error());
-    return parse_items<Prompt>(value.value(), "prompts", [](const json::Json& item) { return Prompt::from_json(item); });
+    return parse_items<Prompt>(value.value(), "prompts");
 }
 
 std::expected<std::string, McpError> McpStdioClient::get_prompt(std::string name, std::string arguments)
 {
-    std::string fieldsJson;
-    auto fields = make_json_writer(fieldsJson);
-    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-    (void)fields.start_object();
-    (void)fields.key("name");
-    (void)fields.string(name);
-    (void)fields.key("arguments");
-    (void)fields.raw(arguments.empty() ? "{}" : arguments);
-    (void)fields.end_object();
-    auto finished = fields.finish();
+    auto finished = json::serialize(galay::mcp::PromptParams{name, arguments.empty() ? std::string("{}") : arguments});
     if (!finished) {
         return std::unexpected(McpError::invalid_message(
             "failed to encode JSON: " + finished.error()));
     }
-    return request(Methods::PROMPTS_GET, std::move(fieldsJson));
+    return request(Methods::PROMPTS_GET, std::move(*finished));
 }
 
 McpHttpClient::McpHttpClient(kernel::Runtime& runtime,
@@ -472,24 +323,15 @@ kernel::Task<void> McpHttpClient::request(std::string method,
     message.id = id;
     message.method = method;
     message.params = std::move(params.value());
-    const std::string body = message.to_json();
+    const std::string body = message.encode();
     auto session = m_client.get_session();
     if (!session) { result = std::unexpected(McpError::connection_error(session.error().message())); co_return; }
     std::string nameHeader;
-    if (method == Methods::TOOLS_CALL || method == Methods::PROMPTS_GET) {
-        auto doc = JsonDocument::parse(fields);
-        if (doc && doc->root().is_object()) {
-            if (auto name = doc->root().at("name").as_string()) {
-                nameHeader = std::string(*name);
-            }
-        }
-    } else if (method == Methods::RESOURCES_READ) {
-        auto doc = JsonDocument::parse(fields);
-        if (doc && doc->root().is_object()) {
-            if (auto uri = doc->root().at("uri").as_string()) {
-                nameHeader = std::string(*uri);
-            }
-        }
+    if (method == Methods::TOOLS_CALL || method == Methods::PROMPTS_GET || method == Methods::RESOURCES_READ) {
+        const char* key = method == Methods::RESOURCES_READ ? "uri" : "name";
+        auto name = json::deserialize_member<std::string>(fields, key);
+        if (!name) { result = std::unexpected(McpError::invalid_params(name.error())); co_return; }
+        nameHeader = std::move(*name);
     }
     std::map<std::string, std::string> headers{
         {"Host", m_client.url().host + ":" + std::to_string(m_client.url().port)},
@@ -498,31 +340,16 @@ kernel::Task<void> McpHttpClient::request(std::string method,
         {"Mcp-Method", method}};
     if (!nameHeader.empty()) headers.emplace("Mcp-Name", encode_header_value(nameHeader));
     if (method == Methods::TOOLS_CALL) {
-        auto fieldsDocument = JsonDocument::parse(fields);
-        if (fieldsDocument && fieldsDocument->root().is_object()) {
-            const json::Json& fieldsObject = fieldsDocument->root();
-            const auto toolName = fieldsObject.at("name").as_string();
-            const json::Json arguments = fieldsObject.at("arguments");
-            if (toolName && arguments.valid()) {
-                auto it = m_toolDefinitions.find(std::string(*toolName));
-                if (it != m_toolDefinitions.end()) {
-                    auto annotations = tool_header_annotations(it->second);
-                    if (!annotations) {
-                        result = std::unexpected(annotations.error());
-                        co_return;
-                    }
-                    for (const auto& annotation : annotations.value()) {
-                        auto value = argument_header_value(arguments, annotation);
-                        if (!value) {
-                            result = std::unexpected(value.error());
-                            co_return;
-                        }
-                        if (value.value()) {
-                            headers.emplace("Mcp-Param-" + annotation.name,
-                                            encode_header_value(*value.value()));
-                        }
-                    }
-                }
+        auto named = json::deserialize<galay::mcp::NamedArguments>(fields);
+        if (!named) { result = std::unexpected(McpError::invalid_params(named.error())); co_return; }
+        auto it = m_toolDefinitions.find(named->name);
+        if (it != m_toolDefinitions.end()) {
+            auto annotations = tool_header_annotations(it->second);
+            if (!annotations) { result = std::unexpected(annotations.error()); co_return; }
+            for (const auto& annotation : *annotations) {
+                auto value = argument_header_value(named->arguments, annotation);
+                if (!value) { result = std::unexpected(value.error()); co_return; }
+                if (*value) headers.emplace("Mcp-Param-" + annotation.name, encode_header_value(**value));
             }
         }
     }
@@ -552,9 +379,8 @@ kernel::Task<void> McpHttpClient::discover(std::expected<DiscoverResult, McpErro
     std::expected<std::string, McpError> value;
     co_await request(Methods::SERVER_DISCOVER, "{}", value);
     if (!value) { result = std::unexpected(value.error()); co_return; }
-    auto doc = JsonDocument::parse(value.value());
-    if (!doc) { result = std::unexpected(doc.error()); co_return; }
-    result = DiscoverResult::from_json(doc->root());
+    result = json::deserialize<DiscoverResult>(*value)
+        .transform_error([](const std::string& message) { return McpError::invalid_response(message); });
 }
 
 kernel::Task<void> McpHttpClient::list_tools(std::expected<std::vector<Tool>, McpError>& result)
@@ -562,7 +388,7 @@ kernel::Task<void> McpHttpClient::list_tools(std::expected<std::vector<Tool>, Mc
     std::expected<std::string, McpError> value;
     co_await request(Methods::TOOLS_LIST, "{}", value);
     if (!value) { result = std::unexpected(value.error()); co_return; }
-    auto parsed = parse_items<Tool>(value.value(), "tools", [](const json::Json& item) { return Tool::from_json(item); });
+    auto parsed = parse_items<Tool>(value.value(), "tools");
     if (!parsed) { result = std::unexpected(parsed.error()); co_return; }
     std::vector<Tool> valid;
     for (auto& tool : parsed.value()) {
@@ -579,22 +405,13 @@ kernel::Task<void> McpHttpClient::list_tools(std::expected<std::vector<Tool>, Mc
 kernel::Task<void> McpHttpClient::call_tool(std::string name, std::string arguments,
                                            std::expected<std::string, McpError>& result)
 {
-    std::string fieldsJson;
-    auto fields = make_json_writer(fieldsJson);
-    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-    (void)fields.start_object();
-    (void)fields.key("name");
-    (void)fields.string(name);
-    (void)fields.key("arguments");
-    (void)fields.raw(arguments.empty() ? "{}" : arguments);
-    (void)fields.end_object();
-    auto finished = fields.finish();
+    auto finished = json::serialize(galay::mcp::PromptParams{name, arguments.empty() ? std::string("{}") : arguments});
     if (!finished) {
         result = std::unexpected(McpError::invalid_message(
             "failed to encode JSON: " + finished.error()));
         co_return;
     }
-    co_await request(Methods::TOOLS_CALL, std::move(fieldsJson), result);
+    co_await request(Methods::TOOLS_CALL, std::move(*finished), result);
 }
 
 kernel::Task<void> McpHttpClient::list_resources(std::expected<std::vector<Resource>, McpError>& result)
@@ -602,27 +419,20 @@ kernel::Task<void> McpHttpClient::list_resources(std::expected<std::vector<Resou
     std::expected<std::string, McpError> value;
     co_await request(Methods::RESOURCES_LIST, "{}", value);
     if (!value) { result = std::unexpected(value.error()); co_return; }
-    result = parse_items<Resource>(value.value(), "resources", [](const json::Json& item) { return Resource::from_json(item); });
+    result = parse_items<Resource>(value.value(), "resources");
 }
 
 kernel::Task<void> McpHttpClient::read_resource(std::string uri,
                                                std::expected<std::string, McpError>& result)
 {
-    std::string fieldsJson;
-    auto fields = make_json_writer(fieldsJson);
-    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-    (void)fields.start_object();
-    (void)fields.key("uri");
-    (void)fields.string(uri);
-    (void)fields.end_object();
-    auto finished = fields.finish();
+    auto finished = json::serialize(galay::mcp::ResourceParams{uri});
     if (!finished) {
         result = std::unexpected(McpError::invalid_message(
             "failed to encode JSON: " + finished.error()));
         co_return;
     }
     std::expected<std::string, McpError> value;
-    co_await request(Methods::RESOURCES_READ, std::move(fieldsJson), value);
+    co_await request(Methods::RESOURCES_READ, std::move(*finished), value);
     if (!value) { result = std::unexpected(value.error()); co_return; }
     result = first_text(value.value());
 }
@@ -632,28 +442,19 @@ kernel::Task<void> McpHttpClient::list_prompts(std::expected<std::vector<Prompt>
     std::expected<std::string, McpError> value;
     co_await request(Methods::PROMPTS_LIST, "{}", value);
     if (!value) { result = std::unexpected(value.error()); co_return; }
-    result = parse_items<Prompt>(value.value(), "prompts", [](const json::Json& item) { return Prompt::from_json(item); });
+    result = parse_items<Prompt>(value.value(), "prompts");
 }
 
 kernel::Task<void> McpHttpClient::get_prompt(std::string name, std::string arguments,
                                             std::expected<std::string, McpError>& result)
 {
-    std::string fieldsJson;
-    auto fields = make_json_writer(fieldsJson);
-    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-    (void)fields.start_object();
-    (void)fields.key("name");
-    (void)fields.string(name);
-    (void)fields.key("arguments");
-    (void)fields.raw(arguments.empty() ? "{}" : arguments);
-    (void)fields.end_object();
-    auto finished = fields.finish();
+    auto finished = json::serialize(galay::mcp::PromptParams{name, arguments.empty() ? std::string("{}") : arguments});
     if (!finished) {
         result = std::unexpected(McpError::invalid_message(
             "failed to encode JSON: " + finished.error()));
         co_return;
     }
-    co_await request(Methods::PROMPTS_GET, std::move(fieldsJson), result);
+    co_await request(Methods::PROMPTS_GET, std::move(*finished), result);
 }
 
 kernel::Task<void> McpHttpClient::listen(
@@ -689,19 +490,9 @@ kernel::Task<void> McpHttpClient::listen(
     }
 
     const RequestId requestId = next_id();
-    auto params = make_request_params(meta(), [&filter] {
-        std::string out;
-        auto fields = make_json_writer(out);
-        // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-        (void)fields.start_object();
-        (void)fields.key("notifications");
-        (void)fields.raw(filter.to_json());
-        (void)fields.end_object();
-        if (!fields.finish()) {
-            return std::string{};
-        }
-        return out;
-    }());
+    auto fields = json::serialize(std::map<std::string, SubscriptionFilter>{{"notifications", filter}});
+    if (!fields) { result = std::unexpected(McpError::invalid_params(fields.error())); co_return; }
+    auto params = make_request_params(meta(), *fields);
     if (!params) {
         result = std::unexpected(params.error());
         co_return;
@@ -711,7 +502,7 @@ kernel::Task<void> McpHttpClient::listen(
     request.method = Methods::SUBSCRIPTIONS_LISTEN;
     request.params = std::move(params.value());
 
-    std::string requestBody = request.to_json();
+    std::string requestBody = request.encode();
     http::HttpRequest httpRequest;
     http::HttpRequestHeader httpHeader;
     httpHeader.method() = http::HttpMethod::POST;

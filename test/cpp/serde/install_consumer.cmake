@@ -4,6 +4,7 @@ file(MAKE_DIRECTORY "${work}/source")
 file(COPY "${CMAKE_CURRENT_LIST_DIR}/consumer/CMakeLists.txt"
     "${CMAKE_CURRENT_LIST_DIR}/t11_struct_formats.cc"
     "${CMAKE_CURRENT_LIST_DIR}/t14_contract.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/t18_wire_fields.cc"
     "${CMAKE_CURRENT_LIST_DIR}/t10_import_smoke.cc"
     "${CMAKE_CURRENT_LIST_DIR}/t12_shared_backend.cc"
     "${CMAKE_CURRENT_LIST_DIR}/struct_formats.hpp"

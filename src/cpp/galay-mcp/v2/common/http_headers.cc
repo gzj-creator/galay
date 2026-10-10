@@ -27,117 +27,14 @@ bool is_token(std::string_view value) noexcept
     return true;
 }
 
-std::expected<void, McpError> scan_schema(const json::Json& element,
-                                         std::vector<std::string> path,
-                                         bool allowAnnotation,
-                                         std::set<std::string>& names,
-                                         std::vector<HeaderAnnotation>& annotations)
-{
-    if (element.is_object()) {
-        const json::Json& object = element;
-        const json::Json annotationElement = object.at("x-mcp-header");
-        if (annotationElement.valid()) {
-            if (!allowAnnotation) {
-                return std::unexpected(McpError::invalid_params(
-                    "x-mcp-header is not statically reachable"));
-            }
-            const auto name = annotationElement.as_string();
-            const auto type = object.at("type").as_string();
-            if (!name || !is_token(*name) || !type ||
-                (*type != "string" && *type != "integer" && *type != "boolean")) {
-                return std::unexpected(McpError::invalid_params(
-                    "invalid x-mcp-header annotation"));
-            }
-            std::string folded(*name);
-            for (char& ch : folded) {
-                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-            }
-            if (!names.insert(folded).second) {
-                return std::unexpected(McpError::invalid_params(
-                    "duplicate x-mcp-header annotation"));
-            }
-            annotations.push_back(HeaderAnnotation{std::string(*name), path, std::string(*type)});
-        }
-
-        const json::Json properties = object.at("properties");
-        if (properties.is_object()) {
-            std::optional<McpError> failure;
-            properties.for_each_member([&](std::string_view fieldKey, const json::Json& value) -> json::result<void> {
-                auto nextPath = path;
-                nextPath.emplace_back(fieldKey);
-                auto nested = scan_schema(value, std::move(nextPath), true,
-                                         names, annotations);
-                if (!nested) {
-                    failure = nested.error();
-                    return std::unexpected(std::string("stop"));
-                }
-                return {};
-            });
-            if (failure) return std::unexpected(*failure);
-        }
-
-        std::optional<McpError> failure;
-        object.for_each_member([&](std::string_view fieldKey, const json::Json& value) -> json::result<void> {
-            if (fieldKey == "properties" || fieldKey == "x-mcp-header") {
-                return {};
-            }
-            if (value.is_object() || value.is_array()) {
-                auto nested = scan_schema(value, path, false, names, annotations);
-                if (!nested) {
-                    failure = nested.error();
-                    return std::unexpected(std::string("stop"));
-                }
-            }
-            return {};
-        });
-        if (failure) return std::unexpected(*failure);
-        return {};
-    }
-
-    if (element.is_array()) {
-        for (size_t i = 0; i < element.size(); ++i) {
-            const json::Json item = element.at(i);
-            auto nested = scan_schema(item, path, false, names, annotations);
-            if (!nested) return std::unexpected(nested.error());
-        }
-    }
-    return {};
-}
-
-std::expected<std::optional<std::string>, McpError> primitive_value(
-    const json::Json& element, std::string_view type)
-{
-    if (element.is_null()) return std::optional<std::string>{};
-    if (type == "string") {
-        auto value = element.as_string();
-        if (!value) {
-            return std::unexpected(McpError::invalid_params("header parameter type mismatch"));
-        }
-        return std::string(*value);
-    }
-    if (type == "boolean") {
-        auto value = element.as_bool();
-        if (!value.has_value()) {
-            return std::unexpected(McpError::invalid_params("header parameter type mismatch"));
-        }
-        return value.value() ? std::optional<std::string>("true")
-                             : std::optional<std::string>("false");
-    }
-    auto signedValue = element.as_int64();
-    if (signedValue.has_value()) {
-        constexpr int64_t maxSafe = (int64_t{1} << 53) - 1;
-        constexpr int64_t minSafe = -maxSafe;
-        if (signedValue.value() < minSafe || signedValue.value() > maxSafe) {
-            return std::unexpected(McpError::invalid_params(
-                "integer x-mcp-header value exceeds safe range"));
-        }
-        return std::to_string(signedValue.value());
-    }
-    auto unsignedValue = element.as_uint64();
-    if (unsignedValue.has_value() && unsignedValue.value() <= (uint64_t{1} << 53) - 1) {
-        return std::to_string(unsignedValue.value());
-    }
-    return std::unexpected(McpError::invalid_params("header parameter type mismatch"));
+struct AnnotationFields {
+    std::optional<std::string> name;
+    std::optional<std::string> type;
+};
+constexpr auto reflect_fields(std::type_identity<AnnotationFields>) {
+    return std::make_tuple(
+        json::make_field("x-mcp-header", &AnnotationFields::name, json::FieldPolicy{.reject_null = true}),
+        json::make_field("type", &AnnotationFields::type));
 }
 
 } // namespace
@@ -184,32 +81,57 @@ std::expected<std::string, McpError> decode_header_value(std::string_view value)
 std::expected<std::vector<HeaderAnnotation>, McpError>
 tool_header_annotations(const Tool& tool)
 {
-    auto document = JsonDocument::parse(tool.inputSchema);
-    if (!document) return std::unexpected(document.error());
-    if (!document->root().is_object()) {
-        return std::unexpected(McpError::invalid_params("tool inputSchema must be an object"));
-    }
+    auto root = json::deserialize<json::Object>(tool.inputSchema);
+    if (!root) return std::unexpected(McpError::invalid_params(root.error()));
     std::set<std::string> names;
     std::vector<HeaderAnnotation> annotations;
-    auto result = scan_schema(document->root(), {}, false, names, annotations);
-    if (!result) return std::unexpected(result.error());
+    auto visited = json::visit_objects(tool.inputSchema, [&](const json::Json& object,
+        const std::vector<std::string>& schema_path) -> json::result<void> {
+        auto fields = json::decode<AnnotationFields>(object);
+        if (!fields) return std::unexpected(fields.error());
+        if (!fields->name) return {};
+        if (!fields->type || !is_token(*fields->name) ||
+            (*fields->type != "string" && *fields->type != "integer" && *fields->type != "boolean"))
+            return std::unexpected(std::string("invalid x-mcp-header annotation"));
+        std::vector<std::string> argument_path;
+        if (schema_path.empty() || schema_path.size() % 2 != 0)
+            return std::unexpected(std::string("x-mcp-header is not statically reachable"));
+        for (std::size_t index = 0; index < schema_path.size(); index += 2) {
+            if (schema_path[index] != "properties")
+                return std::unexpected(std::string("x-mcp-header is not statically reachable"));
+            argument_path.push_back(schema_path[index + 1]);
+        }
+        std::string folded = *fields->name;
+        for (char& ch : folded) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        if (!names.insert(folded).second)
+            return std::unexpected(std::string("duplicate x-mcp-header annotation"));
+        annotations.push_back({std::move(*fields->name), std::move(argument_path), std::move(*fields->type)});
+        return {};
+    });
+    if (!visited) return std::unexpected(McpError::invalid_params(visited.error()));
     return annotations;
 }
 
 std::expected<std::optional<std::string>, McpError>
-argument_header_value(const json::Json& arguments, const HeaderAnnotation& annotation)
-{
-    json::Json current = arguments;
-    for (const auto& key : annotation.path) {
-        if (!current.is_object()) {
-            return std::optional<std::string>{};
-        }
-        current = current.at(key);
-        if (!current.valid()) {
-            return std::optional<std::string>{};
-        }
+argument_header_value(const json::Json& arguments, const HeaderAnnotation& annotation) {
+    if (annotation.type == "string") {
+        auto value = json::decode_path<std::optional<std::string>>(arguments, annotation.path);
+        if (!value) return std::unexpected(McpError::invalid_params(value.error()));
+        return std::move(*value);
     }
-    return primitive_value(current, annotation.type);
+    if (annotation.type == "boolean") {
+        auto value = json::decode_path<std::optional<bool>>(arguments, annotation.path);
+        if (!value) return std::unexpected(McpError::invalid_params(value.error()));
+        if (!*value) return std::optional<std::string>{};
+        return std::optional<std::string>{**value ? "true" : "false"};
+    }
+    auto value = json::decode_path<std::optional<int64_t>>(arguments, annotation.path);
+    if (!value) return std::unexpected(McpError::invalid_params(value.error()));
+    if (!*value) return std::optional<std::string>{};
+    constexpr int64_t max_safe = (int64_t{1} << 53) - 1;
+    if (**value < -max_safe || **value > max_safe)
+        return std::unexpected(McpError::invalid_params("integer x-mcp-header value exceeds safe range"));
+    return std::optional<std::string>{std::to_string(**value)};
 }
 
 } // namespace galay::mcp::v2

@@ -12,36 +12,12 @@ namespace galay::mcp::detail {
 
 const std::string& empty_object_string();
 
-template <typename T, typename ParseFn>
+template <typename T>
 std::expected<std::vector<T>, McpError> parse_list_field(std::string_view body,
-                                                       const char* fieldName,
-                                                       ParseFn&& parse_fn) {
-    auto docExp = JsonDocument::parse(body);
-    if (!docExp) {
-        return std::unexpected(McpError::parse_error(docExp.error().details()));
-    }
-
-    json::Json obj = docExp.value().root();
-    if (!obj.is_object()) {
-        return std::unexpected(McpError::parse_error("Expected JSON object"));
-    }
-
-    std::vector<T> values;
-    json::Json arr = obj.at(fieldName);
-    if (!arr.is_array()) {
-        return values;
-    }
-
-    for (size_t i = 0; i < arr.size(); ++i) {
-        const json::Json item = arr.at(i);
-        auto parsed = parse_fn(item);
-        if (!parsed) {
-            return std::unexpected(McpError::parse_error(parsed.error().message()));
-        }
-        values.emplace_back(std::move(parsed.value()));
-    }
-
-    return values;
+                                                       const char* field_name) {
+    auto values = json::deserialize_member<std::optional<std::vector<T>>>(body, field_name);
+    if (!values) return std::unexpected(McpError::parse_error(values.error()));
+    return std::move(*values).value_or(std::vector<T>{});
 }
 
 std::expected<InitializeResult, McpError> parse_initialize_result(std::string_view body);

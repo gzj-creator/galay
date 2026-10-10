@@ -1,9 +1,9 @@
 /**
- * @file t11_json_document_lifetime_and_allocation.cc
- * @brief 锁定 JsonDocument 返回后的 DOM 生命周期与稳态解析分配边界。
+ * @file t19_document_lifetime_and_allocation.cc
+ * @brief 锁定 json::Json 返回后的 DOM 生命周期与稳态解析分配边界。
  */
 
-#include <galay/cpp/galay-mcp/common/mcp_json.h>
+#include <serde/json/json.hpp>
 
 #include <atomic>
 #include <cstdlib>
@@ -31,9 +31,9 @@ std::size_t take_allocation_count()
     return g_allocations.exchange(0, std::memory_order_relaxed);
 }
 
-bool read_string(const galay::mcp::JsonDocument& doc, const char* key, std::string_view expected)
+bool read_string(const json::Json& doc, const char* key, std::string_view expected)
 {
-    auto value = doc.root().at(key).as_string();
+    auto value = doc.at(key).as_string();
     if (!value) {
         std::cerr << "failed to read key " << key << ": " << value.error() << '\n';
         return false;
@@ -43,16 +43,16 @@ bool read_string(const galay::mcp::JsonDocument& doc, const char* key, std::stri
 
 bool external_element_survives_document_move()
 {
-    auto parsed = galay::mcp::JsonDocument::parse(R"({"params":{"name":"before-move"}})");
+    auto parsed = json::parse(R"({"params":{"name":"before-move"}})");
     if (!require(parsed.has_value(), "failed to parse move-alias document")) {
         return false;
     }
-    json::Json paramsAlias = parsed->root().at("params");
+    json::Json paramsAlias = parsed.value().at("params");
     if (!require(paramsAlias.is_object(), "failed to read params before document move")) {
         return false;
     }
 
-    galay::mcp::JsonDocument moved = std::move(parsed.value());
+    json::Json moved = std::move(parsed.value());
     auto name = paramsAlias.at("name").as_string();
     if (!name) {
         std::cerr << "failed to read aliased element after document move: "
@@ -60,7 +60,7 @@ bool external_element_survives_document_move()
         return false;
     }
     return require(*name == "before-move", "aliased element changed after document move") &&
-           require(moved.root().is_object(), "moved document lost its root value");
+           require(moved.is_object(), "moved document lost its root value");
 }
 
 } // namespace
@@ -109,12 +109,12 @@ void operator delete[](void* ptr, std::size_t) noexcept
 
 int main()
 {
-    const auto first = galay::mcp::JsonDocument::parse(R"({"name":"first","payload":[1,2,3]})");
+    const auto first = json::parse(R"({"name":"first","payload":[1,2,3]})");
     if (!require(first.has_value(), "failed to parse first document")) {
         return 1;
     }
 
-    const auto second = galay::mcp::JsonDocument::parse(R"({"name":"second","payload":[4,5,6]})");
+    const auto second = json::parse(R"({"name":"second","payload":[4,5,6]})");
     if (!require(second.has_value(), "failed to parse second document")) {
         return 1;
     }
@@ -135,16 +135,17 @@ int main()
     constexpr std::size_t long_window = 32;
 
     for (std::size_t i = 0; i < warmup_iterations; ++i) {
-        auto doc = galay::mcp::JsonDocument::parse(json);
+        auto doc = json::parse(json);
         if (!require(doc.has_value(), "warmup parse failed")) {
             return 1;
         }
     }
 
-    take_allocation_count();
+    const auto discarded_allocations = take_allocation_count();
+    (void)discarded_allocations;
     g_count_allocations.store(true, std::memory_order_relaxed);
     for (std::size_t i = 0; i < short_window; ++i) {
-        auto doc = galay::mcp::JsonDocument::parse(json);
+        auto doc = json::parse(json);
         if (!require(doc.has_value(), "short-window parse failed")) {
             g_count_allocations.store(false, std::memory_order_relaxed);
             return 1;
@@ -155,7 +156,7 @@ int main()
 
     g_count_allocations.store(true, std::memory_order_relaxed);
     for (std::size_t i = 0; i < long_window; ++i) {
-        auto doc = galay::mcp::JsonDocument::parse(json);
+        auto doc = json::parse(json);
         if (!require(doc.has_value(), "measured parse failed")) {
             g_count_allocations.store(false, std::memory_order_relaxed);
             return 1;
@@ -165,18 +166,18 @@ int main()
     const auto long_allocations = take_allocation_count();
 
     if (!require(long_allocations == short_allocations * (long_window / short_window),
-                 "JsonDocument::parse steady-state allocation count is not constant per parse")) {
+                 "json::parse steady-state allocation count is not constant per parse")) {
         std::cerr << "short_window_allocations=" << short_allocations
                   << ", long_window_allocations=" << long_allocations << '\n';
         return 1;
     }
     if (!require(short_allocations >= short_window,
-                 "JsonDocument::parse stopped allocating its per-document state per parse")) {
+                 "json::parse stopped allocating its per-document state per parse")) {
         std::cerr << "short_window_allocations=" << short_allocations
                   << ", iterations=" << short_window << '\n';
         return 1;
     }
 
-    std::cout << "T11-JsonDocumentLifetimeAndAllocation PASS\n";
+    std::cout << "T19-DocumentLifetimeAndAllocation PASS\n";
     return 0;
 }

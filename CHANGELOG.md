@@ -19,6 +19,7 @@
 
 ### Changed
 
+- C++ MCP 的通用 JSON 解析、动态值、序列化与 JSON Schema 构建全部移交 serde；MCP 仅保留协议类型、反射字段映射及语义校验。v1/v2 客户端、HTTP/stdio 服务端直接使用 serde，协议编解码入口统一为 `encode` / `decode`，Schema 使用 `<serde/json/schema.hpp>` 的 `json::SchemaBuilder`，同步更新 serde 子模块引用。
 - HTTP chunk 编码改用 `std::to_chars` 写入栈缓冲，按十六进制前缀、两组 CRLF 与 payload 完整预留输出空间，避免追加末尾 CRLF 时再次分配并复制 payload；服务端 header 指针查找直接使用小写 key 的 `std::string_view`，仅对含大写的 key 构造规范化副本。
 - Swagger UI 5.17.14 的 JS、CSS、favicon 和许可证等九项资源直接固化到 `galay-api/ui_assets.cc`，CMake、Bazel 和 mcpp 直接编译源码；构建、安装及默认运行均不再依赖外部资源目录或预生成步骤，保留完整显式自定义资源目录入口。
 - kernel 任务完成通知以单个 32 位原子状态统一未完成、已注册阻塞等待者和已完成三种状态，替代 `m_done` 与惰性 `TaskWaiter` 的跨原子握手；完成方使用 release exchange，仅有等待者时通知，等待方使用 acquire CAS / `atomic::wait`，移除完成路径的 mutex/CV 及等待器分配，保持结果可见性和不丢唤醒语义。同步迁移完成状态查询及源码契约，`TaskState` 在本机仍为 128 字节、64 字节对齐。
@@ -29,11 +30,13 @@
 
 ### Removed
 
+- 删除 MCP 自有 `json_parser`、`mcp_json`、`JsonDocument`、writer 包装及 Schema 构建实现，不保留兼容入口；通用文档生命周期与分配回归、解析吞吐 benchmark 移至 serde 目录。
 - 删除 `assets/swagger-ui` 目录、构建期资源生成脚本及对应生成器测试，不再安装额外的 `share/galay/swagger-ui` 目录。
 - 删除公开的 `ApiBuilder`、`ApiServer` / `ApiServerConfig`、`PreparedApi`、文档 policy 和独立 API HTTP/2 adapter；构建产物收为内部 `PreparedRoutes`，不保留旧名别名、兼容包装或 fallback。
 
 ### Fixed
 
+- 锁定 MCP 迁移后的协议边界：空结果数组仍显式编码，缓存字段仅出现在相应结果中，业务字段不能覆盖保留的 `_meta`；拒绝非法 null 错误、参数及 header 注解，保留 null result 的存在语义、v2 Tool Schema 校验及直接 serde 序列化的完整 JSON-RPC envelope。serde 解码的动态值独立持有存储，避免后续解析或源文档释放使结果失效。
 - 修复 HTTP/1 HEAD 响应按 `Content-Length` / chunked 等待实际响应体的问题；响应解析接收请求方法，TCP/SSL 会话及预序列化请求在完整响应头后返回空 body，保留长度与传输元数据，不消费后续响应，`clone()` / `reset()` 同步维护完成状态。
 - 修复 HTTP 代理转发 HEAD 请求时按响应长度等待不存在的响应体，改为在收到完整上游响应头后继续转发，避免代理协程挂起。
 - HTTP methods 测试等待全部请求结束并检查连接、响应状态、HEAD 空 body 和清理结果；新增自带 HTTP/1.1 服务的验收，核对成功、HTTP 500、响应前断连及服务不可达的退出码与完成计数，避免仅打印失败却返回成功。新增 HEAD 分段头、TCP/SSL、后续 GET 响应与 clone/reset 回归。
@@ -53,6 +56,7 @@
 
 ### Docs
 
+- 更新 MCP 架构、API 参考与 agent C++ API 指引，明确 serde 的 JSON/Schema 所有权及协议边界错误转换；同步迁移示例和 benchmark 调用点。
 - 补全 C/C++ 生产代码、测试、示例与 benchmark 的已有函数文档注释，为具名参数添加 `@param`，为返回值添加 `@return`；展开需要补充契约的行尾注释，并为 Base64 编码声明补齐既有参数名称，不改变执行逻辑。
 - 按实现纠正链式 setter 返回引用、SSL/Redis/RPC 状态机布尔值、owner scheduler 约束、send_zc 路径选择、协程分配失败及 SPSC 入队枚举的返回说明；修正输出引用/输出流、Redis 哈希字段和 Unicode 码点的参数说明。
 - 补充 HTTP 会话 `head(...)` 入口及响应头完成、空响应体、元数据保留和预序列化 HEAD 请求语义。
@@ -62,6 +66,7 @@
 
 ### Validation
 
+- 2026-10-10 MCP/serde 迁移以单任务构建、串行测试完成：C++ MCP 21/21、serde unit 13/13、serde 安装消费者 1/1、C MCP 5/5，上游 serde 无异常模式 6/6、Clang C++ modules 7/7 均通过。相关 HTTP/stdio 示例及 benchmark 构建通过，解析与 v2 协议 benchmark 各运行 100 次测量迭代作为 smoke；MCP 源码无旧 parser/DOM/writer 包装或直接 simdjson 使用，两个仓库 `git diff --check` 通过。未重跑全仓测试，etcd 关闭时未运行 shared-backend 集成测试；不据 smoke 宣称性能改善。
 - 2026-10-10 函数注释检查识别全仓 5614 个已有函数文档注释，具名参数标签与返回标签无缺失、无过时参数名；275 个源码变更文件的 token 对比确认仅 Base64 声明增加参数名，无执行逻辑变更或新增 C/C++ 解析错误。独立 agent 复核已确认的语义修正，未逐条人工审查所有函数实现；两项 C 源码边界检查、样式审计共 3/3 CTest 与 `git diff --check` 通过，未为此次注释变更执行全量构建或完整 CTest。
 - 2026-10-10 HTTP 热路径优化补齐落盘回归：chunk 的 12 个长度、文本与二进制 payload、两个重载及结束块共 96 个输出检查通过；64 KiB chunk 两个重载均只分配一次，服务端长小写 common/map header 命中与缺失均零分配，大小写及客户端查找语义通过。Linux / GCC14 / C++23 / io_uring / Release / `-Werror` 相关构建及 HTTP/HTTP2/MCP 的 98 项 unit CTest 全部通过；临时还原 `reserve(... + 2)` 或旧 header 规范化副本时，新分配回归均按预期失败，样式审计与 `git diff --check` 通过。
 - 2026-10-09 Linux / GCC14 / epoll / Release / C/C++ `-Werror` 全目标构建通过；修复后完整 CTest 655 项：614 通过、36 跳过、5 禁用、0 失败。HEAD、methods 验收与 RPC 端口回归各连续 10 次通过；此前 207 个 benchmark 全量执行记录保留，修复后全部 12 个 HTTP benchmark 目标复跑通过。响应体校验的 HTTP/HTTPS 30 秒负载分别完成 258,099 / 155,938 次请求，静态文件 10 秒完成 67,857 次，均计数守恒且零错误；本轮未跑 sanitizer、原生 C++ modules 或后端性能对比。

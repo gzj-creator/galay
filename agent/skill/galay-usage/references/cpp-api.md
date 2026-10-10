@@ -436,25 +436,25 @@ int main() {
 
 ### galay-mcp
 - **用途**: C++23 Model Context Protocol 实现，stdio 与 HTTP 两种传输的服务端/客户端，支持 tool/resource/prompt 注册与调用。
-- **CMake link**: `galay::mcp`；**头文件前缀** `<galay/cpp/galay-mcp/...>`（`server/stdio_server.h`、`server/http_server.h`、`client/client.h`、`common/schema_builder.h`、`common/mcp_json.h`、`common/mcp_error.h`）；**命名空间** `galay::mcp`
+- **CMake link**: `galay::mcp`；**头文件前缀** `<galay/cpp/galay-mcp/...>`（`v1/server/stdio_server.h`、`v1/server/http_server.h`、`v1/client/client.h`、`common/schema_builder.h`、`common/request_codec.h`、`common/mcp_error.h`）；**命名空间** `galay::mcp`
 - **核心类型与接口**:
   - `McpStdioServer`：`set_server_info(name, version)`；`add_tool(name, description, inputSchema, ToolHandler)`、`add_resource(uri, name, description, mimeType, ResourceReader)`、`add_prompt(name, description, std::vector<PromptArgument>, PromptGetter)`；`void run()`（阻塞 stdin/stdout）、`stop()`、`is_running()`。回调**同步**：`ToolHandler = std::function<std::expected<std::string, McpError>(const json::Json&)>`
   - `McpHttpServer`：`McpHttpServer(host="0.0.0.0", port=8080, ioSchedulers=8, parallelSchedulers=0)`；同名 `set_server_info/add_tool/add_resource/add_prompt`（须在 `start()` 前注册）；`void start()`（阻塞，监听 `POST /mcp`）。回调**协程**：`ToolHandler = std::function<kernel::Task<void>(const json::Json&, std::expected<std::string, McpError>&)>`（结果写回引用）
   - `McpClient`（构造决定模式）：
     - stdio：`explicit McpClient(McpStdioClientConfig={})`；同步 `initialize(name, version)`、`call_tool(name, arguments)`、`list_tools/list_resources/list_prompts()`、`read_resource(uri)`、`get_prompt(name, args)`、`ping()`、`disconnect()`
     - HTTP：`McpClient(kernel::Runtime&, McpHttpClientConfig{.url=url})`；`connect()`、协程 API 把结果写回引用 `initialize(name, version, result&)`、`call_tool(name, args, result&)` 等
-  - `SchemaBuilder`：链式 `add_string/add_number/add_integer/add_boolean(name, description, required=false)`、`add_array(...)`、`add_object(...)`、`add_enum(name, description, std::vector<std::string>, required=false)`、`std::string build()`
-  - JSON/错误：`JsonDocument::parse(...)` / `root()`、serde `json::Json`、`make_json_writer(std::string&)`、`empty_json_object()`；`enum class McpErrorCode`、`McpError`（工厂 `invalid_params/tool_not_found/not_initialized/...`）；协议常量 `MCP_VERSION="2024-11-05"`。旧 `JsonWriter` / `JsonHelper` 已移除。
+  - serde `json::SchemaBuilder`（`<serde/json/schema.hpp>`）：链式 `add_string/add_number/add_integer/add_boolean(name, description, required=false)`、`add_array(...)`、`add_object(...)`、`add_enum(name, description, std::vector<std::string>, required=false)`、`json::result<std::string> encode()`、`std::string build()`
+  - JSON 处理直接使用 serde `json::parse/serialize/deserialize/decode`、`json::Json`、`json::empty_object()`；MCP 只定义协议字段映射与语义校验。错误：`enum class McpErrorCode`、`McpError`（工厂 `invalid_params/tool_not_found/not_initialized/...`）；协议常量 `MCP_VERSION="2024-11-05"`。
 - **最小示例**:
 ```cpp
 #include <galay/cpp/galay-mcp/v1/server/http_server.h>
-#include <galay/cpp/galay-mcp/common/schema_builder.h>
+#include <serde/json/schema.hpp>
 using namespace galay::mcp;
 
 int main() {
     McpHttpServer server("0.0.0.0", 8080);
     server.set_server_info("example-http-server", "1.0.0");
-    auto schema = SchemaBuilder().add_number("a", "op1", true).add_number("b", "op2", true).build();
+    auto schema = json::SchemaBuilder().add_number("a", "op1", true).add_number("b", "op2", true).build();
     server.add_tool("add", "sum", schema,
         [](const json::Json& args, std::expected<std::string, McpError>& result) -> galay::kernel::Task<void> {
             const auto a = args["a"].as_double();
@@ -463,16 +463,9 @@ int main() {
                 result = std::unexpected(McpError::invalid_params("numeric a and b required"));
                 co_return;
             }
-            std::string output;
-            auto writer = make_json_writer(output);
-            // 错误粘滞，所有写入结果由最终 finish() 统一检查。
-            (void)writer.start_object();
-            (void)writer.key("result");
-            (void)writer.number(*a + *b);
-            (void)writer.end_object();
-            const auto finished = writer.finish();
-            if (!finished) result = std::unexpected(McpError::internal_error(finished.error()));
-            else result = std::move(output);
+            auto output = json::serialize(std::map<std::string, double>{{"result", *a + *b}});
+            if (!output) result = std::unexpected(McpError::internal_error(output.error()));
+            else result = std::move(*output);
             co_return;
         });
     server.start();  // 阻塞，监听 POST /mcp

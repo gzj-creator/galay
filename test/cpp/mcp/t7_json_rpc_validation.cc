@@ -3,7 +3,7 @@
  * @brief 锁定 JSON-RPC 2.0 envelope 的请求/响应边界校验。
  */
 
-#include <galay/cpp/galay-mcp/common/json_parser.h>
+#include <galay/cpp/galay-mcp/common/request_codec.h>
 
 #include <iostream>
 #include <string_view>
@@ -36,6 +36,15 @@ bool rejects_response(std::string_view body)
 
 int main()
 {
+    if (!require(rejects_response(R"({"jsonrpc":"2.0","id":1,"result":{},"error":null})"),
+                 "response with null error and result was accepted")) {
+        return 1;
+    }
+    const auto null_response = parse_json_rpc_response(R"({"jsonrpc":"2.0","id":1,"result":null})");
+    if (!require(null_response && null_response->response.hasResult && null_response->response.result.is_null(),
+                 "response with null result was rejected")) {
+        return 1;
+    }
     if (!require(rejects_request(R"({"id":1,"method":"tools/list"})"),
                  "request without jsonrpc version was accepted")) {
         return 1;

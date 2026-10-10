@@ -8,28 +8,18 @@ const std::string& empty_object_string() {
 }
 
 std::expected<InitializeResult, McpError> parse_initialize_result(std::string_view body) {
-    auto docExp = JsonDocument::parse(body);
-    if (!docExp) {
-        return std::unexpected(McpError::parse_error(docExp.error().details()));
-    }
-
-    auto initExp = InitializeResult::from_json(docExp.value().root());
+    auto initExp = json::deserialize<InitializeResult>(body);
     if (!initExp) {
-        return std::unexpected(McpError::initialization_failed(initExp.error().message()));
+        return std::unexpected(McpError::initialization_failed(initExp.error()));
     }
 
     return initExp.value();
 }
 
 std::expected<std::string, McpError> parse_tool_call_result(std::string_view body) {
-    auto docExp = JsonDocument::parse(body);
-    if (!docExp) {
-        return std::unexpected(McpError::parse_error(docExp.error().details()));
-    }
-
-    auto callExp = ToolCallResult::from_json(docExp.value().root());
+    auto callExp = json::deserialize<ToolCallResult>(body);
     if (!callExp) {
-        return std::unexpected(McpError::parse_error(callExp.error().message()));
+        return std::unexpected(McpError::parse_error(callExp.error()));
     }
 
     const auto& callResult = callExp.value();
@@ -47,31 +37,10 @@ std::expected<std::string, McpError> parse_tool_call_result(std::string_view bod
 
 std::expected<std::string, McpError> parse_first_text_content(std::string_view body,
                                                            const char* fieldName) {
-    auto docExp = JsonDocument::parse(body);
-    if (!docExp) {
-        return std::unexpected(McpError::parse_error(docExp.error().details()));
-    }
-
-    json::Json obj = docExp.value().root();
-    if (!obj.is_object()) {
-        return std::unexpected(McpError::parse_error("Expected JSON object"));
-    }
-
-    json::Json arr = obj.at(fieldName);
-    if (!arr.is_array()) {
-        return std::string();
-    }
-
-    for (size_t i = 0; i < arr.size(); ++i) {
-        const json::Json item = arr.at(i);
-        auto contentExp = Content::from_json(item);
-        if (!contentExp) {
-            return std::unexpected(McpError::parse_error(contentExp.error().message()));
-        }
-        if (contentExp.value().type == ContentType::Text) {
-            return contentExp.value().text;
-        }
-    }
+    auto values = parse_list_field<Content>(body, fieldName);
+    if (!values) return std::unexpected(values.error());
+    for (const auto& content : *values)
+        if (content.type == ContentType::Text) return content.text;
 
     return std::string();
 }

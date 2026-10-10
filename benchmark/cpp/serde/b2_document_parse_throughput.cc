@@ -1,13 +1,13 @@
 /**
- * @file b5_json_document_parse_throughput.cc
- * @brief MCP JsonDocument 解析吞吐基准。
+ * @file b2_document_parse_throughput.cc
+ * @brief serde文档解析吞吐基准。
  * @details serde 的 json::parse 每次解析都会分配新的解析 State，
  *          本基准只测量解析吞吐，不再统计解析器对象分配。
  */
 
 #include "../common/benchmark_environment.h"
 
-#include <galay/cpp/galay-mcp/common/mcp_json.h>
+#include <serde/json/json.hpp>
 
 #include <charconv>
 #include <chrono>
@@ -34,7 +34,7 @@ bool parse_iterations(int argc, char** argv, std::size_t& iterations)
     const auto* end = text.data() + text.size();
     const auto result = std::from_chars(begin, end, parsed);
     if (result.ec != std::errc() || result.ptr != end || parsed == 0) {
-        return fail("usage: benchmark_mcp_json_document_parse_throughput [positive-iterations]");
+        return fail("usage: benchmark_serde_b2_document_parse_throughput [positive-iterations]");
     }
     iterations = parsed;
     return true;
@@ -59,12 +59,12 @@ int main(int argc, char** argv)
     std::uint64_t checksum = 0;
 
     for (std::size_t i = 0; i < warmup_iterations; ++i) {
-        auto doc = galay::mcp::JsonDocument::parse(json);
+        auto doc = json::parse(json);
         if (!doc) {
-            std::cerr << "warmup parse failed: " << doc.error().to_string() << '\n';
+            std::cerr << "warmup parse failed: " << doc.error() << '\n';
             return 1;
         }
-        auto id = doc->root().at("id").as_uint64();
+        auto id = doc.value().at("id").as_uint64();
         if (!id) {
             std::cerr << "warmup id read failed: " << id.error() << '\n';
             return 1;
@@ -74,12 +74,12 @@ int main(int argc, char** argv)
 
     const auto start = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < iterations; ++i) {
-        auto doc = galay::mcp::JsonDocument::parse(json);
+        auto doc = json::parse(json);
         if (!doc) {
-            std::cerr << "parse failed: " << doc.error().to_string() << '\n';
+            std::cerr << "parse failed: " << doc.error() << '\n';
             return 1;
         }
-        auto id = doc->root().at("id").as_uint64();
+        auto id = doc.value().at("id").as_uint64();
         if (!id) {
             std::cerr << "id read failed: " << id.error() << '\n';
             return 1;
@@ -98,7 +98,7 @@ int main(int argc, char** argv)
     const double parses_per_second = static_cast<double>(iterations) / seconds;
     const double ns_per_parse = static_cast<double>(elapsed_ns) / static_cast<double>(iterations);
 
-    std::cout << "MCP JsonDocument parse iterations: " << iterations << '\n';
+    std::cout << "serde document parse iterations: " << iterations << '\n';
     std::cout << "Elapsed: " << elapsed_ns / 1000 << " us\n";
     std::cout << "Throughput: " << parses_per_second << " parses/s\n";
     std::cout << "Average: " << ns_per_parse << " ns/parse\n";

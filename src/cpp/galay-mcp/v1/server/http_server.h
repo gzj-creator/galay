@@ -13,7 +13,7 @@
 
 #include "../../common/mcp_base.h"
 #include "../../common/mcp_error.h"
-#include "../../common/json_parser.h"
+#include "../../common/request_codec.h"
 #include "../../common/mcp_policy.h"
 #include "../../../galay-http/server/http_server.h"
 #include "../../../galay-http/server/http_router.h"

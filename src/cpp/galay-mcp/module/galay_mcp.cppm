@@ -8,9 +8,9 @@ export module galay.mcp;
 // transitional interface is consumed by GCC modules.
 export extern "C++" {
 #include "../common/mcp_error.h"
-#include "../common/mcp_json.h"
+#include <serde/json/json.hpp>
 #include "../common/mcp_base.h"
-#include "../common/json_parser.h"
+#include "../common/request_codec.h"
 #include "../common/schema_builder.h"
 #include "../common/protocol_utils.h"
 #include "../v2/common/protocol.h"

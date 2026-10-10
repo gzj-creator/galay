@@ -1,3 +1,4 @@
+#include <serde/json/schema.hpp>
 #ifndef GALAY_MCP_EXAMPLE_E1_STDIO_H
 #define GALAY_MCP_EXAMPLE_E1_STDIO_H
 
@@ -16,7 +17,7 @@ void run_simple_server() {
     server.set_server_info("example-server", "1.0.0");
 
     // 添加一个简单的echo工具
-    auto echoSchema = SchemaBuilder()
+    auto echoSchema = json::SchemaBuilder()
         .add_string("message", "要回显的消息", true)
         .build();
     server.add_tool(
@@ -40,7 +41,7 @@ void run_simple_server() {
             }
 
             std::string result;
-            auto writer = make_json_writer(result);
+            auto writer = json::stream::StreamWriter{[&result](std::string_view chunk) -> json::result<void> { result.append(chunk); return {}; }};
             // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
             (void)writer.start_object();
             (void)writer.key("echo");
@@ -103,7 +104,7 @@ void run_simple_client() {
     // 调用echo工具
     std::cout << "\nCalling echo tool..." << std::endl;
     std::string args;
-    auto argsWriter = make_json_writer(args);
+    auto argsWriter = json::stream::StreamWriter{[&args](std::string_view chunk) -> json::result<void> { args.append(chunk); return {}; }};
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)argsWriter.start_object();
     (void)argsWriter.key("message");

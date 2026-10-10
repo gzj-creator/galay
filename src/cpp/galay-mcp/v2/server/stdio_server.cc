@@ -18,7 +18,7 @@ std::expected<json::Json, McpError> params_object(const json::Json& params)
 std::expected<std::string, McpError> required_string(const json::Json& object,
                                                     const char* key)
 {
-    auto value = object.at(key).as_string();
+    auto value = json::decode_member<std::string>(object, key);
     if (!value) {
         return std::unexpected(McpError::invalid_params(
             std::string("missing or invalid ") + key));
@@ -26,59 +26,17 @@ std::expected<std::string, McpError> required_string(const json::Json& object,
     return std::string(*value);
 }
 
-std::expected<json::Json, McpError> optional_object(const json::Json& object,
-                                                    const char* key)
+std::expected<json::Json, McpError> request_arguments(const json::Json& object)
 {
-    const json::Json value = object.at(key);
-    if (!value.valid()) {
-        return galay::mcp::empty_json_object();
-    }
-    if (!value.is_object()) {
-        return std::unexpected(McpError::invalid_params(
-            std::string(key) + " must be an object"));
-    }
-    return value;
+    auto value = json::decode<ArgumentsFields>(object);
+    if (!value) return std::unexpected(McpError::invalid_params(value.error()));
+    return std::move(value->arguments);
 }
 
-std::string complete_result_from_fields(std::string_view fieldsJson)
-{
-    auto document = JsonDocument::parse(fieldsJson);
-    if (!document) {
-        return R"({"resultType":"complete"})";
-    }
-    if (!document->root().is_object()) {
-        return R"({"resultType":"complete"})";
-    }
-    const json::Json& fields = document->root();
-    std::string out;
-    auto writer = make_json_writer(out);
-    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
-    std::string raw;
-    (void)writer.start_object();
-    (void)writer.key("resultType");
-    (void)writer.string("complete");
-    fields.for_each_member([&](std::string_view fieldKey, const json::Json& value) -> json::result<void> {
-        if (fieldKey == "resultType") {
-            return {};
-        }
-        raw.clear();
-        auto serialized = json::stream::serialize(
-            value, [&](std::string_view chunk) -> json::result<void> {
-                raw.append(chunk);
-                return {};
-            });
-        if (!serialized) {
-            return {};
-        }
-        (void)writer.key(fieldKey);
-        (void)writer.raw(raw);
-        return {};
-    });
-    (void)writer.end_object();
-    if (!writer.finish()) {
-        return R"({"resultType":"complete"})";
-    }
-    return out;
+std::string complete_result_from_fields(std::string_view fields) {
+    auto value = json::merge_objects(fields, {{"resultType", {"\"complete\""}}});
+    if (!value) return {};
+    return std::move(*value);
 }
 
 } // namespace
@@ -189,7 +147,7 @@ std::string McpStdioServer::make_list(std::string_view field,
     result.items = items;
     result.ttlMs = 0;
     result.cacheScope = CacheScope::Private;
-    return result.to_json();
+    return result.encode();
 }
 
 std::string McpStdioServer::normalize_prompt_result(std::string_view resultJson) const
@@ -243,7 +201,7 @@ std::string McpStdioServer::dispatch(const ParsedRequest& request)
             result.capabilities.resources = !m_resources.empty();
             result.capabilities.prompts = !m_prompts.empty();
         }
-        return make_result_response(id, result.to_json());
+        return make_result_response(id, result.encode());
     }
 
     if (request.request.method == Methods::TOOLS_LIST ||
@@ -256,15 +214,15 @@ std::string McpStdioServer::dispatch(const ParsedRequest& request)
             if (request.request.method == Methods::TOOLS_LIST) {
                 field = "tools";
                 items.reserve(m_tools.size());
-                for (const auto& [unused, entry] : m_tools) { items.push_back(entry.tool.to_json()); }
+                for (const auto& [unused, entry] : m_tools) { items.push_back(entry.tool.encode()); }
             } else if (request.request.method == Methods::RESOURCES_LIST) {
                 field = "resources";
                 items.reserve(m_resources.size());
-                for (const auto& [unused, entry] : m_resources) { items.push_back(entry.resource.to_json()); }
+                for (const auto& [unused, entry] : m_resources) { items.push_back(entry.resource.encode()); }
             } else {
                 field = "prompts";
                 items.reserve(m_prompts.size());
-                for (const auto& [unused, entry] : m_prompts) { items.push_back(entry.prompt.to_json()); }
+                for (const auto& [unused, entry] : m_prompts) { items.push_back(entry.prompt.encode()); }
             }
         }
         return make_result_response(id, make_list(field, items));
@@ -274,7 +232,7 @@ std::string McpStdioServer::dispatch(const ParsedRequest& request)
         auto name = required_string(params, "name");
         if (!name) { return error(id, name.error()); }
         json::Json arguments;
-        auto argumentsResult = optional_object(params, "arguments");
+        auto argumentsResult = request_arguments(params);
         if (!argumentsResult) { return error(id, argumentsResult.error()); }
         arguments = argumentsResult.value();
         ToolHandler handler;
@@ -288,7 +246,7 @@ std::string McpStdioServer::dispatch(const ParsedRequest& request)
         }
         auto value = handler(arguments);
         if (!value) { return error(id, value.error()); }
-        return make_result_response(id, ToolCallResult::text(value.value()).to_json());
+        return make_result_response(id, ToolCallResult::text(value.value()).encode());
     }
 
     if (request.request.method == Methods::RESOURCES_READ) {
@@ -308,14 +266,14 @@ std::string McpStdioServer::dispatch(const ParsedRequest& request)
         auto value = reader(uri.value());
         if (!value) { return error(id, value.error()); }
         return make_result_response(
-            id, ReadResourceResult::text(uri.value(), value.value(), mimeType).to_json());
+            id, ReadResourceResult::text(uri.value(), value.value(), mimeType).encode());
     }
 
     if (request.request.method == Methods::PROMPTS_GET) {
         auto name = required_string(params, "name");
         if (!name) { return error(id, name.error()); }
         json::Json arguments;
-        auto argumentsResult = optional_object(params, "arguments");
+        auto argumentsResult = request_arguments(params);
         if (!argumentsResult) { return error(id, argumentsResult.error()); }
         arguments = argumentsResult.value();
         PromptGetter getter;
@@ -351,17 +309,8 @@ void McpStdioServer::run()
             continue;
         }
         // v2 cancellation is a stdio-only notification and has no response.
-        auto notificationDocument = JsonDocument::parse(message.value());
-        if (notificationDocument) {
-            const json::Json& notification = notificationDocument->root();
-            if (notification.is_object()) {
-                const auto method = notification.at("method").as_string();
-                if (method && *method == Methods::CANCELLED &&
-                    !notification.contains("id")) {
-                    continue;
-                }
-            }
-        }
+        auto notification = json::deserialize<EnvelopeFields>(message.value());
+        if (notification && notification->method == Methods::CANCELLED && !notification->id) continue;
         auto request = parse_request(message.value());
         if (!request) {
             (void)write_message(make_error_response(std::nullopt,

@@ -1,19 +1,18 @@
 /**
- * @file json_parser.h
- * @brief JSON-RPC消息解析器
+ * @file request_codec.h
+ * @brief JSON-RPC协议解码与校验
  * @author galay-mcp
  * @version 1.0.0
  *
  * @details 提供JSON-RPC 2.0格式的请求和响应消息解析功能，
- *          将原始JSON文本解析为结构化的视图对象。
+ *          JSON处理由serde完成，本文件只定义协议结果与校验入口。
  */
 
-#ifndef GALAY_MCP_COMMON_MCPJSONPARSER_H
-#define GALAY_MCP_COMMON_MCPJSONPARSER_H
+#ifndef GALAY_MCP_COMMON_REQUEST_CODEC_H
+#define GALAY_MCP_COMMON_REQUEST_CODEC_H
 
 #include "mcp_base.h"
 #include "mcp_error.h"
-#include "mcp_json.h"
 #include <expected>
 #include <string>
 #include <string_view>
@@ -22,7 +21,7 @@ namespace galay::mcp {
 
 /**
  * @brief JSON-RPC请求视图
- * @details 零拷贝方式引用已解析JSON文档中的请求字段
+ * @details 参数值由serde管理存储
  */
 struct JsonRpcRequestView {
     std::optional<int64_t> id; ///< 请求标识符（通知消息无此字段）
@@ -33,7 +32,7 @@ struct JsonRpcRequestView {
 
 /**
  * @brief 已解析的JSON-RPC请求
- * @details 持有JSON文档及其解析出的请求视图
+ * @details 持有解码后的请求字段
  */
 struct ParsedJsonRpcRequest {
     ParsedJsonRpcRequest() = default; ///< 默认构造
@@ -44,7 +43,6 @@ struct ParsedJsonRpcRequest {
      */
     ParsedJsonRpcRequest& operator=(ParsedJsonRpcRequest&&) noexcept = default;
 
-    JsonDocument document; ///< JSON文档（持有底层数据）
     JsonRpcRequestView request; ///< 解析出的请求视图
 
 private:
@@ -58,7 +56,7 @@ private:
 
 /**
  * @brief JSON-RPC响应视图
- * @details 零拷贝方式引用已解析JSON文档中的响应字段
+ * @details 结果和错误值由serde管理存储
  */
 struct JsonRpcResponseView {
     int64_t id = 0; ///< 响应对应的请求标识符
@@ -70,7 +68,7 @@ struct JsonRpcResponseView {
 
 /**
  * @brief 已解析的JSON-RPC响应
- * @details 持有JSON文档及其解析出的响应视图
+ * @details 持有解码后的响应字段
  */
 struct ParsedJsonRpcResponse {
     ParsedJsonRpcResponse() = default; ///< 默认构造
@@ -81,7 +79,6 @@ struct ParsedJsonRpcResponse {
      */
     ParsedJsonRpcResponse& operator=(ParsedJsonRpcResponse&&) noexcept = default;
 
-    JsonDocument document; ///< JSON文档（持有底层数据）
     JsonRpcResponseView response; ///< 解析出的响应视图
 
 private:
@@ -109,4 +106,4 @@ std::expected<ParsedJsonRpcResponse, McpError> parse_json_rpc_response(std::stri
 
 } // namespace galay::mcp
 
-#endif // GALAY_MCP_COMMON_MCPJSONPARSER_H
+#endif // GALAY_MCP_COMMON_REQUEST_CODEC_H

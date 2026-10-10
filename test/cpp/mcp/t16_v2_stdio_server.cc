@@ -33,7 +33,7 @@ std::string request(int id, std::string_view method, std::string_view fields = "
     message.id = id;
     message.method = std::string(method);
     message.params = std::move(params.value());
-    return message.to_json();
+    return message.encode();
 }
 
 } // namespace

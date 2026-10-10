@@ -1,3 +1,4 @@
+#include <serde/json/schema.hpp>
 #ifndef GALAY_MCP_EXAMPLE_E2_HTTP_H
 #define GALAY_MCP_EXAMPLE_E2_HTTP_H
 
@@ -27,7 +28,7 @@ void run_http_server() {
     server.set_server_info("example-http-server", "1.0.0");
 
     // 添加一个简单的计算器工具
-    auto calcSchema = SchemaBuilder()
+    auto calcSchema = json::SchemaBuilder()
         .add_enum("operation", "运算类型", {"add", "subtract", "multiply", "divide"}, true)
         .add_number("a", "第一个操作数", true)
         .add_number("b", "第二个操作数", true)
@@ -112,7 +113,7 @@ void run_http_server() {
             }
 
             std::string resultJson;
-            auto resWriter = make_json_writer(resultJson);
+            auto resWriter = json::stream::StreamWriter{[&resultJson](std::string_view chunk) -> json::result<void> { resultJson.append(chunk); return {}; }};
             // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
             (void)resWriter.start_object();
             (void)resWriter.key("result");
@@ -173,7 +174,7 @@ void run_http_server() {
             }
 
             std::string resultJson;
-            auto resWriter = make_json_writer(resultJson);
+            auto resWriter = json::stream::StreamWriter{[&resultJson](std::string_view chunk) -> json::result<void> { resultJson.append(chunk); return {}; }};
             // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
             (void)resWriter.start_object();
             (void)resWriter.key("description");
@@ -245,7 +246,7 @@ galay::kernel::Task<void> run_client_test(McpClient& client,
     // 调用计算器工具
     std::cout << "\n=== Calling Calculator Tool ===" << std::endl;
     std::string calcArgs;
-    auto calcArgsWriter = make_json_writer(calcArgs);
+    auto calcArgsWriter = json::stream::StreamWriter{[&calcArgs](std::string_view chunk) -> json::result<void> { calcArgs.append(chunk); return {}; }};
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)calcArgsWriter.start_object();
     (void)calcArgsWriter.key("operation");
@@ -263,9 +264,9 @@ galay::kernel::Task<void> run_client_test(McpClient& client,
     std::expected<std::string, McpError> calcResult;
     co_await client.call_tool("calculate", calcArgs, calcResult);
     if (calcResult) {
-        auto docExp = JsonDocument::parse(calcResult.value());
+        auto docExp = json::parse(calcResult.value());
         if (docExp) {
-            const json::Json& root = docExp.value().root();
+            const json::Json& root = docExp.value();
             if (root.is_object()) {
                 auto resultVal = root.at("result");
                 if (resultVal.valid()) {
@@ -313,7 +314,7 @@ galay::kernel::Task<void> run_client_test(McpClient& client,
     // 获取提示
     std::cout << "\n=== Getting Code Review Prompt ===" << std::endl;
     std::string promptArgs;
-    auto promptArgsWriter = make_json_writer(promptArgs);
+    auto promptArgsWriter = json::stream::StreamWriter{[&promptArgs](std::string_view chunk) -> json::result<void> { promptArgs.append(chunk); return {}; }};
     // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     (void)promptArgsWriter.start_object();
     (void)promptArgsWriter.key("language");

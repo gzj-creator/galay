@@ -27,14 +27,18 @@ bool require(bool condition, std::string_view message)
 int main()
 {
     const auto no_params = make_json_rpc_request_body(7, "tools/list", std::nullopt);
-    if (!require(no_params == R"({"jsonrpc":"2.0","id":7,"method":"tools/list"})",
+    const auto parsed_no_params = json::deserialize<galay::mcp::JsonRpcRequest>(no_params);
+    if (!require(parsed_no_params && parsed_no_params->id == 7 &&
+                     parsed_no_params->method == "tools/list" && !parsed_no_params->params,
                  "unexpected JSON-RPC body for request without params")) {
         return 1;
     }
 
     const auto with_params =
         make_json_rpc_request_body(9, "tools/call", std::optional<std::string_view>(R"({"name":"echo"})"));
-    if (!require(with_params == R"({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"echo"}})",
+    const auto parsed_with_params = json::deserialize<galay::mcp::JsonRpcRequest>(with_params);
+    if (!require(parsed_with_params && parsed_with_params->id == 9 &&
+                     parsed_with_params->method == "tools/call" && parsed_with_params->params == R"({"name":"echo"})",
                  "unexpected JSON-RPC body for request with params")) {
         return 1;
     }
