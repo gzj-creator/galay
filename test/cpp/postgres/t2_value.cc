@@ -1,6 +1,7 @@
 #include <galay/cpp/galay-postgres/base/postgres_value.h>
 
 #include <concepts>
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
@@ -144,12 +145,30 @@ void test_result_set_clone_and_metadata()
     require(!command_only.has_result_set(), "command-only result must not report fields");
 }
 
+void test_double_conversion_boundaries()
+{
+    const auto converted = [](std::string value) {
+        const PostgresRow row({std::move(value)});
+        return row.get_double(0, 77.0);
+    };
+    require(converted("-1.25e2") == -125.0, "double exponent conversion");
+    require(converted("4.9406564584124654e-324") == std::numeric_limits<double>::denorm_min(),
+            "double subnormal conversion");
+    require(std::signbit(converted("-0")), "double negative zero conversion");
+    require(std::isinf(converted("Infinity")), "PostgreSQL infinity conversion");
+    require(std::isnan(converted("NaN")), "PostgreSQL NaN conversion");
+    for (const std::string value : {"", " 1.25", "+1.25", "1.25tail", "1,25", "1e999", "1e-999"}) {
+        require(converted(value) == 77.0, "invalid double must use default");
+    }
+}
+
 } // namespace
 
 int main()
 {
     test_oid_and_field_metadata();
     test_row_access_and_conversion();
+    test_double_conversion_boundaries();
     test_result_set_clone_and_metadata();
     return EXIT_SUCCESS;
 }

@@ -5,7 +5,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <threads.h>
+#include <sched.h>
 
 #if defined(__linux__) && !defined(GALAY_C_TEST_KQUEUE)
 #include <sys/epoll.h>
@@ -774,7 +774,9 @@ C_IOResult galay_c_io_scheduler_unregister(galay_c_io_scheduler_t* scheduler,
         // all slot exchanges and task wakeups, before the owner can free it.
         while (atomic_load_explicit(&scheduler->reactor_inflight,
                                     memory_order_acquire) != 0) {
-            thrd_yield();
+            if (sched_yield() != 0) {
+                return make_result(C_IOResultError, errno);
+            }
         }
     }
 

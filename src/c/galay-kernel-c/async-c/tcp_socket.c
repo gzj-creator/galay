@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
+#if defined(__linux__) || defined(__FreeBSD__)
 #include <sys/sendfile.h>
 #endif
 #include <sys/uio.h>

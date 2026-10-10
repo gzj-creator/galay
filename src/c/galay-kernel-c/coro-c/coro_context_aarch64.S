@@ -25,8 +25,8 @@
 .text
 .align 2
 
-.globl _galay_coro_context_switch
-_galay_coro_context_switch:
+.globl _galay_c_coro_context_switch
+_galay_c_coro_context_switch:
     stp x19, x20, [x0, #CTX_X19]
     stp x21, x22, [x0, #CTX_X21]
     stp x23, x24, [x0, #CTX_X23]
@@ -64,10 +64,10 @@ _galay_coro_context_switch:
     ldr x30, [x1, #CTX_PC]
     ret
 
-.globl _galay_coro_context_entry
-_galay_coro_context_entry:
+.globl _galay_c_coro_context_entry
+_galay_c_coro_context_entry:
     mov x0, x19
-    bl _galay_coro_context_trampoline
+    bl _galay_c_coro_context_trampoline
 1:
     b 1b
 

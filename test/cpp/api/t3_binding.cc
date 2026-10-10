@@ -167,7 +167,9 @@ void test_scalars() {
 
     for (const auto& [key, value] : std::vector<std::pair<std::string, std::string>>{
             {"small", "128"}, {"small", "-129"}, {"small", "3tail"}, {"small", " 3"},
-            {"ratio", "1.2tail"}, {"ratio", "1e999"}, {"ratio", "nan"}, {"ratio", "inf"},
+            {"ratio", "1.2tail"}, {"ratio", "1e999"}, {"ratio", "1e-999"},
+            {"ratio", " 1.25"}, {"ratio", "+1.25"}, {"ratio", "0x1.2p3"},
+            {"ratio", "nan"}, {"ratio", "inf"},
             {"enabled", "TRUE"}, {"enabled", "1"}, {"enabled", ""},
             {"text", ""}, {"text", "four"}, {"text", "\xFF"}, {"text", "\xED\xA0\x80"},
             {"mode", "1"}, {"mode", "unknown"}, {"code", "2"}, {"code", "-1"},

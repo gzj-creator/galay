@@ -139,6 +139,13 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT GALAY_DISABLE_IOURING
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         LABELS "kernel;stress"
         TIMEOUT 40)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    add_test(NAME kernel.runtime_pending_accept_kqueue_128
+        COMMAND $<TARGET_FILE:t185_runtime_pending_accept_lsan> 128)
+    set_tests_properties(kernel.runtime_pending_accept_kqueue_128 PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        LABELS "kernel;stress"
+        TIMEOUT 20)
 endif()
 set_tests_properties(kernel.runtime_pending_accept_lsan kernel.accept_completion_integration
     PROPERTIES TIMEOUT 20)

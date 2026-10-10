@@ -430,15 +430,8 @@ Measurement run_raw_queue(int producerCount, int consumerCount)
 
 bool valid_measurement(const Measurement& measurement)
 {
-    bool placementValid = true;
-#if defined(__APPLE__)
-    placementValid = measurement.placement ==
-        galay::benchmark::ThreadPlacement::kPerformanceClassOnly;
-#elif defined(__linux__)
-    placementValid =
-        measurement.placement == galay::benchmark::ThreadPlacement::kPinnedToCore;
-#endif
-    return !measurement.setupFailed && placementValid &&
+    return !measurement.setupFailed &&
+        galay::benchmark::is_thread_placement_valid(measurement.placement) &&
         measurement.messagesPerSecond > 0.0 &&
         measurement.received == kMessages && measurement.sum == kExpectedSum &&
         measurement.sendRetries == 0 && measurement.finalSize == 0;

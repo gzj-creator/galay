@@ -261,6 +261,23 @@ bool test_assignments() {
     return passed;
 }
 
+bool test_float_boundaries() {
+    using Floats = std::map<std::string, double>;
+    const auto parsed = toml::deserialize<Floats>(
+        "positive=+1.25e2\nnegative=-1.25e2\nzero=-0.0\n"
+        "tiny=4.9406564584124654e-324\nlarge=1.7976931348623157e308\n");
+    bool passed = expect(parsed && parsed->at("positive") == 125.0 &&
+        parsed->at("negative") == -125.0 && std::signbit(parsed->at("zero")) &&
+        parsed->at("tiny") == std::numeric_limits<double>::denorm_min() &&
+        parsed->at("large") == std::numeric_limits<double>::max(),
+        "TOML floats retain signs, exponent and representable boundaries");
+    for (const std::string_view value : {"1e999", "1e-999", "1.25tail", "0x1.2p3"}) {
+        passed &= expect(!toml::deserialize<Floats>("value=" + std::string(value)),
+            "invalid or out-of-range TOML float is rejected");
+    }
+    return passed;
+}
+
 }  // namespace
 
 int main() {
@@ -314,5 +331,6 @@ int main() {
                          std::vector<NestedGrandchild>{{"first"}, {"second"}},
                      "repeated nested array tables remain appendable");
     passed &= test_assignments();
+    passed &= test_float_boundaries();
     return passed ? 0 : 1;
 }

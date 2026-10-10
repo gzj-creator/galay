@@ -122,5 +122,25 @@ int main(int argc, char** argv)
     std::cout << "T185 pending=" << count << " resumes=" << resumes << " destroys=" << destroys
               << " detached=" << detached << " closed=" << closed << " frames=" << frames
               << " stop_ms=" << stop_ms << '\n';
+#ifdef USE_KQUEUE
+    if (ok) {
+        Trace restarted_trace;
+        auto registered = restarted_trace.registered.get_future();
+        const auto restarted = runtime.start();
+        if (!restarted) { return 1; }
+        auto task = pending_accept(listeners[0], restarted_trace);
+        const auto keeper = detail::TaskAccess::task_ref(task);
+        if (!runtime.spawn_io(std::move(task)) ||
+            registered.wait_for(std::chrono::seconds(10)) != std::future_status::ready ||
+            !registered.get()) {
+            runtime.stop();
+            return 1;
+        }
+        runtime.stop();
+        ok = restarted_trace.resumes == 1 && restarted_trace.destroys == 1 &&
+            restarted_trace.closed && keeper.state()->m_handle == nullptr &&
+            listeners[0].controller()->m_awaitable[IOController::READ] == nullptr;
+    }
+#endif
     return ok ? 0 : 1;
 }

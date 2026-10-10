@@ -2,6 +2,7 @@
 #define GALAY_API_BINDING_H
 
 #include <galay/cpp/galay-http/server/api_binding.h>
+#include <galay/thirdparty/fast_float/include/fast_float/fast_float.h>
 #include "schema.h"
 #include <serde/json/json.hpp>
 
@@ -71,7 +72,14 @@ ApiResult<T> decode_scalar(std::string_view text) {
         using Parsed = std::conditional_t<std::is_integral_v<T>,
             std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t>, T>;
         Parsed value{};
-        const auto converted = std::from_chars(text.data(), text.data() + text.size(), value);
+        const std::from_chars_result converted = [&] {
+            if constexpr (std::is_floating_point_v<T>) {
+                const auto result = fast_float::from_chars(text.data(), text.data() + text.size(), value);
+                return std::from_chars_result{result.ptr, result.ec};
+            } else {
+                return std::from_chars(text.data(), text.data() + text.size(), value);
+            }
+        }();
         if (converted.ec == std::errc::result_out_of_range) {
             return std::unexpected(bad_request("numeric parameter is outside the field's range"));
         }

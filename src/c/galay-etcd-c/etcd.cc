@@ -91,6 +91,7 @@ galay_status_t status_from_io(C_IOResult result)
         case C_IOResultInvalid:
             return GALAY_INVALID_ARGUMENT;
         case C_IOResultEof:
+        case C_IOResultClosed:
         case C_IOResultTimeout:
         case C_IOResultCancelled:
         case C_IOResultError:

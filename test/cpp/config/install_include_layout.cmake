@@ -181,7 +181,10 @@ foreach(required_header
         "include/galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h"
         "include/galay/thirdparty/concurrentqueue/moodycamel/lightweightsemaphore.h"
         "include/galay/thirdparty/concurrentqueue/LICENSE.md"
-        "include/galay/thirdparty/concurrentqueue/README.md")
+        "include/galay/thirdparty/concurrentqueue/README.md"
+        "include/galay/thirdparty/fast_float/include/fast_float/fast_float.h"
+        "include/galay/thirdparty/fast_float/LICENSE-MIT"
+        "include/third_party/fast_float/include/fast_float/fast_float.h")
     if(NOT EXISTS "${prefix_dir}/${required_header}")
         message(FATAL_ERROR "Missing installed header: ${required_header}")
     endif()

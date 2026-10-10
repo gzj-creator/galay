@@ -1,5 +1,7 @@
 #include "postgres_value.h"
 
+#include <galay/thirdparty/fast_float/include/fast_float/fast_float.h>
+
 #include <charconv>
 #include <utility>
 
@@ -95,13 +97,9 @@ double PostgresRow::get_double(size_t index, double default_value) const noexcep
     }
     const std::string& value = *m_values[index];
     double parsed = 0.0;
-    const auto result = std::from_chars(value.data(),
-                                        value.data() + value.size(),
-                                        parsed,
-                                        std::chars_format::general);
+    const auto result = fast_float::from_chars(value.data(), value.data() + value.size(), parsed);
     return result.ec == std::errc{} && result.ptr == value.data() + value.size()
-        ? parsed
-        : default_value;
+        ? parsed : default_value;
 }
 
 PostgresResultSet PostgresResultSet::clone() const

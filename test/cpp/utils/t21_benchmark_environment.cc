@@ -111,6 +111,14 @@ int main()
                 _exit(4);
             }
             if (ok) {
+                const bool uncontrolled = test.cpus &&
+                    std::string_view(test.cpus) == "none";
+                if (galay::benchmark::is_thread_placement_valid(
+                        galay::benchmark::ThreadPlacement::kPinnedToCore) == uncontrolled ||
+                    galay::benchmark::is_thread_placement_valid(
+                        galay::benchmark::ThreadPlacement::kUnsupported) != uncontrolled) {
+                    _exit(8);
+                }
                 const auto actual = CPU::cpu_affinity();
                 bool inherited = false;
                 std::thread child([&] { inherited = CPU::cpu_affinity() == actual; });

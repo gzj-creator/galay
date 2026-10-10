@@ -139,15 +139,8 @@ Measurement run_channel(int producerCount, int consumerCount, size_t capacity)
 
 bool valid_measurement(const Measurement& measurement)
 {
-    bool placementValid = true;
-#if defined(__APPLE__)
-    placementValid = measurement.placement ==
-        galay::benchmark::ThreadPlacement::kPerformanceClassOnly;
-#elif defined(__linux__)
-    placementValid =
-        measurement.placement == galay::benchmark::ThreadPlacement::kPinnedToCore;
-#endif
-    return placementValid && measurement.messagesPerSecond > 0.0 &&
+    return galay::benchmark::is_thread_placement_valid(measurement.placement) &&
+        measurement.messagesPerSecond > 0.0 &&
         measurement.received == kMessages && measurement.sum == kExpectedSum;
 }
 

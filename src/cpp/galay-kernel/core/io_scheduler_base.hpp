@@ -384,6 +384,16 @@ private:
             if (ran == 0) { break; }
         }
 #endif
+#ifdef USE_KQUEUE
+        m_reactor.stop_accepts();
+        while (m_core.has_pending_work()) {
+            const auto ran = m_core.run_ready_pass(
+                [this](TaskRef& task) { this->resume(task); },
+                [this](size_t drained) { m_wake_coordinator.on_remote_collected(drained); });
+            if (ran == 0) { break; }
+            backend.flush_backend();
+        }
+#endif
     }
 };
 

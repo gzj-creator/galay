@@ -38,6 +38,15 @@ inline const char* thread_placement_name(ThreadPlacement placement) noexcept
     return "unknown";
 }
 
+[[nodiscard]] inline bool is_thread_placement_valid(ThreadPlacement placement) noexcept
+{
+    if (!detail::environmentInitialized) {
+        return false;
+    }
+    return placement == (detail::cpuBindingEnabled
+        ? ThreadPlacement::kPinnedToCore : ThreadPlacement::kUnsupported);
+}
+
 /**
  * @brief 把当前线程固定到基准测试用的执行资源上。
  * @param coreIndex 启动时选择的 CPU 集合中的索引；超出集合大小时取模。

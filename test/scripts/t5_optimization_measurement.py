@@ -127,9 +127,25 @@ class MeasurementTest(unittest.TestCase):
             with self.subTest(args=args), patch("sys.argv", [
                     "measure", "--variant", "a=build/a", "--variant", "b=build/b",
                     "--output", "build/results", *args]), \
+                    patch.object(measure.sys, "platform", "linux"), \
+                    patch.object(measure.os, "sched_getaffinity", return_value={0}, create=True), \
                     patch.object(measure, "measure") as run:
                 measure.main()
                 self.assertEqual(run.call_args.args[5], expected)
+
+    def test_measurement_rejects_unsupported_platform_before_collecting_samples(self):
+        with patch.object(measure.sys, "platform", "darwin"), \
+             patch.object(measure, "observation") as observe:
+            with self.assertRaisesRegex(ValueError, "requires Linux"):
+                measure.measure({}, 10, Path("unused"), "0", 0, ["resume"])
+            observe.assert_not_called()
+        with patch.object(measure.sys, "platform", "darwin"), \
+             patch.object(measure, "measure") as run, \
+             patch("sys.argv", ["measure", "--help"]):
+            with self.assertRaises(SystemExit) as exited:
+                measure.main()
+            self.assertEqual(exited.exception.code, 0)
+            run.assert_not_called()
 
     def test_components_cannot_replace_parked_accept_gate(self):
         raw = "B41Components implementation=galay batch=1 operations=2048 ready_accept_ns_per_op=100 errors=0\n"
@@ -161,6 +177,8 @@ class MeasurementTest(unittest.TestCase):
             (build / "CMakeCache.txt").write_text("fixture\n")
             results = Path(directory) / "results"
             with patch.object(measure, "command_output", side_effect=lambda cmd: "" if "ls-files" in cmd else "fixture\n"), \
+                 patch.object(measure.sys, "platform", "linux"), \
+                 patch.object(measure, "observation", return_value={"affinity": [0]}), \
                  patch.object(measure.subprocess, "run", side_effect=run), \
                  patch.object(measure.time, "sleep") as sleep:
                 measure.measure({"a": build, "b": build}, 10, results, "0", 2.5, ["resume"], aa=True)

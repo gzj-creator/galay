@@ -13,6 +13,7 @@ import random
 from pathlib import Path
 import statistics
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -200,6 +201,8 @@ def measure(variants: dict[str, Path], runs: int, output: Path, cpus: str, coold
             scenarios: list[str], *, seed: int = 1729, minimum_ms: float = 100,
             protocol_path: Path | None = None, calibrate_only: bool = False,
             aa: bool = False, micro_cpu: str | None = None) -> None:
+    if sys.platform != "linux":
+        raise ValueError("optimization measurement requires Linux")
     if len(variants) != 2:
         raise ValueError("exactly two variant labels are required (A/A may share one build)")
     order = pair_order(runs, seed)
@@ -380,8 +383,12 @@ def main() -> None:
     parser.add_argument("--scenario", action="append", choices=tuple(BENCHMARKS))
     parser.add_argument("--cooldown-seconds", type=float, default=0)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--cpus", default=",".join(map(str, sorted(os.sched_getaffinity(0)))))
+    parser.add_argument("--cpus", help="Linux CPU affinity list; defaults to the current process affinity")
     args = parser.parse_args()
+    if sys.platform != "linux":
+        parser.error("optimization measurement requires Linux")
+    if args.cpus is None:
+        args.cpus = ",".join(map(str, sorted(os.sched_getaffinity(0))))
     variants = {}
     for spec in args.variant:
         name, separator, path = spec.partition("=")

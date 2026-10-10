@@ -69,6 +69,8 @@ public:
      * @return int 操作结果
      */
     int add_accept(IOController* controller);
+    /** @brief Complete and detach accepts when the owning scheduler stops. */
+    void stop_accepts();
     /**
      * @brief 注册 connect 等待；1=立即完成，0=已登记，<0=错误
      * @param controller IO 控制器
@@ -239,6 +241,7 @@ private:
     std::unordered_map<int, std::unique_ptr<RegistrationEntry>> m_registration_entries;  ///< fd 到稳定注册入口的映射
     std::vector<std::unique_ptr<RegistrationEntry>> m_retired_entries;  ///< 已退役但保留地址的注册入口
     std::atomic<uint64_t>& m_last_error_code;  ///< 最近一次后端错误编码输出槽位
+    bool m_accept_stopping = false;
 };
 
 static_assert(ReactorType<KqueueReactor>);

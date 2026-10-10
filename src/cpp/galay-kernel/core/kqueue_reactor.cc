@@ -85,6 +85,7 @@ KqueueReactor::KqueueReactor(int max_events, std::atomic<uint64_t>& last_error_c
 
 std::expected<void, IOError> KqueueReactor::start()
 {
+    m_accept_stopping = false;
     if (m_kqueue_fd != -1) {
         return {};
     }
@@ -225,6 +226,10 @@ void KqueueReactor::discard_pending_changes(IOController* controller) {
 int KqueueReactor::add_accept(IOController* controller) {
     auto* awaitable = controller->get_awaitable<AcceptAwaitable>();
     if (awaitable == nullptr) return -1;
+    if (m_accept_stopping) {
+        awaitable->m_result = std::unexpected(IOError(kClosed, 0));
+        return 1;
+    }
     if (awaitable->handle_complete(controller->m_handle)) {
         return 1;
     }
@@ -233,6 +238,36 @@ int KqueueReactor::add_accept(IOController* controller) {
     struct kevent ev;
     EV_SET(&ev, controller->m_handle.fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, entry);
     return kevent(m_kqueue_fd, &ev, 1, nullptr, 0, nullptr);
+}
+
+void KqueueReactor::stop_accepts()
+{
+    m_accept_stopping = true;
+    std::vector<Waker> pending;
+    for (const auto& [fd, entry] : m_registration_entries) {
+        (void)fd;
+        auto* controller = entry ? entry->controller : nullptr;
+        if (controller == nullptr || (static_cast<uint32_t>(controller->m_type) & ACCEPT) == 0) {
+            continue;
+        }
+        if (auto* awaitable = controller->get_awaitable<AcceptAwaitable>(); awaitable != nullptr) {
+            awaitable->m_result = std::unexpected(IOError(kClosed, 0));
+            awaitable->cancel_bound_timeout_timer();
+            controller->remove_awaitable(ACCEPT);
+            delete_one_shot_registration(controller->m_handle.fd, EVFILT_READ);
+            awaitable->m_controller = nullptr;
+            if (controller->m_type == IOEventType::INVALID &&
+                (controller->m_simple_armed_mask | controller->m_sequence_armed_mask) == 0) {
+                controller->release_registration_owner_slot();
+            }
+            pending.push_back(std::move(awaitable->m_waker));
+        }
+    }
+
+    // Detach every frame before any wake can resume inline and destroy another listener.
+    for (auto& waker : pending) {
+        waker.wake_up();
+    }
 }
 
 int KqueueReactor::add_connect(IOController* controller) {
