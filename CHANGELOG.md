@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v7.0.0] - 2026-10-11
+
 ### Added
 
 - 类型化 API 和 OpenAPI/Swagger 扩展到 HTTPS（HTTP/1 over TLS）、h2c prior knowledge 和 HTTP/2 over TLS，保留 HTTP/1 明文能力。四种传输复用同一份 DTO、路由登记、参数绑定、校验、JSON 编解码和错误契约。
@@ -19,6 +21,7 @@
 
 ### Changed
 
+- CMake、Bazel 和 mcpp 版本元数据统一为 `7.0.0`。原生 Builder 取代独立 API 公开接口及 MCP 编解码入口变更属于不兼容变更，按主版本发布；消费者须迁移调用并重新编译。
 - 跟进 serde `v0.5.0` 发布，更新子模块至该版本提交，并将 Bazel 的 serde 依赖声明同步为 `0.5.0`。
 - C++ MCP 的通用 JSON 解析、动态值、序列化与 JSON Schema 构建全部移交 serde；MCP 仅保留协议类型、反射字段映射及语义校验。v1/v2 客户端、HTTP/stdio 服务端直接使用 serde，协议编解码入口统一为 `encode` / `decode`，Schema 使用 `<serde/json/schema.hpp>` 的 `json::SchemaBuilder`，同步更新 serde 子模块引用。
 - HTTP chunk 编码改用 `std::to_chars` 写入栈缓冲，按十六进制前缀、两组 CRLF 与 payload 完整预留输出空间，避免追加末尾 CRLF 时再次分配并复制 payload；服务端 header 指针查找直接使用小写 key 的 `std::string_view`，仅对含大写的 key 构造规范化副本。
@@ -37,6 +40,8 @@
 
 ### Fixed
 
+- 修复 timer wheel 在空闲 tick 后提交任务时提前触发的问题，按实际 deadline 放入时间轮；新增空闲后提交、短于 tick 的延迟和跨层级 deadline 回归。
+- 修复 macOS/kqueue 全量构建与 Runtime 关闭路径，补齐 aarch64 C 协程汇编、pending accept 清理、浮点解析及 benchmark 线程放置验证；`fast_float` 源码依赖和安装仅在 macOS 启用。
 - 锁定 MCP 迁移后的协议边界：空结果数组仍显式编码，缓存字段仅出现在相应结果中，业务字段不能覆盖保留的 `_meta`；拒绝非法 null 错误、参数及 header 注解，保留 null result 的存在语义、v2 Tool Schema 校验及直接 serde 序列化的完整 JSON-RPC envelope。serde 解码的动态值独立持有存储，避免后续解析或源文档释放使结果失效。
 - 修复 HTTP/1 HEAD 响应按 `Content-Length` / chunked 等待实际响应体的问题；响应解析接收请求方法，TCP/SSL 会话及预序列化请求在完整响应头后返回空 body，保留长度与传输元数据，不消费后续响应，`clone()` / `reset()` 同步维护完成状态。
 - 修复 HTTP 代理转发 HEAD 请求时按响应长度等待不存在的响应体，改为在收到完整上游响应头后继续转发，避免代理协程挂起。
@@ -67,6 +72,7 @@
 
 ### Validation
 
+- 2026-10-11 发版检查：macOS/arm64 现有 Debug 构建目录重新配置通过，生成的 CMake 包版本为 `7.0.0`，与 Bazel、mcpp 一致；timer deadline 目标增量构建及 timer deadline、模块 prelude、样式审计三项 CTest 全部通过，`git diff --check` 通过。本轮仅修改版本元数据和发布文档，未重跑全目标构建或全量测试。
 - 2026-10-10 MCP/serde 迁移以单任务构建、串行测试完成：C++ MCP 21/21、serde unit 13/13、serde 安装消费者 1/1、C MCP 5/5，上游 serde 无异常模式 6/6、Clang C++ modules 7/7 均通过。相关 HTTP/stdio 示例及 benchmark 构建通过，解析与 v2 协议 benchmark 各运行 100 次测量迭代作为 smoke；MCP 源码无旧 parser/DOM/writer 包装或直接 simdjson 使用，两个仓库 `git diff --check` 通过。未重跑全仓测试，etcd 关闭时未运行 shared-backend 集成测试；不据 smoke 宣称性能改善。
 - 2026-10-10 函数注释检查识别全仓 5614 个已有函数文档注释，具名参数标签与返回标签无缺失、无过时参数名；275 个源码变更文件的 token 对比确认仅 Base64 声明增加参数名，无执行逻辑变更或新增 C/C++ 解析错误。独立 agent 复核已确认的语义修正，未逐条人工审查所有函数实现；两项 C 源码边界检查、样式审计共 3/3 CTest 与 `git diff --check` 通过，未为此次注释变更执行全量构建或完整 CTest。
 - 2026-10-10 HTTP 热路径优化补齐落盘回归：chunk 的 12 个长度、文本与二进制 payload、两个重载及结束块共 96 个输出检查通过；64 KiB chunk 两个重载均只分配一次，服务端长小写 common/map header 命中与缺失均零分配，大小写及客户端查找语义通过。Linux / GCC14 / C++23 / io_uring / Release / `-Werror` 相关构建及 HTTP/HTTP2/MCP 的 98 项 unit CTest 全部通过；临时还原 `reserve(... + 2)` 或旧 header 规范化副本时，新分配回归均按预期失败，样式审计与 `git diff --check` 通过。

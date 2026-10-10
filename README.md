@@ -107,6 +107,10 @@ C ABI 文档位于 [`docs/c/modules/`](docs/c/modules/)，按模块对齐 `src/c
 
 版本与发版记录见 [CHANGELOG.md](CHANGELOG.md) 与 [docs/release_note.md](docs/release_note.md)。
 
+`v7.0.0` 将类型化 API 统一到 HTTP、HTTPS、h2c 和 H2 原生 Builder，删除独立的
+`ApiBuilder` / `ApiServer` 等旧接口；MCP JSON 与 Schema 处理移交 serde。
+消费者须迁移调用并重新编译，详见 [发布说明](docs/release_note.md)。
+
 `v6.2.0` 将 Galay 自有函数统一为 `snake_case`，不保留旧名包装。消费者须同步修改
 调用并重新编译，不可混用旧 C++ 共享库；命名对照、优化取舍与验证边界见
 [重构评估](docs/cpp/modules/kernel/21-重构评估.md)。

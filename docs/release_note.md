@@ -566,3 +566,45 @@ CMake、Bazel 与 mcpp 版本元数据统一为 `6.0.0`。
   20 次通过后完整串行验证得到上述最终计数，仍保留既有测试端口碰撞风险。
   Bazel、原生 macOS/BSD kqueue、Windows、可选 API 原生模块及全部后端/链接方式
   组合未实跑；外部数据库/集群门控项保持跳过，跳过、禁用和未运行项不计作通过。
+
+## v7.0.0 - 2026-10-11
+
+- **版本级别**：主版本（major）
+- **Git 提交消息**：`chore: 发布 v7.0.0 并同步版本元数据`
+- **Git tag**：`v7.0.0`
+
+### 变更摘要
+
+本版本收束自 `v6.2.0` 以来的 14 个提交。类型化 API 的公开构建入口和 MCP
+编解码接口发生不兼容变更，消费者须迁移调用并重新编译。CMake、Bazel、mcpp
+版本统一为 `7.0.0`；完整累计变更及逐轮验证范围见 `CHANGELOG.md`。
+
+- **四种 HTTP 传输共用原生 Builder**：HTTP、HTTPS、h2c prior knowledge、H2
+  统一提供 `add_api`、`add_handler`、`add_request_handler`，共用 DTO、绑定、校验及
+  错误契约；删除公开 `ApiBuilder`、`ApiServer`、`PreparedApi` 和独立文档 policy，
+  不保留兼容入口。可选文档模式提供 OpenAPI 3.1.0 与内嵌 Swagger UI 5.17.14，
+  九项资源直接编译到源码，默认构建和运行无需外部资源目录。
+- **MCP 使用 serde**：通用 JSON 解析、动态值、序列化与 Schema 构建交给 serde，
+  删除自有 parser、DOM、writer 及 Schema 包装，协议入口统一为 `encode` / `decode`。
+  依赖声明为 serde `0.5.0`，子模块固定于 `80421925f779a2eb4514f464f4485b1a8b8d2d66`
+  （包含该版本之后的 macOS 兼容修复）；保留 JSON-RPC envelope 与业务错误边界。
+- **协议与协程正确性**：修复 HTTP HEAD 响应和代理等待不存在响应体、HPACK 表索引、
+  HTTP/2 流控窗口及连接停止生命周期；修复 io_uring SEND_ZC 通知前复用 buffer、
+  超时 RECV 消耗后续数据、多个 Runtime 共用定时器及 RPC channel 关闭问题。
+  任务完成通知收敛为单原子状态，补齐丢唤醒回归；timer wheel 按实际 deadline
+  调度，避免空闲 tick 后提交任务提前触发。
+- **平台与维护**：修复 macOS/kqueue 构建和 Runtime 关闭，macOS 浮点解析使用随源
+  分发的 fast_float，其他平台不引入或安装该依赖；优化 HTTP chunk 与 header
+  分配并补齐回归，完善函数参数、返回值及生命周期契约文档。
+
+### 验证范围
+
+累计已有记录包含 Linux epoll 全目标构建及 655 项 CTest（614 通过、36 跳过、
+5 禁用），io_uring 全目标构建及 654 项 CTest（616 通过、33 跳过、5 禁用），
+四传输 API、安装消费、离线浏览器、定向 sanitizer 与任务完成压力回归。
+MCP/serde 迁移后的 C++ MCP 21/21、serde unit 13/13、安装消费 1/1、C MCP 5/5
+及上游无异常模式 6/6、Clang modules 7/7 通过。
+
+上述结果来自各次变更的验证，不代表最终提交重新完成全量回归；发版检查结果另行
+记录于 CHANGELOG。Bazel、全部平台/后端组合及全仓 sanitizer 未完成统一验收，
+外部集成的跳过/禁用项不计作通过，不据局部探针或 benchmark smoke 宣称应用性能改善。
