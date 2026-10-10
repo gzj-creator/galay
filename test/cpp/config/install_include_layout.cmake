@@ -5,7 +5,8 @@ foreach(required_var
         GALAY_SOURCE_DIR
         GALAY_BINARY_DIR
         GALAY_CMAKE_GENERATOR
-        GALAY_CXX_COMPILER)
+        GALAY_CXX_COMPILER
+        GALAY_TARGET_SYSTEM_NAME)
     if(NOT DEFINED ${required_var} OR "${${required_var}}" STREQUAL "")
         message(FATAL_ERROR "install_include_layout requires `${required_var}`.")
     endif()
@@ -181,12 +182,22 @@ foreach(required_header
         "include/galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h"
         "include/galay/thirdparty/concurrentqueue/moodycamel/lightweightsemaphore.h"
         "include/galay/thirdparty/concurrentqueue/LICENSE.md"
-        "include/galay/thirdparty/concurrentqueue/README.md"
+        "include/galay/thirdparty/concurrentqueue/README.md")
+    if(NOT EXISTS "${prefix_dir}/${required_header}")
+        message(FATAL_ERROR "Missing installed header: ${required_header}")
+    endif()
+endforeach()
+
+foreach(fast_float_header IN ITEMS
         "include/galay/thirdparty/fast_float/include/fast_float/fast_float.h"
         "include/galay/thirdparty/fast_float/LICENSE-MIT"
         "include/third_party/fast_float/include/fast_float/fast_float.h")
-    if(NOT EXISTS "${prefix_dir}/${required_header}")
-        message(FATAL_ERROR "Missing installed header: ${required_header}")
+    if(GALAY_TARGET_SYSTEM_NAME STREQUAL "Darwin")
+        if(NOT EXISTS "${prefix_dir}/${fast_float_header}")
+            message(FATAL_ERROR "Missing macOS dependency: ${fast_float_header}")
+        endif()
+    elseif(EXISTS "${prefix_dir}/${fast_float_header}")
+        message(FATAL_ERROR "Unexpected macOS-only dependency: ${fast_float_header}")
     endif()
 endforeach()
 

@@ -14,8 +14,10 @@ cc_library(
     include_prefix = "galay/cpp/galay-postgres",
     copts = ["-std=c++23"],
     deps = [
-        "//thirdparty/fast_float:fast_float",
         "//src/cpp/galay-kernel:galay-kernel",
         "//src/cpp/galay-utils:galay-utils",
-    ],
+    ] + select({
+        "@platforms//os:macos": ["//thirdparty/fast_float:fast_float"],
+        "//conditions:default": [],
+    }),
 )

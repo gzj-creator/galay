@@ -10,8 +10,10 @@ cc_library(
     include_prefix = "galay/cpp/galay-api",
     copts = ["-std=c++23"],
     deps = [
-        "//thirdparty/fast_float:fast_float",
         "//src/cpp/galay-http:galay-http",
         "//src/cpp/galay-serde:galay-serde",
-    ],
+    ] + select({
+        "@platforms//os:macos": ["//thirdparty/fast_float:fast_float"],
+        "//conditions:default": [],
+    }),
 )

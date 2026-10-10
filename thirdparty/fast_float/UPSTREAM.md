@@ -7,4 +7,5 @@ The headers are unmodified. Upstream offers Apache-2.0, MIT and Boost-1.0
 licenses; all three license files are included.
 
 Galay uses the locale-independent float and double `from_chars` implementation
-on every platform so parsing does not depend on standard-library support.
+on macOS, where the supported Apple libc++ lacks floating-point overloads.
+Other platforms use the standard library and do not include this dependency.

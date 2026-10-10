@@ -44,8 +44,9 @@ Galay 自带所需的 `concurrentqueue` 头文件。该副本位于
 `include/galay/thirdparty/concurrentqueue`；构建和消费 Galay 不需要另外安装
 或查找原始 `concurrentqueue` 包。
 
-浮点文本转换使用随仓库分发的 `thirdparty/fast_float`（v8.0.2），在 Apple
-libc++ 尚未提供浮点 `std::from_chars` 的环境中也保持相同的解析与范围校验。
+macOS 浮点文本转换使用随仓库分发的 `thirdparty/fast_float`（v8.0.2），解决
+Apple libc++ 缺少浮点 `std::from_chars` 的问题。其他平台直接使用标准库，
+不会引用或安装 fast_float；Bazel 仅在 macOS 目标上启用此依赖。
 
 serde 通过 `thirdparty/serde` Git submodule 获取，MCP/etcd 共用其 JSON 后端。结构体转换示例与
 三套构建说明见 [galay-serde](docs/cpp/modules/serde/00-快速开始.md)。

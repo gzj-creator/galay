@@ -257,10 +257,12 @@ install(FILES
     ${GALAY_CONCURRENTQUEUE_SOURCE_DIR}/README.md
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/concurrentqueue
 )
-install(DIRECTORY ${GALAY_PROJECT_SOURCE_ROOT}/thirdparty/fast_float/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/fast_float
-    FILES_MATCHING PATTERN "*.h" PATTERN "LICENSE-*" PATTERN "README.md"
-)
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    install(DIRECTORY ${GALAY_PROJECT_SOURCE_ROOT}/thirdparty/fast_float/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/fast_float
+        FILES_MATCHING PATTERN "*.h" PATTERN "LICENSE-*" PATTERN "README.md"
+    )
+endif()
 if(GALAY_BUILD_C_API)
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/c/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/c

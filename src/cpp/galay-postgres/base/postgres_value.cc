@@ -1,6 +1,8 @@
 #include "postgres_value.h"
 
+#if defined(__APPLE__) && defined(__MACH__)
 #include <galay/thirdparty/fast_float/include/fast_float/fast_float.h>
+#endif
 
 #include <charconv>
 #include <utility>
@@ -97,7 +99,11 @@ double PostgresRow::get_double(size_t index, double default_value) const noexcep
     }
     const std::string& value = *m_values[index];
     double parsed = 0.0;
+#if defined(__APPLE__) && defined(__MACH__)
     const auto result = fast_float::from_chars(value.data(), value.data() + value.size(), parsed);
+#else
+    const auto result = std::from_chars(value.data(), value.data() + value.size(), parsed);
+#endif
     return result.ec == std::errc{} && result.ptr == value.data() + value.size()
         ? parsed : default_value;
 }
