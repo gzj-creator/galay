@@ -81,11 +81,13 @@ public:
 
     /**
      * @brief 检查是否成功
+     * @return 满足所检查条件时返回 true，否则返回 false
      */
     bool is_success() const { return m_code == SslErrorCode::kSuccess; }
 
     /**
      * @brief 检查是否需要重试（WANT_READ/WANT_WRITE）
+     * @return SSL 操作需要继续读或写时返回 true，否则返回 false
      */
     bool needs_retry() const {
         return m_code == SslErrorCode::kHandshakeWantRead ||
@@ -94,21 +96,25 @@ public:
 
     /**
      * @brief 获取错误码
+     * @return 当前错误码
      */
     SslErrorCode code() const { return m_code; }
 
     /**
      * @brief 获取 OpenSSL 错误码
+     * @return 原始 OpenSSL 错误码
      */
     unsigned long ssl_error() const { return m_ssl_error; }
 
     /**
      * @brief 获取错误消息
+     * @return 处理后的 std::string 结果
      */
     std::string message() const;
 
     /**
      * @brief 获取 OpenSSL 错误字符串
+     * @return 处理后的 std::string 结果
      */
     std::string ssl_error_string() const;
 

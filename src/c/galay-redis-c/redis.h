@@ -169,6 +169,7 @@ galay_status_t galay_redis_command_builder_create(galay_redis_command_builder_t*
 /**
  * @brief 销毁 RESP 命令编码器。
  * @param builder 可为 NULL；销毁后先前 build 返回的 encoded 指针立即失效。
+ * @return 无返回值
  * @note 该函数不阻塞，不访问网络。
  */
 void galay_redis_command_builder_destroy(galay_redis_command_builder_t* builder);
@@ -211,6 +212,7 @@ galay_status_t galay_redis_parse_reply(const char* data, size_t data_len,
 /**
  * @brief 释放 Redis reply 树。
  * @param reply 可为 NULL；会递归释放数组/map 子节点。
+ * @return 无返回值
  * @note 释放后所有通过 accessor 取得的字符串、子 reply 指针同时失效。
  */
 void galay_redis_reply_destroy(galay_redis_reply_t* reply);
@@ -218,6 +220,7 @@ void galay_redis_reply_destroy(galay_redis_reply_t* reply);
 /**
  * @brief `galay_redis_reply_destroy` 的兼容别名。
  * @param reply 可为 NULL。
+ * @return 无返回值
  * @note 供 C 调用方按 free 命名习惯释放 reply；语义与 destroy 完全一致。
  */
 void galay_redis_reply_free(galay_redis_reply_t* reply);
@@ -325,6 +328,7 @@ galay_status_t galay_redis_client_create(const galay_redis_client_config_t* conf
  * @brief 销毁 Redis client handle。
  * @details 若内部 socket 仍存在，会先释放 socket 资源。
  * @param client 可为 NULL。
+ * @return 无返回值
  * @note 该函数不等待未完成 I/O；调用方必须先确保没有挂起的 async 操作。
  */
 void galay_redis_client_destroy(galay_redis_client_t* client);
@@ -366,6 +370,7 @@ galay_status_t galay_redis_pipeline_create(galay_redis_pipeline_t** out);
 /**
  * @brief 销毁 Redis pipeline 命令缓存。
  * @param pipeline 可为 NULL；销毁后其中缓存的命令不可再使用。
+ * @return 无返回值
  * @note 不会释放已经提交后返回的 reply；reply 数组必须单独销毁。
  */
 void galay_redis_pipeline_destroy(galay_redis_pipeline_t* pipeline);
@@ -391,6 +396,7 @@ galay_status_t galay_redis_pipeline_add_command(galay_redis_pipeline_t* pipeline
  * @brief 释放 pipeline async 调用返回的 reply 数组及数组内每个 reply。
  * @param replies `galay_redis_client_pipeline_async` 成功返回的数组，可为 NULL。
  * @param reply_count 数组元素数量。
+ * @return 无返回值
  * @note 只能用于释放 pipeline async 返回的数组；单个 command 返回的 reply 用
  *       `galay_redis_reply_destroy`。
  */
@@ -490,6 +496,7 @@ galay_status_t galay_redis_pool_create(const galay_redis_pool_config_t* config,
 /**
  * @brief 销毁 Redis C 连接池及其空闲/占用连接句柄。
  * @param pool 可为 NULL；调用方必须先停止使用所有 lease。
+ * @return 无返回值
  * @note destroy 不会等待借出的 lease 归还；仍在使用的 lease/client 会成为悬空指针。
  */
 void galay_redis_pool_destroy(galay_redis_pool_t* pool);
@@ -536,6 +543,7 @@ galay_status_t galay_redis_cluster_create(galay_redis_cluster_t** out);
 /**
  * @brief 销毁 Redis Cluster 路由表。
  * @param cluster 可为 NULL。
+ * @return 无返回值
  * @note 销毁后所有 route.host 借用指针失效。
  */
 void galay_redis_cluster_destroy(galay_redis_cluster_t* cluster);

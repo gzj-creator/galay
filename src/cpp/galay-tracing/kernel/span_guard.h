@@ -75,12 +75,14 @@ public:
 
     /**
      * @brief 手动结束 Span 并恢复之前的上下文
+     * @return 无返回值
      */
     void end() noexcept;
 
 private:
     /**
      * @brief 恢复之前的追踪上下文
+     * @return 无返回值
      */
     void restore() noexcept;
 

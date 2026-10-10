@@ -84,7 +84,14 @@ C_IOResult galay_c_coro_task_prepare_wait(void);
 C_IOResult galay_c_coro_task_rollback_wait(void);
 C_IOResult galay_c_coro_task_park_prepared(void);
 C_IOResult galay_c_coro_task_suspend_current(C_CoroState next_state);
-/** Scheduler-thread-only deadline registration; NULL/NONE denotes sleep. */
+/**
+ * Scheduler-thread-only deadline registration; NULL/NONE denotes sleep.
+ * @param task 协程任务
+ * @param controller IO 控制器
+ * @param event_type IO 事件类型
+ * @param timeout_ms 超时时间，单位为毫秒
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误
+ */
 C_IOResult galay_c_coro_task_register_timeout(C_CoroTaskInternal* task,
                                             galay_c_io_controller_t* controller,
                                             uint32_t event_type,

@@ -10,6 +10,8 @@ using namespace galay::kernel;
 
 /**
  * @brief 测试RedisClient的所有命令
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  * @details 全面测试所有Redis命令的功能
  */
 Task<void> test_all_redis_commands(IOScheduler* scheduler)
@@ -473,6 +475,8 @@ Task<void> test_all_redis_commands(IOScheduler* scheduler)
 
 /**
  * @brief 测试execute通用命令接口
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_execute_command(IOScheduler* scheduler)
 {

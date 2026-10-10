@@ -30,10 +30,23 @@ namespace galay::mcp {
 class JsonDocument {
 public:
     JsonDocument() = default; ///< 默认构造
-    JsonDocument(JsonDocument&& other) noexcept = default; ///< 移动构造，转移地址稳定的DOM存储
-    JsonDocument& operator=(JsonDocument&& other) noexcept = default; ///< 移动赋值，转移地址稳定的DOM存储
+    /**
+     * @brief 移动构造，转移地址稳定的DOM存储
+     * @param other 源对象
+     */
+    JsonDocument(JsonDocument&& other) noexcept = default;
+    /**
+     * @brief 移动赋值，转移地址稳定的DOM存储
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    JsonDocument& operator=(JsonDocument&& other) noexcept = default;
     JsonDocument(const JsonDocument&) = delete; ///< 禁止拷贝底层DOM存储
-    JsonDocument& operator=(const JsonDocument&) = delete; ///< 禁止拷贝底层DOM存储
+    /**
+     * @brief 禁止拷贝底层DOM存储
+     * @return 该操作已禁用，不可调用
+     */
+    JsonDocument& operator=(const JsonDocument&) = delete;
 
     /**
      * @brief 解析JSON文本创建文档
@@ -42,8 +55,16 @@ public:
      */
     static std::expected<JsonDocument, McpError> parse(std::string_view json);
 
-    const json::Json& root() const noexcept { return m_root; } ///< 获取根元素（只读）
-    json::Json& root() noexcept { return m_root; } ///< 获取根元素（可修改）
+    /**
+     * @brief 获取根元素（只读）
+     * @return const json::Json& 引用
+     */
+    const json::Json& root() const noexcept { return m_root; }
+    /**
+     * @brief 获取根元素（可修改）
+     * @return json::Json& 引用
+     */
+    json::Json& root() noexcept { return m_root; }
 
 private:
     json::Json m_root; ///< 根元素，持有底层文档存储

@@ -53,11 +53,13 @@ public:
     /**
      * @brief 存储超时时调用的 waker
      * @param waker 包装 coroutine_handle 的 waker
+     * @return 无返回值
      */
     void set_waker(Waker waker) { m_waker = waker; }
 
     /**
      * @brief 恢复挂起的协程并标记此定时器完成
+     * @return 无返回值
      */
     void handle_timeout() override {  m_waker.wake_up(); Timer::handle_timeout(); }
 
@@ -89,6 +91,7 @@ struct SleepAwaitable
 
     /**
      * @brief 始终返回 false，使协程挂起
+     * @return 无需挂起时返回 true，否则返回 false
      */
     bool await_ready() { return false; }
 
@@ -110,6 +113,7 @@ struct SleepAwaitable
 
     /**
      * @brief 空操作；协程以 void 恢复
+     * @return 无返回值
      */
     void await_resume() {}
 

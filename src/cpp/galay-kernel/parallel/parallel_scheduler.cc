@@ -34,6 +34,7 @@ ParallelScheduler::~ParallelScheduler()
 /**
  * @brief 启动计算工作线程
  *
+ * @return 成功时返回空值，失败时返回 IOError 错误
  * @details 原子地切换到运行状态并创建工作线程，线程在进入主循环前
  * 应用已配置的 CPU 亲和性。若已在运行则不做任何操作。
  */
@@ -66,6 +67,7 @@ std::expected<void, IOError> ParallelScheduler::start_impl()
 /**
  * @brief 停止计算工作线程
  *
+ * @return 无返回值
  * @details 先关闭专用恢复接纳，再切换运行状态并等待工作线程结束。
  * 线程在退出前会排空已接纳恢复和普通任务。若已停止则保持接纳关闭。
  */
@@ -105,6 +107,7 @@ bool ParallelScheduler::schedule_work(ParallelWorkItem work) noexcept
 /**
  * @brief 工作线程主循环
  *
+ * @return 无返回值
  * @details 阻塞在并发队列上等待任务，通过恢复协程处理每个任务。
  * 收到停止信号后排空剩余队列任务后退出。
  */

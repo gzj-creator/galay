@@ -87,6 +87,10 @@ public:
     }
 
     /// @note cache 必须活到 registry 停止通知；注册、通知和缓存读取在同一 owner 执行。
+    /// @param service 服务名称
+    /// @param cache 缓存对象
+    /// @param callback 回调函数
+    /// @return 成功时返回空值，失败时返回 RpcError 错误
     std::expected<void, RpcError> watch(const std::string& service,
                                         RpcEndpointCache& cache,
                                         std::function<void()> callback = {}) {
@@ -150,6 +154,7 @@ public:
 
     /**
      * @brief 注册或更新一个 endpoint 到 etcd。
+     * @param endpoint 服务端点
      * @return 成功或 etcd/RPC 参数错误。
      */
     std::expected<void, RpcError> register_endpoint(const RpcEndpointInfo& endpoint) {
@@ -180,6 +185,8 @@ public:
 
     /**
      * @brief 从 etcd 删除一个 endpoint。
+     * @param service 服务名称
+     * @param instance_id 服务实例标识符
      * @return 删除请求成功或 etcd/RPC 参数错误；不存在的 key 视为成功。
      */
     std::expected<void, RpcError> deregister_endpoint(const std::string& service,
@@ -207,6 +214,7 @@ public:
 
     /**
      * @brief 按服务名前缀查询 etcd endpoint。
+     * @param service 服务名称
      * @return 可解析的 endpoint 列表。单个脏值会被跳过，避免影响同服务健康实例。
      */
     std::expected<std::vector<RpcEndpointInfo>, RpcError> discover(const std::string& service) const {
@@ -240,6 +248,10 @@ public:
 
     /**
      * @brief 注册本进程内的 endpoint 变更回调。
+     * @param service 服务名称
+     * @param cache 缓存对象
+     * @param callback 回调函数
+     * @return 成功时返回空值，失败时返回 RpcError 错误
      * @note 当前不启动跨进程 etcd watch 流；register/deregister 会通知本对象回调。
      *       cache 必须活到 registry 停止通知，所有访问在同一 owner 上串行执行。
      */

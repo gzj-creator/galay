@@ -278,6 +278,7 @@ public:
      * @brief 设置完成值
      * @tparam ValueT 可转换到 ResultT 的值类型
      * @param value 结果值
+     * @return 无返回值
      */
     template <typename ValueT>
     void complete(ValueT&& value)
@@ -289,6 +290,7 @@ public:
 
     /**
      * @brief 清除状态
+     * @return 无返回值
      */
     void clear()
     {
@@ -299,6 +301,7 @@ public:
 
     /**
      * @brief 标记使用了队列操作
+     * @return 无返回值
      */
     void mark_queue_used()
     {
@@ -337,6 +340,7 @@ public:
 
     /**
      * @brief 重置（等同于 clear）
+     * @return 无返回值
      */
     void reset()
     {
@@ -383,6 +387,7 @@ public:
      * @brief 将多个步骤批量加入队列
      * @tparam StepTs 步骤类型包
      * @param steps 步骤引用包
+     * @return 无返回值
      */
     template <typename... StepTs>
     void queue_many(StepTs&... steps)
@@ -392,6 +397,7 @@ public:
 
     /**
      * @brief 清除所属结果容器
+     * @return 无返回值
      */
     void clear()
     {
@@ -402,6 +408,7 @@ public:
      * @brief 设置完成值
      * @tparam ValueT 值类型
      * @param value 结果值
+     * @return 无返回值
      */
     template <typename ValueT>
     void complete(ValueT&& value)
@@ -456,6 +463,7 @@ public:
 
     /**
      * @brief 启动握手操作
+     * @return 无返回值
      */
     void start_handshake();
 
@@ -463,6 +471,7 @@ public:
      * @brief 启动接收操作
      * @param buffer 接收缓冲区
      * @param length 缓冲区大小
+     * @return 无返回值
      */
     void start_recv(char* buffer, size_t length);
 
@@ -470,11 +479,13 @@ public:
      * @brief 启动发送操作
      * @param buffer 发送数据
      * @param length 数据长度
+     * @return 无返回值
      */
     void start_send(const char* buffer, size_t length);
 
     /**
      * @brief 启动关闭操作
+     * @return 无返回值
      */
     void start_shutdown();
 
@@ -487,12 +498,14 @@ public:
     /**
      * @brief 处理读取完成事件
      * @param result 读取结果
+     * @return 无返回值
      */
     void on_read(std::expected<size_t, IOError> result);
 
     /**
      * @brief 处理写入完成事件
      * @param result 写入结果
+     * @return 无返回值
      */
     void on_write(std::expected<size_t, IOError> result);
 
@@ -559,38 +572,167 @@ private:
         kCompleted,  ///< 已完成
     };
 
-    void reset_contexts();                                    ///< 重置所有 IO 上下文
-    void reset_handshake_state();                              ///< 重置握手状态
-    void reset_recv_state();                                   ///< 重置接收状态
-    void reset_send_state();                                   ///< 重置发送状态
-    void reset_shutdown_state();                               ///< 重置关闭状态
-    void clear_operation();                                   ///< 清除当前操作
+    /**
+     * @brief 重置所有 IO 上下文
+     * @return 无返回值
+     */
+    void reset_contexts();
+    /**
+     * @brief 重置握手状态
+     * @return 无返回值
+     */
+    void reset_handshake_state();
+    /**
+     * @brief 重置接收状态
+     * @return 无返回值
+     */
+    void reset_recv_state();
+    /**
+     * @brief 重置发送状态
+     * @return 无返回值
+     */
+    void reset_send_state();
+    /**
+     * @brief 重置关闭状态
+     * @return 无返回值
+     */
+    void reset_shutdown_state();
+    /**
+     * @brief 清除当前操作
+     * @return 无返回值
+     */
+    void clear_operation();
 
-    WaitAction poll_handshake();                              ///< 轮询握手进度
-    WaitAction poll_recv();                                   ///< 轮询接收进度
-    WaitAction poll_send();                                   ///< 轮询发送进度
-    WaitAction poll_shutdown();                               ///< 轮询关闭进度
+    /**
+     * @brief 轮询握手进度
+     * @return WaitAction 操作结果
+     */
+    WaitAction poll_handshake();
+    /**
+     * @brief 轮询接收进度
+     * @return WaitAction 操作结果
+     */
+    WaitAction poll_recv();
+    /**
+     * @brief 轮询发送进度
+     * @return WaitAction 操作结果
+     */
+    WaitAction poll_send();
+    /**
+     * @brief 轮询关闭进度
+     * @return WaitAction 操作结果
+     */
+    WaitAction poll_shutdown();
 
-    void on_handshake_read(std::expected<size_t, IOError> result);   ///< 处理握手读取完成
-    void on_handshake_write(std::expected<size_t, IOError> result);  ///< 处理握手写入完成
-    void on_recv_read(std::expected<size_t, IOError> result);        ///< 处理接收读取完成
-    void on_recv_write(std::expected<size_t, IOError> result);       ///< 处理接收写入完成
-    void on_send_read(std::expected<size_t, IOError> result);        ///< 处理发送读取完成
-    void on_send_write(std::expected<size_t, IOError> result);       ///< 处理发送写入完成
-    void on_shutdown_read(std::expected<size_t, IOError> result);    ///< 处理关闭读取完成
-    void on_shutdown_write(std::expected<size_t, IOError> result);   ///< 处理关闭写入完成
+    /**
+     * @brief 处理握手读取完成
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_handshake_read(std::expected<size_t, IOError> result);
+    /**
+     * @brief 处理握手写入完成
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_handshake_write(std::expected<size_t, IOError> result);
+    /**
+     * @brief 处理接收读取完成
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_recv_read(std::expected<size_t, IOError> result);
+    /**
+     * @brief 处理接收写入完成
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_recv_write(std::expected<size_t, IOError> result);
+    /**
+     * @brief 处理发送读取完成
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_send_read(std::expected<size_t, IOError> result);
+    /**
+     * @brief 处理发送写入完成
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_send_write(std::expected<size_t, IOError> result);
+    /**
+     * @brief 处理关闭读取完成
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_shutdown_read(std::expected<size_t, IOError> result);
+    /**
+     * @brief 处理关闭写入完成
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_shutdown_write(std::expected<size_t, IOError> result);
 
-    bool prepare_read_buffer(std::vector<char>& buffer);                    ///< 准备读取缓冲区
-    bool prepare_write_from_pending(std::vector<char>& buffer, size_t pending, SslErrorCode error_code);  ///< 从待发送数据准备写入缓冲区
-    bool prepare_recv_send_chunk(size_t pending);                            ///< 准备接收发送块
-    bool fill_send_chunk(size_t pending = 0);                                ///< 填充发送块
-    RecvPollAction drain_recv_plaintext();                                  ///< 排空接收明文
+    /**
+     * @brief 准备读取缓冲区
+     * @param buffer 数据缓冲区引用
+     * @return 操作成功时返回 true，否则返回 false
+     */
+    bool prepare_read_buffer(std::vector<char>& buffer);
+    /**
+     * @brief 从待发送数据准备写入缓冲区
+     * @param buffer 数据缓冲区引用
+     * @param pending 待处理字节数
+     * @param error_code 错误码
+     * @return 操作成功时返回 true，否则返回 false
+     */
+    bool prepare_write_from_pending(std::vector<char>& buffer, size_t pending, SslErrorCode error_code);
+    /**
+     * @brief 准备接收发送块
+     * @param pending 待处理字节数
+     * @return 操作成功时返回 true，否则返回 false
+     */
+    bool prepare_recv_send_chunk(size_t pending);
+    /**
+     * @brief 填充发送块
+     * @param pending 待发送的加密输出字节数；为 0 时查询 SSL 引擎
+     * @return 有加密块待写入时返回 true；否则返回 false，并通过 read_pending 或 result_set 区分等待读取、发送完成或失败
+     */
+    bool fill_send_chunk(size_t pending = 0);
+    /**
+     * @brief 排空接收明文
+     * @return RecvPollAction 操作结果
+     */
+    RecvPollAction drain_recv_plaintext();
 
-    void set_handshake_failure(SslError error);   ///< 设置握手失败
-    void set_recv_failure(SslError error);        ///< 设置接收失败
-    void set_send_failure(SslError error);        ///< 设置发送失败
-    void set_shutdown_success();                  ///< 设置关闭成功
-    void clear_transient_buffers();               ///< 清除临时缓冲区
+    /**
+     * @brief 设置握手失败
+     * @param error 错误信息
+     * @return 无返回值
+     */
+    void set_handshake_failure(SslError error);
+    /**
+     * @brief 设置接收失败
+     * @param error 错误信息
+     * @return 无返回值
+     */
+    void set_recv_failure(SslError error);
+    /**
+     * @brief 设置发送失败
+     * @param error 错误信息
+     * @return 无返回值
+     */
+    void set_send_failure(SslError error);
+    /**
+     * @brief 设置关闭成功
+     * @return 无返回值
+     */
+    void set_shutdown_success();
+    /**
+     * @brief 清除临时缓冲区
+     * @return 无返回值
+     */
+    void clear_transient_buffers();
 
     SslSocket* m_socket = nullptr;                     ///< SSL Socket 指针
     RecvIOContext m_recv_context;                       ///< 接收 IO 上下文
@@ -740,6 +882,7 @@ public:
 
     /**
      * @brief 获取当前活跃的 IO 任务（const 版本）
+     * @return IOTask* 指针
      */
     const IOTask* front() const override
     {
@@ -748,6 +891,7 @@ public:
 
     /**
      * @brief 移除队首任务
+     * @return 无返回值
      */
     void pop_front() override
     {
@@ -765,6 +909,7 @@ public:
 
     /**
      * @brief 标记操作超时
+     * @return 无返回值
      * @details 清除活跃任务，向状态机注入超时错误，继续驱动状态机
      */
     void mark_timeout()
@@ -1144,10 +1289,27 @@ public:
         return SslMachineAction<result_type>::handshake();
     }
 
-    void on_handshake(std::expected<void, SslError> result) { m_result = std::move(result); }  ///< 处理握手结果
-    void on_recv(std::expected<Bytes, SslError>) {}     ///< 未使用
-    void on_send(std::expected<size_t, SslError>) {}    ///< 未使用
-    void on_shutdown(std::expected<void, SslError>) {}  ///< 未使用
+    /**
+     * @brief 处理握手结果
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_handshake(std::expected<void, SslError> result) { m_result = std::move(result); }
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_recv(std::expected<Bytes, SslError>) {}
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_send(std::expected<size_t, SslError>) {}
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_shutdown(std::expected<void, SslError>) {}
 
     std::optional<result_type> m_result;  ///< 握手结果
 };
@@ -1187,10 +1349,27 @@ public:
         return SslMachineAction<result_type>::recv(m_buffer, m_length);
     }
 
-    void on_handshake(std::expected<void, SslError>) {}                      ///< 未使用
-    void on_recv(std::expected<Bytes, SslError> result) { m_result = std::move(result); }  ///< 处理接收结果
-    void on_send(std::expected<size_t, SslError>) {}     ///< 未使用
-    void on_shutdown(std::expected<void, SslError>) {}   ///< 未使用
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_handshake(std::expected<void, SslError>) {}
+    /**
+     * @brief 处理接收结果
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_recv(std::expected<Bytes, SslError> result) { m_result = std::move(result); }
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_send(std::expected<size_t, SslError>) {}
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_shutdown(std::expected<void, SslError>) {}
 
     char* m_buffer = nullptr;              ///< 接收缓冲区
     size_t m_length = 0;                   ///< 缓冲区大小
@@ -1232,10 +1411,27 @@ public:
         return SslMachineAction<result_type>::send(m_buffer, m_length);
     }
 
-    void on_handshake(std::expected<void, SslError>) {}                          ///< 未使用
-    void on_recv(std::expected<Bytes, SslError>) {}       ///< 未使用
-    void on_send(std::expected<size_t, SslError> result) { m_result = std::move(result); }  ///< 处理发送结果
-    void on_shutdown(std::expected<void, SslError>) {}    ///< 未使用
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_handshake(std::expected<void, SslError>) {}
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_recv(std::expected<Bytes, SslError>) {}
+    /**
+     * @brief 处理发送结果
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_send(std::expected<size_t, SslError> result) { m_result = std::move(result); }
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_shutdown(std::expected<void, SslError>) {}
 
     const char* m_buffer = nullptr;        ///< 发送数据指针
     size_t m_length = 0;                   ///< 数据长度
@@ -1269,10 +1465,27 @@ public:
         return SslMachineAction<result_type>::shutdown();
     }
 
-    void on_handshake(std::expected<void, SslError>) {}                             ///< 未使用
-    void on_recv(std::expected<Bytes, SslError>) {}        ///< 未使用
-    void on_send(std::expected<size_t, SslError>) {}       ///< 未使用
-    void on_shutdown(std::expected<void, SslError> result) { m_result = std::move(result); }  ///< 处理关闭结果
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_handshake(std::expected<void, SslError>) {}
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_recv(std::expected<Bytes, SslError>) {}
+    /**
+     * @brief 未使用
+     * @return 无返回值
+     */
+    void on_send(std::expected<size_t, SslError>) {}
+    /**
+     * @brief 处理关闭结果
+     * @param result 结果对象
+     * @return 无返回值
+     */
+    void on_shutdown(std::expected<void, SslError> result) { m_result = std::move(result); }
 
     std::optional<result_type> m_result;   ///< 关闭结果
 };
@@ -1469,6 +1682,7 @@ public:
     /**
      * @brief 绑定协程上下文到流水线
      * @param ctx 协程上下文
+     * @return 无返回值
      */
     void on_await_context(const AwaitContext& ctx)
     {
@@ -1531,6 +1745,7 @@ public:
     /**
      * @brief 处理握手结果
      * @param result 握手结果
+     * @return 无返回值
      */
     void on_handshake(std::expected<void, SslError> result)
     {
@@ -1563,6 +1778,7 @@ public:
     /**
      * @brief 处理接收结果
      * @param result 接收结果
+     * @return 无返回值
      */
     void on_recv(std::expected<Bytes, SslError> result)
     {
@@ -1595,6 +1811,7 @@ public:
     /**
      * @brief 处理发送结果
      * @param result 发送结果
+     * @return 无返回值
      */
     void on_send(std::expected<size_t, SslError> result)
     {
@@ -1627,6 +1844,7 @@ public:
     /**
      * @brief 处理关闭结果
      * @param result 关闭结果
+     * @return 无返回值
      */
     void on_shutdown(std::expected<void, SslError> result)
     {

@@ -122,6 +122,7 @@ galay_status_t galay_http_headers_create(galay_http_headers_t** out);
 /**
  * @brief 销毁 HTTP header 集合。
  * @param headers 可为 NULL；销毁后所有由该集合返回的 header value 借用指针失效。
+ * @return 无返回值
  * @note 该函数不阻塞、不挂起，也不会释放调用方传入过的字符串。
  */
 void galay_http_headers_destroy(galay_http_headers_t* headers);
@@ -168,6 +169,7 @@ galay_status_t galay_http_request_create(galay_http_request_t** out);
 /**
  * @brief 销毁 HTTP request 对象。
  * @param request 可为 NULL；销毁后 path、body、header、serialized 借用指针全部失效。
+ * @return 无返回值
  */
 void galay_http_request_destroy(galay_http_request_t* request);
 
@@ -292,6 +294,7 @@ galay_status_t galay_http_response_create(galay_http_response_t** out);
 /**
  * @brief 销毁 HTTP response 对象。
  * @param response 可为 NULL；销毁后 body、header、serialized 借用指针全部失效。
+ * @return 无返回值
  */
 void galay_http_response_destroy(galay_http_response_t* response);
 

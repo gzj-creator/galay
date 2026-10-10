@@ -25,6 +25,8 @@ void signal_handler(int) {
 
 /**
  * @brief 处理单个流的请求
+ * @param stream 流对象
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> handle_stream(Http2Stream::ptr stream) {
     g_request_count++;

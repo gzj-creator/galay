@@ -53,6 +53,8 @@
 
 ### Docs
 
+- 补全 C/C++ 生产代码、测试、示例与 benchmark 的已有函数文档注释，为具名参数添加 `@param`，为返回值添加 `@return`；展开需要补充契约的行尾注释，并为 Base64 编码声明补齐既有参数名称，不改变执行逻辑。
+- 按实现纠正链式 setter 返回引用、SSL/Redis/RPC 状态机布尔值、owner scheduler 约束、send_zc 路径选择、协程分配失败及 SPSC 入队枚举的返回说明；修正输出引用/输出流、Redis 哈希字段和 Unicode 码点的参数说明。
 - 补充 HTTP 会话 `head(...)` 入口及响应头完成、空响应体、元数据保留和预序列化 HEAD 请求语义。
 - 更新 API 构建、安装和资源使用文档，新增内置 Swagger UI 来源、许可证及升级说明；保留历史验收记录并补充删除资源目录后的验证结果。
 - 更新协程文档并新增任务完成通知协议说明，记录单原子修改序与 release/acquire 的正确性依据、多等待者及生命周期边界、验证证据和本地性能测量限制。
@@ -60,6 +62,7 @@
 
 ### Validation
 
+- 2026-10-10 函数注释检查识别全仓 5614 个已有函数文档注释，具名参数标签与返回标签无缺失、无过时参数名；275 个源码变更文件的 token 对比确认仅 Base64 声明增加参数名，无执行逻辑变更或新增 C/C++ 解析错误。独立 agent 复核已确认的语义修正，未逐条人工审查所有函数实现；两项 C 源码边界检查、样式审计共 3/3 CTest 与 `git diff --check` 通过，未为此次注释变更执行全量构建或完整 CTest。
 - 2026-10-10 HTTP 热路径优化补齐落盘回归：chunk 的 12 个长度、文本与二进制 payload、两个重载及结束块共 96 个输出检查通过；64 KiB chunk 两个重载均只分配一次，服务端长小写 common/map header 命中与缺失均零分配，大小写及客户端查找语义通过。Linux / GCC14 / C++23 / io_uring / Release / `-Werror` 相关构建及 HTTP/HTTP2/MCP 的 98 项 unit CTest 全部通过；临时还原 `reserve(... + 2)` 或旧 header 规范化副本时，新分配回归均按预期失败，样式审计与 `git diff --check` 通过。
 - 2026-10-09 Linux / GCC14 / epoll / Release / C/C++ `-Werror` 全目标构建通过；修复后完整 CTest 655 项：614 通过、36 跳过、5 禁用、0 失败。HEAD、methods 验收与 RPC 端口回归各连续 10 次通过；此前 207 个 benchmark 全量执行记录保留，修复后全部 12 个 HTTP benchmark 目标复跑通过。响应体校验的 HTTP/HTTPS 30 秒负载分别完成 258,099 / 155,938 次请求，静态文件 10 秒完成 67,857 次，均计数守恒且零错误；本轮未跑 sanitizer、原生 C++ modules 或后端性能对比。
 - Swagger UI 资源调整通过 docs、embedded、transports、configure_matrix、install_consumer 五项回归，无 `assets` 的独立源码目录可构建运行，搬迁安装消费者六项通过；HTTP、HTTPS、h2c、h2 七项上游资源 SHA256 一致。Chromium 141 桌面及手机的 HTTP、HTTPS、h2 页面和 GET/POST 调试通过，无外部请求、控制台错误或 UI 文件访问；h2c 仅计客户端验收。mcpp API 离线配置检查通过，未执行 Bazel 构建。

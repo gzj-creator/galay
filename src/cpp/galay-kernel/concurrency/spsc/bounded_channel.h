@@ -110,6 +110,7 @@ namespace detail {
 /**
  * @brief 执行一次平台相关的短时 CPU 自旋提示。
  *
+ * @return 无返回值
  * @note 该函数不阻塞线程，也不主动把执行权交给操作系统调度器。
  */
 inline void bounded_channel_cpu_pause() noexcept
@@ -313,6 +314,7 @@ public:
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的发送等待者。
      *
+     * @return 无返回值
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void mark_timeout() noexcept;
@@ -385,6 +387,7 @@ public:
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的接收等待者。
      *
+     * @return 无返回值
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void mark_timeout() noexcept;
@@ -459,6 +462,7 @@ public:
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的批量接收等待者。
      *
+     * @return 无返回值
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void mark_timeout() noexcept;
@@ -665,12 +669,14 @@ public:
     BoundedChannel(const BoundedChannel&) = delete;
 
     /// @brief 禁止复制赋值；通道具有唯一身份。
+    /// @return 该操作已禁用，不可调用
     BoundedChannel& operator=(const BoundedChannel&) = delete;
 
     /// @brief 禁止移动构造，避免使已注册 waiter 持有失效地址。
     BoundedChannel(BoundedChannel&&) = delete;
 
     /// @brief 禁止移动赋值，避免使已注册 waiter 持有失效地址。
+    /// @return 该操作已禁用，不可调用
     BoundedChannel& operator=(BoundedChannel&&) = delete;
 
     /**
@@ -852,6 +858,7 @@ public:
     /**
      * @brief 关闭通道并唤醒所有等待者。
      *
+     * @return 无返回值
      * @details 关闭状态通过原子变量发布，可与发送、接收及其他 close() 调用并发执行。
      *
      * @note 操作幂等；关闭后发送失败，接收仍会先排空 ring 中的残留消息。
@@ -1088,6 +1095,7 @@ private:
 
         /**
          * @brief 释放当前推进 pin。
+         * @return 无返回值
          */
         void reset() noexcept
         {
@@ -1169,6 +1177,7 @@ private:
      * @param waiter 已完成状态发布的等待体。
      * @param pendingWake 延迟到最后一次 channel 访问之后执行的唤醒槽。
      *
+     * @return 无返回值
      * @note arming 窗口内只登记 pending wake；实际恢复请求全局至多提交一次。
      */
     void prepare_waiter_wake(Waiter& waiter, PendingWake& pendingWake) noexcept
@@ -1297,6 +1306,7 @@ private:
      *
      * @param waiters waiter 所属的单 waiter 队列。
      * @param waiter 进入终态的固定 waiter 槽。
+     * @return 无返回值
      */
     void remove_queued_waiter(WaiterQueue& waiters, Waiter* waiter) noexcept
     {
@@ -1320,6 +1330,7 @@ private:
      * @brief 析构前清空无并发访问的 waiter slot，并释放队列 pin。
      *
      * @param waiters 待清空的单 waiter 队列。
+     * @return 无返回值
      */
     void clear_waiter_queue(WaiterQueue& waiters) noexcept
     {
@@ -1499,7 +1510,7 @@ private:
     /**
      * @brief 尝试向 SPSC ring 发布一条消息。
      * @param value 待发布消息；仅在确认存在空闲 slot 后移动。
-     * @return 发布成功返回 true；当前 ring 已满时返回 false。
+     * @return 发布成功返回 kPublished；通道已关闭返回 kClosed；占用 slot 后检测到关闭返回 kClosedAfterPublishing；ring 无效或当前 slot 不可写时返回 kFull。
      * @note 同一时刻只能有一个逻辑发送操作；waiter helping 可切换物理执行线程，
      *       因此 cursor 保持 atomic，但不执行 CAS。
      */
@@ -1575,6 +1586,7 @@ private:
      * @brief 尝试推进一个发送 waiter 的状态。
      * @param waiter 待推进的共享等待体；空指针视为未认领。
      * @param wake 完成、关闭或失败时是否立即唤醒关联协程。
+     * @param pendingWakes 暂存的待唤醒节点
      * @return kCompleted 表示等待体已结束，kWaiting 表示已重新排队，
      *         kNotClaimed 表示等待体已由其他并发路径处理。
      * @note ring 仍满时会把 waiter 恢复为 kWaiting 并重新入队。
@@ -1786,6 +1798,7 @@ retry_timeout_operation:
      * @brief 尝试推进一个接收 waiter 的状态。
      * @param waiter 待推进的共享等待体；空指针视为未认领。
      * @param wake 完成、关闭或失败时是否立即唤醒关联协程。
+     * @param pendingWakes 暂存的待唤醒节点
      * @return kCompleted 表示等待体已结束，kWaiting 表示已重新排队，
      *         kNotClaimed 表示等待体已由其他并发路径处理。
      * @note ring 仍空时会把 waiter 恢复为 kWaiting 并重新入队。
@@ -1980,6 +1993,7 @@ retry_timeout_operation:
      *
      * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
      *
+     * @return 无返回值
      * @note 跳过已取消或被其他路径认领的 waiter；处理一个有效 waiter 后立即返回。
      */
     void wake_one_consumer_if_any(PendingWakes& pendingWakes) noexcept
@@ -2000,6 +2014,7 @@ retry_timeout_operation:
      *
      * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
      *
+     * @return 无返回值
      * @note 跳过已取消或被其他路径认领的 waiter；处理一个有效 waiter 后立即返回。
      */
     void drain_one_send_waiter(PendingWakes& pendingWakes) noexcept
@@ -2019,6 +2034,7 @@ retry_timeout_operation:
      * @brief 关闭时通过接收完成权裁决依次结束所有可认领接收 waiter。
      *
      * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
+     * @return 无返回值
      */
     void wake_all_recv_waiters(PendingWakes& pendingWakes) noexcept
     {
@@ -2036,6 +2052,7 @@ retry_timeout_operation:
      * @brief 关闭时通过发送完成权裁决依次结束所有可认领发送 waiter。
      *
      * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
+     * @return 无返回值
      */
     void wake_all_send_waiters(PendingWakes& pendingWakes) noexcept
     {
@@ -2053,6 +2070,7 @@ retry_timeout_operation:
      * @brief 发布窗口结束后完成 close 延迟的两侧 waiter 收尾。
      *
      * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
+     * @return 无返回值
      */
     void finish_close_after_publication(PendingWakes& pendingWakes) noexcept
     {
@@ -2100,6 +2118,7 @@ namespace detail {
  * @brief 等待已被对端认领的 waiter 完成有限的值搬运和状态发布窗口。
  * @tparam T 通道元素类型。
  * @param waiter 当前状态可能为 kFulfilling 的等待体。
+ * @return 无返回值
  * @note 仅在认领已完成后短时自旋，不等待 ring 的满/空条件；调用期间会短时占用当前线程。
  */
 template <BoundedValue T>

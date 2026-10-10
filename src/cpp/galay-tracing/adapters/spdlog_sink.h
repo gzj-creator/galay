@@ -40,12 +40,14 @@ public:
 
     /**
      * @brief 移动赋值 spdlog Sink，转移 logger 共享句柄
+     * @return SpdlogSink& 引用
      */
     SpdlogSink& operator=(SpdlogSink&&) noexcept = default;
 
     /**
      * @brief 将日志记录写入 spdlog
      * @param record 日志记录
+     * @return 无返回值
      */
     void write(const LogRecord& record) override;
 

@@ -18,6 +18,9 @@ using namespace galay::kernel;
 
 /**
  * @brief WSS 客户端协程
+ * @param url 目标 URL
+ * @param message_count 消息数量
+ * @return 协程任务；结果为操作是否成功
  */
 Task<bool> wss_client_task(const std::string& url, int message_count) {
     try {

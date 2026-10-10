@@ -214,6 +214,7 @@ struct HttpRequestReadState {
     /**
      * @brief 重置状态用于下一次读取
      * @param request 新的 HTTP 请求对象
+     * @return 无返回值
      */
     void reset_for_next_read(HttpRequest& request) {
         m_request = &request;
@@ -355,24 +356,35 @@ struct HttpRequestReadState {
     /**
      * @brief 设置 SSL 接收错误
      * @param error SSL 错误
+     * @return 无返回值
      */
     void set_ssl_recv_error(const galay::ssl::SslError& error) {
         m_http_error = HttpError(error);
     }
 #endif
 
-    void on_peer_closed() { m_http_error = HttpError(kConnectionClose); } ///< 对端关闭连接
+    /**
+     * @brief 对端关闭连接
+     * @return 无返回值
+     */
+    void on_peer_closed() { m_http_error = HttpError(kConnectionClose); }
 
     /**
      * @brief 处理接收到的字节数
      * @param recv_bytes 接收字节数
+     * @return 无返回值
      */
     void on_bytes_received(size_t recv_bytes) {
         m_ring_buffer->produce(recv_bytes);
         m_total_received += recv_bytes;
     }
 
-    void set_parse_error(HttpError&& error) { m_http_error = std::move(error); } ///< 设置解析错误
+    /**
+     * @brief 设置解析错误
+     * @param error 错误信息
+     * @return 无返回值
+     */
+    void set_parse_error(HttpError&& error) { m_http_error = std::move(error); }
 
     /**
      * @brief 获取读取结果
@@ -522,12 +534,21 @@ struct HttpResponseReadState {
         return true;
     }
 
-    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); } ///< 获取接收 iovec 数据指针
-    size_t recv_iovecs_count() const { return m_write_iovecs.size(); } ///< 获取接收 iovec 数量
+    /**
+     * @brief 获取接收 iovec 数据指针
+     * @return const struct iovec* 指针
+     */
+    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); }
+    /**
+     * @brief 获取接收 iovec 数量
+     * @return 对应的大小或数量
+     */
+    size_t recv_iovecs_count() const { return m_write_iovecs.size(); }
 
     /**
      * @brief 设置 TCP 接收错误
      * @param io_error IO 错误
+     * @return 无返回值
      */
     void set_recv_error(const IOError& io_error) {
         if (IOError::contains(io_error.code(), kTimeout)) {
@@ -545,24 +566,35 @@ struct HttpResponseReadState {
     /**
      * @brief 设置 SSL 接收错误
      * @param error SSL 错误
+     * @return 无返回值
      */
     void set_ssl_recv_error(const galay::ssl::SslError& error) {
         m_http_error = HttpError(error);
     }
 #endif
 
-    void on_peer_closed() { m_http_error = HttpError(kConnectionClose); } ///< 对端关闭连接
+    /**
+     * @brief 对端关闭连接
+     * @return 无返回值
+     */
+    void on_peer_closed() { m_http_error = HttpError(kConnectionClose); }
 
     /**
      * @brief 处理接收到的字节数
      * @param recv_bytes 接收字节数
+     * @return 无返回值
      */
     void on_bytes_received(size_t recv_bytes) {
         m_ring_buffer->produce(recv_bytes);
         m_total_received += recv_bytes;
     }
 
-    void set_parse_error(HttpError&& error) { m_http_error = std::move(error); } ///< 设置解析错误
+    /**
+     * @brief 设置解析错误
+     * @param error 错误信息
+     * @return 无返回值
+     */
+    void set_parse_error(HttpError&& error) { m_http_error = std::move(error); }
 
     /**
      * @brief 获取读取结果
@@ -682,6 +714,8 @@ struct HttpChunkReadState {
      * @param ring_buffer 环形缓冲区引用
      * @param setting 读取器配置
      * @param chunk_data 用于存储 chunk 数据的字符串引用
+     * @param parser 解析器
+     * @param emitAvailable 是否输出当前可用的 chunk 数据
      */
     HttpChunkReadState(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer,
                        const HttpReaderSetting& setting,
@@ -773,8 +807,16 @@ struct HttpChunkReadState {
         return true;
     }
 
-    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); } ///< 获取接收 iovec 数据指针
-    size_t recv_iovecs_count() const { return m_write_iovecs.size(); } ///< 获取接收 iovec 数量
+    /**
+     * @brief 获取接收 iovec 数据指针
+     * @return const struct iovec* 指针
+     */
+    const struct iovec* recv_iovecs_data() const { return m_write_iovecs.data(); }
+    /**
+     * @brief 获取接收 iovec 数量
+     * @return 对应的大小或数量
+     */
+    size_t recv_iovecs_count() const { return m_write_iovecs.size(); }
 
     void set_recv_error(const IOError& io_error) {
         if (IOError::contains(io_error.code(), kTimeout)) {
@@ -792,15 +834,30 @@ struct HttpChunkReadState {
     /**
      * @brief 设置 SSL 接收错误
      * @param error SSL 错误
+     * @return 无返回值
      */
     void set_ssl_recv_error(const galay::ssl::SslError& error) {
         m_http_error = HttpError(error);
     }
 #endif
 
-    void on_peer_closed() { m_http_error = HttpError(kConnectionClose); } ///< 对端关闭连接
-    void on_bytes_received(size_t recv_bytes) { m_ring_buffer->produce(recv_bytes); } ///< 处理接收到的字节数
-    void set_parse_error(HttpError&& error) { m_http_error = std::move(error); } ///< 设置解析错误
+    /**
+     * @brief 对端关闭连接
+     * @return 无返回值
+     */
+    void on_peer_closed() { m_http_error = HttpError(kConnectionClose); }
+    /**
+     * @brief 处理接收到的字节数
+     * @param recv_bytes 收到的字节数
+     * @return 无返回值
+     */
+    void on_bytes_received(size_t recv_bytes) { m_ring_buffer->produce(recv_bytes); }
+    /**
+     * @brief 设置解析错误
+     * @param error 错误信息
+     * @return 无返回值
+     */
+    void set_parse_error(HttpError&& error) { m_http_error = std::move(error); }
 
     /**
      * @brief 获取读取结果
@@ -1009,7 +1066,12 @@ public:
             std::make_shared<detail::HttpChunkReadState>(*m_ring_buffer, m_setting, chunk_data));
     }
 
-    /** @brief 增量读取下一个已完整的 chunk，不等待末尾 0 chunk。 */
+    /**
+     * @brief 增量读取下一个已完整的 chunk，不等待末尾 0 chunk。
+     * @param chunk_data 分块数据
+     * @param parser 解析器
+     * @return 下一块 HTTP chunk 的读取等待体，通过 co_await 取得读取结果
+     */
     ReadOperation<detail::HttpChunkReadState> get_next_chunk(
         std::string& chunk_data, ChunkParser& parser) {
         return ReadOperation<detail::HttpChunkReadState>(
@@ -1049,6 +1111,11 @@ private:
 
     /**
      * @brief 分多轮读取并解析 HTTP 消息
+     * @param state 状态对象
+     * @param generation 操作代次
+     * @param timeout 超时时长
+     * @param body_timeout 消息体读取超时时长
+     * @return 协程任务，完成后返回 typename StateT::ResultType 结果
      * @details 不使用单个 StateMachineAwaitable 连续驱动完整消息，避免大 body 在单次
      *          awaitable 内触发底层状态机的内联推进上限。每次 socket 读取后让出调度，
      *          下一轮再继续解析或读取，因此合法消息可以跨任意多次 I/O 推进。

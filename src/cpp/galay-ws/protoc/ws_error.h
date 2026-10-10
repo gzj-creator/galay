@@ -100,7 +100,11 @@ public:
     }
 #endif
 
-    WsErrorCode code() const { return m_code; } ///< 获取错误码
+    /**
+     * @brief 获取错误码
+     * @return 当前对象的类型、状态或错误码
+     */
+    WsErrorCode code() const { return m_code; }
 
     /**
      * @brief 获取错误描述信息

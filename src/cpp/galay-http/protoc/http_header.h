@@ -118,8 +118,17 @@ namespace galay::http {
          * @param mode 存储模式，默认为服务端模式
          */
         explicit HeaderPair(Mode mode = Mode::ServerSide);
-        HeaderPair(HeaderPair&& other) noexcept;      ///< 移动构造
-        HeaderPair& operator=(HeaderPair&& other) noexcept;      ///< 移动赋值
+        /**
+         * @brief 移动构造
+         * @param other 源对象
+         */
+        HeaderPair(HeaderPair&& other) noexcept;
+        /**
+         * @brief 移动赋值
+         * @param other 源对象
+         * @return 当前对象引用
+         */
+        HeaderPair& operator=(HeaderPair&& other) noexcept;
 
         /**
          * @brief 显式复制头部键值对状态
@@ -189,6 +198,7 @@ namespace galay::http {
         /**
          * @brief 将头部字段追加到输出字符串
          * @param out 输出字符串，以 "Key: Value\r\n" 格式追加
+         * @return 无返回值
          */
         void append_to(std::string& out) const;
 
@@ -198,7 +208,11 @@ namespace galay::http {
          */
         std::string to_string() const;
 
-        void clear(); ///< 清空所有头部字段
+        /**
+         * @brief 清空所有头部字段
+         * @return 无返回值
+         */
+        void clear();
 
         /**
          * @brief 获取当前存储模式
@@ -210,6 +224,7 @@ namespace galay::http {
          * @brief 设置常见头部字段（fast-path）
          * @param idx 常见头部索引
          * @param value 头部值
+         * @return 无返回值
          */
         void set_common_header(CommonHeaderIndex idx, std::string value);
 
@@ -230,6 +245,7 @@ namespace galay::http {
         /**
          * @brief 遍历所有头部字段
          * @param callback 回调函数，参数为 (key, value)
+         * @return 无返回值
          */
         void for_each_header(std::function<void(std::string_view, std::string_view)> callback) const;
 
@@ -255,7 +271,11 @@ namespace galay::http {
     public:
         HttpRequestHeader() = default;
         HttpRequestHeader(HttpRequestHeader&&) noexcept = default; ///< 移动构造
-        HttpRequestHeader& operator=(HttpRequestHeader&&) noexcept = default; ///< 移动赋值
+        /**
+         * @brief 移动赋值
+         * @return 当前对象引用
+         */
+        HttpRequestHeader& operator=(HttpRequestHeader&&) noexcept = default;
 
         /**
          * @brief 显式复制请求头及其解析状态
@@ -348,6 +368,7 @@ namespace galay::http {
          * @param max_header_count 最大头字段数，0 表示不限制
          * @param max_header_line_size 单个头字段行长度上限，0 表示不限制
          * @param max_uri_size URI 长度上限，0 表示不限制
+         * @return 无返回值
          */
         void set_parse_limits(size_t max_header_count,
                             size_t max_header_line_size,
@@ -356,10 +377,15 @@ namespace galay::http {
         /**
          * @brief 从另一个请求头拷贝内容
          * @param header 源请求头
+         * @return 无返回值
          */
         void copy_from(const HttpRequestHeader& header);
 
-        void reset(); ///< 重置所有解析状态与数据
+        /**
+         * @brief 重置所有解析状态与数据
+         * @return 无返回值
+         */
+        void reset();
 
     private:
         HttpRequestHeader(const HttpRequestHeader&) = delete;
@@ -371,13 +397,53 @@ namespace galay::http {
          * @return kNoError 继续解析，其他值表示错误或完成
          */
         HttpErrorCode parse_char(char c);
-        HttpErrorCode commit_parsed_header_pair(); ///< 提交当前解析中的头部键值对并校验限制
-        void parse_args(std::string uri); ///< 解析 URI 中的查询参数
-        std::string convert_from_uri(std::string_view url, bool convert_plus_to_space); ///< URL 解码
-        std::string convert_to_uri(std::string&& url) const; ///< URL 编码
-        bool is_hex(char c, int &v); ///< 判断是否为十六进制字符
-        size_t to_utf8(int code, char *buff); ///< 将 Unicode 码点转为 UTF-8
-        bool from_hex_to_i(const std::string_view &s, size_t i, size_t cnt, int &val); ///< 从十六进制字符串解析整数
+        /**
+         * @brief 提交当前解析中的头部键值对并校验限制
+         * @return HttpErrorCode 操作结果
+         */
+        HttpErrorCode commit_parsed_header_pair();
+        /**
+         * @brief 解析 URI 中的查询参数
+         * @param uri 资源 URI
+         * @return 无返回值
+         */
+        void parse_args(std::string uri);
+        /**
+         * @brief URL 解码
+         * @param url 目标 URL
+         * @param convert_plus_to_space 是否把加号解码为空格
+         * @return 处理后的 std::string 结果
+         */
+        std::string convert_from_uri(std::string_view url, bool convert_plus_to_space);
+        /**
+         * @brief URL 编码
+         * @param url 目标 URL
+         * @return 处理后的 std::string 结果
+         */
+        std::string convert_to_uri(std::string&& url) const;
+        /**
+         * @brief 判断是否为十六进制字符
+         * @param c 字符
+         * @param v 值
+         * @return 字符为十六进制数字时返回 true，并通过 v 输出数值；否则返回 false
+         */
+        bool is_hex(char c, int &v);
+        /**
+         * @brief 将 Unicode 码点转为 UTF-8
+         * @param code 非负 Unicode 码点
+         * @param buff 至少可容纳 4 字节的输出缓冲区，不追加字符串终止符
+         * @return 写入的 UTF-8 字节数（1 至 4）；代理项或不小于 0x110000 的码点返回 0
+         */
+        size_t to_utf8(int code, char *buff);
+        /**
+         * @brief 从十六进制字符串解析整数
+         * @param s 输入字符串
+         * @param i 开始索引
+         * @param cnt 字符数量
+         * @param val 值
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool from_hex_to_i(const std::string_view &s, size_t i, size_t cnt, int &val);
     private:
         std::string m_uri;                                    ///< 请求 URI
         std::map<std::string, std::string> m_argList;         ///< URI 查询参数
@@ -412,7 +478,11 @@ namespace galay::http {
 
         HttpResponseHeader() = default;
         HttpResponseHeader(HttpResponseHeader&&) noexcept = default; ///< 移动构造
-        HttpResponseHeader& operator=(HttpResponseHeader&&) noexcept = default; ///< 移动赋值
+        /**
+         * @brief 移动赋值
+         * @return 当前对象引用
+         */
+        HttpResponseHeader& operator=(HttpResponseHeader&&) noexcept = default;
 
         /**
          * @brief 显式复制响应头及其解析状态
@@ -488,10 +558,15 @@ namespace galay::http {
         /**
          * @brief 从另一个响应头拷贝内容
          * @param header 源响应头
+         * @return 无返回值
          */
         void copy_from(const HttpResponseHeader& header);
 
-        void reset(); ///< 重置所有解析状态与数据
+        /**
+         * @brief 重置所有解析状态与数据
+         * @return 无返回值
+         */
+        void reset();
 
     private:
         HttpResponseHeader(const HttpResponseHeader&) = delete;
@@ -503,7 +578,11 @@ namespace galay::http {
          * @return kNoError 继续解析，其他值表示错误或完成
          */
         HttpErrorCode parse_char(char c);
-        void commit_parsed_header_pair(); ///< 提交当前解析中的头部键值对
+        /**
+         * @brief 提交当前解析中的头部键值对
+         * @return 无返回值
+         */
+        void commit_parsed_header_pair();
     private:
         HeaderPair m_headerPairs;                             ///< 头部键值对
         std::string m_parseVersionStr;                        ///< 解析中的版本字符串

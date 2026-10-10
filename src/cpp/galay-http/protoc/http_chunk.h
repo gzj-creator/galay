@@ -110,7 +110,11 @@ class ChunkParser
 public:
     ChunkParser() = default;
     ChunkParser(ChunkParser&&) noexcept = default;            ///< 移动构造
-    ChunkParser& operator=(ChunkParser&&) noexcept = default; ///< 移动赋值
+    /**
+     * @brief 移动赋值
+     * @return 当前对象引用
+     */
+    ChunkParser& operator=(ChunkParser&&) noexcept = default;
 
     /**
      * @brief 显式复制 chunk 增量解析状态
@@ -135,6 +139,7 @@ public:
 
     /**
      * @brief 重置解析状态，用于新的 chunked body
+     * @return 无返回值
      */
     void reset();
 

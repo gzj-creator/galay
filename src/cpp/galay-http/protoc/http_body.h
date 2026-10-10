@@ -54,7 +54,11 @@ class PlainBody: public HttpBody
 public:
     PlainBody() = default;
     PlainBody(PlainBody&&) noexcept = default;            ///< 移动构造
-    PlainBody& operator=(PlainBody&&) noexcept = default; ///< 移动赋值
+    /**
+     * @brief 移动赋值
+     * @return 当前对象引用
+     */
+    PlainBody& operator=(PlainBody&&) noexcept = default;
 
     /**
      * @brief 显式复制纯文本 Body 内容
@@ -62,7 +66,11 @@ public:
      */
     PlainBody clone() const;
 
-    std::string content_type() override { return "text/plain"; } ///< 返回 "text/plain"
+    /**
+     * @brief 返回 "text/plain"
+     * @return 处理后的 std::string 结果
+     */
+    std::string content_type() override { return "text/plain"; }
 
     /**
      * @brief 从字符串填充 Body 内容

@@ -116,9 +116,21 @@ struct Host {
         return host;
     }
 
-    bool valid() const { return is_ipv4() || is_ipv6(); }           ///< 检查地址是否为合法 IPv4/IPv6。
-    bool is_ipv4() const { return m_addr.ss_family == AF_INET && m_addr_len == sizeof(sockaddr_in); }   ///< 检查存储的地址是否为 IPv4
-    bool is_ipv6() const { return m_addr.ss_family == AF_INET6 && m_addr_len == sizeof(sockaddr_in6); }  ///< 检查存储的地址是否为 IPv6
+    /**
+     * @brief 检查地址是否为合法 IPv4/IPv6。
+     * @return 对象有效时返回 true，否则返回 false
+     */
+    bool valid() const { return is_ipv4() || is_ipv6(); }
+    /**
+     * @brief 检查存储的地址是否为 IPv4
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_ipv4() const { return m_addr.ss_family == AF_INET && m_addr_len == sizeof(sockaddr_in); }
+    /**
+     * @brief 检查存储的地址是否为 IPv6
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_ipv6() const { return m_addr.ss_family == AF_INET6 && m_addr_len == sizeof(sockaddr_in6); }
 
     /**
      * @brief 获取 IP 地址字符串
@@ -154,10 +166,26 @@ struct Host {
         return 0;
     }
 
-    sockaddr* sock_addr() { return reinterpret_cast<sockaddr*>(&m_addr); }              ///< 获取用于系统调用的可变 sockaddr 指针
-    const sockaddr* sock_addr() const { return reinterpret_cast<const sockaddr*>(&m_addr); } ///< 获取常量 sockaddr 指针
-    socklen_t* addr_len() { return &m_addr_len; }           ///< 获取用于系统调用更新的可变长度指针
-    socklen_t addr_len() const { return m_addr_len; }       ///< 获取当前地址结构长度
+    /**
+     * @brief 获取用于系统调用的可变 sockaddr 指针
+     * @return sockaddr* 指针
+     */
+    sockaddr* sock_addr() { return reinterpret_cast<sockaddr*>(&m_addr); }
+    /**
+     * @brief 获取常量 sockaddr 指针
+     * @return const sockaddr* 指针
+     */
+    const sockaddr* sock_addr() const { return reinterpret_cast<const sockaddr*>(&m_addr); }
+    /**
+     * @brief 获取用于系统调用更新的可变长度指针
+     * @return socklen_t* 指针
+     */
+    socklen_t* addr_len() { return &m_addr_len; }
+    /**
+     * @brief 获取当前地址结构长度
+     * @return socklen_t 操作结果
+     */
+    socklen_t addr_len() const { return m_addr_len; }
 
 private:
     void mark_invalid() {

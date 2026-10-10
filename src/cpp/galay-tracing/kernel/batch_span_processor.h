@@ -68,6 +68,7 @@ public:
      * @brief 将已结束的 Span 加入导出队列
      * @details 队列满时丢弃 Span 并增加丢弃计数
      * @param span 已结束的 Span
+     * @return 无返回值
      */
     void on_end(Span&& span) override;
 
@@ -97,6 +98,7 @@ private:
 
     /**
      * @brief 后台工作线程的主循环
+     * @return 无返回值
      */
     void worker_loop();
 

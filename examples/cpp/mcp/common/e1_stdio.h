@@ -7,6 +7,7 @@ using namespace galay::mcp;
  * @brief 简单的服务器示例
  *
  * 创建一个MCP服务器，提供基本的工具和资源
+ * @return 无返回值
  */
 void run_simple_server() {
     McpStdioServer server;
@@ -75,6 +76,7 @@ void run_simple_server() {
  * @brief 简单的客户端示例
  *
  * 创建一个MCP客户端，连接到服务器并调用功能
+ * @return 无返回值
  */
 void run_simple_client() {
     McpClient client(McpStdioClientConfig{});

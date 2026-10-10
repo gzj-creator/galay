@@ -37,6 +37,7 @@ namespace detail {
  * @param last_error_code 目标原子错误码槽位
  * @param error_code 框架级错误码
  * @param system_code 系统调用错误码
+ * @return 无返回值
  */
 inline void store_backend_error(std::atomic<uint64_t>& last_error_code,
                               IOErrorCode error_code,

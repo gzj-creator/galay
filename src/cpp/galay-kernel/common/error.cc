@@ -89,6 +89,7 @@ std::string IOError::message() const
 
 /**
  * @brief 将错误重置为无错误状态（code = 0）
+ * @return 无返回值
  */
 void IOError::reset()
 {

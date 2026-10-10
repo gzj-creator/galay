@@ -65,6 +65,7 @@ public:
 
     /**
      * @brief 清空参数但保留已分配的 overflow 容量以便复用。
+     * @return 无返回值
      */
     void clear() noexcept
     {

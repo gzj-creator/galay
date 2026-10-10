@@ -60,16 +60,28 @@ class RpcStreamServer;
 class RpcStreamServerBuilder {
 public:
     /// @brief 设置监听地址
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcStreamServerBuilder& host(std::string value)                         { m_config.host = std::move(value); return *this; }
     /// @brief 设置监听端口
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcStreamServerBuilder& port(uint16_t value)                            { m_config.port = value; return *this; }
     /// @brief 设置监听队列长度
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcStreamServerBuilder& backlog(int value)                              { m_config.backlog = value; return *this; }
     /// @brief 设置已接受连接是否启用 TCP_NODELAY
+    /// @param value 是否启用该选项
+    /// @return 当前对象引用
     RpcStreamServerBuilder& tcp_no_delay(bool value)                          { m_config.tcp_no_delay = value; return *this; }
     /// @brief 设置IO调度器数量
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcStreamServerBuilder& io_scheduler_count(size_t value)                  { m_config.io_scheduler_count = value; return *this; }
     /// @brief 设置计算调度器数量
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcStreamServerBuilder& parallel_scheduler_count(size_t value)             { m_config.parallel_scheduler_count = value; return *this; }
     /**
      * @brief 设置顺序绑核策略
@@ -100,12 +112,18 @@ public:
         return true;
     }
     /// @brief 设置环形缓冲区大小
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcStreamServerBuilder& ring_buffer_size(size_t value)                    { m_config.ring_buffer_size = value; return *this; }
     /// @brief 设置流帧大小上限
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcStreamServerBuilder& max_frame_bytes(size_t value)                     { m_config.stream_limits.max_frame_bytes = value; return *this; }
     /// @brief 构建RpcStreamServer实例
+    /// @return 按当前配置创建的 RpcStreamServer 对象
     RpcStreamServer build() const;
     /// @brief 仅导出配置
+    /// @return 当前构建器的配置快照
     RpcStreamServerConfig build_config() const                               { return m_config; }
 
 private:
@@ -259,6 +277,7 @@ public:
 
     /**
      * @brief 停止服务器
+     * @return 无返回值
      */
     void stop() {
         if (m_running.exchange(false, std::memory_order_acq_rel)) {
@@ -268,14 +287,17 @@ public:
     }
 
     /// @brief 检查是否运行中
+    /// @return 正在运行时返回 true，否则返回 false
     bool is_running() const {
         return m_running.load(std::memory_order_acquire);
     }
 
     /// @brief 获取Runtime
+    /// @return Runtime& 引用
     Runtime& runtime() { return m_runtime; }
 
     /// @brief 获取最近一次异步运行错误；启动失败必须读取start()返回值
+    /// @return 最近一次异步运行错误；无错误时为 std::nullopt
     std::optional<RpcError> last_error() const {
         return m_last_error;
     }

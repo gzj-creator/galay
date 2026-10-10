@@ -51,6 +51,10 @@ public:
 
     /**
      * @brief 生成文件的强 ETag
+     * @param filePath 文件路径
+     * @param fileSize 文件字节数
+     * @param lastModified 文件最后修改时间
+     * @return 带引号的强实体标签
      * @details 使用 inode + mtime + size 生成，确保文件唯一性
      */
     static std::string generate_strong(const fs::path& filePath, size_t fileSize, std::time_t lastModified)
@@ -66,6 +70,10 @@ public:
 
     /**
      * @brief 生成文件的弱 ETag
+     * @param filePath 文件路径
+     * @param fileSize 文件字节数
+     * @param lastModified 文件最后修改时间
+     * @return 以 W/ 开头的弱实体标签
      * @details 仅使用 mtime + size，适用于内容可能略有差异但语义相同的情况
      */
     static std::string generate_weak(const fs::path& filePath, size_t fileSize, std::time_t lastModified)
@@ -100,6 +108,9 @@ public:
 
     /**
      * @brief 检查 ETag 是否匹配
+     * @param etag1 第一个实体标签
+     * @param etag2 第二个实体标签
+     * @return 两个实体标签规范化后相同时返回 true，否则返回 false
      * @details 支持强弱 ETag 的比较（规范化后比较）
      */
     static bool match(const std::string& etag1, const std::string& etag2)
@@ -109,6 +120,9 @@ public:
 
     /**
      * @brief 检查 If-None-Match 是否匹配当前 ETag
+     * @param etag 实体标签
+     * @param header_value HTTP 条件请求头的值
+     * @return 请求头中的实体标签匹配当前 ETag 时返回 true，否则返回 false
      */
     static bool match_if_none_match(const std::string& etag, const std::string& header_value)
     {
@@ -117,6 +131,9 @@ public:
 
     /**
      * @brief 检查 If-Match 是否匹配当前 ETag
+     * @param etag 实体标签
+     * @param header_value HTTP 条件请求头的值
+     * @return 请求头中的实体标签匹配当前 ETag 时返回 true，否则返回 false
      */
     static bool match_if_match(const std::string& etag, const std::string& header_value)
     {
@@ -125,6 +142,10 @@ public:
 
     /**
      * @brief 检查 If-Range 是否匹配当前 ETag（日期将与 lastModified 比较）
+     * @param etag 实体标签
+     * @param header_value HTTP 条件请求头的值
+     * @param lastModified 文件最后修改时间
+     * @return 条件为空、实体标签匹配或文件未晚于指定日期修改时返回 true，否则返回 false
      */
     static bool match_if_range(const std::string& etag, const std::string& header_value, std::time_t lastModified)
     {
@@ -150,6 +171,8 @@ public:
 
     /**
      * @brief 解析 If-None-Match 或 If-Match 头
+     * @param header_value HTTP 条件请求头的值
+     * @return 解析出的实体标签列表
      * @details 提取所有 ETag 值（不包含引号）
      */
     static std::vector<std::string> parse_if_match(const std::string& header_value)
@@ -179,6 +202,9 @@ public:
 
     /**
      * @brief 检查是否匹配任何一个 ETag
+     * @param etag 实体标签
+     * @param etags 实体标签列表
+     * @return 列表中存在匹配的实体标签时返回 true，否则返回 false
      */
     static bool match_any(const std::string& etag, const std::vector<std::string>& etags)
     {
@@ -190,6 +216,8 @@ public:
 
     /**
      * @brief 格式化 HTTP 日期
+     * @param time 时间
+     * @return RFC 7231 格式的 GMT 日期字符串
      * @details 按照 RFC 7231 格式化为 GMT 时间
      */
     static std::string format_http_date(std::time_t time)
@@ -321,6 +349,8 @@ private:
 
     /**
      * @brief 获取文件的真实 inode
+     * @param filePath 文件路径
+     * @return 文件 inode；查询失败时为 0，Windows 上使用路径哈希
      * @details 使用 stat 系统调用获取文件的 inode 号
      */
     static uint64_t get_file_inode(const fs::path& filePath)
@@ -340,6 +370,8 @@ private:
 
     /**
      * @brief 获取文件的真实修改时间
+     * @param filePath 文件路径
+     * @return 文件修改时间；查询失败时为 0
      * @details 使用 stat 系统调用获取文件的 mtime
      */
     static std::time_t get_file_modification_time(const fs::path& filePath)

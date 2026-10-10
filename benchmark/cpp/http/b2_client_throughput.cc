@@ -114,6 +114,13 @@ Task<void> continuous_worker(int worker_id, const std::string& host, int port, c
 
 /**
  * @brief 运行持续压测（类似 wrk）
+ * @param rt 运行时
+ * @param connections 连接数量
+ * @param duration_sec 运行时长，单位为秒
+ * @param host 目标主机地址
+ * @param port 端口号
+ * @param path 路径
+ * @return 无返回值
  */
 void run_continuous_benchmark(Runtime& rt, int connections, int duration_sec,
                             const std::string& host, int port, const std::string& path) {

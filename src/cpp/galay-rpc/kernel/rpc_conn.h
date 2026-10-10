@@ -46,6 +46,8 @@ inline constexpr size_t kDefaultRpcRingBufferSize = 8 * 1024;
 namespace detail {
 
 /// @brief 计算iovec数组中可读取的总字节数
+/// @param iovecs 分散缓冲区数组
+/// @return 所有 iovec 的可读字节数之和
 inline size_t iovecs_readable_bytes(std::span<const iovec> iovecs) {
     size_t total = 0;
     for (const auto& iov : iovecs) {
@@ -309,6 +311,7 @@ public:
     }
 
     /// @brief 从RingBuffer中尝试解析请求消息
+    /// @return 解析完成或已记录错误时返回 true；需要更多数据时返回 false，实际成功或错误由 take_result() 获取
     bool parse_from_ring_buffer()
     {
         if (this->ring_buffer().readable() == 0) {
@@ -365,6 +368,7 @@ public:
     }
 
     /// @brief 从RingBuffer中尝试解析响应消息
+    /// @return 解析完成或已记录错误时返回 true；需要更多数据时返回 false，实际成功或错误由 take_result() 获取
     bool parse_from_ring_buffer()
     {
         if (this->ring_buffer().readable() == 0) {
@@ -418,6 +422,7 @@ public:
     }
 
     /// @brief 从RingBuffer中尝试解析消息头
+    /// @return 解析完成或已记录错误时返回 true；需要更多数据时返回 false，实际成功或错误由 take_result() 获取
     bool parse_from_ring_buffer()
     {
         std::array<struct iovec, 2> read_iovecs{};
@@ -468,6 +473,7 @@ public:
     }
 
     /// @brief 从RingBuffer中尝试读取指定长度的消息体
+    /// @return 所需消息或数据读取完成时返回 true，否则返回 false
     bool parse_from_ring_buffer()
     {
         std::array<struct iovec, 2> read_iovecs{};
@@ -515,6 +521,7 @@ public:
 
 private:
     /// @brief 重建iovec数组
+    /// @return 无返回值
     void rebuild_iovecs()
     {
         auto validation = m_request->validate_for_write();
@@ -648,6 +655,7 @@ public:
 
 private:
     /// @brief 重建iovec数组
+    /// @return 无返回值
     void rebuild_iovecs()
     {
         auto validation = m_response->validate_for_write();
@@ -1081,6 +1089,8 @@ public:
 
     /**
      * @brief 获取消息头（用于流式传输）
+     * @param header 头部对象
+     * @return GetHeaderAwaitable 等待体，通过 co_await 执行并取得操作结果
      */
     GetHeaderAwaitable get_header(RpcHeader& header) {
         return GetHeaderAwaitable(m_ring_buffer, header, m_socket);
@@ -1088,6 +1098,9 @@ public:
 
     /**
      * @brief 获取消息体（用于流式传输）
+     * @param body 消息体
+     * @param body_len 消息体字节数
+     * @return GetBodyAwaitable 等待体，通过 co_await 执行并取得操作结果
      */
     GetBodyAwaitable get_body(char* body, size_t body_len) {
         return GetBodyAwaitable(m_ring_buffer, body, body_len, m_socket);
@@ -1155,6 +1168,9 @@ public:
 
     /**
      * @brief 发送原始数据（用于流式传输）
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @return SendRawAwaitable 等待体，通过 co_await 执行并取得操作结果
      */
     SendRawAwaitable send_raw(const char* data, size_t len) {
         std::vector<char> buf(data, data + len);
@@ -1184,6 +1200,10 @@ public:
 
     /**
      * @brief 从已有socket构造（服务端使用）
+     * @param handle 句柄
+     * @param reader_setting 读取器配置
+     * @param writer_setting 写入器配置
+     * @param ring_buffer_size 环形缓冲区字节数
      */
     explicit RpcConnImpl(GHandle handle, const RpcReaderSetting& reader_setting = {},
                          const RpcWriterSetting& writer_setting = {},
@@ -1198,6 +1218,10 @@ public:
 
     /**
      * @brief 创建新连接（客户端使用）
+     * @param type IP 地址类型
+     * @param reader_setting 读取器配置
+     * @param writer_setting 写入器配置
+     * @param ring_buffer_size 环形缓冲区字节数
      */
     explicit RpcConnImpl(IPType type = IPType::IPV4,
                          const RpcReaderSetting& reader_setting = {},
@@ -1223,6 +1247,8 @@ public:
 
     /**
      * @brief 连接到服务器
+     * @param host 目标主机地址
+     * @return ConnectAwaitable 等待体，通过 co_await 执行并取得操作结果
      */
     ConnectAwaitable connect(const Host& host) {
         return m_socket.connect(host);
@@ -1230,6 +1256,7 @@ public:
 
     /**
      * @brief 获取读取器
+     * @return 绑定当前连接的读取器
      */
     RpcReaderImpl<SocketType, Strategy> get_reader() {
         return RpcReaderImpl<SocketType, Strategy>(m_ring_buffer, m_reader_setting, m_socket);
@@ -1237,6 +1264,7 @@ public:
 
     /**
      * @brief 获取写入器
+     * @return 绑定当前连接的写入器
      */
     RpcWriterImpl<SocketType> get_writer() {
         return RpcWriterImpl<SocketType>(m_writer_setting, m_socket);
@@ -1244,16 +1272,19 @@ public:
 
     /**
      * @brief 获取底层socket
+     * @return SocketType& 引用
      */
     SocketType& socket() { return m_socket; }
 
     /**
      * @brief 获取RingBuffer
+     * @return RingBuffer<Strategy, std::dynamic_extent>& 引用
      */
     RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return m_ring_buffer; }
 
     /**
      * @brief 关闭连接
+     * @return CloseAwaitable 等待体，通过 co_await 执行并取得操作结果
      */
     CloseAwaitable close() {
         return m_socket.close();
@@ -1261,6 +1292,8 @@ public:
 
 private:
     /// @brief 归一化环形缓冲区大小，0替换为默认值
+    /// @param ring_buffer_size 环形缓冲区字节数
+    /// @return 对应的大小或数量
     static size_t normalize_ring_buffer_size(size_t ring_buffer_size) {
         return ring_buffer_size == 0 ? kDefaultRingBufferSize : ring_buffer_size;
     }

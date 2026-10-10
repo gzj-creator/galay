@@ -72,7 +72,12 @@ public:
     StaticFileSession(StaticFileSession&&) noexcept = default;
     StaticFileSession& operator=(StaticFileSession&&) noexcept = default;
 
-    /** Read exactly length bytes at the supplied offset. */
+    /**
+     * Read exactly length bytes at the supplied offset.
+     * @param offset 起始偏移量
+     * @param length 缓冲区字节数
+     * @return 协程任务，完成后返回 StaticFileReadResult 结果
+     */
     galay::kernel::Task<StaticFileReadResult> read_at(size_t offset, size_t length);
 
 private:
@@ -100,22 +105,45 @@ const char* static_file_read_error_name(StaticFileReadErrorCode code) noexcept;
 class StaticFileReader
 {
 public:
-    /** Open one reusable session without blocking the scheduler. */
+    /**
+     * Open one reusable session without blocking the scheduler.
+     * @param filePath 文件路径
+     * @return 协程任务，完成后返回 StaticFileSessionResult 结果
+     */
     static galay::kernel::Task<StaticFileSessionResult> open(const std::string& filePath);
 
-    /** Read exactly file_size bytes starting at offset zero. */
+    /**
+     * Read exactly file_size bytes starting at offset zero.
+     * @param filePath 文件路径
+     * @param fileSize 文件字节数
+     * @return 协程任务，完成后返回 StaticFileReadResult 结果
+     */
     static galay::kernel::Task<StaticFileReadResult> read_all(const std::string& filePath,
                                                              size_t fileSize);
 
-    /** Read exactly length bytes at the supplied file offset. */
+    /**
+     * Read exactly length bytes at the supplied file offset.
+     * @param filePath 文件路径
+     * @param offset 起始偏移量
+     * @param length 缓冲区字节数
+     * @return 协程任务，完成后返回 StaticFileReadResult 结果
+     */
     static galay::kernel::Task<StaticFileReadResult> read_at(const std::string& filePath,
                                                             size_t offset,
                                                             size_t length);
 
-    /** Resolve and stat a path on the blocking executor. */
+    /**
+     * Resolve and stat a path on the blocking executor.
+     * @param filePath 文件路径
+     * @return 协程任务，完成后返回 StaticFileMetadataResult 结果
+     */
     static galay::kernel::Task<StaticFileMetadataResult> inspect(const std::string& filePath);
 
-    /** Open a descriptor for zero-copy sendfile without blocking the scheduler. */
+    /**
+     * Open a descriptor for zero-copy sendfile without blocking the scheduler.
+     * @param filePath 文件路径
+     * @return 协程任务，完成后返回 StaticFileDescriptorResult 结果
+     */
     static galay::kernel::Task<StaticFileDescriptorResult> open_for_sendfile(
         const std::string& filePath);
 };

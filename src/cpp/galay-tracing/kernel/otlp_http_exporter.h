@@ -123,6 +123,7 @@ public:
 
     /**
      * @brief 移动赋值导出器，转移配置、请求头和传输函数
+     * @return OtlpHttpExporter& 引用
      */
     OtlpHttpExporter& operator=(OtlpHttpExporter&&) noexcept = default;
 

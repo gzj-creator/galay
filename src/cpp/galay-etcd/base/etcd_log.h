@@ -24,6 +24,7 @@ using Slot = ::galay::kernel::LoggerSlot<::galay::etcd::detail::EtcdLogTag>;
  * 或其他 galay 库日志。推荐在创建 etcd client 之前的单线程初始化阶段调用。
  *
  * @param logger 用户自定义 logger；传入 nullptr 时禁用 galay-etcd 日志。
+ * @return 无返回值
  */
 void set(::galay::kernel::BaseLogger::uptr logger);
 

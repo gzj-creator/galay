@@ -42,11 +42,16 @@ using RpcManagedCallResult = RpcCallResult;
 class RpcStaticDiscovery {
 public:
     /// @brief 设置服务endpoint快照
+    /// @param service 服务名称
+    /// @param endpoints 端点集合
+    /// @return 无返回值
     void set(std::string service, RpcEndpointList endpoints) {
         m_services[std::move(service)] = std::move(endpoints);
     }
 
     /// @brief 解析服务endpoint快照
+    /// @param service 服务名称
+    /// @return 成功时返回 RpcEndpointList，失败时返回 RpcError 错误
     std::expected<RpcEndpointList, RpcError> resolve(const std::string& service) const {
         auto it = m_services.find(service);
         if (it == m_services.end() || it->second.empty()) {
@@ -159,6 +164,7 @@ public:
     /**
      * @brief 标记endpoint暂不可用
      * @param endpoint 失败endpoint
+     * @return 无返回值
      */
     void mark_endpoint_unavailable(const RpcEndpoint& endpoint) {
         m_unavailable_endpoints.insert(endpoint.key());
@@ -167,6 +173,7 @@ public:
     /**
      * @brief 清除endpoint不可用标记
      * @param endpoint endpoint
+     * @return 无返回值
      */
     void mark_endpoint_available(const RpcEndpoint& endpoint) {
         m_unavailable_endpoints.erase(endpoint.key());
@@ -196,6 +203,11 @@ public:
     }
 
     /// @brief 字符串payload一元调用
+    /// @param service 服务名称
+    /// @param method 方法名称
+    /// @param payload 消息负载
+    /// @param options 操作选项
+    /// @return 协程任务，完成后返回 RpcManagedCallResult 结果
     Task<RpcManagedCallResult> call(const std::string& service,
                                     const std::string& method,
                                     const std::string& payload,
@@ -204,6 +216,10 @@ public:
     }
 
     /// @brief 无payload一元调用
+    /// @param service 服务名称
+    /// @param method 方法名称
+    /// @param options 操作选项
+    /// @return 协程任务，完成后返回 RpcManagedCallResult 结果
     Task<RpcManagedCallResult> call(const std::string& service,
                                     const std::string& method,
                                     const RpcCallOptions& options) {
@@ -211,11 +227,13 @@ public:
     }
 
     /// @brief 关闭连接池并唤醒等待者
+    /// @return 成功时返回空值，失败时返回 RpcError 错误
     std::expected<void, RpcError> shutdown() {
         return m_pool.shutdown();
     }
 
     /// @brief 暴露连接池统计，供测试和诊断使用
+    /// @return const RpcConnectionPool& 只读引用
     const RpcConnectionPool& pool() const { return m_pool; }
 
 private:

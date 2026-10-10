@@ -45,12 +45,15 @@ struct RpcEndpointInfo {
     std::unordered_map<std::string, std::string> metadata;  ///< 扩展元数据
 
     /// @brief 返回 host:port 地址字符串
+    /// @return 处理后的 std::string 结果
     std::string address() const { return host + ":" + std::to_string(port); }
 
     /// @brief 返回稳定endpoint key
+    /// @return 处理后的 std::string 结果
     std::string key() const { return service + "/" + instance_id; }
 
     /// @brief 判断endpoint是否可被负载选择
+    /// @return 端点具备有效地址、服务、实例、权重且正在服务时返回 true，否则返回 false
     bool selectable() const {
         return !host.empty() && port > 0 && !service.empty() && !instance_id.empty() &&
                weight > 0 && status == RpcEndpointStatus::Serving;

@@ -139,6 +139,7 @@ inline ByteMetaData deep_copy_bytes(const ByteMetaData& meta) {
  * @param meta Metadata to resize
  * @param length New capacity; 0 frees and resets the metadata
  * @throws std::bad_alloc when allocation fails
+ * @return 无返回值
  */
 inline void realloc_bytes(ByteMetaData& meta, size_t length) {
     if (length == 0) {
@@ -166,6 +167,7 @@ inline void realloc_bytes(ByteMetaData& meta, size_t length) {
 /**
  * @brief Clear bytes without freeing allocated storage
  * @param meta Metadata whose storage should be zeroed and marked empty
+ * @return 无返回值
  */
 inline void clear_bytes(ByteMetaData& meta) noexcept {
     if (meta.data != nullptr && meta.capacity > 0) {
@@ -177,6 +179,7 @@ inline void clear_bytes(ByteMetaData& meta) noexcept {
 /**
  * @brief Free raw byte metadata storage and reset all fields
  * @param meta Metadata to release
+ * @return 无返回值
  */
 inline void free_bytes(ByteMetaData& meta) noexcept {
     if (meta.data != nullptr) {
@@ -388,6 +391,7 @@ public:
 
     /**
      * @brief Release owned storage or detach from a non-owning view
+     * @return 无返回值
      */
     void clear() noexcept {
         if (m_owned) {

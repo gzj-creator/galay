@@ -63,17 +63,57 @@ public:
 
     MongoValue();                       ///< 构造 Null 值
     MongoValue(std::nullptr_t);         ///< 构造 Null 值
-    MongoValue(bool value);             ///< 构造 Bool 值
-    MongoValue(int32_t value);          ///< 构造 Int32 值
-    MongoValue(int64_t value);          ///< 构造 Int64 值
-    MongoValue(double value);           ///< 构造 Double 值
-    MongoValue(std::string value);      ///< 构造 String 值
-    MongoValue(const char* value);      ///< 构造 String 值（从 C 字符串）
-    MongoValue(Binary value);           ///< 构造 Binary 值
-    MongoValue(MongoDocument value);    ///< 构造嵌套 Document 值
-    MongoValue(MongoArray value);       ///< 构造 Array 值
+    /**
+     * @brief 构造 Bool 值
+     * @param value 待设置或处理的值
+     */
+    MongoValue(bool value);
+    /**
+     * @brief 构造 Int32 值
+     * @param value 待设置或处理的值
+     */
+    MongoValue(int32_t value);
+    /**
+     * @brief 构造 Int64 值
+     * @param value 待设置或处理的值
+     */
+    MongoValue(int64_t value);
+    /**
+     * @brief 构造 Double 值
+     * @param value 待设置或处理的值
+     */
+    MongoValue(double value);
+    /**
+     * @brief 构造 String 值
+     * @param value 待设置或处理的值
+     */
+    MongoValue(std::string value);
+    /**
+     * @brief 构造 String 值（从 C 字符串）
+     * @param value 待设置或处理的值
+     */
+    MongoValue(const char* value);
+    /**
+     * @brief 构造 Binary 值
+     * @param value 待设置或处理的值
+     */
+    MongoValue(Binary value);
+    /**
+     * @brief 构造嵌套 Document 值
+     * @param value 待设置或处理的值
+     */
+    MongoValue(MongoDocument value);
+    /**
+     * @brief 构造 Array 值
+     * @param value 待设置或处理的值
+     */
+    MongoValue(MongoArray value);
     MongoValue(MongoValue&&) noexcept = default;             ///< 移动构造，转移 BSON 值所有权
-    MongoValue& operator=(MongoValue&&) noexcept = default;  ///< 移动赋值，转移 BSON 值所有权
+    /**
+     * @brief 移动赋值，转移 BSON 值所有权
+     * @return 当前对象引用
+     */
+    MongoValue& operator=(MongoValue&&) noexcept = default;
 
     /**
      * @brief 显式深拷贝 BSON 值
@@ -113,18 +153,67 @@ public:
 
     /// @name 类型判断
     /// @{
-    bool is_null() const;       ///< 判断是否为 Null
-    bool is_bool() const;       ///< 判断是否为 Bool
-    bool is_int32() const;      ///< 判断是否为 Int32
-    bool is_int64() const;      ///< 判断是否为 Int64
-    bool is_double() const;     ///< 判断是否为 Double
-    bool is_string() const;     ///< 判断是否为 String
-    bool is_binary() const;     ///< 判断是否为 Binary
-    bool is_document() const;   ///< 判断是否为 Document
-    bool is_array() const;      ///< 判断是否为 Array
-    bool is_object_id() const;   ///< 判断是否为 ObjectId
-    bool is_date_time() const;   ///< 判断是否为 DateTime
-    bool is_timestamp() const;  ///< 判断是否为 Timestamp
+    /// @return 满足所检查条件时返回 true，否则返回 false
+    /**
+     * @brief 判断是否为 Null
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_null() const;
+    /**
+     * @brief 判断是否为 Bool
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_bool() const;
+    /**
+     * @brief 判断是否为 Int32
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_int32() const;
+    /**
+     * @brief 判断是否为 Int64
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_int64() const;
+    /**
+     * @brief 判断是否为 Double
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_double() const;
+    /**
+     * @brief 判断是否为 String
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_string() const;
+    /**
+     * @brief 判断是否为 Binary
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_binary() const;
+    /**
+     * @brief 判断是否为 Document
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_document() const;
+    /**
+     * @brief 判断是否为 Array
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_array() const;
+    /**
+     * @brief 判断是否为 ObjectId
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_object_id() const;
+    /**
+     * @brief 判断是否为 DateTime
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_date_time() const;
+    /**
+     * @brief 判断是否为 Timestamp
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_timestamp() const;
     /// @}
 
     /// @name 值提取（类型不匹配时返回默认值或空引用）
@@ -184,8 +273,17 @@ public:
 
     /// @name 可变引用访问（类型不匹配时行为未定义）
     /// @{
-    MongoDocument& as_document();  ///< 获取文档的可变引用
-    MongoArray& as_array();        ///< 获取数组的可变引用
+    /// @return MongoDocument& 引用
+    /**
+     * @brief 获取文档的可变引用
+     * @return MongoDocument& 引用
+     */
+    MongoDocument& as_document();
+    /**
+     * @brief 获取数组的可变引用
+     * @return MongoArray& 引用
+     */
+    MongoArray& as_array();
     /// @}
 
 private:
@@ -210,9 +308,21 @@ private:
     struct ObjectIdTag {};    ///< ObjectId 构造标签
     struct DateTimeTag {};    ///< DateTime 构造标签
     struct TimestampTag {};   ///< Timestamp 构造标签
-    MongoValue(ObjectIdTag, std::string oid);    ///< ObjectId 内部构造
-    MongoValue(DateTimeTag, int64_t millis);     ///< DateTime 内部构造
-    MongoValue(TimestampTag, uint64_t ts);       ///< Timestamp 内部构造
+    /**
+     * @brief ObjectId 内部构造
+     * @param oid 对象标识符
+     */
+    MongoValue(ObjectIdTag, std::string oid);
+    /**
+     * @brief DateTime 内部构造
+     * @param millis 时间，单位为毫秒
+     */
+    MongoValue(DateTimeTag, int64_t millis);
+    /**
+     * @brief Timestamp 内部构造
+     * @param ts 时间戳值
+     */
+    MongoValue(TimestampTag, uint64_t ts);
 
     static const std::string kEmptyString;   ///< 空字符串常量（类型不匹配时返回）
     static const Binary kEmptyBinary;        ///< 空 Binary 常量（类型不匹配时返回）
@@ -227,7 +337,11 @@ class MongoArray
 public:
     MongoArray() = default;
     MongoArray(MongoArray&&) noexcept = default;             ///< 移动构造，转移数组元素所有权
-    MongoArray& operator=(MongoArray&&) noexcept = default;  ///< 移动赋值，转移数组元素所有权
+    /**
+     * @brief 移动赋值，转移数组元素所有权
+     * @return 当前对象引用
+     */
+    MongoArray& operator=(MongoArray&&) noexcept = default;
 
     /**
      * @brief 从已有值列表构造
@@ -244,12 +358,14 @@ public:
     /**
      * @brief 追加一个元素
      * @param value 要追加的值
+     * @return 无返回值
      */
     void append(MongoValue value);
 
     /**
      * @brief 预分配容量
      * @param n 预分配的元素数量
+     * @return 无返回值
      */
     void reserve(size_t n);
 
@@ -310,7 +426,11 @@ public:
 
     MongoDocument() = default;
     MongoDocument(MongoDocument&&) noexcept = default;             ///< 移动构造，转移字段所有权
-    MongoDocument& operator=(MongoDocument&&) noexcept = default;  ///< 移动赋值，转移字段所有权
+    /**
+     * @brief 移动赋值，转移字段所有权
+     * @return 当前对象引用
+     */
+    MongoDocument& operator=(MongoDocument&&) noexcept = default;
 
     /**
      * @brief 从已有字段列表构造
@@ -328,6 +448,7 @@ public:
      * @brief 追加字段（不检查重复键）
      * @param key 字段名
      * @param value 字段值
+     * @return 无返回值
      */
     void append(std::string key, MongoValue value);
 
@@ -335,6 +456,7 @@ public:
      * @brief 设置字段（已存在则更新，否则追加）
      * @param key 字段名
      * @param value 字段值
+     * @return 无返回值
      */
     void set(std::string key, MongoValue value);
 
@@ -368,11 +490,44 @@ public:
 
     /// @name 便捷取值方法（键不存在或类型不匹配时返回默认值）
     /// @{
-    std::string get_string(const std::string& key, std::string default_value = "") const;     ///< 获取字符串值
-    int32_t get_int32(const std::string& key, int32_t default_value = 0) const;               ///< 获取 32 位整数值
-    int64_t get_int64(const std::string& key, int64_t default_value = 0) const;               ///< 获取 64 位整数值
-    double get_double(const std::string& key, double default_value = 0.0) const;              ///< 获取双精度浮点数值
-    bool get_bool(const std::string& key, bool default_value = false) const;                  ///< 获取布尔值
+    /// @param key 键
+    /// @param default_value 默认值
+    /// @return 处理后的 std::string 结果
+    /**
+     * @brief 获取字符串值
+     * @param key 键
+     * @param default_value 默认值
+     * @return 处理后的 std::string 结果
+     */
+    std::string get_string(const std::string& key, std::string default_value = "") const;
+    /**
+     * @brief 获取 32 位整数值
+     * @param key 键
+     * @param default_value 默认值
+     * @return int32_t 操作结果
+     */
+    int32_t get_int32(const std::string& key, int32_t default_value = 0) const;
+    /**
+     * @brief 获取 64 位整数值
+     * @param key 键
+     * @param default_value 默认值
+     * @return int64_t 操作结果
+     */
+    int64_t get_int64(const std::string& key, int64_t default_value = 0) const;
+    /**
+     * @brief 获取双精度浮点数值
+     * @param key 键
+     * @param default_value 默认值
+     * @return double 操作结果
+     */
+    double get_double(const std::string& key, double default_value = 0.0) const;
+    /**
+     * @brief 获取布尔值
+     * @param key 键
+     * @param default_value 默认值
+     * @return 当前存储的布尔值
+     */
+    bool get_bool(const std::string& key, bool default_value = false) const;
     /// @}
 
     /**
@@ -415,7 +570,11 @@ class MongoReply
 public:
     MongoReply() = default;
     MongoReply(MongoReply&&) noexcept = default;             ///< 移动构造，转移响应文档所有权
-    MongoReply& operator=(MongoReply&&) noexcept = default;  ///< 移动赋值，转移响应文档所有权
+    /**
+     * @brief 移动赋值，转移响应文档所有权
+     * @return 当前对象引用
+     */
+    MongoReply& operator=(MongoReply&&) noexcept = default;
 
     /**
      * @brief 从原始响应文档构造

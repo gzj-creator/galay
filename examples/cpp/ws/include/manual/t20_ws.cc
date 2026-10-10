@@ -31,6 +31,8 @@ using namespace galay::kernel;
 
 /**
  * @brief WebSocket 客户端测试
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_web_socket_client(IOScheduler* scheduler) {
 

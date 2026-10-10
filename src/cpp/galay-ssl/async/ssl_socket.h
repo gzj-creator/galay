@@ -115,38 +115,46 @@ public:
 
     /**
      * @brief 移动构造函数
+     * @param other 源对象
      * @note 保持 IO 控制器地址稳定；移动前须完成依赖当前 SslSocket 的 TLS 操作。
      */
     SslSocket(SslSocket&& other) noexcept;
 
     /**
      * @brief 移动赋值运算符
+     * @param other 源对象
+     * @return SslSocket& 引用
      * @note 赋值前须显式关闭当前句柄，并完成双方依赖 SslSocket 的 TLS 操作。
      */
     SslSocket& operator=(SslSocket&& other) noexcept;
 
     /**
      * @brief 获取底层 socket 句柄
+     * @return 底层 socket 句柄；控制器不存在时为无效句柄
      */
     GHandle handle() const { return m_controller ? m_controller->m_handle : GHandle::invalid(); }
 
     /**
      * @brief 获取 IO 控制器指针
+     * @return IOController* 指针
      */
     IOController* controller() { return m_controller.get(); }
 
     /**
      * @brief 获取 SSL 引擎指针
+     * @return SslEngine* 指针
      */
     SslEngine* engine() { return &m_engine; }
 
     /**
      * @brief 检查 socket 是否有效
+     * @return 有效时返回 true，否则返回 false
      */
     bool is_valid() const { return handle().fd >= 0 && m_engine.is_valid(); }
 
     /**
      * @brief 检查 SSL 握手是否完成
+     * @return 满足所检查条件时返回 true，否则返回 false
      */
     bool is_handshake_completed() const { return m_engine.is_handshake_completed(); }
 
@@ -168,6 +176,7 @@ public:
 
     /**
      * @brief 获取句柄选项配置器
+     * @return 关联底层 socket 句柄的选项配置器
      */
     HandleOption option() { return HandleOption(handle()); }
 
@@ -256,21 +265,25 @@ public:
 
     /**
      * @brief 获取证书验证结果
+     * @return OpenSSL 证书验证结果；X509_V_OK 表示验证成功
      */
     long get_verify_result() const { return m_engine.get_verify_result(); }
 
     /**
      * @brief 获取协商的协议版本
+     * @return 处理后的 std::string 结果
      */
     std::string get_protocol_version() const { return m_engine.get_protocol_version(); }
 
     /**
      * @brief 获取协商的密码套件
+     * @return 处理后的 std::string 结果
      */
     std::string get_cipher() const { return m_engine.get_cipher(); }
 
     /**
      * @brief 获取协商的 ALPN 协议
+     * @return 处理后的 std::string 结果
      */
     std::string get_alpn_protocol() const { return m_engine.get_alpn_protocol(); }
 

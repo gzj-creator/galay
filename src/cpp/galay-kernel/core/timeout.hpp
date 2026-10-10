@@ -63,7 +63,11 @@ public:
     DeferredWaker(DeferredWaker&&) = delete;
     DeferredWaker& operator=(DeferredWaker&&) = delete;
 
-    /** @brief 在发布给完成方之前设置目标协程唤醒器。 */
+    /**
+     * @brief 在发布给完成方之前设置目标协程唤醒器。
+     * @param waker 协程唤醒器
+     * @return 无返回值
+     */
     void set_waker(Waker waker) noexcept
     {
         m_waker = std::move(waker);
@@ -123,7 +127,10 @@ public:
         }
     }
 
-    /** @brief awaiter 恢复后释放 gate 持有的任务引用。 */
+    /**
+     * @brief awaiter 恢复后释放 gate 持有的任务引用。
+     * @return 无返回值
+     */
     void clear_waker() noexcept
     {
         m_waker = Waker();
@@ -243,6 +250,8 @@ public:
      *
      * 正常创建与释放都发生在拥有该定时器的 IO 调度线程上；若 shared_ptr
      * 最后在外部线程释放，则直接析构而不进入外部线程的池。
+     * @param duration 持续时间
+     * @return 从线程本地对象池取得并完成初始化的定时器
      */
     static ptr create(std::chrono::milliseconds duration);
 
@@ -252,6 +261,8 @@ public:
      * 只有在最后一个 shared_ptr 已释放、且时间轮不再持有该 timer 时才能
      * 调用；此时 DeferredWaker 不会再收到完成通知，原地重建只负责释放上一轮
      * 可能仍持有的 TaskRef 并恢复初始状态。
+     * @param duration 持续时间
+     * @return 无返回值
      */
     void reset_for_reuse(std::chrono::milliseconds duration) noexcept
     {
@@ -285,7 +296,10 @@ public:
 
     void set_waker(Waker waker) noexcept { m_waker.set_waker(std::move(waker)); }
 
-    /** @brief awaiter 恢复后释放 timer 持有的任务引用。 */
+    /**
+     * @brief awaiter 恢复后释放 timer 持有的任务引用。
+     * @return 无返回值
+     */
     void clear_waker() noexcept { m_waker.clear_waker(); }
 
     /**
@@ -295,7 +309,10 @@ public:
      */
     [[nodiscard]] bool arm_waker() noexcept { return m_waker.arm(); }
 
-    /** @brief 返回供 timeout-aware awaiter 共享的两阶段完成唤醒门。 */
+    /**
+     * @brief 返回供 timeout-aware awaiter 共享的两阶段完成唤醒门。
+     * @return detail::DeferredWaker& 引用
+     */
     detail::DeferredWaker& completion_waker() noexcept { return m_waker; }
 
     /**
@@ -405,6 +422,7 @@ public:
     /**
      * @brief 唤醒由 abort_operation() 最终裁决为 timeout 的任务。
      * @pre 当前调用方刚获得 OperationAbort::kTimeoutWon，且只调用一次。
+     * @return 无返回值
      * @note wake_up() 可能恢复并销毁 awaiter frame，因此必须是调用方最后一步。
      */
     void wake_timeout_winner()
@@ -414,7 +432,10 @@ public:
         }
     }
 
-    /** @brief 操作完成时取消 timeout 竞争；timer 已获胜时不会反转结果。 */
+    /**
+     * @brief 操作完成时取消 timeout 竞争；timer 已获胜时不会反转结果。
+     * @return 无返回值
+     */
     void cancel() noexcept
     {
         if (!try_complete_operation()) {
@@ -423,7 +444,10 @@ public:
         }
     }
 
-    /** @brief timer 注册失败时同步标记超时并请求恢复已挂起任务。 */
+    /**
+     * @brief timer 注册失败时同步标记超时并请求恢复已挂起任务。
+     * @return 无返回值
+     */
     void timeout_now()
     {
         if (complete_timeout()) {
@@ -433,7 +457,10 @@ public:
         }
     }
 
-    /** @brief 在尚未发布 inner waiter 时只标记超时，不请求恢复。 */
+    /**
+     * @brief 在尚未发布 inner waiter 时只标记超时，不请求恢复。
+     * @return 无返回值
+     */
     void mark_timeout_without_wake()
     {
         if (!complete_timeout()) {
@@ -445,7 +472,10 @@ public:
         return m_completion.load(std::memory_order_acquire) == Completion::kTimeoutWon;
     }
 
-    /** @brief 由 timer manager 或测试入口触发一次 timeout 裁决。 */
+    /**
+     * @brief 由 timer manager 或测试入口触发一次 timeout 裁决。
+     * @return 无返回值
+     */
     void handle_timeout() override {
         if (complete_timeout()) {
             // wake_up() 可能恢复并销毁 awaiter frame，因此必须是最后一次成员访问。
@@ -574,6 +604,8 @@ struct TimeoutTimerBinding {
      * WithTimeout 在 inner.await_suspend() 前调用；完成路径必须在唤醒协程
      * 前取消该定时器，把成功与超时的竞争裁决提前到完成派发时刻。组合
      * awaitable 可先暂存绑定，再在自己的 await_suspend() 中转交给 inner。
+     * @param timer 定时器
+     * @return 无返回值
      */
     void bind_timeout_timer(TimeoutTimer* timer) noexcept {
         m_bound_timeout_timer = timer;
@@ -585,6 +617,8 @@ protected:
      *
      * 组合 awaitable 先在外层保存 timer，再在 inner.await_suspend() 前转交，
      * 从而不要求 inner 必须在外层 bind_timeout_timer() 调用前完成构造。
+     * @param awaitable 等待体
+     * @return 无返回值
      */
     template <typename AwaitableT>
     requires requires(AwaitableT& awaitable, TimeoutTimer* timer) {
@@ -598,7 +632,10 @@ protected:
     }
 
 public:
-    /** @brief 完成派发时刻取消竞争；幂等且不反转已发生的超时结果。 */
+    /**
+     * @brief 完成派发时刻取消竞争；幂等且不反转已发生的超时结果。
+     * @return 无返回值
+     */
     void cancel_bound_timeout_timer() noexcept {
         // reactor 和 await_resume() 都可能报告完成。取消前先清除非拥有观察
         // 指针，避免后续通知解引用已由 WithTimeout wrapper 释放的 timer。
@@ -776,14 +813,20 @@ struct WithTimeout {
         return m_inner.await_resume();
     }
 
-    /** @brief 显式为源码级测试或手工驱动 timer 的调用方创建定时器。 */
+    /**
+     * @brief 显式为源码级测试或手工驱动 timer 的调用方创建定时器。
+     * @return 无返回值
+     */
     void ensure_timer() {
         if (!m_timer) {
             m_timer = TimeoutTimer::create(m_duration);
         }
     }
 
-    /** @brief 将嵌套 timeout 包装器的超时结果继续传给 inner。 */
+    /**
+     * @brief 将嵌套 timeout 包装器的超时结果继续传给 inner。
+     * @return 无返回值
+     */
     void mark_timeout() { inject_timeout_result(); }
 
 private:

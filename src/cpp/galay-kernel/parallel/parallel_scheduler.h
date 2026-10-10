@@ -147,6 +147,7 @@ public:
 
     /**
      * @brief 将一个不拥有 coroutine frame 的同步计算工作项入队。
+     * @param work 并行工作项
      * @return true 表示工作项已被 worker 接纳；调度器未运行或工作项无效时
      *         返回 false。
      * @note stop() 与入队并发时，已进入接纳协议的工作项仍会在 worker 退出前排空。
@@ -171,6 +172,7 @@ private:
 
     /**
      * @brief 停止调度器
+     * @return 无返回值
      * @note 先拒绝新的恢复请求，再由工作线程排空已接纳任务并结束
      */
     void stop_impl();
@@ -201,6 +203,7 @@ private:
 
     /**
      * @brief 无分配接纳已停泊任务的恢复请求。
+     * @param task 协程任务
      * @return live scheduler 接管成功返回 true；未启动、已停止、任务无效或 owner
      *         不匹配返回 false。
      */
@@ -249,12 +252,16 @@ private:
 private:
     /**
      * @brief 排空一次 resume admission 快照
+     * @return 无返回值
      * @details 恢复期间新产生的请求留到下一轮；下一轮先尝试一个普通任务，
      *          普通队列为空时则立即继续恢复，兼顾公平性和连续 resume 吞吐。
      */
     void drain_resume_queue();
 
-    /** @brief 工作线程函数 */
+    /**
+     * @brief 工作线程函数
+     * @return 无返回值
+     */
     void worker_loop();
 
 private:

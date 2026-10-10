@@ -36,7 +36,11 @@ public:
 
     HttpRequest() = default;
     HttpRequest(HttpRequest&&) noexcept = default;   ///< 移动构造
-    HttpRequest& operator=(HttpRequest&&) noexcept = default; ///< 移动赋值
+    /**
+     * @brief 移动赋值
+     * @return 当前对象引用
+     */
+    HttpRequest& operator=(HttpRequest&&) noexcept = default;
     ~HttpRequest() = default;
 
     /**
@@ -74,12 +78,14 @@ public:
     /**
      * @brief 设置请求头（移动语义）
      * @param header 请求头
+     * @return 无返回值
      */
     void set_header(HttpRequestHeader&& header);
 
     /**
      * @brief 设置请求头（左值引用）
      * @param header 请求头
+     * @return 无返回值
      */
     void set_header(HttpRequestHeader& header);
 
@@ -87,6 +93,7 @@ public:
      * @brief 设置请求体（模板版，移动语义）
      * @tparam T Body 类型
      * @param body Body 对象
+     * @return 无返回值
      */
     template<HttpBodyType T>
     void set_body(T&& body);
@@ -94,6 +101,7 @@ public:
     /**
      * @brief 设置请求体原始字符串
      * @param body Body 数据（移动语义）
+     * @return 无返回值
      */
     void set_body_str(std::string&& body);
 
@@ -125,18 +133,24 @@ public:
      */
     bool is_complete() const;
 
-    void reset(); ///< 重置解析状态
+    /**
+     * @brief 重置解析状态
+     * @return 无返回值
+     */
+    void reset();
 
     // ==================== 路由参数支持 ====================
     /**
      * @brief 设置路由参数
      * @param params 路径参数映射（例如 /user/:id 中的 id -> 123）
+     * @return 无返回值
      */
     void set_route_params(std::map<std::string, std::string>&& params);
 
     /**
      * @brief 设置路由参数
      * @param params 路由匹配阶段生成的小容器参数
+     * @return 无返回值
      */
     void set_route_params(RouteParams&& params);
 

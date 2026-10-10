@@ -25,6 +25,8 @@ namespace detail {
 
 /**
  * @brief 浮点解析回退实现
+ * @param text 文本
+ * @return 成功时返回 T，失败时返回 std::string 错误
  * @details 部分标准库尚未提供浮点 `std::from_chars`，此处用 `strtod` 家族替代，
  *          通过 `errno` 与结束指针判断失败，不使用异常。
  */
@@ -66,6 +68,7 @@ struct CliValue {
     static_assert(std::is_arithmetic_v<T>, "unsupported cli value type");
 
     /// 类型名，用于帮助输出
+    /// @return 处理后的 std::string_view 结果
     static constexpr std::string_view type_name() noexcept {
         if constexpr (std::is_floating_point_v<T>) {
             return "float";
@@ -105,6 +108,8 @@ struct CliValue {
     }
 
     /// 转为可读字符串，用于帮助输出
+    /// @param value 待设置或处理的值
+    /// @return 按函数说明处理后的字符串
     static std::string to_string(const T& value) { return std::to_string(value); }
 };
 

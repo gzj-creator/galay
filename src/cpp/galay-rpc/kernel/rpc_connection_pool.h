@@ -44,6 +44,7 @@ struct RpcEndpoint {
     uint16_t port = 0; ///< endpoint端口
 
     /// @brief 返回 host:port 格式的稳定key
+    /// @return 处理后的 std::string 结果
     std::string key() const { return host + ":" + std::to_string(port); }
 
     friend bool operator==(const RpcEndpoint& lhs, const RpcEndpoint& rhs) {
@@ -106,14 +107,19 @@ public:
     }
 
     /// @brief 连接id，用于测试和诊断复用/替换行为
+    /// @return 用于诊断连接复用的连接标识符
     uint64_t id() const { return m_id; }
     /// @brief 租约所属endpoint
+    /// @return const RpcEndpoint& 只读引用
     const RpcEndpoint& endpoint() const { return m_endpoint; }
     /// @brief 租约是否仍可归还
+    /// @return 对象有效时返回 true，否则返回 false
     bool valid() const { return m_valid; }
     /// @brief 标记该连接不可复用
+    /// @return 无返回值
     void mark_broken() { m_broken = true; }
     /// @brief 查询是否已标记broken
+    /// @return 租约已标记为损坏时返回 true，否则返回 false
     bool broken() const { return m_broken; }
 
 private:
@@ -268,24 +274,32 @@ public:
     }
 
     /// @brief 指定endpoint可复用连接数量
+    /// @param endpoint 服务端点
+    /// @return 对应的大小或数量
     size_t available_count(const RpcEndpoint& endpoint) const {
         const auto* bucket = find_bucket(endpoint);
         return bucket == nullptr ? 0 : bucket->available.size();
     }
 
     /// @brief 指定endpoint当前租出数量
+    /// @param endpoint 服务端点
+    /// @return 对应的大小或数量
     size_t in_use_count(const RpcEndpoint& endpoint) const {
         const auto* bucket = find_bucket(endpoint);
         return bucket == nullptr ? 0 : bucket->in_use;
     }
 
     /// @brief 指定endpoint等待者数量
+    /// @param endpoint 服务端点
+    /// @return 对应的大小或数量
     size_t waiter_count(const RpcEndpoint& endpoint) const {
         const auto* bucket = find_bucket(endpoint);
         return bucket == nullptr ? 0 : bucket->waiters.size();
     }
 
     /// @brief 指定endpoint总跟踪逻辑连接数
+    /// @param endpoint 服务端点
+    /// @return 指定端点跟踪的连接数量；端点不存在时为 0
     size_t total_tracked_connections(const RpcEndpoint& endpoint) const {
         const auto* bucket = find_bucket(endpoint);
         return bucket == nullptr ? 0 : bucket->total;

@@ -456,11 +456,31 @@ public:
         , m_reader(m_ring_buffer, m_reader_setting, socket)
         , m_writer(m_writer_setting, socket) {}
 
-    HttpReaderImpl<SocketType>& get_reader() { return m_reader; } ///< 获取读取器引用
-    HttpWriterImpl<SocketType>& get_writer() { return m_writer; } ///< 获取写入器引用
-    SocketType& get_socket() { return m_socket; } ///< 获取底层 Socket 引用
-    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& get_ring_buffer() { return m_ring_buffer; } ///< 获取 RingBuffer 引用
-    const HttpReaderSetting& get_reader_setting() const { return m_reader_setting; } ///< 获取读取器配置
+    /**
+     * @brief 获取读取器引用
+     * @return HttpReaderImpl<SocketType>& 引用
+     */
+    HttpReaderImpl<SocketType>& get_reader() { return m_reader; }
+    /**
+     * @brief 获取写入器引用
+     * @return HttpWriterImpl<SocketType>& 引用
+     */
+    HttpWriterImpl<SocketType>& get_writer() { return m_writer; }
+    /**
+     * @brief 获取底层 Socket 引用
+     * @return SocketType& 引用
+     */
+    SocketType& get_socket() { return m_socket; }
+    /**
+     * @brief 获取 RingBuffer 引用
+     * @return RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& 引用
+     */
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& get_ring_buffer() { return m_ring_buffer; }
+    /**
+     * @brief 获取读取器配置
+     * @return const HttpReaderSetting& 引用
+     */
+    const HttpReaderSetting& get_reader_setting() const { return m_reader_setting; }
 
     /**
      * @brief 发送 GET 请求
@@ -619,7 +639,11 @@ public:
         return m_reader.get_response(response);
     }
 
-    /** @brief 只读取响应头，将同批到达的 body 字节留给后续增量读取。 */
+    /**
+     * @brief 只读取响应头，将同批到达的 body 字节留给后续增量读取。
+     * @param header 头部对象
+     * @return 响应头读取等待体，通过 co_await 取得读取结果
+     */
     auto get_response_header(HttpResponseHeader& header) {
         return m_reader.get_response_header(header);
     }
@@ -634,7 +658,12 @@ public:
         return m_writer.send_chunk(data, is_last);
     }
 
-    /** @brief 增量读取下一个已完整 HTTP chunk。 */
+    /**
+     * @brief 增量读取下一个已完整 HTTP chunk。
+     * @param chunk_data 分块数据
+     * @param parser 解析器
+     * @return 下一块 HTTP chunk 的读取等待体，通过 co_await 取得读取结果
+     */
     auto get_next_chunk(std::string& chunk_data, ChunkParser& parser) {
         return m_reader.get_next_chunk(chunk_data, parser);
     }

@@ -35,6 +35,7 @@ public:
 
     /**
      * @brief 停止插件并释放运行期资源。
+     * @return 无返回值
      * @details server 会忽略并记录 stop 中抛出的异常；实现仍必须保持 noexcept。
      */
     virtual void stop() noexcept {}

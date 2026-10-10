@@ -38,36 +38,84 @@ public:
     McpHttpServer(const McpHttpServer&) = delete;
     McpHttpServer& operator=(const McpHttpServer&) = delete;
 
-    /** @brief Configuration API; call from one thread before start(). */
+    /**
+     * @brief Configuration API; call from one thread before start().
+     * @param name 名称
+     * @param version 版本
+     * @return 无返回值
+     */
     void set_server_info(std::string name, std::string version);
-    /** @brief Configuration API; call from one thread before start(). */
+    /**
+     * @brief Configuration API; call from one thread before start().
+     * @param policy 策略
+     * @return 无返回值
+     */
     void set_production_policy(McpProductionPolicy policy);
-    /** @brief 注册阶段接口；必须在 start() 前由单线程调用。 */
+    /**
+     * @brief 注册阶段接口；必须在 start() 前由单线程调用。
+     * @param name 名称
+     * @param description 描述文本
+     * @param inputSchema 输入参数 schema
+     * @param handler 处理回调
+     * @return 无返回值
+     */
     void add_tool(std::string name, std::string description, std::string inputSchema,
                  ToolHandler handler);
-    /** @brief 注册阶段接口；必须在 start() 前由单线程调用。 */
+    /**
+     * @brief 注册阶段接口；必须在 start() 前由单线程调用。
+     * @param uri 资源 URI
+     * @param name 名称
+     * @param description 描述文本
+     * @param mimeType 媒体类型
+     * @param reader 读取器
+     * @return 无返回值
+     */
     void add_resource(std::string uri, std::string name, std::string description,
                      std::string mimeType, ResourceReader reader);
-    /** @brief 注册阶段接口；必须在 start() 前由单线程调用。 */
+    /**
+     * @brief 注册阶段接口；必须在 start() 前由单线程调用。
+     * @param name 名称
+     * @param description 描述文本
+     * @param arguments 调用参数
+     * @param getter 取值回调
+     * @return 无返回值
+     */
     void add_prompt(std::string name, std::string description,
                    std::vector<PromptArgument> arguments, PromptGetter getter);
     /**
      * @brief Submit a notification without blocking or creating a coroutine.
+     * @return 成功时返回空值，失败时返回 McpError 错误
      * @details Success means the owner accepted the command, not a delivery count.
      *          Callable from any thread while the server lives. Stopped admission
      *          returns ConnectionClosed; queue allocation failure returns Overload.
      *          Slow subscribers retain the existing bounded event-queue policy.
      */
     std::expected<void, McpError> notify_tools_list_changed();
-    /** @brief Submit a resource-list notification; same admission contract. */
+    /**
+     * @brief Submit a resource-list notification; same admission contract.
+     * @return 成功时返回空值，失败时返回 McpError 错误
+     */
     std::expected<void, McpError> notify_resources_list_changed();
-    /** @brief Submit a prompt-list notification; same admission contract. */
+    /**
+     * @brief Submit a prompt-list notification; same admission contract.
+     * @return 成功时返回空值，失败时返回 McpError 错误
+     */
     std::expected<void, McpError> notify_prompts_list_changed();
-    /** @brief Submit a resource notification, owning uri until the owner consumes it. */
+    /**
+     * @brief Submit a resource notification, owning uri until the owner consumes it.
+     * @param uri 资源 URI
+     * @return 成功时返回空值，失败时返回 McpError 错误
+     */
     std::expected<void, McpError> notify_resource_updated(std::string uri);
-    /** @brief Blocking lifecycle owner; call on an external thread and join before destruction. */
+    /**
+     * @brief Blocking lifecycle owner; call on an external thread and join before destruction.
+     * @return 无返回值
+     */
     void start();
-    /** @brief Request shutdown and wait for start() to drain; external threads only. */
+    /**
+     * @brief Request shutdown and wait for start() to drain; external threads only.
+     * @return 无返回值
+     */
     void stop();
     bool is_running() const noexcept;
 

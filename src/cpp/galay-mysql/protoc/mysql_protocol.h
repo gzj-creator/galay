@@ -59,11 +59,17 @@ std::expected<std::string_view, ParseError> read_len_enc_string_view(const char*
 
 /**
  * @brief 读取null-terminated string
+ * @param data 输入数据
+ * @param len 数据字节数
+ * @param consumed 接收已消费字节数的引用
+ * @return 成功时返回 std::string，失败时返回 ParseError 错误
  */
 std::expected<std::string, ParseError> read_null_term_string(const char* data, size_t len, size_t& consumed);
 
 /**
  * @brief 读取固定长度整数（小端序）
+ * @param data 输入数据
+ * @return 从输入地址按小端序读取的 16 位整数
  */
 uint16_t read_uint16(const char* data);
 uint32_t read_uint24(const char* data);
@@ -72,6 +78,9 @@ uint64_t read_uint64(const char* data);
 
 /**
  * @brief 写入固定长度整数（小端序）
+ * @param buf 数据缓冲区引用
+ * @param val 值
+ * @return 无返回值
  */
 void write_uint16(std::string& buf, uint16_t val);
 void write_uint24(std::string& buf, uint32_t val);
@@ -80,11 +89,17 @@ void write_uint64(std::string& buf, uint64_t val);
 
 /**
  * @brief 写入length-encoded integer
+ * @param buf 数据缓冲区引用
+ * @param val 值
+ * @return 无返回值
  */
 void write_len_enc_int(std::string& buf, uint64_t val);
 
 /**
  * @brief 写入length-encoded string
+ * @param buf 数据缓冲区引用
+ * @param str 待处理字符串
+ * @return 无返回值
  */
 void write_len_enc_string(std::string& buf, std::string_view str);
 
@@ -112,6 +127,7 @@ public:
      * @brief 解析握手包
      * @param data payload数据（不含包头）
      * @param len payload长度
+     * @return 成功时返回 HandshakeV10，失败时返回 ParseError 错误
      */
     std::expected<HandshakeV10, ParseError> parse_handshake(const char* data, size_t len);
 
@@ -119,6 +135,7 @@ public:
      * @brief 解析AuthSwitchRequest包
      * @param data payload数据（不含包头，含0xFE标识字节）
      * @param len payload长度
+     * @return 成功时返回 AuthSwitchRequest，失败时返回 ParseError 错误
      */
     std::expected<AuthSwitchRequest, ParseError> parse_auth_switch_request(const char* data, size_t len);
 
@@ -126,6 +143,7 @@ public:
      * @brief 判断响应类型
      * @param first_byte payload的第一个字节
      * @param payload_len payload长度
+     * @return 由首字节和负载长度识别出的响应类型
      */
     ResponseType identify_response(uint8_t first_byte, uint32_t payload_len);
 
@@ -134,6 +152,7 @@ public:
      * @param data payload数据（不含包头，含0x00标识字节）
      * @param len payload长度
      * @param capabilities 客户端能力标志
+     * @return 成功时返回 OkPacket，失败时返回 ParseError 错误
      */
     std::expected<OkPacket, ParseError> parse_ok(const char* data, size_t len, uint32_t capabilities);
 
@@ -142,6 +161,7 @@ public:
      * @param data payload数据（不含包头，含0xFF标识字节）
      * @param len payload长度
      * @param capabilities 客户端能力标志
+     * @return 成功时返回 ErrPacket，失败时返回 ParseError 错误
      */
     std::expected<ErrPacket, ParseError> parse_err(const char* data, size_t len, uint32_t capabilities);
 
@@ -149,6 +169,7 @@ public:
      * @brief 解析EOF包
      * @param data payload数据（不含包头，含0xFE标识字节）
      * @param len payload长度
+     * @return 成功时返回 EofPacket，失败时返回 ParseError 错误
      */
     std::expected<EofPacket, ParseError> parse_eof(const char* data, size_t len);
 
@@ -156,6 +177,7 @@ public:
      * @brief 解析列定义包
      * @param data payload数据（不含包头）
      * @param len payload长度
+     * @return 成功时返回 ColumnDefinitionPacket，失败时返回 ParseError 错误
      */
     std::expected<ColumnDefinitionPacket, ParseError> parse_column_definition(const char* data, size_t len);
 
@@ -184,6 +206,7 @@ public:
      * @brief 解析COM_STMT_PREPARE响应的OK部分
      * @param data payload数据（不含包头）
      * @param len payload长度
+     * @return 成功时返回 StmtPrepareOkPacket，失败时返回 ParseError 错误
      */
     std::expected<StmtPrepareOkPacket, ParseError> parse_stmt_prepare_ok(const char* data, size_t len);
 
@@ -287,6 +310,8 @@ public:
 
     /**
      * @brief 编码COM_RESET_CONNECTION命令
+     * @param sequence_id 序列号
+     * @return 处理后的 std::string 结果
      */
     std::string encode_reset_connection(uint8_t sequence_id = 0);
 
@@ -301,6 +326,10 @@ private:
 
     /**
      * @brief 编码简单命令（1字节命令 + 可选payload）
+     * @param cmd 命令名称
+     * @param payload 消息负载
+     * @param sequence_id 序列号
+     * @return 处理后的 std::string 结果
      */
     std::string encode_simple_command(CommandType cmd, std::string_view payload, uint8_t sequence_id);
 };

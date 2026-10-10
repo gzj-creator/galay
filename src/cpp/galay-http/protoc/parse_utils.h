@@ -182,6 +182,7 @@ inline std::vector<iovec> slice_iovecs(const std::vector<iovec>& iovecs, size_t 
  * @brief 宽松模式移除 Header（尝试多种大小写变体）
  * @param headers HeaderPair 对象
  * @param key 头部键名
+ * @return 无返回值
  * @details 依次尝试原始键名、全小写、全大写、首字母大写等形式进行移除
  */
 inline void remove_header_pair_loose(HeaderPair& headers, const std::string& key)

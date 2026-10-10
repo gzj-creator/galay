@@ -36,6 +36,10 @@
 
             /**
              * @brief 从已编码字符串构造（移动语义）
+             * @param client 客户端对象
+             * @param encoded_command 已编码命令
+             * @param expected_replies 预期响应数量
+             * @param recv_only 是否只接收响应
              */
             RedisExchangeSharedState(RedisClient<Strategy>& client,
                                      std::string encoded_command,
@@ -43,6 +47,10 @@
                                      bool recv_only);
             /**
              * @brief 从字符串视图构造（零拷贝）
+             * @param client 客户端对象
+             * @param encoded_command 已编码命令
+             * @param expected_replies 预期响应数量
+             * @param recv_only 是否只接收响应
              */
             RedisExchangeSharedState(RedisClient<Strategy>& client,
                                      std::string_view encoded_command,
@@ -50,6 +58,8 @@
                                      bool recv_only);
             /**
              * @brief 从批量命令视图构造
+             * @param client 客户端对象
+             * @param commands 批量命令
              */
             RedisExchangeSharedState(RedisClient<Strategy>& client,
                                      std::span<const RedisCommandView> commands);
@@ -94,21 +104,46 @@
             /**
              * @brief 读取完成回调
              * @param result 读取结果
+             * @return 无返回值
              */
             void on_read(std::expected<size_t, IOError> result);
 
             /**
              * @brief 写入完成回调
              * @param result 写入结果
+             * @return 无返回值
              */
             void on_write(std::expected<size_t, IOError> result);
 
         private:
-            bool prepare_read_window();                                   ///< 准备读取窗口
-            std::expected<bool, RedisError> try_parse_replies();         ///< 尝试解析回复
-            void set_error(RedisError error) noexcept;                  ///< 设置 Redis 错误
-            void set_send_error(const IOError& io_error) noexcept;       ///< 设置发送错误
-            void set_recv_error(const IOError& io_error) noexcept;       ///< 设置接收错误
+            /**
+             * @brief 准备读取窗口
+             * @return 操作成功时返回 true，否则返回 false
+             */
+            bool prepare_read_window();
+            /**
+             * @brief 尝试解析回复
+             * @return 成功时返回 bool，失败时返回 RedisError 错误
+             */
+            std::expected<bool, RedisError> try_parse_replies();
+            /**
+             * @brief 设置 Redis 错误
+             * @param error 错误信息
+             * @return 无返回值
+             */
+            void set_error(RedisError error) noexcept;
+            /**
+             * @brief 设置发送错误
+             * @param io_error 底层 IO 错误
+             * @return 无返回值
+             */
+            void set_send_error(const IOError& io_error) noexcept;
+            /**
+             * @brief 设置接收错误
+             * @param io_error 底层 IO 错误
+             * @return 无返回值
+             */
+            void set_recv_error(const IOError& io_error) noexcept;
 
             std::shared_ptr<RedisExchangeSharedState<Strategy>> m_state; ///< 共享状态
         };
@@ -142,6 +177,13 @@
 
             /**
              * @brief 构造连接共享状态
+             * @param client 客户端对象
+             * @param ip IP 地址
+             * @param port 端口号
+             * @param username 用户名
+             * @param password 密码
+             * @param db_index 数据库索引
+             * @param version 版本
              */
             RedisConnectSharedState(RedisClient<Strategy>& client,
                                     std::string ip,
@@ -198,29 +240,64 @@
             /**
              * @brief 连接完成回调
              * @param result 连接结果
+             * @return 无返回值
              */
             void on_connect(std::expected<void, IOError> result);
 
             /**
              * @brief 读取完成回调
              * @param result 读取结果
+             * @return 无返回值
              */
             void on_read(std::expected<size_t, IOError> result);
 
             /**
              * @brief 写入完成回调
              * @param result 写入结果
+             * @return 无返回值
              */
             void on_write(std::expected<size_t, IOError> result);
 
         private:
-            bool prepare_read_window();                                   ///< 准备读取窗口
-            bool prepare_next_command();                                  ///< 准备下一条命令
-            std::expected<bool, RedisError> try_parse_reply();            ///< 尝试解析回复
-            void set_error(RedisError error) noexcept;                  ///< 设置 Redis 错误
-            void set_connect_error(const IOError& io_error) noexcept;    ///< 设置连接错误
-            void set_send_error(const IOError& io_error) noexcept;       ///< 设置发送错误
-            void set_recv_error(const IOError& io_error) noexcept;       ///< 设置接收错误
+            /**
+             * @brief 准备读取窗口
+             * @return 操作成功时返回 true，否则返回 false
+             */
+            bool prepare_read_window();
+            /**
+             * @brief 准备下一条命令
+             * @return 下一条 AUTH 或 SELECT 初始化命令已准备好时返回 true；无剩余初始化命令时返回 false
+             */
+            bool prepare_next_command();
+            /**
+             * @brief 尝试解析回复
+             * @return 成功时返回 bool，失败时返回 RedisError 错误
+             */
+            std::expected<bool, RedisError> try_parse_reply();
+            /**
+             * @brief 设置 Redis 错误
+             * @param error 错误信息
+             * @return 无返回值
+             */
+            void set_error(RedisError error) noexcept;
+            /**
+             * @brief 设置连接错误
+             * @param io_error 底层 IO 错误
+             * @return 无返回值
+             */
+            void set_connect_error(const IOError& io_error) noexcept;
+            /**
+             * @brief 设置发送错误
+             * @param io_error 底层 IO 错误
+             * @return 无返回值
+             */
+            void set_send_error(const IOError& io_error) noexcept;
+            /**
+             * @brief 设置接收错误
+             * @param io_error 底层 IO 错误
+             * @return 无返回值
+             */
+            void set_recv_error(const IOError& io_error) noexcept;
 
             std::shared_ptr<RedisConnectSharedState<Strategy>> m_state; ///< 共享状态
         };

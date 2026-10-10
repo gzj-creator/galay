@@ -28,6 +28,8 @@ public:
         : ArgBase(std::move(name), '\0', std::move(description)) {}
 
     /// 设置默认值
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     Positional& def(T value) {
         m_default = std::move(value);
         m_value = *m_default;
@@ -35,30 +37,40 @@ public:
     }
 
     /// 标记为必选
+    /// @param value 是否启用该选项
+    /// @return 当前对象引用
     Positional& required(bool value = true) {
         m_required = value;
         return *this;
     }
 
     /// 吞掉剩余全部位置参数
+    /// @param value 是否启用该选项
+    /// @return 当前对象引用
     Positional& many(bool value = true) {
         m_many = value;
         return *this;
     }
 
     /// 限定候选取值集合
+    /// @param values 值集合
+    /// @return 当前对象引用
     Positional& choices(std::vector<std::string> values) {
         m_choices = std::move(values);
         return *this;
     }
 
     /// 绑定外部变量
+    /// @param target 目标对象
+    /// @return 当前对象引用
     Positional& bind(T* target) {
         m_bound = target;
         return *this;
     }
 
     /// 绑定外部 vector，`many()` 模式下写回全部取值
+    /// @param target 目标对象
+    /// @return 当前对象引用
     Positional& bind_all(std::vector<T>* target) {
         m_boundAll = target;
         return *this;

@@ -156,6 +156,7 @@ public:
 
     /**
      * @brief 停止插件并释放运行期资源。
+     * @return 无返回值
      * @details server 会忽略并记录 stop 中抛出的异常；实现仍必须保持 noexcept。
      */
     void stop() noexcept override {}
@@ -226,6 +227,7 @@ public:
 
     /**
      * @brief 清空当前 SocketType 对应的全局连接统计。
+     * @return 无返回值
      * @details 该接口不获取异步锁，只能在没有 BlackList 插件正在运行时调用，
      *          例如测试用例之间、服务器启动前或服务器完全停止后。运行中调用会与
      *          accept hook 并发访问 m_storage，属于调用方错误。
@@ -247,6 +249,8 @@ private:
 
     /**
      * @brief 判断 time_point 是否已经被初始化为有效业务时间。
+     * @param value 待设置或处理的值
+     * @return 满足所检查条件时返回 true，否则返回 false
      */
     static bool is_set(TimePoint value) noexcept {
         return value != TimePoint{};
@@ -254,6 +258,9 @@ private:
 
     /**
      * @brief 对计数做饱和加一，避免高频拒绝路径上发生 size_t 溢出。
+     * @param value 待设置或处理的值
+     * @param cap 容量
+     * @return 计数加一后的值，不超过 cap
      */
     static std::size_t increment_capped(std::size_t value, std::size_t cap) noexcept {
         if (value >= cap) {
@@ -310,6 +317,8 @@ private:
 
     /**
      * @brief 计算衰减策略使用的实际计数上限。
+     * @param policy 策略
+     * @return 衰减策略的有效计数上限
      * @details 即使 max_counter_value 配置过小，也至少保留 max_attempts + 1，
      *          这样计数仍然能够进入拒绝状态。
      */
@@ -325,6 +334,7 @@ private:
      * @param conn_info 当前客户端地址对应的可变状态。
      * @param policy 衰减计数策略配置。
      * @param now 当前 steady_clock 时间，由调用方统一采集。
+     * @return 无返回值
      * @details 只在访问到该地址时懒衰减，不启动后台定时器。
      */
     static void decay_counter(ConnInfo& conn_info,

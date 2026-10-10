@@ -36,6 +36,7 @@ size_t ws_frame_header_length(uint64_t payload_len, bool use_mask);
  * @param payload_len Frame payload length.
  * @param use_mask Whether to set MASK and append a generated masking key.
  * @param masking_key Output masking key when use_mask is true.
+ * @return 无返回值
  */
 void append_ws_frame_header(std::string& out,
                          WsOpcode opcode,
@@ -49,6 +50,12 @@ void append_ws_frame_header(std::string& out,
 
 /**
  * @brief Append a serialized WebSocket frame header from a WsFrame.
+ * @param out 追加序列化 WebSocket 帧头的输出字符串
+ * @param frame 帧对象
+ * @param payload_len 消息负载字节数
+ * @param use_mask 是否对负载应用掩码
+ * @param masking_key 四字节掩码密钥
+ * @return 无返回值
  */
 void append_ws_frame_header(std::string& out,
                          const WsFrame& frame,

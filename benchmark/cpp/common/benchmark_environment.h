@@ -84,6 +84,7 @@ inline void print_placement_ids(std::span<const unsigned> ids)
  * GALAY_BENCH_CPUS: inherit (default), CPU list/ranges, or explicit none.
  * GALAY_BENCH_NUMA: keep (default), default, bind:<nodes>, interleave:<nodes>.
  * Any requested control that cannot be applied and read back fails startup.
+ * @return 环境初始化成功时返回 true，否则返回 false
  */
 [[nodiscard]] inline bool initialize_benchmark_environment()
 {

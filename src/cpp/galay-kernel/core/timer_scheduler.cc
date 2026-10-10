@@ -44,6 +44,7 @@ TimerScheduler::~TimerScheduler()
 
 /**
  * @brief 启动定时轮后台线程
+ * @return 无返回值
  * @details 累计使用者，首次获取时创建线程执行 timer_loop()。
  */
 void TimerScheduler::start()
@@ -62,6 +63,7 @@ void TimerScheduler::start()
 
 /**
  * @brief 停止定时轮后台线程
+ * @return 无返回值
  * @details 最后一个使用者释放时设置停止标志并 join 等待线程退出。
  */
 void TimerScheduler::stop()
@@ -116,6 +118,7 @@ size_t TimerScheduler::add_timer_batch(const std::vector<Timer::ptr>& timers)
 
 /**
  * @brief 定时轮主循环（运行在后台线程）
+ * @return 无返回值
  * @details 每个 tick 间隔由 TimingWheel 的 during() 决定（纳秒级精度，取最小 1ms）。
  * 每次循环调用 m_timerManager.tick() 驱动定时轮处理到期定时器。
  * 退出前额外执行一次 tick 处理残余定时器。

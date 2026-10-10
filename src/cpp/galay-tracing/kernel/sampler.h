@@ -42,6 +42,9 @@ class AlwaysOnSampler final : public Sampler {
 public:
     /**
      * @brief 始终返回 true
+     * @param parent 父对象
+     * @param trace_id 追踪标识符
+     * @return 决定采样时返回 true，否则返回 false
      */
     [[nodiscard]] bool should_sample(const SpanContext* parent, const TraceId& trace_id) const noexcept override;
 };
@@ -54,6 +57,9 @@ class AlwaysOffSampler final : public Sampler {
 public:
     /**
      * @brief 始终返回 false
+     * @param parent 父对象
+     * @param trace_id 追踪标识符
+     * @return 决定采样时返回 true，否则返回 false
      */
     [[nodiscard]] bool should_sample(const SpanContext* parent, const TraceId& trace_id) const noexcept override;
 };
@@ -73,6 +79,9 @@ public:
 
     /**
      * @brief 根据父 Span 采样决策或根采样器决定是否采样
+     * @param parent 父对象
+     * @param trace_id 追踪标识符
+     * @return 决定采样时返回 true，否则返回 false
      */
     [[nodiscard]] bool should_sample(const SpanContext* parent, const TraceId& trace_id) const noexcept override;
 
@@ -103,6 +112,9 @@ public:
 
     /**
      * @brief 根据 TraceId 数值和比例决定是否采样
+     * @param parent 父对象
+     * @param trace_id 追踪标识符
+     * @return 决定采样时返回 true，否则返回 false
      */
     [[nodiscard]] bool should_sample(const SpanContext* parent, const TraceId& trace_id) const noexcept override;
 
@@ -115,6 +127,7 @@ private:
  * @details 不获取所有权，传入 nullptr 恢复为内置的基于父 Span 的采样器
  * （使用始终采样作为根决策）。
  * @param sampler 采样器指针（不拥有所有权）
+ * @return 无返回值
  */
 void set_sampler(const Sampler* sampler) noexcept;
 

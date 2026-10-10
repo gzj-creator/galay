@@ -38,6 +38,7 @@ using namespace std::chrono_literals;
 /**
  * @brief 处理 WebSocket 连接
  * @param ws_conn WebSocket 连接（通过引用传递）
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> handle_web_socket_connection(WsConn& ws_conn) {
 
@@ -118,6 +119,7 @@ Task<void> handle_web_socket_connection(WsConn& ws_conn) {
 /**
  * @brief HTTP 请求处理器（处理 WebSocket 升级）
  * @param conn HTTP 连接
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> handle_http_request(HttpConn conn) {
     // 读取 HTTP 请求

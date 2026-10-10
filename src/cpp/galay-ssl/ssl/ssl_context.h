@@ -66,21 +66,26 @@ public:
 
     /**
      * @brief 移动构造
+     * @param other 源对象
      */
     SslContext(SslContext&& other) noexcept;
 
     /**
      * @brief 移动赋值
+     * @param other 源对象
+     * @return SslContext& 引用
      */
     SslContext& operator=(SslContext&& other) noexcept;
 
     /**
      * @brief 检查上下文是否有效
+     * @return 有效时返回 true，否则返回 false
      */
     bool is_valid() const { return m_ctx != nullptr; }
 
     /**
      * @brief 获取底层 SSL_CTX 指针
+     * @return SSL_CTX* 指针
      */
     SSL_CTX* native() const { return m_ctx; }
 
@@ -141,6 +146,7 @@ public:
      *
      * @param mode 验证模式
      * @param callback 可选的验证回调函数
+     * @return 无返回值
      */
     void set_verify_mode(SslVerifyMode mode,
                        std::function<bool(bool, X509_STORE_CTX*)> callback = nullptr);
@@ -148,6 +154,7 @@ public:
     /**
      * @brief 设置验证深度
      * @param depth 证书链验证深度
+     * @return 无返回值
      */
     void set_verify_depth(int depth);
 
@@ -186,39 +193,46 @@ public:
     /**
      * @brief 设置最小 TLS 版本
      * @param version TLS 版本（如 TLS1_2_VERSION）
+     * @return 无返回值
      */
     void set_min_protocol_version(int version);
 
     /**
      * @brief 设置最大 TLS 版本
      * @param version TLS 版本（如 TLS1_3_VERSION）
+     * @return 无返回值
      */
     void set_max_protocol_version(int version);
 
     /**
      * @brief 启用会话缓存
      * @param mode 缓存模式
+     * @return 无返回值
      */
     void set_session_cache_mode(long mode);
 
     /**
      * @brief 设置会话超时时间
      * @param timeout 超时秒数
+     * @return 无返回值
      */
     void set_session_timeout(long timeout);
 
     /**
      * @brief 关闭 SSL 会话缓存
+     * @return 无返回值
      */
     void disable_session_cache();
 
     /**
      * @brief 关闭 TLS session ticket
+     * @return 无返回值
      */
     void disable_session_tickets();
 
     /**
      * @brief 获取创建时的错误
+     * @return const SslError& 只读引用
      */
     const SslError& error() const { return m_error; }
 

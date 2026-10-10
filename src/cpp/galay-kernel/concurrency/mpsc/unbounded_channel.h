@@ -86,6 +86,7 @@ public:
 
     /**
      * @brief 在 await 协议开始前转移 awaiter 状态。
+     * @param other 源对象
      * @note await_ready() 或 await_suspend() 任一开始后不得再移动 awaiter。
      */
     UnboundedRecvAwaitable(UnboundedRecvAwaitable&& other) noexcept
@@ -105,6 +106,8 @@ public:
 
     /**
      * @brief 在 await 协议开始前以移动构造语义替换 awaiter 状态。
+     * @param other 源对象
+     * @return 当前对象引用
      * @note await_ready() 或 await_suspend() 任一开始后不得再移动任一 awaiter。
      */
     UnboundedRecvAwaitable& operator=(UnboundedRecvAwaitable&& other) noexcept
@@ -141,7 +144,10 @@ private:
     friend class UnboundedChannel<T>;
     friend struct WithTimeout<UnboundedRecvAwaitable<T>>;
 
-    /** @brief 绑定目标通道；等待完成前通道必须保持有效。 */
+    /**
+     * @brief 绑定目标通道；等待完成前通道必须保持有效。
+     * @param channel 通道对象
+     */
     explicit UnboundedRecvAwaitable(UnboundedChannel<T>* channel) noexcept
         : m_channel(channel) {}
 
@@ -173,7 +179,10 @@ public:
     UnboundedRecvBatchAwaitable& operator=(
         const UnboundedRecvBatchAwaitable&) = delete;
 
-    /** @brief 在 await_ready()/await_suspend() 任一开始前转移等待体状态。 */
+    /**
+     * @brief 在 await_ready()/await_suspend() 任一开始前转移等待体状态。
+     * @param other 源对象
+     */
     UnboundedRecvBatchAwaitable(UnboundedRecvBatchAwaitable&& other) noexcept
         : m_channel(std::exchange(other.m_channel, nullptr))
         , m_timeoutTimer(std::move(other.m_timeoutTimer))
@@ -264,7 +273,10 @@ public:
     UnboundedRecvBatchToAwaitable& operator=(
         const UnboundedRecvBatchToAwaitable&) = delete;
 
-    /** @brief 在 await_ready()/await_suspend() 任一开始前转移等待体状态。 */
+    /**
+     * @brief 在 await_ready()/await_suspend() 任一开始前转移等待体状态。
+     * @param other 源对象
+     */
     UnboundedRecvBatchToAwaitable(
         UnboundedRecvBatchToAwaitable&& other) noexcept
         : m_timeoutTimer(std::move(other.m_timeoutTimer))
@@ -668,6 +680,7 @@ public:
 
         /**
          * @brief 返回 token 是否仍绑定一个存活 channel 的生产者流。
+         * @return 对象有效时返回 true，否则返回 false
          * @note close() 不使 token 失效，但后续 send() 会返回 false；channel 析构
          *       并 detach stream 后返回 false。
          */
@@ -725,6 +738,8 @@ public:
         /**
          * @brief 校验一个存活 channel 的同步发送热路径所需的 token 关联。
          * @pre channel 仍存活，且同一 token 未被其他线程并发移动或销毁。
+         * @param channel 通道对象
+         * @return 令牌绑定指定存活通道时返回 true，否则返回 false
          * @note channel 的 send() 调用和 ProducerToken 的单生产者契约已满足此前提；
          *       不读取 lifetime 状态，避免每条消息为析构后 valid() 查询付出 acquire。
          */
@@ -794,6 +809,7 @@ public:
 
     /**
      * @brief 使用当前线程的默认生产者流发送一条消息。
+     * @param value 待设置或处理的值
      * @return 发布成功返回 true；通道已开始关闭或流/分块分配失败返回 false，
      *         value 保持未移动。
      */
@@ -805,6 +821,8 @@ public:
 
     /**
      * @brief 使用显式 token 发送一条消息。
+     * @param token 操作令牌
+     * @param value 待设置或处理的值
      * @return 发布成功返回 true；token 无效、属于其他 channel、通道已开始关闭或
      *         分块分配失败返回 false，value 保持未移动。
      */
@@ -816,6 +834,7 @@ public:
 
     /**
      * @brief 复制并使用默认生产者流发送一条消息。
+     * @param value 待设置或处理的值
      * @return 发布成功返回 true；通道已开始关闭或流/分块分配失败返回 false。
      */
     [[nodiscard]] bool send(const T& value)
@@ -827,6 +846,8 @@ public:
 
     /**
      * @brief 复制并使用显式 token 发送一条消息。
+     * @param token 操作令牌
+     * @param value 待设置或处理的值
      * @return 发布成功返回 true；token 无效/foreign、通道已开始关闭或分块分配
      *         失败返回 false。
      */
@@ -842,6 +863,7 @@ public:
 
     /**
      * @brief 复制并原子发布一批消息到默认生产者流。
+     * @param values 值集合
      * @return 全批发布返回 true；通道已开始关闭或预留失败返回 false，通道保持不变。
      */
     [[nodiscard]] bool send_batch(const std::vector<T>& values)
@@ -857,6 +879,8 @@ public:
 
     /**
      * @brief 复制并原子发布一批消息到显式 token 的流。
+     * @param token 操作令牌
+     * @param values 值集合
      * @return 全批发布返回 true；token 无效/foreign、通道已开始关闭或预留失败
      *         返回 false，通道保持不变。
      */
@@ -876,6 +900,7 @@ public:
 
     /**
      * @brief 移动并原子发布一批消息到默认生产者流。
+     * @param values 值集合
      * @return 全批发布返回 true；通道已开始关闭或预留失败返回 false，values
      *         保持未移动。
      */
@@ -891,6 +916,8 @@ public:
 
     /**
      * @brief 移动并原子发布一批消息到显式 token 的流。
+     * @param token 操作令牌
+     * @param values 值集合
      * @return 全批发布返回 true；token 无效/foreign、通道已开始关闭或预留失败
      *         返回 false，values 保持未移动。
      */
@@ -907,7 +934,10 @@ public:
         return send_batch_to_stream(*token.m_stream, std::move(values));
     }
 
-    /** @brief 返回单条异步接收等待体。 */
+    /**
+     * @brief 返回单条异步接收等待体。
+     * @return UnboundedRecvAwaitable<T> 等待体，通过 co_await 执行并取得操作结果
+     */
     [[nodiscard]] UnboundedRecvAwaitable<T> recv() noexcept
     {
         return UnboundedRecvAwaitable<T>(this);
@@ -915,6 +945,7 @@ public:
 
     /**
      * @brief 返回使用默认批量上限的 vector-returning 异步接收等待体。
+     * @return UnboundedRecvBatchAwaitable<T> 等待体，通过 co_await 执行并取得操作结果
      * @note 接收路径可能分配；OOM 敏感或要求无分配时使用 recv_batch_to()。
      */
     [[nodiscard]] UnboundedRecvBatchAwaitable<T> recv_batch() noexcept
@@ -924,6 +955,8 @@ public:
 
     /**
      * @brief 返回最多接收 maxCount 条消息的 vector-returning 异步等待体。
+     * @param maxCount 最多处理的元素数量
+     * @return UnboundedRecvBatchAwaitable<T> 等待体，通过 co_await 执行并取得操作结果
      * @note 接收路径可能分配；OOM 敏感或要求无分配时使用 recv_batch_to()。
      */
     [[nodiscard]] UnboundedRecvBatchAwaitable<T> recv_batch(size_t maxCount) noexcept
@@ -1000,6 +1033,7 @@ public:
 
     /**
      * @brief 使用构造时配置的默认上限非阻塞批量接收。
+     * @return 接收到的消息批次；无消息时为 std::nullopt
      * @note 返回 vector 可能分配；OOM 敏感路径使用 drain_to()。
      */
     [[nodiscard]] std::optional<std::vector<T>> try_recv_batch()
@@ -1049,6 +1083,7 @@ public:
 
     /**
      * @brief 返回所有生产者流和预取缓存中待消费消息数的近似快照。
+     * @return 对应的大小或数量
      * @note 该诊断操作按 producer 数量线性扫描，不参与收发同步。
      */
     [[nodiscard]] size_t size() const noexcept
@@ -1081,7 +1116,10 @@ public:
         return total;
     }
 
-    /** @brief 近似检查当前是否没有待消费消息。 */
+    /**
+     * @brief 近似检查当前是否没有待消费消息。
+     * @return 为空时返回 true，否则返回 false
+     */
     [[nodiscard]] bool empty() const noexcept
     {
         return size() == 0;
@@ -1142,13 +1180,19 @@ public:
         return true;
     }
 
-    /** @brief 返回通道是否已经进入 Closing 或 Closed。 */
+    /**
+     * @brief 返回通道是否已经进入 Closing 或 Closed。
+     * @return 已关闭时返回 true，否则返回 false
+     */
     [[nodiscard]] bool is_closed() const noexcept
     {
         return m_closeState.load(std::memory_order_acquire) != CloseState::kOpen;
     }
 
-    /** @brief 返回通道是否已关闭且所有已发布消息均已排空。 */
+    /**
+     * @brief 返回通道是否已关闭且所有已发布消息均已排空。
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
     [[nodiscard]] bool is_closed_and_drained() const noexcept
     {
         return m_closeState.load(std::memory_order_seq_cst) ==
@@ -1449,6 +1493,7 @@ private:
 
     /**
      * @brief 在当前 producer stream 上取得发送许可。
+     * @param stream 流对象
      * @return close 线性化前取得许可返回 true；否则恢复 open 并返回 false。
      * @note 同一 stream 只能由一个 producer 串行调用。producer 先以 seq_cst
      *       store 宣告 Sending，再读取 close state；close 以相反顺序发布 cutoff
@@ -1711,6 +1756,7 @@ private:
 
     /**
      * @brief waiter arming 后无分配检查是否已有可读消息。
+     * @return 满足所检查条件时返回 true，否则返回 false
      * @details 首次 stream 激活仍通过 m_readyStack 的 seq_cst 发布/摘取加入 waiter
      *          全序。随后扫描所有已注册 stream：kSending 的 producer 尚未执行
      *          waiter 仲裁，consumer 可继续 arming；kPublished 表示数据和 ready
@@ -1795,6 +1841,7 @@ private:
     /**
      * @brief 在不访问 channel 的情况下接管 registration 引用并调度 waiter。
      * @param waiterState detach_published_waiter() 返回的非空 owning 指针。
+     * @return 无返回值
      */
     static void wake_detached_waiter(TaskState* waiterState) noexcept
     {

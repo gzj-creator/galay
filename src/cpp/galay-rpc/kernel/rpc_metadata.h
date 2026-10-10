@@ -129,14 +129,19 @@ public:
     }
 
     /// @brief 清空所有元数据
+    /// @return 无返回值
     void clear() { m_values.clear(); }
     /// @brief 当前键值数量
+    /// @return 对应的大小或数量
     size_t size() const { return m_values.size(); }
     /// @brief 是否为空
+    /// @return 为空时返回 true，否则返回 false
     bool empty() const { return m_values.empty(); }
     /// @brief 只读迭代起点
+    /// @return 只读范围的起始迭代器
     const_iterator begin() const { return m_values.begin(); }
     /// @brief 只读迭代终点
+    /// @return 只读范围的尾后迭代器
     const_iterator end() const { return m_values.end(); }
 
 private:

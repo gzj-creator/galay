@@ -38,14 +38,22 @@ struct JsonRpcRequestView {
 struct ParsedJsonRpcRequest {
     ParsedJsonRpcRequest() = default; ///< 默认构造
     ParsedJsonRpcRequest(ParsedJsonRpcRequest&&) noexcept = default; ///< 移动构造，保持DOM地址稳定
-    ParsedJsonRpcRequest& operator=(ParsedJsonRpcRequest&&) noexcept = default; ///< 移动赋值，保持DOM地址稳定
+    /**
+     * @brief 移动赋值，保持DOM地址稳定
+     * @return 当前对象引用
+     */
+    ParsedJsonRpcRequest& operator=(ParsedJsonRpcRequest&&) noexcept = default;
 
     JsonDocument document; ///< JSON文档（持有底层数据）
     JsonRpcRequestView request; ///< 解析出的请求视图
 
 private:
     ParsedJsonRpcRequest(const ParsedJsonRpcRequest&) = delete; ///< 禁止隐式复制DOM与视图
-    ParsedJsonRpcRequest& operator=(const ParsedJsonRpcRequest&) = delete; ///< 禁止隐式复制DOM与视图
+    /**
+     * @brief 禁止隐式复制DOM与视图
+     * @return 该操作已禁用，不可调用
+     */
+    ParsedJsonRpcRequest& operator=(const ParsedJsonRpcRequest&) = delete;
 };
 
 /**
@@ -67,14 +75,22 @@ struct JsonRpcResponseView {
 struct ParsedJsonRpcResponse {
     ParsedJsonRpcResponse() = default; ///< 默认构造
     ParsedJsonRpcResponse(ParsedJsonRpcResponse&&) noexcept = default; ///< 移动构造，保持DOM地址稳定
-    ParsedJsonRpcResponse& operator=(ParsedJsonRpcResponse&&) noexcept = default; ///< 移动赋值，保持DOM地址稳定
+    /**
+     * @brief 移动赋值，保持DOM地址稳定
+     * @return 当前对象引用
+     */
+    ParsedJsonRpcResponse& operator=(ParsedJsonRpcResponse&&) noexcept = default;
 
     JsonDocument document; ///< JSON文档（持有底层数据）
     JsonRpcResponseView response; ///< 解析出的响应视图
 
 private:
     ParsedJsonRpcResponse(const ParsedJsonRpcResponse&) = delete; ///< 禁止隐式复制DOM与视图
-    ParsedJsonRpcResponse& operator=(const ParsedJsonRpcResponse&) = delete; ///< 禁止隐式复制DOM与视图
+    /**
+     * @brief 禁止隐式复制DOM与视图
+     * @return 该操作已禁用，不可调用
+     */
+    ParsedJsonRpcResponse& operator=(const ParsedJsonRpcResponse&) = delete;
 };
 
 /**

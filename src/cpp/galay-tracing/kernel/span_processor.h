@@ -28,6 +28,7 @@ public:
     /**
      * @brief 处理已结束的 Span
      * @param span 已结束的 Span（调用方移交所有权，处理器可异步保存）
+     * @return 无返回值
      */
     virtual void on_end(Span&& span) = 0;
 

@@ -82,6 +82,12 @@ static uint32_t to_latency_us(std::chrono::steady_clock::duration duration) {
 
 /**
  * @brief 单个 WebSocket 客户端压测
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @param client_id 客户端编号
+ * @param target_url 目标 URL
+ * @param message_payload 消息负载
+ * @param end_time 结束时刻
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> benchmark_web_socket_client(
     IOScheduler* scheduler,
@@ -202,6 +208,9 @@ Task<void> benchmark_web_socket_client(
 
 /**
  * @brief 打印统计信息
+ * @param start_time 开始时刻
+ * @param end_time 结束时刻
+ * @return 无返回值
  */
 void print_stats(const std::chrono::steady_clock::time_point& start_time,
                 const std::chrono::steady_clock::time_point& end_time) {

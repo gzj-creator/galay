@@ -141,6 +141,7 @@ public:
 
     /**
      * @brief 重置起点为当前时刻
+     * @return 无返回值
      */
     void reset() {
         m_start = Clock::now();
@@ -315,6 +316,7 @@ public:
 
     /**
      * @brief 重置尝试次数
+     * @return 无返回值
      */
     void reset() {
         m_attempts = 0;

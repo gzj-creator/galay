@@ -33,6 +33,8 @@ void signal_handler(int) {
 
 /**
  * @brief 压测协程 - 每个 worker 使用独立的 registry
+ * @param worker_id 工作协程编号
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> bench_worker(size_t worker_id) {
     // 每个 worker 独立的 registry，避免共享状态竞争

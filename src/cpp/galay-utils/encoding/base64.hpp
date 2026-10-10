@@ -106,7 +106,7 @@ namespace galay::utils
          * @param url 是否使用 URL 安全字符集
          * @return Base64 编码后的字符串
          */
-        static std::string base64_encode(unsigned char const *, size_t len, bool url = false);
+        static std::string base64_encode(unsigned char const *bytes_to_encode, size_t len, bool url = false);
 
 #if __cplusplus >= 201703L
         /**

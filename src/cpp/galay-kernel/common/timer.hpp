@@ -63,6 +63,7 @@ public:
     /**
      * @brief 定时器到期时调用
      *
+     * @return 无返回值
      * @details 通过 kDone 标志标记定时器为已完成。派生类
      * 应在执行自身工作后调用此基类实现。
      */
@@ -82,6 +83,7 @@ public:
     /**
      * @brief 取消定时器
      *
+     * @return 无返回值
      * @details 原子地设置 kCancel 标志。定时器管理器在
      * 调用 handle_timeout() 前检查此标志。
      */
@@ -150,6 +152,7 @@ public:
 
     /**
      * @brief 若未被取消/已完成则调用存储的回调，然后标记完成
+     * @return 无返回值
      */
     void handle_timeout() override {
         if(!cancelled() && !done()) {

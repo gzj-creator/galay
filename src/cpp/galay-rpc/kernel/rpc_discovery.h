@@ -39,6 +39,7 @@ struct ServiceEndpoint {
     uint32_t weight = 100;      ///< 权重（用于负载均衡）
 
     /// @brief 获取地址字符串（host:port）
+    /// @return 处理后的 std::string 结果
     std::string address() const {
         return host + ":" + std::to_string(port);
     }
@@ -46,6 +47,8 @@ struct ServiceEndpoint {
 
 /**
  * @brief 将旧服务发现endpoint转换为Phase 7完整endpoint模型
+ * @param endpoint 服务端点
+ * @return 转换后的 RPC 端点信息
  */
 inline RpcEndpointInfo to_rpc_endpoint_info(const ServiceEndpoint& endpoint) {
     RpcEndpointInfo info;
@@ -62,6 +65,8 @@ inline RpcEndpointInfo to_rpc_endpoint_info(const ServiceEndpoint& endpoint) {
 /**
  * @brief 将Phase 7完整endpoint模型转换为旧服务发现endpoint
  *
+ * @param endpoint 服务端点
+ * @return 转换后的服务发现端点信息
  * @note version/zone/metadata/status没有旧字段承载，会在转换时丢弃。
  */
 inline ServiceEndpoint to_service_endpoint(const RpcEndpointInfo& endpoint) {
@@ -98,8 +103,10 @@ struct DiscoveryError {
     DiscoveryError(Code c, std::string msg = "") : code(c), message(std::move(msg)) {}
 
     /// @brief 判断是否成功
+    /// @return 满足所检查条件时返回 true，否则返回 false
     bool is_ok() const { return code == OK; }
     /// @brief 判断是否存在错误
+    /// @return 存在错误时返回 true，否则返回 false
     explicit operator bool() const { return !is_ok(); }
 };
 
@@ -167,6 +174,8 @@ public:
 
     /**
      * @brief 注册服务
+     * @param endpoint 服务端点
+     * @return 成功时返回空值，失败时返回 DiscoveryError 错误
      */
     std::expected<void, DiscoveryError> register_service(const ServiceEndpoint& endpoint) {
         m_services[endpoint.service_name].push_back(endpoint);
@@ -184,6 +193,8 @@ public:
 
     /**
      * @brief 注销服务
+     * @param endpoint 服务端点
+     * @return 成功时返回空值，失败时返回 DiscoveryError 错误
      */
     std::expected<void, DiscoveryError> deregister_service(const ServiceEndpoint& endpoint) {
         auto it = m_services.find(endpoint.service_name);
@@ -217,6 +228,8 @@ public:
 
     /**
      * @brief 发现服务
+     * @param service_name 服务名称
+     * @return 成功时返回 std::vector<ServiceEndpoint>，失败时返回 DiscoveryError 错误
      */
     std::expected<std::vector<ServiceEndpoint>, DiscoveryError> discover_service(const std::string& service_name) {
         auto it = m_services.find(service_name);
@@ -229,6 +242,9 @@ public:
 
     /**
      * @brief 监听服务变更
+     * @param service_name 服务名称
+     * @param callback 回调函数
+     * @return 成功时返回空值，失败时返回 DiscoveryError 错误
      */
     std::expected<void, DiscoveryError> watch_service(const std::string& service_name, ServiceWatchCallback callback) {
         m_watchers[service_name].push_back(std::move(callback));
@@ -237,6 +253,8 @@ public:
 
     /**
      * @brief 取消监听
+     * @param service_name 服务名称
+     * @return 无返回值
      */
     void unwatch_service(const std::string& service_name) {
         m_watchers.erase(service_name);
@@ -294,6 +312,8 @@ public:
 
     /**
      * @brief 异步注册服务
+     * @param endpoint 服务端点
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> register_service_async(const ServiceEndpoint& endpoint) {
         auto lock_result = co_await m_mutex.lock();
@@ -319,6 +339,8 @@ public:
 
     /**
      * @brief 异步注销服务
+     * @param endpoint 服务端点
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> deregister_service_async(const ServiceEndpoint& endpoint) {
         auto lock_result = co_await m_mutex.lock();
@@ -364,6 +386,8 @@ public:
 
     /**
      * @brief 异步发现服务
+     * @param service_name 服务名称
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> discover_service_async(const std::string& service_name) {
         auto lock_result = co_await m_mutex.lock();
@@ -387,6 +411,9 @@ public:
 
     /**
      * @brief 异步监听服务变更
+     * @param service_name 服务名称
+     * @param callback 回调函数
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> watch_service_async(const std::string& service_name, ServiceWatchCallback callback) {
         auto lock_result = co_await m_mutex.lock();
@@ -403,6 +430,8 @@ public:
 
     /**
      * @brief 异步取消监听
+     * @param service_name 服务名称
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> unwatch_service_async(const std::string& service_name) {
         auto lock_result = co_await m_mutex.lock();
@@ -419,11 +448,13 @@ public:
 
     /**
      * @brief 获取最后一次操作的错误
+     * @return 最近一次操作记录的错误
      */
     DiscoveryError last_error() const { return m_last_error; }
 
     /**
      * @brief 获取最后一次发现的端点列表
+     * @return 最近一次服务发现取得的端点列表
      */
     std::vector<ServiceEndpoint> last_endpoints() const { return m_last_endpoints; }
 
@@ -462,6 +493,8 @@ public:
 
     /**
      * @brief 获取服务实例
+     * @param service_name 服务名称
+     * @return 成功时返回 ServiceEndpoint，失败时返回 DiscoveryError 错误
      */
     std::expected<ServiceEndpoint, DiscoveryError> get_service_endpoint(const std::string& service_name) {
         auto result = m_registry.discover_service(service_name);
@@ -490,6 +523,9 @@ public:
 
     /**
      * @brief 监听服务变更
+     * @param service_name 服务名称
+     * @param callback 回调函数
+     * @return 成功时返回空值，失败时返回 DiscoveryError 错误
      */
     std::expected<void, DiscoveryError> watch(const std::string& service_name, ServiceWatchCallback callback) {
         return m_registry.watch_service(service_name, std::move(callback));
@@ -497,6 +533,8 @@ public:
 
     /**
      * @brief 取消监听
+     * @param service_name 服务名称
+     * @return 无返回值
      */
     void unwatch(const std::string& service_name) {
         m_registry.unwatch_service(service_name);

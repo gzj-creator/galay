@@ -174,12 +174,14 @@ public:
     UnboundedQueue(const UnboundedQueue&) = delete;
 
     /// @brief 禁止复制赋值；队列具有唯一身份。
+    /// @return 该操作已禁用，不可调用
     UnboundedQueue& operator=(const UnboundedQueue&) = delete;
 
     /// @brief 禁止移动构造，避免生产者或消费者持有失效状态。
     UnboundedQueue(UnboundedQueue&&) = delete;
 
     /// @brief 禁止移动赋值，避免生产者或消费者持有失效状态。
+    /// @return 该操作已禁用，不可调用
     UnboundedQueue& operator=(UnboundedQueue&&) = delete;
 
     /**
@@ -860,12 +862,14 @@ public:
     UnboundedChannel(const UnboundedChannel&) = delete;
 
     /// @brief 禁止复制赋值；通道具有唯一身份。
+    /// @return 该操作已禁用，不可调用
     UnboundedChannel& operator=(const UnboundedChannel&) = delete;
 
     /// @brief 禁止移动构造，避免使已注册 waiter 持有失效地址。
     UnboundedChannel(UnboundedChannel&&) = delete;
 
     /// @brief 禁止移动赋值，避免使已注册 waiter 持有失效地址。
+    /// @return 该操作已禁用，不可调用
     UnboundedChannel& operator=(UnboundedChannel&&) = delete;
 
     /**
@@ -1362,6 +1366,10 @@ private:
 
     /**
      * @brief Publish the producer count without an RMW before waiter mode is used.
+     * @param producer 生产者令牌
+     * @param count 元素数量
+     * @param waiterPathUsed 是否使用等待节点路径的输出引用
+     * @return 对应的大小或数量
      * @details SPSC gives the producer exclusive ownership of the published
      *          counter. A release store is sufficient for polling consumers;
      *          waiter registration switches to the existing acq_rel RMW handshake

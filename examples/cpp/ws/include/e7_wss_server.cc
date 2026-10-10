@@ -35,6 +35,8 @@ void signal_handler(int) {
 
 /**
  * @brief 处理 WSS 连接（使用底层帧处理）
+ * @param socket 底层 socket
+ * @return 执行该操作的协程任务，完成后无结果值
  * @details 由于 SslSocket 不支持 readv，这里使用 recv 直接读取数据
  */
 Task<void> handle_wss_connection(galay::ssl::SslSocket& socket) {
@@ -127,6 +129,8 @@ cleanup:
 
 /**
  * @brief HTTPS 请求处理器（处理 WSS 升级）
+ * @param conn 连接对象
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> https_handler(HttpConnImpl<galay::ssl::SslSocket> conn) {
     auto reader = conn.get_reader();

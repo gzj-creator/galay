@@ -46,10 +46,23 @@ public:
     ~MongoClient();  ///< 析构函数，自动关闭连接
 
     MongoClient(const MongoClient&) = delete;             ///< 禁用拷贝构造
-    MongoClient& operator=(const MongoClient&) = delete;  ///< 禁用拷贝赋值
+    /**
+     * @brief 禁用拷贝赋值
+     * @return 该操作已禁用，不可调用
+     */
+    MongoClient& operator=(const MongoClient&) = delete;
 
-    MongoClient(MongoClient&& other) noexcept;             ///< 移动构造函数
-    MongoClient& operator=(MongoClient&& other) noexcept;  ///< 移动赋值运算符
+    /**
+     * @brief 移动构造函数
+     * @param other 源对象
+     */
+    MongoClient(MongoClient&& other) noexcept;
+    /**
+     * @brief 移动赋值运算符
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    MongoClient& operator=(MongoClient&& other) noexcept;
 
     /**
      * @brief 使用完整配置连接到 MongoDB（含认证与同步 replica set server selection）
@@ -136,6 +149,7 @@ public:
 
     /**
      * @brief 关闭连接
+     * @return 无返回值
      */
     void close();
 

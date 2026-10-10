@@ -81,6 +81,7 @@ public:
 
     /**
     * @brief 重置为无错误状态（code = 0）
+     * @return 无返回值
     */
     void reset();
 private:

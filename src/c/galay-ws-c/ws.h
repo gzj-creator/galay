@@ -196,6 +196,7 @@ galay_status_t galay_ws_client_create(const galay_ws_client_config_t* config,
 /**
  * @brief 销毁 WebSocket client 及其拥有的 connection。
  * @param client 可为 NULL；销毁后通过 client 取得的 connection 借用指针全部失效。
+ * @return 无返回值
  * @note 需要协议层 close frame 或 TCP close 时先调用 send_close/connection_close，再 destroy。
  */
 void galay_ws_client_destroy(galay_ws_client_t* client);
@@ -231,6 +232,7 @@ galay_status_t galay_ws_session_adopt_tcp(galay_c_tcp_socket_t* socket,
 /**
  * @brief 销毁 session 及其拥有的 connection。
  * @param session 可为 NULL；销毁后从 session 取得的 connection 借用指针全部失效。
+ * @return 无返回值
  * @note destroy 不发送 close frame；需要协议关闭时先调用 send_close/connection_close。
  */
 void galay_ws_session_destroy(galay_ws_session_t* session);
@@ -408,6 +410,7 @@ galay_status_t galay_ws_received_frame_payload(const galay_ws_received_frame_t* 
 /**
  * @brief 销毁 received frame。
  * @param frame 可为 NULL；销毁后其 payload 借用指针失效。
+ * @return 无返回值
  */
 void galay_ws_received_frame_destroy(galay_ws_received_frame_t* frame);
 

@@ -97,6 +97,7 @@ public:
 
     /**
      * @brief 清空所有已添加的命令
+     * @return 无返回值
      */
     void clear() noexcept;
 
@@ -104,6 +105,7 @@ public:
      * @brief 预分配空间
      * @param command_count 预期命令数量
      * @param encoded_bytes 预期编码总字节数
+     * @return 无返回值
      */
     void reserve(size_t command_count, size_t encoded_bytes);
 
@@ -234,12 +236,46 @@ private:
         uint8_t sequence_id = 0;                      ///< 序列号
     };
 
-    static void append_packet_header_fast(std::string& out, uint32_t payload_len, uint8_t sequence_id); ///< 快速追加包头
-    static size_t estimate_simple_packet_bytes(size_t payload_size) noexcept; ///< 估算简单包字节数
-    void append_invalid(MysqlCommandKind kind, uint8_t sequence_id); ///< 记录无法编码的命令槽位
-    [[nodiscard]] bool has_invalid_command() const noexcept; ///< 是否包含无法编码的命令
-    void append_simple_fast(CommandType cmd, std::string_view payload, uint8_t sequence_id, MysqlCommandKind kind); ///< 快速追加简单命令
-    void rebuild_views_if_needed() const; ///< 按需重建命令视图
+    /**
+     * @brief 快速追加包头
+     * @param out 追加 MySQL 包头字节的输出字符串
+     * @param payload_len 消息负载字节数
+     * @param sequence_id 序列号
+     * @return 无返回值
+     */
+    static void append_packet_header_fast(std::string& out, uint32_t payload_len, uint8_t sequence_id);
+    /**
+     * @brief 估算简单包字节数
+     * @param payload_size 负载字节数
+     * @return 对应的大小或数量
+     */
+    static size_t estimate_simple_packet_bytes(size_t payload_size) noexcept;
+    /**
+     * @brief 记录无法编码的命令槽位
+     * @param kind 值类型
+     * @param sequence_id 序列号
+     * @return 无返回值
+     */
+    void append_invalid(MysqlCommandKind kind, uint8_t sequence_id);
+    /**
+     * @brief 是否包含无法编码的命令
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    [[nodiscard]] bool has_invalid_command() const noexcept;
+    /**
+     * @brief 快速追加简单命令
+     * @param cmd 命令名称
+     * @param payload 消息负载
+     * @param sequence_id 序列号
+     * @param kind 值类型
+     * @return 无返回值
+     */
+    void append_simple_fast(CommandType cmd, std::string_view payload, uint8_t sequence_id, MysqlCommandKind kind);
+    /**
+     * @brief 按需重建命令视图
+     * @return 无返回值
+     */
+    void rebuild_views_if_needed() const;
 
     std::string m_encoded;                                ///< 编码缓冲区
     std::vector<CommandMeta> m_commands;                  ///< 命令元数据列表

@@ -19,7 +19,11 @@ class MongoCommandBuilder
 public:
     MongoCommandBuilder() = default;
     MongoCommandBuilder(MongoCommandBuilder&&) noexcept = default;             ///< 移动构造，转移命令列表所有权
-    MongoCommandBuilder& operator=(MongoCommandBuilder&&) noexcept = default;  ///< 移动赋值，转移命令列表所有权
+    /**
+     * @brief 移动赋值，转移命令列表所有权
+     * @return 当前对象引用
+     */
+    MongoCommandBuilder& operator=(MongoCommandBuilder&&) noexcept = default;
 
     /**
      * @brief 显式深拷贝命令列表

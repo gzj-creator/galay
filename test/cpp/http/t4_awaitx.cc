@@ -13,6 +13,8 @@ using namespace galay::async;
 
 /**
  * @brief 测试1: 连接失败
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_connection_failure(IOScheduler* scheduler)
 {
@@ -33,6 +35,8 @@ Task<void> test_connection_failure(IOScheduler* scheduler)
 
 /**
  * @brief 测试2: 服务器关闭连接
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_server_close_connection(IOScheduler* scheduler)
 {
@@ -78,6 +82,8 @@ Task<void> test_server_close_connection(IOScheduler* scheduler)
 
 /**
  * @brief 测试3: 多个连续请求
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_multiple_requests(IOScheduler* scheduler)
 {
@@ -129,6 +135,8 @@ Task<void> test_multiple_requests(IOScheduler* scheduler)
 
 /**
  * @brief 测试4: 大请求体
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_large_request_body(IOScheduler* scheduler)
 {
@@ -178,6 +186,8 @@ Task<void> test_large_request_body(IOScheduler* scheduler)
 
 /**
  * @brief 测试5: 404 错误
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test404_not_found(IOScheduler* scheduler)
 {
@@ -227,6 +237,8 @@ Task<void> test404_not_found(IOScheduler* scheduler)
 
 /**
  * @brief 测试6: 空响应体
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_empty_response(IOScheduler* scheduler)
 {

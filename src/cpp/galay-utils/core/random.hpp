@@ -162,6 +162,7 @@ public:
      * @brief 生成随机字节序列
      * @param buffer 输出缓冲区；为空时直接返回
      * @param length 字节数量
+     * @return 无返回值
      */
     void random_bytes(uint8_t* buffer, size_t length) {
         if (buffer == nullptr || length == 0) return;
@@ -201,7 +202,8 @@ public:
 
     /**
      * @brief 使用固定种子重置生成器状态
-     * @param seedValue 种子值；相同种子会生成相同序列
+     * @param seed 种子值；相同种子会生成相同序列
+     * @return 无返回值
      */
     void seed(uint64_t seed) {
         m_engine.seed(seed);
@@ -209,6 +211,7 @@ public:
 
     /**
      * @brief 使用随机设备重新播种
+     * @return 无返回值
      */
     void reseed() {
         std::random_device rd;
@@ -338,6 +341,7 @@ public:
      * @brief 生成随机字节序列
      * @param buffer 输出缓冲区；为空时直接返回
      * @param length 字节数量
+     * @return 无返回值
      */
     void random_bytes(uint8_t* buffer, size_t length) {
         if (buffer == nullptr || length == 0) return;
@@ -356,7 +360,8 @@ public:
 
     /**
      * @brief 使用固定种子重置生成器状态
-     * @param seedValue 种子值；相同种子会生成相同序列
+     * @param seed 种子值；相同种子会生成相同序列
+     * @return 无返回值
      */
     void seed(uint64_t seed) {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -365,6 +370,7 @@ public:
 
     /**
      * @brief 使用随机设备重新播种
+     * @return 无返回值
      */
     void reseed() {
         std::lock_guard<std::mutex> lock(m_mutex);

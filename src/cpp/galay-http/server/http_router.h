@@ -138,6 +138,7 @@ public:
      *             - 路径参数：/user/:id 或 /user/:id/posts/:postId
      *             - 通配符：/static/\* 或 /files/\*\*
      * @param handler 处理函数
+     * @return 无返回值
      * @details 支持多个HTTP方法，例如: add_handler<HttpMethod::GET, HttpMethod::POST>("/api", handler)
      */
     template<HttpMethod... Methods>
@@ -171,12 +172,14 @@ public:
 
     /**
      * @brief 清空所有路由
+     * @return 无返回值
      */
     void clear();
 
     /**
      * @brief 设置路由器默认生产策略
      * @param policy route-mode 默认策略，按值保存，调用方可安全释放原对象
+     * @return 无返回值
      * @details Task 1 仅保存该策略；后续限流、超时、代理和静态文件任务会读取这些值。
      */
     void set_default_policy(HttpServerPolicy policy) {
@@ -202,6 +205,7 @@ public:
      * @param routePrefix 路由前缀，例如 "/static"
      * @param dirPath 本地文件系统目录路径
      * @param setting 静态文件传输配置（可选）
+     * @return 无返回值
      * @details 注册一个模糊匹配路由，运行时动态查找文件系统中的文件
      *          例如：mount("/static", "./public")
      *          访问 /static/css/style.css 会查找 ./public/css/style.css
@@ -220,6 +224,7 @@ public:
      * @param routePrefix 路由前缀，例如 "/static"
      * @param dirPath 本地文件系统目录路径
      * @param setting 静态文件传输配置（可选）
+     * @return 无返回值
      * @details 在调用时遍历目录，为所有文件创建精确路由并注册到 map
      *          例如：mount_hardly("/static", "./public")
      *          会为 ./public 下的所有文件创建精确路由
@@ -237,6 +242,7 @@ public:
      * @param upstreamPort 上游端口
      * @param setting 静态文件传输配置（可选）
      * @param mode
+     * @return 无返回值
      * @details 行为等价于：
      *          location /static/ { try_files $uri @upstream; }
      */
@@ -253,6 +259,7 @@ public:
      * @param upstreamHost 上游主机
      * @param upstreamPort 上游端口
      * @param mode
+     * @return 无返回值
      * @details 注册一个通配符路由，将请求转发到上游 HTTP 服务
      *          例如：proxy("/api", "127.0.0.1", 8080)
      *          访问 /api/users 会转发为 http://127.0.0.1:8080/users
@@ -272,6 +279,7 @@ private:
      * @param method HTTP方法
      * @param path 路由路径
      * @param handler 处理函数
+     * @return 无返回值
      */
     void add_handler_internal(HttpMethod method, const std::string& path, HttpRouteHandler handler);
     void add_route(HttpMethod method, const std::string& path, HttpRouteEntry handlers);
@@ -302,7 +310,8 @@ private:
      * @brief 在Trie树中插入路由
      * @param root Trie树根节点
      * @param segments 路径段列表
-     * @param handler 处理函数
+     * @param handlers 处理函数
+     * @return 无返回值
      */
     void insert_route(RouteTrieNode* root, const std::vector<std::string>& segments,
                      HttpRouteEntry handlers);
@@ -339,6 +348,7 @@ private:
      * @param routePrefix 路由前缀
      * @param dirPath 文件系统目录路径
      * @param config 静态文件传输配置
+     * @param fallback_handler 默认处理器
      * @return 处理函数
      */
     HttpRouteHandler create_static_file_handler(const std::string& routePrefix,
@@ -352,6 +362,7 @@ private:
      * @param dirPath 文件系统目录路径
      * @param config 静态文件传输配置
      * @param currentPath 当前遍历的相对路径
+     * @return 无返回值
      */
     void register_files_recursively(const std::string& routePrefix,
                                    const std::string& dirPath,
@@ -372,6 +383,7 @@ private:
      * @param routePrefix 路由前缀
      * @param upstreamHost 上游主机
      * @param upstreamPort 上游端口
+     * @param mode 操作模式
      * @return 处理函数
      */
     HttpRouteHandler create_proxy_handler(const std::string& routePrefix,
@@ -384,7 +396,7 @@ private:
      * @param conn HTTP连接
      * @param req HTTP请求（用于处理 Range 和条件请求）
      * @param filePath 文件路径
-     * @param file_size 文件大小
+     * @param fileSize 文件大小
      * @param mimeType MIME类型
      * @param config 静态文件传输配置
      * @param lastModified 文件最后修改时间；为 0 时在发送前生成回退值
@@ -403,7 +415,7 @@ private:
      * @param conn HTTP连接
      * @param req HTTP请求
      * @param filePath 文件路径
-     * @param file_size 文件大小
+     * @param fileSize 文件大小
      * @param mimeType MIME类型
      * @param etag ETag
      * @param lastModified 最后修改时间
@@ -426,7 +438,7 @@ private:
      * @param conn HTTP连接
      * @param req HTTP请求
      * @param filePath 文件路径
-     * @param file_size 文件大小
+     * @param fileSize 文件大小
      * @param mimeType MIME类型
      * @param etag ETag
      * @param lastModified 最后修改时间

@@ -55,6 +55,7 @@ public:
     }
 
     /// @brief 摘除注册并释放回调捕获；可以重复调用。
+    /// @return 无返回值
     void deactivate() noexcept {
         unlink();
         m_callback = nullptr;
@@ -127,6 +128,7 @@ public:
     RpcCancellationToken() = default;
 
     /// @brief 是否已经请求取消
+    /// @return 已请求取消时返回 true，否则返回 false
     bool cancelled() const noexcept {
         return m_state != nullptr && m_state->cancelled;
     }
@@ -171,6 +173,7 @@ public:
     }
 
     /// @brief 请求取消
+    /// @return 无返回值
     void cancel() {
         if (m_state.cancelled) return;
         m_state.cancelled = true;
@@ -184,6 +187,7 @@ public:
     }
 
     /// @brief 获取传递给RpcCallOptions的token
+    /// @return 关联当前取消源的令牌
     RpcCancellationToken token() noexcept { return RpcCancellationToken(&m_state); }
 
 private:
@@ -204,33 +208,41 @@ public:
     using TimePoint = RpcClock::time_point;
 
     /// @brief 设置相对超时；当未设置绝对deadline时生效
+    /// @param value 从调用发起时刻计算的超时时长
+    /// @return 当前调用选项引用，供链式调用
     RpcCallOptions& timeout(Duration value) {
         m_timeout = value;
         return *this;
     }
 
     /// @brief 清除相对超时
+    /// @return 当前对象引用
     RpcCallOptions& clear_timeout() {
         m_timeout.reset();
         return *this;
     }
 
     /// @brief 获取相对超时
+    /// @return 配置的相对超时；未配置时为 std::nullopt
     std::optional<Duration> timeout() const { return m_timeout; }
 
     /// @brief 设置绝对deadline；同时存在timeout时优先使用deadline
+    /// @param value 调用的绝对截止时刻
+    /// @return 当前调用选项引用，供链式调用
     RpcCallOptions& deadline(TimePoint value) {
         m_deadline = value;
         return *this;
     }
 
     /// @brief 清除绝对deadline
+    /// @return 当前对象引用
     RpcCallOptions& clear_deadline() {
         m_deadline.reset();
         return *this;
     }
 
     /// @brief 获取绝对deadline
+    /// @return 配置的绝对截止时刻；未配置时为 std::nullopt
     std::optional<TimePoint> deadline() const { return m_deadline; }
 
     /**
@@ -249,41 +261,53 @@ public:
     }
 
     /// @brief 设置调用是否可按策略重试
+    /// @param value 是否启用该选项
+    /// @return 当前调用选项引用，供链式调用
     RpcCallOptions& idempotent(bool value) {
         m_idempotent = value;
         return *this;
     }
 
     /// @brief 调用是否可按策略重试
+    /// @return 调用允许按重试策略重试时返回 true，否则返回 false
     bool idempotent() const { return m_idempotent; }
 
     /// @brief 设置最大尝试次数覆盖值
+    /// @param value 调用级最大尝试次数覆盖值，包含首次调用
+    /// @return 当前调用选项引用，供链式调用
     RpcCallOptions& max_attempts(uint32_t value) {
         m_max_attempts = value;
         return *this;
     }
 
     /// @brief 清除最大尝试次数覆盖值
+    /// @return 当前对象引用
     RpcCallOptions& clear_max_attempts() {
         m_max_attempts.reset();
         return *this;
     }
 
     /// @brief 获取最大尝试次数覆盖值
+    /// @return 调用级最大尝试次数；未配置时为 std::nullopt
     std::optional<uint32_t> max_attempts() const { return m_max_attempts; }
 
     /// @brief 获取可变metadata
+    /// @return RpcMetadata& 引用
     RpcMetadata& metadata() { return m_metadata; }
     /// @brief 获取只读metadata
+    /// @return const RpcMetadata& 只读引用
     const RpcMetadata& metadata() const { return m_metadata; }
 
     /// @brief 设置取消token
+    /// @param token 用于取消本次调用的令牌
+    /// @return 当前调用选项引用，供链式调用
     RpcCallOptions& cancellation_token(RpcCancellationToken token) {
         m_cancellation_token = std::move(token);
         return *this;
     }
 
     /// @brief 获取取消token
+    /// @return 配置的取消令牌；未配置时为 std::nullopt
     std::optional<RpcCancellationToken> cancellation_token() const {
         return m_cancellation_token;
     }

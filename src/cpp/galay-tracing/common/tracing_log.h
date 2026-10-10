@@ -26,6 +26,7 @@ using Slot = ::galay::kernel::LoggerSlot<::galay::tracing::detail::TracingBaseLo
  * 推荐在创建 span processor 或 exporter 之前的单线程初始化阶段调用。
  *
  * @param logger 用户自定义 logger；传入 nullptr 时禁用 galay-tracing 内部日志。
+ * @return 无返回值
  */
 inline void set(::galay::kernel::BaseLogger::uptr logger)
 {

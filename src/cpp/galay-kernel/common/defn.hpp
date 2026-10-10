@@ -30,10 +30,19 @@
      * @details 包装 POSIX 文件描述符。invalid() 返回 fd = -1 的哨兵值。
      */
     struct GHandle {
-        static GHandle invalid() { return GHandle{}; }  ///< 返回无效句柄哨兵值
+        /**
+         * @brief 返回无效句柄哨兵值
+         * @return GHandle 操作结果
+         */
+        static GHandle invalid() { return GHandle{}; }
         int fd = -1;  ///< 底层文件描述符
 
-        bool operator==(const GHandle& other) const { return fd == other.fd; }  ///< 比较两个句柄是否相等
+        /**
+         * @brief 比较两个句柄是否相等
+         * @param other 源对象
+         * @return 两个对象相等时返回 true，否则返回 false
+         */
+        bool operator==(const GHandle& other) const { return fd == other.fd; }
     };
 
     inline int galay_close(int fd) { return ::close(fd); }
@@ -50,10 +59,19 @@
      * @details 包装 POSIX 文件描述符。invalid() 返回 fd = -1 的哨兵值。
      */
     struct GHandle {
-        static GHandle invalid() { return GHandle{}; }  ///< 返回无效句柄哨兵值
+        /**
+         * @brief 返回无效句柄哨兵值
+         * @return GHandle 操作结果
+         */
+        static GHandle invalid() { return GHandle{}; }
         int fd = -1;  ///< 底层文件描述符
 
-        bool operator==(const GHandle& other) const { return fd == other.fd; }  ///< 比较两个句柄是否相等
+        /**
+         * @brief 比较两个句柄是否相等
+         * @param other 源对象
+         * @return 两个对象相等时返回 true，否则返回 false
+         */
+        bool operator==(const GHandle& other) const { return fd == other.fd; }
     };
 
     inline int galay_close(int fd) { return ::close(fd); }
@@ -69,10 +87,19 @@
      * @details 包装 SOCKET 句柄。invalid() 返回 INVALID_SOCKET 哨兵值。
      */
     struct GHandle {
-        static GHandle invalid() { return GHandle{INVALID_SOCKET}; }  ///< 返回无效句柄哨兵值
+        /**
+         * @brief 返回无效句柄哨兵值
+         * @return GHandle 操作结果
+         */
+        static GHandle invalid() { return GHandle{INVALID_SOCKET}; }
         SOCKET fd = INVALID_SOCKET;  ///< 底层套接字句柄
 
-        bool operator==(const GHandle& other) const { return fd == other.fd; }  ///< 比较两个句柄是否相等
+        /**
+         * @brief 比较两个句柄是否相等
+         * @param other 源对象
+         * @return 两个对象相等时返回 true，否则返回 false
+         */
+        bool operator==(const GHandle& other) const { return fd == other.fd; }
     };
 
     inline int galay_close(SOCKET fd) { return closesocket(fd); }

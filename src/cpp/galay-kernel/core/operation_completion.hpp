@@ -23,7 +23,10 @@ public:
     ResumeCapability(ResumeCapability&&) noexcept = default;
     ResumeCapability& operator=(ResumeCapability&&) noexcept = default;
 
-    /** @brief 以移动方式消费恢复权；owner scheduler 必须仍在运行。 */
+    /**
+     * @brief 以移动方式消费恢复权；owner scheduler 必须仍在运行。
+     * @return 无返回值
+     */
     void resume() && noexcept {
         Waker resume = std::move(m_resume);
         resume.wake_up(); // 此后不再访问 this；局部 Waker 独立于 operation 存活。
@@ -54,30 +57,45 @@ template <typename Result>
 requires std::is_nothrow_move_constructible_v<Result>
 class OperationCompletion final {
 public:
-    /** @param resume 必须显式移动恢复权，禁止从 Waker 左值隐式复制；同步完成可留空。 */
+    /**
+     * @param resume 必须显式移动恢复权，禁止从 Waker 左值隐式复制；同步完成可留空。
+     * @param key 键
+     */
     explicit OperationCompletion(OperationKey key = {}, Waker&& resume = {}) noexcept
         : m_resume(std::move(resume)), m_state(key) {}
 
     OperationCompletion(OperationCompletion&&) = delete;
     OperationCompletion& operator=(OperationCompletion&&) = delete;
 
-    /** @brief 只读诊断视图；调用者不能绕过 typed result 的完成入口。 */
+    /**
+     * @brief 只读诊断视图；调用者不能绕过 typed result 的完成入口。
+     * @return const OperationState& 只读引用
+     */
     [[nodiscard]] const OperationState& state() const noexcept { return m_state; }
     [[nodiscard]] bool mark_submitted() noexcept { return m_state.mark_submitted(); }
     [[nodiscard]] bool request_cancel() noexcept { return m_state.request_cancel(); }
 
-    /** @brief 转发 attachment 发布前的 retain；失败时不得发布该请求。 */
+    /**
+     * @brief 转发 attachment 发布前的 retain；失败时不得发布该请求。
+     * @return 成功时返回空值，失败时返回 OperationError 错误
+     */
     [[nodiscard]] std::expected<void, OperationError> add_physical_reference() noexcept {
         return m_state.add_physical_reference();
     }
 
-    /** @brief 转发 attachment drain；true 后调用者可以 take_resume()。 */
+    /**
+     * @brief 转发 attachment drain；true 后调用者可以 take_resume()。
+     * @return 成功时返回 bool，失败时返回 OperationError 错误
+     */
     [[nodiscard]] std::expected<bool, OperationError> release_physical_reference() noexcept {
         return m_state.release_physical_reference();
     }
 
     /**
      * @brief 先选 winner，再移动结果；失败时完全不消费 result。
+     * @param reason 完成原因
+     * @param result 结果对象
+     * @return 成功取得完成裁决时返回 true，已有其他完成者时返回 false
      * @note 不调用外部代码或唤醒器（Result 的 noexcept move 除外）。
      */
     [[nodiscard]] bool try_complete(CompletionReason reason, Result&& result) noexcept {

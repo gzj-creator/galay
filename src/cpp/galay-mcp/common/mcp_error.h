@@ -87,10 +87,26 @@ public:
     McpError(McpErrorCode code, const std::string& message, const std::string& details)
         : m_message(message), m_details(details), m_code(code) {}
 
-    McpErrorCode code() const { return m_code; } ///< 获取错误码
-    const std::string& message() const { return m_message; } ///< 获取错误消息
-    const std::string& details() const { return m_details; } ///< 获取错误详情
-    bool is_success() const { return m_code == McpErrorCode::Success; } ///< 判断是否成功
+    /**
+     * @brief 获取错误码
+     * @return 当前对象的类型、状态或错误码
+     */
+    McpErrorCode code() const { return m_code; }
+    /**
+     * @brief 获取错误消息
+     * @return 当前错误的描述消息
+     */
+    const std::string& message() const { return m_message; }
+    /**
+     * @brief 获取错误详情
+     * @return const std::string& 引用
+     */
+    const std::string& details() const { return m_details; }
+    /**
+     * @brief 判断是否成功
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_success() const { return m_code == McpErrorCode::Success; }
 
     /**
      * @brief 转换为可读字符串

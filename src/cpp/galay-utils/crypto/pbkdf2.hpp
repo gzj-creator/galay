@@ -36,6 +36,11 @@ public:
 
     /**
      * @brief Derive key bytes with PBKDF2-HMAC-SHA256 using string password and byte salt.
+     * @param password 密码
+     * @param salt 盐值字节
+     * @param iterations 密钥派生迭代次数
+     * @param output_len 派生密钥字节数
+     * @return 处理后的 std::vector<uint8_t> 结果
      */
     static std::vector<uint8_t> hmac_sha256(const std::string& password,
                                            const std::vector<uint8_t>& salt,

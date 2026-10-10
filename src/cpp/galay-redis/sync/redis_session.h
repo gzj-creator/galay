@@ -42,7 +42,11 @@ namespace galay::redis
         RedisSession(RedisSessionConfig config = {});
     private:
         RedisSession(const RedisSession&) = delete; ///< 禁止拷贝同步连接会话
-        RedisSession& operator=(const RedisSession&) = delete; ///< 禁止拷贝赋值
+        /**
+         * @brief 禁止拷贝赋值
+         * @return 该操作已禁用，不可调用
+         */
+        RedisSession& operator=(const RedisSession&) = delete;
     public:
         RedisSession(RedisSession&& other);
         RedisSession& operator=(RedisSession&& other);

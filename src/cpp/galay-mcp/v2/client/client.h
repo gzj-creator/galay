@@ -81,9 +81,15 @@ public:
     McpHttpClient(McpHttpClient&&) = delete;
     McpHttpClient& operator=(McpHttpClient&&) = delete;
     kernel::Scheduler* owner() const noexcept { return m_owner; }
-    /** @brief Check owner and return the existing transport task without wrapping it. */
+    /**
+     * @brief Check owner and return the existing transport task without wrapping it.
+     * @return std::expected<ConnectAwaitable, McpError> 等待体，通过 co_await 执行并取得操作结果
+     */
     std::expected<ConnectAwaitable, McpError> connect();
-    /** @brief Check owner and return the existing transport task without wrapping it. */
+    /**
+     * @brief Check owner and return the existing transport task without wrapping it.
+     * @return std::expected<CloseAwaitable, McpError> 等待体，通过 co_await 执行并取得操作结果
+     */
     std::expected<CloseAwaitable, McpError> close();
 
     kernel::Task<void> discover(std::expected<DiscoverResult, McpError>& result);
@@ -101,6 +107,7 @@ public:
      * @param filter 客户端显式 opt-in 的通知过滤器。
      * @param callback 收到每条 JSON 通知时调用，返回 false 表示立即取消。
      * @param result 成功返回服务器确认后接受的过滤器；服务器主动 complete 或连接取消后任务结束。
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     kernel::Task<void> listen(SubscriptionFilter filter,
                                SubscriptionCallback callback,

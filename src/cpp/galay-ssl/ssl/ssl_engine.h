@@ -50,21 +50,26 @@ public:
 
     /**
      * @brief 移动构造
+     * @param other 源对象
      */
     SslEngine(SslEngine&& other) noexcept;
 
     /**
      * @brief 移动赋值
+     * @param other 源对象
+     * @return SslEngine& 引用
      */
     SslEngine& operator=(SslEngine&& other) noexcept;
 
     /**
      * @brief 检查引擎是否有效
+     * @return 有效时返回 true，否则返回 false
      */
     bool is_valid() const { return m_ssl != nullptr; }
 
     /**
      * @brief 获取底层 SSL 指针
+     * @return SSL* 指针
      */
     SSL* native() const { return m_ssl; }
 
@@ -113,11 +118,13 @@ public:
 
     /**
      * @brief 设置为客户端模式
+     * @return 无返回值
      */
     void set_connect_state();
 
     /**
      * @brief 设置为服务端模式
+     * @return 无返回值
      */
     void set_accept_state();
 
@@ -153,11 +160,13 @@ public:
 
     /**
      * @brief 获取握手状态
+     * @return 当前 SSL 握手状态
      */
     SslHandshakeState handshake_state() const { return m_handshakeState; }
 
     /**
      * @brief 检查握手是否完成
+     * @return 满足所检查条件时返回 true，否则返回 false
      */
     bool is_handshake_completed() const {
         return m_handshakeState == SslHandshakeState::Completed;
@@ -202,6 +211,7 @@ public:
 
     /**
      * @brief 获取待发送数据大小
+     * @return 已解密且可立即读取的字节数；SSL 对象不存在时为 0
      */
     size_t pending() const;
 

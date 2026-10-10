@@ -112,6 +112,7 @@ int galay_c_io_scheduler_is_running(const galay_c_io_scheduler_t* scheduler);
 
 /**
  * @brief 返回调用线程是否正在执行 C scheduler loop。
+ * @return 当前线程正在执行该 scheduler loop 时返回 1，否则返回 0
  */
 int galay_c_io_scheduler_is_current_thread(void);
 

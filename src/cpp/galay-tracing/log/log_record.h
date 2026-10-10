@@ -104,6 +104,7 @@ public:
 
     /**
      * @brief 以 int64 获取值
+     * @return 存储的有符号 64 位整数
      */
     [[nodiscard]] constexpr std::int64_t as_int64() const noexcept {
         return m_storage.int64Value;
@@ -111,6 +112,7 @@ public:
 
     /**
      * @brief 以 uint64 获取值
+     * @return 存储的无符号 64 位整数
      */
     [[nodiscard]] constexpr std::uint64_t as_uint64() const noexcept {
         return m_storage.uint64Value;
@@ -118,6 +120,7 @@ public:
 
     /**
      * @brief 以 double 获取值
+     * @return 存储的浮点值
      */
     [[nodiscard]] constexpr double as_double() const noexcept {
         return m_storage.doubleValue;
@@ -125,6 +128,7 @@ public:
 
     /**
      * @brief 以 bool 获取值
+     * @return 存储的布尔值
      */
     [[nodiscard]] constexpr bool as_bool() const noexcept {
         return m_storage.boolValue;
@@ -132,6 +136,7 @@ public:
 
     /**
      * @brief 以 string_view 获取值
+     * @return 处理后的 std::string_view 结果
      */
     [[nodiscard]] constexpr std::string_view as_string() const noexcept {
         return m_storage.stringValue;
@@ -297,6 +302,7 @@ struct LogRecord {
 
     /**
      * @brief 移动赋值日志记录，转移消息和上下文所有权
+     * @return LogRecord& 引用
      */
     LogRecord& operator=(LogRecord&&) noexcept = default;
 

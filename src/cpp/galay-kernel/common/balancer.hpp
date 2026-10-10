@@ -77,6 +77,7 @@ public:
     /**
      * @brief 向均衡器追加节点
      * @param node 要添加的节点
+     * @return 无返回值
      */
     void append(Type node) {
         m_nodes.emplace_back(std::move(node));
@@ -171,6 +172,7 @@ public:
      * @brief 向均衡器追加带权重的节点
      * @param node 要添加的节点
      * @param weight 相对权重
+     * @return 无返回值
      */
     void append(Type node, uint32_t weight) {
         m_nodes.emplace_back(std::move(node), static_cast<int32_t>(weight));
@@ -234,6 +236,7 @@ public:
     /**
      * @brief 向均衡器追加节点
      * @param node 要添加的节点
+     * @return 无返回值
      */
     void append(Type node) {
         m_nodes.emplace_back(std::move(node));
@@ -330,6 +333,7 @@ public:
      * @brief 向均衡器追加带权重的节点
      * @param node 要添加的节点
      * @param weight 相对权重
+     * @return 无返回值
      */
     void append(Type node, uint32_t weight) {
         m_nodes.emplace_back(std::move(node), weight);

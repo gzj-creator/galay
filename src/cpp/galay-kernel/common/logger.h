@@ -99,6 +99,7 @@ public:
      * @param line     产生此日志的源文件行号（编译期常量，由 __builtin_LINE() 提供）
      * @param function 产生此日志的函数名（编译期常量，由 __builtin_FUNCTION() 提供）
      *
+     * @return 无返回值
      * @note 实现必须是线程安全的。galay 系列库使用多线程 IO 模型，
      *       此方法可能从任意调度器线程并发调用。
      * @note 建议实现尽量减少阻塞时间，避免影响 IO 吞吐。
@@ -155,6 +156,7 @@ public:
      * @param logger 用户实现的日志实例，通过 unique_ptr 传入以转移所有权。
      *               传入 nullptr 等价于禁用日志（get() 返回 nullptr）。
      *
+     * @return 无返回值
      * @note 线程不安全。不得与 get() 并发调用。
      *       推荐在 main() 开头、创建任何 galay 对象之前调用。
      */
@@ -211,6 +213,7 @@ namespace log
  * @details 只影响 `GALAY_KERNEL_LOG_*` 宏产生的 kernel 日志，不会启用其他 galay 库日志。
  *
  * @param logger 用户实现的 logger；传入 nullptr 时禁用 kernel 日志。
+ * @return 无返回值
  */
 void set(BaseLogger::uptr logger);
 

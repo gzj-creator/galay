@@ -110,8 +110,9 @@ public:
     /**
      * @brief 构造 LRU 缓存
      * @param capacity 最大容量，0 表示不保存任何元素
-     * @param default_ttl 默认 TTL；为 std::nullopt 时元素默认不过期
+     * @param defaultTtl 默认 TTL；为 std::nullopt 时元素默认不过期
      * @param on_evict 可选淘汰回调
+     * @param expirationPolicy 过期策略
      */
     explicit LruCache(size_type capacity = 0,
                       std::optional<duration> defaultTtl = std::nullopt,
@@ -125,8 +126,9 @@ public:
     /**
      * @brief 构造带默认 TTL 的 LRU 缓存
      * @param capacity 最大容量，0 表示不保存任何元素
-     * @param default_ttl 默认 TTL，支持任意可转换到 Clock::duration 的 chrono duration
+     * @param defaultTtl 默认 TTL，支持任意可转换到 Clock::duration 的 chrono duration
      * @param on_evict 可选淘汰回调
+     * @param expirationPolicy 过期策略
      */
     template<typename Rep, typename Period>
     LruCache(size_type capacity,
@@ -206,6 +208,7 @@ public:
     /**
      * @brief 预留内部哈希表容量
      * @param count 预期条目数量
+     * @return 无返回值
      * @note 只影响哈希表分配策略，不改变缓存容量上限。
      */
     void reserve(size_type count) {
@@ -215,6 +218,7 @@ public:
     /**
      * @brief 设置内部哈希表最大负载因子
      * @param factor 最大负载因子
+     * @return 无返回值
      */
     void max_load_factor(float factor) {
         m_index.max_load_factor(factor);
@@ -242,6 +246,7 @@ public:
 
     /**
      * @brief 重置缓存统计；未启用统计时为空操作
+     * @return 无返回值
      */
     void reset_stats() {
         if constexpr (EnableStats) {
@@ -369,6 +374,7 @@ public:
 
     /**
      * @brief 清空缓存
+     * @return 无返回值
      * @details 会对当前仍存在的元素触发 Cleared 淘汰回调。
      */
     void clear() {
@@ -416,6 +422,7 @@ public:
     /**
      * @brief 设置最大容量
      * @param capacity 新容量，0 表示不保存任何元素
+     * @return 无返回值
      * @details 设置后会在本次 API 调用中惰性清理过期元素并执行容量淘汰。
      */
     void set_capacity(size_type capacity) {
@@ -435,6 +442,7 @@ public:
     /**
      * @brief 设置默认 TTL
      * @param ttl 默认 TTL；std::nullopt 表示默认不过期
+     * @return 无返回值
      * @note 只影响后续写入，不改变已有元素的过期时间。
      */
     void set_default_ttl(std::optional<duration> ttl) {

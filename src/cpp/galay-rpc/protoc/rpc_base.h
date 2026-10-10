@@ -21,6 +21,8 @@ namespace galay::rpc
 
 /**
  * @brief 跨平台字节序转换（使用编译器内置，GCC/Clang/AppleClang 均支持）
+ * @param v 值
+ * @return 转换为大端表示的 32 位整数
  */
 inline uint32_t rpc_bswap32(uint32_t v) {
     if constexpr (std::endian::native == std::endian::big) {
@@ -44,12 +46,20 @@ inline uint16_t rpc_bswap16(uint16_t v) {
 }
 
 /// @brief 32位主机字节序转网络字节序
+/// @param host 目标主机地址
+/// @return 网络字节序的 32 位整数
 inline uint32_t rpc_htonl(uint32_t host) { return rpc_bswap32(host); }
 /// @brief 32位网络字节序转主机字节序
+/// @param net 网络配置
+/// @return 主机字节序的 32 位整数
 inline uint32_t rpc_ntohl(uint32_t net)  { return rpc_bswap32(net); }
 /// @brief 16位主机字节序转网络字节序
+/// @param host 目标主机地址
+/// @return 网络字节序的 16 位整数
 inline uint16_t rpc_htons(uint16_t host) { return rpc_bswap16(host); }
 /// @brief 16位网络字节序转主机字节序
+/// @param net 网络配置
+/// @return 主机字节序的 16 位整数
 inline uint16_t rpc_ntohs(uint16_t net)  { return rpc_bswap16(net); }
 
 /**
@@ -159,6 +169,8 @@ enum class RpcErrorCode : uint16_t {
 
 /**
  * @brief 获取错误码描述
+ * @param code 错误码
+ * @return char* 指针
  */
 inline const char* rpc_error_code_to_string(RpcErrorCode code) {
     switch (code) {

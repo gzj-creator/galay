@@ -41,7 +41,10 @@ public:
         std::vector<unsigned> nodes;
     };
 
-    /** @brief 返回以字节计的系统基础页大小（非 huge page 大小），必须为正数。 */
+    /**
+     * @brief 返回以字节计的系统基础页大小（非 huge page 大小），必须为正数。
+     * @return 成功时返回 std::size_t，失败时返回 std::error_code 错误
+     */
     [[nodiscard]] static std::expected<std::size_t, std::error_code> page_size()
     {
 #if defined(__linux__) || defined(__APPLE__)
@@ -65,7 +68,10 @@ public:
 #endif
     }
 
-    /** @brief 读取调用线程当前的默认内存策略。 */
+    /**
+     * @brief 读取调用线程当前的默认内存策略。
+     * @return 成功时返回 PolicyState，失败时返回 std::error_code 错误
+     */
     [[nodiscard]] static std::expected<PolicyState, std::error_code> numa_policy()
     {
 #if defined(__linux__)
@@ -84,6 +90,9 @@ public:
 
     /**
      * @brief 设置调用线程后续内存分配的默认策略。
+     * @param policy 策略
+     * @param nodes NUMA 节点 ID 集合
+     * @return 成功时返回空值，失败时返回 std::error_code 错误
      * @details Default 要求空节点集；Bind 和 Interleave 要求非空节点集。
      */
     [[nodiscard]] static std::expected<void, std::error_code>
@@ -101,6 +110,8 @@ public:
 
     /**
      * @brief 恢复保存的原生 mode（包括 flags）和节点集合，不降级为 Policy 枚举。
+     * @param state 状态对象
+     * @return 成功时返回空值，失败时返回 std::error_code 错误
      * @details Default/Local 要求空集；Preferred 允许空集或非空集；其他
      *          原生模式要求非空集。原生 flags 和内核支持性由 Linux 校验。
      *          节点/cpuset 变化或内核权限限制可能导致恢复失败，必须检查结果。

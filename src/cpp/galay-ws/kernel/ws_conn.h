@@ -1065,6 +1065,9 @@ public:
 
     /**
      * @brief 从HttpConn构造（用于升级场景）
+     * @param http_conn 用于升级的 HTTP 连接
+     * @param is_server 是否按服务端规则处理帧
+     * @return 接管原 HTTP 连接 socket 和缓冲区的 WebSocket 连接
      * @note 升级之后HttpConn不再可用
      */
     static WsConnImpl<SocketType> from(galay::http::HttpConnImpl<SocketType>&& http_conn, bool is_server = true)
@@ -1074,6 +1077,9 @@ public:
 
     /**
      * @brief 直接构造
+     * @param socket 底层 socket
+     * @param ring_buffer 环形缓冲区
+     * @param is_server 是否按服务端规则处理帧
      */
     WsConnImpl(SocketType&& socket, RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>&& ring_buffer, bool is_server = true)
         : m_socket(std::move(socket))
@@ -1084,6 +1090,8 @@ public:
 
     /**
      * @brief 构造函数（只持有socket）
+     * @param socket 底层 socket
+     * @param is_server 是否按服务端规则处理帧
      */
     WsConnImpl(SocketType&& socket, bool is_server = true)
         : m_socket(std::move(socket))
@@ -1104,6 +1112,7 @@ public:
 
     /**
      * @brief 关闭连接
+     * @return 异步操作等待体，通过 co_await 取得结果
      */
     auto close() {
         return m_socket.close();
@@ -1111,11 +1120,13 @@ public:
 
     /**
      * @brief 获取底层Socket引用
+     * @return SocketType& 引用
      */
     SocketType& socket() { return m_socket; }
 
     /**
      * @brief 获取RingBuffer引用
+     * @return RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& 引用
      */
     RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer() { return m_ring_buffer; }
 
@@ -1175,6 +1186,11 @@ public:
 
     /**
      * @brief 单次回显并允许消费 message 缓冲
+     * @param message 消息
+     * @param opcode 帧操作码
+     * @param reader_setting 读取器配置
+     * @param writer_setting 写入器配置
+     * @return 异步操作等待体，通过 co_await 取得结果
      * @details 仅适合调用方在返回后不再依赖 text/binary payload 内容的场景。
      */
     auto echo_once_consume(std::string& message,
@@ -1229,6 +1245,7 @@ public:
 
     /**
      * @brief 是否为服务器端连接
+     * @return 为服务端连接时返回 true，否则返回 false
      */
     bool is_server() const { return m_is_server; }
 

@@ -58,6 +58,7 @@ AsyncTcpSocket::AsyncTcpSocket(GHandle handle)
 
 /**
  * @brief 释放本对象对共享控制器的持有
+ * @return 无返回值
  * @note 本对象是最后一个持有者且句柄仍有效时才关闭句柄
  */
 void AsyncTcpSocket::release_shared_ownership() noexcept

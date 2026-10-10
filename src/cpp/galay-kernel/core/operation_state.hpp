@@ -65,12 +65,18 @@ public:
     [[nodiscard]] OperationPhase phase() const noexcept { return m_phase; }
     [[nodiscard]] uint32_t physical_reference_count() const noexcept { return m_physical_refs; }
 
-    /** @brief 未选出 winner 时返回 nullopt，不暴露虚假的默认完成原因。 */
+    /**
+     * @brief 未选出 winner 时返回 nullopt，不暴露虚假的默认完成原因。
+     * @return 已裁决的完成原因；尚未完成时为 std::nullopt
+     */
     [[nodiscard]] std::optional<CompletionReason> completion_reason() const noexcept {
         return has_completed() ? std::optional(m_reason) : std::nullopt;
     }
 
-    /** @brief 仅首次有效 key 的 Created -> Submitted 成功；失败不改变状态。 */
+    /**
+     * @brief 仅首次有效 key 的 Created -> Submitted 成功；失败不改变状态。
+     * @return 成功从 Created 转为 Submitted 时返回 true，否则返回 false
+     */
     [[nodiscard]] bool mark_submitted() noexcept {
         if (m_phase != OperationPhase::kCreated || !m_key.is_valid()) {
             return false;
@@ -79,7 +85,10 @@ public:
         return true;
     }
 
-    /** @brief 仅记录首次取消请求；完成裁决仍由 try_complete() 执行。 */
+    /**
+     * @brief 仅记录首次取消请求；完成裁决仍由 try_complete() 执行。
+     * @return 首次成功记录取消请求时返回 true，否则返回 false
+     */
     [[nodiscard]] bool request_cancel() noexcept {
         if (m_phase != OperationPhase::kCreated && m_phase != OperationPhase::kSubmitted) {
             return false;
@@ -122,7 +131,11 @@ public:
         return false;
     }
 
-    /** @brief 首个候选获胜；败者不得再修改结果、调用回调或唤醒任务。 */
+    /**
+     * @brief 首个候选获胜；败者不得再修改结果、调用回调或唤醒任务。
+     * @param reason 完成原因
+     * @return 成功取得完成裁决时返回 true，已有其他完成者时返回 false
+     */
     [[nodiscard]] bool try_complete(CompletionReason reason) noexcept {
         if (has_completed()) {
             return false;
@@ -133,7 +146,10 @@ public:
         return true;
     }
 
-    /** @brief SafeToResume 后只移交一次恢复权；这不是 storage 已析构的标记。 */
+    /**
+     * @brief SafeToResume 后只移交一次恢复权；这不是 storage 已析构的标记。
+     * @return 成功移交一次恢复权时返回 true，否则返回 false
+     */
     [[nodiscard]] bool mark_resume_issued() noexcept {
         if (m_phase != OperationPhase::kSafeToResume) {
             return false;

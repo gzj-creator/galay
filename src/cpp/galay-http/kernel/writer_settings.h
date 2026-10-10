@@ -20,6 +20,7 @@ public:
     /**
      * @brief 设置发送超时时间
      * @param timeout_ms 超时时间（毫秒）
+     * @return 无返回值
      */
     void set_send_timeout(int timeout_ms) {
         m_send_timeout_ms = timeout_ms;
@@ -36,6 +37,7 @@ public:
     /**
      * @brief 设置是否启用缓冲
      * @param enable 是否启用
+     * @return 无返回值
      */
     void set_buffering_enabled(bool enable) {
         m_buffering_enabled = enable;
@@ -52,6 +54,7 @@ public:
     /**
      * @brief 设置最大响应大小
      * @param max_size 最大响应大小（字节）
+     * @return 无返回值
      */
     void set_max_response_size(size_t max_size) {
         m_max_response_size = max_size;
@@ -67,6 +70,8 @@ public:
 
     /**
      * @brief 设置 writev 聚合阈值（仅 AsyncTcpSocket）
+     * @param threshold 阈值
+     * @return 无返回值
      * @details 当 header+body 总长度 <= threshold 时，改为单缓冲 send；
      *          设为 0 表示始终使用 writev。
      */
@@ -76,6 +81,7 @@ public:
 
     /**
      * @brief 获取 writev 聚合阈值（字节）
+     * @return writev 聚合阈值，单位为字节
      */
     size_t get_writev_coalesce_threshold() const {
         return m_writev_coalesce_threshold;

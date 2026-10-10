@@ -36,6 +36,7 @@ namespace detail {
  * @brief 消耗writev的iovec数组中已写入的字节数
  * @param iovecs iovec数组引用
  * @param consumed 已消耗的字节数
+ * @return 无返回值
  */
 inline void consume_writev_iovecs(std::vector<iovec>& iovecs, size_t consumed)
 {
@@ -126,6 +127,7 @@ public:
     }
 
     /// @brief 准备读取窗口，返回是否成功
+    /// @return 读取窗口准备成功时返回 true，否则返回 false
     bool prepare_read_window()
     {
         if (!prepare_ring_buffer_read_window(*m_ring_buffer, m_read_iovecs, m_read_iov_count)) {
@@ -136,29 +138,37 @@ public:
     }
 
     /// @brief 获取接收iovec数组指针
+    /// @return struct iovec* 指针
     const struct iovec* recv_iovecs_data() const { return m_read_iovecs.data(); }
     /// @brief 获取接收iovec数量
+    /// @return 对应的大小或数量
     size_t recv_iovecs_count() const { return m_read_iov_count; }
 
     /// @brief 设置接收错误
+    /// @param io_error 底层 IO 错误
+    /// @return 无返回值
     void set_recv_error(const IOError& io_error)
     {
         m_error = map_rpc_read_error(io_error);
     }
 
     /// @brief 处理对端关闭事件
+    /// @return 无返回值
     void on_peer_closed()
     {
         m_error.emplace(RpcErrorCode::CONNECTION_CLOSED, "Connection closed");
     }
 
     /// @brief 处理接收到的字节数
+    /// @param bytes_read 已读取字节数
+    /// @return 无返回值
     void on_bytes_received(size_t bytes_read)
     {
         m_ring_buffer->produce(bytes_read);
     }
 
     /// @brief 取出最终结果
+    /// @return 操作完成结果；失败时携带已记录的 RPC 错误
     ResultType take_result()
     {
         if (m_error.has_value()) {
@@ -169,9 +179,12 @@ public:
 
 protected:
     /// @brief 获取环形缓冲区引用
+    /// @return RingBufferType& 引用
     RingBufferType& ring_buffer() { return *m_ring_buffer; }
 
     /// @brief 设置读取错误
+    /// @param error 错误信息
+    /// @return 无返回值
     void set_read_error(RpcError error)
     {
         m_error = std::move(error);
@@ -207,41 +220,51 @@ public:
     ~RpcWriteStateBase() = default;
 
     /// @brief 判断写入是否完成（出错或所有iovec已消耗）
+    /// @return 满足所检查条件时返回 true，否则返回 false
     bool is_complete() const
     {
         return m_error.has_value() || m_iovecs.empty();
     }
 
     /// @brief 准备写入iovec（默认无额外准备）
+    /// @return 准备成功时返回 true，否则返回 false
     bool prepare_write_iovecs()
     {
         return true;
     }
 
     /// @brief 获取写入iovec数组指针
+    /// @return struct iovec* 指针
     const struct iovec* write_iovecs_data() const { return m_iovecs.data(); }
     /// @brief 获取写入iovec数量
+    /// @return 对应的大小或数量
     size_t write_iovecs_count() const { return m_iovecs.size(); }
 
     /// @brief 处理已写入的字节数
+    /// @param bytes_written 已写入字节数
+    /// @return 无返回值
     void on_bytes_written(size_t bytes_written)
     {
         consume_writev_iovecs(m_iovecs, bytes_written);
     }
 
     /// @brief 设置发送错误
+    /// @param io_error 底层 IO 错误
+    /// @return 无返回值
     void set_send_error(const IOError& io_error)
     {
         m_error = RpcError::from(io_error, RpcErrorCode::INTERNAL_ERROR);
     }
 
     /// @brief 处理零字节写入（发送失败）
+    /// @return 无返回值
     void on_zero_write()
     {
         m_error = RpcError::from(IOError(kSendFailed, 0), RpcErrorCode::INTERNAL_ERROR);
     }
 
     /// @brief 取出最终结果
+    /// @return 操作完成结果；失败时携带已记录的 RPC 错误
     ResultType take_result()
     {
         if (m_error.has_value()) {
@@ -252,9 +275,12 @@ public:
 
 protected:
     /// @brief 获取可修改的iovec数组引用
+    /// @return std::vector<struct iovec>& 引用
     std::vector<struct iovec>& mutable_iovecs() { return m_iovecs; }
 
     /// @brief 设置写入错误
+    /// @param error 错误信息
+    /// @return 无返回值
     void set_write_error(RpcError error)
     {
         m_error = std::move(error);
@@ -319,6 +345,7 @@ struct RpcRingBufferReadMachine
     }
 
     /// @brief 推进状态机，返回下一步动作
+    /// @return 状态机的下一步动作或最终结果
     MachineAction<result_type> advance()
     {
         if (m_result.has_value()) {
@@ -341,6 +368,8 @@ struct RpcRingBufferReadMachine
     }
 
     /// @brief 处理readv完成事件
+    /// @param result 结果对象
+    /// @return 无返回值
     void on_read(std::expected<size_t, IOError> result)
     {
         if (!result.has_value()) {
@@ -359,6 +388,7 @@ struct RpcRingBufferReadMachine
     }
 
     /// @brief 写入完成回调（读取状态机中无操作）
+    /// @return 无返回值
     void on_write(std::expected<size_t, IOError>)
     {
     }
@@ -390,6 +420,7 @@ struct RpcWritevMachine
     }
 
     /// @brief 推进状态机，返回下一步动作
+    /// @return 状态机的下一步动作或最终结果
     MachineAction<result_type> advance()
     {
         if (m_result.has_value()) {
@@ -412,11 +443,14 @@ struct RpcWritevMachine
     }
 
     /// @brief 读取完成回调（写入状态机中无操作）
+    /// @return 无返回值
     void on_read(std::expected<size_t, IOError>)
     {
     }
 
     /// @brief 处理writev完成事件
+    /// @param result 结果对象
+    /// @return 无返回值
     void on_write(std::expected<size_t, IOError> result)
     {
         if (!result.has_value()) {

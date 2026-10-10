@@ -98,6 +98,7 @@ public:
 
     /**
      * @brief 停止调度器
+     * @return 无返回值
      * @note 调用方必须先关闭异步源并等候所有借用该调度器的任务退出。
      */
     void stop();
@@ -105,6 +106,7 @@ public:
     /**
      * @brief 直接提交已绑定调度器的任务引用
      * @param task 任务引用；若未绑定 owner scheduler，会绑定到当前调度器
+     * @return 成功提交任务时返回 true，否则返回 false
      */
     bool schedule(TaskRef task) noexcept;
 
@@ -123,17 +125,21 @@ public:
     /**
      * @brief 延后提交已绑定调度器的任务引用
      * @param task 任务引用；若未绑定 owner scheduler，会绑定到当前调度器
+     * @return 成功安排延后提交时返回 true，否则返回 false
      */
     bool schedule_deferred(TaskRef task) noexcept;
 
     /**
      * @brief 立即在当前线程恢复任务
      * @param task 任务引用；若未绑定 owner scheduler，会绑定到当前调度器
+     * @return 成功恢复任务时返回 true，否则返回 false
      */
     bool schedule_immediately(TaskRef task) noexcept;
 
     /**
      * @brief 将语言中立 ready entry 投递到该调度器。
+     * @param entry 就绪队列条目
+     * @return 成功投递就绪条目时返回 true，否则返回 false
      * @details C stackful coroutine 使用该入口，避免热路径通过 RTTI 识别具体
      *          IOScheduler 后端；非 IO 调度器默认拒绝该入口。
      */
@@ -180,6 +186,7 @@ protected:
     /**
      * @brief 在当前线程恢复任务
      * @param task 待恢复的任务引用
+     * @return 无返回值
      * @details 若任务记录了 Runtime，会先切换到对应 Runtime 作用域再恢复协程
      * @note 仅应由调度器执行线程调用
      */
@@ -188,6 +195,7 @@ protected:
     /**
      * @brief 在当前线程恢复 ready queue 中的就绪项
      * @param entry 待恢复的语言中立就绪项；C++ 任务会被转换回 TaskRef 后恢复
+     * @return 无返回值
      * @note C 协程通过 ReadyEntry hook 恢复；缺失 hook 时安全拒绝并保留 entry。
      */
     void resume(detail::ReadyEntry& entry);

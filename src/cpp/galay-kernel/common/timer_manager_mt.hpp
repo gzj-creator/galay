@@ -73,7 +73,7 @@ public:
 
     /**
      * @brief 构造函数
-     * @param tick_duration 每个 tick 的时间间隔（纳秒）
+     * @param tickDuration 每个 tick 的时间间隔（纳秒）
      */
     explicit ThreadSafeTimerManager(uint64_t tickDuration = 1000000ULL)
         : m_wheelSize(0)
@@ -137,6 +137,7 @@ public:
 
     /**
      * @brief 检查是否为空（近似值）
+     * @return 为空时返回 true，否则返回 false
      */
     bool empty() const
     {
@@ -146,6 +147,7 @@ public:
 
     /**
      * @brief 获取定时器总数（近似值）
+     * @return 对应的大小或数量
      */
     size_t size() const
     {
@@ -155,6 +157,7 @@ public:
 
     /**
      * @brief 获取时间轮中的定时器数量
+     * @return 对应的大小或数量
      */
     size_t wheel_size() const
     {
@@ -163,6 +166,7 @@ public:
 
     /**
      * @brief 获取待处理队列中的定时器数量
+     * @return 对应的大小或数量
      */
     size_t pending_size() const
     {
@@ -171,6 +175,7 @@ public:
 
     /**
      * @brief 获取 tick 间隔（纳秒）
+     * @return tick 间隔，单位为纳秒
      */
     uint64_t during() const
     {
@@ -179,6 +184,7 @@ public:
 
     /**
      * @brief 清空所有待处理和已入轮的定时器
+     * @return 无返回值
      * @details 应在没有 tick()/push() 并发访问时调用，典型场景是调度器线程停止后重置全局定时器。
      */
     void clear()
@@ -206,6 +212,7 @@ public:
      * 2. 推进时间轮到当前时间
      * 3. 执行到期的定时器回调
      *
+     * @return 无返回值
      * @note 只能由定时器线程调用
      */
     void tick()
@@ -264,6 +271,7 @@ public:
 private:
     /**
      * @brief 批量处理待添加的定时器
+     * @return 无返回值
      */
     void process_pending_timers()
     {
@@ -289,6 +297,10 @@ private:
 
     /**
      * @brief 将定时器添加到时间轮的合适位置
+     * @param timer 定时器
+     * @param nowNs 当前时间，单位为纳秒
+     * @param currentTickFromStart 从起点累计的 tick 数
+     * @return 无返回值
      */
     void add_timer_to_wheel(Timer::ptr timer, uint64_t nowNs, uint64_t currentTickFromStart)
     {
@@ -347,6 +359,7 @@ private:
 
     /**
      * @brief 处理第1层当前槽的定时器
+     * @return 无返回值
      */
     void process_wheel1()
     {
@@ -364,6 +377,7 @@ private:
 
     /**
      * @brief 将第2层当前槽的定时器降级到第1层
+     * @return 无返回值
      */
     void cascade_wheel2()
     {
@@ -391,6 +405,8 @@ private:
 
     /**
      * @brief 将指定槽的定时器重新分配到合适的层
+     * @param slot 队列槽位
+     * @return 无返回值
      */
     void cascade_slot(TimerList& slot)
     {
@@ -451,6 +467,7 @@ private:
 
     /**
      * @brief 重置时间轮
+     * @return 无返回值
      */
     void reset()
     {

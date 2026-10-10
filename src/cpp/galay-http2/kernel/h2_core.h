@@ -118,6 +118,7 @@ public:
      * @param data DATA payload
      * @param end_stream 数据发送完后是否附带 END_STREAM
      * @param weight stream 调度权重
+     * @return 无返回值
      */
     void enqueue_data(uint32_t stream_id, std::string data, bool end_stream, uint8_t weight = 16);
 

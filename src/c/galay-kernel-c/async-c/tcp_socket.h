@@ -29,61 +29,125 @@ typedef struct galay_c_tcp_socket {
     C_IPType type;
 } galay_c_tcp_socket_t;
 
-/** 创建非阻塞 TCP socket；成功后由调用方负责 close。 */
+/**
+ * 创建非阻塞 TCP socket；成功后由调用方负责 close。
+ * @param out_socket 接收创建的 socket 的指针
+ * @param type IP 地址类型
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误
+ */
 C_IOResult galay_c_tcp_socket_create(galay_c_tcp_socket_t* out_socket, C_IPType type);
 
-/** 绑定本地端点；host 类型必须与 create 的类型一致。 */
+/**
+ * 绑定本地端点；host 类型必须与 create 的类型一致。
+ * @param socket 底层 socket
+ * @param host 端点地址
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误
+ */
 C_IOResult galay_c_tcp_socket_bind(galay_c_tcp_socket_t* socket, const C_Host* host);
 
-/** 开始监听；backlog <= 0 使用系统默认值 128。 */
+/**
+ * 开始监听；backlog <= 0 使用系统默认值 128。
+ * @param socket 底层 socket
+ * @param backlog 待接受连接队列长度
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误
+ */
 C_IOResult galay_c_tcp_socket_listen(galay_c_tcp_socket_t* socket, int backlog);
 
-/** 查询本地端点。 */
+/**
+ * 查询本地端点。
+ * @param socket 底层 socket
+ * @param out 接收输出结果的指针
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误
+ */
 C_IOResult galay_c_tcp_socket_local_endpoint(const galay_c_tcp_socket_t* socket, C_Host* out);
 
 /**
  * @brief 启用或禁用 SO_REUSEPORT。
  * @param enabled 只接受 0 或 1；必须在 bind 前调用。
+ * @param socket 底层 socket
  * @return 成功返回 C_IOResultOk；平台不支持时返回 C_IOResultError/ENOTSUP。
  */
 C_IOResult galay_c_tcp_socket_set_reuse_port(galay_c_tcp_socket_t* socket, int enabled);
 
-/** 启用或禁用 TCP_NODELAY。 */
+/**
+ * 启用或禁用 TCP_NODELAY。
+ * @param socket 底层 socket
+ * @param enabled 是否启用
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误
+ */
 C_IOResult galay_c_tcp_socket_set_no_delay(galay_c_tcp_socket_t* socket, int enabled);
 
 /**
  * @brief 在当前 C coroutine 中接受连接。
  * @param out_peer 可为 NULL；非 NULL 时返回对端地址。
+ * @param listener 监听 socket
+ * @param out_client 接收新连接 socket 的指针
+ * @param timeout_ms 超时时间，单位为毫秒
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误
  */
 C_IOResult galay_c_tcp_socket_accept(galay_c_tcp_socket_t* listener,
                                      galay_c_tcp_socket_t* out_client,
                                      C_Host* out_peer,
                                      int64_t timeout_ms);
 
-/** 在当前 C coroutine 中连接远端。 */
+/**
+ * 在当前 C coroutine 中连接远端。
+ * @param socket 底层 socket
+ * @param host 端点地址
+ * @param timeout_ms 超时时间，单位为毫秒
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误
+ */
 C_IOResult galay_c_tcp_socket_connect(galay_c_tcp_socket_t* socket,
                                       const C_Host* host,
                                       int64_t timeout_ms);
 
-/** 在当前 C coroutine 中接收数据。 */
+/**
+ * 在当前 C coroutine 中接收数据。
+ * @param socket 底层 socket
+ * @param buffer 数据缓冲区
+ * @param length 缓冲区字节数
+ * @param timeout_ms 超时时间，单位为毫秒
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误，成功时 bytes 为实际传输字节数
+ */
 C_IOResult galay_c_tcp_socket_recv(galay_c_tcp_socket_t* socket,
                                    char* buffer,
                                    size_t length,
                                    int64_t timeout_ms);
 
-/** 在当前 C coroutine 中发送数据；调用方必须处理短写。 */
+/**
+ * 在当前 C coroutine 中发送数据；调用方必须处理短写。
+ * @param socket 底层 socket
+ * @param buffer 数据缓冲区
+ * @param length 缓冲区字节数
+ * @param timeout_ms 超时时间，单位为毫秒
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误，成功时 bytes 为实际传输字节数
+ */
 C_IOResult galay_c_tcp_socket_send(galay_c_tcp_socket_t* socket,
                                    const char* buffer,
                                    size_t length,
                                    int64_t timeout_ms);
 
-/** 在当前 C coroutine 中分散读取；iovecs 在函数返回前由调用方持有。 */
+/**
+ * 在当前 C coroutine 中分散读取；iovecs 在函数返回前由调用方持有。
+ * @param socket 底层 socket
+ * @param iovecs 分散缓冲区数组
+ * @param count 元素数量
+ * @param timeout_ms 超时时间，单位为毫秒
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误，成功时 bytes 为实际传输字节数
+ */
 C_IOResult galay_c_tcp_socket_readv(galay_c_tcp_socket_t* socket,
                                     const galay_iovec_t* iovecs,
                                     size_t count,
                                     int64_t timeout_ms);
 
-/** 在当前 C coroutine 中聚集发送；调用方必须处理短写。 */
+/**
+ * 在当前 C coroutine 中聚集发送；调用方必须处理短写。
+ * @param socket 底层 socket
+ * @param iovecs 分散缓冲区数组
+ * @param count 元素数量
+ * @param timeout_ms 超时时间，单位为毫秒
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误，成功时 bytes 为实际传输字节数
+ */
 C_IOResult galay_c_tcp_socket_writev(galay_c_tcp_socket_t* socket,
                                      const galay_iovec_t* iovecs,
                                      size_t count,
@@ -94,6 +158,9 @@ C_IOResult galay_c_tcp_socket_writev(galay_c_tcp_socket_t* socket,
  * @param file_fd 调用方持有的可读文件描述符，函数不接管其所有权。
  * @param offset 不修改 file_fd 当前偏移的非负文件偏移。
  * @param count 最多发送的字节数，必须大于 0；调用方必须处理短写和文件 EOF。
+ * @param socket 底层 socket
+ * @param timeout_ms 超时时间，单位为毫秒
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误，成功时 bytes 为实际传输字节数
  */
 C_IOResult galay_c_tcp_socket_sendfile(galay_c_tcp_socket_t* socket,
                                        int file_fd,
@@ -101,7 +168,11 @@ C_IOResult galay_c_tcp_socket_sendfile(galay_c_tcp_socket_t* socket,
                                        size_t count,
                                        int64_t timeout_ms);
 
-/** 取消挂起操作并关闭 fd；重复 close 返回成功。 */
+/**
+ * 取消挂起操作并关闭 fd；重复 close 返回成功。
+ * @param socket 底层 socket
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误
+ */
 C_IOResult galay_c_tcp_socket_close(galay_c_tcp_socket_t* socket);
 
 #ifdef __cplusplus

@@ -17,6 +17,8 @@ namespace galay::ssl::log
 
 /**
  * @brief 设置 galay-ssl 的库级 logger
+ * @param logger 日志器
+ * @return 无返回值
  */
 void set(::galay::kernel::BaseLogger::uptr logger)
 {
@@ -25,6 +27,7 @@ void set(::galay::kernel::BaseLogger::uptr logger)
 
 /**
  * @brief 获取 galay-ssl 当前 logger
+ * @return ::galay::kernel::BaseLogger* 指针
  */
 ::galay::kernel::BaseLogger* get() noexcept
 {

@@ -50,7 +50,7 @@ public:
      * @brief 声明一个带取值的选项
      * @tparam T 取值类型
      * @param name 长选项名，不含 `--`
-     * @param short_name 短选项名，`'\0'` 表示不提供
+     * @param shortName 短选项名，`'\0'` 表示不提供
      * @param description 帮助描述
      * @return 选项引用，可继续链式配置
      */
@@ -63,6 +63,9 @@ public:
     }
 
     /// 声明一个无短名的选项
+    /// @param name 名称
+    /// @param description 描述文本
+    /// @return Opt<T>& 引用
     template<typename T>
     Opt<T>& opt(std::string name, std::string description = "") {
         return opt<T>(std::move(name), '\0', std::move(description));
@@ -70,6 +73,10 @@ public:
 
     /**
      * @brief 声明一个布尔标志位
+     * @param name 名称
+     * @param shortName 短选项字符
+     * @param description 描述文本
+     * @return Opt<bool>& 引用
      * @details 支持 `--name` 置真与 `--no-name` 置假。
      */
     Opt<bool>& flag(std::string name, char shortName, std::string description = "") {
@@ -77,6 +84,9 @@ public:
     }
 
     /// 声明一个无短名的标志位
+    /// @param name 名称
+    /// @param description 描述文本
+    /// @return Opt<bool>& 引用
     Opt<bool>& flag(std::string name, std::string description = "") {
         return flag(std::move(name), '\0', std::move(description));
     }
@@ -86,6 +96,7 @@ public:
      * @tparam T 取值类型
      * @param name 参数名，仅用于帮助与错误信息
      * @param description 帮助描述
+     * @return Positional<T>& 引用
      */
     template<typename T>
     Positional<T>& pos(std::string name, std::string description = "") {
@@ -109,6 +120,8 @@ public:
     }
 
     /// 注册命令回调
+    /// @param callback 回调函数
+    /// @return 当前对象引用
     Cmd& on(CmdCallback callback) {
         m_callback = std::move(callback);
         return *this;
@@ -118,27 +131,38 @@ public:
     [[nodiscard]] const std::string& description() const noexcept { return m_description; }
 
     /// 未被命名位置参数消费的剩余参数
+    /// @return const std::vector<std::string>& 只读引用
     [[nodiscard]] const std::vector<std::string>& rest() const noexcept { return m_rest; }
 
     /// 实际被选中的最深层子命令，无子命令时为自身
+    /// @return Cmd& 引用
     [[nodiscard]] Cmd& selected() noexcept {
         return m_activeSub != nullptr ? m_activeSub->selected() : *this;
     }
 
     /// 判断某个选项是否在命令行中出现过
+    /// @param name 名称
+    /// @return 指定命令行参数已设置时返回 true，否则返回 false
     [[nodiscard]] bool has(std::string_view name) const noexcept {
         const ArgBase* found = find_long(name);
         return found != nullptr && found->is_set();
     }
 
     /// 输出帮助信息，顺序与声明顺序一致
+    /// @param out 接收帮助文本的输出流
+    /// @return 无返回值
     void print_help(std::ostream& out) const;
 
 protected:
     /// 解析参数数组，成功返回空，失败或请求帮助返回 `CliError`
+    /// @param argc 命令行参数数量
+    /// @param argv 命令行参数数组
+    /// @param startIndex 开始索引
+    /// @return 成功时返回空值；解析失败或请求帮助时返回 CliError
     std::expected<void, CliError> parse(int argc, const char* const* argv, int startIndex);
 
     /// 执行选中命令的回调
+    /// @return 活动子命令或当前命令回调的结果；无回调时为 0
     [[nodiscard]] int execute() {
         if (m_activeSub != nullptr) {
             return m_activeSub->execute();
@@ -159,6 +183,8 @@ protected:
 
 private:
     /// 按长名查找选项
+    /// @param name 名称
+    /// @return ArgBase* 指针
     [[nodiscard]] ArgBase* find_long(std::string_view name) const noexcept {
         for (const auto& option : m_options) {
             if (option->name() == name) {
@@ -169,6 +195,8 @@ private:
     }
 
     /// 按短名查找选项
+    /// @param shortName 短选项字符
+    /// @return ArgBase* 指针
     [[nodiscard]] ArgBase* find_short(char shortName) const noexcept {
         if (shortName == '\0') {
             return nullptr;
@@ -182,6 +210,8 @@ private:
     }
 
     /// 按名查找子命令
+    /// @param name 名称
+    /// @return Cmd* 指针
     [[nodiscard]] Cmd* find_sub(std::string_view name) const noexcept {
         for (const auto& sub : m_subcommands) {
             if (sub->name() == name) {
@@ -192,6 +222,7 @@ private:
     }
 
     /// 解析前重置所有状态，保证可重复解析
+    /// @return 无返回值
     void reset_state() {
         m_rest.clear();
         m_activeSub = nullptr;
@@ -204,6 +235,7 @@ private:
     }
 
     /// 解析结束后回写绑定变量
+    /// @return 无返回值
     void flush_bindings() const {
         for (const auto& option : m_options) {
             option->flush();
@@ -355,6 +387,10 @@ namespace detail {
 
 /**
  * @brief 预扫描剩余参数中是否存在帮助请求
+ * @param argc 命令行参数数量
+ * @param argv 命令行参数数组
+ * @param from 起始值
+ * @return 剩余参数在 -- 分隔符前包含帮助选项时返回 true，否则返回 false
  * @details 帮助优先于必选校验：`app sub --help` 不应先报父命令缺少必选参数。
  *          `--` 之后的内容按普通取值处理，不参与扫描。
  */
@@ -459,6 +495,8 @@ inline std::expected<void, CliError> Cmd::parse(int argc, const char* const* arg
 namespace detail {
 
 /// 拼装选项在帮助中的左列文本，例如 `-p, --port <int>`
+/// @param option 选项对象
+/// @return 处理后的 std::string 结果
 inline std::string option_label(const ArgBase& option) {
     std::string label;
     if (option.short_name() != '\0') {
@@ -474,6 +512,8 @@ inline std::string option_label(const ArgBase& option) {
 }
 
 /// 拼装选项在帮助中的右列补充说明
+/// @param option 选项对象
+/// @return 处理后的 std::string 结果
 inline std::string option_suffix(const ArgBase& option) {
     std::string suffix;
     if (option.is_required()) {
@@ -505,6 +545,12 @@ inline std::string option_suffix(const ArgBase& option) {
 }
 
 /// 按最长左列文本补齐空格
+/// @param out 接收格式化行文本的输出流
+/// @param label 显示标签
+/// @param width 输出宽度
+/// @param description 描述文本
+/// @param suffix 后缀
+/// @return 无返回值
 inline void write_row(std::ostream& out, const std::string& label, std::size_t width,
                      const std::string& description, const std::string& suffix) {
     out << "  " << label;

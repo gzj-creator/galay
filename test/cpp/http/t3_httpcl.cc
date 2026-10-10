@@ -12,6 +12,8 @@ using namespace galay::async;
 
 /**
  * @brief 测试 GET 请求
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_get(IOScheduler* scheduler)
 {
@@ -66,6 +68,8 @@ Task<void> test_get(IOScheduler* scheduler)
 
 /**
  * @brief 测试 POST 请求
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_post(IOScheduler* scheduler)
 {
@@ -118,6 +122,8 @@ Task<void> test_post(IOScheduler* scheduler)
 
 /**
  * @brief 测试多个连续请求
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_multiple_requests(IOScheduler* scheduler)
 {

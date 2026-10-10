@@ -38,7 +38,11 @@ public:
     template <typename Promise>
     decltype(auto) await_suspend(std::coroutine_handle<Promise> handle);
 
-    /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
+    /**
+     * @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。
+     * @param timer 定时器
+     * @return 无返回值
+     */
     void bind_timeout_timer(TimeoutTimer* timer) noexcept;
 
     ResultType await_resume();

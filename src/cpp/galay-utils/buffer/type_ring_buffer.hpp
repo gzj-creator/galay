@@ -180,13 +180,19 @@ public:
     /** @brief 禁止复制构造；ring 具有唯一并发身份。 */
     TypeRingBuffer(const TypeRingBuffer&) = delete;
 
-    /** @brief 禁止复制赋值；ring 具有唯一并发身份。 */
+    /**
+     * @brief 禁止复制赋值；ring 具有唯一并发身份。
+     * @return 该操作已禁用，不可调用
+     */
     TypeRingBuffer& operator=(const TypeRingBuffer&) = delete;
 
     /** @brief 禁止移动构造，避免运行中的调用方持有失效地址。 */
     TypeRingBuffer(TypeRingBuffer&&) = delete;
 
-    /** @brief 禁止移动赋值，避免运行中的调用方持有失效地址。 */
+    /**
+     * @brief 禁止移动赋值，避免运行中的调用方持有失效地址。
+     * @return 该操作已禁用，不可调用
+     */
     TypeRingBuffer& operator=(TypeRingBuffer&&) = delete;
 
     /**
@@ -535,14 +541,22 @@ public:
             return *this;
         }
 
-        /** @brief 尝试发布一条消息；满时返回 false 且 value 保持未移动。 */
+        /**
+         * @brief 尝试发布一条消息；满时返回 false 且 value 保持未移动。
+         * @param value 待设置或处理的值
+         * @return 消息发布成功时返回 true，缓冲区已满时返回 false
+         */
         [[nodiscard]] bool try_write(T&& value) noexcept
         {
             return try_write_one(
                 m_local, m_ring->m_head, m_ring->m_tail, std::move(value));
         }
 
-        /** @brief 尽量批量发布输入前缀；整批仅执行一次 tail release store。 */
+        /**
+         * @brief 尽量批量发布输入前缀；整批仅执行一次 tail release store。
+         * @param values 值集合
+         * @return 实际发布的消息数量
+         */
         [[nodiscard]] size_t try_write_batch(std::span<T> values) noexcept
         {
             return try_write_batch_impl(
@@ -591,13 +605,20 @@ public:
             return *this;
         }
 
-        /** @brief 尝试读取一条消息；空时返回 std::nullopt。 */
+        /**
+         * @brief 尝试读取一条消息；空时返回 std::nullopt。
+         * @return 接收到的消息；无消息时为 std::nullopt
+         */
         [[nodiscard]] std::optional<T> try_read() noexcept
         {
             return try_read_one(m_local, m_ring->m_head, m_ring->m_tail);
         }
 
-        /** @brief 尝试把一条消息移动到调用方对象；空时返回 false。 */
+        /**
+         * @brief 尝试把一条消息移动到调用方对象；空时返回 false。
+         * @param output 输出缓冲区
+         * @return 成功读取消息到 output 时返回 true，缓冲区为空时返回 false
+         */
         [[nodiscard]] bool try_read(T& output) noexcept
             requires std::is_nothrow_move_assignable_v<T>
         {
@@ -605,7 +626,11 @@ public:
                 m_local, m_ring->m_head, m_ring->m_tail, output);
         }
 
-        /** @brief 尽量批量搬运到调用方存储；整批仅执行一次 head release store。 */
+        /**
+         * @brief 尽量批量搬运到调用方存储；整批仅执行一次 head release store。
+         * @param output 输出缓冲区
+         * @return 实际读取的消息数量
+         */
         [[nodiscard]] size_t try_read_batch(std::span<T> output) noexcept
             requires std::is_nothrow_move_assignable_v<T>
         {

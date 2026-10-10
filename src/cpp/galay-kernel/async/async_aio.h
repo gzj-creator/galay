@@ -182,6 +182,7 @@ public:
      * @param buffer 目标缓冲区；必须 O_DIRECT 对齐
      * @param length 要读取的字节数
      * @param offset 文件偏移量（字节）
+     * @return 无返回值
      */
     void pre_read(char* buffer, size_t length, off_t offset);
 
@@ -190,18 +191,21 @@ public:
      * @param buffer 源缓冲区；必须 O_DIRECT 对齐
      * @param length 要写入的字节数
      * @param offset 文件偏移量（字节）
+     * @return 无返回值
      */
     void pre_write(const char* buffer, size_t length, off_t offset);
 
     /**
      * @brief 批量入队多个读操作
      * @param reads (buffer, length, offset) 元组向量
+     * @return 无返回值
      */
     void pre_read_batch(const std::vector<std::tuple<char*, size_t, off_t>>& reads);
 
     /**
      * @brief 批量入队多个写操作
      * @param writes (buffer, length, offset) 元组向量
+     * @return 无返回值
      */
     void pre_write_batch(const std::vector<std::tuple<const char*, size_t, off_t>>& writes);
 
@@ -215,11 +219,13 @@ public:
 
     /**
      * @brief 丢弃所有已累积但未提交的操作
+     * @return 无返回值
      */
     void clear();
 
     /**
      * @brief 关闭文件描述符（不销毁 AIO 上下文）
+     * @return 无返回值
      */
     void close();
 
@@ -258,6 +264,7 @@ public:
     /**
      * @brief 释放先前由 alloc_aligned_buffer 分配的缓冲区
      * @param buffer 指向待释放缓冲区的指针
+     * @return 无返回值
      */
     static void free_aligned_buffer(char* buffer);
 

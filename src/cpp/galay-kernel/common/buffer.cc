@@ -71,6 +71,7 @@ namespace galay::kernel
 
     /**
      * @brief 将缓冲区内容清零但不释放内存
+     * @return 无返回值
      */
     void Buffer::clear()
     {
@@ -116,6 +117,7 @@ namespace galay::kernel
     /**
      * @brief 通过 realloc 调整缓冲区容量
      * @param capacity 新容量（字节）；0 表示释放内存
+     * @return 无返回值
      */
     void Buffer::resize(size_t capacity)
     {

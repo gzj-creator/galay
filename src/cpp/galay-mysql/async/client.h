@@ -225,11 +225,24 @@ public:
     AsyncMysqlClient(IOScheduler* scheduler,
                      AsyncMysqlConfig config = AsyncMysqlConfig::no_timeout());
 
-    AsyncMysqlClient(AsyncMysqlClient&& other) noexcept;             ///< 移动构造
-    AsyncMysqlClient& operator=(AsyncMysqlClient&& other) noexcept;  ///< 移动赋值
+    /**
+     * @brief 移动构造
+     * @param other 源对象
+     */
+    AsyncMysqlClient(AsyncMysqlClient&& other) noexcept;
+    /**
+     * @brief 移动赋值
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    AsyncMysqlClient& operator=(AsyncMysqlClient&& other) noexcept;
 
     AsyncMysqlClient(const AsyncMysqlClient&) = delete;              ///< 禁止拷贝构造
-    AsyncMysqlClient& operator=(const AsyncMysqlClient&) = delete;   ///< 禁止拷贝赋值
+    /**
+     * @brief 禁止拷贝赋值
+     * @return 该操作已禁用，不可调用
+     */
+    AsyncMysqlClient& operator=(const AsyncMysqlClient&) = delete;
 
     ~AsyncMysqlClient() = default;
 
@@ -311,30 +324,92 @@ public:
 
     // ======================== 事务 ========================
 
-    MysqlQueryAwaitable<Strategy> begin_transaction();  ///< 异步开启事务
-    MysqlQueryAwaitable<Strategy> commit();             ///< 异步提交事务
-    MysqlQueryAwaitable<Strategy> rollback();           ///< 异步回滚事务
+    /**
+     * @brief 异步开启事务
+     * @return MysqlQueryAwaitable<Strategy> 等待体，通过 co_await 执行并取得操作结果
+     */
+    MysqlQueryAwaitable<Strategy> begin_transaction();
+    /**
+     * @brief 异步提交事务
+     * @return MysqlQueryAwaitable<Strategy> 等待体，通过 co_await 执行并取得操作结果
+     */
+    MysqlQueryAwaitable<Strategy> commit();
+    /**
+     * @brief 异步回滚事务
+     * @return MysqlQueryAwaitable<Strategy> 等待体，通过 co_await 执行并取得操作结果
+     */
+    MysqlQueryAwaitable<Strategy> rollback();
 
     // ======================== 工具命令 ========================
 
-    MysqlQueryAwaitable<Strategy> ping();                                ///< 异步发送心跳检测
-    MysqlQueryAwaitable<Strategy> use_database(std::string_view database); ///< 异步切换数据库
+    /**
+     * @brief 异步发送心跳检测
+     * @return MysqlQueryAwaitable<Strategy> 等待体，通过 co_await 执行并取得操作结果
+     */
+    MysqlQueryAwaitable<Strategy> ping();
+    /**
+     * @brief 异步切换数据库
+     * @param database 数据库名称
+     * @return MysqlQueryAwaitable<Strategy> 等待体，通过 co_await 执行并取得操作结果
+     */
+    MysqlQueryAwaitable<Strategy> use_database(std::string_view database);
 
     // ======================== 连接管理 ========================
 
-    auto close() { m_is_closed = true; return m_socket.close(); } ///< 关闭连接
-    bool is_closed() const { return m_is_closed; }                 ///< 检查连接是否已关闭
+    /**
+     * @brief 关闭连接
+     * @return 异步操作等待体，通过 co_await 取得结果
+     */
+    auto close() { m_is_closed = true; return m_socket.close(); }
+    /**
+     * @brief 检查连接是否已关闭
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_closed() const { return m_is_closed; }
 
     // ======================== 内部访问 ========================
 
-    AsyncTcpSocket& socket() { return m_socket; }                   ///< 获取TCP套接字引用
-    RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
-    const RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
-    protocol::MysqlParser& parser() { return m_parser; }       ///< 获取协议解析器引用
-    protocol::MysqlEncoder& encoder() { return m_encoder; }    ///< 获取协议编码器引用
-    const AsyncMysqlConfig& async_config() const { return m_config; } ///< 获取异步配置
-    uint32_t server_capabilities() const { return m_server_capabilities; } ///< 获取服务器能力标志
-    void set_server_capabilities(uint32_t caps) { m_server_capabilities = caps; } ///< 设置服务器能力标志
+    /**
+     * @brief 获取TCP套接字引用
+     * @return AsyncTcpSocket& 引用
+     */
+    AsyncTcpSocket& socket() { return m_socket; }
+    /**
+     * @brief 获取接收环形缓冲区
+     * @return RingBuffer<Strategy, std::dynamic_extent>& 引用
+     */
+    RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return m_ring_buffer; }
+    /**
+     * @brief 获取接收环形缓冲区
+     * @return const RingBuffer<Strategy, std::dynamic_extent>& 引用
+     */
+    const RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() const { return m_ring_buffer; }
+    /**
+     * @brief 获取协议解析器引用
+     * @return protocol::MysqlParser& 引用
+     */
+    protocol::MysqlParser& parser() { return m_parser; }
+    /**
+     * @brief 获取协议编码器引用
+     * @return protocol::MysqlEncoder& 引用
+     */
+    protocol::MysqlEncoder& encoder() { return m_encoder; }
+    /**
+     * @brief 获取异步配置
+     * @return const AsyncMysqlConfig& 引用
+     */
+    const AsyncMysqlConfig& async_config() const { return m_config; }
+    /**
+     * @brief 获取服务器能力标志
+     * @return uint32_t 操作结果
+     */
+    uint32_t server_capabilities() const { return m_server_capabilities; }
+    /**
+     * @brief 设置服务器能力标志
+     * @param caps 协议能力位
+     * @return 无返回值
+     */
+    void set_server_capabilities(uint32_t caps) { m_server_capabilities = caps; }
 private:
     friend class details::MysqlConnectAwaitable<Strategy>;
     friend class details::MysqlQueryAwaitable<Strategy>;

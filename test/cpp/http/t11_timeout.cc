@@ -18,6 +18,8 @@ using namespace std::chrono_literals;
 
 /**
  * @brief 测试 HttpClientAwaitable 超时
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_http_client_awaitable_timeout(IOScheduler* scheduler)
 {
@@ -76,6 +78,8 @@ Task<void> test_http_client_awaitable_timeout(IOScheduler* scheduler)
 
 /**
  * @brief 测试 SendResponseAwaitable 和 GetResponseAwaitable 超时
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_reader_writer_awaitable_timeout(IOScheduler* scheduler)
 {
@@ -161,6 +165,8 @@ Task<void> test_reader_writer_awaitable_timeout(IOScheduler* scheduler)
 
 /**
  * @brief 测试 GetRequestAwaitable 超时
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_get_request_awaitable_timeout(IOScheduler* scheduler)
 {
@@ -173,6 +179,8 @@ Task<void> test_get_request_awaitable_timeout(IOScheduler* scheduler)
 
 /**
  * @brief 测试 GetChunkAwaitable 超时
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_get_chunk_awaitable_timeout(IOScheduler* scheduler)
 {
@@ -185,6 +193,8 @@ Task<void> test_get_chunk_awaitable_timeout(IOScheduler* scheduler)
 
 /**
  * @brief 测试底层 AsyncTcpSocket Awaitable 超时
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_tcp_socket_awaitable_timeout(IOScheduler* scheduler)
 {

@@ -33,7 +33,11 @@ public:
 
     HttpResponse() = default;
     HttpResponse(HttpResponse&&) noexcept = default;   ///< 移动构造
-    HttpResponse& operator=(HttpResponse&&) noexcept = default; ///< 移动赋值
+    /**
+     * @brief 移动赋值
+     * @return 当前对象引用
+     */
+    HttpResponse& operator=(HttpResponse&&) noexcept = default;
     ~HttpResponse() = default;
 
     /**
@@ -71,12 +75,14 @@ public:
     /**
      * @brief 设置响应头（移动语义）
      * @param header 响应头
+     * @return 无返回值
      */
     void set_header(HttpResponseHeader&& header);
 
     /**
      * @brief 设置响应头（左值引用）
      * @param header 响应头
+     * @return 无返回值
      */
     void set_header(HttpResponseHeader& header);
 
@@ -84,6 +90,7 @@ public:
      * @brief 设置响应体（模板版，移动语义）
      * @tparam T Body 类型
      * @param body Body 对象
+     * @return 无返回值
      */
     template<HttpBodyType T>
     void set_body(T&& body);
@@ -91,6 +98,7 @@ public:
     /**
      * @brief 设置响应体原始字符串
      * @param body Body 数据（移动语义）
+     * @return 无返回值
      */
     void set_body_str(std::string&& body);
 
@@ -124,7 +132,11 @@ public:
      */
     bool is_complete() const;
 
-    void reset(); ///< 重置解析状态
+    /**
+     * @brief 重置解析状态
+     * @return 无返回值
+     */
+    void reset();
 
 private:
     HttpResponse(const HttpResponse&) = delete;

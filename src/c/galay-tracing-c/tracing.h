@@ -296,6 +296,7 @@ galay_status_t galay_tracing_trace_context_inject(const galay_tracing_trace_cont
 /**
  * @brief 销毁追踪上下文 handle。
  * @param context 指向上下文 handle 的指针，可为空；`*context` 可为空。
+ * @return 无返回值
  * @note 幂等操作；成功销毁后会将 `*context` 置为 NULL。
  */
 void galay_tracing_trace_context_destroy(galay_tracing_trace_context_t** context);
@@ -320,6 +321,7 @@ galay_status_t galay_tracing_provider_create(galay_tracing_provider_t** out);
 /**
  * @brief 销毁 Tracing Provider。
  * @param provider 指向 Provider handle 的指针，可为空；`*provider` 可为空。
+ * @return 无返回值
  * @note 幂等操作；成功销毁后会将 `*provider` 置为 NULL。调用方必须先销毁或停止使用
  * 由该 Provider 创建的 Tracer/Span。
  */
@@ -377,6 +379,7 @@ galay_status_t galay_tracing_tracer_create(galay_tracing_provider_t* provider, c
 /**
  * @brief 销毁 Tracer。
  * @param tracer 指向 Tracer handle 的指针，可为空；`*tracer` 可为空。
+ * @return 无返回值
  * @note 幂等操作；成功销毁后会将 `*tracer` 置为 NULL。销毁 Tracer 不会销毁 Provider 或已创建的 Span。
  */
 void galay_tracing_tracer_destroy(galay_tracing_tracer_t** tracer);
@@ -401,6 +404,7 @@ galay_status_t galay_tracing_tracer_start_span(galay_tracing_tracer_t* tracer, c
 /**
  * @brief 销毁 Span handle。
  * @param span 指向 Span handle 的指针，可为空；`*span` 可为空。
+ * @return 无返回值
  * @note 幂等操作；成功销毁后会将 `*span` 置为 NULL。未 end 的 Span 被销毁时不会自动导出。
  */
 void galay_tracing_span_destroy(galay_tracing_span_t** span);
@@ -516,6 +520,7 @@ galay_status_t galay_tracing_sampler_create(galay_tracing_sampler_kind_t kind, d
 /**
  * @brief 销毁采样器。
  * @param sampler 指向 Sampler handle 的指针，可为空；`*sampler` 可为空。
+ * @return 无返回值
  * @note 幂等操作；成功销毁后会将 `*sampler` 置为 NULL。
  */
 void galay_tracing_sampler_destroy(galay_tracing_sampler_t** sampler);
@@ -564,6 +569,7 @@ galay_status_t galay_tracing_logger_log(galay_tracing_logger_t* logger,
 /**
  * @brief 销毁 logger。
  * @param logger 指向 Logger handle 的指针，可为空；`*logger` 可为空。
+ * @return 无返回值
  * @note 幂等操作；成功销毁后会将 `*logger` 置为 NULL。
  */
 void galay_tracing_logger_destroy(galay_tracing_logger_t** logger);

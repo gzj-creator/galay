@@ -87,18 +87,30 @@ struct RpcClientConfig {
 class RpcClientBuilder {
 public:
     /// @brief 设置读取器配置
+    /// @param setting 配置
+    /// @return 当前对象引用
     RpcClientBuilder& reader_setting(RpcReaderSetting setting) { m_config.reader_setting = std::move(setting); return *this; }
     /// @brief 设置写入器配置
+    /// @param setting 配置
+    /// @return 当前对象引用
     RpcClientBuilder& writer_setting(RpcWriterSetting setting) { m_config.writer_setting = std::move(setting); return *this; }
     /// @brief 设置环形缓冲区大小
+    /// @param size 环形缓冲区字节数
+    /// @return 当前对象引用
     RpcClientBuilder& ring_buffer_size(size_t size)             { m_config.ring_buffer_size = size; return *this; }
     /// @brief 设置连接 socket 是否启用 TCP_NODELAY
+    /// @param value 是否启用该选项
+    /// @return 当前对象引用
     RpcClientBuilder& tcp_no_delay(bool value)                   { m_config.tcp_no_delay = value; return *this; }
     /// @brief 设置metrics回调
+    /// @param callback 回调函数
+    /// @return 当前对象引用
     RpcClientBuilder& metrics_callback(RpcMetricCallback callback) { m_config.channel_options.metrics_callback = std::move(callback); return *this; }
     /// @brief 构建RpcClient实例
+    /// @return 按当前配置创建的 RpcClientImpl<AsyncTcpSocket, RingBufferBackendStrategy::Mmap> 对象
     RpcClientImpl<AsyncTcpSocket, RingBufferBackendStrategy::Mmap> build() const;
     /// @brief 仅导出配置
+    /// @return 当前构建器的配置快照
     RpcClientConfig build_config() const                       { return m_config; }
 
 private:
@@ -192,6 +204,13 @@ public:
     /**
      * @brief 按调用模式发送RPC帧（为流式RPC预留）
      *
+     * @param service 服务名称
+     * @param method 方法名称
+     * @param mode 操作模式
+     * @param end_of_stream 是否结束当前流
+     * @param payload 消息负载
+     * @param payload_len 消息负载字节数
+     * @return RpcCallAwaitableImpl<SocketType> 等待体，通过 co_await 执行并取得操作结果
      * @note 当前仍走一次请求对应一次响应链路；后续流式模式会复用该元信息扩展多帧流程。
      */
     RpcCallAwaitableImpl<SocketType> call_with_mode(const std::string& service,
@@ -211,6 +230,13 @@ public:
     /**
      * @brief 按调用模式发送RPC帧并应用调用选项
      * @param options deadline、取消和metadata等调用级选项
+     * @param service 服务名称
+     * @param method 方法名称
+     * @param mode 操作模式
+     * @param end_of_stream 是否结束当前流
+     * @param payload 消息负载
+     * @param payload_len 消息负载字节数
+     * @return RpcCallAwaitableImpl<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     RpcCallAwaitableImpl<SocketType> call_with_mode(const std::string& service,
                                                   const std::string& method,
@@ -229,6 +255,10 @@ public:
 
     /**
      * @brief 调用远程方法（字符串payload）
+     * @param service 服务名称
+     * @param method 方法名称
+     * @param payload 消息负载
+     * @return RpcCallAwaitableImpl<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     RpcCallAwaitableImpl<SocketType> call(const std::string& service,
                                           const std::string& method,
@@ -238,6 +268,11 @@ public:
 
     /**
      * @brief 调用远程方法（字符串payload，带调用选项）
+     * @param service 服务名称
+     * @param method 方法名称
+     * @param payload 消息负载
+     * @param options 操作选项
+     * @return RpcCallAwaitableImpl<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     RpcCallAwaitableImpl<SocketType> call(const std::string& service,
                                           const std::string& method,
@@ -248,6 +283,12 @@ public:
 
     /**
      * @brief 调用远程方法（buffer payload，带调用选项）
+     * @param service 服务名称
+     * @param method 方法名称
+     * @param payload 消息负载
+     * @param payload_len 消息负载字节数
+     * @param options 操作选项
+     * @return RpcCallAwaitableImpl<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     RpcCallAwaitableImpl<SocketType> call(const std::string& service,
                                           const std::string& method,
@@ -259,6 +300,9 @@ public:
 
     /**
      * @brief 调用远程方法（无payload）
+     * @param service 服务名称
+     * @param method 方法名称
+     * @return RpcCallAwaitableImpl<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     RpcCallAwaitableImpl<SocketType> call(const std::string& service,
                                           const std::string& method) {
@@ -267,6 +311,10 @@ public:
 
     /**
      * @brief 调用远程方法（无payload，带调用选项）
+     * @param service 服务名称
+     * @param method 方法名称
+     * @param options 操作选项
+     * @return RpcCallAwaitableImpl<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     RpcCallAwaitableImpl<SocketType> call(const std::string& service,
                                           const std::string& method,
@@ -276,6 +324,12 @@ public:
 
     /**
      * @brief 客户端流帧发送（N frame -> 1 response）
+     * @param service 服务名称
+     * @param method 方法名称
+     * @param payload 消息负载
+     * @param payload_len 消息负载字节数
+     * @param end_of_stream 是否结束当前流
+     * @return RpcCallAwaitableImpl<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     RpcCallAwaitableImpl<SocketType> call_client_stream_frame(const std::string& service,
                                                            const std::string& method,
@@ -287,6 +341,11 @@ public:
 
     /**
      * @brief 服务端流请求（1 request -> N response frame）
+     * @param service 服务名称
+     * @param method 方法名称
+     * @param payload 消息负载
+     * @param payload_len 消息负载字节数
+     * @return RpcCallAwaitableImpl<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     RpcCallAwaitableImpl<SocketType> call_server_stream_request(const std::string& service,
                                                              const std::string& method,
@@ -297,6 +356,12 @@ public:
 
     /**
      * @brief 双向流帧发送（N frame <-> N frame）
+     * @param service 服务名称
+     * @param method 方法名称
+     * @param payload 消息负载
+     * @param payload_len 消息负载字节数
+     * @param end_of_stream 是否结束当前流
+     * @return RpcCallAwaitableImpl<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     RpcCallAwaitableImpl<SocketType> call_bidi_stream_frame(const std::string& service,
                                                          const std::string& method,
@@ -308,6 +373,7 @@ public:
 
     /**
      * @brief 发送一次HEARTBEAT并等待pong
+     * @return 协程任务，完成后返回 RpcHeartbeatResult 结果
      */
     Task<RpcHeartbeatResult> send_heartbeat() {
         return m_channel->send_heartbeat();
@@ -316,6 +382,9 @@ public:
     /**
      * @brief 创建流会话（自动分配 stream_id）
      *
+     * @param service 服务名称
+     * @param method 方法名称
+     * @return 成功时返回 RpcStreamImpl<SocketType, Strategy>，失败时返回 RpcError 错误
      * @note 仅创建会话对象，不会自动执行 STREAM_INIT。
      */
     std::expected<RpcStreamImpl<SocketType, Strategy>, RpcError> create_stream(const std::string& service,
@@ -327,6 +396,10 @@ public:
     /**
      * @brief 创建流会话（显式指定 stream_id）
      *
+     * @param stream_id 流标识符
+     * @param service 服务名称
+     * @param method 方法名称
+     * @return 成功时返回 RpcStreamImpl<SocketType, Strategy>，失败时返回 RpcError 错误
      * @note 仅创建会话对象，不会自动执行 STREAM_INIT。
      */
     std::expected<RpcStreamImpl<SocketType, Strategy>, RpcError> create_stream(uint32_t stream_id,
@@ -346,6 +419,7 @@ public:
 
     /**
      * @brief 关闭连接
+     * @return 协程任务，完成后返回 std::expected<void, IOError> 结果
      */
     Task<std::expected<void, IOError>> close() {
         m_connected = false;
@@ -361,6 +435,7 @@ public:
 
     /**
      * @brief 获取读取器
+     * @return 绑定当前连接的读取器
      */
     RpcReaderImpl<SocketType, Strategy> get_reader() {
         return m_channel->get_reader();
@@ -368,6 +443,7 @@ public:
 
     /**
      * @brief 获取写入器
+     * @return 绑定当前连接的写入器
      */
     RpcWriterImpl<SocketType> get_writer() {
         return m_channel->get_writer();
@@ -375,16 +451,19 @@ public:
 
     /**
      * @brief 获取底层socket
+     * @return SocketType& 引用
      */
     SocketType& socket() { return m_channel->socket(); }
 
     /**
      * @brief 获取RingBuffer
+     * @return RingBuffer<Strategy, std::dynamic_extent>& 引用
      */
     RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return m_channel->ring_buffer(); }
 
     /**
      * @brief 获取读取配置
+     * @return const RpcReaderSetting& 只读引用
      */
     const RpcReaderSetting& reader_setting() const { return m_config.reader_setting; }
 

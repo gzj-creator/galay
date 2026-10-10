@@ -165,7 +165,7 @@ public:
     /**
      * @brief 解析 Range 请求头
      * @param rangeHeader Range 请求头的值（不包含 "Range: " 前缀）
-     * @param file_size 文件总大小（用于验证范围）
+     * @param fileSize 文件总大小（用于验证范围）
      * @return Range 解析结果
      */
     static RangeParseResult parse(const std::string& rangeHeader, uint64_t fileSize)
@@ -236,7 +236,7 @@ public:
      * @brief 生成 Content-Range 响应头值
      * @param start 起始位置
      * @param end 结束位置
-     * @param file_size 文件总大小
+     * @param fileSize 文件总大小
      * @return Content-Range 头的值
      */
     static std::string make_content_range(uint64_t start, uint64_t end, uint64_t fileSize)
@@ -248,7 +248,7 @@ public:
     /**
      * @brief 生成 Content-Range 响应头值（使用 HttpRange）
      * @param range Range 对象
-     * @param file_size 文件总大小
+     * @param fileSize 文件总大小
      * @return Content-Range 头的值
      */
     static std::string make_content_range(const HttpRange& range, uint64_t fileSize)
@@ -359,7 +359,7 @@ private:
     /**
      * @brief 解析单个 Range
      * @param rangeStr Range 字符串
-     * @param file_size 文件总大小
+     * @param fileSize 文件总大小
      * @return HttpRange 对象
      */
     static HttpRange parse_single_range(const std::string& rangeStr, uint64_t fileSize)

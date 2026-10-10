@@ -203,6 +203,9 @@ public:
 
     /**
      * @brief 为单个 key 启动异步 watch，并把每个事件批次投递给 `Task<void>` 处理器。
+     * @param key 键
+     * @param handler 处理回调
+     * @return 操作结果；成功值表示操作是否生效，失败时携带 Etcd 错误
      * @note handler 参数按值传递，避免协程 frame 持有悬空引用。
      * @note watch 由后台线程维持长连接；处理器本身会被调度到 client 绑定的 `IOScheduler`。
      */
@@ -210,6 +213,9 @@ public:
 
     /**
      * @brief 为单个 key 启动异步 watch，并在后台 watch 线程上直接调用普通函数处理器。
+     * @param key 键
+     * @param handler 处理回调
+     * @return 操作结果；成功值表示操作是否生效，失败时携带 Etcd 错误
      * @note 如果需要在 `IOScheduler` 上继续协程化处理，请使用 `WatchTaskHandler` 重载。
      */
     EtcdBoolResult watch(const std::string& key, WatchFunctionHandler handler);
@@ -459,15 +465,30 @@ public:
     AsyncEtcdClientLease& operator=(const AsyncEtcdClientLease&) = delete;
     ~AsyncEtcdClientLease();
 
-    /** @brief 获取租约持有的 client；空租约返回 nullptr。 */
+    /**
+     * @brief 获取租约持有的 client；空租约返回 nullptr。
+     * @return AsyncEtcdClient* 指针
+     */
     [[nodiscard]] AsyncEtcdClient* get() const noexcept;
-    /** @brief 解引用租约持有的 client。 */
+    /**
+     * @brief 解引用租约持有的 client。
+     * @return AsyncEtcdClient& 引用
+     */
     [[nodiscard]] AsyncEtcdClient& operator*() const noexcept;
-    /** @brief 访问租约持有的 client。 */
+    /**
+     * @brief 访问租约持有的 client。
+     * @return AsyncEtcdClient* 指针
+     */
     [[nodiscard]] AsyncEtcdClient* operator->() const noexcept;
-    /** @brief 判断租约是否持有 client。 */
+    /**
+     * @brief 判断租约是否持有 client。
+     * @return 持有有效资源时返回 true，否则返回 false
+     */
     [[nodiscard]] explicit operator bool() const noexcept;
-    /** @brief 提前归还 client；可重复调用且不阻塞。 */
+    /**
+     * @brief 提前归还 client；可重复调用且不阻塞。
+     * @return 无返回值
+     */
     void release() noexcept;
 
 private:
@@ -529,11 +550,20 @@ public:
     [[nodiscard]] auto with_client(Fn fn) -> galay::kernel::Task<
         std::expected<details::AsyncEtcdOperationValue<Fn>, EtcdError>>;
 
-    /** @brief 返回池持有的 client 总数。 */
+    /**
+     * @brief 返回池持有的 client 总数。
+     * @return 对应的大小或数量
+     */
     [[nodiscard]] size_t size() const noexcept;
-    /** @brief 返回当前空闲 client 数量的并发快照。 */
+    /**
+     * @brief 返回当前空闲 client 数量的并发快照。
+     * @return 对应的大小或数量
+     */
     [[nodiscard]] size_t idle_count() const noexcept;
-    /** @brief 返回池内 AsyncEtcdClient 固定绑定的 IOScheduler。 */
+    /**
+     * @brief 返回池内 AsyncEtcdClient 固定绑定的 IOScheduler。
+     * @return galay::kernel::IOScheduler* 指针
+     */
     [[nodiscard]] galay::kernel::IOScheduler* scheduler() const noexcept;
 
 private:

@@ -48,7 +48,11 @@ struct HuffmanNode {
         : symbol(), frequency(l->frequency + r->frequency)
         , left(std::move(l)), right(std::move(r)) {}
 
-    bool is_leaf() const { return !left && !right; } ///< 判断是否为叶子节点
+    /**
+     * @brief 判断是否为叶子节点
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_leaf() const { return !left && !right; }
 };
 
 /**
@@ -85,6 +89,7 @@ public:
      * @param symbol 符号
      * @param code 编码值
      * @param length 编码位长
+     * @return 无返回值
      */
     void add_code(const T& symbol, uint32_t code, uint8_t length) {
         if (length > 32) {
@@ -167,6 +172,7 @@ public:
 
     /**
      * @brief 清空编码表
+     * @return 无返回值
      */
     void clear() {
         m_encodeTable.clear();
@@ -215,6 +221,7 @@ public:
     /**
      * @brief 编码单个符号
      * @param symbol 待编码的符号
+     * @return 无返回值
      */
     void encode(const T& symbol) {
         const auto& code = m_table.get_code(symbol);
@@ -224,6 +231,7 @@ public:
     /**
      * @brief 编码符号序列
      * @param symbols 待编码的符号向量
+     * @return 无返回值
      */
     void encode(const std::vector<T>& symbols) {
         for (const auto& sym : symbols) {
@@ -254,6 +262,7 @@ public:
 
     /**
      * @brief 重置编码器状态
+     * @return 无返回值
      */
     void reset() {
         m_output.clear();

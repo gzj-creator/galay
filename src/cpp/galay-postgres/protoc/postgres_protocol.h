@@ -37,7 +37,12 @@ public:
     [[nodiscard]] std::expected<MessageHeader, ParseError>
     parse_header(const char* data, size_t length) const;
 
-    /** The returned payload borrows data from the caller's buffer. */
+    /**
+     * The returned payload borrows data from the caller's buffer.
+     * @param data 输入数据
+     * @param length 缓冲区字节数
+     * @return 成功时返回 MessageView，失败时返回 ParseError 错误
+     */
     [[nodiscard]] std::expected<MessageView, ParseError>
     extract_message(const char* data, size_t length) const;
 
@@ -50,7 +55,12 @@ public:
     [[nodiscard]] std::expected<PostgresRow, ParseError>
     parse_data_row(const char* data, size_t length) const;
 
-    /** Returned values borrow the DataRow payload until that payload is consumed. */
+    /**
+     * Returned values borrow the DataRow payload until that payload is consumed.
+     * @param data 输入数据
+     * @param length 缓冲区字节数
+     * @return 成功时返回 std::vector<std::optional<std::string_view>>，失败时返回 ParseError 错误
+     */
     [[nodiscard]] std::expected<std::vector<std::optional<std::string_view>>, ParseError>
     parse_data_row_view(const char* data, size_t length) const;
 

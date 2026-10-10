@@ -219,10 +219,14 @@ public:
     }
 
     /// @brief 当前pending请求数量
+    /// @return 对应的大小或数量
     size_t pending_count() const { return m_pending.size(); }
     /// @brief 指定request_id是否仍在pending表中
+    /// @param request_id 请求标识符
+    /// @return 指定请求仍待响应时返回 true，否则返回 false
     bool contains_pending(uint32_t request_id) const { return m_pending.contains(request_id); }
     /// @brief 通道配置
+    /// @return const RpcChannelOptions& 只读引用
     const RpcChannelOptions& options() const { return m_options; }
 
 private:
@@ -262,14 +266,18 @@ public:
     }
 
     /// @brief 释放一次成功预约
+    /// @param bytes 字节数据
+    /// @return 无返回值
     void release(size_t bytes) {
         release_bytes(bytes);
         release_count();
     }
 
     /// @brief 当前预约元素数
+    /// @return 对应的大小或数量
     size_t queued_count() const { return m_queued_count.load(std::memory_order_acquire); }
     /// @brief 当前预约字节数
+    /// @return 当前已预约的发送字节数
     size_t queued_bytes() const { return m_queued_bytes.load(std::memory_order_acquire); }
 
 private:
@@ -390,6 +398,8 @@ public:
 
     /**
      * @brief 连接到远端
+     * @param host 目标主机地址
+     * @param port 端口号
      * @return 连接任务；socket 选项配置或连接失败通过 IOError 返回
      * @note 创建非阻塞socket和ring buffer；不会阻塞OS线程。
      */
@@ -422,6 +432,13 @@ public:
 
     /**
      * @brief 发起一元或兼容模式调用
+     * @param service 服务名称
+     * @param method 方法名称
+     * @param mode 操作模式
+     * @param end_of_stream 是否结束当前流
+     * @param payload 消息负载
+     * @param payload_len 消息负载字节数
+     * @param options 操作选项
      * @return 调用结果；错误通过RpcError返回
      *
      * @details 调用方协程只把请求发送到MPSC队列并等待pending waiter，实际socket写入
@@ -594,6 +611,7 @@ public:
     }
 
     /// @brief 请求通道关闭并唤醒writer loop
+    /// @return 无返回值
     void request_shutdown() {
         bool expected = false;
         if (m_shutdown_requested.compare_exchange_strong(expected, true,
@@ -645,24 +663,31 @@ public:
     }
 
     /// @brief 获取读取器
+    /// @return 绑定当前连接的读取器
     RpcReaderImpl<SocketType, Strategy> get_reader() {
         return RpcReaderImpl<SocketType, Strategy>(*m_ring_buffer, m_reader_setting, *m_socket);
     }
 
     /// @brief 获取写入器
+    /// @return 绑定当前连接的写入器
     RpcWriterImpl<SocketType> get_writer() {
         return RpcWriterImpl<SocketType>(m_writer_setting, *m_socket);
     }
 
     /// @brief 获取底层socket
+    /// @return SocketType& 引用
     SocketType& socket() { return *m_socket; }
     /// @brief 获取RingBuffer
+    /// @return RingBuffer<Strategy, std::dynamic_extent>& 引用
     RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return *m_ring_buffer; }
     /// @brief 获取读取配置
+    /// @return const RpcReaderSetting& 只读引用
     const RpcReaderSetting& reader_setting() const { return m_reader_setting; }
     /// @brief 当前pending数量
+    /// @return 对应的大小或数量
     size_t pending_count() const { return m_pending_count.load(std::memory_order_acquire); }
     /// @brief 底层socket和RingBuffer是否已创建，可用于拒绝未连接的上层会话创建。
+    /// @return socket 与环形缓冲区均已创建时返回 true，否则返回 false
     bool ready() const { return m_socket != nullptr && m_ring_buffer != nullptr; }
 
 private:

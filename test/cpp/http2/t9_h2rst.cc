@@ -22,6 +22,7 @@ using namespace galay::async;
  * 2. Http2Stream 提供 state() 查询流状态
  * 3. Http2FrameBuilder 提供 rst_stream_bytes() 构建 RST_STREAM 帧
  * 4. 流状态包含 Closed 状态用于过滤
+ * @return 进程退出码；0 表示成功，非 0 表示失败
  */
 
 int main() {

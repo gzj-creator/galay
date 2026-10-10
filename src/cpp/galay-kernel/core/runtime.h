@@ -104,7 +104,11 @@ public:
     {
     }
 
-    RuntimeErrorCode code() const noexcept { return m_code; }  ///< 返回 Runtime 错误类别
+    /**
+     * @brief 返回 Runtime 错误类别
+     * @return 当前对象的类型、状态或错误码
+     */
+    RuntimeErrorCode code() const noexcept { return m_code; }
     std::string_view message() const noexcept
     {
         static constexpr std::array<std::string_view, static_cast<size_t>(RuntimeErrorCode::kResumeFailed) + 1> kMessages = {{
@@ -140,7 +144,11 @@ class RuntimeHandle;
 class Runtime
 {
 public:
-    explicit Runtime(const RuntimeConfig& config = RuntimeConfig{});  ///< 用给定配置构造 Runtime，尚未启动
+    /**
+     * @brief 用给定配置构造 Runtime，尚未启动
+     * @param config 配置对象
+     */
+    explicit Runtime(const RuntimeConfig& config = RuntimeConfig{});
     ~Runtime();  ///< 析构时停止所有受管 scheduler 和阻塞执行器
 
     Runtime(const Runtime&) = delete;
@@ -151,6 +159,7 @@ public:
      *
      * 按 `RuntimeConfig` 创建内置实例；不支持自定义调度器注入。
      * 重复调用安全，已运行时直接返回。
+     * @return 成功时返回空值，失败时返回 RuntimeError 错误
      */
     std::expected<void, RuntimeError> start();
 
@@ -158,17 +167,26 @@ public:
      * @brief 停止 runtime 及其管理的 scheduler。
      *
      * 停止顺序为 blocking -> compute -> IO -> timer；重复调用安全。
+     * @return 无返回值
      */
     void stop();
 
-    /** @brief 在 IO scheduler 上同步执行一个根任务并返回结果。 */
+    /**
+     * @brief 在 IO scheduler 上同步执行一个根任务并返回结果。
+     * @param task 协程任务
+     * @return 成功时返回 T，失败时返回 RuntimeError 错误
+     */
     template <typename T>
     auto block_on_io(Task<T> task) -> std::expected<T, RuntimeError>
     {
         return block_on_on_scheduler(std::move(task), acquire_io_scheduler());
     }
 
-    /** @brief 在 parallel scheduler 上同步执行一个纯计算根任务并返回结果。 */
+    /**
+     * @brief 在 parallel scheduler 上同步执行一个纯计算根任务并返回结果。
+     * @param task 协程任务
+     * @return 成功时返回 T，失败时返回 RuntimeError 错误
+     */
     template <typename T>
     auto block_on_cpu(Task<T> task) -> std::expected<T, RuntimeError>
     {
@@ -287,29 +305,103 @@ public:
 
     /**
      * @brief 获取一个轻量 `RuntimeHandle`，用于把当前 runtime 传递到其他层。
+     * @return 关联当前运行时的轻量句柄
      */
     RuntimeHandle handle() noexcept;
-    RuntimeStats stats() const;  ///< 返回 Runtime 管理的 scheduler 统计；应在 stop() 后或外部同步下调用
+    /**
+     * @brief 返回 Runtime 管理的 scheduler 统计；应在 stop() 后或外部同步下调用
+     * @return RuntimeStats 操作结果
+     */
+    RuntimeStats stats() const;
 
-    bool is_running() const { return m_running.load(std::memory_order_acquire); }  ///< Runtime 当前是否已启动
-    size_t get_io_scheduler_count() const { return m_io_schedulers.size(); }  ///< 返回当前受管 IO scheduler 数量
-    size_t get_parallel_scheduler_count() const { return m_parallel_schedulers.size(); }  ///< 返回当前受管 parallel scheduler 数量
+    /**
+     * @brief Runtime 当前是否已启动
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_running() const { return m_running.load(std::memory_order_acquire); }
+    /**
+     * @brief 返回当前受管 IO scheduler 数量
+     * @return 对应的大小或数量
+     */
+    size_t get_io_scheduler_count() const { return m_io_schedulers.size(); }
+    /**
+     * @brief 返回当前受管 parallel scheduler 数量
+     * @return 对应的大小或数量
+     */
+    size_t get_parallel_scheduler_count() const { return m_parallel_schedulers.size(); }
 
-    IOScheduler* get_io_scheduler(size_t index);  ///< 按索引返回 IO scheduler；越界时返回 nullptr
-    ParallelScheduler* get_parallel_scheduler(size_t index);  ///< 按索引返回 parallel scheduler；越界时返回 nullptr
-    IOScheduler* get_next_io_scheduler();  ///< 以轮询方式返回下一个 IO scheduler；不存在时返回 nullptr
-    ParallelScheduler* get_next_parallel_scheduler();  ///< 以轮询方式返回下一个 parallel scheduler；不存在时返回 nullptr
+    /**
+     * @brief 按索引返回 IO scheduler；越界时返回 nullptr
+     * @param index 元素索引
+     * @return IOScheduler* 指针
+     */
+    IOScheduler* get_io_scheduler(size_t index);
+    /**
+     * @brief 按索引返回 parallel scheduler；越界时返回 nullptr
+     * @param index 元素索引
+     * @return ParallelScheduler* 指针
+     */
+    ParallelScheduler* get_parallel_scheduler(size_t index);
+    /**
+     * @brief 以轮询方式返回下一个 IO scheduler；不存在时返回 nullptr
+     * @return IOScheduler* 指针
+     */
+    IOScheduler* get_next_io_scheduler();
+    /**
+     * @brief 以轮询方式返回下一个 parallel scheduler；不存在时返回 nullptr
+     * @return ParallelScheduler* 指针
+     */
+    ParallelScheduler* get_next_parallel_scheduler();
 
 private:
-    void create_default_schedulers();  ///< 按配置或 CPU 数生成默认 scheduler 集合
-    void apply_affinity_config();  ///< 把 RuntimeAffinityConfig 应用到所有已注册 scheduler
-    std::expected<void, RuntimeError> ensure_started();  ///< 若 Runtime 尚未启动则触发一次启动
-    std::expected<IOScheduler*, RuntimeError> acquire_io_scheduler();  ///< 保留 IO 根任务提交时的具体调度器类型
-    std::expected<ParallelScheduler*, RuntimeError> acquire_parallel_scheduler();  ///< 保留 CPU 根任务提交时的具体调度器类型
-    void bind_task_to_runtime(const TaskRef& task, Scheduler* scheduler);  ///< 给根任务绑定 Runtime 与目标调度器
-    static size_t get_cpu_count();  ///< 返回当前机器可用 CPU 数量
-    static RuntimeError map_task_result_error(const detail::TaskResultError& error) noexcept;  ///< 把任务消费错误映射为 RuntimeError
-    void configure_io_scheduler_steal_domains();  ///< 为 Runtime 管理的 IO scheduler 下发 steal-domain 配置
+    /**
+     * @brief 按配置或 CPU 数生成默认 scheduler 集合
+     * @return 无返回值
+     */
+    void create_default_schedulers();
+    /**
+     * @brief 把 RuntimeAffinityConfig 应用到所有已注册 scheduler
+     * @return 无返回值
+     */
+    void apply_affinity_config();
+    /**
+     * @brief 若 Runtime 尚未启动则触发一次启动
+     * @return 成功时返回空值，失败时返回 RuntimeError 错误
+     */
+    std::expected<void, RuntimeError> ensure_started();
+    /**
+     * @brief 保留 IO 根任务提交时的具体调度器类型
+     * @return 成功时返回 IOScheduler*，失败时返回 RuntimeError 错误
+     */
+    std::expected<IOScheduler*, RuntimeError> acquire_io_scheduler();
+    /**
+     * @brief 保留 CPU 根任务提交时的具体调度器类型
+     * @return 成功时返回 ParallelScheduler*，失败时返回 RuntimeError 错误
+     */
+    std::expected<ParallelScheduler*, RuntimeError> acquire_parallel_scheduler();
+    /**
+     * @brief 给根任务绑定 Runtime 与目标调度器
+     * @param task 协程任务
+     * @param scheduler 执行异步操作的 IO 调度器
+     * @return 无返回值
+     */
+    void bind_task_to_runtime(const TaskRef& task, Scheduler* scheduler);
+    /**
+     * @brief 返回当前机器可用 CPU 数量
+     * @return 对应的大小或数量
+     */
+    static size_t get_cpu_count();
+    /**
+     * @brief 把任务消费错误映射为 RuntimeError
+     * @param error 错误信息
+     * @return RuntimeError 操作结果
+     */
+    static RuntimeError map_task_result_error(const detail::TaskResultError& error) noexcept;
+    /**
+     * @brief 为 Runtime 管理的 IO scheduler 下发 steal-domain 配置
+     * @return 无返回值
+     */
+    void configure_io_scheduler_steal_domains();
 
     std::vector<std::unique_ptr<IOScheduler>> m_io_schedulers;  ///< Runtime 持有的 IO scheduler 集合
     std::vector<std::unique_ptr<ParallelScheduler>> m_parallel_schedulers;  ///< Runtime 持有的 parallel scheduler 集合
@@ -349,7 +441,11 @@ public:
      */
     static std::optional<RuntimeHandle> try_current();
 
-    bool is_valid() const noexcept { return m_runtime != nullptr; }  ///< 当前是否绑定到有效 Runtime
+    /**
+     * @brief 当前是否绑定到有效 Runtime
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_valid() const noexcept { return m_runtime != nullptr; }
 
     /**
      * @brief 通过当前 runtime 在 IO scheduler 上提交任务。
@@ -408,6 +504,8 @@ class RuntimeBuilder
 public:
     /**
      * @brief 设置 IO scheduler 数量。
+     * @param n 数量
+     * @return 当前对象引用
      * @note 传 `GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 时由 runtime 按 CPU 数自动推导
      */
     RuntimeBuilder& io_scheduler_count(size_t n)
@@ -418,6 +516,8 @@ public:
 
     /**
      * @brief 设置 parallel scheduler 数量。
+     * @param n 数量
+     * @return 当前对象引用
      * @note 传 `GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 时由 runtime 按 CPU 数自动推导
      */
     RuntimeBuilder& parallel_scheduler_count(size_t n)
@@ -428,6 +528,9 @@ public:
 
     /**
      * @brief 对前 `ioCount` / `parallelCount` 个 scheduler 依次分配 CPU 亲和性。
+     * @param ioCount IO 调度器数量
+     * @param parallelCount 并行调度器数量
+     * @return 当前对象引用
      */
     RuntimeBuilder& sequential_affinity(size_t ioCount, size_t parallelCount)
     {
@@ -439,6 +542,8 @@ public:
 
     /**
      * @brief 为每个 scheduler 指定显式 CPU 亲和性列表。
+     * @param ioCpus IO 调度器绑定的 CPU 集合
+     * @param parallelCpus 并行调度器绑定的 CPU 集合
      * @return 列表长度与当前 scheduler 配置完全匹配时返回 `true`
      */
     bool custom_affinity(std::vector<uint32_t> ioCpus, std::vector<uint32_t> parallelCpus)
@@ -455,6 +560,8 @@ public:
 
     /**
      * @brief 直接覆盖完整 affinity 配置。
+     * @param affinity CPU 亲和性配置
+     * @return 当前对象引用
      */
     RuntimeBuilder& apply_affinity(const RuntimeAffinityConfig& affinity)
     {
@@ -464,11 +571,13 @@ public:
 
     /**
      * @brief 按当前 builder 配置构造 `Runtime`。
+     * @return 按当前配置创建的 Runtime 对象
      */
     Runtime build() const { return Runtime(m_config); }
 
     /**
      * @brief 导出当前 builder 累积的配置快照。
+     * @return 当前构建器的配置快照
      */
     RuntimeConfig build_config() const { return m_config; }
 

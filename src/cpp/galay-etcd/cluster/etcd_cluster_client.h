@@ -80,11 +80,13 @@ public:
 
     /**
      * @brief 记录一次请求开始
+     * @return 无返回值
      */
     void record_request();
 
     /**
      * @brief 记录一次重试
+     * @return 无返回值
      */
     void record_retry();
 
@@ -92,6 +94,7 @@ public:
      * @brief 记录端点成功
      * @param index 端点下标
      * @param when 成功时间，默认使用当前系统时间
+     * @return 无返回值
      */
     void mark_success(
         size_t index,
@@ -102,6 +105,8 @@ public:
      * @param index 端点下标
      * @param error 失败错误
      * @param endpoint_unhealthy 是否将该端点标记为 unhealthy
+     * @param when 触发时刻
+     * @return 无返回值
      */
     void mark_failure(
         size_t index,
@@ -122,6 +127,7 @@ public:
      * @brief 记录一次主动探测成功
      * @param index 端点下标
      * @param when 探测成功时间
+     * @return 无返回值
      */
     void mark_probe_success(
         size_t index,
@@ -132,6 +138,7 @@ public:
      * @param index 端点下标
      * @param error 探测失败错误
      * @param when 探测失败时间
+     * @return 无返回值
      */
     void mark_probe_failure(
         size_t index,
@@ -209,15 +216,30 @@ public:
     EtcdClientLease& operator=(const EtcdClientLease&) = delete;
     ~EtcdClientLease();
 
-    /** @brief 获取租约持有的 client；空租约返回 nullptr。 */
+    /**
+     * @brief 获取租约持有的 client；空租约返回 nullptr。
+     * @return EtcdClient* 指针
+     */
     [[nodiscard]] EtcdClient* get() const noexcept;
-    /** @brief 解引用租约持有的 client。 */
+    /**
+     * @brief 解引用租约持有的 client。
+     * @return EtcdClient& 引用
+     */
     [[nodiscard]] EtcdClient& operator*() const noexcept;
-    /** @brief 访问租约持有的 client。 */
+    /**
+     * @brief 访问租约持有的 client。
+     * @return EtcdClient* 指针
+     */
     [[nodiscard]] EtcdClient* operator->() const noexcept;
-    /** @brief 判断租约是否持有 client。 */
+    /**
+     * @brief 判断租约是否持有 client。
+     * @return 持有有效资源时返回 true，否则返回 false
+     */
     [[nodiscard]] explicit operator bool() const noexcept;
-    /** @brief 提前归还 client；可重复调用且不阻塞。 */
+    /**
+     * @brief 提前归还 client；可重复调用且不阻塞。
+     * @return 无返回值
+     */
     void release() noexcept;
 
 private:
@@ -321,9 +343,15 @@ public:
         return std::invoke(std::forward<Fn>(fn), **lease);
     }
 
-    /** @brief 返回池持有的 client 总数。 */
+    /**
+     * @brief 返回池持有的 client 总数。
+     * @return 对应的大小或数量
+     */
     [[nodiscard]] size_t size() const noexcept;
-    /** @brief 返回当前空闲 client 数量的并发快照。 */
+    /**
+     * @brief 返回当前空闲 client 数量的并发快照。
+     * @return 对应的大小或数量
+     */
     [[nodiscard]] size_t idle_count() const noexcept;
 
 private:

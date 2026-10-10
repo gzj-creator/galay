@@ -77,16 +77,28 @@ class RpcServer;
 class RpcServerBuilder {
 public:
     /// @brief 设置监听地址
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcServerBuilder& host(std::string value)                            { m_config.host = std::move(value); return *this; }
     /// @brief 设置监听端口
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcServerBuilder& port(uint16_t value)                               { m_config.port = value; return *this; }
     /// @brief 设置监听队列长度
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcServerBuilder& backlog(int value)                                 { m_config.backlog = value; return *this; }
     /// @brief 设置已接受连接是否启用 TCP_NODELAY
+    /// @param value 是否启用该选项
+    /// @return 当前对象引用
     RpcServerBuilder& tcp_no_delay(bool value)                             { m_config.tcp_no_delay = value; return *this; }
     /// @brief 设置IO调度器数量
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcServerBuilder& io_scheduler_count(size_t value)                     { m_config.io_scheduler_count = value; return *this; }
     /// @brief 设置计算调度器数量
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcServerBuilder& parallel_scheduler_count(size_t value)                { m_config.parallel_scheduler_count = value; return *this; }
     /**
      * @brief 设置顺序绑核策略
@@ -117,12 +129,18 @@ public:
         return true;
     }
     /// @brief 设置环形缓冲区大小
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcServerBuilder& ring_buffer_size(size_t value)                       { m_config.ring_buffer_size = value; return *this; }
     /// @brief 设置请求前置拦截器
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     RpcServerBuilder& interceptor(RpcServerInterceptor value)             { m_config.interceptor = std::move(value); return *this; }
     /// @brief 构建RpcServer实例
+    /// @return 按当前配置创建的 RpcServer 对象
     RpcServer build() const;
     /// @brief 仅导出配置
+    /// @return 当前构建器的配置快照
     RpcServerConfig build_config() const                                  { return m_config; }
 
 private:
@@ -277,6 +295,7 @@ public:
 
     /**
      * @brief 停止服务器
+     * @return 无返回值
      */
     void stop() {
         if (m_running.exchange(false, std::memory_order_acq_rel)) {
@@ -287,6 +306,7 @@ public:
 
     /**
      * @brief 检查是否运行中
+     * @return 正在运行时返回 true，否则返回 false
      */
     bool is_running() const {
         return m_running.load(std::memory_order_acquire);
@@ -294,11 +314,13 @@ public:
 
     /**
      * @brief 获取Runtime
+     * @return Runtime& 引用
      */
     Runtime& runtime() { return m_runtime; }
 
     /**
      * @brief 获取最近一次异步运行错误（若有）
+     * @return 最近一次异步运行错误；无错误时为 std::nullopt
      * @note 非线程安全，仅保留兼容诊断用途；启动失败必须读取start()返回值。
      */
     std::optional<RpcError> last_error() const {
@@ -442,6 +464,8 @@ private:
 
     /**
      * @brief 接受连接循环
+     * @param listener 监听 socket
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> accept_loop(AsyncTcpSocket listener) {
         while (m_running.load(std::memory_order_acquire)) {
@@ -484,6 +508,8 @@ private:
 
     /**
      * @brief 处理连接
+     * @param handle 句柄
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> handle_connection(GHandle handle) {
         RpcConn conn(handle, RpcReaderSetting{}, RpcWriterSetting{}, m_config.ring_buffer_size);

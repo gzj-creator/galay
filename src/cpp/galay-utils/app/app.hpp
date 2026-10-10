@@ -47,7 +47,7 @@ public:
     /**
      * @brief 声明版本选项
      * @param text 触发版本选项时输出的文本
-     * @param short_name 短选项名，`'\0'` 表示仅注册 `--version`
+     * @param shortName 短选项名，`'\0'` 表示仅注册 `--version`
      * @return 当前应用引用
      */
     App& version(std::string text, char shortName = '\0') {

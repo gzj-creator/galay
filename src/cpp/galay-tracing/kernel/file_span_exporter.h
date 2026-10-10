@@ -38,6 +38,7 @@ public:
 
     /**
      * @brief 文件导出器持有互斥锁和输出流，禁止移动赋值
+     * @return 该操作已禁用，不可调用
      */
     FileSpanExporter& operator=(FileSpanExporter&&) = delete;
 

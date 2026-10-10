@@ -40,6 +40,8 @@ void signal_handler(int) {
 
 /**
  * @brief HTTP 请求处理器 - 简单的 OK 响应
+ * @param conn 连接对象
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> handle_http_request(HttpConn conn) {
     auto reader = conn.get_reader();

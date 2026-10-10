@@ -930,7 +930,11 @@ public:
         return m_inner_operation->await_suspend(handle);
     }
 
-    /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
+    /**
+     * @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。
+     * @param timer 定时器
+     * @return 无返回值
+     */
     void bind_timeout_timer(TimeoutTimer* timer) noexcept {
         SequenceAwaitableBase::bind_timeout_timer(timer);
     }
@@ -1221,6 +1225,7 @@ class Http2ConnImpl
 public:
     /**
      * @brief 从 Socket 构造（Prior Knowledge 模式）
+     * @param socket 底层 socket
      */
     Http2ConnImpl(SocketType&& socket)
         : m_socket(std::move(socket))
@@ -1241,6 +1246,7 @@ public:
 
     /**
      * @brief 从 HttpConn 升级构造（h2c Upgrade 模式）
+     * @param http_conn 用于升级的 HTTP 连接
      * @details 类似 WebSocket 从 HTTP/1.1 升级的方式
      */
     Http2ConnImpl(galay::http::HttpConnImpl<SocketType>&& http_conn)
@@ -1286,6 +1292,8 @@ public:
 
     /**
      * @brief 从 Socket 和 RingBuffer 构造
+     * @param socket 底层 socket
+     * @param ring_buffer 环形缓冲区
      */
     Http2ConnImpl(SocketType&& socket, RingBuffer<Strategy, std::dynamic_extent>&& ring_buffer)
         : m_socket(std::move(socket))
@@ -1673,6 +1681,7 @@ public:
 
     /**
      * @brief 获取接收缓冲区引用
+     * @return RingBuffer<Strategy, std::dynamic_extent>& 引用
      */
     RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return m_ring_buffer; }
 
@@ -1680,6 +1689,7 @@ public:
      * @brief 将数据放入接收缓冲区
      * @param data 数据指针
      * @param len 数据长度
+     * @return 无返回值
      */
     void feed_data(const char* data, size_t len) {
         auto write_iovecs = borrow_write_iovecs(m_ring_buffer);
@@ -1793,6 +1803,7 @@ public:
     
     /**
      * @brief 获取帧读取 operation
+     * @return 单帧读取等待体，通过 co_await 取得帧或读取错误
      */
     auto read_frame() {
         return detail::build_read_operation(
@@ -1807,6 +1818,8 @@ public:
 
     /**
      * @brief 获取批量帧读取 operation
+     * @param max_frames 最多处理的帧数量
+     * @return 批量帧读取等待体，通过 co_await 取得帧集合或读取错误
      */
     auto read_frames_batch(size_t max_frames = std::numeric_limits<size_t>::max()) {
         return detail::build_read_operation(
@@ -1836,6 +1849,8 @@ public:
 
     /**
      * @brief 获取帧写入 operation
+     * @param frame 帧对象
+     * @return 帧写入等待体，通过 co_await 取得写入结果
      */
     auto write_frame(const Http2Frame& frame) {
         return detail::build_write_operation(m_socket, frame.serialize());
@@ -1843,6 +1858,8 @@ public:
     
     /**
      * @brief 获取原始数据写入 operation
+     * @param data 输入数据
+     * @return 原始字节写入等待体，通过 co_await 取得写入结果
      */
     auto write_raw(std::string data) {
         return detail::build_write_operation(m_socket, std::move(data));
@@ -1852,6 +1869,7 @@ public:
     
     /**
      * @brief 发送 SETTINGS 帧
+     * @return SETTINGS 帧写入等待体，通过 co_await 取得写入结果
      */
     auto send_settings() {
         auto frame = m_local_settings.to_frame();
@@ -1861,6 +1879,7 @@ public:
     
     /**
      * @brief 发送 SETTINGS ACK
+     * @return SETTINGS ACK 写入等待体，通过 co_await 取得写入结果
      */
     auto send_settings_ack() {
         Http2SettingsFrame frame;
@@ -1870,6 +1889,9 @@ public:
     
     /**
      * @brief 发送 PING
+     * @param data 输入数据
+     * @param ack 是否为确认帧
+     * @return PING 帧写入等待体，通过 co_await 取得写入结果
      */
     auto send_ping(const uint8_t* data, bool ack = false) {
         Http2PingFrame frame;
@@ -1880,6 +1902,10 @@ public:
     
     /**
      * @brief 发送 GOAWAY
+     * @param error 错误信息
+     * @param debug 调试数据
+     * @param last_stream_id 最后处理的流标识符
+     * @return GOAWAY 帧写入等待体，通过 co_await 取得写入结果
      */
     auto send_goaway(Http2ErrorCode error,
                     const std::string& debug = "",
@@ -1895,6 +1921,9 @@ public:
     
     /**
      * @brief 发送 RST_STREAM
+     * @param stream_id 流标识符
+     * @param error 错误信息
+     * @return RST_STREAM 帧写入等待体，通过 co_await 取得写入结果
      */
     auto send_rst_stream(uint32_t stream_id, Http2ErrorCode error) {
         auto bytes = Http2FrameBuilder::rst_stream_bytes(stream_id, error);
@@ -1909,6 +1938,9 @@ public:
     
     /**
      * @brief 发送 WINDOW_UPDATE
+     * @param stream_id 流标识符
+     * @param increment 窗口增量，单位为字节
+     * @return WINDOW_UPDATE 帧写入等待体，通过 co_await 取得写入结果
      */
     auto send_window_update(uint32_t stream_id, uint32_t increment) {
         Http2WindowUpdateFrame frame;
@@ -1919,6 +1951,11 @@ public:
     
     /**
      * @brief 发送 HEADERS 帧
+     * @param stream_id 流标识符
+     * @param headers 头部字段集合
+     * @param end_stream 是否结束当前流
+     * @param end_headers 是否结束头部块
+     * @return HEADERS 帧写入等待体，通过 co_await 取得写入结果
      */
     auto send_headers(
         uint32_t stream_id, 
@@ -1942,6 +1979,10 @@ public:
     
     /**
      * @brief 发送 DATA 帧（单帧）
+     * @param stream_id 流标识符
+     * @param data 输入数据引用
+     * @param end_stream 是否结束当前流
+     * @return 单个 DATA 帧写入等待体，通过 co_await 取得写入结果
      * @details 发送窗口不足时返回立即就绪的 FlowControlError，不挂起也不占用 WRITE 槽位。
      */
     auto send_data_frame(
@@ -1975,6 +2016,10 @@ public:
     
     /**
      * @brief 发送 PUSH_PROMISE 帧
+     * @param stream_id 流标识符
+     * @param promised_stream_id 承诺流标识符
+     * @param headers 头部字段集合
+     * @return PUSH_PROMISE 帧写入等待体，通过 co_await 取得写入结果
      */
     auto send_push_promise(
         uint32_t stream_id,
@@ -1999,6 +2044,11 @@ public:
     
     /**
      * @brief 创建推送流并准备 PUSH_PROMISE
+     * @param stream_id 流标识符
+     * @param method 方法名称
+     * @param path 路径
+     * @param authority 请求目标主机与端口
+     * @param scheme 请求协议方案
      * @return 推送准备结果；如果推送被禁用返回 nullopt
      */
     std::optional<PushPromisePrepareResult> prepare_push_promise(

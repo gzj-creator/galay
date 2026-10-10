@@ -80,8 +80,16 @@ namespace galay::redis
         RedisBorrowedCommand(std::string&&, size_t = 1) = delete;       ///< 禁止右值构造
         RedisBorrowedCommand(std::string_view, size_t = 1) = delete;    ///< 禁止 string_view 构造
 
-        [[nodiscard]] std::string_view encoded() const noexcept { return m_encoded; }          ///< 获取编码后的命令视图
-        [[nodiscard]] size_t expected_replies() const noexcept { return m_expected_replies; }  ///< 获取期望回复数量
+        /**
+         * @brief 获取编码后的命令视图
+         * @return 处理后的 std::string_view 结果
+         */
+        [[nodiscard]] std::string_view encoded() const noexcept { return m_encoded; }
+        /**
+         * @brief 获取期望回复数量
+         * @return size_t 操作结果
+         */
+        [[nodiscard]] size_t expected_replies() const noexcept { return m_expected_replies; }
 
     private:
         std::string_view m_encoded;          ///< 编码后的命令视图
@@ -395,6 +403,7 @@ namespace galay::redis
 
         /**
          * @brief 移动构造函数
+         * @param other 源对象
          * @warning 不要在操作进行中移动 RedisClient
          * @warning 确保所有 awaitable 都处于 Invalid 状态
          */
@@ -402,6 +411,8 @@ namespace galay::redis
 
         /**
          * @brief 移动赋值运算符
+         * @param other 源对象
+         * @return RedisClient& 引用
          * @warning 不要在操作进行中移动 RedisClient
          * @warning 确保所有 awaitable 都处于 Invalid 状态
          */
@@ -446,7 +457,12 @@ namespace galay::redis
          * @return 命令交换操作等待体
          */
         RedisExchangeOperationFor<Strategy> command_borrowed(const RedisBorrowedCommand& packet);
-        RedisExchangeOperationFor<Strategy> command_borrowed(RedisBorrowedCommand&& packet) = delete; ///< 禁止右值
+        /**
+         * @brief 禁止右值
+         * @param packet 数据包
+         * @return 该操作已禁用，不可调用
+         */
+        RedisExchangeOperationFor<Strategy> command_borrowed(RedisBorrowedCommand&& packet) = delete;
 
         /**
          * @brief 仅接收指定数量的回复（不发送命令）
@@ -471,16 +487,47 @@ namespace galay::redis
          * @return 命令交换操作等待体
          */
         RedisExchangeOperationFor<Strategy> batch_borrowed(const std::string& encoded, size_t expected_replies);
-        RedisExchangeOperationFor<Strategy> batch_borrowed(std::string&& encoded, size_t expected_replies) = delete; ///< 禁止右值
+        /**
+         * @brief 禁止右值
+         * @param encoded 已编码数据
+         * @param expected_replies 预期响应数量
+         * @return 该操作已禁用，不可调用
+         */
+        RedisExchangeOperationFor<Strategy> batch_borrowed(std::string&& encoded, size_t expected_replies) = delete;
 
         // ======================== 连接管理 ========================
 
-        AsyncTcpSocket& socket() { return m_socket; }                               ///< 获取底层 TCP 套接字
-        protocol::RespParser& parser() { return m_parser; }                    ///< 获取 RESP 解析器
-        galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return *m_ring_buffer; } ///< 获取接收环形缓冲区
-        const galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() const { return *m_ring_buffer; } ///< 获取接收环形缓冲区
-        const AsyncRedisConfig& async_config() const { return m_config; }       ///< 获取异步配置
-        void set_closed(bool closed) { m_is_closed = closed; }                  ///< 设置关闭状态
+        /**
+         * @brief 获取底层 TCP 套接字
+         * @return AsyncTcpSocket& 引用
+         */
+        AsyncTcpSocket& socket() { return m_socket; }
+        /**
+         * @brief 获取 RESP 解析器
+         * @return protocol::RespParser& 引用
+         */
+        protocol::RespParser& parser() { return m_parser; }
+        /**
+         * @brief 获取接收环形缓冲区
+         * @return galay::utils::RingBuffer<Strategy, std::dynamic_extent>& 引用
+         */
+        galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return *m_ring_buffer; }
+        /**
+         * @brief 获取接收环形缓冲区
+         * @return const galay::utils::RingBuffer<Strategy, std::dynamic_extent>& 引用
+         */
+        const galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() const { return *m_ring_buffer; }
+        /**
+         * @brief 获取异步配置
+         * @return const AsyncRedisConfig& 引用
+         */
+        const AsyncRedisConfig& async_config() const { return m_config; }
+        /**
+         * @brief 设置关闭状态
+         * @param closed 是否已关闭
+         * @return 无返回值
+         */
+        void set_closed(bool closed) { m_is_closed = closed; }
 
         /**
          * @brief 关闭连接
@@ -490,7 +537,11 @@ namespace galay::redis
             return m_socket.close();
         }
 
-        bool is_closed() const { return m_is_closed; } ///< 检查连接是否已关闭
+        /**
+         * @brief 检查连接是否已关闭
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_closed() const { return m_is_closed; }
 
         ~RedisClient() = default;
 
@@ -521,10 +572,23 @@ namespace galay::redis
         RedissClient(IOScheduler* scheduler,
                      AsyncRedisConfig config = AsyncRedisConfig::no_timeout(),
                      RedissClientConfig tls_config = {});
-        RedissClient(RedissClient&& other) noexcept;                          ///< 移动构造
-        RedissClient& operator=(RedissClient&& other) noexcept;               ///< 移动赋值
+        /**
+         * @brief 移动构造
+         * @param other 源对象
+         */
+        RedissClient(RedissClient&& other) noexcept;
+        /**
+         * @brief 移动赋值
+         * @param other 源对象
+         * @return 当前对象引用
+         */
+        RedissClient& operator=(RedissClient&& other) noexcept;
         RedissClient(const RedissClient&) = delete;                           ///< 禁止拷贝
-        RedissClient& operator=(const RedissClient&) = delete;                ///< 禁止拷贝赋值
+        /**
+         * @brief 禁止拷贝赋值
+         * @return 该操作已禁用，不可调用
+         */
+        RedissClient& operator=(const RedissClient&) = delete;
         ~RedissClient();
 
         /**
@@ -566,11 +630,32 @@ namespace galay::redis
          */
         detail::RedissExchangeOperation batch(std::span<const RedisCommandView> commands);
 
-        const AsyncRedisConfig& async_config() const;                          ///< 获取异步配置
-        const RedissClientConfig& tls_config() const;                          ///< 获取 TLS 配置
-        bool is_closed() const;                                                ///< 检查连接是否已关闭
-        void set_closed(bool closed);                                          ///< 设置关闭状态
-        galay::kernel::CloseAwaitable close();                                ///< 关闭连接
+        /**
+         * @brief 获取异步配置
+         * @return const AsyncRedisConfig& 引用
+         */
+        const AsyncRedisConfig& async_config() const;
+        /**
+         * @brief 获取 TLS 配置
+         * @return const RedissClientConfig& 引用
+         */
+        const RedissClientConfig& tls_config() const;
+        /**
+         * @brief 检查连接是否已关闭
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_closed() const;
+        /**
+         * @brief 设置关闭状态
+         * @param closed 是否已关闭
+         * @return 无返回值
+         */
+        void set_closed(bool closed);
+        /**
+         * @brief 关闭连接
+         * @return galay::kernel::CloseAwaitable 等待体，通过 co_await 执行并取得操作结果
+         */
+        galay::kernel::CloseAwaitable close();
 
     private:
         std::unique_ptr<detail::RedissClientImpl> m_impl; ///< Pimpl 实现指针

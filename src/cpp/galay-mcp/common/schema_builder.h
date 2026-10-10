@@ -273,6 +273,7 @@ private:
      * @brief 将单个属性写入JSON
      * @param writer JSON写入器
      * @param prop 属性定义
+     * @return 无返回值
      */
     static void write_property(json::stream::StreamWriter& writer, const Property& prop) {
         // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查

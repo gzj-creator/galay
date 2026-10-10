@@ -76,6 +76,7 @@ public:
 
     /**
      * @brief 获取服务名称
+     * @return const std::string& 只读引用
      */
     const std::string& name() const { return m_name; }
 
@@ -130,6 +131,7 @@ public:
 
     /**
      * @brief 获取所有方法名
+     * @return 处理后的 std::vector<std::string> 结果
      */
     std::vector<std::string> method_names() const {
         std::vector<std::string> names;
@@ -154,6 +156,9 @@ public:
 protected:
     /**
      * @brief 注册一元方法（兼容旧接口）
+     * @param name 名称
+     * @param handler 处理回调
+     * @return 无返回值
      */
     void register_method(std::string_view name, RpcMethodHandler handler) {
         register_unary_method(name, std::move(handler));
@@ -164,6 +169,7 @@ protected:
      * @tparam T 服务类型
      * @param name 方法名
      * @param method 成员函数指针
+     * @return 无返回值
      */
     template<typename T>
     void register_method(std::string_view name, Task<void> (T::*method)(RpcContext&)) {
@@ -171,44 +177,68 @@ protected:
     }
 
     /// @brief 注册一元方法
+    /// @param name 名称
+    /// @param handler 处理回调
+    /// @return 无返回值
     void register_unary_method(std::string_view name, RpcMethodHandler handler) {
         register_method_by_mode(name, RpcCallMode::UNARY, std::move(handler));
     }
 
     /// @brief 注册客户端流方法
+    /// @param name 名称
+    /// @param handler 处理回调
+    /// @return 无返回值
     void register_client_streaming_method(std::string_view name, RpcMethodHandler handler) {
         register_method_by_mode(name, RpcCallMode::CLIENT_STREAMING, std::move(handler));
     }
 
     /// @brief 注册服务端流方法
+    /// @param name 名称
+    /// @param handler 处理回调
+    /// @return 无返回值
     void register_server_streaming_method(std::string_view name, RpcMethodHandler handler) {
         register_method_by_mode(name, RpcCallMode::SERVER_STREAMING, std::move(handler));
     }
 
     /// @brief 注册双向流方法
+    /// @param name 名称
+    /// @param handler 处理回调
+    /// @return 无返回值
     void register_bidi_streaming_method(std::string_view name, RpcMethodHandler handler) {
         register_method_by_mode(name, RpcCallMode::BIDI_STREAMING, std::move(handler));
     }
 
     /// @brief 注册一元成员方法
+    /// @param name 名称
+    /// @param method 服务成员方法指针
+    /// @return 无返回值
     template<typename T>
     void register_unary_method(std::string_view name, Task<void> (T::*method)(RpcContext&)) {
         register_member_method(name, RpcCallMode::UNARY, method);
     }
 
     /// @brief 注册客户端流成员方法
+    /// @param name 名称
+    /// @param method 服务成员方法指针
+    /// @return 无返回值
     template<typename T>
     void register_client_streaming_method(std::string_view name, Task<void> (T::*method)(RpcContext&)) {
         register_member_method(name, RpcCallMode::CLIENT_STREAMING, method);
     }
 
     /// @brief 注册服务端流成员方法
+    /// @param name 名称
+    /// @param method 服务成员方法指针
+    /// @return 无返回值
     template<typename T>
     void register_server_streaming_method(std::string_view name, Task<void> (T::*method)(RpcContext&)) {
         register_member_method(name, RpcCallMode::SERVER_STREAMING, method);
     }
 
     /// @brief 注册双向流成员方法
+    /// @param name 名称
+    /// @param method 服务成员方法指针
+    /// @return 无返回值
     template<typename T>
     void register_bidi_streaming_method(std::string_view name, Task<void> (T::*method)(RpcContext&)) {
         register_member_method(name, RpcCallMode::BIDI_STREAMING, method);
@@ -218,6 +248,7 @@ protected:
      * @brief 注册流会话方法（独立于帧级流模式）
      * @param name 方法名
      * @param handler 流处理函数
+     * @return 无返回值
      */
     void register_stream_method(std::string_view name, RpcStreamHandler handler) {
         m_stream_session_methods[std::string(name)] = std::move(handler);
@@ -228,6 +259,7 @@ protected:
      * @tparam T 服务类型
      * @param name 方法名
      * @param method 成员函数指针
+     * @return 无返回值
      */
     template<typename T>
     void register_stream_method(std::string_view name, Task<void> (T::*method)(RpcStream&)) {
@@ -245,6 +277,8 @@ private:
     };
 
     /// @brief 将流调用模式转换为索引
+    /// @param mode 操作模式
+    /// @return 流模式索引；客户端流为 0、服务端流为 1、双向流为 2，其他模式为 0
     static size_t stream_mode_index(RpcCallMode mode) {
         switch (mode) {
             case RpcCallMode::CLIENT_STREAMING:
@@ -259,6 +293,10 @@ private:
     }
 
     /// @brief 按调用模式注册方法
+    /// @param name 名称
+    /// @param mode 操作模式
+    /// @param handler 处理回调
+    /// @return 无返回值
     void register_method_by_mode(std::string_view name, RpcCallMode mode, RpcMethodHandler handler) {
         const std::string method_name(name);
         if (mode == RpcCallMode::UNARY) {
@@ -273,6 +311,10 @@ private:
     }
 
     /// @brief 注册成员方法（将成员函数包装为RpcMethodHandler）
+    /// @param name 名称
+    /// @param mode 操作模式
+    /// @param method 服务成员方法指针
+    /// @return 无返回值
     template<typename T>
     void register_member_method(std::string_view name,
                               RpcCallMode mode,
@@ -309,18 +351,22 @@ public:
 
     /**
      * @brief 获取请求
+     * @return RpcRequest& 引用
      */
     RpcRequest& request() { return m_request; }
     const RpcRequest& request() const { return m_request; }
 
     /**
      * @brief 获取响应
+     * @return RpcResponse& 引用
      */
     RpcResponse& response() { return m_response; }
     const RpcResponse& response() const { return m_response; }
 
     /**
      * @brief 设置错误
+     * @param code 错误码
+     * @return 无返回值
      */
     void set_error(RpcErrorCode code) {
         m_response.error_code(code);
@@ -328,17 +374,24 @@ public:
 
     /**
      * @brief 设置响应数据
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @return 无返回值
      */
     void set_payload(const char* data, size_t len) {
         m_response.payload(data, len);
     }
 
     /// @brief 设置响应数据（字符串）
+    /// @param data 输入数据引用
+    /// @return 无返回值
     void set_payload(const std::string& data) {
         m_response.payload(data.data(), data.size());
     }
 
     /// @brief 设置响应数据（移动向量）
+    /// @param data 输入数据引用
+    /// @return 无返回值
     void set_payload(std::vector<char>&& data) {
         m_response.payload(std::move(data));
     }
@@ -346,6 +399,7 @@ public:
     /**
      * @brief 设置响应payload视图（零拷贝借用模式）
      * @param view 外部payload视图
+     * @return 无返回值
      * @note 需确保view引用的数据在响应发送完成前有效
      */
     void set_payload(const RpcPayloadView& view) {

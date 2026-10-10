@@ -255,12 +255,14 @@ namespace galay::redis
         /**
          * @brief 设置 Sentinel 监控的主节点名称
          * @param master_name 主节点名称
+         * @return 无返回值
          */
         void set_sentinel_master_name(std::string master_name);
 
         /**
          * @brief 设置自动重试次数
          * @param attempts 最大重试次数
+         * @return 无返回值
          */
         void set_auto_retry_attempts(size_t attempts) noexcept;
 
@@ -270,14 +272,22 @@ namespace galay::redis
          */
         Task<RedisCommandResult> refresh_from_sentinel();
 
-        RedisClient<>& master(); ///< 获取主节点客户端引用
+        /**
+         * @brief 获取主节点客户端引用
+         * @return RedisClient<>& 引用
+         */
+        RedisClient<>& master();
         /**
          * @brief 获取指定索引的从节点客户端
          * @param index 从节点索引
          * @return 从节点客户端引用（若索引越界返回空）
          */
         std::optional<std::reference_wrapper<RedisClient<>>> replica(size_t index);
-        size_t replica_count() const noexcept; ///< 获取从节点数量
+        /**
+         * @brief 获取从节点数量
+         * @return 对应的大小或数量
+         */
+        size_t replica_count() const noexcept;
 
         /**
          * @brief 获取拓扑统计信息
@@ -296,18 +306,59 @@ namespace galay::redis
             bool connected = false;                            ///< 连接状态
         };
 
+        /**
+         * @brief 自动重试执行协程
+         * @param prefer_read 是否优先选择读事件
+         * @param cmd 命令名称
+         * @param args 调用参数包
+         * @param max_attempts 最大尝试次数
+         * @return 协程任务，完成后返回 RedisCommandResult 结果
+         */
         Task<RedisCommandResult> run_auto_task(bool prefer_read,
                                              std::string cmd,
                                              std::vector<std::string> args,
-                                             size_t max_attempts); ///< 自动重试执行协程
-        Task<RedisCommandResult> refresh_sentinel_task(); ///< Sentinel 刷新协程
+                                             size_t max_attempts);
+        /**
+         * @brief Sentinel 刷新协程
+         * @return 协程任务，完成后返回 RedisCommandResult 结果
+         */
+        Task<RedisCommandResult> refresh_sentinel_task();
 
-        bool is_retryable_connection_error(const RedisError& error) const noexcept; ///< 判断是否为可重试的连接错误
-        RedisClient<>* choose_read_client(); ///< 选择读客户端（轮询从节点）
-        RedisClient<>* ensure_master(); ///< 确保主节点可用
-        RedisClient<>* choose_available_sentinel(); ///< 选择可用的 Sentinel 节点
-        bool parse_master_address_reply(const std::vector<RedisValue>& values, RedisNodeAddress* out_addr) const; ///< 解析主节点地址回复
-        bool parse_replica_list_reply(const std::vector<RedisValue>& values, std::vector<RedisNodeAddress>* replicas) const; ///< 解析从节点列表回复
+        /**
+         * @brief 判断是否为可重试的连接错误
+         * @param error 错误信息
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_retryable_connection_error(const RedisError& error) const noexcept;
+        /**
+         * @brief 选择读客户端（轮询从节点）
+         * @return RedisClient<>* 指针
+         */
+        RedisClient<>* choose_read_client();
+        /**
+         * @brief 确保主节点可用
+         * @return RedisClient<>* 指针
+         */
+        RedisClient<>* ensure_master();
+        /**
+         * @brief 选择可用的 Sentinel 节点
+         * @return RedisClient<>* 指针
+         */
+        RedisClient<>* choose_available_sentinel();
+        /**
+         * @brief 解析主节点地址回复
+         * @param values 值集合
+         * @param out_addr 接收解析后地址的指针
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool parse_master_address_reply(const std::vector<RedisValue>& values, RedisNodeAddress* out_addr) const;
+        /**
+         * @brief 解析从节点列表回复
+         * @param values 值集合
+         * @param replicas 副本端点集合
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool parse_replica_list_reply(const std::vector<RedisValue>& values, std::vector<RedisNodeAddress>* replicas) const;
 
         IOScheduler* m_scheduler;                                     ///< IO 调度器
         AsyncRedisConfig m_config;                                    ///< 异步配置
@@ -458,12 +509,14 @@ namespace galay::redis
          * @param node_index 节点索引
          * @param slot_start 槽位起始
          * @param slot_end 槽位结束
+         * @return 无返回值
          */
         void set_slot_range(size_t node_index, uint16_t slot_start, uint16_t slot_end);
 
         /**
          * @brief 设置自动刷新槽位信息的间隔
          * @param interval 刷新间隔
+         * @return 无返回值
          */
         void set_auto_refresh_interval(std::chrono::milliseconds interval);
 
@@ -502,7 +555,11 @@ namespace galay::redis
          */
         uint16_t key_slot(const std::string& key) const;
 
-        size_t node_count() const noexcept; ///< 获取节点数量
+        /**
+         * @brief 获取节点数量
+         * @return 对应的大小或数量
+         */
+        size_t node_count() const noexcept;
         /**
          * @brief 获取指定索引的节点客户端
          * @param index 节点索引
@@ -548,25 +605,91 @@ namespace galay::redis
             uint16_t slot = 0;       ///< 目标槽位
         };
 
-        Task<RedisCommandResult> refresh_slots_task(); ///< 刷新槽位协程
+        /**
+         * @brief 刷新槽位协程
+         * @return 协程任务，完成后返回 RedisCommandResult 结果
+         */
+        Task<RedisCommandResult> refresh_slots_task();
+        /**
+         * @brief 自动重试执行协程
+         * @param routing_key 用于选择节点的路由键
+         * @param cmd 命令名称
+         * @param args 调用参数包
+         * @param force_key_routing 是否强制按键路由
+         * @param allow_auto_refresh 是否允许自动刷新拓扑
+         * @param max_attempts 最大尝试次数
+         * @return 协程任务，完成后返回 RedisCommandResult 结果
+         */
         Task<RedisCommandResult> run_auto_task(std::string routing_key,
                                              std::string cmd,
                                              std::vector<std::string> args,
                                              bool force_key_routing,
                                              bool allow_auto_refresh,
-                                             size_t max_attempts); ///< 自动重试执行协程
+                                             size_t max_attempts);
 
-        static uint16_t crc16(const uint8_t* data, size_t len); ///< CRC16 校验和计算
-        static std::string extract_hash_tag(const std::string& key); ///< 提取哈希标签
-        static std::optional<RedirectInfo> parse_redirect(const RedisValue& value); ///< 解析重定向响应
+        /**
+         * @brief CRC16 校验和计算
+         * @param data 输入数据
+         * @param len 数据字节数
+         * @return uint16_t 操作结果
+         */
+        static uint16_t crc16(const uint8_t* data, size_t len);
+        /**
+         * @brief 提取哈希标签
+         * @param key 键
+         * @return 处理后的 std::string 结果
+         */
+        static std::string extract_hash_tag(const std::string& key);
+        /**
+         * @brief 解析重定向响应
+         * @param value 待设置或处理的值
+         * @return std::optional<RedirectInfo> 操作结果
+         */
+        static std::optional<RedirectInfo> parse_redirect(const RedisValue& value);
 
-        RedisClient<>* choose_node_by_slot(uint16_t slot) noexcept; ///< 根据槽位选择节点
-        RedisClient<>* choose_node_by_key(const std::string& key) noexcept; ///< 根据键选择节点
-        ClusterNode* choose_node_handle_by_slot(uint16_t slot) noexcept; ///< 根据槽位选择节点句柄
-        ClusterNode* choose_node_handle_by_key(const std::string& key) noexcept; ///< 根据键选择节点句柄
-        ClusterNode* find_or_create_node(const std::string& host, int32_t port); ///< 查找或创建节点
-        bool apply_cluster_slots(const std::vector<RedisValue>& values, std::string* error_message); ///< 应用集群槽位信息
-        bool should_auto_refresh() const noexcept; ///< 是否需要自动刷新
+        /**
+         * @brief 根据槽位选择节点
+         * @param slot 队列槽位
+         * @return RedisClient<>* 指针
+         */
+        RedisClient<>* choose_node_by_slot(uint16_t slot) noexcept;
+        /**
+         * @brief 根据键选择节点
+         * @param key 键
+         * @return RedisClient<>* 指针
+         */
+        RedisClient<>* choose_node_by_key(const std::string& key) noexcept;
+        /**
+         * @brief 根据槽位选择节点句柄
+         * @param slot 队列槽位
+         * @return ClusterNode* 指针
+         */
+        ClusterNode* choose_node_handle_by_slot(uint16_t slot) noexcept;
+        /**
+         * @brief 根据键选择节点句柄
+         * @param key 键
+         * @return ClusterNode* 指针
+         */
+        ClusterNode* choose_node_handle_by_key(const std::string& key) noexcept;
+        /**
+         * @brief 查找或创建节点
+         * @param host 目标主机地址
+         * @param port 端口号
+         * @return ClusterNode* 指针
+         */
+        ClusterNode* find_or_create_node(const std::string& host, int32_t port);
+        /**
+         * @brief 应用集群槽位信息
+         * @param values 值集合
+         * @param error_message 错误消息
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool apply_cluster_slots(const std::vector<RedisValue>& values, std::string* error_message);
+        /**
+         * @brief 是否需要自动刷新
+         * @return 需要自动刷新拓扑时返回 true，否则返回 false
+         */
+        bool should_auto_refresh() const noexcept;
 
         IOScheduler* m_scheduler;                                     ///< IO 调度器
         AsyncRedisConfig m_config;                                    ///< 异步配置
@@ -645,10 +768,22 @@ namespace galay::redis
             return *this;
         }
 
-        RedissMasterSlaveClient build() const; ///< 构建 Rediss 主从客户端
+        /**
+         * @brief 构建 Rediss 主从客户端
+         * @return 按当前配置创建的对象或创建失败的错误
+         */
+        RedissMasterSlaveClient build() const;
 
-        AsyncRedisConfig build_config() const { return m_config; } ///< 获取当前配置
-        RedissClientConfig build_tls_config() const { return m_tls_config; } ///< 获取 TLS 配置
+        /**
+         * @brief 获取当前配置
+         * @return 当前构建器的配置快照
+         */
+        AsyncRedisConfig build_config() const { return m_config; }
+        /**
+         * @brief 获取 TLS 配置
+         * @return RedissClientConfig 操作结果
+         */
+        RedissClientConfig build_tls_config() const { return m_tls_config; }
 
     private:
         IOScheduler* m_scheduler = nullptr;
@@ -692,8 +827,18 @@ namespace galay::redis
                                          RedisTopologyRefreshConfig refresh_config,
                                          RedisReadPolicy read_policy);
 
-        detail::RedissConnectOperation connect_master(const RedisNodeAddress& master); ///< 连接到主节点
-        detail::RedissConnectOperation add_replica(const RedisNodeAddress& replica); ///< 添加从节点
+        /**
+         * @brief 连接到主节点
+         * @param master 主节点
+         * @return detail::RedissConnectOperation 操作结果
+         */
+        detail::RedissConnectOperation connect_master(const RedisNodeAddress& master);
+        /**
+         * @brief 添加从节点
+         * @param replica 副本节点
+         * @return detail::RedissConnectOperation 操作结果
+         */
+        detail::RedissConnectOperation add_replica(const RedisNodeAddress& replica);
 
         /**
          * @brief 执行 Redis 命令（支持读写分离和自动重试）
@@ -716,15 +861,51 @@ namespace galay::redis
          */
         detail::RedissExchangeOperation batch(std::span<const RedisCommandView> commands,
                                               bool prefer_read = false);
-        detail::RedissConnectOperation add_sentinel(const RedisNodeAddress& sentinel); ///< 添加 Sentinel 节点
-        void set_sentinel_master_name(std::string master_name); ///< 设置 Sentinel 监控的主节点名称
-        void set_auto_retry_attempts(size_t attempts) noexcept; ///< 设置自动重试次数
-        Task<RedisCommandResult> refresh_from_sentinel(); ///< 从 Sentinel 刷新主节点信息
+        /**
+         * @brief 添加 Sentinel 节点
+         * @param sentinel Sentinel 节点
+         * @return detail::RedissConnectOperation 操作结果
+         */
+        detail::RedissConnectOperation add_sentinel(const RedisNodeAddress& sentinel);
+        /**
+         * @brief 设置 Sentinel 监控的主节点名称
+         * @param master_name 主节点名称
+         * @return 无返回值
+         */
+        void set_sentinel_master_name(std::string master_name);
+        /**
+         * @brief 设置自动重试次数
+         * @param attempts 尝试次数
+         * @return 无返回值
+         */
+        void set_auto_retry_attempts(size_t attempts) noexcept;
+        /**
+         * @brief 从 Sentinel 刷新主节点信息
+         * @return 协程任务，完成后返回 RedisCommandResult 结果
+         */
+        Task<RedisCommandResult> refresh_from_sentinel();
 
-        RedissClient& master(); ///< 获取主节点客户端引用
-        std::optional<std::reference_wrapper<RedissClient>> replica(size_t index); ///< 获取从节点客户端
-        size_t replica_count() const noexcept; ///< 获取从节点数量
-        RedisTopologyStats get_stats() const noexcept; ///< 获取拓扑统计信息
+        /**
+         * @brief 获取主节点客户端引用
+         * @return RedissClient& 引用
+         */
+        RedissClient& master();
+        /**
+         * @brief 获取从节点客户端
+         * @param index 元素索引
+         * @return std::optional<std::reference_wrapper<RedissClient>> 操作结果
+         */
+        std::optional<std::reference_wrapper<RedissClient>> replica(size_t index);
+        /**
+         * @brief 获取从节点数量
+         * @return 对应的大小或数量
+         */
+        size_t replica_count() const noexcept;
+        /**
+         * @brief 获取拓扑统计信息
+         * @return RedisTopologyStats 操作结果
+         */
+        RedisTopologyStats get_stats() const noexcept;
 
     private:
         /**
@@ -737,17 +918,54 @@ namespace galay::redis
             bool connected = false;                            ///< 连接状态
         };
 
+        /**
+         * @brief 自动重试执行协程
+         * @param prefer_read 是否优先选择读事件
+         * @param cmd 命令名称
+         * @param args 调用参数包
+         * @param max_attempts 最大尝试次数
+         * @return 协程任务，完成后返回 RedisCommandResult 结果
+         */
         Task<RedisCommandResult> run_auto_task(bool prefer_read,
                                              std::string cmd,
                                              std::vector<std::string> args,
-                                             size_t max_attempts); ///< 自动重试执行协程
-        Task<RedisCommandResult> refresh_sentinel_task(); ///< Sentinel 刷新协程
+                                             size_t max_attempts);
+        /**
+         * @brief Sentinel 刷新协程
+         * @return 协程任务，完成后返回 RedisCommandResult 结果
+         */
+        Task<RedisCommandResult> refresh_sentinel_task();
 
-        bool is_retryable_connection_error(const RedisError& error) const noexcept; ///< 判断是否为可重试的连接错误
-        RedissClient* choose_read_client(); ///< 选择读客户端
-        RedissClient* ensure_master(); ///< 确保主节点可用
-        bool parse_master_address_reply(const std::vector<RedisValue>& values, RedisNodeAddress* out_addr) const; ///< 解析主节点地址回复
-        bool parse_replica_list_reply(const std::vector<RedisValue>& values, std::vector<RedisNodeAddress>* replicas) const; ///< 解析从节点列表回复
+        /**
+         * @brief 判断是否为可重试的连接错误
+         * @param error 错误信息
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_retryable_connection_error(const RedisError& error) const noexcept;
+        /**
+         * @brief 选择读客户端
+         * @return RedissClient* 指针
+         */
+        RedissClient* choose_read_client();
+        /**
+         * @brief 确保主节点可用
+         * @return RedissClient* 指针
+         */
+        RedissClient* ensure_master();
+        /**
+         * @brief 解析主节点地址回复
+         * @param values 值集合
+         * @param out_addr 接收解析后地址的指针
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool parse_master_address_reply(const std::vector<RedisValue>& values, RedisNodeAddress* out_addr) const;
+        /**
+         * @brief 解析从节点列表回复
+         * @param values 值集合
+         * @param replicas 副本端点集合
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool parse_replica_list_reply(const std::vector<RedisValue>& values, std::vector<RedisNodeAddress>* replicas) const;
 
         IOScheduler* m_scheduler;                                     ///< IO 调度器
         AsyncRedisConfig m_config;                                    ///< 异步配置
@@ -830,10 +1048,22 @@ namespace galay::redis
             return *this;
         }
 
-        RedissClusterClient build() const; ///< 构建 Rediss 集群客户端
+        /**
+         * @brief 构建 Rediss 集群客户端
+         * @return 按当前配置创建的对象或创建失败的错误
+         */
+        RedissClusterClient build() const;
 
-        AsyncRedisConfig build_config() const { return m_config; } ///< 获取当前配置
-        RedissClientConfig build_tls_config() const { return m_tls_config; } ///< 获取 TLS 配置
+        /**
+         * @brief 获取当前配置
+         * @return 当前构建器的配置快照
+         */
+        AsyncRedisConfig build_config() const { return m_config; }
+        /**
+         * @brief 获取 TLS 配置
+         * @return RedissClientConfig 操作结果
+         */
+        RedissClientConfig build_tls_config() const { return m_tls_config; }
 
     private:
         IOScheduler* m_scheduler = nullptr;
@@ -877,9 +1107,26 @@ namespace galay::redis
                                      RedisTopologyRefreshConfig refresh_config,
                                      RedisReadPolicy read_policy);
 
-        detail::RedissConnectOperation add_node(const RedisClusterNodeAddress& node); ///< 添加集群节点
-        void set_slot_range(size_t node_index, uint16_t slot_start, uint16_t slot_end); ///< 设置槽位范围
-        void set_auto_refresh_interval(std::chrono::milliseconds interval); ///< 设置自动刷新间隔
+        /**
+         * @brief 添加集群节点
+         * @param node NUMA 节点 ID
+         * @return detail::RedissConnectOperation 操作结果
+         */
+        detail::RedissConnectOperation add_node(const RedisClusterNodeAddress& node);
+        /**
+         * @brief 设置槽位范围
+         * @param node_index 节点索引
+         * @param slot_start 起始槽位
+         * @param slot_end 结束槽位
+         * @return 无返回值
+         */
+        void set_slot_range(size_t node_index, uint16_t slot_start, uint16_t slot_end);
+        /**
+         * @brief 设置自动刷新间隔
+         * @param interval 时间间隔
+         * @return 无返回值
+         */
+        void set_auto_refresh_interval(std::chrono::milliseconds interval);
 
         /**
          * @brief 执行 Redis 命令（支持自动路由和重试）
@@ -902,12 +1149,34 @@ namespace galay::redis
          */
         detail::RedissExchangeOperation batch(std::span<const RedisCommandView> commands,
                                               std::string routing_key = std::string());
-        Task<RedisCommandResult> refresh_slots(); ///< 刷新集群槽位映射
+        /**
+         * @brief 刷新集群槽位映射
+         * @return 协程任务，完成后返回 RedisCommandResult 结果
+         */
+        Task<RedisCommandResult> refresh_slots();
 
-        uint16_t key_slot(const std::string& key) const; ///< 计算键对应的槽位号
-        size_t node_count() const noexcept; ///< 获取节点数量
-        std::optional<std::reference_wrapper<RedissClient>> node(size_t index); ///< 获取指定节点客户端
-        RedisTopologyStats get_stats() const noexcept; ///< 获取拓扑统计信息
+        /**
+         * @brief 计算键对应的槽位号
+         * @param key 键
+         * @return uint16_t 操作结果
+         */
+        uint16_t key_slot(const std::string& key) const;
+        /**
+         * @brief 获取节点数量
+         * @return 对应的大小或数量
+         */
+        size_t node_count() const noexcept;
+        /**
+         * @brief 获取指定节点客户端
+         * @param index 元素索引
+         * @return std::optional<std::reference_wrapper<RedissClient>> 操作结果
+         */
+        std::optional<std::reference_wrapper<RedissClient>> node(size_t index);
+        /**
+         * @brief 获取拓扑统计信息
+         * @return RedisTopologyStats 操作结果
+         */
+        RedisTopologyStats get_stats() const noexcept;
 
     private:
         /**
@@ -940,25 +1209,91 @@ namespace galay::redis
             uint16_t slot = 0;       ///< 目标槽位
         };
 
-        Task<RedisCommandResult> refresh_slots_task(); ///< 刷新槽位协程
+        /**
+         * @brief 刷新槽位协程
+         * @return 协程任务，完成后返回 RedisCommandResult 结果
+         */
+        Task<RedisCommandResult> refresh_slots_task();
+        /**
+         * @brief 自动重试执行协程
+         * @param routing_key 用于选择节点的路由键
+         * @param cmd 命令名称
+         * @param args 调用参数包
+         * @param force_key_routing 是否强制按键路由
+         * @param allow_auto_refresh 是否允许自动刷新拓扑
+         * @param max_attempts 最大尝试次数
+         * @return 协程任务，完成后返回 RedisCommandResult 结果
+         */
         Task<RedisCommandResult> run_auto_task(std::string routing_key,
                                              std::string cmd,
                                              std::vector<std::string> args,
                                              bool force_key_routing,
                                              bool allow_auto_refresh,
-                                             size_t max_attempts); ///< 自动重试执行协程
+                                             size_t max_attempts);
 
-        static uint16_t crc16(const uint8_t* data, size_t len); ///< CRC16 校验和计算
-        static std::string extract_hash_tag(const std::string& key); ///< 提取哈希标签
-        static std::optional<RedirectInfo> parse_redirect(const RedisValue& value); ///< 解析重定向响应
+        /**
+         * @brief CRC16 校验和计算
+         * @param data 输入数据
+         * @param len 数据字节数
+         * @return uint16_t 操作结果
+         */
+        static uint16_t crc16(const uint8_t* data, size_t len);
+        /**
+         * @brief 提取哈希标签
+         * @param key 键
+         * @return 处理后的 std::string 结果
+         */
+        static std::string extract_hash_tag(const std::string& key);
+        /**
+         * @brief 解析重定向响应
+         * @param value 待设置或处理的值
+         * @return std::optional<RedirectInfo> 操作结果
+         */
+        static std::optional<RedirectInfo> parse_redirect(const RedisValue& value);
 
-        RedissClient* choose_node_by_slot(uint16_t slot) noexcept; ///< 根据槽位选择节点
-        RedissClient* choose_node_by_key(const std::string& key) noexcept; ///< 根据键选择节点
-        ClusterNode* choose_node_handle_by_slot(uint16_t slot) noexcept; ///< 根据槽位选择节点句柄
-        ClusterNode* choose_node_handle_by_key(const std::string& key) noexcept; ///< 根据键选择节点句柄
-        ClusterNode* find_or_create_node(const std::string& host, int32_t port); ///< 查找或创建节点
-        bool apply_cluster_slots(const std::vector<RedisValue>& values, std::string* error_message); ///< 应用集群槽位信息
-        bool should_auto_refresh() const noexcept; ///< 是否需要自动刷新
+        /**
+         * @brief 根据槽位选择节点
+         * @param slot 队列槽位
+         * @return RedissClient* 指针
+         */
+        RedissClient* choose_node_by_slot(uint16_t slot) noexcept;
+        /**
+         * @brief 根据键选择节点
+         * @param key 键
+         * @return RedissClient* 指针
+         */
+        RedissClient* choose_node_by_key(const std::string& key) noexcept;
+        /**
+         * @brief 根据槽位选择节点句柄
+         * @param slot 队列槽位
+         * @return ClusterNode* 指针
+         */
+        ClusterNode* choose_node_handle_by_slot(uint16_t slot) noexcept;
+        /**
+         * @brief 根据键选择节点句柄
+         * @param key 键
+         * @return ClusterNode* 指针
+         */
+        ClusterNode* choose_node_handle_by_key(const std::string& key) noexcept;
+        /**
+         * @brief 查找或创建节点
+         * @param host 目标主机地址
+         * @param port 端口号
+         * @return ClusterNode* 指针
+         */
+        ClusterNode* find_or_create_node(const std::string& host, int32_t port);
+        /**
+         * @brief 应用集群槽位信息
+         * @param values 值集合
+         * @param error_message 错误消息
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool apply_cluster_slots(const std::vector<RedisValue>& values, std::string* error_message);
+        /**
+         * @brief 是否需要自动刷新
+         * @return 需要自动刷新拓扑时返回 true，否则返回 false
+         */
+        bool should_auto_refresh() const noexcept;
 
         IOScheduler* m_scheduler;                                     ///< IO 调度器
         AsyncRedisConfig m_config;                                    ///< 异步配置

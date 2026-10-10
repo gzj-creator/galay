@@ -56,6 +56,7 @@ public:
     /**
      * @brief 添加单词到字典树
      * @param word 待添加的单词
+     * @return 无返回值
      */
     void add(const std::string& word) {
         if (word.empty()) return;
@@ -148,8 +149,16 @@ public:
         return result;
     }
 
-    size_t size() const { return m_size; } ///< 获取单词数量
-    bool empty() const { return m_size == 0; } ///< 判断字典树是否为空
+    /**
+     * @brief 获取单词数量
+     * @return 对应的大小或数量
+     */
+    size_t size() const { return m_size; }
+    /**
+     * @brief 判断字典树是否为空
+     * @return 为空时返回 true，否则返回 false
+     */
+    bool empty() const { return m_size == 0; }
 
     void clear() {
         m_root = std::make_unique<TrieNode>();

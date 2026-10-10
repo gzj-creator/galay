@@ -61,6 +61,7 @@ namespace detail {
 
 /**
  * @brief 执行一次平台相关的短时 CPU 自旋提示。
+ * @return 无返回值
  * @note 该函数不阻塞线程，也不主动把执行权交给操作系统调度器。
  */
 inline void bounded_channel_cpu_pause() noexcept
@@ -90,6 +91,7 @@ class BoundedChannelBackoff
 public:
     /**
      * @brief 对 cursor CAS 竞争执行有上限的指数自旋。
+     * @return 无返回值
      * @note 仅发出 CPU hint，不调用 std::this_thread::yield()。
      */
     void spin() noexcept
@@ -106,6 +108,7 @@ public:
 
     /**
      * @brief 等待 slot sequence 发布时执行分级退避。
+     * @return 无返回值
      * @note 初始阶段使用 CPU hint；持续竞争超过自旋上限后才让出当前线程时间片。
      */
     void snooze() noexcept
@@ -166,6 +169,7 @@ struct BoundedChannelWaiter
     /**
      * @brief 创建绑定指定协程唤醒器的等待体。
      * @param waiter_waker 等待操作完成时使用的唤醒器，所有权移入 waiter。
+     * @param timeout_timer 超时定时器
      */
     explicit BoundedChannelWaiter(Waker waiter_waker,
                                   TimeoutTimer::ptr timeout_timer = {})
@@ -234,6 +238,7 @@ public:
 
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的发送等待者。
+     * @return 无返回值
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void mark_timeout() noexcept;
@@ -295,6 +300,7 @@ public:
 
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的接收等待者。
+     * @return 无返回值
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void mark_timeout() noexcept;
@@ -356,6 +362,7 @@ public:
 
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的批量接收等待者。
+     * @return 无返回值
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void mark_timeout() noexcept;
@@ -442,13 +449,19 @@ public:
     /** @brief 禁止复制构造；通道具有唯一身份。 */
     BoundedChannel(const BoundedChannel&) = delete;
 
-    /** @brief 禁止复制赋值；通道具有唯一身份。 */
+    /**
+     * @brief 禁止复制赋值；通道具有唯一身份。
+     * @return 该操作已禁用，不可调用
+     */
     BoundedChannel& operator=(const BoundedChannel&) = delete;
 
     /** @brief 禁止移动构造，避免使已注册 waiter 持有失效地址。 */
     BoundedChannel(BoundedChannel&&) = delete;
 
-    /** @brief 禁止移动赋值，避免使已注册 waiter 持有失效地址。 */
+    /**
+     * @brief 禁止移动赋值，避免使已注册 waiter 持有失效地址。
+     * @return 该操作已禁用，不可调用
+     */
     BoundedChannel& operator=(BoundedChannel&&) = delete;
 
     /**
@@ -557,6 +570,7 @@ public:
 
     /**
      * @brief 关闭通道并唤醒所有等待者。
+     * @return 无返回值
      * @details close 与 producer reservation 在线性化于同一个 tail 原子。先完成
      *          reservation 的发送仍会发布且可被接收；先发布 close 的发送会失败。
      *          接收方仅在所有在先 reservation 已发布并被认领后返回 kClosed。
@@ -661,6 +675,11 @@ private:
 
     /**
      * @brief 把已完成 waiter 追加到 pump 的本地延迟唤醒链。
+     * @param wakeHead 待唤醒链表的头节点引用
+     * @param wakeTail 待唤醒链表的尾节点引用
+     * @param waiter 等待节点
+     * @param timeoutWinner 超时竞争是否胜出的状态
+     * @return 无返回值
      * @details pump 释放 channel ownership 后才发出实际唤醒，避免 inline resume
      *          销毁 channel 后 pump 继续访问成员。
      */
@@ -681,6 +700,8 @@ private:
 
     /**
      * @brief 在 channel 不再被访问后发出 pump 收集的全部唤醒。
+     * @param wakeHead 待唤醒链表的头节点引用
+     * @return 无返回值
      * @note 任一 wake 都可能 inline 恢复并销毁 channel，因此该函数不得访问 this。
      */
     static void issue_deferred_wakes(WaiterPtr wakeHead) noexcept
@@ -698,7 +719,11 @@ private:
         }
     }
 
-    /** @brief 尝试由唯一 pump owner 完成 kWaiting -> kFulfilling 认领。 */
+    /**
+     * @brief 尝试由唯一 pump owner 完成 kWaiting -> kFulfilling 认领。
+     * @param waiter 等待节点
+     * @return 成功认领等待节点时返回 true，否则返回 false
+     */
     bool claim_waiter(const WaiterPtr& waiter) noexcept
     {
         BoundedWaiterState expected = BoundedWaiterState::kWaiting;
@@ -709,7 +734,12 @@ private:
             std::memory_order_acquire);
     }
 
-    /** @brief 保证 waiter 在指定队列中至多保留一个可发现入口。 */
+    /**
+     * @brief 保证 waiter 在指定队列中至多保留一个可发现入口。
+     * @param waiters 等待节点集合
+     * @param waiter 等待节点
+     * @return 节点已在队列中或成功入队时返回 true，入队失败时返回 false
+     */
     bool enqueue_waiter(WaiterQueue& waiters, const WaiterPtr& waiter) noexcept
     {
         bool expected = false;
@@ -726,7 +756,12 @@ private:
         return false;
     }
 
-    /** @brief 从指定队列移除一个有效入口，并在认领前清除其队列成员位。 */
+    /**
+     * @brief 从指定队列移除一个有效入口，并在认领前清除其队列成员位。
+     * @param waiters 等待节点集合
+     * @param waiter 等待节点
+     * @return 找到有效节点并移出队列时返回 true，否则返回 false
+     */
     bool try_dequeue_waiter(WaiterQueue& waiters, WaiterPtr& waiter) noexcept
     {
         while (waiters.try_dequeue(waiter)) {
@@ -754,7 +789,10 @@ private:
             m_slots[position & m_mask].sequence.load(std::memory_order_seq_cst);
     }
 
-    /** @brief close 已发布且所有在先 reservation 均已被消费者认领时返回 true。 */
+    /**
+     * @brief close 已发布且所有在先 reservation 均已被消费者认领时返回 true。
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
     bool is_closed_and_drained() const noexcept
     {
         const uint64_t tail = m_tail.load(std::memory_order_acquire);
@@ -850,7 +888,11 @@ private:
         return RingEnqueueResult::kSent;
     }
 
-    /** @brief 白盒测试兼容入口；公开路径使用 result 区分 close/exhaustion。 */
+    /**
+     * @brief 白盒测试兼容入口；公开路径使用 result 区分 close/exhaustion。
+     * @param value 待设置或处理的值
+     * @return 消息成功写入 ring 时返回 true，否则返回 false
+     */
     bool ring_enqueue(T&& value) noexcept
     {
         const auto result = ring_enqueue_result(std::move(value));
@@ -904,6 +946,8 @@ private:
     /**
      * @brief 尝试推进一个发送 waiter 的状态。
      * @param waiter 待推进的共享等待体；空指针视为未认领。
+     * @param wakeHead 待唤醒链表的头节点引用
+     * @param wakeTail 待唤醒链表的尾节点引用
      * @return kCompleted 表示等待体已结束，kWaiting 表示已重新排队，
      *         kSkipped 表示该入口已由其他并发路径处理。
      * @note ring 仍满时会把 waiter 恢复为 kWaiting 并重新入队。
@@ -1038,6 +1082,8 @@ private:
     /**
      * @brief 尝试推进一个接收 waiter 的状态。
      * @param waiter 待推进的共享等待体；空指针视为未认领。
+     * @param wakeHead 待唤醒链表的头节点引用
+     * @param wakeTail 待唤醒链表的尾节点引用
      * @return kCompleted 表示等待体已结束，kWaiting 表示已重新排队，
      *         kSkipped 表示该入口已由其他并发路径处理。
      * @note ring 仍空时会把 waiter 恢复为 kWaiting 并重新入队。
@@ -1155,6 +1201,7 @@ private:
     /**
      * @brief 发布一类 waiter 慢路径工作，并在无 owner 时成为唯一 pump owner。
      * @param work kRecvWork、kSendWork 或二者的按位组合。
+     * @return 无返回值
      * @note 数据/队列入口必须先于 release fetch_or 发布。Running 只能由 owner 清除；
      *       requester 与 owner 的退出 CAS 共享同一原子，因此不存在最后检查空窗。
      */
@@ -1179,7 +1226,12 @@ private:
         }
     }
 
-    /** @brief 推进接收 waiter，直到队列耗尽或首个 live waiter 因无数据重新阻塞。 */
+    /**
+     * @brief 推进接收 waiter，直到队列耗尽或首个 live waiter 因无数据重新阻塞。
+     * @param wakeHead 待唤醒链表的头节点引用
+     * @param wakeTail 待唤醒链表的尾节点引用
+     * @return 无返回值
+     */
     void drain_recv_waiters(WaiterPtr& wakeHead, WaiterPtr& wakeTail) noexcept
     {
         WaiterPtr waiter;
@@ -1191,7 +1243,12 @@ private:
         }
     }
 
-    /** @brief 推进发送 waiter，直到队列耗尽或首个 live waiter 因 ring 满重新阻塞。 */
+    /**
+     * @brief 推进发送 waiter，直到队列耗尽或首个 live waiter 因 ring 满重新阻塞。
+     * @param wakeHead 待唤醒链表的头节点引用
+     * @param wakeTail 待唤醒链表的尾节点引用
+     * @return 无返回值
+     */
     void drain_send_waiters(WaiterPtr& wakeHead, WaiterPtr& wakeTail) noexcept
     {
         WaiterPtr waiter;
@@ -1205,6 +1262,7 @@ private:
 
     /**
      * @brief 由唯一 owner 领取全部 pending work，推进到固定点后释放 ownership。
+     * @return 无返回值
      * @note ownership 释放后只访问本地 waiter 链；实际唤醒可安全 inline 销毁 channel。
      */
     void run_pump() noexcept
@@ -1265,6 +1323,7 @@ namespace detail {
  * @brief 等待已被对端认领的 waiter 完成有限的值搬运和状态发布窗口。
  * @tparam T 通道元素类型。
  * @param waiter 当前状态可能为 kFulfilling 的等待体。
+ * @return 无返回值
  * @note 仅在认领已完成后短时自旋，不等待 ring 的满/空条件；调用期间会短时占用当前线程。
  */
 template <BoundedValue T>

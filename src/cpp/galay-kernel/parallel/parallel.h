@@ -324,6 +324,8 @@ private:
 
 /**
  * @brief 封装不挂起的 CPU 可调用对象，且不创建协程。
+ * @param function 要执行的函数
+ * @return 封装指定可调用对象的并行工作项
  * @note 可调用对象必须是 `noexcept`，并返回 `void` 或
  *       `std::expected<void, ParallelError>`。
  */
@@ -873,6 +875,8 @@ private:
 
 /**
  * @brief 在 Runtime 的 parallel scheduler 上等待依赖图完成。
+ * @param graph 任务依赖图
+ * @return detail::ParallelAwaitable 等待体，通过 co_await 执行并取得操作结果
  * @details parent 协程只会恢复一次，并且只有在所有图节点都进入终态
  *          （succeeded、failed、skipped 或 rejected）后才会恢复。
  */

@@ -248,6 +248,7 @@ struct SpanStatus {
  * @details 控制是否记录 Span 的开始和结束时间戳。默认禁用，
  * 以日志时间戳作为低成本的默认时间来源。
  * @param policy 时间策略
+ * @return 无返回值
  */
 void set_span_timing_policy(SpanTimingPolicy policy) noexcept;
 
@@ -312,6 +313,7 @@ public:
 
     /**
      * @brief 移动赋值 Span，转移属性、事件和链接等拥有状态
+     * @return Span& 引用
      */
     Span& operator=(Span&&) noexcept = default;
 
@@ -364,6 +366,7 @@ public:
     /**
      * @brief 设置 Span 类型
      * @param kind Span 类型
+     * @return 无返回值
      */
     void set_kind(SpanKind kind) noexcept {
         m_kind = kind;
@@ -381,6 +384,7 @@ public:
      * @brief 设置 Span 状态
      * @param code 状态码
      * @param message 状态描述消息（默认为空）
+     * @return 无返回值
      */
     void set_status(SpanStatusCode code, std::string message = {});
 
@@ -517,6 +521,7 @@ public:
 
     /**
      * @brief 标记 Span 为已结束
+     * @return 无返回值
      */
     void end() noexcept;
 

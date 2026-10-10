@@ -178,6 +178,7 @@ std::expected<void, IOError> AsyncAio::open(const std::string& path, AioOpenMode
  * @param buffer 对齐的目标缓冲区
  * @param length 要读取的字节数
  * @param offset 起始文件偏移量
+ * @return 无返回值
  */
 void AsyncAio::pre_read(char* buffer, size_t length, off_t offset)
 {
@@ -194,6 +195,7 @@ void AsyncAio::pre_read(char* buffer, size_t length, off_t offset)
  * @param buffer 对齐的源缓冲区
  * @param length 要写入的字节数
  * @param offset 起始文件偏移量
+ * @return 无返回值
  */
 void AsyncAio::pre_write(const char* buffer, size_t length, off_t offset)
 {
@@ -208,6 +210,7 @@ void AsyncAio::pre_write(const char* buffer, size_t length, off_t offset)
 /**
  * @brief 将多个读操作批量入队，每个转发到 pre_read
  * @param reads (buffer, length, offset) 元组向量
+ * @return 无返回值
  */
 void AsyncAio::pre_read_batch(const std::vector<std::tuple<char*, size_t, off_t>>& reads)
 {
@@ -219,6 +222,7 @@ void AsyncAio::pre_read_batch(const std::vector<std::tuple<char*, size_t, off_t>
 /**
  * @brief 将多个写操作批量入队，每个转发到 pre_write
  * @param writes (buffer, length, offset) 元组向量
+ * @return 无返回值
  */
 void AsyncAio::pre_write_batch(const std::vector<std::tuple<const char*, size_t, off_t>>& writes)
 {
@@ -253,6 +257,7 @@ AioCommitAwaitable AsyncAio::commit()
 
 /**
  * @brief 丢弃所有待处理但未提交的 iocb 和指针
+ * @return 无返回值
  */
 void AsyncAio::clear()
 {
@@ -262,6 +267,7 @@ void AsyncAio::clear()
 
 /**
  * @brief 如果文件描述符当前处于打开状态则关闭它
+ * @return 无返回值
  */
 void AsyncAio::close()
 {
@@ -321,6 +327,7 @@ char* AsyncAio::alloc_aligned_buffer(size_t size, size_t alignment)
 /**
  * @brief 释放先前由 alloc_aligned_buffer 分配的缓冲区
  * @param buffer 指向待释放缓冲区的指针
+ * @return 无返回值
  */
 void AsyncAio::free_aligned_buffer(char* buffer)
 {

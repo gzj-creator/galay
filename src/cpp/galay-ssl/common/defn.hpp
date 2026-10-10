@@ -67,6 +67,8 @@ enum class SslIOResult : int {
 
 /**
  * @brief 将 SSL_get_error 结果转换为 SslIOResult
+ * @param ssl_error SSL 错误
+ * @return 与 OpenSSL 错误对应的 SSL IO 状态
  */
 inline SslIOResult ssl_error_to_result(int ssl_error) {
     switch (ssl_error) {

@@ -78,6 +78,9 @@ private:
 
 /**
  * 单个 stream 的响应处理协程（由 spawn 并发运行）
+ * @param stream 流对象
+ * @param barrier 批次完成屏障
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> handle_response(Http2Stream::ptr stream, std::shared_ptr<BatchBarrier> barrier) {
     BatchBarrierGuard guard(std::move(barrier));
@@ -115,6 +118,13 @@ Task<void> handle_response(Http2Stream::ptr stream, std::shared_ptr<BatchBarrier
  * 单条连接的工作协程：
  *   每轮在同一连接上并发发射 streams_per_conn 个 stream，
  *   等待全部完成后进入下一轮
+ * @param client 客户端对象
+ * @param id 标识符
+ * @param host 目标主机地址
+ * @param port 端口号
+ * @param streams_per_conn 每条连接的并发流数量
+ * @param rounds 执行轮数
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> run_connection(std::shared_ptr<H2cClient<>> client,
                          int id,

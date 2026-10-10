@@ -77,10 +77,23 @@ public:
      */
     explicit AsyncWaiterAwaitable(AsyncWaiter<T>* waiter) : m_waiter(waiter) {}
 
-    bool await_ready() const noexcept;  ///< 如果结果已经 ready，则返回 true 以避免挂起
+    /**
+     * @brief 如果结果已经 ready，则返回 true 以避免挂起
+     * @return 无需挂起时返回 true，否则返回 false
+     */
+    bool await_ready() const noexcept;
+    /**
+     * @brief 注册等待协程并在结果未就绪时挂起
+     * @param handle 句柄
+     * @return 协程需要保持挂起时返回 true，否则返回 false
+     */
     template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;  ///< 注册等待协程并在结果未就绪时挂起
-    std::expected<T, IOError> await_resume() noexcept;  ///< 返回结果；若超时则返回 IOError(kTimeout, 0)
+    bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;
+    /**
+     * @brief 返回结果；若超时则返回 IOError(kTimeout, 0)
+     * @return 成功时返回 T，失败时返回 IOError 错误
+     */
+    std::expected<T, IOError> await_resume() noexcept;
 
 private:
     friend struct WithTimeout<AsyncWaiterAwaitable<T>>;
@@ -102,12 +115,34 @@ public:
      */
     explicit AsyncWaiterAwaitable(AsyncWaiter<void>* waiter) : m_waiter(waiter) {}
 
-    bool await_ready() const noexcept;  ///< 如果完成信号已经到达，则返回 true 以避免挂起
+    /**
+     * @brief 如果完成信号已经到达，则返回 true 以避免挂起
+     * @return 无需挂起时返回 true，否则返回 false
+     */
+    bool await_ready() const noexcept;
+    /**
+     * @brief 注册等待协程并在尚未完成时挂起
+     * @param handle 句柄
+     * @return 协程需要保持挂起时返回 true，否则返回 false
+     */
     template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;  ///< 注册等待协程并在尚未完成时挂起
-    bool await_suspend(Waker waker) noexcept;  ///< 使用外部 Waker 注册等待，用于 C coroutine bridge
-    std::expected<void, IOError> await_resume() noexcept;  ///< 返回完成结果；超时时返回 IOError(kTimeout, 0)
-    void mark_timeout() noexcept;  ///< 标记超时并清理等待器中的外部 Waker
+    bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;
+    /**
+     * @brief 使用外部 Waker 注册等待，用于 C coroutine bridge
+     * @param waker 协程唤醒器
+     * @return 协程需要保持挂起时返回 true，否则返回 false
+     */
+    bool await_suspend(Waker waker) noexcept;
+    /**
+     * @brief 返回完成结果；超时时返回 IOError(kTimeout, 0)
+     * @return 成功时返回空值，失败时返回 IOError 错误
+     */
+    std::expected<void, IOError> await_resume() noexcept;
+    /**
+     * @brief 标记超时并清理等待器中的外部 Waker
+     * @return 无返回值
+     */
+    void mark_timeout() noexcept;
 
 private:
     friend struct WithTimeout<AsyncWaiterAwaitable<void>>;

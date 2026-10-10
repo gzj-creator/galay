@@ -63,6 +63,7 @@ public:
     /**
      * @brief 预留底层存储容量
      * @param capacity 至少预留的字节数
+     * @return 无返回值
      */
     void reserve(size_t capacity) {
         m_storage.reserve(capacity);
@@ -72,6 +73,7 @@ public:
      * @brief 追加原始字节
      * @param data 字节指针；为空时本次追加为空操作
      * @param length 字节数
+     * @return 无返回值
      */
     void append(const char* data, size_t length) {
         if (data == nullptr || length == 0) {
@@ -86,6 +88,7 @@ public:
     /**
      * @brief 追加字符串视图中的字节
      * @param bytes 字节视图
+     * @return 无返回值
      */
     void append(std::string_view bytes) {
         append(bytes.data(), bytes.size());
@@ -94,6 +97,7 @@ public:
     /**
      * @brief 追加 std::byte 视图中的字节
      * @param bytes 字节视图
+     * @return 无返回值
      */
     void append(std::span<const std::byte> bytes) {
         append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
@@ -154,6 +158,7 @@ public:
     /**
      * @brief 消费头部字节
      * @param length 要消费的字节数；大于等于 size() 时清空队列
+     * @return 无返回值
      */
     void consume(size_t length) {
         if (length >= size()) {
@@ -166,6 +171,7 @@ public:
 
     /**
      * @brief 清空队列
+     * @return 无返回值
      */
     void clear() noexcept {
         m_storage.clear();

@@ -23,6 +23,10 @@ std::atomic<int> fail_count{0};
 
 /**
  * @brief 客户端测试协程
+ * @param host 目标主机地址
+ * @param port 端口号
+ * @param num_messages 消息数量
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_client(const std::string& host, uint16_t port, int num_messages) {
     auto client = WsClientBuilder().build();

@@ -21,6 +21,7 @@ namespace galay::http::log
  * @details 只影响 `HTTP_LOG_*` 宏产生的日志，不会启用其他 galay 库日志。
  *
  * @param logger 用户自定义 logger；传入 nullptr 时禁用 galay-http 日志。
+ * @return 无返回值
  */
 void set(::galay::kernel::BaseLogger::uptr logger);
 

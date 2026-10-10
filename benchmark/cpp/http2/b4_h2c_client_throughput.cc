@@ -73,6 +73,12 @@ Task<void> handle_stream(Http2Stream::ptr stream) {
 
 /**
  * @brief 单个客户端协程 - 使用 HTTP/2 多路复用
+ * @param client 客户端对象
+ * @param client_id 客户端编号
+ * @param host 目标主机地址
+ * @param port 端口号
+ * @param requests_per_client 每个客户端的请求次数
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> run_client(std::shared_ptr<H2cClient<>> client,
                      int client_id,
@@ -130,6 +136,13 @@ Task<void> run_client(std::shared_ptr<H2cClient<>> client,
 
 /**
  * @brief 运行压测
+ * @param host 目标主机地址
+ * @param port 端口号
+ * @param concurrent_clients 并发客户端数量
+ * @param requests_per_client 每个客户端的请求次数
+ * @param max_wait_seconds 最长等待时间，单位为秒
+ * @param io_schedulers IO 调度器数量
+ * @return 无返回值
  */
 void run_benchmark(const std::string& host,
                   uint16_t port,

@@ -99,17 +99,76 @@ public:
                                                                     size_t& consumed);
 
 private:
-    static void write_int32(std::string& out, int32_t value);       ///< 写入 32 位整数（小端序）
-    static void write_int64(std::string& out, int64_t value);       ///< 写入 64 位整数（小端序）
-    static void write_double(std::string& out, double value);       ///< 写入双精度浮点数（小端序）
-    static std::expected<void, std::string> write_c_string(std::string& out, std::string_view value); ///< 写入 C 风格字符串（无长度前缀）
+    /**
+     * @brief 写入 32 位整数（小端序）
+     * @param out 追加编码字节的输出字符串
+     * @param value 待设置或处理的值
+     * @return 无返回值
+     */
+    static void write_int32(std::string& out, int32_t value);
+    /**
+     * @brief 写入 64 位整数（小端序）
+     * @param out 追加编码字节的输出字符串
+     * @param value 待设置或处理的值
+     * @return 无返回值
+     */
+    static void write_int64(std::string& out, int64_t value);
+    /**
+     * @brief 写入双精度浮点数（小端序）
+     * @param out 追加编码字节的输出字符串
+     * @param value 待设置或处理的值
+     * @return 无返回值
+     */
+    static void write_double(std::string& out, double value);
+    /**
+     * @brief 写入 C 风格字符串（无长度前缀）
+     * @param out 追加字符串及终止符的输出字符串
+     * @param value 待设置或处理的值
+     * @return 成功时返回空值，失败时返回 std::string 错误
+     */
+    static std::expected<void, std::string> write_c_string(std::string& out, std::string_view value);
 
-    static std::expected<int32_t, std::string> read_int32(const char* data, size_t len, size_t pos);       ///< 读取 32 位整数
-    static std::expected<int64_t, std::string> read_int64(const char* data, size_t len, size_t pos);       ///< 读取 64 位整数
-    static std::expected<double, std::string> read_double(const char* data, size_t len, size_t pos);       ///< 读取双精度浮点数
-    static std::expected<std::string, std::string> read_c_string(const char* data, size_t len, size_t& pos); ///< 读取 C 风格字符串
+    /**
+     * @brief 读取 32 位整数
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @param pos 位置
+     * @return 成功时返回 int32_t，失败时返回 std::string 错误
+     */
+    static std::expected<int32_t, std::string> read_int32(const char* data, size_t len, size_t pos);
+    /**
+     * @brief 读取 64 位整数
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @param pos 位置
+     * @return 成功时返回 int64_t，失败时返回 std::string 错误
+     */
+    static std::expected<int64_t, std::string> read_int64(const char* data, size_t len, size_t pos);
+    /**
+     * @brief 读取双精度浮点数
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @param pos 位置
+     * @return 成功时返回 double，失败时返回 std::string 错误
+     */
+    static std::expected<double, std::string> read_double(const char* data, size_t len, size_t pos);
+    /**
+     * @brief 读取 C 风格字符串
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @param pos 位置
+     * @return 成功时返回 std::string，失败时返回 std::string 错误
+     */
+    static std::expected<std::string, std::string> read_c_string(const char* data, size_t len, size_t& pos);
 
-    static std::expected<void, std::string> encode_element(std::string& out, std::string_view key, const MongoValue& value);  ///< 编码单个 BSON 元素
+    /**
+     * @brief 编码单个 BSON 元素
+     * @param out 追加 BSON 元素编码字节的输出字符串
+     * @param key 键
+     * @param value 待设置或处理的值
+     * @return 成功时返回空值，失败时返回 std::string 错误
+     */
+    static std::expected<void, std::string> encode_element(std::string& out, std::string_view key, const MongoValue& value);
     static std::expected<MongoValue, std::string> decode_element_value(BsonType type,               ///< 解码单个 BSON 元素值
                                                                       const char* data,
                                                                       size_t len,

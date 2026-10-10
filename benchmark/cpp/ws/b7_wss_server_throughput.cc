@@ -49,6 +49,8 @@ Task<void> handle_wss_connection(WssConn& ws_conn) {
 
 /**
  * @brief HTTPS 请求处理器（处理 WSS 升级）
+ * @param conn 连接对象
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> https_handler(HttpConnImpl<galay::ssl::SslSocket> conn) {
     auto reader = conn.get_reader();

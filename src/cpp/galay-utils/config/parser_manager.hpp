@@ -43,6 +43,7 @@ public:
      * @brief 注册或替换指定扩展名的解析器工厂
      * @param extension 文件扩展名（含前导点，如 `.toml`）
      * @param creator 解析器工厂函数
+     * @return 无返回值
      */
     void register_parser(const std::string& extension, Creator creator) {
         m_creators[extension] = std::move(creator);

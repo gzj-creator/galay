@@ -19,7 +19,11 @@ public:
          */
         AcquireAwaitable(MysqlConnectionPool& pool);
 
-        bool await_ready() const noexcept; ///< 检查是否已完成
+        /**
+         * @brief 检查是否已完成
+         * @return 无需挂起时返回 true，否则返回 false
+         */
+        bool await_ready() const noexcept;
         /**
          * @brief 挂起协程，等待连接获取
          * @tparam Promise 协程Promise类型

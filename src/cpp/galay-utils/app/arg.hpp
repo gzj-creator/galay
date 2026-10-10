@@ -41,22 +41,33 @@ public:
     [[nodiscard]] bool is_set() const noexcept { return m_set; }
 
     /// 是否为标志位（无需取值）
+    /// @return 满足所检查条件时返回 true，否则返回 false
     [[nodiscard]] virtual bool is_flag() const noexcept = 0;
     /// 是否可重复出现并累积多个取值
+    /// @return 满足所检查条件时返回 true，否则返回 false
     [[nodiscard]] virtual bool is_multi() const noexcept = 0;
     /// 帮助输出中的类型名
+    /// @return 处理后的 std::string_view 结果
     [[nodiscard]] virtual std::string_view type_name() const noexcept = 0;
     /// 帮助输出中的默认值文本，空表示无默认值
+    /// @return 处理后的 std::string 结果
     [[nodiscard]] virtual std::string default_text() const = 0;
     /// 候选取值集合，空表示不限制
+    /// @return const std::vector<std::string>& 只读引用
     [[nodiscard]] virtual const std::vector<std::string>& choices() const noexcept = 0;
     /// 从文本解析并写入，失败返回原因
+    /// @param text 文本
+    /// @return 成功时返回空值，失败时返回 std::string 错误
     virtual std::expected<void, std::string> assign(std::string_view text) = 0;
     /// 标志位赋值，`negated` 为 `--no-xxx` 形式
+    /// @param negated 是否取反
+    /// @return 成功时返回空值，失败时返回 std::string 错误
     virtual std::expected<void, std::string> assign_flag(bool negated) = 0;
     /// 解析开始前重置为初始状态
+    /// @return 无返回值
     virtual void reset() = 0;
     /// 解析结束后把最终值同步到绑定变量
+    /// @return 无返回值
     virtual void flush() const = 0;
 
 protected:
@@ -85,6 +96,8 @@ public:
         : ArgBase(std::move(name), shortName, std::move(description)) {}
 
     /// 设置默认值
+    /// @param value 待设置或处理的值
+    /// @return 当前对象引用
     Opt& def(T value) {
         m_default = std::move(value);
         m_value = *m_default;
@@ -92,38 +105,50 @@ public:
     }
 
     /// 标记为必选
+    /// @param value 是否启用该选项
+    /// @return 当前对象引用
     Opt& required(bool value = true) {
         m_required = value;
         return *this;
     }
 
     /// 允许重复出现并累积取值
+    /// @param value 是否启用该选项
+    /// @return 当前对象引用
     Opt& multi(bool value = true) {
         m_multi = value;
         return *this;
     }
 
     /// 限定候选取值集合
+    /// @param values 值集合
+    /// @return 当前对象引用
     Opt& choices(std::vector<std::string> values) {
         m_choices = std::move(values);
         return *this;
     }
 
     /// 绑定外部变量，解析完成后自动写回
+    /// @param target 目标对象
+    /// @return 当前对象引用
     Opt& bind(T* target) {
         m_bound = target;
         return *this;
     }
 
     /// 绑定外部 vector，`multi()` 模式下写回全部取值
+    /// @param target 目标对象
+    /// @return 当前对象引用
     Opt& bind_all(std::vector<T>* target) {
         m_boundAll = target;
         return *this;
     }
 
     /// 取当前值：命令行未提供时为默认值
+    /// @return const T& 只读引用
     [[nodiscard]] const T& value() const noexcept { return m_value; }
     /// 取全部取值，仅 `multi()` 模式下有多个元素
+    /// @return const std::vector<T>& 只读引用
     [[nodiscard]] const std::vector<T>& values() const noexcept { return m_values; }
 
     [[nodiscard]] bool is_flag() const noexcept override { return std::is_same_v<T, bool>; }

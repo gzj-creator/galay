@@ -87,13 +87,48 @@ class HttpServerBuilder : public server_detail::ServerRoutes<EnableSwagger> {
 public:
     HttpServerBuilder() = default;
     explicit HttpServerBuilder(HttpServerConfig config) : m_config(std::move(config)) {}
-    HttpServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; } ///< 设置监听地址
-    HttpServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; } ///< 设置监听端口
-    HttpServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; } ///< 设置 listen backlog
-    HttpServerBuilder& tcp_no_delay(bool v)               { m_config.tcp_no_delay = v; return *this; } ///< 设置已接受连接是否启用 TCP_NODELAY
-    HttpServerBuilder& io_scheduler_count(size_t v)       { m_config.io_scheduler_count = v; return *this; } ///< 设置 IO 调度器数量
-    HttpServerBuilder& parallel_scheduler_count(size_t v)  { m_config.parallel_scheduler_count = v; return *this; } ///< 设置计算调度器数量
-    HttpServerBuilder& policy(HttpServerPolicy v)        { m_config.policy = std::move(v); return *this; } ///< 设置 route-mode 生产策略
+    /**
+     * @brief 设置监听地址
+     * @param v 值
+     * @return HttpServerBuilder& 引用
+     */
+    HttpServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; }
+    /**
+     * @brief 设置监听端口
+     * @param v 值
+     * @return HttpServerBuilder& 引用
+     */
+    HttpServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; }
+    /**
+     * @brief 设置 listen backlog
+     * @param v 值
+     * @return HttpServerBuilder& 引用
+     */
+    HttpServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; }
+    /**
+     * @brief 设置已接受连接是否启用 TCP_NODELAY
+     * @param v 值
+     * @return HttpServerBuilder& 引用
+     */
+    HttpServerBuilder& tcp_no_delay(bool v)               { m_config.tcp_no_delay = v; return *this; }
+    /**
+     * @brief 设置 IO 调度器数量
+     * @param v IO 调度器数量
+     * @return 当前构建器引用，供链式调用
+     */
+    HttpServerBuilder& io_scheduler_count(size_t v)       { m_config.io_scheduler_count = v; return *this; }
+    /**
+     * @brief 设置计算调度器数量
+     * @param v 计算调度器数量
+     * @return 当前构建器引用，供链式调用
+     */
+    HttpServerBuilder& parallel_scheduler_count(size_t v)  { m_config.parallel_scheduler_count = v; return *this; }
+    /**
+     * @brief 设置 route-mode 生产策略
+     * @param v 值
+     * @return HttpServerBuilder& 引用
+     */
+    HttpServerBuilder& policy(HttpServerPolicy v)        { m_config.policy = std::move(v); return *this; }
     /**
      * @brief 设置顺序 CPU 亲和性
      * @param io_count IO 调度器绑定的 CPU 核心数
@@ -123,7 +158,11 @@ public:
         return true;
     }
     api::ApiResult<std::unique_ptr<HttpServerImpl<AsyncTcpSocket>>> build();
-    HttpServerConfig build_config() const                { return m_config; } ///< 导出配置
+    /**
+     * @brief 导出配置
+     * @return 当前构建器的配置快照
+     */
+    HttpServerConfig build_config() const                { return m_config; }
 private:
     HttpServerConfig m_config;
 };
@@ -196,6 +235,7 @@ public:
     /**
      * @brief 以自定义连接处理器启动服务器
      * @param handler 每个新连接都会被包装成 `Task<void>` 并交给该处理器
+     * @return 无返回值
      * @note handler 必须可安全复制或移动到服务器内部，且不应捕获悬空引用
      */
     void start(HttpConnHandler handler) {
@@ -207,6 +247,7 @@ public:
     /**
      * @brief 以路由模式启动服务器
      * @param router 将被移动到服务器内部保存的路由表
+     * @return 无返回值
      * @details 框架会负责：
      * - 持续读取 HTTP 请求
      * - 处理 Keep-Alive / Connection: close
@@ -409,6 +450,7 @@ public:
 
     /**
      * @brief 停止服务器并关闭内部 runtime
+     * @return 无返回值
      * @details 该函数幂等；当服务器未运行但已有插件启动时仍会尝试清理插件。
      */
     void stop() {
@@ -449,6 +491,9 @@ public:
 protected:
     /**
      * @brief 将 server 拥有的 root task 绑定到当前 Runtime 后提交到指定调度器。
+     * @param scheduler 执行异步操作的 IO 调度器
+     * @param task 协程任务
+     * @return 任务提交成功时返回 true，否则返回 false
      * @details `RuntimeHandle::current()` 依赖 TaskState 中的 runtime 指针；server
      *          自己使用裸 scheduler 投递时必须显式绑定，否则路由 handler 内无法
      *          安全使用 RuntimeHandle 派生 blocking task。
@@ -555,6 +600,8 @@ protected:
     /**
      * @brief 服务器 accept 循环
      * @param scheduler 当前 IO 调度器
+     * @param listener 监听 socket
+     * @return 执行该操作的协程任务，完成后无结果值
      * @details 每个 IO 调度器上运行一个独立的 server_loop，
      *          创建独立的 listener socket，利用 SO_REUSEPORT 实现多线程 accept。
      */
@@ -729,12 +776,42 @@ class HttpsServerBuilder : public server_detail::ServerRoutes<EnableSwagger> {
 public:
     HttpsServerBuilder() = default;
     explicit HttpsServerBuilder(HttpsServerConfig config) : m_config(std::move(config)) {}
-    HttpsServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; } ///< 设置监听地址
-    HttpsServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; } ///< 设置监听端口
-    HttpsServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; } ///< 设置 listen backlog
-    HttpsServerBuilder& tcp_no_delay(bool v)               { m_config.tcp_no_delay = v; return *this; } ///< 设置已接受连接是否启用 TCP_NODELAY
-    HttpsServerBuilder& io_scheduler_count(size_t v)       { m_config.io_scheduler_count = v; return *this; } ///< 设置 IO 调度器数量
-    HttpsServerBuilder& parallel_scheduler_count(size_t v)  { m_config.parallel_scheduler_count = v; return *this; } ///< 设置计算调度器数量
+    /**
+     * @brief 设置监听地址
+     * @param v 值
+     * @return HttpsServerBuilder& 引用
+     */
+    HttpsServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; }
+    /**
+     * @brief 设置监听端口
+     * @param v 值
+     * @return HttpsServerBuilder& 引用
+     */
+    HttpsServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; }
+    /**
+     * @brief 设置 listen backlog
+     * @param v 值
+     * @return HttpsServerBuilder& 引用
+     */
+    HttpsServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; }
+    /**
+     * @brief 设置已接受连接是否启用 TCP_NODELAY
+     * @param v 值
+     * @return HttpsServerBuilder& 引用
+     */
+    HttpsServerBuilder& tcp_no_delay(bool v)               { m_config.tcp_no_delay = v; return *this; }
+    /**
+     * @brief 设置 IO 调度器数量
+     * @param v IO 调度器数量
+     * @return 当前构建器引用，供链式调用
+     */
+    HttpsServerBuilder& io_scheduler_count(size_t v)       { m_config.io_scheduler_count = v; return *this; }
+    /**
+     * @brief 设置计算调度器数量
+     * @param v 计算调度器数量
+     * @return 当前构建器引用，供链式调用
+     */
+    HttpsServerBuilder& parallel_scheduler_count(size_t v)  { m_config.parallel_scheduler_count = v; return *this; }
     HttpsServerBuilder& policy(HttpServerPolicy v)       { m_config.policy = std::move(v); return *this; }
     HttpsServerBuilder& sequential_affinity(size_t io_count, size_t parallel_count) {
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Sequential;
@@ -752,13 +829,42 @@ public:
         m_config.affinity.custom_parallel_cpus = std::move(parallel_cpus);
         return true;
     }
-    HttpsServerBuilder& cert_path(std::string v)          { m_config.cert_path = std::move(v); return *this; } ///< 设置证书路径
-    HttpsServerBuilder& key_path(std::string v)           { m_config.key_path = std::move(v); return *this; } ///< 设置私钥路径
-    HttpsServerBuilder& ca_path(std::string v)            { m_config.ca_path = std::move(v); return *this; } ///< 设置 CA 证书路径
-    HttpsServerBuilder& verify_peer(bool v)               { m_config.verify_peer = v; return *this; } ///< 设置是否校验客户端证书
-    HttpsServerBuilder& verify_depth(int v)               { m_config.verify_depth = v; return *this; } ///< 设置证书链校验深度
+    /**
+     * @brief 设置证书路径
+     * @param v 值
+     * @return HttpsServerBuilder& 引用
+     */
+    HttpsServerBuilder& cert_path(std::string v)          { m_config.cert_path = std::move(v); return *this; }
+    /**
+     * @brief 设置私钥路径
+     * @param v 值
+     * @return HttpsServerBuilder& 引用
+     */
+    HttpsServerBuilder& key_path(std::string v)           { m_config.key_path = std::move(v); return *this; }
+    /**
+     * @brief 设置 CA 证书路径
+     * @param v 值
+     * @return HttpsServerBuilder& 引用
+     */
+    HttpsServerBuilder& ca_path(std::string v)            { m_config.ca_path = std::move(v); return *this; }
+    /**
+     * @brief 设置是否校验客户端证书
+     * @param v 值
+     * @return HttpsServerBuilder& 引用
+     */
+    HttpsServerBuilder& verify_peer(bool v)               { m_config.verify_peer = v; return *this; }
+    /**
+     * @brief 设置证书链校验深度
+     * @param v 值
+     * @return HttpsServerBuilder& 引用
+     */
+    HttpsServerBuilder& verify_depth(int v)               { m_config.verify_depth = v; return *this; }
     api::ApiResult<std::unique_ptr<HttpsServer>> build();
-    HttpsServerConfig build_config() const                { return m_config; } ///< 导出配置
+    /**
+     * @brief 导出配置
+     * @return 当前构建器的配置快照
+     */
+    HttpsServerConfig build_config() const                { return m_config; }
 private:
     HttpsServerConfig m_config;
 };

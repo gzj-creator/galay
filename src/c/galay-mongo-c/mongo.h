@@ -57,6 +57,7 @@ galay_status_t galay_mongo_document_create(galay_mongo_document_t** out);
 /**
  * @brief 销毁 BSON document。
  * @param document 可为 NULL。
+ * @return 无返回值
  * @note 销毁后 encode/get_string/get_binary/get_object_id 返回的借用指针失效。
  */
 void galay_mongo_document_destroy(galay_mongo_document_t* document);
@@ -327,6 +328,7 @@ galay_status_t galay_mongo_array_create(galay_mongo_array_t** out);
 /**
  * @brief 销毁 BSON array。
  * @param array 可为 NULL。
+ * @return 无返回值
  * @note 销毁后 array getter 返回的借用字符串失效。
  */
 void galay_mongo_array_destroy(galay_mongo_array_t* array);
@@ -518,6 +520,7 @@ galay_status_t galay_mongo_uri_parse(const char* uri_text, galay_mongo_uri_t** o
 /**
  * @brief 销毁 Mongo URI handle。
  * @param uri 可为 NULL。
+ * @return 无返回值
  * @note 销毁后 host/database getter 返回的借用指针失效。
  */
 void galay_mongo_uri_destroy(galay_mongo_uri_t* uri);
@@ -618,6 +621,7 @@ galay_status_t galay_mongo_client_create(galay_mongo_client_t** out);
 /**
  * @brief 销毁 Mongo client handle。
  * @param client 可为 NULL。
+ * @return 无返回值
  * @note 若 socket 仍存在会释放 socket；调用方必须保证没有挂起 async 操作。
  */
 void galay_mongo_client_destroy(galay_mongo_client_t* client);
@@ -625,6 +629,7 @@ void galay_mongo_client_destroy(galay_mongo_client_t* client);
 /**
  * @brief 同步释放 Mongo client 内部 socket。
  * @param client Mongo client，可为 NULL。
+ * @return 无返回值
  * @note 本地资源关闭，不发送 MongoDB command，也不挂起 coroutine。
  */
 void galay_mongo_client_close(galay_mongo_client_t* client);

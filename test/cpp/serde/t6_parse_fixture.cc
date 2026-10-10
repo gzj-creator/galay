@@ -21,6 +21,7 @@
 namespace {
 
 /// 上游 tests/test.toml 的逐字节内嵌副本，测试不依赖工作目录。
+/// @return 处理后的 std::string_view 结果
 constexpr std::string_view galay_serde_test_fixture() {
     return R"serde_toml(# TOML 1.0 语法样例。这里有意混用不同的词法形式，确保解析器能够处理注释、
 # 键、字符串、标量、集合、表和数组表，而不只是解析自身序列化生成的文本。

@@ -206,6 +206,7 @@ public:
 
     /**
      * @brief 清空全部连接信息；此前返回的 ConnInfo 引用或指针全部失效。
+     * @return 无返回值
      */
     void clear_conn_info() {
         m_conn_info.clear();
@@ -213,6 +214,7 @@ public:
 
     /**
      * @brief 返回当前保存的连接信息数量。
+     * @return 对应的大小或数量
      */
     std::size_t size() const noexcept {
         return m_conn_info.size();
@@ -220,6 +222,7 @@ public:
 
     /**
      * @brief 判断当前是否没有任何连接信息。
+     * @return 为空时返回 true，否则返回 false
      */
     bool empty() const noexcept {
         return m_conn_info.empty();

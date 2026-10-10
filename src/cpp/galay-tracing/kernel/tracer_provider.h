@@ -28,6 +28,7 @@ inline std::atomic<SpanProcessor*> g_currentSpanProcessor{nullptr};
  * @brief 设置当前进程级 SpanProcessor
  * @details 不获取所有权。传入 nullptr 表示不提交结束的 Span。
  * @param processor SpanProcessor 指针，调用方负责保证生命周期
+ * @return 无返回值
  */
 inline void set_span_processor(SpanProcessor* processor) noexcept {
     detail::g_currentSpanProcessor.store(processor, std::memory_order_release);

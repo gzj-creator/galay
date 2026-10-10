@@ -48,14 +48,18 @@ public:
         , m_message(message) {}
 
     /// @brief 获取错误码
+    /// @return 当前错误码
     RpcErrorCode code() const { return m_code; }
     /// @brief 获取错误消息
+    /// @return const std::string& 只读引用
     const std::string& message() const { return m_message; }
 
     /// @brief 判断是否为成功状态
+    /// @return 满足所检查条件时返回 true，否则返回 false
     bool is_ok() const { return m_code == RpcErrorCode::OK; }
 
     /// @brief 判断是否存在错误（非OK时返回true）
+    /// @return 存在错误时返回 true，否则返回 false
     explicit operator bool() const { return !is_ok(); }
 
     /**
@@ -77,6 +81,7 @@ public:
     }
 
     /// @brief 转换为字符串表示（错误码: 消息）
+    /// @return 按函数说明处理后的字符串
     std::string to_string() const {
         return std::string(rpc_error_code_to_string(m_code)) + ": " + m_message;
     }

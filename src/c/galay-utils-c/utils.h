@@ -71,6 +71,7 @@ galay_status_t galay_utils_bytes_create(const void* data, size_t len,
  *
  * @param bytes 指向句柄的地址；可传 NULL 或指向 NULL 句柄。
  *
+ * @return 无返回值
  * @note 成功释放后会将 *bytes 置为 NULL。该函数不会阻塞，不返回错误；调用方
  * 必须保证没有其它线程或读者继续使用该句柄。
  */
@@ -123,6 +124,7 @@ galay_status_t galay_utils_ring_buffer_create(size_t capacity,
  *
  * @param ring 指向 ring 句柄的地址；可传 NULL 或指向 NULL 句柄。
  *
+ * @return 无返回值
  * @note 成功释放后会将 *ring 置为 NULL。调用方必须保证没有并发读写或悬挂指针。
  */
 void galay_utils_ring_buffer_destroy(galay_utils_ring_buffer_t** ring);

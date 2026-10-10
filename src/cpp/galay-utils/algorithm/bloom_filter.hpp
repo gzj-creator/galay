@@ -102,7 +102,7 @@ public:
 
     /**
      * @brief 按 bit 数构造 Bloom Filter
-     * @param bit_count 期望 bit 数；会向上取整到完整 256-bit block
+     * @param bitCount 期望 bit 数；会向上取整到完整 256-bit block
      * @param hash 哈希函数；结果会经过内部 64-bit 混合后进入 split-block 算法
      * @throws std::invalid_argument bit_count 为 0 时抛出
      * @throws std::length_error block 数超过 uint32_t 可寻址范围时抛出
@@ -195,6 +195,7 @@ public:
     /**
      * @brief 加入一个值
      * @param value 待加入值
+     * @return 无返回值
      */
     void add(const T& value) {
         add_hash(hash_value(value));
@@ -204,6 +205,7 @@ public:
      * @brief 加入一个已计算好的 64-bit hash
      * @param hash64 稳定且分布良好的 64-bit hash
      *
+     * @return 无返回值
      * @details 该接口不会再次混合 hash，用于调用方已有稳定 hash 的场景。
      */
     void add_hash(uint64_t hash64) {
@@ -242,6 +244,7 @@ public:
 
     /**
      * @brief 清空过滤器
+     * @return 无返回值
      * @details 清空后，之前 add 的元素都会返回 false，直到再次加入。
      */
     void clear() {

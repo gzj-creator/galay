@@ -15,6 +15,8 @@ using namespace galay::kernel;
 
 /**
  * @brief WebSocket 客户端协程
+ * @param url 目标 URL
+ * @return 协程任务；结果为操作是否成功
  */
 Task<bool> run_web_socket_client(const std::string& url) {
 

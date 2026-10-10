@@ -37,6 +37,7 @@ struct CurrentContextState {
 /**
  * @brief 设置当前线程的上下文状态
  * @param state 要设置的上下文状态
+ * @return 无返回值
  */
 void set_current_context_state(CurrentContextState state);
 
@@ -51,12 +52,14 @@ void set_current_context_state(CurrentContextState state);
 /**
  * @brief 设置当前线程的活跃追踪上下文
  * @param context 要设置的追踪上下文，传入空值表示清除
+ * @return 无返回值
  */
 void set_current_context(std::optional<TraceContext> context);
 
 /**
  * @brief 设置当前线程的活跃追踪上下文（便捷重载）
  * @param context 要设置的追踪上下文引用
+ * @return 无返回值
  */
 inline void set_current_context(const TraceContext& context) {
     set_current_context(std::optional<TraceContext>(context));
@@ -64,6 +67,7 @@ inline void set_current_context(const TraceContext& context) {
 
 /**
  * @brief 清除当前线程的活跃追踪上下文
+ * @return 无返回值
  */
 void clear_current_context() noexcept;
 

@@ -99,19 +99,71 @@ private:
          * @return 状态机动作
          */
         galay::kernel::MachineAction<result_type> advance();
-        void on_connect(std::expected<void, IOError> result);  ///< 连接完成回调
-        void on_read(std::expected<size_t, IOError> result);   ///< 读取完成回调
-        void on_write(std::expected<size_t, IOError> result);  ///< 写入完成回调
+        /**
+         * @brief 连接完成回调
+         * @param result 结果对象
+         * @return 无返回值
+         */
+        void on_connect(std::expected<void, IOError> result);
+        /**
+         * @brief 读取完成回调
+         * @param result 结果对象
+         * @return 无返回值
+         */
+        void on_read(std::expected<size_t, IOError> result);
+        /**
+         * @brief 写入完成回调
+         * @param result 结果对象
+         * @return 无返回值
+         */
+        void on_write(std::expected<size_t, IOError> result);
 
     private:
-        bool prepare_read_window();                                              ///< 准备读取窗口
-        std::expected<bool, MysqlError> parse_handshake_from_ring_buffer();        ///< 从环形缓冲区解析握手包
-        std::expected<bool, MysqlError> parse_auth_result_from_ring_buffer();       ///< 从环形缓冲区解析认证结果
-        void set_error(MysqlError error) noexcept;                              ///< 设置错误
-        void set_connect_error(const IOError& io_error) noexcept;                ///< 设置连接错误
-        void set_send_error(const IOError& io_error) noexcept;                   ///< 设置发送错误
-        void set_recv_error(const std::string& phase, const IOError& io_error) noexcept; ///< 设置接收错误
-        void complete_success() noexcept;                                        ///< 标记成功完成
+        /**
+         * @brief 准备读取窗口
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool prepare_read_window();
+        /**
+         * @brief 从环形缓冲区解析握手包
+         * @return 成功时返回 bool，失败时返回 MysqlError 错误
+         */
+        std::expected<bool, MysqlError> parse_handshake_from_ring_buffer();
+        /**
+         * @brief 从环形缓冲区解析认证结果
+         * @return 成功时返回 bool，失败时返回 MysqlError 错误
+         */
+        std::expected<bool, MysqlError> parse_auth_result_from_ring_buffer();
+        /**
+         * @brief 设置错误
+         * @param error 错误信息
+         * @return 无返回值
+         */
+        void set_error(MysqlError error) noexcept;
+        /**
+         * @brief 设置连接错误
+         * @param io_error 底层 IO 错误
+         * @return 无返回值
+         */
+        void set_connect_error(const IOError& io_error) noexcept;
+        /**
+         * @brief 设置发送错误
+         * @param io_error 底层 IO 错误
+         * @return 无返回值
+         */
+        void set_send_error(const IOError& io_error) noexcept;
+        /**
+         * @brief 设置接收错误
+         * @param phase 当前阶段
+         * @param io_error 底层 IO 错误
+         * @return 无返回值
+         */
+        void set_recv_error(const std::string& phase, const IOError& io_error) noexcept;
+        /**
+         * @brief 标记成功完成
+         * @return 无返回值
+         */
+        void complete_success() noexcept;
 
         std::shared_ptr<SharedState> m_state; ///< 共享状态
     };
@@ -151,7 +203,11 @@ public:
     MysqlQueryAwaitable(const MysqlQueryAwaitable&) = delete;
     MysqlQueryAwaitable& operator=(const MysqlQueryAwaitable&) = delete;
 
-    bool is_invalid() const; ///< 检查等待体是否无效
+    /**
+     * @brief 检查等待体是否无效
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_invalid() const;
 
 private:
     /**
@@ -196,16 +252,53 @@ private:
 
         explicit Machine(std::shared_ptr<SharedState> state);
 
-        galay::kernel::MachineAction<result_type> advance(); ///< 推进状态机
-        void on_read(std::expected<size_t, IOError> result);  ///< 读取完成回调
-        void on_write(std::expected<size_t, IOError> result); ///< 写入完成回调
+        /**
+         * @brief 推进状态机
+         * @return galay::kernel::MachineAction<result_type> 操作结果
+         */
+        galay::kernel::MachineAction<result_type> advance();
+        /**
+         * @brief 读取完成回调
+         * @param result 结果对象
+         * @return 无返回值
+         */
+        void on_read(std::expected<size_t, IOError> result);
+        /**
+         * @brief 写入完成回调
+         * @param result 结果对象
+         * @return 无返回值
+         */
+        void on_write(std::expected<size_t, IOError> result);
 
     private:
-        bool prepare_read_window();                                        ///< 准备读取窗口
-        std::expected<bool, MysqlError> try_parse_from_ring_buffer();        ///< 尝试从环形缓冲区解析
-        void set_error(MysqlError error) noexcept;                        ///< 设置错误
-        void set_send_error(const IOError& io_error) noexcept;             ///< 设置发送错误
-        void set_recv_error(const IOError& io_error) noexcept;             ///< 设置接收错误
+        /**
+         * @brief 准备读取窗口
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool prepare_read_window();
+        /**
+         * @brief 尝试从环形缓冲区解析
+         * @return 成功时返回 bool，失败时返回 MysqlError 错误
+         */
+        std::expected<bool, MysqlError> try_parse_from_ring_buffer();
+        /**
+         * @brief 设置错误
+         * @param error 错误信息
+         * @return 无返回值
+         */
+        void set_error(MysqlError error) noexcept;
+        /**
+         * @brief 设置发送错误
+         * @param io_error 底层 IO 错误
+         * @return 无返回值
+         */
+        void set_send_error(const IOError& io_error) noexcept;
+        /**
+         * @brief 设置接收错误
+         * @param io_error 底层 IO 错误
+         * @return 无返回值
+         */
+        void set_recv_error(const IOError& io_error) noexcept;
 
         std::shared_ptr<SharedState> m_state; ///< 共享状态
     };
@@ -291,7 +384,11 @@ public:
     MysqlPrepareAwaitable(const MysqlPrepareAwaitable&) = delete;
     MysqlPrepareAwaitable& operator=(const MysqlPrepareAwaitable&) = delete;
 
-    bool is_invalid() const; ///< 检查等待体是否无效
+    /**
+     * @brief 检查等待体是否无效
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_invalid() const;
 
 private:
     /**
@@ -337,16 +434,53 @@ private:
 
         explicit Machine(std::shared_ptr<SharedState> state);
 
-        galay::kernel::MachineAction<result_type> advance(); ///< 推进状态机
-        void on_read(std::expected<size_t, IOError> result);  ///< 读取完成回调
-        void on_write(std::expected<size_t, IOError> result); ///< 写入完成回调
+        /**
+         * @brief 推进状态机
+         * @return galay::kernel::MachineAction<result_type> 操作结果
+         */
+        galay::kernel::MachineAction<result_type> advance();
+        /**
+         * @brief 读取完成回调
+         * @param result 结果对象
+         * @return 无返回值
+         */
+        void on_read(std::expected<size_t, IOError> result);
+        /**
+         * @brief 写入完成回调
+         * @param result 结果对象
+         * @return 无返回值
+         */
+        void on_write(std::expected<size_t, IOError> result);
 
     private:
-        bool prepare_read_window();                                        ///< 准备读取窗口
-        std::expected<bool, MysqlError> try_parse_from_ring_buffer();        ///< 尝试从环形缓冲区解析
-        void set_error(MysqlError error) noexcept;                        ///< 设置错误
-        void set_send_error(const IOError& io_error) noexcept;             ///< 设置发送错误
-        void set_recv_error(const IOError& io_error) noexcept;             ///< 设置接收错误
+        /**
+         * @brief 准备读取窗口
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool prepare_read_window();
+        /**
+         * @brief 尝试从环形缓冲区解析
+         * @return 成功时返回 bool，失败时返回 MysqlError 错误
+         */
+        std::expected<bool, MysqlError> try_parse_from_ring_buffer();
+        /**
+         * @brief 设置错误
+         * @param error 错误信息
+         * @return 无返回值
+         */
+        void set_error(MysqlError error) noexcept;
+        /**
+         * @brief 设置发送错误
+         * @param io_error 底层 IO 错误
+         * @return 无返回值
+         */
+        void set_send_error(const IOError& io_error) noexcept;
+        /**
+         * @brief 设置接收错误
+         * @param io_error 底层 IO 错误
+         * @return 无返回值
+         */
+        void set_recv_error(const IOError& io_error) noexcept;
 
         std::shared_ptr<SharedState> m_state; ///< 共享状态
     };
@@ -385,7 +519,11 @@ public:
     MysqlStmtExecuteAwaitable(const MysqlStmtExecuteAwaitable&) = delete;
     MysqlStmtExecuteAwaitable& operator=(const MysqlStmtExecuteAwaitable&) = delete;
 
-    bool is_invalid() const; ///< 检查等待体是否无效
+    /**
+     * @brief 检查等待体是否无效
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_invalid() const;
 
 private:
     /**
@@ -430,16 +568,53 @@ private:
 
         explicit Machine(std::shared_ptr<SharedState> state);
 
-        galay::kernel::MachineAction<result_type> advance(); ///< 推进状态机
-        void on_read(std::expected<size_t, IOError> result);  ///< 读取完成回调
-        void on_write(std::expected<size_t, IOError> result); ///< 写入完成回调
+        /**
+         * @brief 推进状态机
+         * @return galay::kernel::MachineAction<result_type> 操作结果
+         */
+        galay::kernel::MachineAction<result_type> advance();
+        /**
+         * @brief 读取完成回调
+         * @param result 结果对象
+         * @return 无返回值
+         */
+        void on_read(std::expected<size_t, IOError> result);
+        /**
+         * @brief 写入完成回调
+         * @param result 结果对象
+         * @return 无返回值
+         */
+        void on_write(std::expected<size_t, IOError> result);
 
     private:
-        bool prepare_read_window();                                        ///< 准备读取窗口
-        std::expected<bool, MysqlError> try_parse_from_ring_buffer();        ///< 尝试从环形缓冲区解析
-        void set_error(MysqlError error) noexcept;                        ///< 设置错误
-        void set_send_error(const IOError& io_error) noexcept;             ///< 设置发送错误
-        void set_recv_error(const IOError& io_error) noexcept;             ///< 设置接收错误
+        /**
+         * @brief 准备读取窗口
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool prepare_read_window();
+        /**
+         * @brief 尝试从环形缓冲区解析
+         * @return 成功时返回 bool，失败时返回 MysqlError 错误
+         */
+        std::expected<bool, MysqlError> try_parse_from_ring_buffer();
+        /**
+         * @brief 设置错误
+         * @param error 错误信息
+         * @return 无返回值
+         */
+        void set_error(MysqlError error) noexcept;
+        /**
+         * @brief 设置发送错误
+         * @param io_error 底层 IO 错误
+         * @return 无返回值
+         */
+        void set_send_error(const IOError& io_error) noexcept;
+        /**
+         * @brief 设置接收错误
+         * @param io_error 底层 IO 错误
+         * @return 无返回值
+         */
+        void set_recv_error(const IOError& io_error) noexcept;
 
         std::shared_ptr<SharedState> m_state; ///< 共享状态
     };
@@ -479,7 +654,11 @@ public:
     MysqlPipelineAwaitable(const MysqlPipelineAwaitable&) = delete;
     MysqlPipelineAwaitable& operator=(const MysqlPipelineAwaitable&) = delete;
 
-    bool is_invalid() const; ///< 检查等待体是否无效
+    /**
+     * @brief 检查等待体是否无效
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_invalid() const;
 
 private:
     /**
@@ -538,21 +717,79 @@ private:
 
         explicit Machine(std::shared_ptr<SharedState> state);
 
-        galay::kernel::MachineAction<result_type> advance(); ///< 推进状态机
-        void on_read(std::expected<size_t, IOError> result);  ///< 读取完成回调
-        void on_write(std::expected<size_t, IOError> result); ///< 写入完成回调
+        /**
+         * @brief 推进状态机
+         * @return galay::kernel::MachineAction<result_type> 操作结果
+         */
+        galay::kernel::MachineAction<result_type> advance();
+        /**
+         * @brief 读取完成回调
+         * @param result 结果对象
+         * @return 无返回值
+         */
+        void on_read(std::expected<size_t, IOError> result);
+        /**
+         * @brief 写入完成回调
+         * @param result 结果对象
+         * @return 无返回值
+         */
+        void on_write(std::expected<size_t, IOError> result);
 
     private:
-        bool prepare_read_window();                                        ///< 准备读取窗口
-        size_t pending_write_iov_count();                                   ///< 获取待写入iovec数量
-        bool advance_after_write(size_t sent_bytes);                       ///< 写入后推进游标
-        void refill_write_iov_window();                                     ///< 重新填充写入iovec窗口
-        void reset_current_result();                                       ///< 重置当前结果集
-        void finalize_current_result();                                    ///< 完成当前结果集
-        std::expected<bool, MysqlError> try_parse_from_ring_buffer();        ///< 尝试从环形缓冲区解析
-        void set_error(MysqlError error) noexcept;                        ///< 设置错误
-        void set_send_error(const IOError& io_error) noexcept;             ///< 设置发送错误
-        void set_recv_error(const IOError& io_error) noexcept;             ///< 设置接收错误
+        /**
+         * @brief 准备读取窗口
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool prepare_read_window();
+        /**
+         * @brief 获取待写入iovec数量
+         * @return 对应的大小或数量
+         */
+        size_t pending_write_iov_count();
+        /**
+         * @brief 写入后推进游标
+         * @param sent_bytes 发送完成的字节数
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool advance_after_write(size_t sent_bytes);
+        /**
+         * @brief 重新填充写入iovec窗口
+         * @return 无返回值
+         */
+        void refill_write_iov_window();
+        /**
+         * @brief 重置当前结果集
+         * @return 无返回值
+         */
+        void reset_current_result();
+        /**
+         * @brief 完成当前结果集
+         * @return 无返回值
+         */
+        void finalize_current_result();
+        /**
+         * @brief 尝试从环形缓冲区解析
+         * @return 成功时返回 bool，失败时返回 MysqlError 错误
+         */
+        std::expected<bool, MysqlError> try_parse_from_ring_buffer();
+        /**
+         * @brief 设置错误
+         * @param error 错误信息
+         * @return 无返回值
+         */
+        void set_error(MysqlError error) noexcept;
+        /**
+         * @brief 设置发送错误
+         * @param io_error 底层 IO 错误
+         * @return 无返回值
+         */
+        void set_send_error(const IOError& io_error) noexcept;
+        /**
+         * @brief 设置接收错误
+         * @param io_error 底层 IO 错误
+         * @return 无返回值
+         */
+        void set_recv_error(const IOError& io_error) noexcept;
 
         std::shared_ptr<SharedState> m_state; ///< 共享状态
     };

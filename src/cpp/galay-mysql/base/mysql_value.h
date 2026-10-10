@@ -106,30 +106,120 @@ public:
      */
     [[nodiscard]] MysqlField clone() const;
 
-    const std::string& name() const { return m_name; }             ///< 获取列名
-    MysqlFieldType type() const { return m_type; }                 ///< 获取字段类型
-    uint16_t flags() const { return m_flags; }                     ///< 获取字段标志
-    uint32_t column_length() const { return m_column_length; }      ///< 获取列长度
-    uint8_t decimals() const { return m_decimals; }                ///< 获取小数位数
+    /**
+     * @brief 获取列名
+     * @return const std::string& 引用
+     */
+    const std::string& name() const { return m_name; }
+    /**
+     * @brief 获取字段类型
+     * @return 当前对象的类型、状态或错误码
+     */
+    MysqlFieldType type() const { return m_type; }
+    /**
+     * @brief 获取字段标志
+     * @return uint16_t 操作结果
+     */
+    uint16_t flags() const { return m_flags; }
+    /**
+     * @brief 获取列长度
+     * @return 对应的大小或数量
+     */
+    uint32_t column_length() const { return m_column_length; }
+    /**
+     * @brief 获取小数位数
+     * @return uint8_t 操作结果
+     */
+    uint8_t decimals() const { return m_decimals; }
 
-    void set_catalog(std::string catalog) { m_catalog = std::move(catalog); }     ///< 设置目录名
-    void set_schema(std::string schema) { m_schema = std::move(schema); }         ///< 设置数据库名
-    void set_table(std::string table) { m_table = std::move(table); }             ///< 设置表名
-    void set_org_table(std::string org_table) { m_org_table = std::move(org_table); } ///< 设置原始表名
-    void set_org_name(std::string org_name) { m_org_name = std::move(org_name); }  ///< 设置原始列名
-    void set_character_set(uint16_t cs) { m_character_set = cs; }                  ///< 设置字符集
+    /**
+     * @brief 设置目录名
+     * @param catalog 目录名称
+     * @return 无返回值
+     */
+    void set_catalog(std::string catalog) { m_catalog = std::move(catalog); }
+    /**
+     * @brief 设置数据库名
+     * @param schema 数据库 schema 名称
+     * @return 无返回值
+     */
+    void set_schema(std::string schema) { m_schema = std::move(schema); }
+    /**
+     * @brief 设置表名
+     * @param table 表名称
+     * @return 无返回值
+     */
+    void set_table(std::string table) { m_table = std::move(table); }
+    /**
+     * @brief 设置原始表名
+     * @param org_table 原始表名称
+     * @return 无返回值
+     */
+    void set_org_table(std::string org_table) { m_org_table = std::move(org_table); }
+    /**
+     * @brief 设置原始列名
+     * @param org_name 原始字段名称
+     * @return 无返回值
+     */
+    void set_org_name(std::string org_name) { m_org_name = std::move(org_name); }
+    /**
+     * @brief 设置字符集
+     * @param cs 字符集编号
+     * @return 无返回值
+     */
+    void set_character_set(uint16_t cs) { m_character_set = cs; }
 
-    const std::string& catalog() const { return m_catalog; }       ///< 获取目录名
-    const std::string& schema() const { return m_schema; }         ///< 获取数据库名
-    const std::string& table() const { return m_table; }           ///< 获取表名
-    const std::string& org_table() const { return m_org_table; }    ///< 获取原始表名
-    const std::string& org_name() const { return m_org_name; }      ///< 获取原始列名
-    uint16_t character_set() const { return m_character_set; }      ///< 获取字符集
+    /**
+     * @brief 获取目录名
+     * @return const std::string& 引用
+     */
+    const std::string& catalog() const { return m_catalog; }
+    /**
+     * @brief 获取数据库名
+     * @return const std::string& 引用
+     */
+    const std::string& schema() const { return m_schema; }
+    /**
+     * @brief 获取表名
+     * @return const std::string& 引用
+     */
+    const std::string& table() const { return m_table; }
+    /**
+     * @brief 获取原始表名
+     * @return const std::string& 引用
+     */
+    const std::string& org_table() const { return m_org_table; }
+    /**
+     * @brief 获取原始列名
+     * @return const std::string& 引用
+     */
+    const std::string& org_name() const { return m_org_name; }
+    /**
+     * @brief 获取字符集
+     * @return uint16_t 操作结果
+     */
+    uint16_t character_set() const { return m_character_set; }
 
-    bool is_not_null() const { return m_flags & NOT_NULL_FLAG; }         ///< 是否不允许NULL
-    bool is_primary_key() const { return m_flags & PRI_KEY_FLAG; }       ///< 是否为主键
-    bool is_auto_increment() const { return m_flags & AUTO_INCREMENT_FLAG; } ///< 是否自增
-    bool is_unsigned() const { return m_flags & UNSIGNED_FLAG; }        ///< 是否无符号
+    /**
+     * @brief 是否不允许NULL
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_not_null() const { return m_flags & NOT_NULL_FLAG; }
+    /**
+     * @brief 是否为主键
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_primary_key() const { return m_flags & PRI_KEY_FLAG; }
+    /**
+     * @brief 是否自增
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_auto_increment() const { return m_flags & AUTO_INCREMENT_FLAG; }
+    /**
+     * @brief 是否无符号
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_unsigned() const { return m_flags & UNSIGNED_FLAG; }
 
 private:
     std::string m_catalog;                          ///< 目录名
@@ -172,8 +262,16 @@ public:
      */
     [[nodiscard]] MysqlRow clone() const;
 
-    size_t size() const { return m_values.size(); }  ///< 获取列数
-    bool empty() const { return m_values.empty(); }   ///< 判断是否为空行
+    /**
+     * @brief 获取列数
+     * @return 对应的大小或数量
+     */
+    size_t size() const { return m_values.size(); }
+    /**
+     * @brief 判断是否为空行
+     * @return 为空时返回 true，否则返回 false
+     */
+    bool empty() const { return m_values.empty(); }
 
     /**
      * @brief 通过索引访问列值
@@ -262,12 +360,14 @@ public:
     /**
      * @brief 添加列定义
      * @param field 列定义
+     * @return 无返回值
      */
     void add_field(MysqlField field);
 
     /**
      * @brief 预分配列定义空间
      * @param n 预分配数量
+     * @return 无返回值
      */
     void reserve_fields(size_t n) { m_fields.reserve(n); }
 
@@ -293,12 +393,14 @@ public:
     /**
      * @brief 添加行数据
      * @param row 行数据
+     * @return 无返回值
      */
     void add_row(MysqlRow row);
 
     /**
      * @brief 预分配行数据空间
      * @param n 预分配数量
+     * @return 无返回值
      */
     void reserve_rows(size_t n) { m_rows.reserve(n); }
 
@@ -329,17 +431,62 @@ public:
     int find_field(const std::string& name) const;
 
     // OK包信息
-    void set_affected_rows(uint64_t n) { m_affected_rows = n; }     ///< 设置影响行数
-    void set_last_insert_id(uint64_t id) { m_last_insert_id = id; }  ///< 设置最后插入ID
-    void set_warnings(uint16_t w) { m_warnings = w; }              ///< 设置警告数
-    void set_status_flags(uint16_t f) { m_status_flags = f; }       ///< 设置状态标志
-    void set_info(std::string info) { m_info = std::move(info); }  ///< 设置附加信息
+    /**
+     * @brief 设置影响行数
+     * @param n 数量
+     * @return 无返回值
+     */
+    void set_affected_rows(uint64_t n) { m_affected_rows = n; }
+    /**
+     * @brief 设置最后插入ID
+     * @param id 标识符
+     * @return 无返回值
+     */
+    void set_last_insert_id(uint64_t id) { m_last_insert_id = id; }
+    /**
+     * @brief 设置警告数
+     * @param w 等待节点
+     * @return 无返回值
+     */
+    void set_warnings(uint16_t w) { m_warnings = w; }
+    /**
+     * @brief 设置状态标志
+     * @param f 响应处理回调
+     * @return 无返回值
+     */
+    void set_status_flags(uint16_t f) { m_status_flags = f; }
+    /**
+     * @brief 设置附加信息
+     * @param info 信息对象
+     * @return 无返回值
+     */
+    void set_info(std::string info) { m_info = std::move(info); }
 
-    uint64_t affected_rows() const { return m_affected_rows; }     ///< 获取影响行数
-    uint64_t last_insert_id() const { return m_last_insert_id; }    ///< 获取最后插入ID
-    uint16_t warnings() const { return m_warnings; }              ///< 获取警告数
-    uint16_t status_flags() const { return m_status_flags; }       ///< 获取状态标志
-    const std::string& info() const { return m_info; }            ///< 获取附加信息
+    /**
+     * @brief 获取影响行数
+     * @return uint64_t 操作结果
+     */
+    uint64_t affected_rows() const { return m_affected_rows; }
+    /**
+     * @brief 获取最后插入ID
+     * @return uint64_t 操作结果
+     */
+    uint64_t last_insert_id() const { return m_last_insert_id; }
+    /**
+     * @brief 获取警告数
+     * @return uint16_t 操作结果
+     */
+    uint16_t warnings() const { return m_warnings; }
+    /**
+     * @brief 获取状态标志
+     * @return uint16_t 操作结果
+     */
+    uint16_t status_flags() const { return m_status_flags; }
+    /**
+     * @brief 获取附加信息
+     * @return const std::string& 引用
+     */
+    const std::string& info() const { return m_info; }
 
     /**
      * @brief 判断是否包含结果集（有列定义）

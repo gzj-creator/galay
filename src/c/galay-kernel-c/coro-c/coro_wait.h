@@ -55,6 +55,7 @@ C_IOResult galay_c_coro_wait_io(galay_c_io_scheduler_t* scheduler,
  *
  * @param controller IO controller。
  * @param event_type 待取消的事件类型（GALAY_C_EVENT_READ 或 GALAY_C_EVENT_WRITE）。
+ * @param scheduler 执行异步操作的 IO 调度器
  * @return 成功取消返回 C_IOResultCancelled；槽位为空返回 C_IOResultInvalid。
  *
  * @note 该函数会将挂起的协程标记为 Cancelled 并入队到 ready queue。

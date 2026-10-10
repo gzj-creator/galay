@@ -14,6 +14,7 @@ extern "C" {
 /**
  * @brief C 协程入口函数。
  * @param arg 传给 `galay_c_coro_spawn` 的用户数据指针。
+ * @return 无返回值
  * @note 入口函数运行在选定的 owner IO scheduler 线程上，必须正常返回；
  * 不得抛出 C++ 异常。调用方负责避免进程终止和长时间阻塞工作。
  */

@@ -71,7 +71,7 @@ namespace galay::kernel
         /**
          * @brief 以可配置的 tick 间隔构造时间轮管理器
          *
-         * @param tick_duration 每 tick 的纳秒数；控制定时器精度和最大范围
+         * @param tickDuration 每 tick 的纳秒数；控制定时器精度和最大范围
          *
          * @details 常见配置：
          * - 1 ms  (1e6)：覆盖 0 -- 48 天
@@ -221,6 +221,7 @@ namespace galay::kernel
         /**
          * @brief 推进时间轮并触发过期定时器
          *
+         * @return 无返回值
          * @details 从当前挂钟时间计算目标 tick，
          * 然后从当前 tick 迭代到目标 tick。每一步：
          * 1. 当跨越层边界时，将高层槽级联下降
@@ -290,6 +291,7 @@ namespace galay::kernel
 
         /**
          * @brief 触发第1层当前槽中的所有定时器
+         * @return 无返回值
          */
         void process_wheel1()
         {
@@ -313,6 +315,8 @@ namespace galay::kernel
 
         /**
          * @brief 将第2层定时器级联下降到第1层
+         * @param nowNs 当前时间，单位为纳秒
+         * @return 无返回值
          */
         void cascade_wheel2(uint64_t nowNs)
         {
@@ -322,6 +326,8 @@ namespace galay::kernel
 
         /**
          * @brief 将第3层定时器级联下降到低层
+         * @param nowNs 当前时间，单位为纳秒
+         * @return 无返回值
          */
         void cascade_wheel3(uint64_t nowNs)
         {
@@ -331,6 +337,8 @@ namespace galay::kernel
 
         /**
          * @brief 将第4层定时器级联下降到低层
+         * @param nowNs 当前时间，单位为纳秒
+         * @return 无返回值
          */
         void cascade_wheel4(uint64_t nowNs)
         {
@@ -340,6 +348,8 @@ namespace galay::kernel
 
         /**
          * @brief 将第5层定时器级联下降到低层
+         * @param nowNs 当前时间，单位为纳秒
+         * @return 无返回值
          */
         void cascade_wheel5(uint64_t nowNs)
         {
@@ -351,6 +361,8 @@ namespace galay::kernel
          * @brief 将高层槽中的定时器重新分配到正确的低层
          * @param slot 正在级联的定时器列表
          *
+         * @param nowNs 当前时间，单位为纳秒
+         * @return 无返回值
          * @details 每个定时器被重新评估：若已过期则立即触发；
          * 否则插入到合适的时间轮层。
          */
@@ -416,6 +428,7 @@ namespace galay::kernel
 
         /**
          * @brief 将时间轮的起始时间和当前 tick 重置为当前时刻
+         * @return 无返回值
          */
         void reset()
         {

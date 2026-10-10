@@ -125,8 +125,11 @@ public:
     }
 
     /// @brief 获取流ID
+    /// @return 当前流的标识符
     uint32_t stream_id() const { return m_stream_id; }
     /// @brief 设置流ID
+    /// @param id 标识符
+    /// @return 无返回值
     void stream_id(uint32_t id) { m_stream_id = id; }
 
     const std::vector<char>& payload() const {
@@ -187,6 +190,8 @@ public:
         };
     }
     /// @brief 设置payload（字符串拷贝模式）
+    /// @param data 输入数据引用
+    /// @return 无返回值
     void payload(const std::string& data) {
         m_payload.assign(data.begin(), data.end());
         m_payload_owned = true;
@@ -201,6 +206,7 @@ public:
      * @brief 设置借用型 payload 视图
      * @param view 外部 payload 视图
      *
+     * @return 无返回值
      * @note 调用方必须保证 `view` 指向的内存在消息被消费完成前保持有效；
      *       如需脱离外部缓冲长期持有，请改用 `payload(...)`。
      */
@@ -211,17 +217,25 @@ public:
     }
 
     /// @brief 判断是否为流结束帧
+    /// @return 满足所检查条件时返回 true，否则返回 false
     bool is_end() const { return m_is_end; }
     /// @brief 设置流结束标志
+    /// @param end 结束位置
+    /// @return 无返回值
     void set_end(bool end = true) { m_is_end = end; }
 
     /// @brief 获取消息类型
+    /// @return 当前消息的协议类型
     RpcMessageType message_type() const { return m_msg_type; }
     /// @brief 设置消息类型
+    /// @param type 类型
+    /// @return 无返回值
     void message_type(RpcMessageType type) { m_msg_type = type; }
 
     /**
      * @brief 序列化流消息
+     * @param type 类型
+     * @return 序列化后的消息字节
      */
     std::vector<char> serialize(RpcMessageType type) const {
         const RpcPayloadView payload_view = this->payload_view();
@@ -248,6 +262,9 @@ public:
 
     /**
      * @brief 反序列化流消息体
+     * @param body 消息体
+     * @param length 缓冲区字节数
+     * @return 消息体解析成功时返回 true，否则返回 false
      */
     bool deserialize_body(const char* body, size_t length) {
         if (length > 0) {
@@ -373,16 +390,25 @@ public:
         , m_method_name(method) {}
 
     /// @brief 获取流ID
+    /// @return 当前流的标识符
     uint32_t stream_id() const { return m_stream_id; }
     /// @brief 设置流ID
+    /// @param id 标识符
+    /// @return 无返回值
     void stream_id(uint32_t id) { m_stream_id = id; }
     /// @brief 获取服务名
+    /// @return const std::string& 只读引用
     const std::string& service_name() const { return m_service_name; }
     /// @brief 设置服务名
+    /// @param name 名称
+    /// @return 无返回值
     void service_name(std::string_view name) { m_service_name = name; }
     /// @brief 获取方法名
+    /// @return const std::string& 只读引用
     const std::string& method_name() const { return m_method_name; }
     /// @brief 设置方法名
+    /// @param name 名称
+    /// @return 无返回值
     void method_name(std::string_view name) { m_method_name = name; }
 
     std::vector<char> serialize() const {
@@ -902,11 +928,15 @@ public:
     /**
      * @brief 更新当前写入器绑定的 stream_id
      * @param stream_id 后续发送帧要使用的逻辑流 ID
+     * @return 无返回值
      */
     void stream_id(uint32_t stream_id) { m_stream_id = stream_id; }
 
     /**
      * @brief 发送流数据
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     SendStreamDataAwaitable<SocketType> send_data(const char* data, size_t len) {
         return SendStreamDataAwaitable<SocketType>(
@@ -922,6 +952,7 @@ public:
      * @brief 发送借用型 payload 视图
      * @param payload_view 调用方拥有的 payload 视图
      *
+     * @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
      * @note 调用方需保证 payload 所指向内存在本次 `co_await` 完成前保持有效。
      */
     SendStreamDataAwaitable<SocketType> send_data(const RpcPayloadView& payload_view) {
@@ -932,6 +963,9 @@ public:
 
     /**
      * @brief 发送流初始化请求
+     * @param service 服务名称
+     * @param method 方法名称
+     * @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     SendStreamDataAwaitable<SocketType> send_init(const std::string& service, const std::string& method) {
         return SendStreamDataAwaitable<SocketType>(
@@ -941,6 +975,7 @@ public:
 
     /**
      * @brief 发送流初始化确认
+     * @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     SendStreamDataAwaitable<SocketType> send_init_ack() {
         return SendStreamDataAwaitable<SocketType>(
@@ -950,6 +985,7 @@ public:
 
     /**
      * @brief 发送流结束
+     * @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     SendStreamDataAwaitable<SocketType> send_end() {
         return SendStreamDataAwaitable<SocketType>(
@@ -959,6 +995,7 @@ public:
 
     /**
      * @brief 发送流取消
+     * @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
      */
     SendStreamDataAwaitable<SocketType> send_cancel() {
         return SendStreamDataAwaitable<SocketType>(
@@ -1024,24 +1061,29 @@ public:
     RpcStreamImpl& operator=(RpcStreamImpl&&) = delete;
 
     /// @brief 获取流ID
+    /// @return 当前流的标识符
     uint32_t stream_id() const { return m_stream_id; }
     /**
      * @brief 更新逻辑流 ID，并同步到底层写入器
      * @param stream_id 新的逻辑流 ID
+     * @return 无返回值
      */
     void stream_id(uint32_t stream_id) {
         m_stream_id = stream_id;
         m_writer.stream_id(stream_id);
     }
     /// @brief 获取服务名
+    /// @return const std::string& 只读引用
     const std::string& service_name() const { return m_service_name; }
     /// @brief 获取方法名
+    /// @return const std::string& 只读引用
     const std::string& method_name() const { return m_method_name; }
 
     /**
      * @brief 设置路由信息
      * @param service_name 服务名
      * @param method_name 方法名
+     * @return 无返回值
      */
     void set_route(std::string service_name, std::string method_name) {
         m_service_name = std::move(service_name);
@@ -1049,21 +1091,29 @@ public:
     }
 
     /// @brief 获取流读取器
+    /// @return StreamReaderImpl<SocketType, Strategy>& 引用
     StreamReaderImpl<SocketType, Strategy>& get_reader() { return m_reader; }
     /// @brief 获取流写入器
+    /// @return StreamWriterImpl<SocketType>& 引用
     StreamWriterImpl<SocketType>& get_writer() { return m_writer; }
 
     /// @brief 读取流消息
+    /// @param msg 消息文本
+    /// @return GetStreamMessageAwaitable<SocketType, Strategy> 等待体，通过 co_await 执行并取得操作结果
     GetStreamMessageAwaitable<SocketType, Strategy> read(StreamMessage& msg) {
         return m_reader.get_message(msg);
     }
 
     /// @brief 发送流初始化（使用已有路由信息）
+    /// @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
     SendStreamDataAwaitable<SocketType> send_init() {
         return m_writer.send_init(m_service_name, m_method_name);
     }
 
     /// @brief 发送流初始化（更新路由信息）
+    /// @param service 服务名称
+    /// @param method 方法名称
+    /// @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
     SendStreamDataAwaitable<SocketType> send_init(const std::string& service, const std::string& method) {
         m_service_name = service;
         m_method_name = method;
@@ -1072,24 +1122,34 @@ public:
 
     SendStreamDataAwaitable<SocketType> send_init_ack() { return m_writer.send_init_ack(); }
     /// @brief 发送流数据（指针+长度）
+    /// @param data 输入数据
+    /// @param len 数据字节数
+    /// @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
     SendStreamDataAwaitable<SocketType> send_data(const char* data, size_t len) { return m_writer.send_data(data, len); }
     /// @brief 发送流数据（字符串）
+    /// @param data 输入数据引用
+    /// @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
     SendStreamDataAwaitable<SocketType> send_data(const std::string& data) { return m_writer.send_data(data); }
     /**
      * @brief 发送借用型 payload 视图
      * @param payload_view 调用方拥有的 payload 视图
      *
+     * @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
      * @note 调用方需保证 payload 所指向内存在本次 `co_await` 完成前保持有效。
      */
     SendStreamDataAwaitable<SocketType> send_data(const RpcPayloadView& payload_view) { return m_writer.send_data(payload_view); }
     /// @brief 发送流结束帧
+    /// @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
     SendStreamDataAwaitable<SocketType> send_end() { return m_writer.send_end(); }
     /// @brief 发送流取消帧
+    /// @return SendStreamDataAwaitable<SocketType> 等待体，通过 co_await 执行并取得操作结果
     SendStreamDataAwaitable<SocketType> send_cancel() { return m_writer.send_cancel(); }
 
     /// @brief 获取底层Socket
+    /// @return SocketType& 引用
     SocketType& socket() { return *m_socket; }
     /// @brief 获取环形缓冲区
+    /// @return RingBuffer<Strategy, std::dynamic_extent>& 引用
     RingBuffer<Strategy, std::dynamic_extent>& ring_buffer() { return *m_ring_buffer; }
 
 private:

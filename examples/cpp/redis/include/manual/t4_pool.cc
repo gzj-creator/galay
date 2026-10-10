@@ -14,6 +14,8 @@ using namespace galay::kernel;
 
 /**
  * @brief 测试连接池基本功能
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_basic_connection_pool(IOScheduler* scheduler)
 {
@@ -97,6 +99,8 @@ Task<void> test_basic_connection_pool(IOScheduler* scheduler)
 
 /**
  * @brief 测试 RAII 风格的连接获取
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_scoped_connection(IOScheduler* scheduler)
 {
@@ -151,6 +155,13 @@ Task<void> test_scoped_connection(IOScheduler* scheduler)
 
 /**
  * @brief 测试并发获取连接
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @param client_id 客户端编号
+ * @param pool 连接池
+ * @param failure_count 共享失败计数器
+ * @param remaining 剩余任务计数器
+ * @param done_waiter 全部任务完成时唤醒的等待器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_concurrent_acquire(IOScheduler* scheduler,
                                 int client_id,
@@ -249,6 +260,8 @@ Task<void> test_concurrency(IOScheduler* scheduler)
 
 /**
  * @brief 测试连接池扩容
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_pool_expansion(IOScheduler* scheduler)
 {
@@ -313,6 +326,8 @@ Task<void> test_pool_expansion(IOScheduler* scheduler)
 
 /**
  * @brief 测试健康检查
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_health_check(IOScheduler* scheduler)
 {
@@ -361,6 +376,8 @@ Task<void> test_health_check(IOScheduler* scheduler)
 
 /**
  * @brief 测试统计信息
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_statistics(IOScheduler* scheduler)
 {

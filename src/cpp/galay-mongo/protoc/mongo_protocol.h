@@ -52,7 +52,11 @@ struct MongoMessage
 {
     MongoMessage() = default;
     MongoMessage(MongoMessage&&) noexcept = default;             ///< 移动构造，转移消息体所有权
-    MongoMessage& operator=(MongoMessage&&) noexcept = default;  ///< 移动赋值，转移消息体所有权
+    /**
+     * @brief 移动赋值，转移消息体所有权
+     * @return 当前对象引用
+     */
+    MongoMessage& operator=(MongoMessage&&) noexcept = default;
 
     /**
      * @brief 显式深拷贝解码后的消息

@@ -80,13 +80,18 @@ public:
      * @brief 执行无返回值的异步任务
      * @tparam F 函数类型
      * @param f 待执行的函数
+     * @return 无返回值
      */
     template<typename F>
     void execute(F&& f) {
         (void)enqueue_task(std::function<void()>(std::forward<F>(f)));
     }
 
-    size_t thread_count() const { return m_workers.size(); } ///< 获取线程数量
+    /**
+     * @brief 获取线程数量
+     * @return 对应的大小或数量
+     */
+    size_t thread_count() const { return m_workers.size(); }
 
     /**
      * @brief 获取待处理任务数量
@@ -96,10 +101,15 @@ public:
         return m_pendingTasks.load(std::memory_order_acquire);
     }
 
-    bool is_stopped() const { return m_stopped; } ///< 判断线程池是否已停止
+    /**
+     * @brief 判断线程池是否已停止
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_stopped() const { return m_stopped; }
 
     /**
      * @brief 阻塞等待所有任务完成
+     * @return 无返回值
      * @warning 会阻塞当前线程，不要在协程中使用
      */
     void wait_all() {
@@ -112,6 +122,7 @@ public:
 
     /**
      * @brief 优雅停止线程池（等待所有任务完成后停止）
+     * @return 无返回值
      */
     void stop() {
         if (m_stopped.exchange(true, std::memory_order_acq_rel)) {
@@ -132,6 +143,7 @@ public:
 
     /**
      * @brief 立即停止线程池（丢弃所有未完成任务）
+     * @return 无返回值
      */
     void stop_now() {
         if (m_stopped.exchange(true, std::memory_order_acq_rel)) {
@@ -273,6 +285,7 @@ public:
      * @tparam F 函数类型
      * @param pool 线程池引用
      * @param f 待执行的任务
+     * @return 无返回值
      */
     template<typename F>
     void add_task(ThreadPool& pool, F&& f) {
@@ -293,6 +306,7 @@ public:
 
     /**
      * @brief 阻塞等待所有任务完成
+     * @return 无返回值
      * @warning 会阻塞当前线程，不要在协程中使用
      */
     void wait() {
@@ -305,6 +319,8 @@ public:
 
     /**
      * @brief 带超时的阻塞等待
+     * @param timeout 超时时长
+     * @return 在超时前完成等待时返回 true，否则返回 false
      * @warning 会阻塞当前线程，不要在协程中使用
      */
     template<typename Rep, typename Period>

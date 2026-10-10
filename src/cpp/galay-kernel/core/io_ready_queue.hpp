@@ -288,6 +288,7 @@ struct IOReadyQueue {
     /**
      * @brief 调整跨线程注入批量缓冲区大小
      * @param inject_batch_size 目标批量大小；最小会被修正为 1
+     * @return 无返回值
      */
     void resize_inject_buffer(size_t inject_batch_size) {
         ready_inject_buffer.resize(std::max<size_t>(1, inject_batch_size));
@@ -296,6 +297,7 @@ struct IOReadyQueue {
     /**
      * @brief 将任务推入本地执行队列
      * @param task 待入队的任务；无效任务会被忽略
+     * @return 无返回值
      * @details 优先复用 LIFO 槽位以减少最近恢复任务的调度延迟
      */
     void schedule_local(TaskRef task) {
@@ -325,6 +327,7 @@ struct IOReadyQueue {
     /**
      * @brief 将任务以 FIFO 方式追加到本地队列尾部
      * @param task 待入队的任务；无效任务会被忽略
+     * @return 无返回值
      */
     void schedule_local_deferred(TaskRef task) {
         if (!task.is_valid()) {
@@ -369,6 +372,7 @@ struct IOReadyQueue {
 
     /**
      * @brief 无分配接纳已停泊 C++ 任务的恢复请求。
+     * @param task 协程任务
      * @return 有值表示接纳成功，值为 true 时接纳前没有远端待办；无效任务返回
      *         std::nullopt。
      * @details TaskState 自带侵入链接，因此该路径不依赖 ConcurrentQueue 分配。
@@ -386,7 +390,10 @@ struct IOReadyQueue {
         return was_empty;
     }
 
-    /** @brief 停止接纳新的 owner-only 恢复请求；已接纳节点仍由 owner 排空。 */
+    /**
+     * @brief 停止接纳新的 owner-only 恢复请求；已接纳节点仍由 owner 排空。
+     * @return 无返回值
+     */
     void close_resume_admission() noexcept {
         ready_resume_queue.close();
     }
@@ -503,13 +510,17 @@ struct IOReadyQueue {
         return injected_outstanding.load(std::memory_order_acquire) > 0;
     }
 
-    /** @brief 是否仍有专用 resume 节点尚未搬入本地 ready ring。 */
+    /**
+     * @brief 是否仍有专用 resume 节点尚未搬入本地 ready ring。
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
     bool has_pending_resume() const noexcept {
         return ready_resume_local != nullptr || !ready_resume_queue.empty();
     }
 
     /**
      * @brief 判断 owner 线程是否已经至少处理过一批跨线程注入任务
+     * @return 满足所检查条件时返回 true，否则返回 false
      * @details stealing 只能旁路后续积压，不能抢走 victim 首次注入批次的 owner-first 执行机会。
      */
     bool has_owner_drained_injected() const {
@@ -534,6 +545,7 @@ struct IOReadyQueue {
 
     /**
      * @brief 在取任务前整理本地调度状态
+     * @return 无返回值
      * @details 当连续命中 LIFO 槽位过多时，将其回退到 FIFO 队列避免饥饿
      */
     void prepare_for_run() {
@@ -588,6 +600,8 @@ struct IOReadyQueue {
 
     /**
      * @brief 供 stealing 路径调用的入口
+     * @param out 接收窃取到的就绪条目的引用
+     * @return 成功窃取有效就绪条目时返回 true，否则返回 false
      */
     bool steal_front(detail::ReadyEntry& out) {
         if (local_ring.steal_front(out)) {
@@ -636,6 +650,9 @@ struct IOReadyQueue {
 
     /**
      * @brief 配置本地 worker 的 steal-domain 元数据
+     * @param index 元素索引
+     * @param view 数据视图
+     * @return 无返回值
      */
     void configure_steal_domain(size_t index, std::span<IOScheduler* const> view) noexcept
     {

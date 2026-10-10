@@ -60,12 +60,14 @@ public:
 
     /**
      * @brief 获取定时轮使用权，首个使用者启动线程
+     * @return 无返回值
      * @note 每次调用必须与 stop() 配对，在控制线程调用
      */
     void start();
 
     /**
      * @brief 释放定时轮使用权，最后一个使用者停止线程
+     * @return 无返回值
      * @note 在控制线程调用
      */
     void stop();
@@ -117,6 +119,7 @@ private:
 
     /**
      * @brief 定时轮线程主循环
+     * @return 无返回值
      */
     void timer_loop();
 

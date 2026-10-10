@@ -79,23 +79,49 @@ struct AsyncMutexWaiter
 class AsyncMutexAwaitable : public TimeoutSupport<AsyncMutexAwaitable>
 {
 public:
-    explicit AsyncMutexAwaitable(AsyncMutex* mutex) : m_mutex(mutex) {}  ///< 构造与指定互斥锁绑定的等待体
+    /**
+     * @brief 构造与指定互斥锁绑定的等待体
+     * @param mutex 异步互斥锁
+     */
+    explicit AsyncMutexAwaitable(AsyncMutex* mutex) : m_mutex(mutex) {}
 
-    bool await_ready() const noexcept;  ///< 若当前可直接抢锁则返回 true，避免挂起
+    /**
+     * @brief 若当前可直接抢锁则返回 true，避免挂起
+     * @return 无需挂起时返回 true，否则返回 false
+     */
+    bool await_ready() const noexcept;
+    /**
+     * @brief 注册 waiter，并在未抢到锁时挂起当前协程
+     * @param handle 句柄
+     * @return 协程需要保持挂起时返回 true，否则返回 false
+     */
     template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;  ///< 注册 waiter，并在未抢到锁时挂起当前协程
-    bool await_suspend(Waker waker) noexcept;  ///< 使用外部 Waker 注册等待，用于 C coroutine bridge
+    bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;
+    /**
+     * @brief 使用外部 Waker 注册等待，用于 C coroutine bridge
+     * @param waker 协程唤醒器
+     * @return 协程需要保持挂起时返回 true，否则返回 false
+     */
+    bool await_suspend(Waker waker) noexcept;
     std::expected<void, IOError> await_resume() noexcept
     {
         cancel_waiter();
         m_waiter.reset();
         return m_result;
     }
-    void mark_timeout() noexcept;  ///< 标记等待超时，并让残留 waiter 在 unlock() 时失效
+    /**
+     * @brief 标记等待超时，并让残留 waiter 在 unlock() 时失效
+     * @return 无返回值
+     */
+    void mark_timeout() noexcept;
 
 private:
     friend struct WithTimeout<AsyncMutexAwaitable>;
-    void cancel_waiter() noexcept;  ///< 让当前 waiter 失效，防止后续陈旧唤醒
+    /**
+     * @brief 让当前 waiter 失效，防止后续陈旧唤醒
+     * @return 无返回值
+     */
+    void cancel_waiter() noexcept;
 
     AsyncMutex* m_mutex;
     std::expected<void, IOError> m_result;
@@ -146,6 +172,7 @@ public:
     /**
      * @brief 释放锁并唤醒一个仍然有效的等待协程。
      *
+     * @return 无返回值
      * @note
      * - 必须仅由当前持锁路径调用
      * - 如果队列中的 waiter 已 timeout 或已失效，会被跳过而不会重新占锁
@@ -180,6 +207,7 @@ private:
 
     /**
      * @brief 当锁空闲时把锁转交给等待队列中的下一个有效 waiter。
+     * @return 无返回值
      * @note 调用者不需要持锁；本函数不会阻塞线程。
      */
     void wake_next_waiter_if_unlocked() {

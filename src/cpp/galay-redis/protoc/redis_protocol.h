@@ -74,13 +74,36 @@ namespace galay::redis::protocol
     {
     public:
         RedisReply();                                      ///< 默认构造（Null 类型）
-        RedisReply(RespType type, RespData data);          ///< 从类型和数据构造
+        /**
+         * @brief 从类型和数据构造
+         * @param type 类型
+         * @param data 输入数据
+         */
+        RedisReply(RespType type, RespData data);
     private:
-        RedisReply(const RedisReply& other) = delete;      ///< 禁止隐式拷贝
-        RedisReply& operator=(const RedisReply& other) = delete; ///< 禁止隐式拷贝赋值
+        /**
+         * @brief 禁止隐式拷贝
+         * @param other 源对象
+         */
+        RedisReply(const RedisReply& other) = delete;
+        /**
+         * @brief 禁止隐式拷贝赋值
+         * @param other 源对象
+         * @return 该操作已禁用，不可调用
+         */
+        RedisReply& operator=(const RedisReply& other) = delete;
     public:
-        RedisReply(RedisReply&& other) noexcept;           ///< 移动构造
-        RedisReply& operator=(RedisReply&& other) noexcept; ///< 移动赋值
+        /**
+         * @brief 移动构造
+         * @param other 源对象
+         */
+        RedisReply(RedisReply&& other) noexcept;
+        /**
+         * @brief 移动赋值
+         * @param other 源对象
+         * @return 当前对象引用
+         */
+        RedisReply& operator=(RedisReply&& other) noexcept;
 
         /**
          * @brief 显式克隆 RESP 回复
@@ -89,34 +112,114 @@ namespace galay::redis::protocol
         [[nodiscard]] RedisReply clone() const;
 
         // 类型判断
-        bool is_simple_string() const { return m_type == RespType::SimpleString; } ///< 判断是否为简单字符串
-        bool is_error() const { return m_type == RespType::Error; }               ///< 判断是否为错误
-        bool is_integer() const { return m_type == RespType::Integer; }           ///< 判断是否为整数
-        bool is_bulk_string() const { return m_type == RespType::BulkString; }     ///< 判断是否为批量字符串
-        bool is_array() const { return m_type == RespType::Array; }               ///< 判断是否为数组
-        bool is_null() const { return m_type == RespType::Null; }                 ///< 判断是否为空值
-        bool is_double() const { return m_type == RespType::Double; }             ///< 判断是否为浮点数
-        bool is_boolean() const { return m_type == RespType::Boolean; }           ///< 判断是否为布尔值
-        bool is_map() const { return m_type == RespType::Map; }                   ///< 判断是否为映射
-        bool is_set() const { return m_type == RespType::Set; }                   ///< 判断是否为集合
-        bool is_push() const { return m_type == RespType::Push; }                 ///< 判断是否为推送
+        /**
+         * @brief 判断是否为简单字符串
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_simple_string() const { return m_type == RespType::SimpleString; }
+        /**
+         * @brief 判断是否为错误
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_error() const { return m_type == RespType::Error; }
+        /**
+         * @brief 判断是否为整数
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_integer() const { return m_type == RespType::Integer; }
+        /**
+         * @brief 判断是否为批量字符串
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_bulk_string() const { return m_type == RespType::BulkString; }
+        /**
+         * @brief 判断是否为数组
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_array() const { return m_type == RespType::Array; }
+        /**
+         * @brief 判断是否为空值
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_null() const { return m_type == RespType::Null; }
+        /**
+         * @brief 判断是否为浮点数
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_double() const { return m_type == RespType::Double; }
+        /**
+         * @brief 判断是否为布尔值
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_boolean() const { return m_type == RespType::Boolean; }
+        /**
+         * @brief 判断是否为映射
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_map() const { return m_type == RespType::Map; }
+        /**
+         * @brief 判断是否为集合
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_set() const { return m_type == RespType::Set; }
+        /**
+         * @brief 判断是否为推送
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_push() const { return m_type == RespType::Push; }
 
         // 获取值
-        std::string as_string() const;                ///< 转换为字符串
-        int64_t as_integer() const;                   ///< 转换为整数
-        double as_double() const;                     ///< 转换为浮点数
-        bool as_boolean() const;                      ///< 转换为布尔值
-        const std::vector<RedisReply>& as_array() const; ///< 转换为数组引用
-        const std::vector<std::pair<RedisReply, RedisReply>>& as_map() const; ///< 转换为映射引用
+        /**
+         * @brief 转换为字符串
+         * @return 处理后的 std::string 结果
+         */
+        std::string as_string() const;
+        /**
+         * @brief 转换为整数
+         * @return int64_t 操作结果
+         */
+        int64_t as_integer() const;
+        /**
+         * @brief 转换为浮点数
+         * @return double 操作结果
+         */
+        double as_double() const;
+        /**
+         * @brief 转换为布尔值
+         * @return 当前存储的布尔值
+         */
+        bool as_boolean() const;
+        /**
+         * @brief 转换为数组引用
+         * @return const std::vector<RedisReply>& 引用
+         */
+        const std::vector<RedisReply>& as_array() const;
+        /**
+         * @brief 转换为映射引用
+         * @return const std::vector<std::pair<RedisReply, RedisReply>>& 引用
+         */
+        const std::vector<std::pair<RedisReply, RedisReply>>& as_map() const;
 
-        RespType get_type() const { return m_type; }  ///< 获取类型
-        const RespData& get_data() const { return m_data; } ///< 获取数据
+        /**
+         * @brief 获取类型
+         * @return 当前对象的类型、状态或错误码
+         */
+        RespType get_type() const { return m_type; }
+        /**
+         * @brief 获取数据
+         * @return const RespData& 引用
+         */
+        const RespData& get_data() const { return m_data; }
 
     private:
         friend class RespParser;
 
         /**
          * @brief 从解析输入直接写入自有字符串载荷
+         * @param type 类型
+         * @param data 输入数据
+         * @param length 缓冲区字节数
+         * @return 无返回值
          * @note 该函数会拷贝 data 指向的字节到 RedisReply 内部的 std::string，
          *       不保存调用方输入缓冲区视图，确保解析结果可独立存活。
          */
@@ -172,36 +275,100 @@ namespace galay::redis::protocol
 
         /**
          * @brief 重置解析器状态
+         * @return 无返回值
          */
         void reset();
 
     private:
+        /**
+         * @brief 解析简单字符串 (+OK\r\n)
+         * @param data 输入数据
+         * @param length 缓冲区字节数
+         * @param out 接收输出结果的指针
+         * @return 成功时返回 size_t，失败时返回 ParseError 错误
+         */
         std::expected<size_t, ParseError>
-            parse_simple_string_fast(const char* data, size_t length, RedisReply* out); ///< 解析简单字符串 (+OK\r\n)
+            parse_simple_string_fast(const char* data, size_t length, RedisReply* out);
 
+        /**
+         * @brief 解析错误 (-Error message\r\n)
+         * @param data 输入数据
+         * @param length 缓冲区字节数
+         * @param out 接收输出结果的指针
+         * @return 成功时返回 size_t，失败时返回 ParseError 错误
+         */
         std::expected<size_t, ParseError>
-            parse_error_fast(const char* data, size_t length, RedisReply* out); ///< 解析错误 (-Error message\r\n)
+            parse_error_fast(const char* data, size_t length, RedisReply* out);
 
+        /**
+         * @brief 解析整数 (:1000\r\n)
+         * @param data 输入数据
+         * @param length 缓冲区字节数
+         * @param out 接收输出结果的指针
+         * @return 成功时返回 size_t，失败时返回 ParseError 错误
+         */
         std::expected<size_t, ParseError>
-            parse_integer_fast(const char* data, size_t length, RedisReply* out); ///< 解析整数 (:1000\r\n)
+            parse_integer_fast(const char* data, size_t length, RedisReply* out);
 
+        /**
+         * @brief 解析批量字符串 ($6\r\nfoobar\r\n)
+         * @param data 输入数据
+         * @param length 缓冲区字节数
+         * @param out 接收输出结果的指针
+         * @return 成功时返回 size_t，失败时返回 ParseError 错误
+         */
         std::expected<size_t, ParseError>
-            parse_bulk_string_fast(const char* data, size_t length, RedisReply* out); ///< 解析批量字符串 ($6\r\nfoobar\r\n)
+            parse_bulk_string_fast(const char* data, size_t length, RedisReply* out);
 
+        /**
+         * @brief 解析数组 (*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n)
+         * @param data 输入数据
+         * @param length 缓冲区字节数
+         * @param out 接收输出结果的指针
+         * @return 成功时返回 size_t，失败时返回 ParseError 错误
+         */
         std::expected<size_t, ParseError>
-            parse_array_fast(const char* data, size_t length, RedisReply* out); ///< 解析数组 (*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n)
+            parse_array_fast(const char* data, size_t length, RedisReply* out);
 
+        /**
+         * @brief 解析双精度浮点数 (,1.23\r\n) - RESP3
+         * @param data 输入数据
+         * @param length 缓冲区字节数
+         * @param out 接收输出结果的指针
+         * @return 成功时返回 size_t，失败时返回 ParseError 错误
+         */
         std::expected<size_t, ParseError>
-            parse_double_fast(const char* data, size_t length, RedisReply* out); ///< 解析双精度浮点数 (,1.23\r\n) - RESP3
+            parse_double_fast(const char* data, size_t length, RedisReply* out);
 
+        /**
+         * @brief 解析布尔值 (#t\r\n or #f\r\n) - RESP3
+         * @param data 输入数据
+         * @param length 缓冲区字节数
+         * @param out 接收输出结果的指针
+         * @return 成功时返回 size_t，失败时返回 ParseError 错误
+         */
         std::expected<size_t, ParseError>
-            parse_boolean_fast(const char* data, size_t length, RedisReply* out); ///< 解析布尔值 (#t\r\n or #f\r\n) - RESP3
+            parse_boolean_fast(const char* data, size_t length, RedisReply* out);
 
+        /**
+         * @brief 解析映射 (%2\r\n...) - RESP3
+         * @param data 输入数据
+         * @param length 缓冲区字节数
+         * @param out 接收输出结果的指针
+         * @return 成功时返回 size_t，失败时返回 ParseError 错误
+         */
         std::expected<size_t, ParseError>
-            parse_map_fast(const char* data, size_t length, RedisReply* out); ///< 解析映射 (%2\r\n...) - RESP3
+            parse_map_fast(const char* data, size_t length, RedisReply* out);
 
+        /**
+         * @brief 解析集合 (~2\r\n...) - RESP3
+         * @param data 输入数据
+         * @param length 缓冲区字节数
+         * @param out 接收输出结果的指针
+         * @return 成功时返回 size_t，失败时返回 ParseError 错误
+         */
         std::expected<size_t, ParseError>
-            parse_set_fast(const char* data, size_t length, RedisReply* out); ///< 解析集合 (~2\r\n...) - RESP3
+            parse_set_fast(const char* data, size_t length, RedisReply* out);
 
         /**
          * @brief 查找 CRLF (\r\n) 位置
@@ -311,6 +478,7 @@ namespace galay::redis::protocol
          * @brief 追加编码后的命令到输出字符串
          * @param[out] out 输出字符串
          * @param cmd_parts 命令各部分
+         * @return 无返回值
          */
         void append(std::string& out, const std::vector<std::string>& cmd_parts) const;
 
@@ -319,6 +487,7 @@ namespace galay::redis::protocol
          * @param[out] out 输出字符串
          * @param cmd 命令名
          * @param args 命令参数
+         * @return 无返回值
          */
         void append(std::string& out,
                            std::string_view cmd,
@@ -329,6 +498,7 @@ namespace galay::redis::protocol
          * @param[out] out 输出字符串
          * @param cmd 命令名
          * @param args 命令参数视图
+         * @return 无返回值
          */
         void append(std::string& out,
                            std::string_view cmd,
@@ -339,6 +509,7 @@ namespace galay::redis::protocol
          * @param[out] out 输出字符串
          * @param cmd 命令名
          * @param args 命令参数初始化列表
+         * @return 无返回值
          */
         void append(std::string& out,
                            std::string_view cmd,
@@ -384,6 +555,7 @@ namespace galay::redis::protocol
          * @brief 快速路径：追加命令（调用方必须确保输出缓冲区已预留足够空间）
          * @param[out] out 输出字符串
          * @param cmd_parts 命令各部分
+         * @return 无返回值
          */
         void append_command_fast(std::string& out, const std::vector<std::string>& cmd_parts) const
         {
@@ -401,6 +573,10 @@ namespace galay::redis::protocol
 
         /**
          * @brief 快速路径：追加命令（span 参数版本）
+         * @param out 追加 RESP 命令编码字节的输出字符串
+         * @param cmd 命令名称
+         * @param args 调用参数包
+         * @return 无返回值
          */
         void append_command_fast(std::string& out,
                                std::string_view cmd,
@@ -418,6 +594,10 @@ namespace galay::redis::protocol
 
         /**
          * @brief 快速路径：追加命令（vector 参数版本）
+         * @param out 追加 RESP 命令编码字节的输出字符串
+         * @param cmd 命令名称
+         * @param args 调用参数包
+         * @return 无返回值
          */
         void append_command_fast(std::string& out,
                                std::string_view cmd,
@@ -435,6 +615,10 @@ namespace galay::redis::protocol
 
         /**
          * @brief 快速路径：追加命令（初始化列表版本）
+         * @param out 追加 RESP 命令编码字节的输出字符串
+         * @param cmd 命令名称
+         * @param args 调用参数包
+         * @return 无返回值
          */
         void append_command_fast(std::string& out,
                                std::string_view cmd,
@@ -455,6 +639,7 @@ namespace galay::redis::protocol
          * @brief 追加无符号十进制数字符串到输出
          * @param[out] out 输出字符串
          * @param value 无符号整数值
+         * @return 无返回值
          */
         static void append_unsigned_decimal(std::string& out, size_t value)
         {
@@ -496,6 +681,7 @@ namespace galay::redis::protocol
          * @brief 追加编码后的批量字符串到输出
          * @param[out] out 输出字符串
          * @param value 字符串值
+         * @return 无返回值
          */
         static void append_bulk_string(std::string& out, std::string_view value)
         {
@@ -511,6 +697,7 @@ namespace galay::redis::protocol
          * @tparam T 值类型
          * @param[out] out 输出字符串
          * @param value 命令部分值
+         * @return 无返回值
          */
         template<typename T>
         static void append_command_part(std::string& out, T&& value)
@@ -559,13 +746,24 @@ namespace galay::redis::protocol
          * @param[out] result 输出字符串
          * @param first 第一个参数
          * @param rest 剩余参数
+         * @return 无返回值
          */
         template<typename T, typename... Rest>
         void build_command_args(std::string& result, T&& first, Rest&&... rest);
 
         // RESP3扩展
-        std::string encode_double(double value);   ///< 编码双精度浮点数（RESP3）
-        std::string encode_boolean(bool value);     ///< 编码布尔值（RESP3）
+        /**
+         * @brief 编码双精度浮点数（RESP3）
+         * @param value 待设置或处理的值
+         * @return 处理后的 std::string 结果
+         */
+        std::string encode_double(double value);
+        /**
+         * @brief 编码布尔值（RESP3）
+         * @param value 待设置或处理的值
+         * @return 处理后的 std::string 结果
+         */
+        std::string encode_boolean(bool value);
     };
 
     // 模板实现必须在头文件中

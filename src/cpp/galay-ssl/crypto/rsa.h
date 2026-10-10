@@ -29,6 +29,9 @@ std::expected<std::string, std::string> rsa_oaep_encrypt_with_pem_public_key(
  *
  * This variant is required by wire protocols such as MySQL
  * caching_sha2_password full authentication.
+ * @param payload 消息负载
+ * @param pem_public_key PEM 格式公钥
+ * @return 成功时返回 std::string，失败时返回 std::string 错误
  */
 std::expected<std::string, std::string> rsa_oaep_sha1_encrypt_with_pem_public_key(
     std::string_view payload,

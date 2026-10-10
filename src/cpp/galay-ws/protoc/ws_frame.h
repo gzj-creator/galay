@@ -47,6 +47,7 @@ public:
      * @param iovec_count iovec 数量
      * @param frame 输出的帧数据
      * @param is_server 是否是服务器端（服务器端要求客户端必须使用掩码）
+     * @return 成功时返回 size_t，失败时返回 WsError 错误
      */
     static std::expected<size_t, WsError>
     from_io_vec(const struct iovec* iovecs, size_t iovec_count, WsFrame& frame, bool is_server = true);
@@ -64,6 +65,7 @@ public:
      * @param out 输出缓冲区，函数会覆盖其现有内容
      * @param frame 要编码的帧
      * @param use_mask 是否使用掩码（客户端必须使用）
+     * @return 无返回值
      */
     static void encode_into(std::string& out, const WsFrame& frame, bool use_mask = false);
 
@@ -74,6 +76,7 @@ public:
      * @param payload 负载内容
      * @param fin 是否是最后一个分片
      * @param use_mask 是否使用掩码（客户端必须使用）
+     * @return 无返回值
      */
     static void encode_message_into(std::string& out,
                                   WsOpcode opcode,
@@ -88,6 +91,7 @@ public:
      * @param payload 可被消费的负载内容
      * @param fin 是否是最后一个分片
      * @param use_mask 是否使用掩码（客户端必须使用）
+     * @return 无返回值
      */
     static void encode_message_into(std::string& out,
                                   WsOpcode opcode,
@@ -167,6 +171,10 @@ public:
 
     /**
      * @brief 对原始字节区应用 WebSocket 掩码
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @param masking_key 四字节掩码密钥
+     * @return 无返回值
      */
     static void apply_mask_bytes(char* data, size_t len, const uint8_t masking_key[4]);
 
@@ -174,16 +182,24 @@ public:
      * @brief 应用掩码
      * @param data 要掩码的数据
      * @param masking_key 掩码密钥
+     * @return 无返回值
      */
     static void apply_mask(std::string& data, const uint8_t masking_key[4]);
 
     /**
      * @brief 验证原始字节区是否是有效 UTF-8
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @return 满足所检查条件时返回 true，否则返回 false
      */
     static bool is_valid_utf8_bytes(const char* data, size_t len);
 
     /**
      * @brief 验证带掩码的原始字节区在解掩码后是否是有效 UTF-8
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @param masking_key 四字节掩码密钥
+     * @return 满足所检查条件时返回 true，否则返回 false
      */
     static bool is_valid_utf8_masked_bytes(const char* data, size_t len, const uint8_t masking_key[4]);
 
@@ -197,6 +213,8 @@ public:
 private:
     /**
      * @brief 计算iovec总长度
+     * @param iovecs 分散缓冲区数组
+     * @return 对应的大小或数量
      */
     static size_t get_total_length(const std::vector<iovec>& iovecs);
     static size_t get_total_length(const struct iovec* iovecs, size_t iovec_count);

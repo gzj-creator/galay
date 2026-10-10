@@ -329,6 +329,7 @@ galay_status_t galay_rpc_client_create(const galay_rpc_client_config_t* config,
 /**
  * @brief 销毁 RPC client。
  * @param client 可为 NULL；会释放其拥有的 socket handle。
+ * @return 无返回值
  * @note 不会自动 destroy 仍借用该 client 的 stream；调用方应先关闭并销毁 stream。
  */
 void galay_rpc_client_destroy(galay_rpc_client_t* client);
@@ -418,6 +419,7 @@ galay_status_t galay_rpc_server_create(const galay_rpc_server_config_t* config,
 /**
  * @brief 销毁 RPC server。
  * @param server 可为 NULL；会释放 listener handle。
+ * @return 无返回值
  * @note server 只借用已注册 service，不销毁 service。
  */
 void galay_rpc_server_destroy(galay_rpc_server_t* server);
@@ -470,6 +472,7 @@ galay_status_t galay_rpc_service_create(const char* name,
 /**
  * @brief 销毁 RPC service。
  * @param service 可为 NULL；销毁后不得继续被 server 使用。
+ * @return 无返回值
  */
 void galay_rpc_service_destroy(galay_rpc_service_t* service);
 
@@ -562,6 +565,7 @@ C_IOResult galay_rpc_stream_close(galay_rpc_stream_t* stream, int64_t timeout_ms
 /**
  * @brief 销毁 stream handle。
  * @param stream 可为 NULL；不会自动关闭 client socket。
+ * @return 无返回值
  */
 void galay_rpc_stream_destroy(galay_rpc_stream_t* stream);
 
@@ -575,6 +579,7 @@ galay_status_t galay_rpc_cancellation_source_create(galay_rpc_cancellation_sourc
 /**
  * @brief 标记取消源已取消。
  * @param source cancellation source，可为 NULL。
+ * @return 无返回值
  * @note 可从其他线程设置原子标记；当前 call 仅在进入 I/O 前观察该标记。
  */
 void galay_rpc_cancellation_source_cancel(galay_rpc_cancellation_source_t* source);
@@ -582,12 +587,14 @@ void galay_rpc_cancellation_source_cancel(galay_rpc_cancellation_source_t* sourc
 /**
  * @brief 销毁取消源。
  * @param source 可为 NULL；不得在仍有调用借用该 source 时销毁。
+ * @return 无返回值
  */
 void galay_rpc_cancellation_source_destroy(galay_rpc_cancellation_source_t* source);
 
 /**
  * @brief 释放 response buffer 内部 payload。
  * @param response response buffer，可为 NULL。
+ * @return 无返回值
  * @note 本函数会 free payload 并把结构重置为 OK/unary/空 payload。
  */
 void galay_rpc_response_buffer_destroy(galay_rpc_response_buffer_t* response);
@@ -605,6 +612,7 @@ galay_status_t galay_rpc_pool_create(const galay_rpc_pool_config_t* config,
 /**
  * @brief 销毁 RPC pool。
  * @param pool 可为 NULL；调用方应先 release 所有 lease。
+ * @return 无返回值
  */
 void galay_rpc_pool_destroy(galay_rpc_pool_t* pool);
 

@@ -31,12 +31,14 @@ public:
 
     /**
      * @brief 移动赋值 Sink 基类状态
+     * @return LogSink& 引用
      */
     LogSink& operator=(LogSink&&) noexcept = default;
 
     /**
      * @brief 写入一条日志记录
      * @param record 日志记录
+     * @return 无返回值
      */
     virtual void write(const LogRecord& record) = 0;
 

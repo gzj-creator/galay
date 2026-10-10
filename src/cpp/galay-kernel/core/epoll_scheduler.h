@@ -18,7 +18,12 @@ namespace galay::kernel {
 class EpollSchedulerBackend : public IOSchedulerBase<EpollSchedulerBackend, EpollReactor>
 {
 public:
-    /** @brief Accept operation 的 owner 注册及 timeout 适配入口。 */
+    /**
+     * @brief Accept operation 的 owner 注册及 timeout 适配入口。
+     * @param awaitable 等待体
+     * @param waker 协程唤醒器
+     * @return accept 操作注册成功时返回 true，否则返回 false
+     */
     bool submit_accept(AcceptAwaitable& awaitable, Waker&& waker) {
         return m_reactor.submit_accept(awaitable, std::move(waker));
     }

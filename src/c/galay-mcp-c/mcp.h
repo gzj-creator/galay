@@ -125,6 +125,7 @@ galay_status_t galay_mcp_message_create(galay_mcp_message_t** out);
 /**
  * @brief 销毁 MCP message。
  * @param message 可为 NULL；销毁后 data accessor 返回的借用 buffer 失效。
+ * @return 无返回值
  */
 void galay_mcp_message_destroy(galay_mcp_message_t* message);
 
@@ -195,6 +196,7 @@ galay_status_t galay_mcp_parse_request(const char* data, size_t data_len, galay_
 /**
  * @brief 销毁 parsed request。
  * @param request 可为 NULL；销毁后 method/params 借用 buffer 失效。
+ * @return 无返回值
  */
 void galay_mcp_parsed_request_destroy(galay_mcp_parsed_request_t* request);
 
@@ -244,6 +246,7 @@ galay_status_t galay_mcp_parse_response(const char* data, size_t data_len, galay
 /**
  * @brief 销毁 parsed response。
  * @param response 可为 NULL；销毁后 result 借用 buffer 失效。
+ * @return 无返回值
  */
 void galay_mcp_parsed_response_destroy(galay_mcp_parsed_response_t* response);
 
@@ -301,6 +304,7 @@ galay_status_t galay_mcp_http_config_set_bearer_token(galay_mcp_client_config_t*
 /**
  * @brief 销毁 client config。
  * @param config 可为 NULL；不影响已创建 client。
+ * @return 无返回值
  */
 void galay_mcp_client_config_destroy(galay_mcp_client_config_t* config);
 
@@ -332,6 +336,7 @@ galay_status_t galay_mcp_client_create(const galay_mcp_client_config_t* config, 
 /**
  * @brief 销毁 MCP client。
  * @param client 可为 NULL；不会销毁 loopback server。
+ * @return 无返回值
  */
 void galay_mcp_client_destroy(galay_mcp_client_t* client);
 
@@ -487,6 +492,7 @@ galay_status_t galay_mcp_http_server_create(const char* host, uint16_t port, gal
 /**
  * @brief 销毁 MCP server。
  * @param server 可为 NULL；不会释放注册回调的 userdata。
+ * @return 无返回值
  * @note 若 HTTP listener 仍存在，会先释放 listener handle。
  */
 void galay_mcp_server_destroy(galay_mcp_server_t* server);

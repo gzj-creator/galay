@@ -84,11 +84,17 @@ struct RpcGovernancePolicy {
 class RpcRetryController {
 public:
     /// @brief 判断错误码是否在策略白名单内
+    /// @param policy 策略
+    /// @param code 错误码
+    /// @return 满足所检查条件时返回 true，否则返回 false
     static bool is_retryable(const RpcRetryPolicy& policy, RpcErrorCode code) {
         return std::ranges::find(policy.retryable_errors, code) != policy.retryable_errors.end();
     }
 
     /// @brief 计算最终总尝试次数
+    /// @param policy 策略
+    /// @param options 操作选项
+    /// @return 最终总尝试次数，至少为 1
     static uint32_t max_attempts(const RpcRetryPolicy& policy, const RpcCallOptions& options) {
         if (options.max_attempts().has_value()) {
             return std::max<uint32_t>(1, *options.max_attempts());
@@ -136,6 +142,10 @@ public:
 
     /**
      * @brief 异步执行重试策略
+     * @param policy 策略
+     * @param options 操作选项
+     * @param operation 操作对象
+     * @return 协程任务，完成后返回 Result 结果
      * @note 退避通过sleep挂起协程，不使用阻塞锁、条件变量或线程sleep。
      */
     template<typename Result, typename Operation>
@@ -270,6 +280,7 @@ public:
     }
 
     /// @brief 记录成功调用
+    /// @return 无返回值
     void on_success() {
         if (m_policy.circuit_breaker.enabled) {
             m_breaker.on_success();
@@ -280,6 +291,7 @@ public:
     }
 
     /// @brief 记录失败调用
+    /// @return 无返回值
     void on_failure() {
         if (m_policy.circuit_breaker.enabled) {
             m_breaker.on_failure();
@@ -290,6 +302,7 @@ public:
     }
 
     /// @brief 归还限流许可；令牌桶模式无需归还
+    /// @return 无返回值
     void release() {
         auto current = m_acquired_rate_permits.load(std::memory_order_relaxed);
         while (current > 0) {
@@ -306,6 +319,7 @@ public:
     }
 
     /// @brief 当前熔断状态
+    /// @return 当前熔断器状态
     utils::CircuitState circuit_state() const { return m_breaker.state(); }
 
 private:

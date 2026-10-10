@@ -102,7 +102,6 @@ public:
 
     /**
      * @brief 获取HttpWriter
-     * @param setting HttpWriterSetting配置
      * @return HttpWriterImpl<SocketType> Writer对象
      */
     HttpWriterImpl<SocketType> get_writer() {
@@ -121,6 +120,7 @@ public:
     /**
      * @brief 设置连接级默认 HttpWriter 配置
      * @param setting 默认写入器配置
+     * @return 无返回值
      */
     void set_default_writer_setting(HttpWriterSetting setting) {
         m_default_writer_setting = std::move(setting);

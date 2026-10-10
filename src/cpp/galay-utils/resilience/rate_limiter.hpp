@@ -106,6 +106,7 @@ public:
     /**
      * @brief 释放许可
      * @param count 释放的许可数量
+     * @return 无返回值
      */
     void release(size_t count = 1) {
         m_count.fetch_add(count, std::memory_order_release);
@@ -171,6 +172,7 @@ public:
     /**
      * @brief 设置令牌填充速率
      * @param rate 每秒填充的令牌数
+     * @return 无返回值
      */
     void set_rate(double rate) {
         refill();
@@ -181,6 +183,7 @@ public:
     /**
      * @brief 设置桶容量并裁剪当前令牌数
      * @param capacity 最大令牌数量
+     * @return 无返回值
      */
     void set_capacity(size_t capacity) {
         int64_t max_tokens = detail::to_rate_limiter_units(capacity);

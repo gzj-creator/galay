@@ -44,6 +44,7 @@ public:
     /**
      * @brief 替换调度器的定时器管理器
      * @param manager 新的时间轮定时器管理器（右值引用）
+     * @return 无返回值
      * @details 用于自定义时间轮配置（wheel_size、tick_duration）以适应不同的超时场景
      * @note 应在调度器启动前调用，避免运行时替换导致定时器丢失
      * @example
@@ -58,41 +59,134 @@ public:
     }
 
 
-    /** @brief 跨线程唤醒后端的阻塞 poll。 */
+    /**
+     * @brief 跨线程唤醒后端的阻塞 poll。
+     * @return 无返回值
+     */
     void notify() { m_reactor.notify(); }
 
     /**
      * @brief 以下注册操作只允许 owner 线程访问；结果原样交回 awaitable。
+     * @param controller IO 控制器
      * @return 1=立即完成，0=已登记，负数=错误；close/remove 的 0 表示成功。
      */
-    int add_accept(IOController* controller) { return m_reactor.add_accept(controller); }  ///< accept；返回后端结果。
-    int add_connect(IOController* controller) { return m_reactor.add_connect(controller); }  ///< connect；返回后端结果。
-    int add_recv(IOController* controller) { return m_reactor.add_recv(controller); }  ///< recv；返回后端结果。
-    int add_send(IOController* controller) { return m_reactor.add_send(controller); }  ///< send；返回后端结果。
-    int add_readv(IOController* controller) { return m_reactor.add_readv(controller); }  ///< readv；返回后端结果。
-    int add_writev(IOController* controller) { return m_reactor.add_writev(controller); }  ///< writev；返回后端结果。
-    int add_close(IOController* controller) { return m_reactor.add_close(controller); }  ///< close；返回后端结果。
-    int add_file_read(IOController* controller) { return m_reactor.add_file_read(controller); }  ///< 文件读取；返回后端结果。
-    int add_file_write(IOController* controller) { return m_reactor.add_file_write(controller); }  ///< 文件写入；返回后端结果。
-    int add_recv_from(IOController* controller) { return m_reactor.add_recv_from(controller); }  ///< recvfrom；返回后端结果。
-    int add_send_to(IOController* controller) { return m_reactor.add_send_to(controller); }  ///< sendto；返回后端结果。
-    int add_file_watch(IOController* controller) { return m_reactor.add_file_watch(controller); }  ///< 文件监控；返回后端结果。
-    int add_send_file(IOController* controller) { return m_reactor.add_send_file(controller); }  ///< sendfile；返回后端结果。
-    int add_sequence(IOController* controller) { return m_reactor.add_sequence(controller); }  ///< 组合式序列；返回后端结果。
-    int remove(IOController* controller) { return m_reactor.remove(controller); }  ///< 移除注册；返回后端结果。
+    /**
+     * @brief accept；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_accept(IOController* controller) { return m_reactor.add_accept(controller); }
+    /**
+     * @brief connect；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_connect(IOController* controller) { return m_reactor.add_connect(controller); }
+    /**
+     * @brief recv；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_recv(IOController* controller) { return m_reactor.add_recv(controller); }
+    /**
+     * @brief send；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_send(IOController* controller) { return m_reactor.add_send(controller); }
+    /**
+     * @brief readv；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_readv(IOController* controller) { return m_reactor.add_readv(controller); }
+    /**
+     * @brief writev；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_writev(IOController* controller) { return m_reactor.add_writev(controller); }
+    /**
+     * @brief close；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_close(IOController* controller) { return m_reactor.add_close(controller); }
+    /**
+     * @brief 文件读取；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_file_read(IOController* controller) { return m_reactor.add_file_read(controller); }
+    /**
+     * @brief 文件写入；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_file_write(IOController* controller) { return m_reactor.add_file_write(controller); }
+    /**
+     * @brief recvfrom；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_recv_from(IOController* controller) { return m_reactor.add_recv_from(controller); }
+    /**
+     * @brief sendto；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_send_to(IOController* controller) { return m_reactor.add_send_to(controller); }
+    /**
+     * @brief 文件监控；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_file_watch(IOController* controller) { return m_reactor.add_file_watch(controller); }
+    /**
+     * @brief sendfile；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_send_file(IOController* controller) { return m_reactor.add_send_file(controller); }
+    /**
+     * @brief 组合式序列；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int add_sequence(IOController* controller) { return m_reactor.add_sequence(controller); }
+    /**
+     * @brief 移除注册；返回后端结果。
+     * @param controller IO 控制器
+     * @return int 操作结果
+     */
+    int remove(IOController* controller) { return m_reactor.remove(controller); }
 
-    /** @brief 内部后端最近一次错误；无错误时为空。 */
+    /**
+     * @brief 内部后端最近一次错误；无错误时为空。
+     * @return std::optional<IOError> 结果，含义见函数说明
+     */
     std::optional<IOError> last_error() const { return detail::load_backend_error(m_last_error_code); }
 
-    /** @brief 启动前配置 Runtime 借用的 sibling 视图；视图须覆盖整个运行周期。 */
+    /**
+     * @brief 启动前配置 Runtime 借用的 sibling 视图；视图须覆盖整个运行周期。
+     * @param siblings 同级调度器集合
+     * @param self_index 当前调度器索引
+     * @return 无返回值
+     */
     void configure_steal_domain(std::span<IOScheduler* const> siblings, size_t self_index) {
         m_worker.configure_steal_domain(self_index, siblings);
     }
 
-    /** @brief 内部窃取队列入口；当前 IO 后端默认禁用窃取。 */
+    /**
+     * @brief 内部窃取队列入口；当前 IO 后端默认禁用窃取。
+     * @return IOReadyQueue* 指针
+     */
     IOReadyQueue* steal_worker_state() noexcept { return &m_worker; }
 
-    /** @brief 仅在停止或外部同步后读取统计快照。 */
+    /**
+     * @brief 仅在停止或外部同步后读取统计快照。
+     * @return 当前调度器的工作窃取统计快照
+     */
     IOSchedulerStealStats steal_stats() const noexcept { return m_worker.snapshot_steal_stats(); }
 
 protected:
@@ -196,6 +290,7 @@ protected:
      *
      * 空轮使用 idle 上限，非空轮对齐下一个 tick 边界；统一在纳秒域
      * 应用通用毫秒上限，避免 kqueue 发生 ms->ns 往返精度损失。
+     * @return 轮询等待上限，单位为纳秒
      */
     uint64_t scheduler_poll_timeout_nanoseconds() const noexcept {
         constexpr uint64_t kNsPerMs = 1'000'000ULL;
@@ -207,7 +302,10 @@ protected:
         return std::min(max_ns, ns);
     }
 
-    /** @brief epoll 等毫秒接口使用纳秒边界的向上取整结果。 */
+    /**
+     * @brief epoll 等毫秒接口使用纳秒边界的向上取整结果。
+     * @return 向上取整的轮询等待上限，单位为毫秒
+     */
     int scheduler_poll_timeout_milliseconds() const noexcept {
         constexpr uint64_t kNsPerMs = 1'000'000ULL;
         const uint64_t ns = scheduler_poll_timeout_nanoseconds();
@@ -219,6 +317,7 @@ protected:
 
     /**
      * @brief io_uring 完成等待的纳秒上限。
+     * @return io_uring 完成等待上限，单位为纳秒
      * @details io_uring 的有效等待时间还会受空闲轮 50ms 默认值影响，最终
      *          取时间轮边界与 GALAY_KERNEL_IO_POLL_WAIT_MAX_NS 的较小值。
      */

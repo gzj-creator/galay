@@ -32,6 +32,7 @@ using Slot = ::galay::kernel::LoggerSlot<::galay::rpc::detail::RpcLogTag>;
  * 或其他 galay 库的日志。推荐在创建 RpcClient/RpcServer 之前的单线程初始化阶段调用。
  *
  * @param logger 用户自定义 logger；传入 nullptr 时禁用 galay-rpc 日志。
+ * @return 无返回值
  */
 inline void set(::galay::kernel::BaseLogger::uptr logger)
 {

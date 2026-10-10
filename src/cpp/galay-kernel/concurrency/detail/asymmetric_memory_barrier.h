@@ -89,6 +89,7 @@ asymmetric_memory_barrier_support() noexcept
 /**
  * @brief Compiler-side half of the Linux asymmetric barrier protocol.
  * @pre asymmetric_memory_barrier_support() returned success.
+ * @return 无返回值
  */
 inline void asymmetric_light_barrier() noexcept
 {

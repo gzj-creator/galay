@@ -1044,6 +1044,8 @@ public:
 
     /**
      * @brief 推入帧（由 StreamManager 调用）
+     * @param frame 帧对象
+     * @return 无返回值
      */
     void push_frame(Http2Frame::uptr frame) {
         if (!m_frame_queue_enabled) {
@@ -1054,6 +1056,7 @@ public:
 
     /**
      * @brief 标记帧队列关闭（由 StreamManager 在 RST_STREAM/GOAWAY 时调用）
+     * @return 无返回值
      */
     void close_frame_queue() {
         if (m_frame_queue_closed) return;
@@ -1090,6 +1093,7 @@ public:
 
     /**
      * @brief 批量获取帧（至少 1 帧，最多 max_count）
+     * @param max_count 最多处理的元素数量
      * @return co_await 后得到 expected<vector<uptr>, IOError>
      */
     auto get_frames(size_t max_count = galay::spsc::UnboundedChannel<Http2Frame::uptr>::DEFAULT_BATCH_SIZE) {
@@ -1098,6 +1102,8 @@ public:
 
     /**
      * @brief 解码头部块
+     * @param header_block 编码后的头部块
+     * @return 解码后的头部字段；解码器缺失或解码失败时为空
      */
     std::vector<Http2HeaderField> decode_headers(const std::string& header_block) {
         if (!m_decoder) return {};
@@ -1204,6 +1210,10 @@ public:
 
     /**
      * @brief 发送 HEADERS 帧
+     * @param headers 头部字段集合
+     * @param end_stream 是否结束当前流
+     * @param end_headers 是否结束头部块
+     * @return 无返回值
      */
     void send_headers(const std::vector<Http2HeaderField>& headers,
                      bool end_stream = false, bool end_headers = true) {
@@ -1230,6 +1240,9 @@ public:
 
     /**
      * @brief 发送 DATA 帧
+     * @param data 输入数据引用
+     * @param end_stream 是否结束当前流
+     * @return 无返回值
      */
     void send_data(const std::string& data, bool end_stream = false) {
         send_data_internal(data, end_stream, nullptr);
@@ -1245,6 +1258,8 @@ public:
 
     /**
      * @brief 发送 RST_STREAM 帧
+     * @param error 错误信息
+     * @return 无返回值
      */
     void send_rst_stream(Http2ErrorCode error) {
         send_rst_stream_internal(error, nullptr);
@@ -1252,6 +1267,8 @@ public:
 
     /**
      * @brief 批量发送帧（按顺序入队）
+     * @param frames 帧集合
+     * @return 无返回值
      */
     void send_frames(std::vector<Http2Frame::uptr> frames) {
         send_frame_batch_internal(std::move(frames), nullptr);
@@ -1259,6 +1276,9 @@ public:
 
     /**
      * @brief 批量发送 DATA 帧（最后一帧可带 END_STREAM）
+     * @param chunks 数据块集合
+     * @param end_stream 是否结束当前流
+     * @return 无返回值
      */
     void send_data_batch(const std::vector<std::string>& chunks, bool end_stream = false) {
         send_data_batch_internal(chunks, end_stream, nullptr);
@@ -1303,6 +1323,10 @@ public:
 
     /**
      * @brief 帧优先 API：发送 HEADERS 并等待入队完成
+     * @param headers 头部字段集合
+     * @param end_stream 是否结束当前流
+     * @param end_headers 是否结束头部块
+     * @return ReplyAndWaitAwaitable 等待体，通过 co_await 执行并取得操作结果
      */
     ReplyAndWaitAwaitable reply_header(const std::vector<Http2HeaderField>& headers,
                                       bool end_stream = false,
@@ -1338,6 +1362,9 @@ public:
 
     /**
      * @brief 帧优先 API：发送 DATA 并等待入队完成
+     * @param data 输入数据引用
+     * @param end_stream 是否结束当前流
+     * @return ReplyAndWaitAwaitable 等待体，通过 co_await 执行并取得操作结果
      */
     ReplyAndWaitAwaitable reply_data(const std::string& data, bool end_stream = false) {
         auto waiter = std::make_shared<Http2OutgoingFrame::Waiter>();
@@ -1359,6 +1386,8 @@ public:
 
     /**
      * @brief 帧优先 API：发送 RST_STREAM 并等待入队完成
+     * @param error 错误信息
+     * @return ReplyAndWaitAwaitable 等待体，通过 co_await 执行并取得操作结果
      */
     ReplyAndWaitAwaitable reply_rst(Http2ErrorCode error) {
         auto waiter = std::make_shared<Http2OutgoingFrame::Waiter>();
@@ -1368,6 +1397,8 @@ public:
 
     /**
      * @brief 帧优先 API：批量发送帧并等待“最后一帧入队”完成
+     * @param frames 帧集合
+     * @return ReplyAndWaitAwaitable 等待体，通过 co_await 执行并取得操作结果
      */
     ReplyAndWaitAwaitable reply_frames(std::vector<Http2Frame::uptr> frames) {
         auto waiter = std::make_shared<Http2OutgoingFrame::Waiter>();
@@ -1377,6 +1408,9 @@ public:
 
     /**
      * @brief 帧优先 API：批量发送 DATA 并等待最后一帧入队
+     * @param chunks 数据块集合
+     * @param end_stream 是否结束当前流
+     * @return ReplyAndWaitAwaitable 等待体，通过 co_await 执行并取得操作结果
      */
     ReplyAndWaitAwaitable reply_data_batch(const std::vector<std::string>& chunks,
                                          bool end_stream = false) {
@@ -1437,6 +1471,8 @@ public:
 
     /**
      * @brief 发送 WINDOW_UPDATE 帧
+     * @param increment 窗口增量，单位为字节
+     * @return 无返回值
      */
     void send_window_update(uint32_t increment) {
         if (!m_send_queue && !m_send_channel) return;

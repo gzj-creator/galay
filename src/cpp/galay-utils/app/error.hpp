@@ -66,11 +66,13 @@ struct CliError {
     std::string detail;
 
     /// 判断是否为帮助/版本这类正常终止
+    /// @return 满足所检查条件时返回 true，否则返回 false
     [[nodiscard]] bool is_termination() const noexcept {
         return code == CliErrorCode::HelpRequested || code == CliErrorCode::VersionRequested;
     }
 
     /// 拼装可直接输出的错误信息
+    /// @return 处理后的 std::string 结果
     [[nodiscard]] std::string message() const {
         std::string text = cli_error_string(code);
         if (!source.empty()) {
@@ -87,6 +89,10 @@ struct CliError {
 };
 
 /// 构造错误对象的便捷函数
+/// @param code 错误码
+/// @param source 源信息
+/// @param detail 错误详情
+/// @return 包含错误码、来源和详情的 CLI 错误
 inline CliError make_cli_error(CliErrorCode code, std::string source, std::string detail = {}) {
     return CliError{code, std::move(source), std::move(detail)};
 }

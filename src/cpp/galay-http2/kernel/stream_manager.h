@@ -342,6 +342,7 @@ public:
      * 内部启动两个协程：
      * - Reader: 读取帧、处理连接级帧、分发流级帧、spawn handler
      * - Writer: 从 send channel 接收数据并写入 socket
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> start(Http2StreamHandler handler) {
         prepare_for_start(false);
@@ -408,6 +409,9 @@ public:
 
     /**
      * @brief 将帧入队发送
+     * @param frame 帧对象
+     * @param waiter 等待节点
+     * @return 无返回值
      */
     void enqueue_send_frame(Http2Frame::uptr frame,
                           const Http2OutgoingFrame::WaiterPtr& waiter = nullptr) {
@@ -432,6 +436,7 @@ public:
 
     /**
      * @brief 获取连接引用（供用户 handler 使用）
+     * @return Http2ConnImpl<SocketType, Strategy>& 引用
      */
     Http2ConnImpl<SocketType, Strategy>& conn() { return m_conn; }
 
@@ -439,6 +444,7 @@ public:
      * @brief 从非协程上下文启动 StreamManager
      * @param scheduler 当前 IO 调度器
      * @param handler 用户流处理回调
+     * @return 成功启动时返回 true，否则返回 false
      * @details 通过 schedule_task(scheduler, ) 启动 reader/writer/monitor，
      *          不需要协程上下文，可从 CustomAwaitable::await_resume() 等普通函数调用。
      */
@@ -496,6 +502,7 @@ public:
 
     /**
      * @brief 自动分配 stream ID 并创建流
+     * @return 分配了本地流 ID 的流对象
      * @details 客户端自动分配奇数 ID（3, 5, 7, ...），服务端自动分配偶数 ID（2, 4, 6, ...）
      */
     Http2Stream::ptr allocate_stream() {
@@ -506,6 +513,8 @@ public:
 
     /**
      * @brief 优雅关闭：发送 GOAWAY、关闭连接、等待 StreamManager 停止
+     * @param error 错误信息
+     * @return 执行该操作的协程任务，完成后无结果值
      * @details 替代手动的 send_goaway + conn.close() + wait_stopped() 序列
      */
     Task<void> shutdown(Http2ErrorCode error = Http2ErrorCode::NoError) {
@@ -725,6 +734,9 @@ private:
 public:
     /**
      * @brief 发送 GOAWAY 帧
+     * @param error 错误信息
+     * @param debug 调试数据
+     * @param last_stream_id 最后处理的流标识符
      * @return waiter，co_await waiter->wait() 等待发送完成
      */
     Http2OutgoingFrame::WaiterPtr send_goaway(Http2ErrorCode error = Http2ErrorCode::NoError,
@@ -737,6 +749,7 @@ public:
 
     /**
      * @brief 等待 StreamManager 停止（start() 完成）
+     * @return galay::kernel::AsyncWaiterAwaitable<void> 等待体，通过 co_await 执行并取得操作结果
      */
     galay::kernel::AsyncWaiterAwaitable<void> wait_stopped() {
         return m_stop_waiter.wait();
@@ -910,6 +923,8 @@ private:
 
     /**
      * @brief Reader 协程：读取帧、处理连接级帧、分发流级帧
+     * @param handler 处理回调
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> reader_loop(Http2StreamHandler handler) {
         // reader_loop 只在 IO 错误（peer closed / connection error）或连接关闭时退出。
@@ -1450,6 +1465,7 @@ private:
 
     /**
      * @brief Writer 协程：从 send channel 接收数据并写入 socket
+     * @return 执行该操作的协程任务，完成后无结果值
      * @details 使用 writev 批量发送多个帧，减少系统调用和内存拷贝
      */
     Task<void> writer_loop() {
@@ -1611,6 +1627,8 @@ private:
 
     /**
      * @brief 处理连接级帧（非协程，通过 channel 发送响应）
+     * @param frame 帧对象
+     * @return 无返回值
      */
     void handle_connection_frame(Http2Frame::uptr frame) {
         switch (frame->type()) {
@@ -1756,6 +1774,8 @@ private:
 
     /**
      * @brief 分发流级帧到对应 Http2Stream 的帧队列
+     * @param error 错误信息
+     * @return 无返回值
      */
     void enqueue_goaway_action(Http2ErrorCode error) {
         m_pending_actions.push_back({PendingAction::Type::SendGoaway, 0, error});
@@ -2908,6 +2928,7 @@ private:
 
     /**
      * @brief 处理 dispatch_stream_frame 中标记的待处理动作（通过 channel 发送）
+     * @return 无返回值
      */
     void process_pending_actions() {
         while (!m_pending_actions.empty()) {
@@ -2949,6 +2970,11 @@ private:
 
     /**
      * @brief 入队 GOAWAY 帧
+     * @param error 错误信息
+     * @param debug 调试数据
+     * @param waiter 等待节点
+     * @param last_stream_id 最后处理的流标识符
+     * @return 无返回值
      */
     void enqueue_goaway(Http2ErrorCode error,
                        const std::string& debug = "",
@@ -2967,6 +2993,8 @@ private:
 
     /**
      * @brief 将新流加入待 spawn 队列
+     * @param stream 流对象
+     * @return 无返回值
      */
     void queue_stream_handler(Http2Stream::ptr stream) {
         m_pending_spawns.push(stream);

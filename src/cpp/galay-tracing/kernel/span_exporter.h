@@ -42,6 +42,7 @@ public:
 
     /**
      * @brief 移动赋值导出器基类状态
+     * @return SpanExporter& 引用
      */
     SpanExporter& operator=(SpanExporter&&) noexcept = default;
 

@@ -33,6 +33,9 @@ class StringUtils {
 public:
     /**
      * @brief Split string by character delimiter
+     * @param str 待处理字符串
+     * @param delimiter 分隔符
+     * @return 处理后的 std::vector<std::string> 结果
      */
     static std::vector<std::string> split(std::string_view str, char delimiter) {
         std::vector<std::string> result;
@@ -55,6 +58,9 @@ public:
 
     /**
      * @brief Split string by string delimiter
+     * @param str 待处理字符串
+     * @param delimiter 分隔符
+     * @return 处理后的 std::vector<std::string> 结果
      */
     static std::vector<std::string> split(std::string_view str, std::string_view delimiter) {
         std::vector<std::string> result;
@@ -82,6 +88,10 @@ public:
 
     /**
      * @brief Split string by character, respecting quoted sections
+     * @param str 待处理字符串
+     * @param delimiter 分隔符
+     * @param quote 引用字符
+     * @return 处理后的 std::vector<std::string> 结果
      */
     static std::vector<std::string> split_respect_quotes(std::string_view str, char delimiter, char quote = '"') {
         std::vector<std::string> result;
@@ -111,6 +121,9 @@ public:
 
     /**
      * @brief Join strings with delimiter
+     * @param parts 字符串片段集合
+     * @param delimiter 分隔符
+     * @return 处理后的 std::string 结果
      */
     static std::string join(const std::vector<std::string>& parts, std::string_view delimiter) {
         if (parts.empty()) return "";
@@ -125,6 +138,8 @@ public:
 
     /**
      * @brief Trim whitespace from both ends
+     * @param str 待处理字符串
+     * @return 按函数说明处理后的字符串
      */
     static std::string trim(std::string_view str) {
         size_t start = 0;
@@ -142,6 +157,8 @@ public:
 
     /**
      * @brief Trim whitespace from left
+     * @param str 待处理字符串
+     * @return 按函数说明处理后的字符串
      */
     static std::string trim_left(std::string_view str) {
         size_t start = 0;
@@ -153,6 +170,8 @@ public:
 
     /**
      * @brief Trim whitespace from right
+     * @param str 待处理字符串
+     * @return 按函数说明处理后的字符串
      */
     static std::string trim_right(std::string_view str) {
         size_t end = str.length();
@@ -164,6 +183,8 @@ public:
 
     /**
      * @brief Convert string to lowercase
+     * @param str 待处理字符串
+     * @return 按函数说明处理后的字符串
      */
     static std::string to_lower(std::string_view str) {
         std::string result(str);
@@ -174,6 +195,8 @@ public:
 
     /**
      * @brief Convert string to uppercase
+     * @param str 待处理字符串
+     * @return 按函数说明处理后的字符串
      */
     static std::string to_upper(std::string_view str) {
         std::string result(str);
@@ -184,6 +207,9 @@ public:
 
     /**
      * @brief Check if string starts with prefix
+     * @param str 待处理字符串
+     * @param prefix 前缀
+     * @return 匹配指定前缀时返回 true，否则返回 false
      */
     static bool starts_with(std::string_view str, std::string_view prefix) {
         if (prefix.length() > str.length()) return false;
@@ -192,6 +218,9 @@ public:
 
     /**
      * @brief Check if string ends with suffix
+     * @param str 待处理字符串
+     * @param suffix 后缀
+     * @return 匹配指定后缀时返回 true，否则返回 false
      */
     static bool ends_with(std::string_view str, std::string_view suffix) {
         if (suffix.length() > str.length()) return false;
@@ -200,6 +229,9 @@ public:
 
     /**
      * @brief Check if string contains substring
+     * @param str 待处理字符串
+     * @param substr 子字符串
+     * @return 包含指定内容时返回 true，否则返回 false
      */
     static bool contains(std::string_view str, std::string_view substr) {
         return str.find(substr) != std::string_view::npos;
@@ -207,6 +239,10 @@ public:
 
     /**
      * @brief Replace all occurrences of a substring
+     * @param str 待处理字符串
+     * @param from 待替换子字符串
+     * @param to 替换文本
+     * @return 按函数说明处理后的字符串
      */
     static std::string replace(std::string_view str, std::string_view from, std::string_view to) {
         if (from.empty()) return std::string(str);
@@ -230,6 +266,10 @@ public:
 
     /**
      * @brief Replace first occurrence of a substring
+     * @param str 待处理字符串
+     * @param from 待替换子字符串
+     * @param to 替换文本
+     * @return 按函数说明处理后的字符串
      */
     static std::string replace_first(std::string_view str, std::string_view from, std::string_view to) {
         if (from.empty()) return std::string(str);
@@ -249,6 +289,9 @@ public:
 
     /**
      * @brief Count occurrences of a character
+     * @param str 待处理字符串
+     * @param ch 字符
+     * @return 对应的大小或数量
      */
     static size_t count(std::string_view str, char ch) {
         return std::count(str.begin(), str.end(), ch);
@@ -256,6 +299,9 @@ public:
 
     /**
      * @brief Count occurrences of a substring
+     * @param str 待处理字符串
+     * @param substr 子字符串
+     * @return 对应的大小或数量
      */
     static size_t count(std::string_view str, std::string_view substr) {
         if (substr.empty()) return 0;
@@ -273,6 +319,10 @@ public:
 
     /**
      * @brief Convert bytes to hex string
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @param uppercase 是否使用大写十六进制字符
+     * @return 按函数说明处理后的字符串
      */
     static std::string to_hex(const uint8_t* data, size_t len, bool uppercase = false) {
         if (data == nullptr) {
@@ -296,6 +346,8 @@ public:
 
     /**
      * @brief Convert hex string to bytes
+     * @param hex 十六进制字符串
+     * @return 处理后的 std::vector<uint8_t> 结果
      */
     static std::vector<uint8_t> from_hex(std::string_view hex) {
         if (hex.empty() || (hex.length() % 2) != 0) {
@@ -326,6 +378,9 @@ public:
 
     /**
      * @brief Convert bytes to visible hex string (with spaces)
+     * @param data 输入数据
+     * @param len 数据字节数
+     * @return 按函数说明处理后的字符串
      */
     static std::string to_visible_hex(const uint8_t* data, size_t len) {
         if (data == nullptr) {
@@ -348,6 +403,8 @@ public:
 
     /**
      * @brief Check if string is a valid integer
+     * @param str 待处理字符串
+     * @return 字符串表示有效整数时返回 true，否则返回 false
      */
     static bool is_integer(std::string_view str) {
         if (str.empty()) return false;
@@ -369,6 +426,8 @@ public:
 
     /**
      * @brief Check if string is a valid floating point number
+     * @param str 待处理字符串
+     * @return 字符串表示有效浮点数时返回 true，否则返回 false
      */
     static bool is_float(std::string_view str) {
         if (str.empty()) return false;
@@ -408,6 +467,8 @@ public:
 
     /**
      * @brief Check if string is empty or contains only whitespace
+     * @param str 待处理字符串
+     * @return 字符串为空或只含空白字符时返回 true，否则返回 false
      */
     static bool is_blank(std::string_view str) {
         for (char c : str) {
@@ -420,6 +481,8 @@ public:
 
     /**
      * @brief Format string with printf-style arguments
+     * @param fmt 格式字符串
+     * @return 按函数说明处理后的字符串
      */
     static std::string format(const char* fmt) {
         if (fmt == nullptr) {
@@ -430,6 +493,9 @@ public:
 
     /**
      * @brief Format string with printf-style arguments
+     * @param fmt 格式字符串
+     * @param args 调用参数包
+     * @return 按函数说明处理后的字符串
      */
     template<typename... Args>
     static std::string format(const char* fmt, Args&&... args) {
@@ -447,6 +513,9 @@ public:
 
     /**
      * @brief Parse string to type T
+     * @param str 待处理字符串
+     * @param defaultValue 解析失败时使用的默认值
+     * @return 解析出的 T 值；解析失败时返回 defaultValue
      */
     template<typename T>
     static T parse(std::string_view str, T defaultValue = T{}) {
@@ -479,6 +548,8 @@ public:
 
     /**
      * @brief Convert value to string
+     * @param value 待设置或处理的值
+     * @return 按函数说明处理后的字符串
      */
     template<typename T>
     static std::string to_string(const T& value) {

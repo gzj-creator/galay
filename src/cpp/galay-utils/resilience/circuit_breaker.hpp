@@ -157,6 +157,7 @@ public:
 
     /**
      * @brief 记录一次成功调用
+     * @return 无返回值
      */
     void on_success() {
         auto currentState = static_cast<CircuitState>(m_state.load(std::memory_order_acquire));
@@ -192,6 +193,7 @@ public:
 
     /**
      * @brief 记录一次失败调用
+     * @return 无返回值
      */
     void on_failure() {
         auto now = now_ns();
@@ -324,6 +326,7 @@ public:
 
     /**
      * @brief 重置熔断器为关闭状态
+     * @return 无返回值
      */
     void reset() {
         m_state.store(static_cast<int>(CircuitState::Closed), std::memory_order_release);
@@ -335,6 +338,7 @@ public:
 
     /**
      * @brief 强制将熔断器设置为开启状态
+     * @return 无返回值
      */
     void force_open() {
         m_lastFailureTimeNs.store(now_ns(), std::memory_order_release);

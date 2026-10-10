@@ -116,6 +116,7 @@ public:
     /// @brief 禁用拷贝构造
     AsyncTcpSocket(const AsyncTcpSocket&) = delete;
     /// @brief 禁用拷贝赋值
+    /// @return 该操作已禁用，不可调用
     AsyncTcpSocket& operator=(const AsyncTcpSocket&) = delete;
 
     /**
@@ -158,7 +159,12 @@ public:
      * socket.bind(Host(IPType::IPV4, "0.0.0.0", 8080));
      * @endcode
      */
-    std::expected<void, galay::kernel::IOError> bind(const galay::kernel::Host& host);  ///< 绑定本地地址；成功返回 void，失败返回 IOError
+    /**
+     * @brief 绑定本地地址；成功返回 void，失败返回 IOError
+     * @param host 目标主机地址
+     * @return 成功时返回空值，失败时返回 galay::kernel::IOError 错误
+     */
+    std::expected<void, galay::kernel::IOError> bind(const galay::kernel::Host& host);
 
     /**
      * @brief 开始监听连接
@@ -486,7 +492,12 @@ public:
     int get_shared_count() const { return static_cast<int>(m_controller.use_count()); }
 
 private:
-    static std::expected<GHandle, galay::kernel::IOError> open_handle(galay::kernel::IPType type);  ///< 按协议版本创建底层 socket
+    /**
+     * @brief 按协议版本创建底层 socket
+     * @param type IP 地址类型
+     * @return 成功时返回 GHandle，失败时返回 galay::kernel::IOError 错误
+     */
+    static std::expected<GHandle, galay::kernel::IOError> open_handle(galay::kernel::IPType type);
 
     /**
      * @brief 从共享控制器构造（仅 clone 使用）
@@ -497,6 +508,7 @@ private:
 
     /**
      * @brief 释放本对象对共享控制器的持有
+     * @return 无返回值
      * @note 递减共享计数；计数减到 0 且句柄仍有效时关闭句柄
      */
     void release_shared_ownership() noexcept;

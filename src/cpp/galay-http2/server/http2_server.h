@@ -245,6 +245,8 @@ enum class DetectedProtocol {
 
 /**
  * @brief 判断首字节是否像 HTTP method（大写 ASCII 字母）
+ * @param buf 数据缓冲区
+ * @return 首字节为大写 ASCII 字母时返回 true，否则返回 false
  */
 inline bool looks_like_http_method(const char* buf) {
     return buf[0] >= 'A' && buf[0] <= 'Z';
@@ -252,6 +254,10 @@ inline bool looks_like_http_method(const char* buf) {
 
 /**
  * @brief 从 RingBuffer 的 iovec 拷贝 n 字节到 buf（不 consume）
+ * @param rb 环形缓冲区
+ * @param buf 数据缓冲区
+ * @param n 数量
+ * @return 无返回值
  */
 inline void peek_ring_buffer(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& rb, char* buf, size_t n) {
     auto iovecs = borrow_read_iovecs(rb);
@@ -266,6 +272,8 @@ inline void peek_ring_buffer(RingBuffer<galay::utils::RingBufferBackendStrategy:
 
 /**
  * @brief 把 RingBuffer 全部数据取出到 string 并 consume
+ * @param rb 环形缓冲区
+ * @return 处理后的 std::string 结果
  */
 inline std::string drain_ring_buffer(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& rb) {
     std::string data;
@@ -406,6 +414,9 @@ public:
 private:
     /**
      * @brief 将 server 拥有的 root task 绑定到当前 Runtime 后提交到指定调度器。
+     * @param scheduler 执行异步操作的 IO 调度器
+     * @param task 协程任务
+     * @return 任务提交成功时返回 true，否则返回 false
      * @details HTTP/2 静态文件异步读取依赖 `RuntimeHandle::current()` 派生
      *          blocking task；server 直接使用裸 scheduler 投递 root task 时必须显式绑定。
      */
@@ -581,6 +592,8 @@ private:
     
     /**
      * @brief 处理新连接
+     * @param socket 底层 socket
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> handle_connection(AsyncTcpSocket socket) {
         auto tracked = co_await m_connections.attach(socket.handle().fd);
@@ -686,6 +699,7 @@ private:
      * @param conn HTTP/2 连接
      * @param protocol 输出协议类型
      * @param upgrade_request 输出首个 HTTP/1.1 请求头（Upgrade/Http1 路径）
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> detect_protocol(Http2ConnImpl<AsyncTcpSocket>& conn,
                               DetectedProtocol& protocol,
@@ -1157,6 +1171,9 @@ private:
 
     /**
      * @brief 将 TLS server 拥有的 root task 绑定到当前 Runtime 后提交。
+     * @param scheduler 执行异步操作的 IO 调度器
+     * @param task 协程任务
+     * @return 任务提交成功时返回 true，否则返回 false
      */
     template <typename T>
     bool schedule_runtime_task(Scheduler* scheduler, Task<T> task) {

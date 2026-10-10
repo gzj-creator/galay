@@ -157,6 +157,7 @@ galay_status_t galay_mysql_config_create(galay_mysql_config_t** out);
 /**
  * @brief 销毁 MySQL 配置对象。
  * @param config 可为 NULL。
+ * @return 无返回值
  * @note 销毁后 getter 返回的所有借用字符串失效。
  */
 void galay_mysql_config_destroy(galay_mysql_config_t* config);
@@ -260,6 +261,7 @@ galay_status_t galay_mysql_auth_response_for_plugin(const char* plugin, const ch
 /**
  * @brief 销毁 MySQL buffer。
  * @param buffer 可为 NULL。
+ * @return 无返回值
  * @note 销毁后 `galay_mysql_buffer_data` 返回的借用指针失效。
  */
 void galay_mysql_buffer_destroy(galay_mysql_buffer_t* buffer);
@@ -324,6 +326,7 @@ galay_status_t galay_mysql_result_set_decode(const unsigned char* data, size_t d
 /**
  * @brief 销毁 MySQL result-set。
  * @param result 可为 NULL。
+ * @return 无返回值
  * @note 销毁后所有 field/value view 失效；pipeline result 中借用的 item 不得传入本函数。
  */
 void galay_mysql_result_set_destroy(galay_mysql_result_set_t* result);
@@ -433,6 +436,7 @@ galay_status_t galay_mysql_client_create(galay_mysql_client_t** out);
  * @brief 销毁 MySQL client handle。
  * @details 若内部 socket 仍存在，会先释放 socket 资源。
  * @param client 可为 NULL。
+ * @return 无返回值
  * @note 不会等待挂起 I/O；销毁前必须确保没有 active async 操作。
  */
 void galay_mysql_client_destroy(galay_mysql_client_t* client);
@@ -440,6 +444,7 @@ void galay_mysql_client_destroy(galay_mysql_client_t* client);
 /**
  * @brief 同步释放 client 内部 socket 并清理握手状态。
  * @param client MySQL client，可为 NULL。
+ * @return 无返回值
  * @note 这是本地资源关闭，不发送 MySQL quit packet，也不挂起 coroutine。
  */
 void galay_mysql_client_close(galay_mysql_client_t* client);
@@ -585,6 +590,7 @@ C_IOResult galay_mysql_client_stmt_prepare_async(galay_mysql_client_t* client,
 /**
  * @brief 销毁 prepared statement metadata。
  * @param stmt 可为 NULL。
+ * @return 无返回值
  * @note 当前不会向 server 发送 COM_STMT_CLOSE；若需要 server-side close，应由调用方另行处理。
  */
 void galay_mysql_stmt_destroy(galay_mysql_stmt_t* stmt);
@@ -643,6 +649,7 @@ galay_status_t galay_mysql_pipeline_create(galay_mysql_pipeline_t** out);
 /**
  * @brief 销毁 MySQL pipeline。
  * @param pipeline 可为 NULL。
+ * @return 无返回值
  * @note 不会释放已返回的 pipeline result；result 必须单独 destroy。
  */
 void galay_mysql_pipeline_destroy(galay_mysql_pipeline_t* pipeline);
@@ -674,6 +681,7 @@ C_IOResult galay_mysql_client_pipeline_async(galay_mysql_client_t* client,
 /**
  * @brief 销毁 MySQL pipeline result。
  * @param result 可为 NULL。
+ * @return 无返回值
  * @note 销毁后通过 `galay_mysql_pipeline_result_at` 取得的 item 指针失效。
  */
 void galay_mysql_pipeline_result_destroy(galay_mysql_pipeline_result_t* result);
@@ -716,6 +724,7 @@ galay_status_t galay_mysql_pool_create(const galay_mysql_config_t* config,
 /**
  * @brief 销毁 MySQL 连接池及其空闲连接。
  * @param pool 可为 NULL。
+ * @return 无返回值
  * @note 调用方必须先归还所有 lease；未归还 lease 中的 client 不在 idle 列表中，继续使用会产生悬空引用。
  */
 void galay_mysql_pool_destroy(galay_mysql_pool_t* pool);

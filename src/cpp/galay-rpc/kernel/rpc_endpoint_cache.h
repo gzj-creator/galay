@@ -41,6 +41,8 @@ struct RpcEndpointEvent {
     std::string instance_id;  ///< 删除事件实例ID
 
     /// @brief 构造添加事件
+    /// @param info 信息对象
+    /// @return RpcEndpointEvent 结果，含义见函数说明
     static RpcEndpointEvent add(RpcEndpointInfo info) {
         RpcEndpointEvent event;
         event.type = RpcEndpointEventType::Add;
@@ -51,6 +53,8 @@ struct RpcEndpointEvent {
     }
 
     /// @brief 构造更新事件
+    /// @param info 信息对象
+    /// @return 携带更新后端点信息的更新事件
     static RpcEndpointEvent update(RpcEndpointInfo info) {
         RpcEndpointEvent event = add(std::move(info));
         event.type = RpcEndpointEventType::Update;
@@ -58,6 +62,9 @@ struct RpcEndpointEvent {
     }
 
     /// @brief 构造删除事件
+    /// @param service_name 服务名称
+    /// @param instance 服务实例对象
+    /// @return 标记指定服务实例被删除的事件
     static RpcEndpointEvent remove(std::string service_name, std::string instance) {
         RpcEndpointEvent event;
         event.type = RpcEndpointEventType::Remove;
@@ -76,6 +83,7 @@ struct RpcEndpointSnapshot {
     RpcEndpointSnapshot& operator=(RpcEndpointSnapshot&&) noexcept = default;
 
     /// @brief 显式复制独立拥有的 endpoint 数据。
+    /// @return 当前对象的独立副本
     RpcEndpointSnapshot clone() const { return RpcEndpointSnapshot(*this); }
 
     std::unordered_map<std::string, std::vector<RpcEndpointInfo>> by_service;  ///< 按服务分组
@@ -107,6 +115,8 @@ public:
 
     /**
      * @brief 获取指定服务endpoint快照副本
+     * @param service 服务名称
+     * @return 指定服务的端点快照副本；服务不存在时为空
      */
     std::vector<RpcEndpointInfo> snapshot(const std::string& service) const {
         auto it = m_snapshot.by_service.find(service);
@@ -118,6 +128,8 @@ public:
 
     /**
      * @brief 获取指定服务可选endpoint副本
+     * @param service 服务名称
+     * @return 符合服务选择条件的端点列表
      */
     std::vector<RpcEndpointInfo> selectable(const std::string& service) const {
         std::vector<RpcEndpointInfo> result;
@@ -136,6 +148,8 @@ public:
 
     /**
      * @brief 在 owner 上原地应用endpoint变更，不复制无关服务。
+     * @param event 事件
+     * @return 无返回值
      */
     void apply(const RpcEndpointEvent& event) {
         if (event.type == RpcEndpointEventType::Remove) {

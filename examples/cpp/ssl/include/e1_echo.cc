@@ -50,6 +50,7 @@ void signal_handler(int) {
  * @brief 处理单个客户端连接
  * @param ctx SSL上下文
  * @param handle 客户端socket句柄
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> handle_client(SslContext* ctx, GHandle handle) {
     SslSocket client(ctx, handle);
@@ -92,6 +93,10 @@ Task<void> handle_client(SslContext* ctx, GHandle handle) {
 
 /**
  * @brief SSL Echo服务器协程
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @param ctx SSL 上下文
+ * @param port 端口号
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> ssl_echo_server(IOSchedulerType* scheduler, SslContext* ctx, uint16_t port) {
     SslSocket listener(ctx);

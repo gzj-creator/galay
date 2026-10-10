@@ -67,16 +67,23 @@ public:
 
     /**
      * @brief SHA1哈希
+     * @param data 输入数据引用
+     * @return 处理后的 std::string 结果
      */
     static std::string sha1(const std::string& data);
 
     /**
      * @brief SHA256哈希
+     * @param data 输入数据引用
+     * @return 处理后的 std::string 结果
      */
     static std::string sha256(const std::string& data);
 
     /**
      * @brief XOR两个等长字符串
+     * @param a 第一个输入字符串
+     * @param b 第二个输入字符串
+     * @return 处理后的 std::string 结果
      */
     static std::string xor_strings(const std::string& a, const std::string& b);
 };

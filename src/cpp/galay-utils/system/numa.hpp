@@ -149,7 +149,10 @@ class Numa {
 public:
     static constexpr unsigned kMaxNodes = detail::kMaxNumaNodes;
 
-    /** @brief 读取系统在线 NUMA 节点快照，不等同于当前 cpuset 允许节点。 */
+    /**
+     * @brief 读取系统在线 NUMA 节点快照，不等同于当前 cpuset 允许节点。
+     * @return 成功时返回 std::vector<unsigned>，失败时返回 std::error_code 错误
+     */
     [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code> online_nodes()
     {
 #if defined(__linux__)
@@ -159,7 +162,11 @@ public:
 #endif
     }
 
-    /** @brief 返回 sysfs 拓扑中 CPU 所属的在线节点；未找到 CPU 返回 no_such_device。 */
+    /**
+     * @brief 返回 sysfs 拓扑中 CPU 所属的在线节点；未找到 CPU 返回 no_such_device。
+     * @param cpu CPU ID
+     * @return 成功时返回 unsigned，失败时返回 std::error_code 错误
+     */
     [[nodiscard]] static std::expected<unsigned, std::error_code> node_of_cpu(unsigned cpu)
     {
 #if defined(__linux__)
@@ -170,7 +177,11 @@ public:
 #endif
     }
 
-    /** @brief 读取在线节点的在线 CPU 列表；不按 affinity 过滤，无 CPU 的节点返回空集。 */
+    /**
+     * @brief 读取在线节点的在线 CPU 列表；不按 affinity 过滤，无 CPU 的节点返回空集。
+     * @param node NUMA 节点 ID
+     * @return 成功时返回 std::vector<unsigned>，失败时返回 std::error_code 错误
+     */
     [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code>
     cpus_of_node(unsigned node)
     {
@@ -182,7 +193,12 @@ public:
 #endif
     }
 
-    /** @brief 返回 sysfs 的正整数相对距离，无时间/字节单位。 */
+    /**
+     * @brief 返回 sysfs 的正整数相对距离，无时间/字节单位。
+     * @param from 起始 NUMA 节点 ID
+     * @param to 目标 NUMA 节点 ID
+     * @return 成功时返回 unsigned，失败时返回 std::error_code 错误
+     */
     [[nodiscard]] static std::expected<unsigned, std::error_code>
     distance(unsigned from, unsigned to)
     {
@@ -195,7 +211,10 @@ public:
 #endif
     }
 
-    /** @brief 读取当前线程所属 cpuset 允许使用的内存节点。 */
+    /**
+     * @brief 读取当前线程所属 cpuset 允许使用的内存节点。
+     * @return 成功时返回 std::vector<unsigned>，失败时返回 std::error_code 错误
+     */
     [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code>
     allowed_numa_nodes()
     {

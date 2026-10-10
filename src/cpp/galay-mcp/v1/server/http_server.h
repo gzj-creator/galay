@@ -42,6 +42,7 @@ public:
      * @param port 监听端口，默认8080
      * @param ioSchedulers IO调度线程数，默认8
      * @param parallelSchedulers 计算调度线程数，默认0（自动）
+     * @param tcpNoDelay 是否启用 TCP_NODELAY
      */
     McpHttpServer(const std::string& host = "0.0.0.0",
                   int port = 8080,
@@ -51,14 +52,23 @@ public:
     ~McpHttpServer(); ///< 析构函数
 
     McpHttpServer(const McpHttpServer&) = delete; ///< 禁止拷贝构造
-    McpHttpServer& operator=(const McpHttpServer&) = delete; ///< 禁止拷贝赋值
+    /**
+     * @brief 禁止拷贝赋值
+     * @return 该操作已禁用，不可调用
+     */
+    McpHttpServer& operator=(const McpHttpServer&) = delete;
     McpHttpServer(McpHttpServer&&) = delete; ///< 禁止移动构造
-    McpHttpServer& operator=(McpHttpServer&&) = delete; ///< 禁止移动赋值
+    /**
+     * @brief 禁止移动赋值
+     * @return 该操作已禁用，不可调用
+     */
+    McpHttpServer& operator=(McpHttpServer&&) = delete;
 
     /**
      * @brief 设置服务器信息
      * @param name 服务器名称
      * @param version 服务器版本
+     * @return 无返回值
      */
     void set_server_info(const std::string& name, const std::string& version);
 
@@ -66,6 +76,7 @@ public:
      * @brief 设置生产运行策略
      * @details 策略按值保存；应在 start() 前配置，运行中修改不保证并发可见性。
      * @param policy 传输限制、超时和会话策略
+     * @return 无返回值
      */
     void set_production_policy(McpProductionPolicy policy);
 
@@ -75,6 +86,7 @@ public:
      * @param description 工具描述
      * @param inputSchema 输入参数的JSON Schema
      * @param handler 工具处理函数（协程）
+     * @return 无返回值
      */
     void add_tool(std::string name,
                  std::string description,
@@ -88,6 +100,7 @@ public:
      * @param description 资源描述
      * @param mimeType 资源MIME类型
      * @param reader 资源读取函数（协程）
+     * @return 无返回值
      */
     void add_resource(std::string uri,
                      std::string name,
@@ -101,15 +114,28 @@ public:
      * @param description 提示描述
      * @param arguments 参数定义列表
      * @param getter 提示获取函数（协程）
+     * @return 无返回值
      */
     void add_prompt(std::string name,
                    std::string description,
                    std::vector<PromptArgument> arguments,
                    PromptGetter getter);
 
-    void start(); ///< 启动服务器
-    void stop(); ///< 停止服务器
-    bool is_running() const; ///< 检查服务器是否正在运行
+    /**
+     * @brief 启动服务器
+     * @return 无返回值
+     */
+    void start();
+    /**
+     * @brief 停止服务器
+     * @return 无返回值
+     */
+    void stop();
+    /**
+     * @brief 检查服务器是否正在运行
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_running() const;
 
 private:
     /**
@@ -234,7 +260,11 @@ private:
     struct ToolInfo {
         ToolInfo() = default; ///< 默认构造
         ToolInfo(ToolInfo&&) noexcept = default; ///< 移动构造注册项
-        ToolInfo& operator=(ToolInfo&&) noexcept = default; ///< 移动赋值注册项
+        /**
+         * @brief 移动赋值注册项
+         * @return 当前对象引用
+         */
+        ToolInfo& operator=(ToolInfo&&) noexcept = default;
 
         Tool tool; ///< 工具定义
         ToolHandler handler; ///< 工具处理函数
@@ -251,7 +281,11 @@ private:
     struct ResourceInfo {
         ResourceInfo() = default; ///< 默认构造
         ResourceInfo(ResourceInfo&&) noexcept = default; ///< 移动构造注册项
-        ResourceInfo& operator=(ResourceInfo&&) noexcept = default; ///< 移动赋值注册项
+        /**
+         * @brief 移动赋值注册项
+         * @return 当前对象引用
+         */
+        ResourceInfo& operator=(ResourceInfo&&) noexcept = default;
 
         Resource resource; ///< 资源定义
         ResourceReader reader; ///< 资源读取函数
@@ -268,7 +302,11 @@ private:
     struct PromptInfo {
         PromptInfo() = default; ///< 默认构造
         PromptInfo(PromptInfo&&) noexcept = default; ///< 移动构造注册项
-        PromptInfo& operator=(PromptInfo&&) noexcept = default; ///< 移动赋值注册项
+        /**
+         * @brief 移动赋值注册项
+         * @return 当前对象引用
+         */
+        PromptInfo& operator=(PromptInfo&&) noexcept = default;
 
         Prompt prompt; ///< 提示定义
         PromptGetter getter; ///< 提示获取函数

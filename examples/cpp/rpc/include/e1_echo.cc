@@ -40,6 +40,8 @@ public:
 
     /**
      * @brief Echo方法 - 原样返回输入
+     * @param ctx 上下文
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> echo(RpcContext& ctx) {
         auto& req = ctx.request();
@@ -49,6 +51,8 @@ public:
 
     /**
      * @brief Reverse方法 - 反转字符串
+     * @param ctx 上下文
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> reverse(RpcContext& ctx) {
         auto& payload = ctx.request().payload();
@@ -60,6 +64,8 @@ public:
 
     /**
      * @brief Length方法 - 返回字符串长度
+     * @param ctx 上下文
+     * @return 执行该操作的协程任务，完成后无结果值
      */
     Task<void> length(RpcContext& ctx) {
         auto& payload = ctx.request().payload();

@@ -89,7 +89,11 @@ public:
     {
     }
 
-    TaskResultErrorCode code() const noexcept { return m_code; }  ///< 返回任务结果消费错误类别
+    /**
+     * @brief 返回任务结果消费错误类别
+     * @return 当前对象的类型、状态或错误码
+     */
+    TaskResultErrorCode code() const noexcept { return m_code; }
     std::string_view message() const noexcept
     {
         static constexpr std::array<std::string_view, static_cast<size_t>(TaskResultErrorCode::kResumeFailed) + 1> kMessages = {{
@@ -112,8 +116,17 @@ private:
     TaskResultErrorCode m_code;
 };
 
-Runtime* current_runtime() noexcept;  ///< 读取当前线程绑定的 Runtime，上下文不存在时返回 nullptr
-Runtime* swap_current_runtime(Runtime* runtime) noexcept;  ///< 替换当前线程 Runtime 并返回旧值
+/**
+ * @brief 读取当前线程绑定的 Runtime，上下文不存在时返回 nullptr
+ * @return Runtime* 指针
+ */
+Runtime* current_runtime() noexcept;
+/**
+ * @brief 替换当前线程 Runtime 并返回旧值
+ * @param runtime 运行时
+ * @return Runtime* 指针
+ */
+Runtime* swap_current_runtime(Runtime* runtime) noexcept;
 /**
  * @brief 分配 C++ coroutine frame 的存储。
  * @param size 编译器请求的 frame 字节数
@@ -132,6 +145,7 @@ void* allocate_frame_storage(std::size_t size, std::size_t alignment) noexcept;
  * @param alignment 与分配路径匹配的对齐
  * @pre `ptr` 非空时必须仍指向 allocate_frame_storage() 返回的原始地址；任意
  *      外部指针都不满足该 helper 的释放契约。
+ * @return 无返回值
  */
 void release_frame_storage(void* ptr,
                          std::size_t size,
@@ -139,53 +153,144 @@ void release_frame_storage(void* ptr,
 /**
  * @brief 设置当前线程的 frame recycler 开关。
  * @param enabled true 使用 TLS recycler；false 直接走匹配的全局分配
+ * @return 无返回值
  * @note 仅供边界测试和 benchmark 做 A/B 对照；默认开启。
  */
 void set_frame_recycler_enabled_for_testing(bool enabled) noexcept;
 /**
  * @brief 让当前线程的 frame 分配暂时失败。
+ * @param enabled 是否启用
+ * @return 无返回值
  * @note 仅用于验证标准 allocation-failure hook；默认关闭。
  */
 void set_frame_allocation_failure_for_testing(bool enabled) noexcept;
 /**
  * @brief 让当前线程的 nothrow TaskState 分配暂时失败。
+ * @param enabled 是否启用
+ * @return 无返回值
  * @note 仅用于验证 get_return_object() 的空状态分支；默认关闭。
  */
 void set_task_state_allocation_failure_for_testing(bool enabled) noexcept;
 /**
  * @brief 查询当前线程指定 frame 桶的缓存节点数。
+ * @param size 大小
+ * @param alignment 内存对齐字节数
+ * @return 当前线程指定协程帧桶的空闲节点数量
  * @note 仅供边界测试和 benchmark 观测，不参与分配热路径。
  */
 std::size_t frame_free_list_size_for_testing(std::size_t size,
                                         std::size_t alignment) noexcept;
-bool schedule_task(const TaskRef& task) noexcept;  ///< 将任务按普通语义提交给其所属调度器
-bool schedule_task_deferred(const TaskRef& task) noexcept;  ///< 将任务按延后语义提交给其所属调度器
-bool schedule_task_deferred_state(TaskState* state) noexcept;  ///< 通过裸状态提交延后任务，供 promise 热路径使用
-bool schedule_task_immediately(const TaskRef& task) noexcept;  ///< 在所属调度器线程上立即恢复任务
+/**
+ * @brief 将任务按普通语义提交给其所属调度器
+ * @param task 协程任务
+ * @return 操作成功时返回 true，否则返回 false
+ */
+bool schedule_task(const TaskRef& task) noexcept;
+/**
+ * @brief 将任务按延后语义提交给其所属调度器
+ * @param task 协程任务
+ * @return 操作成功时返回 true，否则返回 false
+ */
+bool schedule_task_deferred(const TaskRef& task) noexcept;
+/**
+ * @brief 通过裸状态提交延后任务，供 promise 热路径使用
+ * @param state 状态对象
+ * @return 操作成功时返回 true，否则返回 false
+ */
+bool schedule_task_deferred_state(TaskState* state) noexcept;
+/**
+ * @brief 在所属调度器线程上立即恢复任务
+ * @param task 协程任务
+ * @return 操作成功时返回 true，否则返回 false
+ */
+bool schedule_task_immediately(const TaskRef& task) noexcept;
 enum class TaskResumeResult : uint8_t {
     kAccepted,
     kAlreadyQueued,
     kRejected,
 };
 TaskResumeResult request_task_resume_state_detailed(TaskState* state) noexcept;
-bool request_task_resume(const TaskRef& task) noexcept;  ///< 请求恢复已暂停任务；失败时返回 false
-bool request_task_resume_state(TaskState* state) noexcept;  ///< 通过 owner scheduler 的无分配入口请求恢复；调用方必须持有有效引用
-std::thread::id scheduler_thread_id(Scheduler* scheduler) noexcept;  ///< 查询调度器线程 ID；scheduler 为空时返回默认值
-void complete_task_state(const TaskRef& task) noexcept;  ///< 标记任务完成并触发 continuation 清理
-void complete_task_state(TaskState* state) noexcept;  ///< 通过裸状态标记任务完成，供 promise 热路径使用
-void attach_task_continuation(const TaskRef& task, TaskRef next) noexcept;  ///< 为任务追加下一段 continuation
-bool wait_task_completion(const TaskRef& task);  ///< 阻塞等待任务完成；无有效任务状态时返回 false
-void store_task_error(const TaskRef& task, TaskResultError error) noexcept;  ///< 写入任务错误
-bool destroy_task_frame(TaskState* state) noexcept;  ///< 销毁仍处于初始挂起态的 frame，已完成 frame 不重复销毁
+/**
+ * @brief 请求恢复已暂停任务；失败时返回 false
+ * @param task 协程任务
+ * @return 操作成功时返回 true，否则返回 false
+ */
+bool request_task_resume(const TaskRef& task) noexcept;
+/**
+ * @brief 通过 owner scheduler 的无分配入口请求恢复；调用方必须持有有效引用
+ * @param state 状态对象
+ * @return 操作成功时返回 true，否则返回 false
+ */
+bool request_task_resume_state(TaskState* state) noexcept;
+/**
+ * @brief 查询调度器线程 ID；scheduler 为空时返回默认值
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return std::thread::id 操作结果
+ */
+std::thread::id scheduler_thread_id(Scheduler* scheduler) noexcept;
+/**
+ * @brief 标记任务完成并触发 continuation 清理
+ * @param task 协程任务
+ * @return 无返回值
+ */
+void complete_task_state(const TaskRef& task) noexcept;
+/**
+ * @brief 通过裸状态标记任务完成，供 promise 热路径使用
+ * @param state 状态对象
+ * @return 无返回值
+ */
+void complete_task_state(TaskState* state) noexcept;
+/**
+ * @brief 为任务追加下一段 continuation
+ * @param task 协程任务
+ * @param next 后继对象
+ * @return 无返回值
+ */
+void attach_task_continuation(const TaskRef& task, TaskRef next) noexcept;
+/**
+ * @brief 阻塞等待任务完成；无有效任务状态时返回 false
+ * @param task 协程任务
+ * @return 操作成功时返回 true，否则返回 false
+ */
+bool wait_task_completion(const TaskRef& task);
+/**
+ * @brief 写入任务错误
+ * @param task 协程任务
+ * @param error 错误信息
+ * @return 无返回值
+ */
+void store_task_error(const TaskRef& task, TaskResultError error) noexcept;
+/**
+ * @brief 销毁仍处于初始挂起态的 frame，已完成 frame 不重复销毁
+ * @param state 状态对象
+ * @return 操作成功时返回 true，否则返回 false
+ */
+bool destroy_task_frame(TaskState* state) noexcept;
 struct TaskAccess;  ///< 供内核实现访问 Task 私有状态的辅助入口
 template <typename T>
 class TaskAwaiter;  ///< `co_await Task<T>` 使用的 awaiter
+/**
+ * @brief 初始化任务结果存储
+ * @param task 协程任务
+ * @return 无返回值
+ */
 template <typename T>
-void initialize_task_result(const TaskRef& task) noexcept;  ///< 初始化任务结果存储
+void initialize_task_result(const TaskRef& task) noexcept;
+/**
+ * @brief 写入任务结果
+ * @param task 协程任务
+ * @param value 待设置或处理的值
+ * @return 操作成功时返回 true，否则返回 false
+ */
 template <typename T, typename U>
-bool store_task_result(const TaskRef& task, U&& value);  ///< 写入任务结果
+bool store_task_result(const TaskRef& task, U&& value);
+/**
+ * @brief 以返回值消费任务结果
+ * @param task 协程任务
+ * @return 成功时返回 T，失败时返回 TaskResultError 错误
+ */
 template <typename T>
-std::expected<T, TaskResultError> try_take_task_result(const TaskRef& task);  ///< 以返回值消费任务结果
+std::expected<T, TaskResultError> try_take_task_result(const TaskRef& task);
 
 } // namespace detail
 
@@ -197,21 +302,56 @@ class TaskRef
 {
 public:
     TaskRef() noexcept = default;
-    explicit TaskRef(TaskState* state, bool retainRef) noexcept;  ///< 从裸状态创建引用；`retainRef=true` 时增加引用计数
-    TaskRef(const TaskRef& other) noexcept;  ///< 拷贝并共享同一底层状态
-    TaskRef(TaskRef&& other) noexcept;  ///< 移动任务引用，源对象被清空
+    /**
+     * @brief 从裸状态创建引用；`retainRef=true` 时增加引用计数
+     * @param state 状态对象
+     * @param retainRef 是否保留任务引用
+     */
+    explicit TaskRef(TaskState* state, bool retainRef) noexcept;
+    /**
+     * @brief 拷贝并共享同一底层状态
+     * @param other 源对象
+     */
+    TaskRef(const TaskRef& other) noexcept;
+    /**
+     * @brief 移动任务引用，源对象被清空
+     * @param other 源对象
+     */
+    TaskRef(TaskRef&& other) noexcept;
     ~TaskRef();  ///< 释放引用；最后一个引用会回收底层状态
 
-    TaskRef& operator=(const TaskRef& other) noexcept;  ///< 拷贝赋值并共享同一底层状态
-    TaskRef& operator=(TaskRef&& other) noexcept;  ///< 移动赋值，源对象被清空
+    /**
+     * @brief 拷贝赋值并共享同一底层状态
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    TaskRef& operator=(const TaskRef& other) noexcept;
+    /**
+     * @brief 移动赋值，源对象被清空
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    TaskRef& operator=(TaskRef&& other) noexcept;
 
-    bool is_valid() const noexcept { return m_state != nullptr; }  ///< 是否引用到有效任务状态
+    /**
+     * @brief 是否引用到有效任务状态
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_valid() const noexcept { return m_state != nullptr; }
+    /**
+     * @brief 返回非拥有状态指针；promise view 使用低位标记
+     * @return 当前对象的类型、状态或错误码
+     */
     TaskState* state() const noexcept
     {
         const auto raw = reinterpret_cast<uintptr_t>(m_state);
         return reinterpret_cast<TaskState*>(raw & ~kBorrowedBit);
-    }  ///< 返回非拥有状态指针；promise view 使用低位标记
-    Scheduler* belong_scheduler() const noexcept;  ///< 返回任务所属调度器；未绑定时返回 nullptr
+    }
+    /**
+     * @brief 返回任务所属调度器；未绑定时返回 nullptr
+     * @return Scheduler* 指针
+     */
+    Scheduler* belong_scheduler() const noexcept;
 
 private:
     template <typename T>
@@ -226,8 +366,16 @@ private:
         return (reinterpret_cast<uintptr_t>(m_state) & kBorrowedBit) != 0;
     }
 
-    void retain() noexcept;  ///< 增加底层状态引用计数
-    void release() noexcept;  ///< 减少底层状态引用计数，必要时释放状态
+    /**
+     * @brief 增加底层状态引用计数
+     * @return 无返回值
+     */
+    void retain() noexcept;
+    /**
+     * @brief 减少底层状态引用计数，必要时释放状态
+     * @return 无返回值
+     */
+    void release() noexcept;
 
     static constexpr uintptr_t kBorrowedBit = 1U;
     TaskState* m_state = nullptr;
@@ -261,7 +409,11 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
 
     void* result_storage() noexcept { return static_cast<void*>(m_result_storage); }
     const void* result_storage() const noexcept { return static_cast<const void*>(m_result_storage); }
-    /** @brief 只有终态 kDone 表示完成，阻塞等待注册不影响调度资格。 */
+    /**
+     * @brief 只有终态 kDone 表示完成，阻塞等待注册不影响调度资格。
+     * @param order 原子操作内存顺序
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
     bool is_done(std::memory_order order = std::memory_order_acquire) const noexcept
     {
         return m_completion_status.load(order) == detail::TaskCompletionStatus::kDone;
@@ -284,7 +436,11 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
     std::atomic<bool> m_result_consumed{false};  ///< 任务结果是否已被 join/await 消费
     std::optional<detail::TaskResultError> m_result_error;  ///< 任务错误
     ResultStorageKind m_result_kind = ResultStorageKind::Empty;  ///< 当前结果存储形态
-    void (*m_destroy_result)(TaskState&) noexcept = nullptr;  ///< 销毁尚未消费的结果对象
+    /**
+     * @brief 销毁尚未消费的结果对象
+     * @return 无返回值
+     */
+    void (*m_destroy_result)(TaskState&) noexcept = nullptr;
     std::optional<TaskRef> m_then;  ///< `then()` 追加的 continuation 任务
     std::optional<TaskRef> m_next;  ///< 当前 `co_await` 后要恢复的父任务
 };
@@ -624,6 +780,7 @@ struct TaskCompletionState
      * @brief 写入任务返回值并唤醒等待者
      * @tparam U 可转换到 `T` 的值类型
      * @param value 要保存的任务结果
+     * @return 无返回值
      */
     template <typename U>
     void set_value(U&& value)
@@ -639,6 +796,7 @@ struct TaskCompletionState
     /**
      * @brief 写入任务错误并唤醒等待者
      * @param error 要返回给 join() 的任务错误
+     * @return 无返回值
      */
     void set_error(detail::TaskResultError error)
     {
@@ -652,6 +810,7 @@ struct TaskCompletionState
 
     /**
      * @brief 阻塞等待任务结束
+     * @return 无返回值
      * @note 只等待完成，不消耗结果
      */
     void wait() const
@@ -758,21 +917,42 @@ public:
     using promise_type = TaskPromise<T>;  ///< 与该任务类型配套的 coroutine promise
 
     Task() noexcept = default;  ///< 构造空任务
-    Task(Task&& other) noexcept = default;  ///< 移动任务所有权
-    Task& operator=(Task&& other) noexcept = default;  ///< 移动赋值任务所有权
+    /**
+     * @brief 移动任务所有权
+     * @param other 源对象
+     */
+    Task(Task&& other) noexcept = default;
+    /**
+     * @brief 移动赋值任务所有权
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    Task& operator=(Task&& other) noexcept = default;
 
     Task(const Task&) = delete;
     Task& operator=(const Task&) = delete;
 
-    bool is_valid() const { return m_task.is_valid(); }  ///< 是否持有可用任务
+    /**
+     * @brief 是否持有可用任务
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_valid() const { return m_task.is_valid(); }
     bool done() const
     {
         auto* state = m_task.state();
         return !state || state->is_done();
     }
 
-    auto operator co_await() &;  ///< 以左值任务创建 awaiter；恢复后会消费任务结果
-    auto operator co_await() &&;  ///< 以右值任务创建 awaiter；恢复后会消费任务结果
+    /**
+     * @brief 以左值任务创建 awaiter；恢复后会消费任务结果
+     * @return 操作结果，类型由函数实现推导
+     */
+    auto operator co_await() &;
+    /**
+     * @brief 以右值任务创建 awaiter；恢复后会消费任务结果
+     * @return 操作结果，类型由函数实现推导
+     */
+    auto operator co_await() &&;
 
 private:
     friend class Runtime;
@@ -806,23 +986,54 @@ public:
     using promise_type = TaskPromise<void>;  ///< 与该任务类型配套的 coroutine promise
 
     Task() noexcept = default;  ///< 构造空任务
-    Task(Task&& other) noexcept = default;  ///< 移动任务所有权
-    Task& operator=(Task&& other) noexcept = default;  ///< 移动赋值任务所有权
+    /**
+     * @brief 移动任务所有权
+     * @param other 源对象
+     */
+    Task(Task&& other) noexcept = default;
+    /**
+     * @brief 移动赋值任务所有权
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    Task& operator=(Task&& other) noexcept = default;
 
     Task(const Task&) = delete;
     Task& operator=(const Task&) = delete;
 
-    bool is_valid() const { return m_task.is_valid(); }  ///< 是否持有可用任务
+    /**
+     * @brief 是否持有可用任务
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_valid() const { return m_task.is_valid(); }
     bool done() const
     {
         auto* state = m_task.state();
         return !state || state->is_done();
     }
 
-    auto operator co_await() &;  ///< 以左值任务创建 awaiter；恢复后只消费完成状态
-    auto operator co_await() &&;  ///< 以右值任务创建 awaiter；恢复后只消费完成状态
-    Task<void>& then(Task<void> next) &;  ///< 为当前任务追加 continuation，返回当前左值引用
-    Task<void>&& then(Task<void> next) &&;  ///< 为当前任务追加 continuation，返回当前右值引用
+    /**
+     * @brief 以左值任务创建 awaiter；恢复后只消费完成状态
+     * @return 操作结果，类型由函数实现推导
+     */
+    auto operator co_await() &;
+    /**
+     * @brief 以右值任务创建 awaiter；恢复后只消费完成状态
+     * @return 操作结果，类型由函数实现推导
+     */
+    auto operator co_await() &&;
+    /**
+     * @brief 为当前任务追加 continuation，返回当前左值引用
+     * @param next 后继对象
+     * @return Task<void>& 引用
+     */
+    Task<void>& then(Task<void> next) &;
+    /**
+     * @brief 为当前任务追加 continuation，返回当前右值引用
+     * @param next 后继对象
+     * @return Task<void>&& 引用
+     */
+    Task<void>&& then(Task<void> next) &&;
 
 private:
     friend class Runtime;
@@ -862,13 +1073,26 @@ public:
         : m_blocking_completion(std::move(completion))
     {
     }
-    JoinHandle(JoinHandle&& other) noexcept = default;  ///< 移动句柄所有权
-    JoinHandle& operator=(JoinHandle&& other) noexcept = default;  ///< 移动赋值句柄所有权
+    /**
+     * @brief 移动句柄所有权
+     * @param other 源对象
+     */
+    JoinHandle(JoinHandle&& other) noexcept = default;
+    /**
+     * @brief 移动赋值句柄所有权
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    JoinHandle& operator=(JoinHandle&& other) noexcept = default;
 
     JoinHandle(const JoinHandle&) = delete;
     JoinHandle& operator=(const JoinHandle&) = delete;
 
-    bool is_valid() const noexcept { return m_task.is_valid() || static_cast<bool>(m_blocking_completion); }  ///< 是否绑定到有效任务完成态
+    /**
+     * @brief 是否绑定到有效任务完成态
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_valid() const noexcept { return m_task.is_valid() || static_cast<bool>(m_blocking_completion); }
 
     std::expected<void, detail::TaskResultError> wait() const  ///< 阻塞等待任务结束，不消费结果
     {
@@ -917,13 +1141,26 @@ public:
         : m_blocking_completion(std::move(completion))
     {
     }
-    JoinHandle(JoinHandle&& other) noexcept = default;  ///< 移动句柄所有权
-    JoinHandle& operator=(JoinHandle&& other) noexcept = default;  ///< 移动赋值句柄所有权
+    /**
+     * @brief 移动句柄所有权
+     * @param other 源对象
+     */
+    JoinHandle(JoinHandle&& other) noexcept = default;
+    /**
+     * @brief 移动赋值句柄所有权
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    JoinHandle& operator=(JoinHandle&& other) noexcept = default;
 
     JoinHandle(const JoinHandle&) = delete;
     JoinHandle& operator=(const JoinHandle&) = delete;
 
-    bool is_valid() const noexcept { return m_task.is_valid() || static_cast<bool>(m_blocking_completion); }  ///< 是否绑定到有效任务完成态
+    /**
+     * @brief 是否绑定到有效任务完成态
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_valid() const noexcept { return m_task.is_valid() || static_cast<bool>(m_blocking_completion); }
 
     std::expected<void, detail::TaskResultError> wait() const  ///< 阻塞等待任务结束，不消费完成状态
     {
@@ -1194,10 +1431,30 @@ enum class ReadyEntryKind : uintptr_t {
  */
 struct ReadyEntryHooks
 {
-    Scheduler* (*owner_scheduler)(void* state) noexcept = nullptr;  ///< 返回 owner scheduler
-    bool (*resume_owner_only)(void* state) noexcept = nullptr;  ///< 是否只能由 owner scheduler 恢复
-    bool (*resume)(void* state) noexcept = nullptr;  ///< 恢复 C 协程；成功后 ready entry 会释放
-    void (*release)(void* state) noexcept = nullptr;  ///< 释放 ready entry 持有的 C 协程引用
+    /**
+     * @brief 返回 owner scheduler
+     * @param state 状态对象
+     * @return Scheduler* 指针
+     */
+    Scheduler* (*owner_scheduler)(void* state) noexcept = nullptr;
+    /**
+     * @brief 是否只能由 owner scheduler 恢复
+     * @param state 状态对象
+     * @return 仅允许 owner scheduler 恢复时返回 true，否则返回 false
+     */
+    bool (*resume_owner_only)(void* state) noexcept = nullptr;
+    /**
+     * @brief 恢复 C 协程；成功后 ready entry 会释放
+     * @param state 状态对象
+     * @return 操作成功时返回 true，否则返回 false
+     */
+    bool (*resume)(void* state) noexcept = nullptr;
+    /**
+     * @brief 释放 ready entry 持有的 C 协程引用
+     * @param state 状态对象
+     * @return 无返回值
+     */
+    void (*release)(void* state) noexcept = nullptr;
 };
 
 /**
@@ -1564,10 +1821,14 @@ public:
                                             static_cast<std::size_t>(alignment));
     }
 
+    /**
+     * @brief 协程帧分配失败时返回无效任务
+     * @return 无有效协程帧的 Task，is_valid() 为 false；消费结果时返回 kInvalidState 错误
+     */
     static Task<T> get_return_object_on_allocation_failure() noexcept
     {
         return {};
-    }  ///< 协程帧分配失败时返回无效任务
+    }
 
     Task<T> get_return_object() noexcept  ///< 构造并返回与该 promise 绑定的 Task
     {
@@ -1602,7 +1863,11 @@ public:
         void await_resume() const noexcept {}
     };
 
-    InitialSuspendAwaiter initial_suspend() noexcept { return {this}; }  ///< 初始总是挂起，失败状态在挂起点释放 frame
+    /**
+     * @brief 初始总是挂起，失败状态在挂起点释放 frame
+     * @return InitialSuspendAwaiter 操作结果
+     */
+    InitialSuspendAwaiter initial_suspend() noexcept { return {this}; }
 
     std::suspend_always yield_value(ReSchedulerType flag) noexcept  ///< `co_yield true` 时把任务重新放回延后队列
     {
@@ -1612,7 +1877,11 @@ public:
         return {};
     }
 
-    std::suspend_never final_suspend() noexcept { return {}; }  ///< 结束时不再二次挂起，由完成逻辑直接清理
+    /**
+     * @brief 结束时不再二次挂起，由完成逻辑直接清理
+     * @return std::suspend_never 操作结果
+     */
+    std::suspend_never final_suspend() noexcept { return {}; }
 
     void unhandled_exception() noexcept  ///< 捕获协程异常并写入完成态
     {
@@ -1641,7 +1910,11 @@ public:
         m_task_view.m_state = nullptr;
     }
 
-    const TaskRef& task_ref_view() const noexcept { return m_task_view; }  ///< 返回非拥有 TaskRef view
+    /**
+     * @brief 返回非拥有 TaskRef view
+     * @return const TaskRef& 引用
+     */
+    const TaskRef& task_ref_view() const noexcept { return m_task_view; }
 
 private:
     TaskState* m_state = nullptr;  ///< promise 热路径使用的非拥有状态指针
@@ -1706,10 +1979,14 @@ public:
                                             static_cast<std::size_t>(alignment));
     }
 
+    /**
+     * @brief 协程帧分配失败时返回无效任务
+     * @return 无有效协程帧的 Task，is_valid() 为 false；消费结果时返回 kInvalidState 错误
+     */
     static Task<void> get_return_object_on_allocation_failure() noexcept
     {
         return {};
-    }  ///< 协程帧分配失败时返回无效任务
+    }
 
     Task<void> get_return_object() noexcept  ///< 构造并返回与该 promise 绑定的 Task
     {
@@ -1743,7 +2020,11 @@ public:
         void await_resume() const noexcept {}
     };
 
-    InitialSuspendAwaiter initial_suspend() noexcept { return {this}; }  ///< 初始总是挂起，失败状态在挂起点释放 frame
+    /**
+     * @brief 初始总是挂起，失败状态在挂起点释放 frame
+     * @return InitialSuspendAwaiter 操作结果
+     */
+    InitialSuspendAwaiter initial_suspend() noexcept { return {this}; }
 
     std::suspend_always yield_value(ReSchedulerType flag) noexcept  ///< `co_yield true` 时把任务重新放回延后队列
     {
@@ -1753,7 +2034,11 @@ public:
         return {};
     }
 
-    std::suspend_never final_suspend() noexcept { return {}; }  ///< 结束时不再二次挂起，由完成逻辑直接清理
+    /**
+     * @brief 结束时不再二次挂起，由完成逻辑直接清理
+     * @return std::suspend_never 操作结果
+     */
+    std::suspend_never final_suspend() noexcept { return {}; }
 
     void unhandled_exception() noexcept  ///< 捕获协程异常并写入完成态
     {
@@ -1776,7 +2061,11 @@ public:
         m_task_view.m_state = nullptr;
     }
 
-    const TaskRef& task_ref_view() const noexcept { return m_task_view; }  ///< 返回非拥有 TaskRef view
+    /**
+     * @brief 返回非拥有 TaskRef view
+     * @return const TaskRef& 引用
+     */
+    const TaskRef& task_ref_view() const noexcept { return m_task_view; }
 
 private:
     TaskState* m_state = nullptr;  ///< promise 热路径使用的非拥有状态指针

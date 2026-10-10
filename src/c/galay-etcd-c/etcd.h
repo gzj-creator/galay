@@ -161,6 +161,7 @@ galay_status_t galay_etcd_config_builder_create(galay_etcd_config_builder_t** ou
 /**
  * @brief 销毁 Etcd 配置构建器。
  * @param builder 可为 NULL；销毁后不得再传给 client create。
+ * @return 无返回值
  */
 void galay_etcd_config_builder_destroy(galay_etcd_config_builder_t* builder);
 
@@ -198,6 +199,7 @@ galay_status_t galay_etcd_client_create(const galay_etcd_config_builder_t* build
 /**
  * @brief 销毁 Etcd client 及其拥有的 socket。
  * @param client 可为 NULL；销毁后所有借用该 client 的 watch 均失效。
+ * @return 无返回值
  * @note 本函数不抛异常；若底层 socket destroy 失败，只会清理 C handle 状态。
  */
 void galay_etcd_client_destroy(galay_etcd_client_t* client);
@@ -275,6 +277,7 @@ galay_status_t galay_etcd_get_result_create_empty(galay_etcd_get_result_t** out)
 /**
  * @brief 销毁 get result。
  * @param result 可为 NULL；销毁后其 item key/value 借用指针全部失效。
+ * @return 无返回值
  */
 void galay_etcd_get_result_destroy(galay_etcd_get_result_t* result);
 
@@ -348,6 +351,7 @@ galay_status_t galay_etcd_pipeline_create(galay_etcd_pipeline_t** out);
 /**
  * @brief 销毁 pipeline 请求缓存。
  * @param pipeline 可为 NULL；销毁后已添加操作不可再执行。
+ * @return 无返回值
  */
 void galay_etcd_pipeline_destroy(galay_etcd_pipeline_t* pipeline);
 
@@ -407,6 +411,7 @@ galay_status_t galay_etcd_client_pipeline_execute(galay_etcd_client_t* client,
 /**
  * @brief 销毁 pipeline result。
  * @param result 可为 NULL；销毁后其内部 get result 借用指针全部失效。
+ * @return 无返回值
  */
 void galay_etcd_pipeline_result_destroy(galay_etcd_pipeline_result_t* result);
 
@@ -475,6 +480,7 @@ galay_status_t galay_etcd_watch_create(galay_etcd_client_t* client,
 /**
  * @brief 销毁 watch handle。
  * @param watch 可为 NULL；不会隐式关闭或销毁 client。
+ * @return 无返回值
  */
 void galay_etcd_watch_destroy(galay_etcd_watch_t* watch);
 
@@ -503,6 +509,7 @@ galay_status_t galay_etcd_watch_cancel(galay_etcd_watch_t* watch,
 /**
  * @brief 销毁 watch event。
  * @param event 可为 NULL；销毁后 key/value 借用指针失效。
+ * @return 无返回值
  */
 void galay_etcd_watch_event_destroy(galay_etcd_watch_event_t* event);
 

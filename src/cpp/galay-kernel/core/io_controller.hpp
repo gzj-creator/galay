@@ -102,7 +102,11 @@ struct SqeRequestHandle {
     int result_value = 0;  ///< 延迟到 notification 后交付的业务结果
     unsigned result_flags = 0;  ///< 延迟结果的 CQE flags（不含 notification 标记）
 
-    void recycle() noexcept;  ///< 将请求句柄归还到所属池
+    /**
+     * @brief 将请求句柄归还到所属池
+     * @return 无返回值
+     */
+    void recycle() noexcept;
 };
 
 /**
@@ -112,6 +116,8 @@ struct SqeRequestHandle {
 struct SqeHandleArena {
     /**
      * @brief 构造请求句柄池
+     * @param owner 所属对象
+     * @param slot 队列槽位
      * @details 初始化首个句柄块，保证常规热路径可直接获取 handle。
      */
     SqeHandleArena(IOController* owner, uint8_t slot)
@@ -151,6 +157,7 @@ struct SqeHandleArena {
     /**
      * @brief 回收请求句柄
      * @param handle 待归还的 handle；允许为空
+     * @return 无返回值
      */
     void recycle(SqeRequestHandle* handle) noexcept {
         if (handle == nullptr) {
@@ -248,7 +255,11 @@ struct ReadyRecvChunk {
     size_t length = 0;  ///< 当前尚未消费数据长度
     Kind kind = Kind::Buffer;  ///< 片段类型
     std::expected<size_t, IOError> result = 0;  ///< EOF / Error 情况下交付给 awaitable 的结果
-    void (*recycle)(const std::shared_ptr<void>&, uint16_t) noexcept = nullptr;  ///< 归还 buffer 到 ring 的回调
+    /**
+     * @brief 归还 buffer 到 ring 的回调
+     * @return 无返回值
+     */
+    void (*recycle)(const std::shared_ptr<void>&, uint16_t) noexcept = nullptr;
 
     void release() noexcept {
         if (recycle != nullptr && owner) {
@@ -317,7 +328,11 @@ struct ReadyRecvDatagram {
     sockaddr_storage source{};  ///< 数据报源地址；仅 Buffer 类型有效
     std::shared_ptr<void> owner;  ///< 持有底层 UDP buffer pool 生命周期
     std::expected<size_t, IOError> result = 0;  ///< Error 类型交付给 awaitable 的错误
-    void (*recycle)(const std::shared_ptr<void>&, uint16_t) noexcept = nullptr;  ///< 归还 buffer 到 ring 的回调
+    /**
+     * @brief 归还 buffer 到 ring 的回调
+     * @return 无返回值
+     */
+    void (*recycle)(const std::shared_ptr<void>&, uint16_t) noexcept = nullptr;
     char* data = nullptr;  ///< 数据报 payload 起始地址
     size_t length = 0;  ///< 当前数据报 payload 长度
     uint16_t bid = 0;  ///< provided buffer id 标识
@@ -416,6 +431,8 @@ struct IOController {
 #if defined(USE_EPOLL) || defined(USE_KQUEUE)
     /**
      * @brief 绑定 reactor 稳定注册入口中的 controller 槽位
+     * @param owner_slot 所属调度器槽位
+     * @return 无返回值
      * @note 仅在所属 IO 调度器线程调用；无需原子或锁。
      */
     void bind_registration_owner_slot(IOController** owner_slot) noexcept {
@@ -439,6 +456,7 @@ struct IOController {
 
     /**
      * @brief 解除 reactor 稳定注册入口对当前 controller 的引用
+     * @return 无返回值
      */
     void release_registration_owner_slot() noexcept {
         if (m_registration_owner_slot != nullptr) {
@@ -452,6 +470,7 @@ struct IOController {
 
     /**
      * @brief 将 moved-from 对象重置到安全空状态
+     * @return 无返回值
      * @note 供移动构造/赋值后清理源对象使用
      */
     void reset_moved_from() noexcept {
@@ -512,6 +531,7 @@ struct IOController {
     /**
      * @brief 推进指定槽位的 generation
      * @param slot READ 或 WRITE 槽位
+     * @return 无返回值
      * @note 在替换 awaitable 或重绑 owner 时调用，用于让旧 CQE 自动失效
      */
     void advance_sqe_generation(Index slot) noexcept {
@@ -523,6 +543,7 @@ struct IOController {
 
     /**
      * @brief 使当前控制器上所有历史 SQE 请求失效
+     * @return 无返回值
      */
     void invalidate_sqe_requests() noexcept {
         clear_sqe_state();
@@ -531,6 +552,7 @@ struct IOController {
     /**
      * @brief 将 accepted fd 缓存到 controller 侧队列
      * @param handle 新接受到的连接句柄
+     * @return 无返回值
      */
     void enqueue_accepted_handle(GHandle handle) {
         m_ready_accepts.push_back(handle);
@@ -547,6 +569,7 @@ struct IOController {
 
     /**
      * @brief 清理 controller 内缓存但尚未交付的 accepted fd
+     * @return 无返回值
      */
     void clear_accepted_handles() noexcept {
         while (!m_ready_accepts.empty()) {
@@ -561,6 +584,7 @@ struct IOController {
     /**
      * @brief 将 recv CQE 对应的内部 buffer 片段缓存到 controller 侧队列
      * @param chunk 已完成但尚未交付给用户的内部 recv 片段
+     * @return 无返回值
      */
     void enqueue_ready_recv(ReadyRecvChunk&& chunk) {
         m_ready_recvs.push_back(std::move(chunk));
@@ -624,6 +648,7 @@ struct IOController {
 
     /**
      * @brief 清理 controller 内缓存但尚未交付的 recv 片段
+     * @return 无返回值
      */
     void clear_ready_recvs() noexcept {
         while (!m_ready_recvs.empty()) {
@@ -635,6 +660,7 @@ struct IOController {
     /**
      * @brief 将完整 UDP 数据报缓存到 controller 侧队列
      * @param datagram 已完成但尚未交付给用户的内部数据报
+     * @return 无返回值
      */
     void enqueue_ready_recv_from(ReadyRecvDatagram&& datagram)
     {
@@ -678,6 +704,7 @@ struct IOController {
 
     /**
      * @brief 归还所有尚未交付的 UDP provided buffers
+     * @return 无返回值
      */
     void clear_ready_recv_from() noexcept
     {
@@ -699,6 +726,7 @@ struct IOController {
     /**
      * @brief 清除Awaitable信息（支持 RECVWITHSEND 状态机）
      * @param type IO事件类型
+     * @return 无返回值
      */
     void remove_awaitable(IOEventType type);
 
@@ -795,6 +823,7 @@ private:
 
 /**
  * @brief IOController::get_awaitable 的显式特化集合
+ * @return AcceptAwaitable* 等待体，通过 co_await 执行并取得操作结果
  * @details 这些访问器把 READ/WRITE 槽位上的 `void*` awaitable 安全转换为具体类型。
  */
 

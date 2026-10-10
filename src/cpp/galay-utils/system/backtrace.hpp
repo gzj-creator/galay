@@ -93,6 +93,7 @@ public:
      * @brief 打印堆栈跟踪到标准错误流
      * @param maxFrames 最大栈帧数（默认 64）
      * @param skipFrames 跳过的栈帧数（默认 1）
+     * @return 无返回值
      */
     static void print_stack_trace(int maxFrames = 64, int skipFrames = 1) {
         auto frames = get_stack_trace(maxFrames, skipFrames + 1);
@@ -123,6 +124,7 @@ public:
 
     /**
      * @brief 安装崩溃信号处理器（SIGSEGV、SIGABRT、SIGFPE、SIGILL、SIGBUS）
+     * @return 无返回值
      */
     static void install_crash_handlers() {
         std::signal(SIGSEGV, crash_signal_handler);

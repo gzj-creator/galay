@@ -110,6 +110,7 @@ class CPU {
 public:
     /**
      * @brief 返回 std::thread::hardware_concurrency() 的硬件并发度提示。
+     * @return 对应的大小或数量
      * @details 可能为 0；不是在线/有效 affinity 的大小，也不是 CPU ID 上界。
      */
     [[nodiscard]] static unsigned count() noexcept
@@ -117,7 +118,10 @@ public:
         return std::thread::hardware_concurrency();
     }
 
-    /** @brief 查询系统在线 CPU ID 快照，不按当前线程的 cpuset 过滤。 */
+    /**
+     * @brief 查询系统在线 CPU ID 快照，不按当前线程的 cpuset 过滤。
+     * @return 成功时返回 std::vector<unsigned>，失败时返回 std::error_code 错误
+     */
     [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code>
     online_cpus()
     {
@@ -129,7 +133,10 @@ public:
 #endif
     }
 
-    /** @brief 查询瞬间正在执行调用线程的 CPU ID；不保证后续绑定或不迁移。 */
+    /**
+     * @brief 查询瞬间正在执行调用线程的 CPU ID；不保证后续绑定或不迁移。
+     * @return 成功时返回 unsigned，失败时返回 std::error_code 错误
+     */
     [[nodiscard]] static std::expected<unsigned, std::error_code> current_id()
     {
 #if defined(__linux__)
@@ -146,7 +153,10 @@ public:
 #endif
     }
 
-    /** @brief 读取调用线程的有效 CPU mask，使用动态容量，不受 CPU_SETSIZE 限制。 */
+    /**
+     * @brief 读取调用线程的有效 CPU mask，使用动态容量，不受 CPU_SETSIZE 限制。
+     * @return 成功时返回 std::vector<unsigned>，失败时返回 std::error_code 错误
+     */
     [[nodiscard]] static std::expected<std::vector<unsigned>, std::error_code>
     cpu_affinity()
     {
@@ -159,6 +169,8 @@ public:
 
     /**
      * @brief 设置调用线程的 CPU mask，并回读内核实际生效的 mask。
+     * @param cpus CPU ID 集合
+     * @return 成功时返回 std::vector<unsigned>，失败时返回 std::error_code 错误
      * @details 重复 CPU ID 自动合并；调用方应比较返回值和请求集合，以发现
      *          cpuset、online CPU 等内核限制。回读失败时绑定可能已经生效。
      */

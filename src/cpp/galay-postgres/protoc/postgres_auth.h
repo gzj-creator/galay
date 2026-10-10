@@ -32,13 +32,19 @@ public:
     ScramSha256(const ScramSha256&) = delete;
     ScramSha256& operator=(const ScramSha256&) = delete;
 
-    /** Generate the PostgreSQL/libpq-style Base64 encoding of 18 random bytes. */
+    /**
+     * Generate the PostgreSQL/libpq-style Base64 encoding of 18 random bytes.
+     * @return 成功时返回 std::string，失败时返回 std::string 错误
+     */
     [[nodiscard]] static std::expected<std::string, std::string> generate_nonce();
 
     /**
      * PostgreSQL already sends the role in StartupMessage, so production
      * connections pass an empty username here and emit the standard `n=` form.
      * A non-empty username remains supported for RFC 7677 vector verification.
+     * @param username 用户名
+     * @param nonce 认证随机数据
+     * @return 成功时返回 std::string，失败时返回 std::string 错误
      */
     [[nodiscard]] std::expected<std::string, std::string>
     client_first_message(std::string_view username, std::string_view nonce);

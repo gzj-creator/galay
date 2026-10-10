@@ -34,6 +34,10 @@ using namespace galay::kernel;
 
 /**
  * @brief SSL客户端协程
+ * @param ctx SSL 上下文
+ * @param host 目标主机地址
+ * @param port 端口号
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> ssl_client(SslContext* ctx, const std::string& host, uint16_t port) {
     SslSocket socket(ctx);

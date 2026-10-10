@@ -295,17 +295,34 @@ struct SubscriptionFilter {
         const json::Json& element);
 };
 
-/** @brief 构建只包含必需 `_meta` 的请求参数对象。 */
+/**
+ * @brief 构建只包含必需 `_meta` 的请求参数对象。
+ * @param meta 元数据
+ * @return 处理后的 std::string 结果
+ */
 std::string make_request_params(const RequestMeta& meta);
 
-/** @brief 合并业务参数对象与必需 `_meta`；fieldsJson 必须是 JSON 对象。 */
+/**
+ * @brief 合并业务参数对象与必需 `_meta`；fieldsJson 必须是 JSON 对象。
+ * @param meta 元数据
+ * @param fieldsJson JSON 字段定义
+ * @return 成功时返回 std::string，失败时返回 McpError 错误
+ */
 std::expected<std::string, McpError> make_request_params(const RequestMeta& meta,
                                                       std::string_view fieldsJson);
 
-/** @brief 解析并校验 2026-07-28 JSON-RPC 请求和必需的每请求元数据。 */
+/**
+ * @brief 解析并校验 2026-07-28 JSON-RPC 请求和必需的每请求元数据。
+ * @param body 消息体
+ * @return 成功时返回 ParsedRequest，失败时返回 McpError 错误
+ */
 std::expected<ParsedRequest, McpError> parse_request(std::string_view body);
 
-/** @brief 解析 2026-07-28 结果；该版本缺失 `resultType` 视为错误。 */
+/**
+ * @brief 解析 2026-07-28 结果；该版本缺失 `resultType` 视为错误。
+ * @param body 消息体
+ * @return 成功时返回 ParsedResult，失败时返回 McpError 错误
+ */
 std::expected<ParsedResult, McpError> parse_result(std::string_view body);
 
 std::expected<ParsedResponse, McpError> parse_response(std::string_view body);
@@ -320,25 +337,45 @@ std::string make_unsupported_protocol_version_response(
     std::string_view requested,
     const std::vector<std::string>& supported);
 
-/** @brief 构建 listen 流的首条确认通知。 */
+/**
+ * @brief 构建 listen 流的首条确认通知。
+ * @param id 标识符
+ * @param accepted 是否接受请求
+ * @return 处理后的 std::string 结果
+ */
 std::string make_subscription_acknowledged_notification(
     const RequestId& id,
     const SubscriptionFilter& accepted);
 
-/** @brief 构建带 subscriptionId 的列表或资源变更通知。 */
+/**
+ * @brief 构建带 subscriptionId 的列表或资源变更通知。
+ * @param method 方法名称
+ * @param id 标识符
+ * @param uri 资源 URI
+ * @return 处理后的 std::string 结果
+ */
 std::string make_subscription_notification(
     std::string_view method,
     const RequestId& id,
     std::optional<std::string_view> uri = std::nullopt);
 
-/** @brief 构建服务端主动结束 listen 流时的最终响应。 */
+/**
+ * @brief 构建服务端主动结束 listen 流时的最终响应。
+ * @param id 标识符
+ * @return 处理后的 std::string 结果
+ */
 std::string make_subscription_complete_response(const RequestId& id);
 
-/** @brief 把一条 JSON-RPC 消息编码为 SSE data event。 */
+/**
+ * @brief 把一条 JSON-RPC 消息编码为 SSE data event。
+ * @param message 消息
+ * @return 处理后的 std::string 结果
+ */
 std::string encode_sse_event(std::string_view message);
 
 /**
  * @brief 解析一个完整 SSE event。
+ * @param event 事件
  * @return data event 返回 JSON 字符串，comment/空 event 返回 nullopt。
  */
 std::expected<std::optional<std::string>, McpError> parse_sse_event(

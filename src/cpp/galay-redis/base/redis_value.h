@@ -29,11 +29,28 @@ namespace galay::redis
     {
     public:
         RedisValue();                               ///< 默认构造
-        explicit RedisValue(protocol::RedisReply reply); ///< 从 RedisReply 构造
-        RedisValue(RedisValue&& other) noexcept;     ///< 移动构造
-        RedisValue& operator=(RedisValue&& other) noexcept; ///< 移动赋值
+        /**
+         * @brief 从 RedisReply 构造
+         * @param reply 响应对象
+         */
+        explicit RedisValue(protocol::RedisReply reply);
+        /**
+         * @brief 移动构造
+         * @param other 源对象
+         */
+        RedisValue(RedisValue&& other) noexcept;
+        /**
+         * @brief 移动赋值
+         * @param other 源对象
+         * @return 当前对象引用
+         */
+        RedisValue& operator=(RedisValue&& other) noexcept;
         RedisValue(const RedisValue&) = delete;      ///< 禁止拷贝
-        RedisValue& operator=(const RedisValue&) = delete; ///< 禁止拷贝赋值
+        /**
+         * @brief 禁止拷贝赋值
+         * @return 该操作已禁用，不可调用
+         */
+        RedisValue& operator=(const RedisValue&) = delete;
 
         /**
          * @brief 显式克隆 RedisValue
@@ -49,16 +66,56 @@ namespace galay::redis
         static RedisValue from_error(const std::string& error_msg);
 
         // RESP2 类型判断和转换
-        bool is_null() const;                        ///< 判断是否为 Null
-        bool is_status() const;                      ///< 判断是否为状态回复
-        std::string to_status() const;               ///< 转换为状态字符串
-        bool is_error() const;                       ///< 判断是否为错误回复
-        std::string to_error() const;                ///< 转换为错误字符串
-        bool is_integer() const;                     ///< 判断是否为整数
-        int64_t to_integer() const;                  ///< 转换为整数
-        bool is_string() const;                      ///< 判断是否为字符串
-        std::string to_string() const;               ///< 转换为字符串
-        bool is_array() const;                       ///< 判断是否为数组
+        /**
+         * @brief 判断是否为 Null
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_null() const;
+        /**
+         * @brief 判断是否为状态回复
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_status() const;
+        /**
+         * @brief 转换为状态字符串
+         * @return 处理后的 std::string 结果
+         */
+        std::string to_status() const;
+        /**
+         * @brief 判断是否为错误回复
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_error() const;
+        /**
+         * @brief 转换为错误字符串
+         * @return 处理后的 std::string 结果
+         */
+        std::string to_error() const;
+        /**
+         * @brief 判断是否为整数
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_integer() const;
+        /**
+         * @brief 转换为整数
+         * @return int64_t 操作结果
+         */
+        int64_t to_integer() const;
+        /**
+         * @brief 判断是否为字符串
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_string() const;
+        /**
+         * @brief 转换为字符串
+         * @return 处理后的 std::string 结果
+         */
+        std::string to_string() const;
+        /**
+         * @brief 判断是否为数组
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_array() const;
 
         /**
          * @brief 转换为数组
@@ -68,11 +125,31 @@ namespace galay::redis
         std::vector<RedisValue> to_array() const;
 
         // RESP3 类型判断和转换
-        bool is_double() const;                      ///< 判断是否为双精度浮点数（RESP3）
-        double to_double() const;                    ///< 转换为双精度浮点数
-        bool is_bool() const;                        ///< 判断是否为布尔值（RESP3）
-        bool to_bool() const;                        ///< 转换为布尔值
-        bool is_map() const;                         ///< 判断是否为映射（RESP3）
+        /**
+         * @brief 判断是否为双精度浮点数（RESP3）
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_double() const;
+        /**
+         * @brief 转换为双精度浮点数
+         * @return double 操作结果
+         */
+        double to_double() const;
+        /**
+         * @brief 判断是否为布尔值（RESP3）
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_bool() const;
+        /**
+         * @brief 转换为布尔值
+         * @return 当前响应转换后的布尔值
+         */
+        bool to_bool() const;
+        /**
+         * @brief 判断是否为映射（RESP3）
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_map() const;
 
         /**
          * @brief 转换为映射
@@ -81,7 +158,11 @@ namespace galay::redis
          */
         std::map<std::string, RedisValue> to_map() const;
 
-        bool is_set() const;                         ///< 判断是否为集合（RESP3）
+        /**
+         * @brief 判断是否为集合（RESP3）
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_set() const;
 
         /**
          * @brief 转换为集合
@@ -90,8 +171,16 @@ namespace galay::redis
          */
         std::vector<RedisValue> to_set() const;
 
-        bool is_attr() const;                        ///< 判断是否为属性（RESP3）
-        bool is_push() const;                        ///< 判断是否为推送（RESP3）
+        /**
+         * @brief 判断是否为属性（RESP3）
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_attr() const;
+        /**
+         * @brief 判断是否为推送（RESP3）
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_push() const;
 
         /**
          * @brief 转换为推送数组
@@ -100,11 +189,27 @@ namespace galay::redis
          */
         std::vector<RedisValue> to_push() const;
 
-        bool is_big_number() const;                   ///< 判断是否为大数字（RESP3）
-        std::string to_big_number() const;            ///< 转换为大数字字符串
+        /**
+         * @brief 判断是否为大数字（RESP3）
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_big_number() const;
+        /**
+         * @brief 转换为大数字字符串
+         * @return 处理后的 std::string 结果
+         */
+        std::string to_big_number() const;
 
-        bool is_verb() const;                        ///< 判断是否为原义字符串（RESP3，不转义）
-        std::string to_verb() const;                 ///< 转换为原义字符串
+        /**
+         * @brief 判断是否为原义字符串（RESP3，不转义）
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_verb() const;
+        /**
+         * @brief 转换为原义字符串
+         * @return 处理后的 std::string 结果
+         */
+        std::string to_verb() const;
 
         /**
          * @brief 获取底层 RedisReply（const）
@@ -140,12 +245,33 @@ namespace galay::redis
     {
     public:
         RedisAsyncValue();                               ///< 默认构造
-        explicit RedisAsyncValue(protocol::RedisReply reply); ///< 从 RedisReply 构造
-        RedisAsyncValue(RedisAsyncValue&& other) noexcept;     ///< 移动构造
-        RedisAsyncValue& operator=(RedisAsyncValue&& other) noexcept; ///< 移动赋值
+        /**
+         * @brief 从 RedisReply 构造
+         * @param reply 响应对象
+         */
+        explicit RedisAsyncValue(protocol::RedisReply reply);
+        /**
+         * @brief 移动构造
+         * @param other 源对象
+         */
+        RedisAsyncValue(RedisAsyncValue&& other) noexcept;
+        /**
+         * @brief 移动赋值
+         * @param other 源对象
+         * @return 当前对象引用
+         */
+        RedisAsyncValue& operator=(RedisAsyncValue&& other) noexcept;
         RedisAsyncValue(const RedisAsyncValue&) = delete;      ///< 禁止拷贝
-        RedisAsyncValue& operator=(const RedisAsyncValue&) = delete; ///< 禁止拷贝赋值
-        [[nodiscard]] RedisAsyncValue clone() const;           ///< 显式克隆异步值
+        /**
+         * @brief 禁止拷贝赋值
+         * @return 该操作已禁用，不可调用
+         */
+        RedisAsyncValue& operator=(const RedisAsyncValue&) = delete;
+        /**
+         * @brief 显式克隆异步值
+         * @return 当前对象的独立副本
+         */
+        [[nodiscard]] RedisAsyncValue clone() const;
         ~RedisAsyncValue() = default;
     };
 }

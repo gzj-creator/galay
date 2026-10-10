@@ -285,7 +285,11 @@ public:
         return m_inner_operation->await_suspend(handle);
     }
 
-    /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
+    /**
+     * @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。
+     * @param timer 定时器
+     * @return 无返回值
+     */
     void bind_timeout_timer(TimeoutTimer* timer) noexcept {
         SequenceAwaitableBase::bind_timeout_timer(timer);
     }
@@ -663,7 +667,11 @@ public:
         return m_inner_operation->await_suspend(handle);
     }
 
-    /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
+    /**
+     * @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。
+     * @param timer 定时器
+     * @return 无返回值
+     */
     void bind_timeout_timer(TimeoutTimer* timer) noexcept {
         SequenceAwaitableBase::bind_timeout_timer(timer);
     }

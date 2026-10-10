@@ -86,6 +86,7 @@ public:
 
     /**
      * @brief 清理过期的提前唤醒标记。
+     * @return 无返回值
      * @note 当等待者通过 await_ready()/try_recv() 等同步路径直接拿到数据时调用。
      */
     void clear_pending_wake() noexcept {

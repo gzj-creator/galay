@@ -61,6 +61,7 @@ struct RpcPayloadView {
     size_t segment2_len = 0;          ///< 第二段数据长度
 
     /// @brief 获取payload总字节数；溢出时饱和到size_t最大值以便上层边界校验拒绝
+    /// @return 对应的大小或数量
     size_t size() const {
         if (segment1_len > std::numeric_limits<size_t>::max() - segment2_len) {
             return std::numeric_limits<size_t>::max();
@@ -68,6 +69,7 @@ struct RpcPayloadView {
         return segment1_len + segment2_len;
     }
     /// @brief 判断payload是否为空
+    /// @return 为空时返回 true，否则返回 false
     bool empty() const { return size() == 0; }
 };
 
@@ -85,6 +87,8 @@ struct RpcHeader {
 
     /**
      * @brief 序列化到缓冲区
+     * @param buffer 数据缓冲区
+     * @return 无返回值
      */
     void serialize(char* buffer) const {
         uint32_t magic = rpc_htonl(m_magic);
@@ -102,6 +106,8 @@ struct RpcHeader {
 
     /**
      * @brief 从缓冲区反序列化
+     * @param buffer 数据缓冲区
+     * @return 消息解析成功时返回 true，否则返回 false
      */
     bool deserialize(const char* buffer) {
         uint32_t magic;
@@ -210,42 +216,64 @@ public:
     }
 
     /// @brief 获取请求ID
+    /// @return 当前请求标识符
     uint32_t request_id() const { return m_request_id; }
     /// @brief 设置请求ID
+    /// @param id 标识符
+    /// @return 无返回值
     void request_id(uint32_t id) { m_request_id = id; }
     /// @brief 获取调用模式
+    /// @return 当前 RPC 调用模式
     RpcCallMode call_mode() const { return m_call_mode; }
     /// @brief 设置调用模式
+    /// @param mode 操作模式
+    /// @return 无返回值
     void call_mode(RpcCallMode mode) { m_call_mode = mode; }
     /// @brief 判断是否为流结束帧
+    /// @return 当前帧结束流时返回 true，否则返回 false
     bool end_of_stream() const { return m_end_of_stream; }
     /// @brief 设置流结束标志
+    /// @param end 结束位置
+    /// @return 无返回值
     void end_of_stream(bool end) { m_end_of_stream = end; }
 
     /// @brief 获取服务名
+    /// @return const std::string& 只读引用
     const std::string& service_name() const { return m_service_name; }
     /// @brief 设置服务名
+    /// @param name 名称
+    /// @return 无返回值
     void service_name(std::string_view name) { m_service_name = name; }
     /// @brief 设置服务名（移动语义）
+    /// @param name 名称
+    /// @return 无返回值
     void service_name(std::string&& name) { m_service_name = std::move(name); }
 
     /// @brief 获取方法名
+    /// @return const std::string& 只读引用
     const std::string& method_name() const { return m_method_name; }
     /// @brief 设置方法名
+    /// @param name 名称
+    /// @return 无返回值
     void method_name(std::string_view name) { m_method_name = name; }
     /// @brief 设置方法名（移动语义）
+    /// @param name 名称
+    /// @return 无返回值
     void method_name(std::string&& name) { m_method_name = std::move(name); }
 
     /// @brief 获取payload数据（触发实体化拷贝）
+    /// @return const std::vector<char>& 只读引用
     const std::vector<char>& payload() const {
         materialize_payload_if_needed();
         return m_payload;
     }
     /// @brief 获取payload大小
+    /// @return 对应的大小或数量
     size_t payload_size() const {
         return m_payload_owned ? m_payload.size() : m_payload_view.size();
     }
     /// @brief 获取payload视图（不触发拷贝）
+    /// @return 不复制负载的借用视图
     RpcPayloadView payload_view() const {
         if (m_payload_owned) {
             return RpcPayloadView{
@@ -261,6 +289,7 @@ public:
      * @brief 设置payload（拷贝模式）
      * @param data 数据指针
      * @param len 数据长度
+     * @return 无返回值
      */
     void payload(const char* data, size_t len) {
         m_payload.assign(data, data + len);
@@ -275,6 +304,7 @@ public:
     /**
      * @brief 设置payload（移动模式）
      * @param data 数据向量
+     * @return 无返回值
      */
     void payload(std::vector<char>&& data) {
         m_payload = std::move(data);
@@ -289,6 +319,7 @@ public:
     /**
      * @brief 设置payload视图（零拷贝借用模式）
      * @param view 外部payload视图
+     * @return 无返回值
      * @note 调用方必须保证视图指向的内存在消息被消费完成前保持有效
      */
     void payload_view(const RpcPayloadView& view) {
@@ -299,11 +330,14 @@ public:
     }
 
     /// @brief 获取可变metadata
+    /// @return RpcMetadata& 引用
     RpcMetadata& metadata() { return m_metadata; }
     /// @brief 获取只读metadata
+    /// @return const RpcMetadata& 只读引用
     const RpcMetadata& metadata() const { return m_metadata; }
 
     /// @brief 请求体序列化后的字节数
+    /// @return 对应的大小或数量
     size_t serialized_body_size() const {
         return metadata_wire_size() +
                sizeof(uint16_t) + m_service_name.size() +
@@ -311,6 +345,7 @@ public:
                payload_size();
     }
     /// @brief metadata wire编码字节数
+    /// @return 对应的大小或数量
     size_t serialized_metadata_size() const { return metadata_wire_size(); }
 
     /**
@@ -341,6 +376,7 @@ public:
 
     /**
      * @brief 序列化请求
+     * @return 序列化后的消息字节
      */
     std::vector<char> serialize() const {
         if (!validate_for_write().has_value()) {
@@ -394,6 +430,9 @@ public:
 
     /**
      * @brief 反序列化请求体
+     * @param body 消息体
+     * @param length 缓冲区字节数
+     * @return 消息体解析成功时返回 true，否则返回 false
      */
     bool deserialize_body(const char* body, size_t length) {
         return deserialize_body(body, length, false);
@@ -402,6 +441,9 @@ public:
     /**
      * @brief 反序列化请求体
      * @param has_metadata header reserved位是否声明了metadata扩展
+     * @param body 消息体
+     * @param length 缓冲区字节数
+     * @return 消息体解析成功时返回 true，否则返回 false
      */
     bool deserialize_body(const char* body, size_t length, bool has_metadata) {
         if (length < 4) return false;
@@ -662,33 +704,48 @@ public:
     }
 
     /// @brief 获取请求ID
+    /// @return 当前请求标识符
     uint32_t request_id() const { return m_request_id; }
     /// @brief 设置请求ID
+    /// @param id 标识符
+    /// @return 无返回值
     void request_id(uint32_t id) { m_request_id = id; }
     /// @brief 获取调用模式
+    /// @return 当前 RPC 调用模式
     RpcCallMode call_mode() const { return m_call_mode; }
     /// @brief 设置调用模式
+    /// @param mode 操作模式
+    /// @return 无返回值
     void call_mode(RpcCallMode mode) { m_call_mode = mode; }
     /// @brief 判断是否为流结束帧
+    /// @return 当前帧结束流时返回 true，否则返回 false
     bool end_of_stream() const { return m_end_of_stream; }
     /// @brief 设置流结束标志
+    /// @param end 结束位置
+    /// @return 无返回值
     void end_of_stream(bool end) { m_end_of_stream = end; }
 
     /// @brief 获取错误码
+    /// @return 响应携带的错误码
     RpcErrorCode error_code() const { return m_error_code; }
     /// @brief 设置错误码
+    /// @param code 错误码
+    /// @return 无返回值
     void error_code(RpcErrorCode code) { m_error_code = code; }
 
     /// @brief 获取payload数据（触发实体化拷贝）
+    /// @return const std::vector<char>& 只读引用
     const std::vector<char>& payload() const {
         materialize_payload_if_needed();
         return m_payload;
     }
     /// @brief 获取payload大小
+    /// @return 对应的大小或数量
     size_t payload_size() const {
         return m_payload_owned ? m_payload.size() : m_payload_view.size();
     }
     /// @brief 获取payload视图（不触发拷贝）
+    /// @return 不复制负载的借用视图
     RpcPayloadView payload_view() const {
         if (m_payload_owned) {
             return RpcPayloadView{
@@ -701,6 +758,7 @@ public:
         return m_payload_view;
     }
     /// @brief 将借用payload实体化为自有缓冲，避免外部RingBuffer复用后悬空
+    /// @return 无返回值
     void materialize_payload() const {
         materialize_payload_if_needed();
     }
@@ -708,6 +766,7 @@ public:
      * @brief 设置payload（拷贝模式）
      * @param data 数据指针
      * @param len 数据长度
+     * @return 无返回值
      */
     void payload(const char* data, size_t len) {
         m_payload.assign(data, data + len);
@@ -722,6 +781,7 @@ public:
     /**
      * @brief 设置payload（移动模式）
      * @param data 数据向量
+     * @return 无返回值
      */
     void payload(std::vector<char>&& data) {
         m_payload = std::move(data);
@@ -736,6 +796,7 @@ public:
     /**
      * @brief 设置payload视图（零拷贝借用模式）
      * @param view 外部payload视图
+     * @return 无返回值
      * @note 调用方必须保证视图指向的内存在消息被消费完成前保持有效
      */
     void payload_view(const RpcPayloadView& view) {
@@ -746,6 +807,7 @@ public:
     }
 
     /// @brief 判断响应是否为成功状态
+    /// @return 满足所检查条件时返回 true，否则返回 false
     bool is_ok() const { return m_error_code == RpcErrorCode::OK; }
 
     /**
@@ -766,6 +828,7 @@ public:
 
     /**
      * @brief 序列化响应
+     * @return 序列化后的消息字节
      */
     std::vector<char> serialize() const {
         if (!validate_for_write().has_value()) {
@@ -804,6 +867,9 @@ public:
 
     /**
      * @brief 反序列化响应体
+     * @param body 消息体
+     * @param length 缓冲区字节数
+     * @return 消息体解析成功时返回 true，否则返回 false
      */
     bool deserialize_body(const char* body, size_t length) {
         if (length < 2) return false;

@@ -72,6 +72,7 @@ namespace galay::kernel
 
         /**
          * @brief 清除缓冲区内容（内存清零，保留分配）
+         * @return 无返回值
          */
         void clear();
 
@@ -102,6 +103,7 @@ namespace galay::kernel
         /**
          * @brief 通过 realloc 调整缓冲区大小
          * @param capacity 新容量（字节）；0 表示释放内存
+         * @return 无返回值
          */
         void resize(size_t capacity);
 
@@ -119,6 +121,8 @@ namespace galay::kernel
 
         /**
          * @brief 移动赋值运算符
+         * @param other 源对象
+         * @return Buffer& 引用
          */
         Buffer& operator=(Buffer&& other) noexcept;
 
@@ -127,6 +131,7 @@ namespace galay::kernel
         /**
          * @brief 与另一个缓冲区交换内容
          * @param other 要交换的缓冲区
+         * @return 无返回值
          */
         void swap(Buffer& other) {
             std::swap(m_data, other.m_data);

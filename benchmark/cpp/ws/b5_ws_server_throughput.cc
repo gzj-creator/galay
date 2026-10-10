@@ -37,6 +37,8 @@ void signal_handler(int) {
 
 /**
  * @brief WebSocket 连接处理协程
+ * @param ws_conn WebSocket 连接
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> handle_web_socket_connection(WsConn& ws_conn) {
     int conn_id = total_connections.fetch_add(1);
@@ -95,6 +97,8 @@ cleanup:
 
 /**
  * @brief HTTP 请求处理协程
+ * @param conn 连接对象
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> handle_http_request(HttpConn conn) {
     static std::atomic<int> req_id{0};

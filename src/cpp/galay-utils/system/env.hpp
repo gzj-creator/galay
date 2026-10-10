@@ -27,6 +27,7 @@ public:
 
     /**
      * @brief 返回环境变量值的独立副本；变量不存在时返回 std::nullopt
+     * @param name 名称
      * @return 非法变量名返回 std::errc::invalid_argument
      */
     [[nodiscard]] static std::expected<std::optional<std::string>, std::error_code>
@@ -43,6 +44,10 @@ public:
 
     /**
      * @brief 设置环境变量；overwrite=false 时保留已有值
+     * @param name 名称
+     * @param value 待设置或处理的值
+     * @param overwrite 是否覆盖已有环境变量
+     * @return 成功时返回空值，失败时返回 std::error_code 错误
      * @details 值允许为空，但不能包含 NUL；Windows CRT 将空值视为删除。
      *          非法输入返回 invalid_argument，系统失败保留原始错误码。
      */
@@ -70,6 +75,7 @@ public:
 
     /**
      * @brief 删除环境变量；变量不存在时仍成功
+     * @param name 名称
      * @return 非法输入返回 invalid_argument，系统失败保留原始错误码
      */
     [[nodiscard]] static std::expected<void, std::error_code>

@@ -91,6 +91,7 @@ galay_status_t galay_ssl_context_create(galay_ssl_method_t method, galay_ssl_con
 /**
  * @brief 销毁 TLS context。
  * @param context 可为 NULL；非 NULL 时必须确保没有 socket 仍借用该 context。
+ * @return 无返回值
  */
 void galay_ssl_context_destroy(galay_ssl_context_t* context);
 
@@ -210,6 +211,7 @@ galay_status_t galay_ssl_socket_create(galay_ssl_context_t* context, C_IPType ty
 /**
  * @brief 销毁 TLS socket。
  * @param socket 可为 NULL；非 NULL 时会释放 SSL engine 并 destroy 底层 TCP socket。
+ * @return 无返回值
  * @note 该函数不执行 TLS close_notify；需要有序关闭时先调用 `galay_ssl_socket_shutdown`。
  */
 void galay_ssl_socket_destroy(galay_ssl_socket_t* socket);

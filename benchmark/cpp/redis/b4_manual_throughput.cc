@@ -30,6 +30,11 @@ void mark_client_completed()
 
 /**
  * @brief 单个客户端的性能测试
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @param client_id 客户端编号
+ * @param operations_per_client 每个客户端的操作次数
+ * @param verbose 是否输出详细信息
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> benchmark_client(IOScheduler* scheduler, int client_id, int operations_per_client, bool verbose)
 {
@@ -105,6 +110,12 @@ Task<void> benchmark_client(IOScheduler* scheduler, int client_id, int operation
 
 /**
  * @brief Pipeline性能测试
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @param client_id 客户端编号
+ * @param batch_size 每批操作数量
+ * @param batches 批次数量
+ * @param verbose 是否输出详细信息
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> benchmark_pipeline(IOScheduler* scheduler, int client_id, int batch_size, int batches, bool verbose)
 {

@@ -113,28 +113,44 @@ struct NodeStatus {
     std::atomic<uint64_t> failureCount{0}; ///< 失败计数
     std::atomic<bool> healthy{true}; ///< 是否健康
 
+    /**
+     * @brief 记录一次请求
+     * @return 无返回值
+     */
     void record_request() {
         const uint64_t previous = requestCount.fetch_add(1, std::memory_order_relaxed);
         if (previous == std::numeric_limits<uint64_t>::max()) {
             requestCount.store(previous, std::memory_order_relaxed);
         }
-    } ///< 记录一次请求
+    }
 
+    /**
+     * @brief 记录一次失败并标记为不健康
+     * @return 无返回值
+     */
     void record_failure() {
         const uint64_t previous = failureCount.fetch_add(1, std::memory_order_relaxed);
         if (previous == std::numeric_limits<uint64_t>::max()) {
             failureCount.store(previous, std::memory_order_relaxed);
         }
         healthy.store(false, std::memory_order_release);
-    } ///< 记录一次失败并标记为不健康
+    }
 
-    void mark_healthy() { healthy.store(true, std::memory_order_release); } ///< 标记为健康
+    /**
+     * @brief 标记为健康
+     * @return 无返回值
+     */
+    void mark_healthy() { healthy.store(true, std::memory_order_release); }
 
+    /**
+     * @brief 重置所有计数器
+     * @return 无返回值
+     */
     void reset() {
         requestCount.store(0, std::memory_order_relaxed);
         failureCount.store(0, std::memory_order_relaxed);
         healthy.store(true, std::memory_order_release);
-    } ///< 重置所有计数器
+    }
 };
 
 /**
@@ -250,6 +266,7 @@ public:
     /**
      * @brief 添加节点到哈希环
      * @param config 节点配置
+     * @return 无返回值
      */
     void add_node(const NodeConfig& config) {
         auto node = std::make_shared<PhysicalNode>(config);
@@ -287,6 +304,7 @@ public:
     /**
      * @brief 从哈希环移除节点
      * @param nodeId 节点标识
+     * @return 无返回值
      */
     void remove_node(const std::string& nodeId) {
         const RingSnapshot* retired = nullptr;

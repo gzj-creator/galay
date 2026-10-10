@@ -264,6 +264,7 @@ public:
 
     /**
      * @brief 移动构造，保留 pending 发送进度
+     * @param other 源对象
      * @details TCP writev 游标保存的是指向本对象缓冲区的 iovec，移动后会
      *          重新绑定到新对象的 header/payload 存储。
      */
@@ -277,6 +278,8 @@ public:
 
     /**
      * @brief 移动赋值，保留 pending 发送进度
+     * @param other 源对象
+     * @return 当前对象引用
      * @details 与移动构造一样会重新绑定 TCP writev 游标到当前对象。
      */
     WsWriterImpl& operator=(WsWriterImpl&& other) noexcept {

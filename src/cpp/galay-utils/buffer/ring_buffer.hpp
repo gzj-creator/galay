@@ -369,6 +369,7 @@ public:
     /**
      * @brief 确认外部已经写入的字节数并推进写指针
      * @param length 已写入字节数；超过 writable() 时自动截断
+     * @return 无返回值
      */
     void produce(size_t length) noexcept {
         if (length == 0 || capacity() == 0) {
@@ -382,6 +383,7 @@ public:
     /**
      * @brief 消费头部字节并推进读指针
      * @param length 要消费的字节数；超过 readable() 时自动截断
+     * @return 无返回值
      */
     void consume(size_t length) noexcept {
         if (length == 0 || capacity() == 0) {
@@ -398,6 +400,7 @@ public:
 
     /**
      * @brief 清空缓冲区但保留容量
+     * @return 无返回值
      */
     void clear() noexcept {
         m_readIndex = 0;
@@ -972,6 +975,7 @@ public:
     /**
      * @brief 确认外部已经写入的字节数并推进写指针
      * @param length 已写入字节数；超过 writable() 时自动截断
+     * @return 无返回值
      */
     void produce(size_t length) noexcept {
         detail::visit_ring_buffer_impl(m_impl, [length](auto& impl) { impl.produce(length); });
@@ -980,6 +984,7 @@ public:
     /**
      * @brief 消费头部字节并推进读指针
      * @param length 要消费的字节数；超过 readable() 时自动截断
+     * @return 无返回值
      */
     void consume(size_t length) noexcept {
         detail::visit_ring_buffer_impl(m_impl, [length](auto& impl) { impl.consume(length); });
@@ -987,6 +992,7 @@ public:
 
     /**
      * @brief 清空缓冲区但保留容量和当前后端
+     * @return 无返回值
      */
     void clear() noexcept {
         detail::visit_ring_buffer_impl(m_impl, [](auto& impl) { impl.clear(); });

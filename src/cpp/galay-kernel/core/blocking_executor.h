@@ -43,7 +43,11 @@ public:
     {
     }
 
-    BlockingExecutorErrorCode code() const noexcept { return m_code; }  ///< 返回阻塞执行器错误类别
+    /**
+     * @brief 返回阻塞执行器错误类别
+     * @return 当前对象的类型、状态或错误码
+     */
+    BlockingExecutorErrorCode code() const noexcept { return m_code; }
     std::string_view message() const noexcept
     {
         static constexpr std::array<std::string_view, static_cast<size_t>(BlockingExecutorErrorCode::kStopping) + 1> kMessages = {{
@@ -69,7 +73,13 @@ class BlockingExecutor
 {
 public:
     BlockingExecutor();  ///< 使用默认线程数与空闲超时配置构造执行器
-    BlockingExecutor(size_t minWorkers, size_t maxWorkers, std::chrono::milliseconds keepAlive);  ///< 自定义最小/最大线程数和空闲超时时间
+    /**
+     * @brief 自定义最小/最大线程数和空闲超时时间
+     * @param minWorkers 最少工作线程数量
+     * @param maxWorkers 最多工作线程数量
+     * @param keepAlive 空闲工作线程保留时长
+     */
+    BlockingExecutor(size_t minWorkers, size_t maxWorkers, std::chrono::milliseconds keepAlive);
     ~BlockingExecutor();  ///< 停止执行器并等待工作线程全部退出
 
     /**
@@ -77,18 +87,37 @@ public:
      *
      * Runtime 在停止 IO scheduler 前调用此方法，确保阻塞任务的异步
      * completion 能够唤醒仍在 scheduler 上等待的协程。
+     * @return 无返回值
      */
     void stop() noexcept;
 
     BlockingExecutor(const BlockingExecutor&) = delete;
     BlockingExecutor& operator=(const BlockingExecutor&) = delete;
 
-    std::expected<void, BlockingExecutorError> submit(std::function<void()> task);  ///< 提交一个阻塞任务；必要时会拉起额外工作线程
+    /**
+     * @brief 提交一个阻塞任务；必要时会拉起额外工作线程
+     * @param task 协程任务
+     * @return 成功时返回空值，失败时返回 BlockingExecutorError 错误
+     */
+    std::expected<void, BlockingExecutorError> submit(std::function<void()> task);
 
 private:
-    void worker_loop(std::function<void()> initial_task);  ///< 工作线程主循环，持续拉取并执行阻塞任务
-    void retire_worker_locked();  ///< 在持锁状态下回收一个空闲工作线程计数
-    static size_t default_max_workers();  ///< 根据当前机器并发度推导默认最大线程数
+    /**
+     * @brief 工作线程主循环，持续拉取并执行阻塞任务
+     * @param initial_task 初始任务
+     * @return 无返回值
+     */
+    void worker_loop(std::function<void()> initial_task);
+    /**
+     * @brief 在持锁状态下回收一个空闲工作线程计数
+     * @return 无返回值
+     */
+    void retire_worker_locked();
+    /**
+     * @brief 根据当前机器并发度推导默认最大线程数
+     * @return size_t 操作结果
+     */
+    static size_t default_max_workers();
 
     size_t m_minWorkers;  ///< 最少保留的工作线程数
     size_t m_maxWorkers;  ///< 允许扩张到的最大工作线程数

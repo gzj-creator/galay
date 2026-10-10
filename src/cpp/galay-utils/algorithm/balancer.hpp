@@ -51,11 +51,13 @@ public:
 
     /**
      * @brief 移动构造负载均衡器，转移节点并重置源索引
+     * @param other 源对象
      */
     RoundRobinLoadBalancer(RoundRobinLoadBalancer&& other) noexcept;
 
     /**
      * @brief 移动赋值负载均衡器，转移节点并重置源索引
+     * @param other 源对象
      * @return 当前负载均衡器
      */
     RoundRobinLoadBalancer& operator=(RoundRobinLoadBalancer&& other) noexcept;
@@ -81,6 +83,7 @@ public:
     /**
      * @brief 追加节点
      * @param node 新节点
+     * @return 无返回值
      */
     void append(Type node);
 
@@ -163,6 +166,7 @@ public:
      * @brief 追加节点
      * @param node 新节点
      * @param weight 节点权重
+     * @return 无返回值
      */
     void append(Type node, uint32_t weight);
 
@@ -233,6 +237,7 @@ public:
     /**
      * @brief 追加节点
      * @param node 新节点
+     * @return 无返回值
      */
     void append(Type node);
 
@@ -311,6 +316,7 @@ public:
      * @brief 追加节点
      * @param node 新节点
      * @param weight 节点权重
+     * @return 无返回值
      */
     void append(Type node, uint32_t weight);
 

@@ -67,6 +67,7 @@ public:
      *
      * @tparam NotifyFn  执行实际唤醒的可调用对象
      * @param notify_fn  唤醒函数
+     * @return 无返回值
      */
     template <typename NotifyFn>
     void force_wake(NotifyFn&& notify_fn) {
@@ -76,6 +77,7 @@ public:
 
     /**
      * @brief 标记事件循环进入可能的休眠状态
+     * @return 无返回值
      */
     void mark_sleeping() noexcept {
         m_sleeping.store(true, std::memory_order_release);
@@ -83,6 +85,7 @@ public:
 
     /**
      * @brief 标记事件循环为唤醒状态（poll 或任务处理之后）
+     * @return 无返回值
      */
     void mark_awake() noexcept {
         m_sleeping.store(false, std::memory_order_release);
@@ -90,6 +93,7 @@ public:
 
     /**
      * @brief 清除待处理唤醒标志（消费唤醒事件后调用）
+     * @return 无返回值
      */
     void cancel_pending_wake() noexcept {
         m_wakeup_pending.store(false, std::memory_order_release);
@@ -99,6 +103,7 @@ public:
      * @brief 处理远程任务排空完成
      *
      * @param drained  从注入队列排空的任务数
+     * @return 无返回值
      * @details 若有任务被排空，标记循环为唤醒状态并取消待处理唤醒，
      *          因为循环已在运行。
      */

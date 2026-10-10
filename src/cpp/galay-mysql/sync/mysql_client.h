@@ -49,9 +49,22 @@ public:
     ~MysqlClient();   ///< 析构并关闭连接
 
     MysqlClient(const MysqlClient&) = delete;              ///< 禁止拷贝构造
-    MysqlClient& operator=(const MysqlClient&) = delete;   ///< 禁止拷贝赋值
-    MysqlClient(MysqlClient&& other) noexcept;             ///< 移动构造
-    MysqlClient& operator=(MysqlClient&& other) noexcept;  ///< 移动赋值
+    /**
+     * @brief 禁止拷贝赋值
+     * @return 该操作已禁用，不可调用
+     */
+    MysqlClient& operator=(const MysqlClient&) = delete;
+    /**
+     * @brief 移动构造
+     * @param other 源对象
+     */
+    MysqlClient(MysqlClient&& other) noexcept;
+    /**
+     * @brief 移动赋值
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    MysqlClient& operator=(MysqlClient&& other) noexcept;
 
     // ======================== 连接 ========================
 
@@ -136,39 +149,111 @@ public:
 
     // ======================== 事务 ========================
 
-    MysqlVoidResult begin_transaction();  ///< 开启事务
-    MysqlVoidResult commit();             ///< 提交事务
-    MysqlVoidResult rollback();           ///< 回滚事务
+    /**
+     * @brief 开启事务
+     * @return MysqlVoidResult 操作结果
+     */
+    MysqlVoidResult begin_transaction();
+    /**
+     * @brief 提交事务
+     * @return MysqlVoidResult 操作结果
+     */
+    MysqlVoidResult commit();
+    /**
+     * @brief 回滚事务
+     * @return MysqlVoidResult 操作结果
+     */
+    MysqlVoidResult rollback();
 
     // ======================== 工具 ========================
 
-    MysqlVoidResult ping();                                ///< 发送心跳检测
-    MysqlVoidResult use_database(const std::string& database); ///< 切换数据库
+    /**
+     * @brief 发送心跳检测
+     * @return MysqlVoidResult 操作结果
+     */
+    MysqlVoidResult ping();
+    /**
+     * @brief 切换数据库
+     * @param database 数据库名称
+     * @return MysqlVoidResult 操作结果
+     */
+    MysqlVoidResult use_database(const std::string& database);
 
     // ======================== 连接管理 ========================
 
-    void close();                                           ///< 关闭连接
-    bool is_connected() const { return m_connected; }        ///< 检查是否已连接
+    /**
+     * @brief 关闭连接
+     * @return 无返回值
+     */
+    void close();
+    /**
+     * @brief 检查是否已连接
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_connected() const { return m_connected; }
 
 private:
     using Packet = std::pair<uint8_t, std::string>; ///< 包类型：序列号 + payload
 
     static constexpr size_t kRecvBufferCapacity = 256 * 1024; ///< 接收缓冲区容量（256KB）
 
+    /**
+     * @brief 创建TCP连接
+     * @param host 目标主机地址
+     * @param port 端口号
+     * @param timeout_ms 超时时间，单位为毫秒
+     * @param tcp_no_delay 是否启用 TCP_NODELAY
+     * @return MysqlVoidResult 操作结果
+     */
     MysqlVoidResult connect_socket(const std::string& host, uint16_t port,
                                   uint32_t timeout_ms,
-                                  bool tcp_no_delay = true); ///< 创建TCP连接
-    void close_socket() noexcept; ///< 关闭套接字
+                                  bool tcp_no_delay = true);
+    /**
+     * @brief 关闭套接字
+     * @return 无返回值
+     */
+    void close_socket() noexcept;
 
-    MysqlVoidResult send_all(std::string_view data); ///< 发送全部数据
-    MysqlVoidResult send_allv(std::span<const struct iovec> iovecs); ///< 通过iovec发送全部数据
+    /**
+     * @brief 发送全部数据
+     * @param data 输入数据
+     * @return MysqlVoidResult 操作结果
+     */
+    MysqlVoidResult send_all(std::string_view data);
+    /**
+     * @brief 通过iovec发送全部数据
+     * @param iovecs 分散缓冲区数组
+     * @return MysqlVoidResult 操作结果
+     */
+    MysqlVoidResult send_allv(std::span<const struct iovec> iovecs);
 
-    MysqlVoidResult recv_into_ring_buffer(); ///< 从套接字读取数据到环形缓冲区
-    std::expected<std::optional<Packet>, MysqlError> try_extract_packet(); ///< 尝试从环形缓冲区提取包
-    std::expected<Packet, MysqlError> recv_packet(); ///< 接收一个完整的MySQL包
+    /**
+     * @brief 从套接字读取数据到环形缓冲区
+     * @return MysqlVoidResult 操作结果
+     */
+    MysqlVoidResult recv_into_ring_buffer();
+    /**
+     * @brief 尝试从环形缓冲区提取包
+     * @return 成功时返回 std::optional<Packet>，失败时返回 MysqlError 错误
+     */
+    std::expected<std::optional<Packet>, MysqlError> try_extract_packet();
+    /**
+     * @brief 接收一个完整的MySQL包
+     * @return 成功时返回 Packet，失败时返回 MysqlError 错误
+     */
+    std::expected<Packet, MysqlError> recv_packet();
 
-    MysqlResult receive_result_set(); ///< 接收完整结果集
-    MysqlVoidResult run_simple_statement(const std::string& sql); ///< 执行简单SQL语句
+    /**
+     * @brief 接收完整结果集
+     * @return MysqlResult 操作结果
+     */
+    MysqlResult receive_result_set();
+    /**
+     * @brief 执行简单SQL语句
+     * @param sql SQL 语句
+     * @return MysqlVoidResult 操作结果
+     */
+    MysqlVoidResult run_simple_statement(const std::string& sql);
 
     galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> m_recv_ring_buffer; ///< 接收环形缓冲区
     std::string m_parse_scratch;                 ///< 解析临时缓冲区

@@ -30,7 +30,11 @@ public:
      */
     explicit Http1_1RequestBuilder(HeaderPair::Mode mode = HeaderPair::Mode::ClientSide);
     Http1_1RequestBuilder(Http1_1RequestBuilder&&) noexcept = default; ///< 移动构造
-    Http1_1RequestBuilder& operator=(Http1_1RequestBuilder&&) noexcept = default; ///< 移动赋值
+    /**
+     * @brief 移动赋值
+     * @return 当前对象引用
+     */
+    Http1_1RequestBuilder& operator=(Http1_1RequestBuilder&&) noexcept = default;
 
     /**
      * @brief 显式复制请求构造器状态
@@ -163,7 +167,11 @@ public:
      */
     Http1_1ResponseBuilder();
     Http1_1ResponseBuilder(Http1_1ResponseBuilder&&) noexcept = default; ///< 移动构造
-    Http1_1ResponseBuilder& operator=(Http1_1ResponseBuilder&&) noexcept = default; ///< 移动赋值
+    /**
+     * @brief 移动赋值
+     * @return 当前对象引用
+     */
+    Http1_1ResponseBuilder& operator=(Http1_1ResponseBuilder&&) noexcept = default;
 
     /**
      * @brief 显式复制响应构造器状态

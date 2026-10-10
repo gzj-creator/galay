@@ -34,9 +34,9 @@ public:
 
     /**
      * @brief 构造追踪上下文
-     * @param trace_id 追踪标识符
-     * @param span_id Span 标识符
-     * @param trace_flags 追踪标志位（默认 0，位 0 表示采样）
+     * @param traceId 追踪标识符
+     * @param spanId Span 标识符
+     * @param traceFlags 追踪标志位（默认 0，位 0 表示采样）
      * @param tracestate W3C tracestate 字符串（默认为空）
      */
     TraceContext(TraceId traceId, SpanId spanId, std::uint8_t traceFlags = 0, std::string tracestate = {})
@@ -105,7 +105,8 @@ public:
 
     /**
      * @brief 设置 Span 标识符
-     * @param span_id 新的 SpanId
+     * @param spanId 新的 SpanId
+     * @return 无返回值
      */
     void set_span_id(SpanId spanId) noexcept {
         m_spanId = spanId;
@@ -113,7 +114,8 @@ public:
 
     /**
      * @brief 设置父 Span 标识符
-     * @param parent_span_id 父 SpanId 的可选值
+     * @param parentSpanId 父 SpanId 的可选值
+     * @return 无返回值
      */
     void set_parent_span_id(std::optional<SpanId> parentSpanId) {
         m_parentSpanId = std::move(parentSpanId);
@@ -121,7 +123,8 @@ public:
 
     /**
      * @brief 设置追踪标志位
-     * @param trace_flags 新的标志位值
+     * @param traceFlags 新的标志位值
+     * @return 无返回值
      */
     void set_trace_flags(std::uint8_t traceFlags) noexcept {
         m_traceFlags = traceFlags;
@@ -130,6 +133,7 @@ public:
     /**
      * @brief 设置 W3C tracestate 字符串
      * @param tracestate 新的 tracestate 值
+     * @return 无返回值
      */
     void set_tracestate(std::string tracestate) {
         m_tracestate = std::move(tracestate);
@@ -158,10 +162,10 @@ public:
 
     /**
      * @brief 构造 Span 上下文
-     * @param trace_id 追踪标识符
-     * @param span_id Span 标识符
-     * @param trace_flags 追踪标志位（默认 0）
-     * @param parent_span_id 父 SpanId（默认为空）
+     * @param traceId 追踪标识符
+     * @param spanId Span 标识符
+     * @param traceFlags 追踪标志位（默认 0）
+     * @param parentSpanId 父 SpanId（默认为空）
      */
     explicit constexpr SpanContext(
         TraceId traceId,
@@ -232,7 +236,8 @@ public:
 
     /**
      * @brief 设置 Span 标识符
-     * @param span_id 新的 SpanId
+     * @param spanId 新的 SpanId
+     * @return 无返回值
      */
     void set_span_id(SpanId spanId) noexcept {
         m_spanId = spanId;
@@ -240,7 +245,8 @@ public:
 
     /**
      * @brief 设置父 Span 标识符
-     * @param parent_span_id 父 SpanId 的可选值
+     * @param parentSpanId 父 SpanId 的可选值
+     * @return 无返回值
      */
     void set_parent_span_id(std::optional<SpanId> parentSpanId) noexcept {
         m_parentSpanId = parentSpanId;
@@ -248,7 +254,8 @@ public:
 
     /**
      * @brief 设置追踪标志位
-     * @param trace_flags 新的标志位值
+     * @param traceFlags 新的标志位值
+     * @return 无返回值
      */
     void set_trace_flags(std::uint8_t traceFlags) noexcept {
         m_traceFlags = traceFlags;
@@ -287,9 +294,9 @@ public:
 
     /**
      * @brief 构造日志上下文
-     * @param trace_id 追踪标识符
-     * @param span_id Span 标识符
-     * @param trace_flags 追踪标志位（默认 0）
+     * @param traceId 追踪标识符
+     * @param spanId Span 标识符
+     * @param traceFlags 追踪标志位（默认 0）
      */
     explicit constexpr LogContext(TraceId traceId, SpanId spanId, std::uint8_t traceFlags = 0) noexcept
         : m_traceId(traceId),

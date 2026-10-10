@@ -154,27 +154,40 @@ template <UnboundedValue T>
 class UnboundedRecvAwaitable : public TimeoutSupport<UnboundedRecvAwaitable<T>>
 {
 public:
-    /** @brief 创建绑定指定通道的异步接收等待体。 */
+    /**
+     * @brief 创建绑定指定通道的异步接收等待体。
+     * @param channel 通道对象
+     */
     explicit UnboundedRecvAwaitable(UnboundedChannel<T>* channel)
         : m_channel(channel)
     {
     }
 
-    /** @brief 已有消息或通道已关闭时返回 true。 */
+    /**
+     * @brief 已有消息或通道已关闭时返回 true。
+     * @return 无需挂起时返回 true，否则返回 false
+     */
     bool await_ready() noexcept;
 
     /**
      * @brief 注册当前协程为接收等待者。
+     * @param handle 句柄
      * @return 需要等待消息时返回 true；已同步完成或注册失败时返回 false。
      * @note 该函数只挂起协程，不阻塞调度器线程。
      */
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;
 
-    /** @brief 返回消息；关闭、超时或等待队列失败通过 IOError 返回。 */
+    /**
+     * @brief 返回消息；关闭、超时或等待队列失败通过 IOError 返回。
+     * @return 成功时返回 T，失败时返回 IOError 错误
+     */
     std::expected<T, IOError> await_resume() noexcept;
 
-    /** @brief 尝试取消尚未被发送或关闭路径认领的等待者。 */
+    /**
+     * @brief 尝试取消尚未被发送或关闭路径认领的等待者。
+     * @return 无返回值
+     */
     void mark_timeout() noexcept;
 
 private:
@@ -211,21 +224,31 @@ public:
     {
     }
 
-    /** @brief 已取得批次或通道已关闭时返回 true。 */
+    /**
+     * @brief 已取得批次或通道已关闭时返回 true。
+     * @return 无需挂起时返回 true，否则返回 false
+     */
     bool await_ready() noexcept;
 
     /**
      * @brief 注册当前协程为接收等待者。
+     * @param handle 句柄
      * @return 需要等待消息时返回 true；已同步完成或注册失败时返回 false。
      * @note 该函数只挂起协程，不阻塞调度器线程。
      */
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;
 
-    /** @brief 返回消息批次；关闭、超时或等待队列失败通过 IOError 返回。 */
+    /**
+     * @brief 返回消息批次；关闭、超时或等待队列失败通过 IOError 返回。
+     * @return 成功时返回 std::vector<T>，失败时返回 IOError 错误
+     */
     std::expected<std::vector<T>, IOError> await_resume() noexcept;
 
-    /** @brief 尝试取消尚未被发送或关闭路径认领的等待者。 */
+    /**
+     * @brief 尝试取消尚未被发送或关闭路径认领的等待者。
+     * @return 无返回值
+     */
     void mark_timeout() noexcept;
 
 private:
@@ -355,7 +378,10 @@ public:
             return *this;
         }
 
-        /** @brief 返回 token 是否仍绑定有效通道 producer。 */
+        /**
+         * @brief 返回 token 是否仍绑定有效通道 producer。
+         * @return 对象有效时返回 true，否则返回 false
+         */
         bool valid() const noexcept
         {
             return m_channel != nullptr && m_generation != 0;
@@ -414,7 +440,10 @@ public:
             return *this;
         }
 
-        /** @brief 返回 token 是否仍绑定有效通道。 */
+        /**
+         * @brief 返回 token 是否仍绑定有效通道。
+         * @return 对象有效时返回 true，否则返回 false
+         */
         bool valid() const noexcept
         {
             return m_channel != nullptr;
@@ -474,13 +503,19 @@ public:
     UnboundedChannel(UnboundedChannel&&) = delete;
     UnboundedChannel& operator=(UnboundedChannel&&) = delete;
 
-    /** @brief 为当前生产线程创建显式 producer token。 */
+    /**
+     * @brief 为当前生产线程创建显式 producer token。
+     * @return 绑定当前通道的生产者令牌
+     */
     [[nodiscard]] ProducerToken make_producer_token()
     {
         return ProducerToken(*this);
     }
 
-    /** @brief 为当前消费线程创建显式 consumer token。 */
+    /**
+     * @brief 为当前消费线程创建显式 consumer token。
+     * @return 绑定当前通道的消费者令牌
+     */
     [[nodiscard]] ConsumerToken make_consumer_token()
     {
         return ConsumerToken(*this);
@@ -498,6 +533,8 @@ public:
 
     /**
      * @brief 使用线程独占 producer token 发送一条消息。
+     * @param token 操作令牌
+     * @param value 待设置或处理的值
      * @return true 表示发送成功；token 不属于当前通道、通道关闭或入队失败时返回 false。
      */
     bool send(ProducerToken& token, T&& value)
@@ -508,7 +545,11 @@ public:
         return send_token_fast<true>(token, std::move(value));
     }
 
-    /** @brief 复制并发送一条消息。 */
+    /**
+     * @brief 复制并发送一条消息。
+     * @param value 待设置或处理的值
+     * @return 消息入队成功时返回 true，通道关闭、令牌无效或入队失败时返回 false
+     */
     bool send(const T& value)
         requires std::copy_constructible<T> &&
             std::is_nothrow_copy_constructible_v<T>
@@ -517,7 +558,12 @@ public:
         return send(std::move(copy));
     }
 
-    /** @brief 使用线程独占 producer token 复制并发送一条消息。 */
+    /**
+     * @brief 使用线程独占 producer token 复制并发送一条消息。
+     * @param token 操作令牌
+     * @param value 待设置或处理的值
+     * @return 消息入队成功时返回 true，通道关闭、令牌无效或入队失败时返回 false
+     */
     bool send(ProducerToken& token, const T& value)
         requires std::copy_constructible<T> &&
             std::is_nothrow_copy_constructible_v<T>
@@ -528,6 +574,7 @@ public:
 
     /**
      * @brief 复制发送一批消息。
+     * @param values 值集合
      * @return 全部入队成功返回 true；失败时返回 false 且本批次未入队。
      */
     bool send_batch(const std::vector<T>& values)
@@ -537,7 +584,12 @@ public:
         return send_batch_impl(nullptr, values.data(), values.size());
     }
 
-    /** @brief 使用线程独占 producer token 复制发送一批消息。 */
+    /**
+     * @brief 使用线程独占 producer token 复制发送一批消息。
+     * @param token 操作令牌
+     * @param values 值集合
+     * @return 消息入队成功时返回 true，通道关闭、令牌无效或入队失败时返回 false
+     */
     bool send_batch(ProducerToken& token,
                    const std::vector<T>& values)
         requires std::copy_constructible<T> &&
@@ -551,6 +603,7 @@ public:
 
     /**
      * @brief 移动发送一批消息。
+     * @param values 值集合
      * @return 全部入队成功返回 true；失败时返回 false。
      */
     bool send_batch(std::vector<T>&& values)
@@ -559,7 +612,12 @@ public:
             nullptr, std::make_move_iterator(values.begin()), values.size());
     }
 
-    /** @brief 使用线程独占 producer token 移动发送一批消息。 */
+    /**
+     * @brief 使用线程独占 producer token 移动发送一批消息。
+     * @param token 操作令牌
+     * @param values 值集合
+     * @return 消息入队成功时返回 true，通道关闭、令牌无效或入队失败时返回 false
+     */
     bool send_batch(ProducerToken& token, std::vector<T>&& values)
     {
         if (!token.valid_for(*this)) {
@@ -569,7 +627,10 @@ public:
             &token, std::make_move_iterator(values.begin()), values.size());
     }
 
-    /** @brief 尝试立即接收一条消息；为空时返回 std::nullopt。 */
+    /**
+     * @brief 尝试立即接收一条消息；为空时返回 std::nullopt。
+     * @return 接收到的消息；无消息时为 std::nullopt
+     */
     std::optional<T> try_recv()
     {
         return try_recv_impl(nullptr);
@@ -577,6 +638,7 @@ public:
 
     /**
      * @brief 使用线程独占 consumer token 尝试立即接收一条消息。
+     * @param token 操作令牌
      * @return 取到消息时返回该值；队列为空或 token 不属于当前通道时返回 std::nullopt。
      */
     std::optional<T> try_recv(ConsumerToken& token)
@@ -587,13 +649,20 @@ public:
         return try_recv_token_fast(token);
     }
 
-    /** @brief 异步接收一条消息；空时挂起协程。 */
+    /**
+     * @brief 异步接收一条消息；空时挂起协程。
+     * @return UnboundedRecvAwaitable<T> 等待体，通过 co_await 执行并取得操作结果
+     */
     UnboundedRecvAwaitable<T> recv()
     {
         return UnboundedRecvAwaitable<T>(this);
     }
 
-    /** @brief 尝试接收最多 count 条消息；无消息时返回 std::nullopt。 */
+    /**
+     * @brief 尝试接收最多 count 条消息；无消息时返回 std::nullopt。
+     * @param count 元素数量
+     * @return 接收到的消息批次；无消息时为 std::nullopt
+     */
     std::optional<std::vector<T>> try_recv_batch(size_t count)
     {
         return try_recv_batch_impl(nullptr, count);
@@ -601,6 +670,8 @@ public:
 
     /**
      * @brief 使用线程独占 consumer token 尝试接收最多 count 条消息。
+     * @param token 操作令牌
+     * @param count 元素数量
      * @return 取到消息时返回批次；队列为空或 token 不属于当前通道时返回 std::nullopt。
      */
     std::optional<std::vector<T>> try_recv_batch(ConsumerToken& token, size_t count)
@@ -611,7 +682,11 @@ public:
         return try_recv_batch_impl(&token, count);
     }
 
-    /** @brief 异步接收最多 count 条消息；空时等待至少一条。 */
+    /**
+     * @brief 异步接收最多 count 条消息；空时等待至少一条。
+     * @param count 元素数量
+     * @return UnboundedRecvBatchAwaitable<T> 等待体，通过 co_await 执行并取得操作结果
+     */
     UnboundedRecvBatchAwaitable<T> recv_batch(size_t count)
     {
         return UnboundedRecvBatchAwaitable<T>(this, count);
@@ -619,6 +694,7 @@ public:
 
     /**
      * @brief 关闭通道并唤醒所有等待接收者。
+     * @return 无返回值
      * @details close 在线性化点之后拒绝新的发送许可。已经取得许可的发送仍可完成；
      *          接收方会等待这些 producer 恢复静止，二次判空并排空队列后才返回 kClosed。
      * @note 可与发送、接收及其他 close() 并发执行，且操作幂等。
@@ -644,7 +720,10 @@ public:
         return (m_tail.load(std::memory_order_acquire) & kClosedBit) != 0;
     }
 
-    /** @brief 返回当前待消费消息的近似数量，仅供诊断。 */
+    /**
+     * @brief 返回当前待消费消息的近似数量，仅供诊断。
+     * @return 对应的大小或数量
+     */
     size_t size() const noexcept
     {
         const uint64_t tail =
@@ -653,7 +732,10 @@ public:
         return static_cast<size_t>(tail >= head ? tail - head : 0);
     }
 
-    /** @brief 近似检查通道是否为空。 */
+    /**
+     * @brief 近似检查通道是否为空。
+     * @return 为空时返回 true，否则返回 false
+     */
     bool empty() const noexcept
     {
         return size() == 0;
@@ -1042,7 +1124,10 @@ private:
         }
     }
 
-    /** @brief 发布入队完成后的 waiter work。 */
+    /**
+     * @brief 发布入队完成后的 waiter work。
+     * @return 无返回值
+     */
     void release_send_publication() noexcept
     {
         if (waiter_path_used_after_publish()) [[unlikely]] {
@@ -1062,7 +1147,10 @@ private:
         request_recv_pump();
     }
 
-    /** @brief 仅当 close 已发布且所有保留位置均已被 consumer claim 时返回 true。 */
+    /**
+     * @brief 仅当 close 已发布且所有保留位置均已被 consumer claim 时返回 true。
+     * @return 已关闭且全部预约位置已被消费者认领时返回 true，否则返回 false
+     */
     bool send_side_quiescent_after_close() const noexcept
     {
         const uint64_t tail = m_tail.load(std::memory_order_acquire);
@@ -1072,6 +1160,8 @@ private:
 
     /**
      * @brief 首次 dequeue 为空后，在线性化关闭前执行 producer 扫描与二次 dequeue。
+     * @param value 待设置或处理的值
+     * @return 接收到值、通道已关闭或暂时无数据的探测状态
      * @details producer 可能在首次空检查后完成 enqueue 并恢复为 idle；只有
      *          quiescent scan 后的第二次 dequeue 仍为空，接收方才可发布 Closed。
      */
@@ -1611,7 +1701,10 @@ private:
         }
     }
 
-    /** @brief 由唯一 owner 排空已发布的 recv work，直到退出 CAS 确认没有新事件。 */
+    /**
+     * @brief 由唯一 owner 排空已发布的 recv work，直到退出 CAS 确认没有新事件。
+     * @return 无返回值
+     */
     void run_recv_pump() noexcept
     {
         for (;;) {
@@ -1634,6 +1727,7 @@ private:
 
     /**
      * @brief 发布一次 recv work；没有现存 owner 时由当前线程同步取得 pump 所有权。
+     * @return 无返回值
      * @note Running 与 RecvWork 共用一个原子，owner 退出 CAS 与并发请求互斥，
      *       因而 requester 观察到 Running 后可以直接返回而不会丢事件。
      */

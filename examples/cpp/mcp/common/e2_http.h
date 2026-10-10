@@ -17,6 +17,7 @@ static void finish_client_run(int code, int& exitCode, ClientRunState* state) {
  * @brief 简单的HTTP服务器示例
  *
  * 创建一个HTTP MCP服务器，提供基本的工具和资源
+ * @return 无返回值
  */
 void run_http_server() {
     // 创建服务器（监听 0.0.0.0:8080）
@@ -349,6 +350,8 @@ galay::kernel::Task<void> run_client_test(McpClient& client,
  * @brief 简单的HTTP客户端示例
  *
  * 创建一个HTTP MCP客户端，连接到服务器并调用功能
+ * @param url 目标 URL
+ * @return 进程退出码；0 表示成功，非 0 表示失败
  */
 int run_http_client(const std::string& url) {
     // 创建Runtime

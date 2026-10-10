@@ -35,6 +35,7 @@ public:
 
     /**
      * @brief 重置对象状态，归还对象池时自动调用
+     * @return 无返回值
      */
     virtual void reset() {}
 };
@@ -63,7 +64,7 @@ public:
     /**
      * @brief 构造对象池
      * @param initialSize 初始预创建的对象数量
-     * @param max_size 最大池容量（0 表示无限制）
+     * @param maxSize 最大池容量（0 表示无限制）
      * @param creator 自定义创建函数
      * @param destroyer 自定义销毁函数
      */
@@ -176,6 +177,7 @@ public:
 
     /**
      * @brief 清空对象池
+     * @return 无返回值
      */
     void clear() {
         m_state->clear();
@@ -184,6 +186,7 @@ public:
     /**
      * @brief 将池收缩到指定大小
      * @param targetSize 目标大小
+     * @return 无返回值
      */
     void shrink(size_t targetSize) {
         std::lock_guard<std::mutex> lock(m_state->mutex);

@@ -51,6 +51,7 @@ namespace galay::redis::protocol
 
         /**
          * @brief 断开连接
+         * @return 无返回值
          */
         void disconnect();
 

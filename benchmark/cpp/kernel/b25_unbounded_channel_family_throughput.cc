@@ -296,7 +296,12 @@ Measurement run_channel(int producerCount, int consumerCount)
     };
 }
 
-/** @brief 在相同 MPMC harness 中测量指定 traits 的独立 raw moodycamel 队列。 */
+/**
+ * @brief 在相同 MPMC harness 中测量指定 traits 的独立 raw moodycamel 队列。
+ * @param producerCount 生产者数量
+ * @param consumerCount 消费者数量
+ * @return 测得的耗时与吞吐量数据
+ */
 template <typename QueueTraits>
 Measurement run_raw_queue(int producerCount, int consumerCount)
 {

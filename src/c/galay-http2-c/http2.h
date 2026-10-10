@@ -188,6 +188,7 @@ galay_status_t galay_http2_ping_frame_create(const uint8_t opaque[8], galay_bool
 /**
  * @brief 销毁 HTTP/2 frame。
  * @param frame 可为 NULL；非 NULL 时必须是本 C ABI 返回的 frame。
+ * @return 无返回值
  */
 void galay_http2_frame_destroy(galay_http2_frame_t* frame);
 
@@ -247,6 +248,7 @@ galay_status_t galay_http2_headers_create(galay_http2_headers_t** out);
 /**
  * @brief 销毁 headers 集合。
  * @param headers 可为 NULL；非 NULL 时必须是本 C ABI 返回的 headers。
+ * @return 无返回值
  */
 void galay_http2_headers_destroy(galay_http2_headers_t* headers);
 
@@ -328,6 +330,7 @@ galay_status_t galay_http2_client_create(const galay_http2_config_t* config,
 /**
  * @brief 销毁 client 及其拥有的 connection。
  * @param client 可为 NULL；非 NULL 时必须停止继续使用从该 client 借出的 connection/stream。
+ * @return 无返回值
  * @note 若 client 仍持有 connection，destroy 会级联销毁 connection 和其 stream；
  * 调用方不得再单独 destroy `galay_http2_client_conn` 返回的借用指针。
  */
@@ -382,6 +385,7 @@ galay_status_t galay_http2_server_create(const galay_http2_config_t* config,
 /**
  * @brief 销毁 server listener。
  * @param server 可为 NULL。
+ * @return 无返回值
  * @note 该函数只销毁 server 拥有的 listener；已经由 `galay_http2_server_accept`
  * 返回的 connection 由调用方负责 `galay_http2_conn_destroy`。
  */

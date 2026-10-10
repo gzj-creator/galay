@@ -40,12 +40,14 @@ public:
 
     /**
      * @brief 移动赋值控制台 Sink，转移输出流指针
+     * @return ConsoleSink& 引用
      */
     ConsoleSink& operator=(ConsoleSink&&) noexcept = default;
 
     /**
      * @brief 将日志记录写入控制台
      * @param record 日志记录
+     * @return 无返回值
      */
     void write(const LogRecord& record) override;
 

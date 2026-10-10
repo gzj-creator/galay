@@ -87,6 +87,7 @@ struct ErasedLogWriter {
      * @brief 写入普通日志记录
      * @details 优先使用 write_fn，若不可用则回退到结构化写入（无字段）
      * @param record 日志记录
+     * @return 无返回值
      */
     void write(LogRecord record) const {
         if (object == nullptr) {
@@ -111,6 +112,7 @@ struct ErasedLogWriter {
      * @brief 写入结构化日志记录
      * @details 优先使用 write_structured_fn，若不可用则回退到普通写入
      * @param record 结构化日志记录
+     * @return 无返回值
      */
     void write(StructuredLogRecord record) const {
         if (object == nullptr) {
@@ -126,6 +128,7 @@ struct ErasedLogWriter {
     /**
      * @brief 结构化日志的普通写入回退实现
      * @param record 结构化日志记录
+     * @return 无返回值
      */
     void write_structured_fallback(StructuredLogRecord record) const;
 };
@@ -146,6 +149,8 @@ public:
 
     /**
      * @brief 检查级别是否启用
+     * @param level 日志级别
+     * @return 满足所检查条件时返回 true，否则返回 false
      */
     [[nodiscard]] bool is_enabled(LogLevel level) const noexcept {
         return m_writer != nullptr && m_writer->is_enabled(level);
@@ -153,6 +158,8 @@ public:
 
     /**
      * @brief 写入普通日志记录
+     * @param record 日志记录
+     * @return 无返回值
      */
     void write(LogRecord record) const {
         if (m_writer != nullptr) {
@@ -162,6 +169,8 @@ public:
 
     /**
      * @brief 写入结构化日志记录
+     * @param record 日志记录
+     * @return 无返回值
      */
     void write(StructuredLogRecord record) const {
         if (m_writer != nullptr) {
@@ -192,6 +201,8 @@ public:
 
     /**
      * @brief 检查级别是否启用
+     * @param level 日志级别
+     * @return 满足所检查条件时返回 true，否则返回 false
      */
     [[nodiscard]] bool is_enabled(LogLevel level) const noexcept {
         return m_writer != nullptr && m_writer->is_enabled(level);
@@ -199,6 +210,8 @@ public:
 
     /**
      * @brief 写入普通日志记录（仅当 Writer 满足 LogWriter 概念时可用）
+     * @param record 日志记录
+     * @return 无返回值
      */
     void write(LogRecord record)
         requires LogWriter<Writer> {
@@ -209,6 +222,8 @@ public:
 
     /**
      * @brief 写入结构化日志记录（仅当 Writer 满足 StructuredLogWriter 概念时可用）
+     * @param record 日志记录
+     * @return 无返回值
      */
     void write(StructuredLogRecord record)
         requires StructuredLogWriter<Writer> {
@@ -264,6 +279,7 @@ template <typename Writer>
  * @param source 源码位置
  * @param name 事件名称
  * @param fields 结构化字段列表
+ * @return 无返回值
  */
 template <LogLevel kLevel, StructuredLogWriter Writer, typename... Fields>
 void write_event_unchecked(
@@ -282,7 +298,12 @@ void write_event_unchecked(
     });
 }
 
-void set_default_log_writer_ref(ErasedLogWriter writer) noexcept;       ///< 设置默认写入器引用
+/**
+ * @brief 设置默认写入器引用
+ * @param writer 写入器
+ * @return 无返回值
+ */
+void set_default_log_writer_ref(ErasedLogWriter writer) noexcept;
 extern std::atomic<const ErasedLogWriter*> g_defaultLogWriterPtr;   ///< 全局默认写入器原子指针
 
 /**
@@ -304,11 +325,13 @@ extern std::atomic<const ErasedLogWriter*> g_defaultLogWriterPtr;   ///< 全局�
 
 /**
  * @brief 获取默认写入器的类型擦除引用
+ * @return 默认日志写入器的类型擦除引用
  */
 [[nodiscard]] ErasedLogWriter default_log_writer_ref() noexcept;
 
 /**
  * @brief 获取默认写入器的值类型实例
+ * @return 默认日志写入器实例
  */
 [[nodiscard]] DefaultLogWriter default_log_writer() noexcept;
 
@@ -335,6 +358,7 @@ public:
 
     /**
      * @brief Logger 持有互斥锁、原子快照指针和历史快照，禁止移动赋值
+     * @return 该操作已禁用，不可调用
      */
     Logger& operator=(Logger&&) = delete;
 
@@ -367,6 +391,7 @@ public:
     /**
      * @brief 设置最低日志级别
      * @param level 新的最低级别
+     * @return 无返回值
      */
     void set_level(LogLevel level) noexcept;
 
@@ -386,11 +411,13 @@ public:
     /**
      * @brief 添加一个日志 Sink
      * @param sink LogSink 的共享指针
+     * @return 无返回值
      */
     void add_sink(std::shared_ptr<LogSink> sink);
 
     /**
      * @brief 清除所有日志 Sink
+     * @return 无返回值
      */
     void clear_sinks();
 
@@ -401,6 +428,7 @@ public:
      * @param source 源码位置
      * @param fmt 格式化字符串
      * @param args 格式化参数
+     * @return 无返回值
      */
     template <typename... Args>
     void log(LogLevel level, SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
@@ -424,6 +452,7 @@ public:
      * @param context 显式追踪上下文
      * @param fmt 格式化字符串
      * @param args 格式化参数
+     * @return 无返回值
      */
     template <typename... Args>
     void log_with_context(
@@ -446,12 +475,14 @@ public:
     /**
      * @brief 写入普通日志记录（满足 LogWriter 概念）
      * @param record 日志记录
+     * @return 无返回值
      */
     void write(LogRecord record);
 
     /**
      * @brief 写入结构化日志记录（满足 StructuredLogWriter 概念）
      * @param record 结构化日志记录
+     * @return 无返回值
      */
     void write(StructuredLogRecord record);
 
@@ -459,6 +490,7 @@ private:
     /**
      * @brief 将日志记录发布到所有 Sink
      * @param record 日志记录
+     * @return 无返回值
      */
     void publish(LogRecord record);
 
@@ -480,11 +512,13 @@ private:
 /**
  * @brief 设置进程级默认 Logger
  * @param logger Logger 指针（不获取所有权）
+ * @return 无返回值
  */
 void set_default_logger(Logger* logger) noexcept;
 
 /**
  * @brief 清除默认日志写入器
+ * @return 无返回值
  */
 void set_default_log_writer(std::nullptr_t) noexcept;
 
@@ -493,6 +527,7 @@ void set_default_log_writer(std::nullptr_t) noexcept;
  * @details 调用方须保证 writer 在默认写入器被更改或清除之前保持存活。
  * @tparam Writer 满足 LogWriter 或 StructuredLogWriter 概念的类型
  * @param writer 写入器指针，传入 nullptr 清除默认写入器
+ * @return 无返回值
  */
 template <typename Writer>
     requires(LogWriter<Writer> || StructuredLogWriter<Writer>)
@@ -535,6 +570,9 @@ public:
 
     /**
      * @brief 记录追踪级别日志
+     * @param fmt 格式字符串
+     * @param args 调用参数包
+     * @return 无返回值
      */
     template <typename... Args>
     void trace(std::format_string<Args...> fmt, Args&&... args) {
@@ -543,6 +581,9 @@ public:
 
     /**
      * @brief 记录调试级别日志
+     * @param fmt 格式字符串
+     * @param args 调用参数包
+     * @return 无返回值
      */
     template <typename... Args>
     void debug(std::format_string<Args...> fmt, Args&&... args) {
@@ -551,6 +592,9 @@ public:
 
     /**
      * @brief 记录信息级别日志
+     * @param fmt 格式字符串
+     * @param args 调用参数包
+     * @return 无返回值
      */
     template <typename... Args>
     void info(std::format_string<Args...> fmt, Args&&... args) {
@@ -559,6 +603,9 @@ public:
 
     /**
      * @brief 记录警告级别日志
+     * @param fmt 格式字符串
+     * @param args 调用参数包
+     * @return 无返回值
      */
     template <typename... Args>
     void warn(std::format_string<Args...> fmt, Args&&... args) {
@@ -567,6 +614,9 @@ public:
 
     /**
      * @brief 记录错误级别日志
+     * @param fmt 格式字符串
+     * @param args 调用参数包
+     * @return 无返回值
      */
     template <typename... Args>
     void error(std::format_string<Args...> fmt, Args&&... args) {
@@ -578,6 +628,9 @@ private:
      * @brief 内部写入实现
      * @tparam kLevel 日志级别
      * @tparam Args 格式化参数类型
+     * @param fmt 格式字符串
+     * @param args 调用参数包
+     * @return 无返回值
      */
     template <LogLevel kLevel, typename... Args>
     void write(std::format_string<Args...> fmt, Args&&... args) {
@@ -619,6 +672,9 @@ public:
 
     /**
      * @brief 记录追踪级别结构化事件
+     * @param name 名称
+     * @param fields 字段集合
+     * @return 无返回值
      */
     template <typename... Fields>
     void trace(std::string_view name, Fields&&... fields) {
@@ -627,6 +683,9 @@ public:
 
     /**
      * @brief 记录调试级别结构化事件
+     * @param name 名称
+     * @param fields 字段集合
+     * @return 无返回值
      */
     template <typename... Fields>
     void debug(std::string_view name, Fields&&... fields) {
@@ -635,6 +694,9 @@ public:
 
     /**
      * @brief 记录信息级别结构化事件
+     * @param name 名称
+     * @param fields 字段集合
+     * @return 无返回值
      */
     template <typename... Fields>
     void info(std::string_view name, Fields&&... fields) {
@@ -643,6 +705,9 @@ public:
 
     /**
      * @brief 记录警告级别结构化事件
+     * @param name 名称
+     * @param fields 字段集合
+     * @return 无返回值
      */
     template <typename... Fields>
     void warn(std::string_view name, Fields&&... fields) {
@@ -651,6 +716,9 @@ public:
 
     /**
      * @brief 记录错误级别结构化事件
+     * @param name 名称
+     * @param fields 字段集合
+     * @return 无返回值
      */
     template <typename... Fields>
     void error(std::string_view name, Fields&&... fields) {
@@ -662,6 +730,9 @@ private:
      * @brief 内部结构化事件写入实现
      * @tparam kLevel 日志级别
      * @tparam Fields 字段类型列表
+     * @param name 名称
+     * @param fields 字段集合
+     * @return 无返回值
      */
     template <LogLevel kLevel, typename... Fields>
     void write(std::string_view name, Fields&&... fields) {
@@ -759,6 +830,7 @@ template <StructuredLogWriter Writer>
  * @param source 源码位置
  * @param fmt 格式化字符串
  * @param args 格式化参数
+ * @return 无返回值
  */
 template <LogLevel kLevel, typename... Args>
 void log_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
@@ -782,6 +854,7 @@ void log_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... ar
  * @param context 显式追踪上下文
  * @param fmt 格式化字符串
  * @param args 格式化参数
+ * @return 无返回值
  */
 template <LogLevel kLevel, typename... Args>
 void log_with_context_at(
@@ -807,6 +880,7 @@ void log_with_context_at(
  * @param source 源码位置
  * @param fmt 格式化字符串
  * @param args 格式化参数
+ * @return 无返回值
  */
 template <typename... Args>
 void log_trace_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
@@ -815,6 +889,11 @@ void log_trace_at(SourceLocation source, std::format_string<Args...> fmt, Args&&
 
 /**
  * @brief 追踪级别日志（带源码位置和显式上下文）
+ * @param source 日志调用位置
+ * @param context 上下文
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_trace_with_context_at(
@@ -827,6 +906,10 @@ void log_trace_with_context_at(
 
 /**
  * @brief 调试级别日志（带源码位置）
+ * @param source 日志调用位置
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_debug_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
@@ -835,6 +918,11 @@ void log_debug_at(SourceLocation source, std::format_string<Args...> fmt, Args&&
 
 /**
  * @brief 调试级别日志（带源码位置和显式上下文）
+ * @param source 日志调用位置
+ * @param context 上下文
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_debug_with_context_at(
@@ -847,6 +935,10 @@ void log_debug_with_context_at(
 
 /**
  * @brief 信息级别日志（带源码位置）
+ * @param source 日志调用位置
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_info_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
@@ -855,6 +947,11 @@ void log_info_at(SourceLocation source, std::format_string<Args...> fmt, Args&&.
 
 /**
  * @brief 信息级别日志（带源码位置和显式上下文）
+ * @param source 日志调用位置
+ * @param context 上下文
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_info_with_context_at(
@@ -867,6 +964,10 @@ void log_info_with_context_at(
 
 /**
  * @brief 警告级别日志（带源码位置）
+ * @param source 日志调用位置
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_warn_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
@@ -875,6 +976,11 @@ void log_warn_at(SourceLocation source, std::format_string<Args...> fmt, Args&&.
 
 /**
  * @brief 警告级别日志（带源码位置和显式上下文）
+ * @param source 日志调用位置
+ * @param context 上下文
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_warn_with_context_at(
@@ -887,6 +993,10 @@ void log_warn_with_context_at(
 
 /**
  * @brief 错误级别日志（带源码位置）
+ * @param source 日志调用位置
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_error_at(SourceLocation source, std::format_string<Args...> fmt, Args&&... args) {
@@ -895,6 +1005,11 @@ void log_error_at(SourceLocation source, std::format_string<Args...> fmt, Args&&
 
 /**
  * @brief 错误级别日志（带源码位置和显式上下文）
+ * @param source 日志调用位置
+ * @param context 上下文
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_error_with_context_at(
@@ -907,6 +1022,9 @@ void log_error_with_context_at(
 
 /**
  * @brief 追踪级别日志（自动捕获源码位置）
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_trace(std::format_string<Args...> fmt, Args&&... args) {
@@ -915,6 +1033,9 @@ void log_trace(std::format_string<Args...> fmt, Args&&... args) {
 
 /**
  * @brief 调试级别日志（自动捕获源码位置）
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_debug(std::format_string<Args...> fmt, Args&&... args) {
@@ -923,6 +1044,9 @@ void log_debug(std::format_string<Args...> fmt, Args&&... args) {
 
 /**
  * @brief 信息级别日志（自动捕获源码位置）
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_info(std::format_string<Args...> fmt, Args&&... args) {
@@ -931,6 +1055,9 @@ void log_info(std::format_string<Args...> fmt, Args&&... args) {
 
 /**
  * @brief 警告级别日志（自动捕获源码位置）
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_warn(std::format_string<Args...> fmt, Args&&... args) {
@@ -939,6 +1066,9 @@ void log_warn(std::format_string<Args...> fmt, Args&&... args) {
 
 /**
  * @brief 错误级别日志（自动捕获源码位置）
+ * @param fmt 格式字符串
+ * @param args 调用参数包
+ * @return 无返回值
  */
 template <typename... Args>
 void log_error(std::format_string<Args...> fmt, Args&&... args) {

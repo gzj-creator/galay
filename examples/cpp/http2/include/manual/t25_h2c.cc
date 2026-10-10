@@ -23,6 +23,10 @@ std::atomic<bool> g_done{false};
 
 /**
  * @brief 客户端测试协程
+ * @param host 目标主机地址
+ * @param port 端口号
+ * @param num_requests 请求次数
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_client(const std::string& host, uint16_t port, int num_requests) {
     H2cClient<> client(H2cClientBuilder().build());

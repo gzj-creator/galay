@@ -80,6 +80,7 @@ namespace bounded_detail
 
 /**
  * @brief 执行一次平台相关的短时 CPU 自旋提示。
+ * @return 无返回值
  * @note 该函数不阻塞线程，也不主动把执行权交给操作系统调度器。
  */
 inline void cpu_pause() noexcept
@@ -107,6 +108,7 @@ class ExponentialBackoff
 public:
     /**
      * @brief CAS 竞争失败后执行指数退避。
+     * @return 无返回值
      * @note 4P/8P 场景下可将性能从 6.9M/5.46M 提升到 38M/52M。
      */
     void backoff() noexcept
@@ -221,6 +223,7 @@ struct ChannelWaiter
  * @brief 等待已被对端认领的 waiter 完成有限的值搬运和状态发布窗口。
  * @tparam T 通道元素类型。
  * @param waiter 当前状态可能为 kFulfilling 的等待体。
+ * @return 无返回值
  * @note 这里只等待一次有限发布窗口，不等待 ring 的满或空条件。
  */
 template <BoundedValue T>
@@ -275,6 +278,7 @@ public:
 
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的发送等待者。
+     * @return 无返回值
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void mark_timeout() noexcept;
@@ -282,7 +286,11 @@ public:
 private:
     friend struct WithTimeout<BoundedSendAwaitable<T>>;
 
-    /** @brief 把 WithTimeout 的完成权绑定到后续发布的 channel waiter。 */
+    /**
+     * @brief 把 WithTimeout 的完成权绑定到后续发布的 channel waiter。
+     * @param timer 定时器
+     * @return 无返回值
+     */
     void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
@@ -338,6 +346,7 @@ public:
 
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的接收等待者。
+     * @return 无返回值
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void mark_timeout() noexcept;
@@ -345,7 +354,11 @@ public:
 private:
     friend struct WithTimeout<BoundedRecvAwaitable<T>>;
 
-    /** @brief 把 WithTimeout 的完成权绑定到后续发布的 channel waiter。 */
+    /**
+     * @brief 把 WithTimeout 的完成权绑定到后续发布的 channel waiter。
+     * @param timer 定时器
+     * @return 无返回值
+     */
     void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
@@ -400,6 +413,7 @@ public:
 
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的批量接收等待者。
+     * @return 无返回值
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void mark_timeout() noexcept;
@@ -407,7 +421,11 @@ public:
 private:
     friend struct WithTimeout<BoundedRecvBatchAwaitable<T>>;
 
-    /** @brief 把 WithTimeout 的完成权绑定到后续发布的 channel waiter。 */
+    /**
+     * @brief 把 WithTimeout 的完成权绑定到后续发布的 channel waiter。
+     * @param timer 定时器
+     * @return 无返回值
+     */
     void bind_timeout_timer(const TimeoutTimer::ptr& timer) noexcept
     {
         m_timeoutTimer = timer;
@@ -625,13 +643,19 @@ public:
     /** @brief 禁止复制构造；通道具有唯一身份。 */
     BoundedChannel(const BoundedChannel&) = delete;
 
-    /** @brief 禁止复制赋值；通道具有唯一身份。 */
+    /**
+     * @brief 禁止复制赋值；通道具有唯一身份。
+     * @return 该操作已禁用，不可调用
+     */
     BoundedChannel& operator=(const BoundedChannel&) = delete;
 
     /** @brief 禁止移动构造，避免使已注册 waiter 持有失效地址。 */
     BoundedChannel(BoundedChannel&&) = delete;
 
-    /** @brief 禁止移动赋值，避免使已注册 waiter 持有失效地址。 */
+    /**
+     * @brief 禁止移动赋值，避免使已注册 waiter 持有失效地址。
+     * @return 该操作已禁用，不可调用
+     */
     BoundedChannel& operator=(BoundedChannel&&) = delete;
 
     /**
@@ -654,6 +678,8 @@ public:
 
     /**
      * @brief 通过独占 producer ring 尝试发送一条消息。
+     * @param token 操作令牌
+     * @param value 待设置或处理的值
      * @return 发送成功返回 true；token 无效、已关闭或该 producer 分片已满返回 false。
      * @note 失败不移动 value。
      */
@@ -856,6 +882,7 @@ public:
 
     /**
      * @brief 关闭通道并唤醒所有等待者。
+     * @return 无返回值
      * @details 关闭状态通过原子变量发布，可与发送、接收及其他 close() 调用并发执行。
      * @note 操作幂等；关闭后发送失败，接收仍会先排空 ring 中的残留消息。
      * @note 分片 token 模式下，必须先停止并 join 所有 producer；
@@ -931,13 +958,19 @@ public:
         return count < m_capacity ? count : m_capacity;
     }
 
-    /** @brief 近似检查 ring 是否为空；结果不可用作同步条件。 */
+    /**
+     * @brief 近似检查 ring 是否为空；结果不可用作同步条件。
+     * @return 为空时返回 true，否则返回 false
+     */
     bool empty() const noexcept
     {
         return size() == 0;
     }
 
-    /** @brief 近似检查 ring 是否已满；结果不可用作同步条件。 */
+    /**
+     * @brief 近似检查 ring 是否已满；结果不可用作同步条件。
+     * @return 近似已满时返回 true，否则返回 false；不可作为同步条件
+     */
     bool full() const noexcept
     {
         return size() >= m_capacity;
@@ -965,7 +998,10 @@ private:
             return reinterpret_cast<T*>(storage);
         }
 
-        /** @brief 获取已构造对象的 T 指针。 */
+        /**
+         * @brief 获取已构造对象的 T 指针。
+         * @return T* 指针
+         */
         T* value() noexcept
         {
             return std::launder(raw_storage());
@@ -1110,7 +1146,11 @@ private:
         wakeTail = waiter;
     }
 
-    /** @note 任一唤醒都可能 inline 销毁 channel，本函数不得访问 this。 */
+    /**
+     * @note 任一唤醒都可能 inline 销毁 channel，本函数不得访问 this。
+     * @param wakeHead 待唤醒链表的头节点引用
+     * @return 无返回值
+     */
     static void issue_deferred_wakes(WaiterPtr wakeHead) noexcept
     {
         while (wakeHead) {
@@ -1126,7 +1166,11 @@ private:
         }
     }
 
-    /** @brief 尝试由唯一 pump owner 认领等待中的 waiter。 */
+    /**
+     * @brief 尝试由唯一 pump owner 认领等待中的 waiter。
+     * @param waiter 等待节点
+     * @return 成功认领等待节点时返回 true，否则返回 false
+     */
     bool claim_waiter(const WaiterPtr& waiter) noexcept
     {
         bounded_detail::WaiterState expected = bounded_detail::WaiterState::kWaiting;
@@ -1298,7 +1342,11 @@ private:
         return RingEnqueueResult::kSent;
     }
 
-    /** @brief 白盒测试兼容入口；公开快路径使用 ring_enqueue_result() 区分关闭。 */
+    /**
+     * @brief 白盒测试兼容入口；公开快路径使用 ring_enqueue_result() 区分关闭。
+     * @param value 待设置或处理的值
+     * @return 消息成功写入 ring 时返回 true，否则返回 false
+     */
     bool ring_enqueue(T&& value) noexcept
     {
         const auto result = ring_enqueue_result(std::move(value));
@@ -1676,7 +1724,12 @@ private:
         return bounded_detail::WaiterProgress::kSkipped;
     }
 
-    /** @brief 保留旧白盒签名；生产路径只通过唯一 pump 调用三参数版本。 */
+    /**
+     * @brief 保留旧白盒签名；生产路径只通过唯一 pump 调用三参数版本。
+     * @param waiter 等待节点
+     * @param wake 唤醒操作
+     * @return 等待节点的推进状态：已完成、继续等待或已跳过
+     */
     bounded_detail::WaiterProgress try_complete_send_waiter(
         const WaiterPtr& waiter, bool wake) noexcept
     {
@@ -1690,7 +1743,12 @@ private:
         return progress;
     }
 
-    /** @brief 保留旧白盒签名；生产路径只通过唯一 pump 调用三参数版本。 */
+    /**
+     * @brief 保留旧白盒签名；生产路径只通过唯一 pump 调用三参数版本。
+     * @param waiter 等待节点
+     * @param wake 唤醒操作
+     * @return 等待节点的推进状态：已完成、继续等待或已跳过
+     */
     bounded_detail::WaiterProgress try_complete_recv_waiter(
         const WaiterPtr& waiter, bool wake) noexcept
     {
@@ -1753,7 +1811,10 @@ private:
         }
     }
 
-    /** @note ownership 释放后只访问本地 waiter 链，inline resume 可安全销毁 channel。 */
+    /**
+     * @note ownership 释放后只访问本地 waiter 链，inline resume 可安全销毁 channel。
+     * @return 无返回值
+     */
     void run_pump() noexcept
     {
         WaiterPtr wakeHead;

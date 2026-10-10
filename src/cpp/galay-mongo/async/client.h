@@ -149,13 +149,21 @@ struct MongoPipelineResponse
 {
     MongoPipelineResponse() = default;
     MongoPipelineResponse(MongoPipelineResponse&&) noexcept = default;             ///< 移动构造，转移响应或错误状态
-    MongoPipelineResponse& operator=(MongoPipelineResponse&&) noexcept = default;  ///< 移动赋值，转移响应或错误状态
+    /**
+     * @brief 移动赋值，转移响应或错误状态
+     * @return 当前对象引用
+     */
+    MongoPipelineResponse& operator=(MongoPipelineResponse&&) noexcept = default;
 
     std::optional<MongoReply> reply;                 ///< 响应文档（成功时有效）
     std::optional<MongoError> error;                 ///< 错误信息（失败时有效）
     int32_t request_id = 0;                          ///< 对应的请求 ID
 
-    bool ok() const { return reply.has_value(); }    ///< 判断该条命令是否成功
+    /**
+     * @brief 判断该条命令是否成功
+     * @return 操作成功时返回 true，否则返回 false
+     */
+    bool ok() const { return reply.has_value(); }
 
     /**
      * @brief 显式深拷贝 pipeline 单条响应
@@ -205,11 +213,24 @@ public:
     AsyncMongoClient(IOScheduler* scheduler,
                      AsyncMongoConfig config = AsyncMongoConfig::no_timeout());
 
-    AsyncMongoClient(AsyncMongoClient&& other) noexcept;             ///< 移动构造函数
-    AsyncMongoClient& operator=(AsyncMongoClient&& other) noexcept;  ///< 移动赋值运算符
+    /**
+     * @brief 移动构造函数
+     * @param other 源对象
+     */
+    AsyncMongoClient(AsyncMongoClient&& other) noexcept;
+    /**
+     * @brief 移动赋值运算符
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    AsyncMongoClient& operator=(AsyncMongoClient&& other) noexcept;
 
     AsyncMongoClient(const AsyncMongoClient&) = delete;              ///< 禁用拷贝构造
-    AsyncMongoClient& operator=(const AsyncMongoClient&) = delete;   ///< 禁用拷贝赋值
+    /**
+     * @brief 禁用拷贝赋值
+     * @return 该操作已禁用，不可调用
+     */
+    AsyncMongoClient& operator=(const AsyncMongoClient&) = delete;
 
     ~AsyncMongoClient() = default;                                   ///< 析构函数
 
@@ -265,11 +286,27 @@ public:
         return m_socket.close();
     }
 
-    bool is_closed() const { return m_is_closed; }  ///< 判断连接是否已关闭
+    /**
+     * @brief 判断连接是否已关闭
+     * @return 满足所检查条件时返回 true，否则返回 false
+     */
+    bool is_closed() const { return m_is_closed; }
 
-    AsyncTcpSocket& socket() { return m_socket; }        ///< 获取底层 TCP socket 的可变引用
-    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
-    const galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
+    /**
+     * @brief 获取底层 TCP socket 的可变引用
+     * @return AsyncTcpSocket& 引用
+     */
+    AsyncTcpSocket& socket() { return m_socket; }
+    /**
+     * @brief 获取接收环形缓冲区
+     * @return galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& 引用
+     */
+    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer() { return m_ring_buffer; }
+    /**
+     * @brief 获取接收环形缓冲区
+     * @return const galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& 引用
+     */
+    const galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer() const { return m_ring_buffer; }
 
     /**
      * @brief 分配下一个请求 ID（线程不安全）

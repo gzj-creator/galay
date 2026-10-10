@@ -93,8 +93,16 @@ public:
     }
 #endif
 
-    Http2ErrorCode code() const { return m_code; } ///< 获取错误码
-    const std::string& message() const { return m_message; } ///< 获取错误描述
+    /**
+     * @brief 获取错误码
+     * @return 当前对象的类型、状态或错误码
+     */
+    Http2ErrorCode code() const { return m_code; }
+    /**
+     * @brief 获取错误描述
+     * @return 当前错误的描述消息
+     */
+    const std::string& message() const { return m_message; }
 
     /**
      * @brief 判断是否存在错误
@@ -110,12 +118,41 @@ public:
         return http2_error_code_to_string(m_code) + (m_message.empty() ? "" : ": " + m_message);
     }
 
-    static Http2Error no_error() { return Http2Error(Http2ErrorCode::NoError); } ///< 创建无错误对象
-    static Http2Error protocol_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::ProtocolError, msg); } ///< 创建协议错误
-    static Http2Error internal_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::InternalError, msg); } ///< 创建内部错误
-    static Http2Error flow_control_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::FlowControlError, msg); } ///< 创建流量控制错误
-    static Http2Error frame_size_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::FrameSizeError, msg); } ///< 创建帧大小错误
-    static Http2Error compression_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::CompressionError, msg); } ///< 创建压缩错误
+    /**
+     * @brief 创建无错误对象
+     * @return Http2Error 操作结果
+     */
+    static Http2Error no_error() { return Http2Error(Http2ErrorCode::NoError); }
+    /**
+     * @brief 创建协议错误
+     * @param msg 消息文本
+     * @return Http2Error 操作结果
+     */
+    static Http2Error protocol_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::ProtocolError, msg); }
+    /**
+     * @brief 创建内部错误
+     * @param msg 消息文本
+     * @return Http2Error 操作结果
+     */
+    static Http2Error internal_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::InternalError, msg); }
+    /**
+     * @brief 创建流量控制错误
+     * @param msg 消息文本
+     * @return Http2Error 操作结果
+     */
+    static Http2Error flow_control_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::FlowControlError, msg); }
+    /**
+     * @brief 创建帧大小错误
+     * @param msg 消息文本
+     * @return Http2Error 操作结果
+     */
+    static Http2Error frame_size_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::FrameSizeError, msg); }
+    /**
+     * @brief 创建压缩错误
+     * @param msg 消息文本
+     * @return Http2Error 操作结果
+     */
+    static Http2Error compression_error(const std::string& msg = "") { return Http2Error(Http2ErrorCode::CompressionError, msg); }
 
 private:
     std::string m_message; ///< 附加描述信息

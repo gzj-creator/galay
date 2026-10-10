@@ -34,6 +34,7 @@ std::atomic<bool> g_server_ready{false};
 
 /**
  * @brief UDP Echo服务器协程
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> udp_server() {
     LogInfo("UDP Server starting...");
@@ -92,6 +93,7 @@ Task<void> udp_server() {
 
 /**
  * @brief UDP客户端协程
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> udp_client() {
     // 等待服务器准备好

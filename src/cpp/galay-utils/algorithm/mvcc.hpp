@@ -238,6 +238,7 @@ public:
     /**
      * @brief 垃圾回收，保留最近 N 个版本
      * @param keepVersions 保留的版本数量
+     * @return 无返回值
      */
     void gc(size_t keepVersions) {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
@@ -250,6 +251,7 @@ public:
     /**
      * @brief 垃圾回收，删除早于指定版本的所有版本
      * @param olderThan 版本号阈值
+     * @return 无返回值
      */
     void gc_older_than(Version olderThan) {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
@@ -354,6 +356,7 @@ public:
     /**
      * @brief 写入待提交的值
      * @param value 新值
+     * @return 无返回值
      */
     void write(std::unique_ptr<T> value) {
         m_pendingValue = std::move(value);

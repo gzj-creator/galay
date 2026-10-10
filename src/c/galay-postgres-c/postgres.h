@@ -143,6 +143,7 @@ galay_status_t galay_postgres_config_create(galay_postgres_config_t** out);
 /**
  * @brief Destroy a PostgreSQL configuration.
  * @param config May be NULL.
+ * @return 无返回值
  * @note All strings borrowed from this configuration become invalid.
  */
 void galay_postgres_config_destroy(galay_postgres_config_t* config);
@@ -231,6 +232,8 @@ galay_status_t galay_postgres_config_set_host(galay_postgres_config_t* config,
 
 /**
  * @brief Set a non-zero TCP port.
+ * @param config 配置对象
+ * @param port 端口号
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT` for a NULL config or zero port.
  */
 galay_status_t galay_postgres_config_set_port(galay_postgres_config_t* config,
@@ -238,6 +241,8 @@ galay_status_t galay_postgres_config_set_port(galay_postgres_config_t* config,
 
 /**
  * @brief Set a non-empty username, copying the supplied string.
+ * @param config 配置对象
+ * @param username 用户名
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_config_set_username(galay_postgres_config_t* config,
@@ -246,6 +251,8 @@ galay_status_t galay_postgres_config_set_username(galay_postgres_config_t* confi
 /**
  * @brief Set the password, copying the supplied string.
  * @details An empty password is allowed and is copied as an empty string.
+ * @param config 配置对象
+ * @param password 密码
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_config_set_password(galay_postgres_config_t* config,
@@ -254,6 +261,8 @@ galay_status_t galay_postgres_config_set_password(galay_postgres_config_t* confi
 /**
  * @brief Set the startup database, copying the supplied string.
  * @details An empty database omits the startup parameter.
+ * @param config 配置对象
+ * @param database 数据库名称
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_config_set_database(galay_postgres_config_t* config,
@@ -262,6 +271,8 @@ galay_status_t galay_postgres_config_set_database(galay_postgres_config_t* confi
 /**
  * @brief Set the startup application name, copying the supplied string.
  * @details An empty name omits the startup parameter.
+ * @param config 配置对象
+ * @param application_name 应用名称
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_config_set_application_name(galay_postgres_config_t* config,
@@ -269,6 +280,8 @@ galay_status_t galay_postgres_config_set_application_name(galay_postgres_config_
 
 /**
  * @brief Set the positive fallback connect timeout in milliseconds.
+ * @param config 配置对象
+ * @param timeout_ms 超时时间，单位为毫秒
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT` for zero or a NULL config.
  */
 galay_status_t galay_postgres_config_set_connect_timeout_ms(galay_postgres_config_t* config,
@@ -277,6 +290,7 @@ galay_status_t galay_postgres_config_set_connect_timeout_ms(galay_postgres_confi
 /**
  * @brief Set the TCP_NODELAY request for newly created sockets.
  * @param enabled Must be `GALAY_FALSE` or `GALAY_TRUE`.
+ * @param config 配置对象
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_config_set_tcp_no_delay(galay_postgres_config_t* config,
@@ -284,6 +298,7 @@ galay_status_t galay_postgres_config_set_tcp_no_delay(galay_postgres_config_t* c
 
 /**
  * @brief Validate that a configuration can start a connection.
+ * @param config 配置对象
  * @return `GALAY_OK` when host, port, username and timeout are valid; otherwise
  * `GALAY_INVALID_ARGUMENT`.
  */
@@ -293,6 +308,7 @@ galay_status_t galay_postgres_config_validate(const galay_postgres_config_t* con
 /**
  * @brief Destroy an owning wire buffer.
  * @param buffer May be NULL.
+ * @return 无返回值
  * @note Any pointer returned by `galay_postgres_buffer_data` becomes invalid.
  */
 void galay_postgres_buffer_destroy(galay_postgres_buffer_t* buffer);
@@ -479,6 +495,7 @@ galay_status_t galay_postgres_result_set_create(galay_postgres_result_set_t** ou
 
 /**
  * @brief Reset logical contents while retaining decoded storage capacity.
+ * @param result 要操作的结果对象
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  * @note Invalidates every field and value view borrowed from this result set.
  */
@@ -499,6 +516,7 @@ galay_status_t galay_postgres_result_set_decode(const unsigned char* data,
 /**
  * @brief Destroy an independently owned result set.
  * @param result May be NULL.
+ * @return 无返回值
  * @note Do not pass an item borrowed from a pipeline result.
  */
 void galay_postgres_result_set_destroy(galay_postgres_result_set_t* result);
@@ -523,6 +541,9 @@ galay_status_t galay_postgres_result_set_row_count(const galay_postgres_result_s
 
 /**
  * @brief Borrow metadata for one result column.
+ * @param result 要查询的结果集
+ * @param index 元素索引
+ * @param field 接收输出结果的指针
  * @return `GALAY_NOT_FOUND` for an out-of-range index.
  * @note The field name remains valid only while the result set is alive.
  */
@@ -543,6 +564,10 @@ galay_status_t galay_postgres_result_set_find_field(const galay_postgres_result_
 
 /**
  * @brief Borrow one decoded cell value.
+ * @param result 要查询的结果集
+ * @param row 行索引
+ * @param column 列索引
+ * @param value 接收输出值的指针
  * @return `GALAY_NOT_FOUND` for an out-of-range row or column.
  * @note Value bytes may contain NUL and remain valid until result-set destroy.
  */
@@ -563,6 +588,7 @@ galay_status_t galay_postgres_result_set_command_tag(const galay_postgres_result
 /**
  * @brief Get the trailing row count parsed from the CommandComplete tag.
  * @param affected_rows Receives the parsed count, or zero when no count is present.
+ * @param result 要查询的结果集
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_result_set_affected_rows(const galay_postgres_result_set_t* result,
@@ -571,6 +597,7 @@ galay_status_t galay_postgres_result_set_affected_rows(const galay_postgres_resu
 /**
  * @brief Get the ReadyForQuery transaction status.
  * @param status Receives `I` for idle, `T` for transaction, or `E` for failed transaction.
+ * @param result 要查询的结果集
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_result_set_transaction_status(
@@ -590,12 +617,14 @@ galay_status_t galay_postgres_stmt_create(const char* name,
 /**
  * @brief Destroy local statement metadata; no server Close message is sent.
  * @param stmt May be NULL; all borrowed names and fields become invalid.
+ * @return 无返回值
  */
 void galay_postgres_stmt_destroy(galay_postgres_stmt_t* stmt);
 
 /**
  * @brief Borrow the statement name.
  * @param name Receives a NUL-terminated pointer valid until statement destroy.
+ * @param stmt 预处理语句
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_stmt_name(const galay_postgres_stmt_t* stmt,
@@ -604,6 +633,7 @@ galay_status_t galay_postgres_stmt_name(const galay_postgres_stmt_t* stmt,
 /**
  * @brief Get the server-reported ParameterDescription count.
  * @param count Receives the number of parameters.
+ * @param stmt 预处理语句
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_stmt_param_count(const galay_postgres_stmt_t* stmt,
@@ -612,6 +642,7 @@ galay_status_t galay_postgres_stmt_param_count(const galay_postgres_stmt_t* stmt
 /**
  * @brief Get the server-reported result-column count.
  * @param count Receives the number of result columns.
+ * @param stmt 预处理语句
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_stmt_column_count(const galay_postgres_stmt_t* stmt,
@@ -621,6 +652,7 @@ galay_status_t galay_postgres_stmt_column_count(const galay_postgres_stmt_t* stm
  * @brief Borrow prepared result-column metadata.
  * @param index Zero-based result-column index.
  * @param field Receives metadata whose name is valid until statement destroy.
+ * @param stmt 预处理语句
  * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_NOT_FOUND`.
  */
 galay_status_t galay_postgres_stmt_field(const galay_postgres_stmt_t* stmt,
@@ -637,11 +669,14 @@ galay_status_t galay_postgres_pipeline_create(galay_postgres_pipeline_t** out);
 /**
  * @brief Destroy a pipeline and its copied command bytes.
  * @param pipeline May be NULL; previously produced result objects are independent.
+ * @return 无返回值
  */
 void galay_postgres_pipeline_destroy(galay_postgres_pipeline_t* pipeline);
 
 /**
  * @brief Append a copied simple Query message, which expects one ReadyForQuery.
+ * @param pipeline 批量命令管线
+ * @param sql SQL 语句
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  * @note Not safe to call while the same pipeline is being built or executed.
  */
@@ -652,6 +687,7 @@ galay_status_t galay_postgres_pipeline_append_query(galay_postgres_pipeline_t* p
  * @brief Append a copied Parse message.
  * @param statement_name Named or unnamed statement name copied into the command.
  * @param sql SQL copied into the command.
+ * @param pipeline 批量命令管线
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  * @note Append Sync to delimit the Parse response.
  */
@@ -661,6 +697,7 @@ galay_status_t galay_postgres_pipeline_append_parse(galay_postgres_pipeline_t* p
 
 /**
  * @brief Append Sync and one expected ReadyForQuery boundary.
+ * @param pipeline 批量命令管线
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_pipeline_append_sync(galay_postgres_pipeline_t* pipeline);
@@ -687,6 +724,7 @@ galay_status_t galay_postgres_client_create(galay_postgres_client_t** out);
 /**
  * @brief Destroy a client and synchronously release any socket storage.
  * @param client May be NULL.
+ * @return 无返回值
  * @note Does not wait for active operations; all async calls must finish first.
  */
 void galay_postgres_client_destroy(galay_postgres_client_t* client);
@@ -694,6 +732,7 @@ void galay_postgres_client_destroy(galay_postgres_client_t* client);
 /**
  * @brief Synchronously discard the local socket without sending Terminate.
  * @param client May be NULL.
+ * @return 无返回值
  * @note Use `galay_postgres_client_close_async` for a graceful protocol close.
  */
 void galay_postgres_client_close(galay_postgres_client_t* client);
@@ -701,6 +740,7 @@ void galay_postgres_client_close(galay_postgres_client_t* client);
 /**
  * @brief Get whether startup and authentication reached ReadyForQuery.
  * @param connected Receives `GALAY_TRUE` for an authenticated connection.
+ * @param client 客户端对象
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  * @note Do not call concurrently with another operation on the client.
  */
@@ -709,6 +749,8 @@ galay_status_t galay_postgres_client_is_connected(const galay_postgres_client_t*
 
 /**
  * @brief Synchronous connect placeholder.
+ * @param client 客户端对象
+ * @param config 配置对象
  * @return Valid arguments return `GALAY_UNSUPPORTED`; invalid state or arguments
  * return `GALAY_INVALID_ARGUMENT`.
  * @note Use `galay_postgres_client_connect_async` for network connection.
@@ -745,7 +787,14 @@ C_IOResult galay_postgres_client_query_async(galay_postgres_client_t* client,
                                              int64_t timeout_ms,
                                              galay_postgres_result_set_t** result);
 
-/** Alias of `galay_postgres_client_query_async` retained for result-oriented naming. */
+/**
+ * Alias of `galay_postgres_client_query_async` retained for result-oriented naming.
+ * @param client 客户端对象
+ * @param sql SQL 语句
+ * @param timeout_ms 超时时间，单位为毫秒
+ * @param result 接收输出结果的指针
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误
+ */
 C_IOResult galay_postgres_client_query_result_async(galay_postgres_client_t* client,
                                                     const char* sql,
                                                     int64_t timeout_ms,
@@ -770,6 +819,7 @@ C_IOResult galay_postgres_client_query_into_async(galay_postgres_client_t* clien
  * @brief Send `BEGIN` and decode its complete result sequence.
  * @param timeout_ms Milliseconds per socket operation; negative disables timeout.
  * @param result Receives result-set ownership on success and NULL on failure.
+ * @param client 客户端对象
  * @return Same explicit I/O and protocol errors as `galay_postgres_client_query_async`.
  */
 C_IOResult galay_postgres_client_begin_transaction_async(
@@ -781,6 +831,7 @@ C_IOResult galay_postgres_client_begin_transaction_async(
  * @brief Send `COMMIT` and return an owning decoded result set.
  * @param timeout_ms Milliseconds per socket operation; negative disables timeout.
  * @param result Receives result-set ownership on success and NULL on failure.
+ * @param client 客户端对象
  * @return Same explicit I/O and protocol errors as `galay_postgres_client_query_async`.
  */
 C_IOResult galay_postgres_client_commit_async(galay_postgres_client_t* client,
@@ -791,6 +842,7 @@ C_IOResult galay_postgres_client_commit_async(galay_postgres_client_t* client,
  * @brief Send `ROLLBACK` and return an owning decoded result set.
  * @param timeout_ms Milliseconds per socket operation; negative disables timeout.
  * @param result Receives result-set ownership on success and NULL on failure.
+ * @param client 客户端对象
  * @return Same explicit I/O and protocol errors as `galay_postgres_client_query_async`.
  */
 C_IOResult galay_postgres_client_rollback_async(galay_postgres_client_t* client,
@@ -821,6 +873,7 @@ C_IOResult galay_postgres_client_stmt_prepare_async(galay_postgres_client_t* cli
  * @param bind_count Must equal the server-reported parameter count.
  * @param timeout_ms Milliseconds per socket operation.
  * @param result Receives result-set ownership on success.
+ * @return IO 操作结果；code 为完成状态，sys_errno 保留系统错误
  * @note Suspends the current coroutine and drains responses through ReadyForQuery.
  */
 C_IOResult galay_postgres_client_stmt_execute_async(
@@ -847,12 +900,14 @@ C_IOResult galay_postgres_client_pipeline_async(galay_postgres_client_t* client,
 /**
  * @brief Destroy a pipeline result and every result set it owns.
  * @param result May be NULL; every item borrowed from it becomes invalid.
+ * @return 无返回值
  */
 void galay_postgres_pipeline_result_destroy(galay_postgres_pipeline_result_t* result);
 
 /**
  * @brief Get the number of owned result sets in a pipeline result.
  * @param count Receives the number of result sets.
+ * @param result 要查询的结果集
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  */
 galay_status_t galay_postgres_pipeline_result_count(
@@ -860,6 +915,9 @@ galay_status_t galay_postgres_pipeline_result_count(
 
 /**
  * @brief Borrow one pipeline result-set item.
+ * @param result 要查询的结果集
+ * @param index 元素索引
+ * @param item 接收输出结果的指针
  * @return Out-of-range indices return `GALAY_NOT_FOUND`.
  * @note The item must not be destroyed and expires with the pipeline result.
  */
@@ -871,6 +929,7 @@ galay_status_t galay_postgres_pipeline_result_at(
 /**
  * @brief Gracefully send Terminate, close, and destroy the client socket.
  * @param timeout_ms Milliseconds for send and close operations; negative disables timeout.
+ * @param client 客户端对象
  * @return Cleanup is attempted on every path; failures are returned explicitly.
  * @note Suspends the current C coroutine and leaves the client disconnected.
  */
@@ -882,6 +941,7 @@ C_IOResult galay_postgres_client_close_async(galay_postgres_client_t* client,
  * @param config Valid configuration copied into the pool.
  * @param max_connections Positive connection limit.
  * @param out Receives pool ownership.
+ * @return 成功返回 GALAY_OK，失败返回对应状态码
  * @note The pool is single-threaded and must outlive every lease.
  */
 galay_status_t galay_postgres_pool_create(const galay_postgres_config_t* config,
@@ -891,6 +951,7 @@ galay_status_t galay_postgres_pool_create(const galay_postgres_config_t* config,
 /**
  * @brief Destroy a pool and all idle clients.
  * @param pool May be NULL.
+ * @return 无返回值
  * @note All leases must be released first; outstanding leases are not owned by the idle list.
  */
 void galay_postgres_pool_destroy(galay_postgres_pool_t* pool);
@@ -919,6 +980,7 @@ galay_status_t galay_postgres_pool_lease_client(galay_postgres_pool_lease_t* lea
 
 /**
  * @brief Return a lease client to its pool and destroy the lease handle.
+ * @param lease 连接池租约
  * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  * @note The pool must still be alive and the borrowed client must have no active operation.
  */

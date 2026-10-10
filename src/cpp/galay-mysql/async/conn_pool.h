@@ -67,18 +67,55 @@ class MysqlPoolLease
 {
 public:
     MysqlPoolLease() noexcept; ///< 构造空租约
-    MysqlPoolLease(MysqlPoolLease&& other) noexcept; ///< 移动构造，源租约失效
-    MysqlPoolLease& operator=(MysqlPoolLease&& other) noexcept; ///< 移动赋值，先归还当前连接
+    /**
+     * @brief 移动构造，源租约失效
+     * @param other 源对象
+     */
+    MysqlPoolLease(MysqlPoolLease&& other) noexcept;
+    /**
+     * @brief 移动赋值，先归还当前连接
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    MysqlPoolLease& operator=(MysqlPoolLease&& other) noexcept;
     MysqlPoolLease(const MysqlPoolLease&) = delete; ///< 禁止拷贝
-    MysqlPoolLease& operator=(const MysqlPoolLease&) = delete; ///< 禁止拷贝赋值
+    /**
+     * @brief 禁止拷贝赋值
+     * @return 该操作已禁用，不可调用
+     */
+    MysqlPoolLease& operator=(const MysqlPoolLease&) = delete;
     ~MysqlPoolLease(); ///< 析构时归还仍持有的连接
 
-    AsyncMysqlClient<>* get() const noexcept; ///< 获取底层连接指针
-    AsyncMysqlClient<>& operator*() const noexcept; ///< 解引用底层连接
-    AsyncMysqlClient<>* operator->() const noexcept; ///< 访问底层连接
-    explicit operator bool() const noexcept; ///< 是否持有连接
-    void release() noexcept; ///< 立即归还连接；可重复调用
-    AsyncMysqlClient<>* dismiss() noexcept; ///< 放弃RAII归还责任并返回底层连接
+    /**
+     * @brief 获取底层连接指针
+     * @return AsyncMysqlClient<>* 指针
+     */
+    AsyncMysqlClient<>* get() const noexcept;
+    /**
+     * @brief 解引用底层连接
+     * @return AsyncMysqlClient<>& 引用
+     */
+    AsyncMysqlClient<>& operator*() const noexcept;
+    /**
+     * @brief 访问底层连接
+     * @return AsyncMysqlClient<>* 指针
+     */
+    AsyncMysqlClient<>* operator->() const noexcept;
+    /**
+     * @brief 是否持有连接
+     * @return 持有有效资源时返回 true，否则返回 false
+     */
+    explicit operator bool() const noexcept;
+    /**
+     * @brief 立即归还连接；可重复调用
+     * @return 无返回值
+     */
+    void release() noexcept;
+    /**
+     * @brief 放弃RAII归还责任并返回底层连接
+     * @return AsyncMysqlClient<>* 指针
+     */
+    AsyncMysqlClient<>* dismiss() noexcept;
 
 private:
     friend class MysqlConnectionPool;
@@ -108,7 +145,11 @@ public:
     ~MysqlConnectionPool(); ///< 析构连接池
 
     MysqlConnectionPool(const MysqlConnectionPool&) = delete;             ///< 禁止拷贝构造
-    MysqlConnectionPool& operator=(const MysqlConnectionPool&) = delete;  ///< 禁止拷贝赋值
+    /**
+     * @brief 禁止拷贝赋值
+     * @return 该操作已禁用，不可调用
+     */
+    MysqlConnectionPool& operator=(const MysqlConnectionPool&) = delete;
 
     class AcquireAwaitable; ///< 连接获取等待体，完整定义位于 details/pool_awaitable.h
     class LeaseAwaitable;   ///< RAII 租约获取等待体，完整定义位于 details/pool_awaitable.h
@@ -128,6 +169,7 @@ public:
     /**
      * @brief 归还连接到池中
      * @param client 要归还的客户端指针
+     * @return 无返回值
      */
     void release(AsyncMysqlClient<>* client);
 
@@ -146,10 +188,27 @@ public:
 private:
     friend class AcquireAwaitable;
 
-    AsyncMysqlClient<>* try_acquire();  ///< 尝试从空闲队列获取连接
-    AsyncMysqlClient<>* create_client(); ///< 创建新的客户端连接
-    bool enqueue_waiter(std::shared_ptr<detail::MysqlPoolWaiter> waiter); ///< 注册等待连接的协程
-    bool wake_one_waiter(); ///< 唤醒一个仍然有效的等待协程
+    /**
+     * @brief 尝试从空闲队列获取连接
+     * @return AsyncMysqlClient<>* 指针
+     */
+    AsyncMysqlClient<>* try_acquire();
+    /**
+     * @brief 创建新的客户端连接
+     * @return AsyncMysqlClient<>* 指针
+     */
+    AsyncMysqlClient<>* create_client();
+    /**
+     * @brief 注册等待连接的协程
+     * @param waiter 等待节点
+     * @return 操作成功时返回 true，否则返回 false
+     */
+    bool enqueue_waiter(std::shared_ptr<detail::MysqlPoolWaiter> waiter);
+    /**
+     * @brief 唤醒一个仍然有效的等待协程
+     * @return 操作成功时返回 true，否则返回 false
+     */
+    bool wake_one_waiter();
 
     galay::kernel::IOScheduler* m_scheduler;        ///< IO调度器指针
     MysqlConfig m_mysql_config;                      ///< MySQL连接配置

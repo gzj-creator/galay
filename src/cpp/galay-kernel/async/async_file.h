@@ -98,6 +98,7 @@ public:
     /**
      * @brief Adopt an already opened descriptor.
      * @param fd An owned descriptor; AsyncFile closes it on destruction.
+     * @return 无返回值
      * @note The descriptor should be opened by an async-file adapter or a
      *       blocking executor before entering the scheduler coroutine.
      *       The current file must have no pending I/O. A moved-from object may be reused.
@@ -116,7 +117,14 @@ public:
      * - 返回值为0表示 EOF
      * - 缓冲区生命周期必须持续到 co_await 完成
      */
-    galay::kernel::FileReadAwaitable read(char* buffer, size_t length, off_t offset = 0);  ///< 异步读取文件，恢复后返回实际读取字节数
+    /**
+     * @brief 异步读取文件，恢复后返回实际读取字节数
+     * @param buffer 数据缓冲区
+     * @param length 缓冲区字节数
+     * @param offset 起始偏移量
+     * @return galay::kernel::FileReadAwaitable 等待体，通过 co_await 执行并取得操作结果
+     */
+    galay::kernel::FileReadAwaitable read(char* buffer, size_t length, off_t offset = 0);
 
     /**
      * @brief 异步写入数据到文件

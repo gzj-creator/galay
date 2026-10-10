@@ -10,6 +10,7 @@ namespace galay::kernel::log
  *
  * @param logger 用户实现的日志实例，允许传入 nullptr 以禁用日志
  *
+ * @return 无返回值
  * @note 线程不安全。不得与 get() 或其他 set() 并发调用。
  *       推荐在 main() 开头、创建任何 galay Runtime 之前调用。
  */

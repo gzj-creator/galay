@@ -36,7 +36,7 @@ BlockingExecutor::BlockingExecutor()
  *
  * @param minWorkers  最少保留的工作线程数
  * @param maxWorkers  允许的最大工作线程数
- * @param keep_alive   多余线程的空闲超时时间
+ * @param keepAlive   多余线程的空闲超时时间
  */
 BlockingExecutor::BlockingExecutor(size_t minWorkers,
                                    size_t maxWorkers,
@@ -140,6 +140,7 @@ std::expected<void, BlockingExecutorError> BlockingExecutor::submit(std::functio
  * 关闭时排空剩余任务后退出。
  *
  * @param initial_task  首个执行的任务（来自创建该线程的 submit() 调用）
+ * @return 无返回值
  */
 void BlockingExecutor::worker_loop(std::function<void()> initial_task)
 {
@@ -192,6 +193,7 @@ void BlockingExecutor::worker_loop(std::function<void()> initial_task)
 /**
  * @brief 在持锁状态下递减工作线程计数，必要时通知关闭等待
  *
+ * @return 无返回值
  * @note 必须在持有 m_mutex 时调用
  */
 void BlockingExecutor::retire_worker_locked()

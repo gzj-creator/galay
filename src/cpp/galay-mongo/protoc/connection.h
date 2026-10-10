@@ -65,10 +65,23 @@ public:
     ~Connection();  ///< 析构函数，自动断开连接
 
     Connection(const Connection&) = delete;             ///< 禁用拷贝构造
-    Connection& operator=(const Connection&) = delete;  ///< 禁用拷贝赋值
+    /**
+     * @brief 禁用拷贝赋值
+     * @return 该操作已禁用，不可调用
+     */
+    Connection& operator=(const Connection&) = delete;
 
-    Connection(Connection&& other) noexcept;             ///< 移动构造函数
-    Connection& operator=(Connection&& other) noexcept;  ///< 移动赋值运算符
+    /**
+     * @brief 移动构造函数
+     * @param other 源对象
+     */
+    Connection(Connection&& other) noexcept;
+    /**
+     * @brief 移动赋值运算符
+     * @param other 源对象
+     * @return 当前对象引用
+     */
+    Connection& operator=(Connection&& other) noexcept;
 
     /**
      * @brief 建立到 MongoDB 服务端的 TCP 连接
@@ -79,6 +92,7 @@ public:
 
     /**
      * @brief 断开连接并关闭 socket
+     * @return 无返回值
      */
     void disconnect();
 
@@ -121,10 +135,33 @@ public:
     int fd() const { return m_socket_fd; }
 
 private:
-    std::expected<void, MongoError> ensure_data(size_t n);  ///< 确保缓冲区中至少有 n 字节数据
-    std::expected<void, MongoError> recv_exact(char* buffer, size_t n); ///< 精确接收 n 字节到指定缓冲区
-    void copy_readable(size_t offset, char* dst, size_t len) const;     ///< 从环形缓冲区拷贝可读数据
-    std::string consume_to_string(size_t len);                           ///< 消费并转换为字符串
+    /**
+     * @brief 确保缓冲区中至少有 n 字节数据
+     * @param n 数量
+     * @return 成功时返回空值，失败时返回 MongoError 错误
+     */
+    std::expected<void, MongoError> ensure_data(size_t n);
+    /**
+     * @brief 精确接收 n 字节到指定缓冲区
+     * @param buffer 数据缓冲区
+     * @param n 数量
+     * @return 成功时返回空值，失败时返回 MongoError 错误
+     */
+    std::expected<void, MongoError> recv_exact(char* buffer, size_t n);
+    /**
+     * @brief 从环形缓冲区拷贝可读数据
+     * @param offset 起始偏移量
+     * @param dst 接收输出数据的引用
+     * @param len 数据字节数
+     * @return 无返回值
+     */
+    void copy_readable(size_t offset, char* dst, size_t len) const;
+    /**
+     * @brief 消费并转换为字符串
+     * @param len 数据字节数
+     * @return 处理后的 std::string 结果
+     */
+    std::string consume_to_string(size_t len);
 
     galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> m_recv_ring;         ///< 接收环形缓冲区
     std::string m_decode_buffer;                    ///< 解码用的临时缓冲区

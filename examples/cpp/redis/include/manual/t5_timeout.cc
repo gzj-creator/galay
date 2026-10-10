@@ -9,6 +9,8 @@ using namespace galay::kernel;
 
 /**
  * @brief 测试RedisClient的超时功能
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  * @details 演示如何使用timeout()方法为Redis命令设置超时
  */
 Task<void> test_redis_client_with_timeout(IOScheduler* scheduler)
@@ -120,6 +122,9 @@ Task<void> test_redis_client_with_timeout(IOScheduler* scheduler)
 
 /**
  * @brief 测试并发执行多个Redis命令
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @param client_id 客户端编号
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> test_concurrent_commands(IOScheduler* scheduler, int client_id)
 {

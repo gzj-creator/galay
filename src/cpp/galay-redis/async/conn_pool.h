@@ -207,22 +207,55 @@ namespace galay::redis
 
     private:
         PooledConnection(const PooledConnection&) = delete; ///< 禁止拷贝连接包装器
-        PooledConnection& operator=(const PooledConnection&) = delete; ///< 禁止拷贝赋值
+        /**
+         * @brief 禁止拷贝赋值
+         * @return 该操作已禁用，不可调用
+         */
+        PooledConnection& operator=(const PooledConnection&) = delete;
     public:
         PooledConnection(PooledConnection&&) noexcept = default; ///< 允许移动所有权
-        PooledConnection& operator=(PooledConnection&&) noexcept = default; ///< 允许移动赋值
+        /**
+         * @brief 允许移动赋值
+         * @return 当前对象引用
+         */
+        PooledConnection& operator=(PooledConnection&&) noexcept = default;
 
-        RedisClient<>* get() { return m_client.get(); }              ///< 获取原始客户端指针
-        const RedisClient<>* get() const { return m_client.get(); }  ///< 获取原始客户端指针（const）
+        /**
+         * @brief 获取原始客户端指针
+         * @return RedisClient<>* 指针
+         */
+        RedisClient<>* get() { return m_client.get(); }
+        /**
+         * @brief 获取原始客户端指针（const）
+         * @return const RedisClient<>* 指针
+         */
+        const RedisClient<>* get() const { return m_client.get(); }
 
-        RedisClient<>* operator->() { return m_client.get(); }              ///< 箭头操作符访问客户端
-        const RedisClient<>* operator->() const { return m_client.get(); }  ///< 箭头操作符访问客户端（const）
+        /**
+         * @brief 箭头操作符访问客户端
+         * @return RedisClient<>* 指针
+         */
+        RedisClient<>* operator->() { return m_client.get(); }
+        /**
+         * @brief 箭头操作符访问客户端（const）
+         * @return const RedisClient<>* 指针
+         */
+        const RedisClient<>* operator->() const { return m_client.get(); }
 
-        RedisClient<>& operator*() { return *m_client; }              ///< 解引用操作符
-        const RedisClient<>& operator*() const { return *m_client; }  ///< 解引用操作符（const）
+        /**
+         * @brief 解引用操作符
+         * @return RedisClient<>& 引用
+         */
+        RedisClient<>& operator*() { return *m_client; }
+        /**
+         * @brief 解引用操作符（const）
+         * @return const RedisClient<>& 引用
+         */
+        const RedisClient<>& operator*() const { return *m_client; }
 
         /**
          * @brief 更新最后使用时间为当前时刻
+         * @return 无返回值
          */
         void update_last_used()
         {
@@ -239,9 +272,22 @@ namespace galay::redis
             return std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_used);
         }
 
-        bool is_healthy() const { return m_is_healthy; }            ///< 获取健康状态
-        void set_healthy(bool healthy) { m_is_healthy = healthy; }  ///< 设置健康状态
-        bool is_closed() const { return m_client->is_closed(); }     ///< 检查连接是否已关闭
+        /**
+         * @brief 获取健康状态
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_healthy() const { return m_is_healthy; }
+        /**
+         * @brief 设置健康状态
+         * @param healthy 是否健康
+         * @return 无返回值
+         */
+        void set_healthy(bool healthy) { m_is_healthy = healthy; }
+        /**
+         * @brief 检查连接是否已关闭
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_closed() const { return m_client->is_closed(); }
 
     private:
         std::shared_ptr<RedisClient<>> m_client;                          ///< 底层 Redis 客户端
@@ -273,22 +319,55 @@ namespace galay::redis
 
     private:
         PooledRedissConnection(const PooledRedissConnection&) = delete; ///< 禁止拷贝连接包装器
-        PooledRedissConnection& operator=(const PooledRedissConnection&) = delete; ///< 禁止拷贝赋值
+        /**
+         * @brief 禁止拷贝赋值
+         * @return 该操作已禁用，不可调用
+         */
+        PooledRedissConnection& operator=(const PooledRedissConnection&) = delete;
     public:
         PooledRedissConnection(PooledRedissConnection&&) noexcept = default; ///< 允许移动所有权
-        PooledRedissConnection& operator=(PooledRedissConnection&&) noexcept = default; ///< 允许移动赋值
+        /**
+         * @brief 允许移动赋值
+         * @return 当前对象引用
+         */
+        PooledRedissConnection& operator=(PooledRedissConnection&&) noexcept = default;
 
-        RedissClient* get() { return m_client.get(); }              ///< 获取原始客户端指针
-        const RedissClient* get() const { return m_client.get(); }  ///< 获取原始客户端指针（const）
+        /**
+         * @brief 获取原始客户端指针
+         * @return RedissClient* 指针
+         */
+        RedissClient* get() { return m_client.get(); }
+        /**
+         * @brief 获取原始客户端指针（const）
+         * @return const RedissClient* 指针
+         */
+        const RedissClient* get() const { return m_client.get(); }
 
-        RedissClient* operator->() { return m_client.get(); }              ///< 箭头操作符访问客户端
-        const RedissClient* operator->() const { return m_client.get(); }  ///< 箭头操作符访问客户端（const）
+        /**
+         * @brief 箭头操作符访问客户端
+         * @return RedissClient* 指针
+         */
+        RedissClient* operator->() { return m_client.get(); }
+        /**
+         * @brief 箭头操作符访问客户端（const）
+         * @return const RedissClient* 指针
+         */
+        const RedissClient* operator->() const { return m_client.get(); }
 
-        RedissClient& operator*() { return *m_client; }              ///< 解引用操作符
-        const RedissClient& operator*() const { return *m_client; }  ///< 解引用操作符（const）
+        /**
+         * @brief 解引用操作符
+         * @return RedissClient& 引用
+         */
+        RedissClient& operator*() { return *m_client; }
+        /**
+         * @brief 解引用操作符（const）
+         * @return const RedissClient& 引用
+         */
+        const RedissClient& operator*() const { return *m_client; }
 
         /**
          * @brief 更新最后使用时间为当前时刻
+         * @return 无返回值
          */
         void update_last_used()
         {
@@ -305,9 +384,22 @@ namespace galay::redis
             return std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_used);
         }
 
-        bool is_healthy() const { return m_is_healthy; }            ///< 获取健康状态
-        void set_healthy(bool healthy) { m_is_healthy = healthy; }  ///< 设置健康状态
-        bool is_closed() const { return m_client->is_closed(); }     ///< 检查连接是否已关闭
+        /**
+         * @brief 获取健康状态
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_healthy() const { return m_is_healthy; }
+        /**
+         * @brief 设置健康状态
+         * @param healthy 是否健康
+         * @return 无返回值
+         */
+        void set_healthy(bool healthy) { m_is_healthy = healthy; }
+        /**
+         * @brief 检查连接是否已关闭
+         * @return 满足所检查条件时返回 true，否则返回 false
+         */
+        bool is_closed() const { return m_client->is_closed(); }
 
     private:
         std::shared_ptr<RedissClient> m_client;                         ///< 底层 Rediss 客户端
@@ -394,26 +486,31 @@ namespace galay::redis
         /**
          * @brief 归还连接
          * @param conn 要归还的连接
+         * @return 无返回值
          */
         void release(std::shared_ptr<PooledConnection> conn);
 
         /**
          * @brief 手动触发健康检查
+         * @return 无返回值
          */
         void trigger_health_check();
 
         /**
          * @brief 手动触发空闲连接清理
+         * @return 无返回值
          */
         void trigger_idle_cleanup();
 
         /**
          * @brief 预热连接池（创建到最小连接数）
+         * @return 无返回值
          */
         void warmup();
 
         /**
          * @brief 清理所有不健康的连接
+         * @return 清理的不健康连接数量
          */
         size_t cleanup_unhealthy_connections();
 
@@ -433,6 +530,7 @@ namespace galay::redis
 
         /**
          * @brief 关闭连接池（同步方法）
+         * @return 无返回值
          */
         void shutdown();
 
@@ -465,6 +563,7 @@ namespace galay::redis
 
         /**
          * @brief 获取配置
+         * @return const ConnectionPoolConfig& 只读引用
          */
         const ConnectionPoolConfig& get_config() const { return m_config; }
 
@@ -474,28 +573,87 @@ namespace galay::redis
         friend class PoolInitializeAwaitable;
         friend class PoolAcquireAwaitable;
 
-        RedisVoidResult initialize_sync(); ///< 同步初始化实现
+        /**
+         * @brief 同步初始化实现
+         * @return RedisVoidResult 操作结果
+         */
+        RedisVoidResult initialize_sync();
+        /**
+         * @brief 同步获取连接实现
+         * @param start_time 开始时刻
+         * @return 成功时返回 std::shared_ptr<PooledConnection>，失败时返回 RedisError 错误
+         */
         std::expected<std::shared_ptr<PooledConnection>, RedisError>
-        acquire_sync(std::chrono::steady_clock::time_point start_time); ///< 同步获取连接实现
-        void record_acquire_stats(std::chrono::steady_clock::time_point start_time); ///< 记录获取连接统计
-        std::shared_ptr<PooledConnection> try_acquire_available(); ///< 从分片空闲队列非阻塞获取健康连接
-        std::shared_ptr<PooledConnection> create_connection_slot(); ///< 预留容量并创建待连接槽位
-        void destroy_connection_slot(std::shared_ptr<PooledConnection>& conn); ///< 销毁已计入容量的连接槽位
-        bool return_to_available(std::shared_ptr<PooledConnection> conn); ///< 将健康连接放回分片空闲队列
-        bool enqueue_waiter(std::shared_ptr<detail::RedisPoolWaiter> waiter); ///< 注册等待连接的协程
+        acquire_sync(std::chrono::steady_clock::time_point start_time);
+        /**
+         * @brief 记录获取连接统计
+         * @param start_time 开始时刻
+         * @return 无返回值
+         */
+        void record_acquire_stats(std::chrono::steady_clock::time_point start_time);
+        /**
+         * @brief 从分片空闲队列非阻塞获取健康连接
+         * @return std::shared_ptr<PooledConnection> 操作结果
+         */
+        std::shared_ptr<PooledConnection> try_acquire_available();
+        /**
+         * @brief 预留容量并创建待连接槽位
+         * @return std::shared_ptr<PooledConnection> 操作结果
+         */
+        std::shared_ptr<PooledConnection> create_connection_slot();
+        /**
+         * @brief 销毁已计入容量的连接槽位
+         * @param conn 连接对象
+         * @return 无返回值
+         */
+        void destroy_connection_slot(std::shared_ptr<PooledConnection>& conn);
+        /**
+         * @brief 将健康连接放回分片空闲队列
+         * @param conn 连接对象
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool return_to_available(std::shared_ptr<PooledConnection> conn);
+        /**
+         * @brief 注册等待连接的协程
+         * @param waiter 等待节点
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool enqueue_waiter(std::shared_ptr<detail::RedisPoolWaiter> waiter);
+        /**
+         * @brief 尝试把连接转交给等待者
+         * @param conn 连接对象
+         * @param waiter_to_wake 要唤醒的等待节点
+         * @return 操作成功时返回 true，否则返回 false
+         */
         bool complete_one_waiter(std::shared_ptr<PooledConnection> conn,
-                               std::shared_ptr<detail::RedisPoolWaiter>& waiter_to_wake); ///< 尝试把连接转交给等待者
-        bool wake_one_waiter_from_available(); ///< 从空闲队列唤醒一个等待者，避免 enqueue/release 竞态
-        size_t drain_available_connections(std::vector<std::shared_ptr<PooledConnection>>* drained = nullptr); ///< 清空空闲分片
-        size_t idle_shard_index() const noexcept; ///< 当前线程对应的空闲分片
+                               std::shared_ptr<detail::RedisPoolWaiter>& waiter_to_wake);
+        /**
+         * @brief 从空闲队列唤醒一个等待者，避免 enqueue/release 竞态
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool wake_one_waiter_from_available();
+        /**
+         * @brief 清空空闲分片
+         * @param drained 已排空条目数量
+         * @return size_t 操作结果
+         */
+        size_t drain_available_connections(std::vector<std::shared_ptr<PooledConnection>>* drained = nullptr);
+        /**
+         * @brief 当前线程对应的空闲分片
+         * @return size_t 操作结果
+         */
+        size_t idle_shard_index() const noexcept;
 
         /**
          * @brief 获取或创建连接（内部方法，同步）
+         * @return 成功时返回 std::shared_ptr<PooledConnection>，失败时返回 RedisError 错误
          */
         std::expected<std::shared_ptr<PooledConnection>, RedisError> get_connection_sync();
 
         /**
          * @brief 检查连接健康状态（同步）
+         * @param conn 连接对象
+         * @return 连接健康时返回 true，否则返回 false
          */
         bool check_connection_health_sync(std::shared_ptr<PooledConnection> conn);
 
@@ -559,22 +717,81 @@ namespace galay::redis
                              RedissConnectionPoolConfig config = RedissConnectionPoolConfig::default_config());
 
         RedissConnectionPool(const RedissConnectionPool&) = delete; ///< 禁止拷贝
-        RedissConnectionPool& operator=(const RedissConnectionPool&) = delete; ///< 禁止拷贝赋值
+        /**
+         * @brief 禁止拷贝赋值
+         * @return 该操作已禁用，不可调用
+         */
+        RedissConnectionPool& operator=(const RedissConnectionPool&) = delete;
         RedissConnectionPool(RedissConnectionPool&&) = delete; ///< 禁止移动
-        RedissConnectionPool& operator=(RedissConnectionPool&&) = delete; ///< 禁止移动赋值
+        /**
+         * @brief 禁止移动赋值
+         * @return 该操作已禁用，不可调用
+         */
+        RedissConnectionPool& operator=(RedissConnectionPool&&) = delete;
 
-        RedissPoolInitializeAwaitable initialize(); ///< 初始化连接池
-        RedissPoolAcquireAwaitable acquire(); ///< 获取连接
-        void release(std::shared_ptr<PooledRedissConnection> conn); ///< 归还连接
-        void trigger_health_check(); ///< 手动触发健康检查
-        void trigger_idle_cleanup(); ///< 手动触发空闲连接清理
-        void warmup(); ///< 预热连接池
-        size_t cleanup_unhealthy_connections(); ///< 清理不健康的连接
-        size_t expand_pool(size_t count); ///< 扩容连接池
-        size_t shrink_pool(size_t target_size); ///< 缩容连接池
-        void shutdown(); ///< 关闭连接池
-        PoolStats get_stats() const; ///< 获取连接池统计信息
-        const RedissConnectionPoolConfig& get_config() const { return m_config; } ///< 获取配置
+        /**
+         * @brief 初始化连接池
+         * @return RedissPoolInitializeAwaitable 等待体，通过 co_await 执行并取得操作结果
+         */
+        RedissPoolInitializeAwaitable initialize();
+        /**
+         * @brief 获取连接
+         * @return RedissPoolAcquireAwaitable 等待体，通过 co_await 执行并取得操作结果
+         */
+        RedissPoolAcquireAwaitable acquire();
+        /**
+         * @brief 归还连接
+         * @param conn 连接对象
+         * @return 无返回值
+         */
+        void release(std::shared_ptr<PooledRedissConnection> conn);
+        /**
+         * @brief 手动触发健康检查
+         * @return 无返回值
+         */
+        void trigger_health_check();
+        /**
+         * @brief 手动触发空闲连接清理
+         * @return 无返回值
+         */
+        void trigger_idle_cleanup();
+        /**
+         * @brief 预热连接池
+         * @return 无返回值
+         */
+        void warmup();
+        /**
+         * @brief 清理不健康的连接
+         * @return size_t 操作结果
+         */
+        size_t cleanup_unhealthy_connections();
+        /**
+         * @brief 扩容连接池
+         * @param count 元素数量
+         * @return size_t 操作结果
+         */
+        size_t expand_pool(size_t count);
+        /**
+         * @brief 缩容连接池
+         * @param target_size 目标大小
+         * @return size_t 操作结果
+         */
+        size_t shrink_pool(size_t target_size);
+        /**
+         * @brief 关闭连接池
+         * @return 无返回值
+         */
+        void shutdown();
+        /**
+         * @brief 获取连接池统计信息
+         * @return PoolStats 操作结果
+         */
+        PoolStats get_stats() const;
+        /**
+         * @brief 获取配置
+         * @return const RedissConnectionPoolConfig& 引用
+         */
+        const RedissConnectionPoolConfig& get_config() const { return m_config; }
 
         ~RedissConnectionPool();
 
@@ -582,22 +799,87 @@ namespace galay::redis
         friend class RedissPoolInitializeAwaitable;
         friend class RedissPoolAcquireAwaitable;
 
-        RedisVoidResult initialize_sync(); ///< 同步初始化实现
+        /**
+         * @brief 同步初始化实现
+         * @return RedisVoidResult 操作结果
+         */
+        RedisVoidResult initialize_sync();
+        /**
+         * @brief 同步获取连接实现
+         * @param start_time 开始时刻
+         * @return 成功时返回 std::shared_ptr<PooledRedissConnection>，失败时返回 RedisError 错误
+         */
         std::expected<std::shared_ptr<PooledRedissConnection>, RedisError>
-        acquire_sync(std::chrono::steady_clock::time_point start_time); ///< 同步获取连接实现
-        void record_acquire_stats(std::chrono::steady_clock::time_point start_time); ///< 记录获取连接统计
-        std::shared_ptr<PooledRedissConnection> try_acquire_available(); ///< 从分片空闲队列非阻塞获取健康连接
-        std::shared_ptr<PooledRedissConnection> create_connection_slot(); ///< 预留容量并创建待连接槽位
-        void destroy_connection_slot(std::shared_ptr<PooledRedissConnection>& conn); ///< 销毁已计入容量的连接槽位
-        bool return_to_available(std::shared_ptr<PooledRedissConnection> conn); ///< 将健康连接放回分片空闲队列
-        bool enqueue_waiter(std::shared_ptr<detail::RedissPoolWaiter> waiter); ///< 注册等待连接的协程
+        acquire_sync(std::chrono::steady_clock::time_point start_time);
+        /**
+         * @brief 记录获取连接统计
+         * @param start_time 开始时刻
+         * @return 无返回值
+         */
+        void record_acquire_stats(std::chrono::steady_clock::time_point start_time);
+        /**
+         * @brief 从分片空闲队列非阻塞获取健康连接
+         * @return std::shared_ptr<PooledRedissConnection> 操作结果
+         */
+        std::shared_ptr<PooledRedissConnection> try_acquire_available();
+        /**
+         * @brief 预留容量并创建待连接槽位
+         * @return std::shared_ptr<PooledRedissConnection> 操作结果
+         */
+        std::shared_ptr<PooledRedissConnection> create_connection_slot();
+        /**
+         * @brief 销毁已计入容量的连接槽位
+         * @param conn 连接对象
+         * @return 无返回值
+         */
+        void destroy_connection_slot(std::shared_ptr<PooledRedissConnection>& conn);
+        /**
+         * @brief 将健康连接放回分片空闲队列
+         * @param conn 连接对象
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool return_to_available(std::shared_ptr<PooledRedissConnection> conn);
+        /**
+         * @brief 注册等待连接的协程
+         * @param waiter 等待节点
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool enqueue_waiter(std::shared_ptr<detail::RedissPoolWaiter> waiter);
+        /**
+         * @brief 尝试把连接转交给等待者
+         * @param conn 连接对象
+         * @param waiter_to_wake 要唤醒的等待节点
+         * @return 操作成功时返回 true，否则返回 false
+         */
         bool complete_one_waiter(std::shared_ptr<PooledRedissConnection> conn,
-                               std::shared_ptr<detail::RedissPoolWaiter>& waiter_to_wake); ///< 尝试把连接转交给等待者
-        bool wake_one_waiter_from_available(); ///< 从空闲队列唤醒一个等待者，避免 enqueue/release 竞态
-        size_t drain_available_connections(std::vector<std::shared_ptr<PooledRedissConnection>>* drained = nullptr); ///< 清空空闲分片
-        size_t idle_shard_index() const noexcept; ///< 当前线程对应的空闲分片
-        std::expected<std::shared_ptr<PooledRedissConnection>, RedisError> get_connection_sync(); ///< 获取或创建连接
-        bool check_connection_health_sync(std::shared_ptr<PooledRedissConnection> conn); ///< 检查连接健康状态
+                               std::shared_ptr<detail::RedissPoolWaiter>& waiter_to_wake);
+        /**
+         * @brief 从空闲队列唤醒一个等待者，避免 enqueue/release 竞态
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool wake_one_waiter_from_available();
+        /**
+         * @brief 清空空闲分片
+         * @param drained 已排空条目数量
+         * @return size_t 操作结果
+         */
+        size_t drain_available_connections(std::vector<std::shared_ptr<PooledRedissConnection>>* drained = nullptr);
+        /**
+         * @brief 当前线程对应的空闲分片
+         * @return size_t 操作结果
+         */
+        size_t idle_shard_index() const noexcept;
+        /**
+         * @brief 获取或创建连接
+         * @return 成功时返回 std::shared_ptr<PooledRedissConnection>，失败时返回 RedisError 错误
+         */
+        std::expected<std::shared_ptr<PooledRedissConnection>, RedisError> get_connection_sync();
+        /**
+         * @brief 检查连接健康状态
+         * @param conn 连接对象
+         * @return 操作成功时返回 true，否则返回 false
+         */
+        bool check_connection_health_sync(std::shared_ptr<PooledRedissConnection> conn);
 
     private:
         static constexpr size_t kIdleShardCount = 16;
@@ -720,7 +1002,11 @@ namespace galay::redis
         }
 
         ScopedRedissConnection(const ScopedRedissConnection&) = delete; ///< 禁止拷贝
-        ScopedRedissConnection& operator=(const ScopedRedissConnection&) = delete; ///< 禁止拷贝赋值
+        /**
+         * @brief 禁止拷贝赋值
+         * @return 该操作已禁用，不可调用
+         */
+        ScopedRedissConnection& operator=(const ScopedRedissConnection&) = delete;
 
         /**
          * @brief 移动构造函数
@@ -749,19 +1035,48 @@ namespace galay::redis
             return *this;
         }
 
-        RedissClient* get() { return m_conn ? m_conn->get() : nullptr; }              ///< 获取原始客户端指针
-        const RedissClient* get() const { return m_conn ? m_conn->get() : nullptr; }  ///< 获取原始客户端指针（const）
+        /**
+         * @brief 获取原始客户端指针
+         * @return RedissClient* 指针
+         */
+        RedissClient* get() { return m_conn ? m_conn->get() : nullptr; }
+        /**
+         * @brief 获取原始客户端指针（const）
+         * @return const RedissClient* 指针
+         */
+        const RedissClient* get() const { return m_conn ? m_conn->get() : nullptr; }
 
-        RedissClient* operator->() { return get(); }              ///< 箭头操作符访问客户端
-        const RedissClient* operator->() const { return get(); }  ///< 箭头操作符访问客户端（const）
+        /**
+         * @brief 箭头操作符访问客户端
+         * @return RedissClient* 指针
+         */
+        RedissClient* operator->() { return get(); }
+        /**
+         * @brief 箭头操作符访问客户端（const）
+         * @return const RedissClient* 指针
+         */
+        const RedissClient* operator->() const { return get(); }
 
-        RedissClient& operator*() { return *get(); }              ///< 解引用操作符
-        const RedissClient& operator*() const { return *get(); }  ///< 解引用操作符（const）
+        /**
+         * @brief 解引用操作符
+         * @return RedissClient& 引用
+         */
+        RedissClient& operator*() { return *get(); }
+        /**
+         * @brief 解引用操作符（const）
+         * @return const RedissClient& 引用
+         */
+        const RedissClient& operator*() const { return *get(); }
 
-        explicit operator bool() const { return m_conn != nullptr; } ///< 检查是否持有有效连接
+        /**
+         * @brief 检查是否持有有效连接
+         * @return 持有有效资源时返回 true，否则返回 false
+         */
+        explicit operator bool() const { return m_conn != nullptr; }
 
         /**
          * @brief 手动释放连接，归还到连接池
+         * @return 无返回值
          */
         void release()
         {

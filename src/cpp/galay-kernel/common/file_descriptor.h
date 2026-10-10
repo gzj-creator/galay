@@ -150,6 +150,7 @@ public:
 
     /**
      * @brief 若当前持有有效 fd，则同步关闭它。
+     * @return 无返回值
      */
     void close() noexcept
     {
@@ -200,6 +201,7 @@ public:
     /**
      * @brief 交换两个对象持有的文件描述符。
      * @param other 另一个 FileDescriptor 对象
+     * @return 无返回值
      */
     void swap(FileDescriptor& other) noexcept
     {
@@ -208,6 +210,7 @@ public:
 
     /**
      * @brief 显式转换为 bool，等价于 valid()。
+     * @return 持有有效资源时返回 true，否则返回 false
      */
     explicit operator bool() const noexcept
     {

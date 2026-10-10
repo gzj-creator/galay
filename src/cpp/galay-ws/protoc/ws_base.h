@@ -149,6 +149,8 @@ struct WsFrame
 
 /**
  * @brief 获取操作码名称
+ * @param opcode 帧操作码
+ * @return char* 指针
  */
 inline const char* get_opcode_name(WsOpcode opcode)
 {
@@ -165,6 +167,8 @@ inline const char* get_opcode_name(WsOpcode opcode)
 
 /**
  * @brief 检查操作码是否是控制帧
+ * @param opcode 帧操作码
+ * @return 为控制帧时返回 true，否则返回 false
  */
 inline bool is_control_frame(WsOpcode opcode)
 {
@@ -175,6 +179,8 @@ inline bool is_control_frame(WsOpcode opcode)
 
 /**
  * @brief 检查操作码是否是数据帧
+ * @param opcode 帧操作码
+ * @return 为数据帧时返回 true，否则返回 false
  */
 inline bool is_data_frame(WsOpcode opcode)
 {

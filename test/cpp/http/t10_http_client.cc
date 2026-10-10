@@ -20,6 +20,8 @@ constexpr uint16_t TEST_PORT = 8080;
 
 /**
  * @brief 测试：请求超时
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  * @details 服务器延迟响应，客户端设置较短超时时间
  */
 Task<void> test_request_timeout(IOScheduler* scheduler)
@@ -80,6 +82,8 @@ Task<void> test_request_timeout(IOScheduler* scheduler)
 
 /**
  * @brief 测试：连接超时
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  * @details 连接到不存在的服务器，测试连接超时
  */
 Task<void> test_connect_timeout(IOScheduler* scheduler)
@@ -111,6 +115,8 @@ Task<void> test_connect_timeout(IOScheduler* scheduler)
 
 /**
  * @brief 测试：服务器主动断开连接
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  * @details 服务器在发送部分数据后断开连接
  */
 Task<void> test_server_disconnect(IOScheduler* scheduler)
@@ -172,6 +178,8 @@ Task<void> test_server_disconnect(IOScheduler* scheduler)
 
 /**
  * @brief 测试：接收超时
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  * @details 服务器发送部分数据后停止，测试接收超时
  */
 Task<void> test_receive_timeout(IOScheduler* scheduler)
@@ -229,6 +237,8 @@ Task<void> test_receive_timeout(IOScheduler* scheduler)
 
 /**
  * @brief 测试：多次超时重试
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  * @details 测试超时后重新发起请求
  */
 Task<void> test_timeout_retry(IOScheduler* scheduler)
@@ -298,6 +308,8 @@ Task<void> test_timeout_retry(IOScheduler* scheduler)
 
 /**
  * @brief 测试：正常请求（无超时）
+ * @param scheduler 执行异步操作的 IO 调度器
+ * @return 执行该操作的协程任务，完成后无结果值
  * @details 验证超时功能不影响正常请求
  */
 Task<void> test_normal_request_with_timeout(IOScheduler* scheduler)
@@ -352,6 +364,7 @@ Task<void> test_normal_request_with_timeout(IOScheduler* scheduler)
 
 /**
  * @brief 主函数
+ * @return 进程退出码；0 表示成功，非 0 表示失败
  */
 int main()
 {

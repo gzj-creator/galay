@@ -46,6 +46,11 @@ static uint32_t to_latency_us(std::chrono::steady_clock::duration duration) {
 
 /**
  * @brief 单个 WSS 客户端压测协程
+ * @param client_id 客户端编号
+ * @param url 目标 URL
+ * @param message_payload 消息负载
+ * @param end_time 结束时刻
+ * @return 执行该操作的协程任务，完成后无结果值
  */
 Task<void> benchmark_wss_client(
     int client_id,
@@ -174,6 +179,9 @@ cleanup:
 
 /**
  * @brief 打印统计信息
+ * @param start_time 开始时刻
+ * @param end_time 结束时刻
+ * @return 无返回值
  */
 void print_stats(const std::chrono::steady_clock::time_point& start_time,
                 const std::chrono::steady_clock::time_point& end_time) {

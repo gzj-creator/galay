@@ -40,14 +40,23 @@ public:
     ~McpStdioServer(); ///< 析构函数
 
     McpStdioServer(const McpStdioServer&) = delete; ///< 禁止拷贝构造
-    McpStdioServer& operator=(const McpStdioServer&) = delete; ///< 禁止拷贝赋值
+    /**
+     * @brief 禁止拷贝赋值
+     * @return 该操作已禁用，不可调用
+     */
+    McpStdioServer& operator=(const McpStdioServer&) = delete;
     McpStdioServer(McpStdioServer&&) = delete; ///< 禁止移动构造
-    McpStdioServer& operator=(McpStdioServer&&) = delete; ///< 禁止移动赋值
+    /**
+     * @brief 禁止移动赋值
+     * @return 该操作已禁用，不可调用
+     */
+    McpStdioServer& operator=(McpStdioServer&&) = delete;
 
     /**
      * @brief 设置服务器信息
      * @param name 服务器名称
      * @param version 服务器版本
+     * @return 无返回值
      */
     void set_server_info(const std::string& name, const std::string& version);
 
@@ -55,6 +64,7 @@ public:
      * @brief 设置生产运行策略
      * @details 策略按值保存；应在 run() 前配置，运行中修改不保证并发可见性。
      * @param policy 传输限制、超时和会话策略
+     * @return 无返回值
      */
     void set_production_policy(McpProductionPolicy policy);
 
@@ -63,6 +73,7 @@ public:
      * @details 调用方必须保证 input/output 生命周期覆盖 run() 调用。
      * @param input JSON-RPC line 输入流
      * @param output JSON-RPC line 输出流
+     * @return 无返回值
      */
     void set_streams(std::istream& input, std::ostream& output) noexcept;
 
@@ -72,6 +83,7 @@ public:
      * @param description 工具描述
      * @param inputSchema 输入参数的JSON Schema
      * @param handler 工具处理函数
+     * @return 无返回值
      */
     void add_tool(std::string name,
                  std::string description,
@@ -85,6 +97,7 @@ public:
      * @param description 资源描述
      * @param mimeType MIME类型
      * @param reader 资源读取函数
+     * @return 无返回值
      */
     void add_resource(std::string uri,
                      std::string name,
@@ -98,6 +111,7 @@ public:
      * @param description 提示描述
      * @param arguments 参数定义
      * @param getter 提示获取函数
+     * @return 无返回值
      */
     void add_prompt(std::string name,
                    std::string description,
@@ -108,16 +122,19 @@ public:
      * @brief 运行服务器（阻塞）
      *
      * 该方法会阻塞当前线程，从stdin读取请求并处理，直到收到停止信号或stdin关闭。
+     * @return 无返回值
      */
     void run();
 
     /**
      * @brief 停止服务器
+     * @return 无返回值
      */
     void stop();
 
     /**
      * @brief 检查服务器是否正在运行
+     * @return 正在运行时返回 true，否则返回 false
      */
     bool is_running() const;
 
@@ -125,60 +142,70 @@ private:
     /**
      * @brief 处理JSON-RPC请求
      * @param request 请求视图
+     * @return 无返回值
      */
     void handle_request(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理initialize方法
      * @param request 请求视图
+     * @return 无返回值
      */
     void handle_initialize(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理tools/list方法
      * @param request 请求视图
+     * @return 无返回值
      */
     void handle_tools_list(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理tools/call方法
      * @param request 请求视图
+     * @return 无返回值
      */
     void handle_tools_call(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理resources/list方法
      * @param request 请求视图
+     * @return 无返回值
      */
     void handle_resources_list(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理resources/read方法
      * @param request 请求视图
+     * @return 无返回值
      */
     void handle_resources_read(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理prompts/list方法
      * @param request 请求视图
+     * @return 无返回值
      */
     void handle_prompts_list(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理prompts/get方法
      * @param request 请求视图
+     * @return 无返回值
      */
     void handle_prompts_get(const JsonRpcRequestView& request);
 
     /**
      * @brief 处理ping方法
      * @param request 请求视图
+     * @return 无返回值
      */
     void handle_ping(const JsonRpcRequestView& request);
 
     /**
      * @brief 发送JSON-RPC响应
      * @param response 响应对象
+     * @return 无返回值
      */
     void send_response(const JsonRpcResponse& response);
 
@@ -188,6 +215,7 @@ private:
      * @param code 错误码
      * @param message 错误消息
      * @param details 错误详情
+     * @return 无返回值
      */
     void send_error(int64_t id, int code, const std::string& message, const std::string& details = "");
 
@@ -195,6 +223,7 @@ private:
      * @brief 发送JSON-RPC通知
      * @param method 通知方法名
      * @param params 通知参数JSON
+     * @return 无返回值
      */
     void send_notification(const std::string& method, const std::string& params);
 
@@ -222,7 +251,11 @@ private:
     struct ToolInfo {
         ToolInfo() = default; ///< 默认构造
         ToolInfo(ToolInfo&&) noexcept = default; ///< 移动构造注册项
-        ToolInfo& operator=(ToolInfo&&) noexcept = default; ///< 移动赋值注册项
+        /**
+         * @brief 移动赋值注册项
+         * @return 当前对象引用
+         */
+        ToolInfo& operator=(ToolInfo&&) noexcept = default;
 
         Tool tool; ///< 工具定义
         ToolHandler handler; ///< 工具处理函数
@@ -240,7 +273,11 @@ private:
     struct ResourceInfo {
         ResourceInfo() = default; ///< 默认构造
         ResourceInfo(ResourceInfo&&) noexcept = default; ///< 移动构造注册项
-        ResourceInfo& operator=(ResourceInfo&&) noexcept = default; ///< 移动赋值注册项
+        /**
+         * @brief 移动赋值注册项
+         * @return 当前对象引用
+         */
+        ResourceInfo& operator=(ResourceInfo&&) noexcept = default;
 
         Resource resource; ///< 资源定义
         ResourceReader reader; ///< 资源读取函数
@@ -258,7 +295,11 @@ private:
     struct PromptInfo {
         PromptInfo() = default; ///< 默认构造
         PromptInfo(PromptInfo&&) noexcept = default; ///< 移动构造注册项
-        PromptInfo& operator=(PromptInfo&&) noexcept = default; ///< 移动赋值注册项
+        /**
+         * @brief 移动赋值注册项
+         * @return 当前对象引用
+         */
+        PromptInfo& operator=(PromptInfo&&) noexcept = default;
 
         Prompt prompt; ///< 提示定义
         PromptGetter getter; ///< 提示获取函数
