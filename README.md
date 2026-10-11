@@ -65,6 +65,30 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
+### 多仓库复用 mcpp 包
+
+Galay 和 serde 分别在 `mcpp.toml` 中固定声明 `namespace = "gzj-creator"`，
+包身份为 `gzj-creator.galay` 和 `gzj-creator.serde`，不随机器或安装目录改变。
+消费者通过包名和版本使用依赖：
+
+```toml
+[dependencies]
+"gzj-creator.galay" = "7.0.1"
+```
+
+配置的索引提供对应版本后，在消费者仓库中执行：
+
+```bash
+mcpp add gzj-creator.galay@7.0.1
+mcpp build
+```
+
+首次构建生成锁文件，依赖已安装后可使用 `mcpp build --offline --locked`。
+包位于 `~/.mcpp/registry/data/xpkgs/`，
+所有使用同一 `MCPP_HOME` 的仓库共用它；消费者不声明 `path` 或 Git 依赖。
+清单中的命名空间声明不等于发布；新机器使用 `7.0.1` 前，官方或自建索引必须
+提供该版本及可下载的包资源。
+
 按需关闭部分构建：
 
 ```bash

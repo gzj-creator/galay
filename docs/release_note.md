@@ -608,3 +608,24 @@ MCP/serde 迁移后的 C++ MCP 21/21、serde unit 13/13、安装消费 1/1、C M
 上述结果来自各次变更的验证，不代表最终提交重新完成全量回归；发版检查结果另行
 记录于 CHANGELOG。Bazel、全部平台/后端组合及全仓 sanitizer 未完成统一验收，
 外部集成的跳过/禁用项不计作通过，不据局部探针或 benchmark smoke 宣称应用性能改善。
+
+## v7.0.1 - 2026-10-11
+
+- **版本级别**：修订版本（patch，小版本）
+- **Git 提交消息**：`fix: 固定 mcpp 包身份并同步 serde 发布 v7.0.1`
+- **Git tag**：`v7.0.1`
+
+### 变更摘要
+
+本版本收束自 `v7.0.0` 以来的包身份修正和消费说明，CMake、Bazel、mcpp 版本
+统一为 `7.0.1`。
+
+- **固定包身份**：Galay 的 mcpp 清单显式声明 `namespace = "gzj-creator"`，源码引用及生成的描述符统一识别为 `gzj-creator.galay`；serde 同步固定为 `gzj-creator.serde`。
+- **更新 serde**：Bazel 依赖声明为 `0.5.1`，子模块固定到发布提交 `d0327a15b7dd8fde17a149504d993ea713fb6069`，包含此前已有的 macOS fast_float 修复。
+- **原生消费说明**：README 说明通过包名和版本复用共享存储、离线锁定构建及索引发布条件；消费者无需运行自定义打包脚本。发布 tag 不等于更新公共 mcpp 索引。
+
+### 验证范围
+
+- CMake 重新配置生成 `7.0.1` 包版本，配置测试 4/4 通过；Linux / LLVM 22.1.8 的 mcpp 原生模块 import smoke 构建和运行通过，依赖图识别两个包的固定身份和新版本。
+- serde Linux 无异常构建及包含安装消费者的 7 项 CTest 通过，两个仓库 `git diff --check` 通过。
+- 未重跑 Galay 全量测试、macOS 或 Bazel，未更新公共 mcpp 索引。

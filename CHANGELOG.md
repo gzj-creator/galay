@@ -11,6 +11,24 @@
 
 ## [Unreleased]
 
+## [v7.0.1] - 2026-10-11
+
+### Fixed
+
+- mcpp 清单显式声明 `namespace = "gzj-creator"`，Galay 的源码引用和生成包描述统一识别为 `gzj-creator.galay`；serde 同步固定为 `gzj-creator.serde`。
+
+### Changed
+
+- CMake、Bazel、mcpp 版本统一为 `7.0.1`，serde 子模块和 Bazel 依赖同步至 `0.5.1`，保留该依赖已有的 macOS fast_float 修复。
+
+### Docs
+
+- README 补充通过包名和版本跨仓库复用依赖的原生命令，明确全局存储、离线锁定构建和索引发布条件；不要求消费者运行自定义打包脚本。
+
+### Validation
+
+- CMake 重新配置生成 `7.0.1` 包版本，配置测试 4/4 通过；Linux / LLVM 22.1.8 的 mcpp 原生模块 import smoke 构建和运行通过，依赖图识别 `gzj-creator.galay@7.0.1` 和 `gzj-creator.serde@0.5.1`。serde Linux 无异常构建及包含安装消费者的 7 项 CTest 通过，两个仓库 `git diff --check` 通过。未重跑 Galay 全量测试、macOS 或 Bazel，未更新公共 mcpp 索引。
+
 ## [v7.0.0] - 2026-10-11
 
 ### Added
