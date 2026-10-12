@@ -62,7 +62,7 @@ Task<void> echo_server() {
 - **头文件前缀**: `<galay/cpp/galay-utils/...>`；一站式总头 `<galay/cpp/galay-utils/galay_utils.hpp>`
 - **命名空间**: `galay::utils`
 - **核心类型与接口**:
-  - `StringUtils`（`core/string.hpp`）— `static std::vector<std::string> split(std::string_view, char)`、`join(const std::vector<std::string>&, std::string_view)`、`trim/trim_left/trim_right(std::string_view)`
+  - `StringUtils`（`common/string.hpp`）— `static std::vector<std::string> split(std::string_view, char)`、`join(const std::vector<std::string>&, std::string_view)`、`trim/trim_left/trim_right(std::string_view)`
   - `LruCache<Key, Value>`（`cache/lru_cache.hpp`）— `put(K&&, V&&)` / `put(..., ttl)`、`Value* get(const Key&)`、`EvictCallback`、`Stats`；不可拷贝/移动
   - `RingBuffer`（`buffer/ring_buffer.hpp`）、`Bytes`（`buffer/bytes.hpp`，`data()`/`size()`/`to_string_view()`）
   - `Base64Util`（`encoding/base64.hpp`）— `static std::string base64_encode(std::string const&, bool url=false)`、`base64_decode(std::string const&, bool remove_linebreaks=false)`

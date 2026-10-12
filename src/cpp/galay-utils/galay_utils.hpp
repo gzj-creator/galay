@@ -13,13 +13,13 @@
 /// 公共类型定义
 #include "common/defn.hpp"
 /// 类型名称工具
-#include "core/type_name.hpp"
+#include "common/type_name.hpp"
 
 /// 字符串工具
-#include "core/string.hpp"
+#include "common/string.hpp"
 
 /// 随机数生成
-#include "core/random.hpp"
+#include "algorithm/random.hpp"
 
 /// 系统工具
 #include "system/system.hpp"
@@ -28,7 +28,10 @@
 #include "system/env.hpp"
 
 /// 时间工具
-#include "core/time.hpp"
+#include "system/time.hpp"
+
+/// 硬件计数器读取
+#include "system/rdtsc.hpp"
 
 /// 堆栈跟踪
 #include "system/backtrace.hpp"

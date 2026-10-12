@@ -1,0 +1,80 @@
+日期：2026-10-12
+环境：Linux-6.8.0-101-generic-x86_64-with-glibc2.39
+CPU：Intel(R) Xeon(R) Platinum 8255C CPU @ 2.50GHz
+编译器：c++ (Ubuntu 14.2.0-4ubuntu2~24.04.1) 14.2.0
+构建类型：Release -O3 -DNDEBUG；无 LTO；epoll
+clocksource：kvm-clock
+运行顺序：先 RPC 九对交替样本，后 utils CPU 0，再 utils CPU 1；期间没有并行构建或 CTest。
+二进制 SHA-256：458a1d27d5ca63b570872b653a3e211459329d03a27efeb544f3087a1b29bd83
+
+round=0 clock=steady cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=steady iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13325999.24 p50_ns=40 p95_ns=59 p99_ns=60
+
+round=0 clock=rdtsc cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=rdtsc iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13752120.14 p50_ns=30 p95_ns=56 p99_ns=57
+
+round=1 clock=rdtsc cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=rdtsc iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13936146.07 p50_ns=31 p95_ns=57 p99_ns=62
+
+round=1 clock=steady cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=steady iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13278205.76 p50_ns=40 p95_ns=59 p99_ns=60
+
+round=2 clock=steady cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=steady iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13301698.44 p50_ns=40 p95_ns=58 p99_ns=59
+
+round=2 clock=rdtsc cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=rdtsc iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=14014275.19 p50_ns=30 p95_ns=56 p99_ns=56
+
+round=3 clock=rdtsc cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=rdtsc iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=14038234.16 p50_ns=30 p95_ns=56 p99_ns=56
+
+round=3 clock=steady cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=steady iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13250483.54 p50_ns=40 p95_ns=60 p99_ns=74
+
+round=4 clock=steady cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=steady iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13316468.20 p50_ns=40 p95_ns=57 p99_ns=58
+
+round=4 clock=rdtsc cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=rdtsc iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=14050144.45 p50_ns=30 p95_ns=56 p99_ns=56
+
+round=5 clock=rdtsc cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=rdtsc iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13927938.77 p50_ns=30 p95_ns=56 p99_ns=56
+
+round=5 clock=steady cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=steady iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13145354.93 p50_ns=40 p95_ns=58 p99_ns=67
+
+round=6 clock=steady cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=steady iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13221734.66 p50_ns=40 p95_ns=57 p99_ns=59
+
+round=6 clock=rdtsc cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=rdtsc iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13985678.23 p50_ns=31 p95_ns=56 p99_ns=57
+
+round=7 clock=rdtsc cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=rdtsc iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=14017669.31 p50_ns=30 p95_ns=56 p99_ns=56
+
+round=7 clock=steady cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=steady iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13272162.20 p50_ns=40 p95_ns=58 p99_ns=59
+
+round=8 clock=steady cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=steady iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13269874.23 p50_ns=40 p95_ns=58 p99_ns=68
+
+round=8 clock=rdtsc cpu=0
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=0 numa=keep numa_mode=0 numa_nodes=
+rpc unary mode route cache clock=rdtsc iterations=2000000 ok=2000000 errors=0 error_rate=0.000000 lookup_per_s=13888001.70 p50_ns=30 p95_ns=56 p99_ns=56

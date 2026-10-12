@@ -35,7 +35,7 @@ namespace galay::utils {
  * @version 1.0.0
  *
  * @details 提供跨平台的系统工具函数，包括文件操作、网络地址解析和系统信息查询。
- *          时间相关能力位于 core/time.hpp，环境变量管理位于 system/env.hpp。
+ *          时间相关能力位于 system/time.hpp，环境变量管理位于 system/env.hpp。
  */
 
 /**

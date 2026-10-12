@@ -1,0 +1,71 @@
+# 2026-10-12 RDTSC 生产接入审查验证记录
+
+主机：Linux 6.8.0-101-generic，KVM，Intel Xeon Platinum 8255C，4 个逻辑 CPU
+编译器：GCC 14.2.0；构建类型：Release `-O3 -DNDEBUG`，无 LTO，epoll
+
+## 构建与测试
+
+```text
+$ cmake --build build/rdtsc-eval -j 4
+exit=0
+
+$ ctest --test-dir build/rdtsc-eval --output-on-failure
+exit=0
+100% tests passed, 0 tests failed out of 292
+未运行：kernel.iou_accept_completion_resource、kernel.iou_accept_typed_completion、kernel.async_file_move；三个测试因当前构建禁用 io_uring 条件跳过。
+
+$ ctest --test-dir build/rdtsc-eval -R '^utils\.rdtsc$' --output-on-failure
+exit=0
+1/1 Test #28: utils.rdtsc ... Passed
+
+$ python3 scripts/common/106_gen_module_prelude.py --module galay-utils --check
+exit=0
+ok src/cpp/galay-utils/module/module_prelude.hpp (76 headers)
+
+$ git diff --check
+exit=0
+```
+
+首次全量 CTest 的 `rpc.t21.rpc.client.concurrent.unary` 使用 `26000 + getpid() % 16000` 选端口，曾因 `Address already in use` 绑定冲突而失败；没有确定当时的占用来源。单独重跑通过，随后第二次完整 CTest 通过。没有修改该测试或端口策略。
+
+提交前还核对了 `git diff --cached --check`，将复测 CSV 的 CRLF 统一为 LF，并去除盘点附件末尾的多余空行；样本数值和搜索结果保持不变。
+
+## 行为边界
+
+- RPC `-n 0`、未知 `--clock`、缺失参数值均非零退出并打印 usage。
+- utils 时间源 benchmark 的 `0` 次迭代非零退出并打印 `invalid iteration count`。
+- RPC RDTSC 与 utils 时间源在 `GALAY_BENCH_CPUS=0,1` 时拒绝多 CPU；RPC steady 对照在同一集合上成功。
+- 文档 C++ 示例编译并运行，输出 `parts=3 elapsed_ns=<positive>`。
+- 生产时间盘点中的 5 条 `rg` 命令重放后命中数一致；受影响的 9 份 Markdown 中 108 个本地链接/锚点通过检查，本文 4 个证据文件引用也分别核验存在。
+
+## 性能复测证据
+
+- [RPC 交替样本日志](rdtsc_rpc_route_review_2026-10-12.txt)
+- [RPC 交替样本 CSV](rdtsc_rpc_route_review_2026-10-12.csv)
+- [Utils CPU 0 原始输出](rdtsc_time_sources_review_2026-10-12_cpu0.txt)
+- [Utils CPU 1 原始输出](rdtsc_time_sources_review_2026-10-12_cpu1.txt)
+
+所有 RDTSC 样本均在启动时初始化一次并回读单 CPU affinity；失败时进程非零退出，没有默认回退到 chrono。
+
+## 第二次完整 CTest 的原始摘要
+
+```text
+100% tests passed, 0 tests failed out of 292
+
+Label Time Summary:
+config     =  36.68 sec*proc (8 tests)
+kernel     = 154.10 sec*proc (208 tests)
+rpc        =   0.92 sec*proc (42 tests)
+scripts    =  20.21 sec*proc (6 tests)
+stress     =   0.22 sec*proc (1 test)
+surface    =   0.02 sec*proc (6 tests)
+unit       = 213.49 sec*proc (285 tests)
+utils      =   1.82 sec*proc (28 tests)
+
+Total Test time (real) = 133.18 sec
+
+The following tests did not run:
+	141 - kernel.iou_accept_completion_resource (Skipped)
+	142 - kernel.iou_accept_typed_completion (Skipped)
+	144 - kernel.async_file_move (Skipped)
+```

@@ -1,3 +1,8 @@
+#include <galay/cpp/galay-utils/common/string.hpp>
+#include <galay/cpp/galay-utils/system/time.hpp>
+#include <galay/cpp/galay-utils/algorithm/random.hpp>
+#include <galay/cpp/galay-utils/common/type_name.hpp>
+
 #include "test_common.hpp"
 
 #include <limits>
@@ -353,7 +358,7 @@ void test_type_name() {
 // ==================== Base64 Tests ====================
 
 int main() {
-    std::cout << "\n=== core_test ===" << std::endl;
+    std::cout << "\n=== string_time_random_test ===" << std::endl;
     try {
         test_string();
         test_random();

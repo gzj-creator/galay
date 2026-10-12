@@ -5,9 +5,11 @@ import galay.utils;
 #include <cstddef>
 #include <iostream>
 #include <new>
+#include <span>
 #include <string>
 #include <system_error>
 #include <thread>
+#include <type_traits>
 #include <utility>
 
 int main() {
@@ -19,6 +21,32 @@ int main() {
     }
     static_assert(Numa::kMaxNodes > 0);
     static_assert(Memory::kMaxNodes > 0);
+    static_assert(!std::is_default_constructible_v<Rdtsc>);
+
+#if defined(__linux__)
+    const auto allowed_cpus = CPU::cpu_affinity();
+    if (!allowed_cpus || allowed_cpus->empty()) {
+        return 1;
+    }
+    const unsigned cpu = allowed_cpus->front();
+    const auto pinned = CPU::bind_current_thread(std::span{&cpu, 1});
+    if (!pinned || pinned->size() != 1 || pinned->front() != cpu) {
+        return 1;
+    }
+#endif
+    const auto counter = Rdtsc::create();
+    if constexpr (Rdtsc::is_supported) {
+        if (!counter) {
+            std::cerr << "Rdtsc initialization failed: " << counter.error().message() << '\n';
+            return 1;
+        }
+        const auto elapsed = counter->to_nanoseconds(0);
+        if (!elapsed || elapsed->count() != 0 || counter->frequency_hz() == 0) {
+            return 1;
+        }
+    } else if (counter || counter.error() != std::errc::operation_not_supported) {
+        return 1;
+    }
 
     const auto invalidEnv = Env::get("");
     if (invalidEnv || invalidEnv.error() != std::errc::invalid_argument) {

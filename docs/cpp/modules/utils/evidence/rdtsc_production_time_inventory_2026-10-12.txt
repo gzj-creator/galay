@@ -1,0 +1,343 @@
+Galay RDTSC 生产接入时间源盘点
+日期：2026-10-12
+基准 HEAD：3ca39a2d48cfd51bf7a07458bf4f4d44af6c475b（包含已有未提交 RDTSC 与目录迁移改动）
+范围：src/cpp 与 src/c；benchmark 仅用于确认当前计数器消费者。
+结论：没有满足全部接入条件的生产计时路径；逐路径语义依据见 ../rdtsc.md 的生产代码接入审查章节。
+命中记录只证明搜索覆盖，线程与时间契约由调用链审查核实。
+行号为本次工作区快照，符号与来源路径是后续核验依据。
+
+直接、别名、模板与 C 时钟调用
+$ rg -n '\b[A-Za-z_]*[Cc]lock::now\(|\bClock::now\(|clock_gettime\(|gettimeofday\(|timespec_get\(|Time::current_time_\w+\(|std::time\(' src --glob '!module_prelude.hpp' --glob '!*.cppm'
+命中行数：113
+src/c/galay-kernel-c/async-c/async_mutex.c:22:    return clock_gettime(CLOCK_MONOTONIC, &now) == 0
+src/c/galay-kernel-c/async-c/async_waiter.c:23:    return clock_gettime(CLOCK_MONOTONIC, &now) == 0
+src/c/galay-kernel-c/concurrency-c/bounded_channel.c:121:    return clock_gettime(CLOCK_MONOTONIC, &now) == 0
+src/c/galay-kernel-c/coro-c/coro_task.c:376:    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:101:        std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:115:        std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:124:        std::chrono::system_clock::time_point now = std::chrono::system_clock::now());
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:134:        std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:146:        std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+src/cpp/galay-http/kernel/http_reader.h:1091:        const auto now = SteadyClock::now();
+src/cpp/galay-http/kernel/http_reader.h:1132:            deadline = SteadyClock::now() + *timeout;
+src/cpp/galay-http/kernel/http_reader.h:1156:                    deadline = SteadyClock::now() + *body_timeout;
+src/cpp/galay-http/plugin/blacklist/blacklist.hpp:207:        const auto now = std::chrono::steady_clock::now();
+src/cpp/galay-http/server/http_etag.h:387:            ftime - fs::file_time_type::clock::now() + std::chrono::system_clock::now()
+src/cpp/galay-http/server/http_range.h:145:               std::to_string(std::time(nullptr));
+src/cpp/galay-http/server/http_router.cc:1542:        lastModified = std::time(nullptr);
+src/cpp/galay-http2/kernel/h2_core.cc:165:        const auto timer_event = check_timers(std::chrono::steady_clock::now());
+src/cpp/galay-http2/kernel/h2_core.h:151:    std::chrono::steady_clock::time_point m_last_frame_recv_at{std::chrono::steady_clock::now()};
+src/cpp/galay-http2/kernel/h2_core.h:81:        mark_settings_sent(std::chrono::steady_clock::now());
+src/cpp/galay-http2/kernel/http2_conn.h:1616:        m_settings_sent_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/kernel/stream_manager.h:1045:                m_last_frame_recv_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/kernel/stream_manager.h:1157:                        m_last_frame_recv_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/kernel/stream_manager.h:1230:                    m_last_frame_recv_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/kernel/stream_manager.h:1428:            auto now = std::chrono::steady_clock::now();
+src/cpp/galay-http2/kernel/stream_manager.h:558:            auto deadline = std::chrono::steady_clock::now() + m_conn.runtime_config().graceful_shutdown_timeout;
+src/cpp/galay-http2/kernel/stream_manager.h:560:                   std::chrono::steady_clock::now() < deadline) {
+src/cpp/galay-http2/kernel/stream_manager.h:609:        m_last_frame_recv_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/kernel/stream_manager.h:960:                        m_last_frame_recv_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/server/h2_static_file.cc:19:        file_time - std::filesystem::file_time_type::clock::now() +
+src/cpp/galay-http2/server/h2_static_file.cc:20:        std::chrono::system_clock::now());
+src/cpp/galay-kernel/common/timer.hpp:120:            auto now = std::chrono::steady_clock::now();
+src/cpp/galay-kernel/common/timer_manager.hpp:117:            auto now = std::chrono::steady_clock::now();
+src/cpp/galay-kernel/common/timer_manager.hpp:205:            auto now = std::chrono::steady_clock::now();
+src/cpp/galay-kernel/common/timer_manager.hpp:239:            auto now = std::chrono::steady_clock::now();
+src/cpp/galay-kernel/common/timer_manager.hpp:435:            auto now = std::chrono::steady_clock::now();
+src/cpp/galay-kernel/common/timer_manager.hpp:92:            , m_startTime(std::chrono::steady_clock::now())
+src/cpp/galay-kernel/common/timer_manager_mt.hpp:233:        auto now = std::chrono::steady_clock::now();
+src/cpp/galay-kernel/common/timer_manager_mt.hpp:289:            const auto now = std::chrono::steady_clock::now();
+src/cpp/galay-kernel/common/timer_manager_mt.hpp:415:        auto now = std::chrono::steady_clock::now();
+src/cpp/galay-kernel/common/timer_manager_mt.hpp:469:        m_startTime = std::chrono::steady_clock::now();
+src/cpp/galay-kernel/common/timer_manager_mt.hpp:88:        , m_startTime(std::chrono::steady_clock::now())
+src/cpp/galay-mongo/sync/mongo_client.cc:266:    const auto deadline = std::chrono::steady_clock::now() + timeout;
+src/cpp/galay-mongo/sync/mongo_client.cc:270:    while (first_scan || std::chrono::steady_clock::now() < deadline) {
+src/cpp/galay-mongo/sync/mongo_client.cc:279:            const auto now = std::chrono::steady_clock::now();
+src/cpp/galay-mongo/sync/mongo_client.cc:290:            const auto started = std::chrono::steady_clock::now();
+src/cpp/galay-mongo/sync/mongo_client.cc:292:            const auto round_trip_time = std::chrono::steady_clock::now() - started;
+src/cpp/galay-mongo/sync/mongo_client.cc:362:        if (std::chrono::steady_clock::now() >= deadline) {
+src/cpp/galay-redis/async/conn_pool.cc:186:        const auto elapsed = std::chrono::steady_clock::now() - start_time;
+src/cpp/galay-redis/async/conn_pool.cc:834:        const auto elapsed = std::chrono::steady_clock::now() - start_time;
+src/cpp/galay-redis/async/conn_pool.h:203:            , m_last_used(std::chrono::steady_clock::now())
+src/cpp/galay-redis/async/conn_pool.h:262:            m_last_used = std::chrono::steady_clock::now();
+src/cpp/galay-redis/async/conn_pool.h:271:            auto now = std::chrono::steady_clock::now();
+src/cpp/galay-redis/async/conn_pool.h:315:            , m_last_used(std::chrono::steady_clock::now())
+src/cpp/galay-redis/async/conn_pool.h:374:            m_last_used = std::chrono::steady_clock::now();
+src/cpp/galay-redis/async/conn_pool.h:383:            auto now = std::chrono::steady_clock::now();
+src/cpp/galay-redis/async/topology_client.cc:1690:        m_last_refresh_time = std::chrono::steady_clock::now();
+src/cpp/galay-redis/async/topology_client.cc:1699:        const auto now = std::chrono::steady_clock::now();
+src/cpp/galay-redis/async/topology_client.cc:815:        m_last_refresh_time = std::chrono::steady_clock::now();
+src/cpp/galay-redis/async/topology_client.cc:824:        const auto now = std::chrono::steady_clock::now();
+src/cpp/galay-redis/details/pool_awaitable.inl:21:        , m_start_time(std::chrono::steady_clock::now())
+src/cpp/galay-redis/details/pool_awaitable.inl:235:        , m_start_time(std::chrono::steady_clock::now())
+src/cpp/galay-redis/details/pool_awaitable.inl:242:        m_start_time = std::chrono::steady_clock::now();
+src/cpp/galay-redis/details/pool_awaitable.inl:28:        m_start_time = std::chrono::steady_clock::now();
+src/cpp/galay-rpc/kernel/rpc_channel.h:1113:        event.latency = std::chrono::steady_clock::now() - pending.started_at;
+src/cpp/galay-rpc/kernel/rpc_channel.h:488:        outbound.started_at = std::chrono::steady_clock::now();
+src/cpp/galay-rpc/kernel/rpc_channel.h:524:        auto deadline = options.effective_deadline(RpcClock::now());
+src/cpp/galay-rpc/kernel/rpc_channel.h:527:            auto now = RpcClock::now();
+src/cpp/galay-rpc/kernel/rpc_channel.h:760:        const auto deadline = std::chrono::steady_clock::now() + timeout;
+src/cpp/galay-rpc/kernel/rpc_channel.h:762:            if (std::chrono::steady_clock::now() >= deadline) {
+src/cpp/galay-rpc/kernel/rpc_policy.h:117:        auto deadline = options.effective_deadline(RpcClock::now());
+src/cpp/galay-rpc/kernel/rpc_policy.h:118:        if (deadline.has_value() && *deadline <= RpcClock::now()) {
+src/cpp/galay-rpc/kernel/rpc_policy.h:135:            if (deadline.has_value() && *deadline <= RpcClock::now()) {
+src/cpp/galay-rpc/kernel/rpc_policy.h:155:        auto deadline = options.effective_deadline(RpcClock::now());
+src/cpp/galay-rpc/kernel/rpc_policy.h:156:        if (deadline.has_value() && *deadline <= RpcClock::now()) {
+src/cpp/galay-rpc/kernel/rpc_policy.h:177:                const auto now = RpcClock::now();
+src/cpp/galay-tracing/common/id_format.cc:32:    const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:121:              deadline(std::chrono::steady_clock::now() + timeout) {
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:264:    const auto deadline = std::chrono::steady_clock::now() + timeout;
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:272:           std::chrono::steady_clock::now() <= deadline) {
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:287:        const auto now = std::chrono::steady_clock::now();
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:299:    return ok && std::chrono::steady_clock::now() <= deadline;
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:324:        const auto now = std::chrono::steady_clock::now();
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:333:        while (std::chrono::steady_clock::now() <= deadline) {
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:350:        return ok && std::chrono::steady_clock::now() <= deadline;
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:385:            const bool deadlineExpired = std::chrono::steady_clock::now() >= shutdownDeadline;
+src/cpp/galay-tracing/kernel/span.cc:151:      m_startedAt(timingPolicy == SpanTimingPolicy::kEnabled ? Clock::now() : Clock::time_point{}),
+src/cpp/galay-tracing/kernel/span.cc:162:            m_endedAt = Clock::now();
+src/cpp/galay-tracing/kernel/span.cc:218:        .timestamp = m_startedAt == Clock::time_point{} ? Clock::time_point{} : Clock::now(),
+src/cpp/galay-tracing/log/log_record.h:290:        Clock::time_point timestamp = Clock::now())
+src/cpp/galay-tracing/log/log_record.h:321:    Clock::time_point timestamp{Clock::now()};           ///< 时间戳
+src/cpp/galay-utils/cache/lru_cache.hpp:486:        return Expiration{Clock::now() + *ttl, ttl};
+src/cpp/galay-utils/cache/lru_cache.hpp:490:        return Expiration{Clock::now() + ttl, ttl};
+src/cpp/galay-utils/cache/lru_cache.hpp:494:        return expiresAt.has_value() && *expiresAt <= Clock::now();
+src/cpp/galay-utils/cache/lru_cache.hpp:606:        const auto now = Clock::now();
+src/cpp/galay-utils/cache/lru_cache.hpp:630:        const auto now = Clock::now();
+src/cpp/galay-utils/crypto/salt.hpp:271:        auto now = std::chrono::system_clock::now();
+src/cpp/galay-utils/resilience/circuit_breaker.hpp:386:            Clock::now().time_since_epoch()).count();
+src/cpp/galay-utils/resilience/rate_limiter.hpp:219:        return static_cast<int64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+src/cpp/galay-utils/resilience/rate_limiter.hpp:325:        return static_cast<int64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+src/cpp/galay-utils/resilience/rate_limiter.hpp:400:        return static_cast<int64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+src/cpp/galay-utils/system/rdtsc.cc:37:    if (clock_gettime(CLOCK_MONOTONIC_RAW, &now) != 0) {
+src/cpp/galay-utils/system/rdtsc.cc:43:        std::chrono::steady_clock::now().time_since_epoch()).count();
+src/cpp/galay-utils/system/time.hpp:106:        return format_time(std::time(nullptr), format, false);
+src/cpp/galay-utils/system/time.hpp:112:        const auto now = std::chrono::system_clock::now();
+src/cpp/galay-utils/system/time.hpp:133:        : m_start(Clock::now()) {}
+src/cpp/galay-utils/system/time.hpp:147:        m_start = Clock::now();
+src/cpp/galay-utils/system/time.hpp:155:        return Clock::now() - m_start;
+src/cpp/galay-utils/system/time.hpp:205:        return Deadline(Clock::now() + std::chrono::duration_cast<duration>(timeout));
+src/cpp/galay-utils/system/time.hpp:213:        return Clock::now() >= m_deadline;
+src/cpp/galay-utils/system/time.hpp:221:        const auto now = Clock::now();
+src/cpp/galay-utils/system/time.hpp:97:        return format_time(std::time(nullptr), format, true);
+src/cpp/galay-utils/thread/thread.hpp:328:        const auto deadline = std::chrono::steady_clock::now() + timeout;
+src/cpp/galay-utils/thread/thread.hpp:330:            if (std::chrono::steady_clock::now() >= deadline) {
+
+存储的时间字段与公开时间点
+$ rg -n 'time_point|started_at|m_start_time|m_last_used|shutdownDeadlineTicks|m_last_(refresh_time|frame_recv_at)|m_settings_sent_at' src/cpp --glob '!module_prelude.hpp' --glob '!*.cppm'
+命中行数：132
+src/cpp/galay-etcd/cluster/etcd_cluster_client.cc:109:    std::chrono::system_clock::time_point when)
+src/cpp/galay-etcd/cluster/etcd_cluster_client.cc:134:std::vector<size_t> EtcdClusterState::collect_due_probes(std::chrono::system_clock::time_point now)
+src/cpp/galay-etcd/cluster/etcd_cluster_client.cc:146:            snapshot.last_failure_time.value_or(std::chrono::system_clock::time_point{}));
+src/cpp/galay-etcd/cluster/etcd_cluster_client.cc:158:void EtcdClusterState::mark_probe_success(size_t index, std::chrono::system_clock::time_point when)
+src/cpp/galay-etcd/cluster/etcd_cluster_client.cc:171:    std::chrono::system_clock::time_point when)
+src/cpp/galay-etcd/cluster/etcd_cluster_client.cc:88:void EtcdClusterState::mark_success(size_t index, std::chrono::system_clock::time_point when)
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:101:        std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:115:        std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:124:        std::chrono::system_clock::time_point now = std::chrono::system_clock::now());
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:134:        std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:146:        std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:48:    std::optional<std::chrono::system_clock::time_point> last_failure_time = std::nullopt; ///< 最近失败时间
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:49:    std::optional<std::chrono::system_clock::time_point> last_success_time = std::nullopt; ///< 最近成功时间
+src/cpp/galay-etcd/cluster/etcd_cluster_client.h:50:    std::optional<std::chrono::system_clock::time_point> last_probe_time = std::nullopt; ///< 最近主动探测时间
+src/cpp/galay-http/kernel/http_reader.h:1087:        const std::optional<SteadyClock::time_point>& deadline) {
+src/cpp/galay-http/kernel/http_reader.h:1129:        std::optional<SteadyClock::time_point> deadline;
+src/cpp/galay-http/plugin/blacklist/blacklist.hpp:240:    using TimePoint = std::chrono::steady_clock::time_point;
+src/cpp/galay-http/plugin/blacklist/blacklist.hpp:251:     * @brief 判断 time_point 是否已经被初始化为有效业务时间。
+src/cpp/galay-http/plugin/common/conn_info_storage.hpp:26:    std::chrono::steady_clock::time_point first_access_at{}; ///< 固定间隔策略的当前窗口起点。
+src/cpp/galay-http/plugin/common/conn_info_storage.hpp:27:    std::chrono::steady_clock::time_point blocked_until{};   ///< 临时封禁截止时间；默认值表示未封禁。
+src/cpp/galay-http/plugin/common/conn_info_storage.hpp:28:    std::chrono::steady_clock::time_point last_decay_at{};   ///< 衰减计数策略的上次衰减基准时间。
+src/cpp/galay-http/server/http_etag.h:386:        auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+src/cpp/galay-http2/kernel/h2_core.cc:27:Http2ConnectionCore::TimerEvent Http2ConnectionCore::check_timers(std::chrono::steady_clock::time_point now) noexcept
+src/cpp/galay-http2/kernel/h2_core.cc:31:        now - m_settings_sent_at > m_timer_config.settings_ack_timeout) {
+src/cpp/galay-http2/kernel/h2_core.cc:37:        now - m_graceful_shutdown_started_at > m_timer_config.graceful_shutdown_timeout) {
+src/cpp/galay-http2/kernel/h2_core.cc:43:            now - m_last_frame_recv_at >= m_timer_config.ping_interval) {
+src/cpp/galay-http2/kernel/h2_core.h:100:        m_graceful_shutdown_started_at = at;
+src/cpp/galay-http2/kernel/h2_core.h:104:    TimerEvent check_timers(std::chrono::steady_clock::time_point now) noexcept;
+src/cpp/galay-http2/kernel/h2_core.h:150:    std::chrono::steady_clock::time_point m_settings_sent_at{};
+src/cpp/galay-http2/kernel/h2_core.h:151:    std::chrono::steady_clock::time_point m_last_frame_recv_at{std::chrono::steady_clock::now()};
+src/cpp/galay-http2/kernel/h2_core.h:152:    std::chrono::steady_clock::time_point m_last_ping_sent_at{};
+src/cpp/galay-http2/kernel/h2_core.h:153:    std::chrono::steady_clock::time_point m_graceful_shutdown_started_at{};
+src/cpp/galay-http2/kernel/h2_core.h:83:    void mark_settings_sent(std::chrono::steady_clock::time_point at) noexcept {
+src/cpp/galay-http2/kernel/h2_core.h:85:        m_settings_sent_at = at;
+src/cpp/galay-http2/kernel/h2_core.h:90:    void mark_frame_received_at(std::chrono::steady_clock::time_point at) noexcept { m_last_frame_recv_at = at; }
+src/cpp/galay-http2/kernel/h2_core.h:91:    void mark_ping_sent(std::chrono::steady_clock::time_point at) noexcept {
+src/cpp/galay-http2/kernel/h2_core.h:98:    void begin_graceful_shutdown(std::chrono::steady_clock::time_point at) noexcept {
+src/cpp/galay-http2/kernel/http2_conn.h:1616:        m_settings_sent_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/kernel/http2_conn.h:1620:    std::chrono::steady_clock::time_point settings_sent_at() const { return m_settings_sent_at; }
+src/cpp/galay-http2/kernel/http2_conn.h:2116:    std::chrono::steady_clock::time_point m_settings_sent_at{};
+src/cpp/galay-http2/kernel/stream_manager.h:1045:                m_last_frame_recv_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/kernel/stream_manager.h:1157:                        m_last_frame_recv_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/kernel/stream_manager.h:1230:                    m_last_frame_recv_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/kernel/stream_manager.h:1442:                if (now - m_last_frame_recv_at >= m_conn.runtime_config().ping_interval) {
+src/cpp/galay-http2/kernel/stream_manager.h:3135:    std::chrono::steady_clock::time_point m_last_frame_recv_at{};
+src/cpp/galay-http2/kernel/stream_manager.h:3136:    std::chrono::steady_clock::time_point m_last_ping_sent_at{};
+src/cpp/galay-http2/kernel/stream_manager.h:609:        m_last_frame_recv_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/kernel/stream_manager.h:840:    bool should_enforce_settings_ack_timeout(std::chrono::steady_clock::time_point now) const {
+src/cpp/galay-http2/kernel/stream_manager.h:852:        return m_last_frame_recv_at <= m_conn.settings_sent_at();
+src/cpp/galay-http2/kernel/stream_manager.h:960:                        m_last_frame_recv_at = std::chrono::steady_clock::now();
+src/cpp/galay-http2/server/h2_static_file.cc:18:    const auto system_time = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+src/cpp/galay-kernel/common/timer_manager.hpp:450:        std::chrono::steady_clock::time_point m_startTime;     ///< 时间轮纪元时间点
+src/cpp/galay-kernel/common/timer_manager_mt.hpp:491:    std::chrono::steady_clock::time_point m_startTime;
+src/cpp/galay-redis/async/conn_pool.cc:130:    RedisConnectionPool::acquire_sync(std::chrono::steady_clock::time_point start_time)
+src/cpp/galay-redis/async/conn_pool.cc:184:    void RedisConnectionPool::record_acquire_stats(std::chrono::steady_clock::time_point start_time)
+src/cpp/galay-redis/async/conn_pool.cc:778:    RedissConnectionPool::acquire_sync(std::chrono::steady_clock::time_point start_time)
+src/cpp/galay-redis/async/conn_pool.cc:832:    void RedissConnectionPool::record_acquire_stats(std::chrono::steady_clock::time_point start_time)
+src/cpp/galay-redis/async/conn_pool.h:203:            , m_last_used(std::chrono::steady_clock::now())
+src/cpp/galay-redis/async/conn_pool.h:262:            m_last_used = std::chrono::steady_clock::now();
+src/cpp/galay-redis/async/conn_pool.h:272:            return std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_used);
+src/cpp/galay-redis/async/conn_pool.h:295:        std::chrono::steady_clock::time_point m_last_used;               ///< 最后使用时间
+src/cpp/galay-redis/async/conn_pool.h:315:            , m_last_used(std::chrono::steady_clock::now())
+src/cpp/galay-redis/async/conn_pool.h:374:            m_last_used = std::chrono::steady_clock::now();
+src/cpp/galay-redis/async/conn_pool.h:384:            return std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_used);
+src/cpp/galay-redis/async/conn_pool.h:407:        std::chrono::steady_clock::time_point m_last_used;              ///< 最后使用时间
+src/cpp/galay-redis/async/conn_pool.h:587:        acquire_sync(std::chrono::steady_clock::time_point start_time);
+src/cpp/galay-redis/async/conn_pool.h:593:        void record_acquire_stats(std::chrono::steady_clock::time_point start_time);
+src/cpp/galay-redis/async/conn_pool.h:813:        acquire_sync(std::chrono::steady_clock::time_point start_time);
+src/cpp/galay-redis/async/conn_pool.h:819:        void record_acquire_stats(std::chrono::steady_clock::time_point start_time);
+src/cpp/galay-redis/async/topology_client.cc:1690:        m_last_refresh_time = std::chrono::steady_clock::now();
+src/cpp/galay-redis/async/topology_client.cc:1700:        return (now - m_last_refresh_time) >= m_auto_refresh_interval;
+src/cpp/galay-redis/async/topology_client.cc:815:        m_last_refresh_time = std::chrono::steady_clock::now();
+src/cpp/galay-redis/async/topology_client.cc:825:        return (now - m_last_refresh_time) >= m_auto_refresh_interval;
+src/cpp/galay-redis/async/topology_client.h:1305:        std::chrono::steady_clock::time_point m_last_refresh_time{};  ///< 上次刷新时间
+src/cpp/galay-redis/async/topology_client.h:700:        std::chrono::steady_clock::time_point m_last_refresh_time{};  ///< 上次刷新时间
+src/cpp/galay-redis/details/pool_awaitable.h:188:        std::chrono::steady_clock::time_point m_start_time;
+src/cpp/galay-redis/details/pool_awaitable.h:94:        std::chrono::steady_clock::time_point m_start_time;
+src/cpp/galay-redis/details/pool_awaitable.inl:136:                m_pool->record_acquire_stats(m_start_time);
+src/cpp/galay-redis/details/pool_awaitable.inl:167:                    m_pool->record_acquire_stats(m_start_time);
+src/cpp/galay-redis/details/pool_awaitable.inl:21:        , m_start_time(std::chrono::steady_clock::now())
+src/cpp/galay-redis/details/pool_awaitable.inl:235:        , m_start_time(std::chrono::steady_clock::now())
+src/cpp/galay-redis/details/pool_awaitable.inl:242:        m_start_time = std::chrono::steady_clock::now();
+src/cpp/galay-redis/details/pool_awaitable.inl:28:        m_start_time = std::chrono::steady_clock::now();
+src/cpp/galay-redis/details/pool_awaitable.inl:293:            m_pool->record_acquire_stats(m_start_time);
+src/cpp/galay-redis/details/pool_awaitable.inl:350:                m_pool->record_acquire_stats(m_start_time);
+src/cpp/galay-redis/details/pool_awaitable.inl:381:                    m_pool->record_acquire_stats(m_start_time);
+src/cpp/galay-redis/details/pool_awaitable.inl:79:            m_pool->record_acquire_stats(m_start_time);
+src/cpp/galay-rpc/kernel/rpc_call.h:208:    using TimePoint = RpcClock::time_point;
+src/cpp/galay-rpc/kernel/rpc_channel.h:1113:        event.latency = std::chrono::steady_clock::now() - pending.started_at;
+src/cpp/galay-rpc/kernel/rpc_channel.h:488:        outbound.started_at = std::chrono::steady_clock::now();
+src/cpp/galay-rpc/kernel/rpc_channel.h:497:        outbound.pending_hint->started_at = outbound.started_at;
+src/cpp/galay-rpc/kernel/rpc_channel.h:65:    std::chrono::steady_clock::time_point started_at{};  ///< 调用开始时间
+src/cpp/galay-rpc/kernel/rpc_channel.h:699:        std::chrono::steady_clock::time_point started_at{};
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:125:        std::chrono::steady_clock::time_point deadline;
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:131:    std::atomic<Clock::rep> shutdownDeadlineTicks{
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:132:        Clock::time_point::max().time_since_epoch().count()};
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:142:    void set_shutdown_deadline(Clock::time_point deadline) noexcept {
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:143:        shutdownDeadlineTicks.store(deadline.time_since_epoch().count(), std::memory_order_release);
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:146:    [[nodiscard]] Clock::time_point shutdown_deadline() const noexcept {
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:147:        return Clock::time_point(Clock::duration(
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:148:            shutdownDeadlineTicks.load(std::memory_order_acquire)));
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:323:    auto remaining_timeout = [](std::chrono::steady_clock::time_point deadline) {
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:331:    auto drain_until_idle = [this, &batch](std::chrono::steady_clock::time_point deadline) {
+src/cpp/galay-tracing/kernel/otlp_http_exporter.cc:179:void append_time_unix_nano(std::string& out, Span::Clock::time_point timestamp) {
+src/cpp/galay-tracing/kernel/otlp_http_exporter.cc:196:        if (events[i].timestamp != Span::Clock::time_point{}) {
+src/cpp/galay-tracing/kernel/span.cc:151:      m_startedAt(timingPolicy == SpanTimingPolicy::kEnabled ? Clock::now() : Clock::time_point{}),
+src/cpp/galay-tracing/kernel/span.cc:161:        if (m_startedAt != Clock::time_point{}) {
+src/cpp/galay-tracing/kernel/span.cc:218:        .timestamp = m_startedAt == Clock::time_point{} ? Clock::time_point{} : Clock::now(),
+src/cpp/galay-tracing/kernel/span.h:169:    std::chrono::steady_clock::time_point timestamp{}; ///< 可选事件时间戳
+src/cpp/galay-tracing/kernel/span.h:502:    [[nodiscard]] Clock::time_point started_at() const noexcept {
+src/cpp/galay-tracing/kernel/span.h:510:    [[nodiscard]] Clock::time_point ended_at() const noexcept {
+src/cpp/galay-tracing/kernel/span.h:538:    Clock::time_point m_startedAt{};            ///< 开始时间戳
+src/cpp/galay-tracing/kernel/span.h:539:    Clock::time_point m_endedAt{};              ///< 结束时间戳
+src/cpp/galay-tracing/log/log_record.h:290:        Clock::time_point timestamp = Clock::now())
+src/cpp/galay-tracing/log/log_record.h:321:    Clock::time_point timestamp{Clock::now()};           ///< 时间戳
+src/cpp/galay-utils/cache/lru_cache.hpp:179:    bool put_until(K&& key, V&& value, time_point expiresAt) {
+src/cpp/galay-utils/cache/lru_cache.hpp:456:        std::optional<time_point> expiresAt;
+src/cpp/galay-utils/cache/lru_cache.hpp:462:        std::optional<time_point> expiresAt;
+src/cpp/galay-utils/cache/lru_cache.hpp:467:        time_point expiresAt;
+src/cpp/galay-utils/cache/lru_cache.hpp:493:    bool is_expired(const std::optional<time_point>& expiresAt) const {
+src/cpp/galay-utils/cache/lru_cache.hpp:609:            const time_point lastRefresh = *it->expiresAt - *it->ttl;
+src/cpp/galay-utils/cache/lru_cache.hpp:60:    using time_point = typename Clock::time_point; ///< 过期时间点类型
+src/cpp/galay-utils/resilience/circuit_breaker.hpp:103:    using TimePoint = Clock::time_point;
+src/cpp/galay-utils/resilience/circuit_breaker.hpp:88: * @tparam ClockType 时间源类型，需要提供 now() 和 time_point；默认使用 std::chrono::steady_clock
+src/cpp/galay-utils/system/time.hpp:127:    using time_point = typename Clock::time_point; ///< 时钟 time_point 类型
+src/cpp/galay-utils/system/time.hpp:139:    explicit StopWatch(time_point start)
+src/cpp/galay-utils/system/time.hpp:170:    time_point start_time() const {
+src/cpp/galay-utils/system/time.hpp:175:    time_point m_start;
+src/cpp/galay-utils/system/time.hpp:188:    using time_point = typename Clock::time_point; ///< 时钟 time_point 类型
+src/cpp/galay-utils/system/time.hpp:194:    explicit Deadline(time_point deadline)
+src/cpp/galay-utils/system/time.hpp:232:    time_point deadline_time() const {
+src/cpp/galay-utils/system/time.hpp:237:    time_point m_deadline;
+
+等待与操作系统计时消费者
+$ rg -n 'wait_until\(|wait_for\(|try_acquire_until\(|try_acquire_for\(|\bpoll\(|\bepoll_wait\(|\btimerfd_settime\(|sleep_for\(' src --glob '!module_prelude.hpp' --glob '!*.cppm'
+命中行数：35
+src/c/galay-kernel-c/core-c/io_scheduler.c:371:    int n = epoll_wait(ctx->epoll_fd, ctx->events, ctx->max_events, timeout_ms);
+src/cpp/galay-etcd/async/client.cc:205:        poll_result = ::poll(&pfd, 1, timeout_ms);
+src/cpp/galay-etcd/sync/etcd_client.cc:164:        poll_result = ::poll(&pfd, 1, timeout_ms);
+src/cpp/galay-http2/client/h2_client.h:346:        auto wait = m_driver.poll();
+src/cpp/galay-kernel/core/blocking_executor.cc:162:                ready = m_taskCv.wait_for(lock, m_keepAlive, [this]() {
+src/cpp/galay-kernel/core/epoll_reactor.cc:727:void EpollReactor::poll(int timeout_ms, WakeCoordinator& wake_coordinator) {
+src/cpp/galay-kernel/core/epoll_reactor.cc:732:    const int nev = epoll_wait(m_epoll_fd, m_events.data(), m_max_events, timeout_ms);
+src/cpp/galay-kernel/core/epoll_reactor.h:196:    void poll(int timeout_ms, WakeCoordinator& wake_coordinator);
+src/cpp/galay-kernel/core/epoll_scheduler.cc:18:    m_reactor.poll(scheduler_poll_timeout_milliseconds(), m_wake_coordinator);
+src/cpp/galay-kernel/core/kqueue_reactor.cc:529:void KqueueReactor::poll(const struct timespec& timeout, WakeCoordinator& wake_coordinator) {
+src/cpp/galay-kernel/core/kqueue_reactor.h:165:    void poll(const struct timespec& timeout, WakeCoordinator& wake_coordinator);
+src/cpp/galay-kernel/core/kqueue_scheduler.cc:23:    m_reactor.poll(timeout, m_wake_coordinator);
+src/cpp/galay-kernel/core/timer_scheduler.cc:137:        std::this_thread::sleep_for(tickDuration);
+src/cpp/galay-kernel/core/uring_reactor.cc:1240:void IOUringReactor::poll(uint64_t timeout_ns, WakeCoordinator& wake_coordinator) {
+src/cpp/galay-kernel/core/uring_reactor.h:181:    void poll(uint64_t timeout_ns, WakeCoordinator& wake_coordinator);
+src/cpp/galay-kernel/core/uring_scheduler.cc:18:    m_reactor.poll(scheduler_poll_timeout_io_uring_nanoseconds(), m_wake_coordinator);
+src/cpp/galay-mcp/v1/server/http_server.cc:231:        std::this_thread::sleep_for(std::chrono::seconds(1));
+src/cpp/galay-mongo/protoc/connection.cc:156:        const int poll_ret = ::poll(&pfd, 1, static_cast<int>(options.timeout_ms));
+src/cpp/galay-mongo/sync/mongo_client.cc:365:        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+src/cpp/galay-mysql/sync/mysql_client.cc:159:        const int poll_ret = ::poll(&pfd, 1, static_cast<int>(timeout_ms));
+src/cpp/galay-postgres/sync/postgres_client.cc:189:            poll_result = ::poll(&descriptor,
+src/cpp/galay-redis/async/client.cc:1210:            auto wait = m_driver.poll();
+src/cpp/galay-redis/protoc/connection.cc:121:            int poll_result = poll(&pfd, 1, timeout_ms);
+src/cpp/galay-ssl/async/ssl_await.cc:445:SslOperationDriver::WaitAction SslOperationDriver::poll()
+src/cpp/galay-ssl/async/ssl_await.h:1177:                const auto wait = m_driver.poll();
+src/cpp/galay-ssl/async/ssl_await.h:496:    WaitAction poll();
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:163:    [[nodiscard]] bool wait_for(const std::chrono::duration<Rep, Period>& timeout) {
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:164:        const bool acquired = signal.try_acquire_for(timeout);
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:255:    const bool completed = request->done.try_acquire_until(request->deadline);
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:347:                static_cast<void>(m_control->wait_for(std::chrono::milliseconds(1)));
+src/cpp/galay-tracing/kernel/batch_span_processor.cc:374:        const bool intervalElapsed = !m_control->wait_for(m_config.flush_interval);
+src/cpp/galay-utils/common/pool.hpp:311:    Ptr try_acquire_for(const std::chrono::duration<Rep, Period>& timeout) {
+src/cpp/galay-utils/common/pool.hpp:313:        if (!m_cv.wait_for(lock, timeout, [this] { return !m_pool.empty(); })) {
+src/cpp/galay-utils/system/rdtsc.cc:57:        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+src/cpp/galay-utils/thread/thread.hpp:327:    bool wait_for(const std::chrono::duration<Rep, Period>& timeout) {
+
+StopWatch 的生产调用点
+$ rg -n '\bStopWatch\b' src
+命中行数：3
+src/cpp/galay-utils/system/time.hpp:123:class StopWatch {
+src/cpp/galay-utils/system/time.hpp:132:    StopWatch()
+src/cpp/galay-utils/system/time.hpp:139:    explicit StopWatch(time_point start)
+
+原始计数器当前消费者
+$ rg -n 'Rdtsc::create|read_relaxed\(|read_start\(|read_end\(|to_nanoseconds\(' src/cpp benchmark/cpp/utils/b12_time_sources.cc benchmark/cpp/rpc/b7_unary_mode_route_cache.cc --glob '!module_prelude.hpp' --glob '!*.cppm'
+命中行数：33
+benchmark/cpp/rpc/b7_unary_mode_route_cache.cc:110:        const auto created = galay::utils::Rdtsc::create();
+benchmark/cpp/rpc/b7_unary_mode_route_cache.cc:133:            const auto sample_begin = read_start();
+benchmark/cpp/rpc/b7_unary_mode_route_cache.cc:135:            const auto sample_end = read_end();
+benchmark/cpp/rpc/b7_unary_mode_route_cache.cc:154:        ? measure_routes([&] { return counter->read_start(); },
+benchmark/cpp/rpc/b7_unary_mode_route_cache.cc:155:                         [&] { return counter->read_end(); },
+benchmark/cpp/rpc/b7_unary_mode_route_cache.cc:161:                             return counter->to_nanoseconds(end - start);
+benchmark/cpp/utils/b12_time_sources.cc:103:            const auto ns = counter.to_nanoseconds(end - origin);
+benchmark/cpp/utils/b12_time_sources.cc:118:            const auto start = counter.read_start();
+benchmark/cpp/utils/b12_time_sources.cc:119:            const auto end = counter.read_end();
+benchmark/cpp/utils/b12_time_sources.cc:123:            const auto ns = counter.to_nanoseconds(end - start);
+benchmark/cpp/utils/b12_time_sources.cc:133:            const auto end = counter.read_relaxed();
+benchmark/cpp/utils/b12_time_sources.cc:148:            return counter.read_relaxed();
+benchmark/cpp/utils/b12_time_sources.cc:187:        const auto start = counter.read_start();
+benchmark/cpp/utils/b12_time_sources.cc:189:        const auto end = counter.read_end();
+benchmark/cpp/utils/b12_time_sources.cc:193:        const auto ns = counter.to_nanoseconds(end - start);
+benchmark/cpp/utils/b12_time_sources.cc:243:    const auto counter = galay::utils::Rdtsc::create();
+benchmark/cpp/utils/b12_time_sources.cc:248:    const auto origin = counter->read_start();
+benchmark/cpp/utils/b12_time_sources.cc:297:    const auto end = counter->read_end();
+benchmark/cpp/utils/b12_time_sources.cc:302:    const auto elapsed = counter->to_nanoseconds(end - origin);
+benchmark/cpp/utils/b12_time_sources.cc:60:    const auto origin = counter.read_start();
+benchmark/cpp/utils/b12_time_sources.cc:73:            return counter.read_relaxed();
+benchmark/cpp/utils/b12_time_sources.cc:77:            return counter.read_start();
+benchmark/cpp/utils/b12_time_sources.cc:81:            return counter.read_end();
+benchmark/cpp/utils/b12_time_sources.cc:86:            const auto end = counter.read_relaxed();
+benchmark/cpp/utils/b12_time_sources.cc:90:            const auto ns = counter.to_nanoseconds(end - origin);
+benchmark/cpp/utils/b12_time_sources.cc:99:            const auto end = counter.read_end();
+src/cpp/galay-utils/system/rdtsc.cc:89:std::expected<Rdtsc, std::error_code> Rdtsc::create() {
+src/cpp/galay-utils/system/rdtsc.hpp:100:     *       AArch64 与 read_start() 使用相同屏障；编译器排序限制同 read_start()。
+src/cpp/galay-utils/system/rdtsc.hpp:102:    [[nodiscard]] inline std::uint64_t read_end() const noexcept {
+src/cpp/galay-utils/system/rdtsc.hpp:111:        return read_start();
+src/cpp/galay-utils/system/rdtsc.hpp:125:    to_nanoseconds(std::uint64_t ticks) const noexcept {
+src/cpp/galay-utils/system/rdtsc.hpp:58:    [[nodiscard]] inline std::uint64_t read_relaxed() const noexcept {
+src/cpp/galay-utils/system/rdtsc.hpp:80:    [[nodiscard]] inline std::uint64_t read_start() const noexcept {

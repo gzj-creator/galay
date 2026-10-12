@@ -1,7 +1,7 @@
 #ifndef GALAY_UTILS_STRING_HPP
 #define GALAY_UTILS_STRING_HPP
 
-#include "../common/defn.hpp"
+#include "defn.hpp"
 #include <vector>
 #include <string>
 #include <string_view>

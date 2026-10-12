@@ -8,13 +8,14 @@ export module galay.utils;
 // transitional interface is consumed by GCC modules.
 export extern "C++" {
 #include "../common/defn.hpp"
-#include "../core/type_name.hpp"
+#include "../common/type_name.hpp"
 
-#include "../core/string.hpp"
-#include "../core/random.hpp"
+#include "../common/string.hpp"
+#include "../algorithm/random.hpp"
 #include "../system/system.hpp"
 #include "../system/env.hpp"
-#include "../core/time.hpp"
+#include "../system/time.hpp"
+#include "../system/rdtsc.hpp"
 #include "../system/backtrace.hpp"
 #include "../system/signal.hpp"
 #include "../common/pool.hpp"

@@ -11,6 +11,26 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 `galay::utils::Rdtsc` 硬件计数器，支持 GCC/Clang 的 x86-64 TSC 与 AArch64 Generic Timer。初始化显式返回 `std::expected`，检查硬件、Linux 线程权限和频率；提供原始读取、有序起止读取及带溢出检查的 Q32 纳秒换算，不隐式回退到标准时钟。
+- 新增时间源成本 benchmark，为 RPC 同步路由 benchmark 增加显式 `--clock steady|rdtsc`；RDTSC 测量要求核验单 CPU affinity，初始化、tick 回退和换算失败明确终止，保留标准时钟对照和九轮交替样本。
+
+### Changed
+
+- 删除 utils 的 `core/` 目录，字符串和类型名工具归入 `common/`，随机数归入 `algorithm/`，原有时间工具归入 `system/`；同步总头、模块导出、安装布局测试与消费者文档，不保留旧路径转发头，原工具 API 和时间语义保持原实现。
+- 将 RDTSC 初始化实现接入 utils 库及 Bazel 源码清单，补充硬件计数器、总头和原生模块消费验证。
+
+### Docs
+
+- 同步 utils 架构、API、示例、性能与 RPC 计时说明，新增 RDTSC 权限、排序、精度和错误契约，以及固定 CPU 的原始 benchmark 证据。
+- 完成生产时间源审查：现有候选受跨线程传递、调度/等待、业务共享时间或公开 chrono 时间点契约限制，生产路径保留标准时钟；本次提交提供计时工具与微基准验证，没有完成生产路径的 RDTSC 接入。
+
+### Validation
+
+- Linux / GCC 14.2 / epoll / Release 的 `build/rdtsc-eval` 全量构建通过；完整 CTest 注册 292 项，289 通过、3 项因 io_uring 条件跳过、0 失败，`utils.rdtsc` 单独执行通过。首次 RPC 并发测试曾遇到端口占用，单独重跑和第二次完整运行通过。
+- GCC Debug 的 28 个 utils CTest、安装头文件布局与包消费、LLVM 22.1.8 的 `mcpp run test_utils_import --locked --offline` 已通过；模块 prelude、受影响文档链接/示例及 `git diff --check` 已验证。CPU 0/1 的九轮微基准及 RPC 九对交替样本已归档，仅证明测量成本变化；AArch64、macOS、其他 CPU 与 Bazel 构建未实测。
+
 ## [v7.0.1] - 2026-10-11
 
 ### Fixed

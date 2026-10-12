@@ -12,7 +12,7 @@
 #define GALAY_UTILS_BACKTRACE_HPP
 
 #include "../common/defn.hpp"
-#include "../core/type_name.hpp"
+#include "../common/type_name.hpp"
 #include <string>
 #include <vector>
 #include <iostream>

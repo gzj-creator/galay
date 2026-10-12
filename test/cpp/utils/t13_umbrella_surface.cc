@@ -6,10 +6,12 @@
 #include <galay/cpp/galay-utils/galay_utils.hpp>
 
 #include <iostream>
+#include <type_traits>
 #include <utility>
 
 int main()
 {
+    static_assert(!std::is_default_constructible_v<galay::utils::Rdtsc>);
     const auto invalidEnv = galay::utils::Env::get("");
     if (invalidEnv || invalidEnv.error() != std::errc::invalid_argument) {
         std::cerr << "[t13] Env should be visible and reject invalid names\n";

@@ -13,12 +13,13 @@
 完整公开头文件清单：
 
 - `galay-utils/galay_utils.hpp`
-- `galay-utils/core/string.hpp`
-- `galay-utils/core/random.hpp`
+- `galay-utils/common/string.hpp`
+- `galay-utils/algorithm/random.hpp`
 - `galay-utils/system/system.hpp`
 - `galay-utils/system/env.hpp`
-- `galay-utils/core/time.hpp`
-- `galay-utils/core/type_name.hpp`
+- `galay-utils/system/time.hpp`
+- `galay-utils/system/rdtsc.hpp`
+- `galay-utils/common/type_name.hpp`
 - `galay-utils/system/backtrace.hpp`
 - `galay-utils/system/signal.hpp`
 - `galay-utils/thread/thread.hpp`
@@ -50,16 +51,17 @@
 - `galay-utils/module/module_prelude.hpp`
 - `galay-utils/module/galay_utils.cppm`
 
-## 2. 核心工具
+## 2. 通用与系统工具
 
 | 模块 | 头文件 | 主要类型 / 函数 |
 |---|---|---|
-| String | `galay-utils/core/string.hpp` | `StringUtils` |
-| Random | `galay-utils/core/random.hpp` | `RandomGenerator`、`Randomizer` |
-| Time | `galay-utils/core/time.hpp` | `Time`、`StopWatch<Clock>`、`Deadline<Clock>`、`Backoff` |
+| String | `galay-utils/common/string.hpp` | `StringUtils` |
+| Random | `galay-utils/algorithm/random.hpp` | `RandomGenerator`、`Randomizer` |
+| Time | `galay-utils/system/time.hpp` | `Time`、`StopWatch<Clock>`、`Deadline<Clock>`、`Backoff` |
+| Hardware Counter | `galay-utils/system/rdtsc.hpp` | `Rdtsc`、`RdtscFrequencySource` |
 | System | `galay-utils/system/system.hpp` | `System`、`System::AddressType` |
 | Env | `galay-utils/system/env.hpp` | `Env` |
-| TypeName | `galay-utils/core/type_name.hpp` | `get_type_name<T>()`、`get_type_name(obj)`、`demangle_symbol()` |
+| TypeName | `galay-utils/common/type_name.hpp` | `get_type_name<T>()`、`get_type_name(obj)`、`demangle_symbol()` |
 | BackTrace | `galay-utils/system/backtrace.hpp` | `BackTrace` |
 | Signal | `galay-utils/system/signal.hpp` | `SignalHandler` |
 | CPU | `galay-utils/system/cpu.hpp` | 硬件并发度、在线 CPU ID、当前 CPU 快照与线程亲和性 |
@@ -186,6 +188,27 @@ NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/d
   - `format_time(...)` 的 `format == nullptr`、空格式、平台时间转换失败或格式化结果写入失败时返回空字符串
   - `StopWatch`、`Deadline`、`Backoff` 都是轻量非线程安全值对象，不创建线程，不提供 sleep 或调度语义
   - 这些类型不依赖平台、进程或 signal 头文件
+
+### `Rdtsc`
+
+- 文件：`galay-utils/system/rdtsc.hpp`
+- `Rdtsc::is_supported`：编译期架构/编译器支持，不代表实际硬件、权限或频率可用
+- `Rdtsc::create() -> std::expected<Rdtsc, std::error_code>`：显式初始化，需链接 `galay::utils`
+- 实例方法 `read_relaxed()` / `read_start()` / `read_end() -> std::uint64_t`
+- `to_nanoseconds(std::uint64_t ticks) -> std::expected<std::chrono::nanoseconds, std::error_code>`
+- `frequency_hz()` / `frequency_source()` / `has_invariant_frequency()`
+- `RdtscFrequencySource::kArchitectural` / `RdtscFrequencySource::kCalibrated`
+- 语义：
+  - 返回架构硬件计数器 tick，不是 Unix 时间戳，也不保证一个 tick 等于一个 CPU 核心周期
+  - `read_relaxed()` 只追求最低读取开销，不提供周围指令的排序保证
+  - `read_start()` 与 `read_end()` 用于短区间耗时测量，包含架构屏障，成本高于 relaxed 读取
+  - 当前支持 GCC/Clang 的 x86-64 TSC 与 AArch64 Generic Timer，依赖 128 位整数；不支持时初始化返回 `operation_not_supported`
+  - x86 检查 TSC、SSE2、RDTSCP，Linux 检查当前线程 TSC 权限；AArch64 调用前须由系统允许用户态读取 `CNTVCT_EL0` / `CNTFRQ_EL0`
+  - 优先读取架构频率，x86 缺少完整 CPUID 0x15 信息时以参考时钟做五轮 20 ms 校准；校准期间迁核、回退或频率离散过大返回 `resource_unavailable_try_again`
+  - 纳秒转换使用预计算 Q32 定点乘法，按频率换算而非 CPU 当前主频；输入为差值，超范围返回 `value_too_large`
+  - 对象初始化后只读、无锁、无分配；短区间测量需固定同一 CPU，未承诺跨核同步、休眠或虚拟机迁移后的有效性
+  - 不提供 Unix 时间戳或 `steady_clock` 纪元，不自动替换超时、TTL、限流、调度或日志时钟
+  - 完整用法、误差界、错误与实测依据见 [Rdtsc 硬件计数器](rdtsc.md)
 
 ### `System`
 
@@ -777,7 +800,7 @@ Linux 的进程亲和性接口操作传入 pid/tid 对应线程，默认使用�
 ## 9. 返回、线程与使用语义
 
 - 当前仓库没有统一的 `expected` / 错误码基类；检索失败语义时必须回到对应头文件签名，而不能把整个仓库当成单一错误模型
-- 纯工具类主路径集中在 `core/`、`encoding/`、`crypto/`、`common/`，它们主要回答“输入是什么、返回值是什么”
+- 工具按职责进入 `common/`、`algorithm/`、`system/`、`encoding/`、`crypto/` 等目录，检索时首先核对输入与返回值契约
 - 线程池位于 `thread/`，对象池位于 `common/`，系统资源接口位于 `system/`；检索时要额外关注阻塞、等待与资源释放语义
 - `ThreadPool::add_task(...)` 返回 `std::future<...>`，而 `execute(...)` 是 fire-and-forget 风格；两者不应混用为同一等待模型
 - `ObjectPool<T>` 与 `BlockingObjectPool<T>` 不是同一组方法：前者是“可扩容 + 非阻塞取对象”，后者是“固定池 + 阻塞等待”

@@ -4,6 +4,7 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "galay-utils",
+    srcs = ["system/rdtsc.cc"],
     hdrs = glob([
         "**/*.h",
         "**/*.hpp",

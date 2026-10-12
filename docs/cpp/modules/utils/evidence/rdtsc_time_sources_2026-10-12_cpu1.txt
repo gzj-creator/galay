@@ -1,0 +1,156 @@
+GALAY_BENCH_ENV status=ok affinity=pinned cpus=1 numa=keep numa_mode=0 numa_nodes=
+frequency_hz=2494085133 invariant=0 source=calibrated iterations=2000000 rounds=9
+SAMPLES round,scenario,ns_per_op,checksum
+0,steady_clock::now,29.389,16226677202462418777
+0,system_clock::now,29.668,17664522164015080644
+0,rdtsc relaxed,8.828,1434693330560107054
+0,rdtsc start,18.115,1434827775268664904
+0,rdtsc end,18.629,1435011109520905618
+0,relaxed + ns Q32,9.788,19581472077688
+0,ordered + ns Q32,22.500,44997960732927
+0,steady interval,59.006,58954599
+0,ordered interval + ns,40.198,33811923
+0,relaxed + ns double,10.626,21270111605483
+0,intrinsic __rdtsc,8.855,1436566212235970720
+0,loop control,0.323,1999999000000
+1,loop control,0.327,1999999000000
+1,intrinsic __rdtsc,8.839,1436661048015287018
+1,relaxed + ns double,11.195,22100840586938
+1,ordered interval + ns,40.168,33846258
+1,steady interval,59.138,59333438
+1,ordered + ns Q32,22.500,44988591108616
+1,relaxed + ns Q32,9.794,19576982860122
+1,rdtsc end,18.603,1438222808339378950
+1,rdtsc start,18.150,1438406061996143786
+1,rdtsc relaxed,8.803,1438540723153523148
+1,system_clock::now,29.605,17666218534499395558
+1,steady_clock::now,29.388,16228609930859041078
+2,steady_clock::now,29.413,16228727711987193483
+2,system_clock::now,29.554,17666572073504841590
+2,rdtsc relaxed,8.800,1439805565917375708
+2,rdtsc start,18.105,1439939818714210740
+2,rdtsc end,18.589,1440122913801991190
+2,relaxed + ns Q32,9.786,19560265821840
+2,ordered + ns Q32,22.498,45015233654048
+2,steady interval,58.826,58775484
+2,ordered interval + ns,40.114,33877250
+2,relaxed + ns double,10.584,21167880376338
+2,intrinsic __rdtsc,8.789,1441674409892797644
+2,loop control,0.333,1999999000000
+3,loop control,0.353,1999999000000
+3,intrinsic __rdtsc,9.923,1441776866041127068
+3,relaxed + ns double,10.609,21229459266826
+3,ordered interval + ns,40.277,34004791
+3,steady interval,59.065,59020175
+3,ordered + ns Q32,22.522,45032948190312
+3,relaxed + ns Q32,9.826,19640202767247
+3,rdtsc end,18.599,1443336881292769516
+3,rdtsc start,18.172,1443520348570543080
+3,rdtsc relaxed,8.814,1443654973028401422
+3,system_clock::now,29.634,17668269096014523177
+3,steady_clock::now,29.460,16230660660310114873
+4,steady_clock::now,29.591,16230778880570750767
+4,system_clock::now,29.681,17668624034667452703
+4,rdtsc relaxed,8.847,1444924059203743128
+4,rdtsc start,18.353,1445059434732270940
+4,rdtsc end,18.573,1445244118134012568
+4,relaxed + ns Q32,9.790,19565345978464
+4,ordered + ns Q32,22.479,44962470958804
+4,steady interval,59.213,59399349
+4,ordered interval + ns,40.102,33800375
+4,relaxed + ns double,11.352,21998968995324
+4,intrinsic __rdtsc,9.596,1446813118543897520
+4,loop control,0.328,1999999000000
+5,loop control,0.327,1999999000000
+5,intrinsic __rdtsc,8.809,1446909322969441350
+5,relaxed + ns double,10.652,21351494981261
+5,ordered interval + ns,40.141,33910721
+5,steady interval,58.982,59058872
+5,ordered + ns Q32,22.491,44959235148032
+5,relaxed + ns Q32,9.795,19610673588170
+5,rdtsc end,18.624,1448463696566504336
+5,rdtsc start,18.151,1448646782947602554
+5,rdtsc relaxed,8.822,1448781758220151366
+5,system_clock::now,29.509,17670324468736505759
+5,steady_clock::now,29.545,16232715892865091598
+6,steady_clock::now,29.169,16232833146570797370
+6,system_clock::now,29.565,17670677514474182065
+6,rdtsc relaxed,8.817,1450045103708391258
+6,rdtsc start,18.104,1450179408638942434
+6,rdtsc end,18.600,1450362520415084636
+6,relaxed + ns Q32,9.832,19658017084662
+6,ordered + ns Q32,22.547,45071133239923
+6,steady interval,59.192,59225352
+6,ordered interval + ns,40.716,34414538
+6,relaxed + ns double,10.721,21483726973487
+6,intrinsic __rdtsc,9.014,1451927479377133184
+6,loop control,0.327,1999999000000
+7,loop control,0.330,1999999000000
+7,intrinsic __rdtsc,8.813,1452022861154391696
+7,relaxed + ns double,10.619,21239109371139
+7,ordered interval + ns,40.378,34084129
+7,steady interval,59.019,59031201
+7,ordered + ns Q32,22.512,45065718659867
+7,relaxed + ns Q32,9.837,19678935398991
+7,rdtsc end,18.632,1453580268528810138
+7,rdtsc start,18.057,1453763402037957942
+7,rdtsc relaxed,8.827,1453897372525291958
+7,system_clock::now,29.643,17672375879809305602
+7,steady_clock::now,29.323,16234767257434288954
+8,steady_clock::now,29.407,16234884561130480358
+8,system_clock::now,29.663,17672729483930519041
+8,rdtsc relaxed,8.824,1455163471164856278
+8,rdtsc start,18.115,1455297859311234362
+8,rdtsc end,18.604,1455481076191632540
+8,relaxed + ns Q32,9.812,19642276184378
+8,ordered + ns Q32,22.521,45035840225542
+8,steady interval,59.032,58992437
+8,ordered interval + ns,40.258,33920207
+8,relaxed + ns double,10.590,21152605050450
+8,intrinsic __rdtsc,8.813,1457036920520060258
+8,loop control,0.327,1999999000000
+SUMMARY scenario,median_ns_per_op,min_ns_per_op,max_ns_per_op
+steady_clock::now,29.407,29.169,29.591
+system_clock::now,29.634,29.509,29.681
+rdtsc relaxed,8.822,8.800,8.847
+rdtsc start,18.115,18.057,18.353
+rdtsc end,18.603,18.573,18.632
+relaxed + ns Q32,9.795,9.786,9.837
+ordered + ns Q32,22.500,22.479,22.547
+steady interval,59.032,58.826,59.213
+ordered interval + ns,40.198,40.102,40.716
+relaxed + ns double,10.626,10.584,11.352
+intrinsic __rdtsc,8.839,8.789,9.923
+loop control,0.327,0.323,0.353
+0,LRU no per-op timing,16.719,65000000
+0,LRU steady per-op timing,77.345,160367717
+0,LRU rdtsc per-op timing,69.810,154306694
+1,LRU rdtsc per-op timing,69.719,154205443
+1,LRU steady per-op timing,77.345,160471712
+1,LRU no per-op timing,16.751,65000000
+2,LRU no per-op timing,16.727,65000000
+2,LRU steady per-op timing,77.137,159907703
+2,LRU rdtsc per-op timing,70.596,155448494
+3,LRU rdtsc per-op timing,69.703,154133433
+3,LRU steady per-op timing,77.309,160301064
+3,LRU no per-op timing,16.776,65000000
+4,LRU no per-op timing,16.659,65000000
+4,LRU steady per-op timing,77.143,159901577
+4,LRU rdtsc per-op timing,69.693,154215380
+5,LRU rdtsc per-op timing,69.771,154284622
+5,LRU steady per-op timing,77.182,159968209
+5,LRU no per-op timing,16.722,65000000
+6,LRU no per-op timing,16.717,65000000
+6,LRU steady per-op timing,77.355,160464253
+6,LRU rdtsc per-op timing,69.794,154324365
+7,LRU rdtsc per-op timing,69.814,154347298
+7,LRU steady per-op timing,77.133,159874700
+7,LRU no per-op timing,16.669,65000000
+8,LRU no per-op timing,16.664,65000000
+8,LRU steady per-op timing,77.224,160129206
+8,LRU rdtsc per-op timing,69.787,154332061
+SUMMARY scenario,median_ns_per_op,min_ns_per_op,max_ns_per_op
+LRU no per-op timing,16.719,16.659,16.776
+LRU steady per-op timing,77.224,77.133,77.355
+LRU rdtsc per-op timing,69.787,69.693,70.596
+accuracy reference_ns=7590615800 counter_ns=7590778368 difference_ppm=21.417
