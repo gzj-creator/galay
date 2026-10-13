@@ -629,3 +629,26 @@ MCP/serde 迁移后的 C++ MCP 21/21、serde unit 13/13、安装消费 1/1、C M
 - CMake 重新配置生成 `7.0.1` 包版本，配置测试 4/4 通过；Linux / LLVM 22.1.8 的 mcpp 原生模块 import smoke 构建和运行通过，依赖图识别两个包的固定身份和新版本。
 - serde Linux 无异常构建及包含安装消费者的 7 项 CTest 通过，两个仓库 `git diff --check` 通过。
 - 未重跑 Galay 全量测试、macOS 或 Bazel，未更新公共 mcpp 索引。
+
+## v7.0.2 - 2026-10-13
+
+- **版本级别**：修订版本（patch，小版本，按用户指定）
+- **Git 提交消息**：`chore: 发布 v7.0.2 并明确 GTS 规则适用范围`
+- **Git tag**：`v7.0.2`
+
+### 变更摘要
+
+本版本收束自 `v7.0.1` 以来的 3 个提交及本次发版调整，CMake、Bazel、mcpp
+版本统一为 `7.0.2`。用户指定使用修订版本；utils 旧 `core/` 头文件路径已删除，
+消费者仍须修改 include 并重新编译，没有旧路径转发头。
+
+- **RDTSC 工具**：新增 `galay::utils::Rdtsc`，支持 GCC/Clang x86-64 TSC 和 AArch64 Generic Timer，显式初始化返回 `std::expected`；提供原始、有序起止读取和 Q32 纳秒换算，检查硬件、Linux 初始化线程权限、校准及数值范围。计数器没有 Unix 或 steady_clock 纪元，要求固定同一 CPU，不承诺跨 CPU、休眠恢复或虚拟机迁移后的有效性。
+- **utils 目录与导出**：字符串和类型名工具从 `core/` 归入 `common/`，随机数归入 `algorithm/`，原有时间工具归入 `system/`；同步总头、原生模块、安装布局、Bazel 源码清单及消费说明，原工具 API 和时间语义保持原实现。
+- **测量与证据**：新增九轮交替的时间源成本 benchmark，为 RPC 同步路由微基准增加 `--clock steady|rdtsc`，核验单 CPU affinity 并显式处理初始化、tick 回退和换算失败。已有结果仅证明测量开销降低；生产时间源尚未替换，不将微基准变化解释为生产吞吐提高。
+- **工程规则范围**：保留 `.codex -> ../gts-ai/.codex` 共享入口，明确 `gts-docs-rag` 和 `gts-mcpp-dependencies` 仅适用于名称以 `gts-` 开头的目标仓库。Galay 不适用这两项规则；清理误用门禁新增的维护文档及 README 链接，修正 `AGENTS.md`。共享 skill 本体由独立的 `gts-ai` 仓库维护，不包含在 Galay tag 中。
+
+### 验证范围
+
+- 累计开发验证包含 GCC Release 的 292 项 CTest（289 通过、3 项 io_uring 条件跳过）、GCC Debug 的 28 个 utils 测试、安装消费及 LLVM 22.1.8 原生模块 import；固定 CPU 的时间源和 RPC 对照原始样本已归档。
+- 本次发版重新配置并构建 Linux / GCC Release / epoll 的 `build/rdtsc-eval`（utils、kernel、RPC），292 项 CTest 中 289 通过、3 项 io_uring 条件跳过、0 失败；CMake、Bazel、mcpp 及生成的包版本一致，文档元数据与 68 个本地链接、共享 mcpp skill 结构校验及 diff 检查通过。本次未重跑 mcpp 原生模块构建或性能采样。
+- 未验证原生 AArch64、macOS、Bazel 或全部模块/后端组合；未更新公共 mcpp 索引。工作区既有 `mcpp.lock` 内容哈希改动不纳入本版本。

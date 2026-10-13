@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(galay VERSION 7.0.1 LANGUAGES C CXX)
+project(galay VERSION 7.0.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

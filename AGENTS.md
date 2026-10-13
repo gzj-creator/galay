@@ -17,7 +17,7 @@
 
 ## 3. 依赖与兼容性
 
-- 维护 mcpp 依赖清单、相关构建入口或依赖文档时，先读取并遵守共享 skill：`.codex/skills/gts-mcpp-dependencies/SKILL.md`。第三方 mcpp 依赖统一通过 `/opt/mcpp-deps/` 下的绝对 `path` 引入，不使用 Git、相对路径或仅版本号的索引依赖。
+- Galay 不属于名称以 `gts-` 开头的 GTS 系列仓库，不适用 `gts-docs-rag` 和 `gts-mcpp-dependencies`；共享 `.codex` 入口不改变适用范围。mcpp 依赖维护遵循本仓库约定。
 - 先确认项目现有依赖能否解决问题，再考虑新增依赖或自行实现。
 - 优先使用成熟、持续维护的库；自行实现必须有明确理由。
 - 不保留向后兼容：删除过时代码，不添加兼容层、迁移逻辑或 fallback。

@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v7.0.2] - 2026-10-13
+
 ### Added
 
 - 新增 `galay::utils::Rdtsc` 硬件计数器，支持 GCC/Clang 的 x86-64 TSC 与 AArch64 Generic Timer。初始化显式返回 `std::expected`，检查硬件、Linux 线程权限和频率；提供原始读取、有序起止读取及带溢出检查的 Q32 纳秒换算，不隐式回退到标准时钟。
@@ -20,21 +22,23 @@
 
 - 删除 utils 的 `core/` 目录，字符串和类型名工具归入 `common/`，随机数归入 `algorithm/`，原有时间工具归入 `system/`；同步总头、模块导出、安装布局测试与消费者文档，不保留旧路径转发头，原工具 API 和时间语义保持原实现。
 - 将 RDTSC 初始化实现接入 utils 库及 Bazel 源码清单，补充硬件计数器、总头和原生模块消费验证。
+- 按用户指定的修订版本发布，CMake、Bazel 和 mcpp 版本统一为 `7.0.2`，同步 README 包消费示例与 RDTSC 文档的适用版本；utils 旧头文件路径的删除仍需要消费者修改 include。
 
 ### Docs
 
 - 同步 utils 架构、API、示例、性能与 RPC 计时说明，新增 RDTSC 权限、排序、精度和错误契约，以及固定 CPU 的原始 benchmark 证据。
 - 完成生产时间源审查：现有候选受跨线程传递、调度/等待、业务共享时间或公开 chrono 时间点契约限制，生产路径保留标准时钟；本次提交提供计时工具与微基准验证，没有完成生产路径的 RDTSC 接入。
-- 明确 Galay 不属于名称以 `gts-` 开头的 GTS 系列仓库，不适用 `gts-docs-rag` 文档门禁；删除此前误用门禁新增的 `docs/maintenance.md` 及 README 导航，mcpp 依赖约束继续由根目录工程准则定义。
+- 明确 Galay 不属于名称以 `gts-` 开头的 GTS 系列仓库，不适用 `gts-docs-rag` 文档门禁或 `gts-mcpp-dependencies` 依赖路径规范；删除此前误用门禁新增的 `docs/maintenance.md` 及 README 导航，根目录工程准则同步明确作用范围。
 
 ### Chore
 
-- 接入指向同级 `gts-ai/.codex` 的共享 skill 软链接，在根目录工程准则明确 mcpp 依赖维护前读取共享规范；规则接入不改变当前依赖声明、生产行为或公开 API，本地 `mcpp.lock` 内容哈希变化保留未提交。
+- 接入指向同级 `gts-ai/.codex` 的共享 skill 软链接；共享入口不扩大 GTS 专属规则的适用范围，不改变当前依赖声明、生产行为或公开 API。本地 `mcpp.lock` 内容哈希变化保留未提交。
 
 ### Validation
 
 - Linux / GCC 14.2 / epoll / Release 的 `build/rdtsc-eval` 全量构建通过；完整 CTest 注册 292 项，289 通过、3 项因 io_uring 条件跳过、0 失败，`utils.rdtsc` 单独执行通过。首次 RPC 并发测试曾遇到端口占用，单独重跑和第二次完整运行通过。
 - GCC Debug 的 28 个 utils CTest、安装头文件布局与包消费、LLVM 22.1.8 的 `mcpp run test_utils_import --locked --offline` 已通过；模块 prelude、受影响文档链接/示例及 `git diff --check` 已验证。CPU 0/1 的九轮微基准及 RPC 九对交替样本已归档，仅证明测量成本变化；AArch64、macOS、其他 CPU 与 Bazel 构建未实测。
+- `v7.0.2` 发版重新配置并构建 `build/rdtsc-eval`（Linux / GCC Release / epoll / utils、kernel、RPC），292 项 CTest 中 289 通过、3 项 io_uring 条件跳过、0 失败；核对 CMake、Bazel、mcpp 与生成包版本一致，文档元数据和 68 个本地链接有效。共享 mcpp skill 结构校验通过；本次未重跑 mcpp 原生模块构建或性能采样。
 
 ## [v7.0.1] - 2026-10-11
 
