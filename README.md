@@ -129,8 +129,6 @@ galay/
 
 C ABI 文档位于 [`docs/c/modules/`](docs/c/modules/)，按模块对齐 `src/c/galay-*-c`，包括 `bridge`、`common`、`utils` 等共享层文档。
 
-仓库维护与共享 skill 接入见 [共享工程规范维护](docs/maintenance.md)，包含 mcpp 依赖变更规则、当前清单状态和验证边界。
-
 版本与发版记录见 [CHANGELOG.md](CHANGELOG.md) 与 [docs/release_note.md](docs/release_note.md)。
 
 `v7.0.0` 将类型化 API 统一到 HTTP、HTTPS、h2c 和 H2 原生 Builder，删除独立的
