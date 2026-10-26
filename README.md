@@ -73,20 +73,28 @@ Galay 和 serde 分别在 `mcpp.toml` 中固定声明 `namespace = "gzj-creator"
 
 ```toml
 [dependencies]
-"gzj-creator.galay" = "7.0.2"
+"gzj-creator.galay" = "7.1.0"
+```
+
+默认只启用 utils。需要 `import galay.kernel;` 时显式启用 `kernel` feature；
+HTTP、SSL、Redis、数据库、RPC 与 tracing feature 会自动带上它：
+
+```toml
+[dependencies]
+"gzj-creator.galay" = { version = "7.1.0", features = ["kernel"] }
 ```
 
 配置的索引提供对应版本后，在消费者仓库中执行：
 
 ```bash
-mcpp add gzj-creator.galay@7.0.2
+mcpp add gzj-creator.galay@7.1.0
 mcpp build
 ```
 
 首次构建生成锁文件，依赖已安装后可使用 `mcpp build --offline --locked`。
 包位于 `~/.mcpp/registry/data/xpkgs/`，
 所有使用同一 `MCPP_HOME` 的仓库共用它；消费者不声明 `path` 或 Git 依赖。
-清单中的命名空间声明不等于发布；新机器使用 `7.0.2` 前，官方或自建索引必须
+清单中的命名空间声明不等于发布；新机器使用 `7.1.0` 前，官方或自建索引必须
 提供该版本及可下载的包资源。
 
 按需关闭部分构建：

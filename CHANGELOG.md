@@ -11,6 +11,30 @@
 
 ## [Unreleased]
 
+## [v7.1.0] - 2026-10-26
+
+### Added
+
+- 新增 mcpp `kernel` feature，独立承载 `galay-kernel` 实现与 `galay.kernel` 模块接口；需要内核模块的消费者可显式启用该 feature，HTTP、SSL、Redis、数据库、RPC 和 tracing feature 会自动传递启用。
+
+### Changed
+
+- mcpp 默认 `[build].sources` 收窄为 `galay-utils`；默认构建、`import galay.utils` 消费不再编译 kernel 源码，也不再解析 Linux libaio。现有直接 `import galay.kernel;` 的 mcpp 消费者须增加 `features = ["kernel"]` 或启用相应上层 feature。
+- 将 libaio 挂到 `[target.linux.feature-deps.kernel]`，并为全部 kernel-only 测试与 benchmark 增加 `required_features = ["kernel"]`；同步 libaio 锁记录 hash。
+- CMake、Bazel、mcpp 包版本统一提升为 `7.1.0`，README 的包名、版本及 kernel feature 消费示例同步更新。
+
+### Docs
+
+- utils 快速开始、架构设计和常见问题补充 mcpp 默认 utils-only 边界、kernel feature 启用方式及上层 feature 的传递关系。
+- README 明确默认只启用 utils，RDTSC 文档的适用版本同步至 `7.1.0`。
+
+### Validation
+
+- `mcpp run test_utils_import --offline` 通过；默认生成的 `build.ninja` 中 kernel 源文件和 libaio 引用均为 0。
+- 独立 path 消费者仅导入 `galay.utils` 时构建运行成功；启用 `features = ["kernel"]` 后同时导入 `galay.utils` 与 `galay.kernel` 构建运行成功。
+- `mcpp run test_kernel_taskresult_storage --features kernel --offline` 通过；默认与 kernel 配置均通过 `mcpp build --configure-only --strict --offline`。
+- CMake 7.1.0 的 utils-only 配置和构建通过；`git diff --check` 通过。未重跑完整 CTest、Bazel、macOS 或其他 mcpp feature 组合。
+
 ## [v7.0.2] - 2026-10-13
 
 ### Added

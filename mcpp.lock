@@ -9,5 +9,5 @@ version = 2
 namespace = "compat"
 version = "0.3.113"
 source  = "index+compat@0.3.113"
-hash    = "fnv1a:36207dee11922c2d"
+hash    = "fnv1a:298964da1eb74e01"
 

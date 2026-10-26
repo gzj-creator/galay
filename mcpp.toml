@@ -1,15 +1,14 @@
 [package]
 name        = "galay"
 namespace   = "gzj-creator"
-version     = "7.0.2"
+version     = "7.1.0"
 description = "C++23 coroutine networking and protocol framework"
 license     = "Apache-2.0"
 standard    = "c++23"
 platforms   = ["linux", "macos"]
 
-# Galay has no single umbrella module.  This path removes mcpp's conventional
-# root-module warning while the source list below keeps every named module
-# interface independently importable (galay.utils, galay.kernel, ...).
+# Galay has no single umbrella module.  The default package is utils-only;
+# higher-level modules are enabled through features below.
 [lib]
 path = "src/cpp/galay-utils/module/galay_utils.cppm"
 
@@ -21,8 +20,6 @@ path = "src/cpp/galay-utils/module/galay_utils.cppm"
 sources = [
     "src/cpp/galay-utils/**/*.cc",
     "src/cpp/galay-utils/module/*.cppm",
-    "src/cpp/galay-kernel/**/*.cc",
-    "src/cpp/galay-kernel/module/*.cppm",
 ]
 
 # The repository's source includes use the installed prefix
@@ -99,6 +96,7 @@ cxxflags = ["-UNDEBUG", "-DGALAY_TEST_SSL_IMPORT"]
 [targets.test_kernel_epoll_pending_registration]
 kind = "bin"
 main = "test/cpp/kernel/t195_epoll_pending_registration.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_ssl_handshake]
@@ -110,111 +108,135 @@ cxxflags = ["-UNDEBUG"]
 [targets.benchmark_kernel_scheduler_dispatch]
 kind = "bin"
 main = "benchmark/cpp/kernel/b38_scheduler_dispatch.cc"
+required_features = ["kernel"]
 
 [targets.benchmark_kernel_scheduler_resume_pressure]
 kind = "bin"
 main = "benchmark/cpp/kernel/b28_scheduler_resume_pressure.cc"
+required_features = ["kernel"]
 
 # Async-operation cancellation lifecycle repros and Phase 3 baseline probes.
 [targets.benchmark_kernel_ready_entry_wakeup_latency]
 kind = "bin"
 main = "benchmark/cpp/kernel/b18_ready_entry_wakeup_latency.cc"
+required_features = ["kernel"]
 
 [targets.benchmark_kernel_resume_token_waker_ops]
 kind = "bin"
 main = "benchmark/cpp/kernel/b19_resume_token_waker_ops.cc"
+required_features = ["kernel"]
 
 [targets.benchmark_kernel_thread_safe_timer_manager]
 kind = "bin"
 main = "benchmark/cpp/kernel/b20_thread_safe_timer_manager.cc"
+required_features = ["kernel"]
 
 [targets.benchmark_kernel_runtime_executor_split]
 kind = "bin"
 main = "benchmark/cpp/kernel/b30_runtime_executor_split.cc"
+required_features = ["kernel"]
 
 [targets.benchmark_kernel_timeout_ready_path]
 kind = "bin"
 main = "benchmark/cpp/kernel/b33_timeout_ready_path.cc"
+required_features = ["kernel"]
 
 [targets.benchmark_kernel_coroutine_frame_allocator_pressure]
 kind = "bin"
 main = "benchmark/cpp/kernel/b34_coroutine_frame_allocator_pressure.cc"
+required_features = ["kernel"]
 
 [targets.benchmark_kernel_operation_state_gate]
 kind = "bin"
 main = "benchmark/cpp/kernel/b39_operation_state_gate.cc"
+required_features = ["kernel"]
 
 [targets.benchmark_kernel_operation_completion_pressure]
 kind = "bin"
 main = "benchmark/cpp/kernel/b40_operation_completion_pressure.cc"
+required_features = ["kernel"]
 
 [targets.test_kernel_scheduler_static_dispatch]
 kind = "bin"
 main = "test/cpp/kernel/t183_scheduler_static_dispatch.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_kernel_io_controller_self_contained]
 kind = "bin"
 main = "test/cpp/kernel/t184_io_controller_self_contained.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_kernel_taskresult_storage]
 kind = "bin"
 main = "test/cpp/kernel/t122_taskresult_storage.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_kernel_runtime_executor_split]
 kind = "bin"
 main = "test/cpp/kernel/t178_runtime_executor_split.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_kernel_coroutine_frame_allocator]
 kind = "bin"
 main = "test/cpp/kernel/t180_coroutine_frame_allocator.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_kernel_parallel_shutdown_races]
 kind = "bin"
 main = "test/cpp/kernel/t182_parallel_shutdown_races.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_kernel_runtime_pending_accept_lsan]
 kind = "bin"
 main = "test/cpp/kernel/t185_runtime_pending_accept_lsan.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_kernel_pending_frame_destroy_source]
 kind = "bin"
 main = "test/cpp/kernel/t186_pending_frame_destroy_source.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_kernel_operation_state_completion]
 kind = "bin"
 main = "test/cpp/kernel/t187_operation_state_completion.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_kernel_operation_completion_boundary]
 kind = "bin"
 main = "test/cpp/kernel/t188_operation_completion_boundary.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_kernel_accept_completion_integration]
 kind = "bin"
 main = "test/cpp/kernel/t189_accept_completion_integration.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.benchmark_kernel_accept_completion_lifecycle]
 kind = "bin"
 main = "benchmark/cpp/kernel/b41_accept_completion_lifecycle.cc"
+required_features = ["kernel"]
 
 [targets.test_kernel_iou_accept_completion_resource]
 kind = "bin"
 main = "test/cpp/kernel/t190_iou_accept_completion_resource.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.test_kernel_iou_accept_typed_completion]
 kind = "bin"
 main = "test/cpp/kernel/t191_iou_accept_typed_completion.cc"
+required_features = ["kernel"]
 cxxflags = ["-UNDEBUG"]
 
 [dependencies]
@@ -245,9 +267,10 @@ ldflags = ["-pthread", "-ldl"]
 defines = ["USE_KQUEUE"]
 
 # libaio is Linux-only and is needed by the epoll kernel implementation.
-# Keeping it conditional avoids resolving a Linux ABI package on macOS.
-[target.linux.dependencies.compat]
-libaio = "0.3.113"
+# Keeping it on the kernel feature avoids resolving it for utils-only builds,
+# while the platform row avoids resolving a Linux ABI package on macOS.
+[target.linux.feature-deps.kernel]
+compat.libaio = "0.3.113"
 
 [features]
 # The default is deliberately small and has no OpenSSL dependency.  Consumers
@@ -282,6 +305,15 @@ full = [
     "tracing",
 ]
 
+# Kernel implementation and its C++23 module.  This is deliberately not a
+# default feature: a consumer that only imports galay.utils does not compile
+# kernel sources or resolve libaio.  Every higher-level module opts in below.
+[features.kernel]
+sources = [
+    "src/cpp/galay-kernel/**/*.cc",
+    "src/cpp/galay-kernel/module/*.cppm",
+]
+
 # OpenSSL is feature-scoped so a utils/kernel-only consumer does not download
 # or build it.  The feature define is transitive and therefore reaches a
 # downstream TU importing a TLS-enabled Galay module.
@@ -291,12 +323,14 @@ sources = [
     "src/cpp/galay-ssl/module/*.cppm",
 ]
 defines = ["GALAY_SSL_FEATURE_ENABLED"]
+implies = ["kernel"]
 
 [features.http]
 sources = [
     "src/cpp/galay-http/**/*.cc",
     "src/cpp/galay-http/module/*.cppm",
 ]
+implies = ["kernel"]
 
 # API browser resources are checked into the source tree; no prebuild step is needed.
 # No galay.api module facade is provided in this release.
@@ -331,6 +365,7 @@ sources = [
     "src/cpp/galay-redis/sync/*.cc",
     "src/cpp/galay-redis/module/*.cppm",
 ]
+implies = ["kernel"]
 
 # Struct serialization and MCP/etcd share the dependency's single backend.
 [features.serde]
@@ -350,24 +385,28 @@ sources = [
     "src/cpp/galay-mysql/**/*.cc",
     "src/cpp/galay-mysql/module/*.cppm",
 ]
+implies = ["kernel"]
 
 [features.postgres]
 sources = [
     "src/cpp/galay-postgres/**/*.cc",
     "src/cpp/galay-postgres/module/*.cppm",
 ]
+implies = ["kernel"]
 
 [features.mongo]
 sources = [
     "src/cpp/galay-mongo/**/*.cc",
     "src/cpp/galay-mongo/module/*.cppm",
 ]
+implies = ["kernel"]
 
 [features.rpc]
 sources = [
     "src/cpp/galay-rpc/common/*.cc",
     "src/cpp/galay-rpc/module/galay_rpc.cppm",
 ]
+implies = ["kernel"]
 
 [features.rpc-etcd]
 sources = ["src/cpp/galay-rpc/module/galay_rpc_etcd.cppm"]
@@ -392,6 +431,7 @@ sources = [
     "src/cpp/galay-tracing/log/*.cc",
     "src/cpp/galay-tracing/module/*.cppm",
 ]
+implies = ["kernel"]
 
 [features.tracing-http]
 defines = ["GALAY_TRACING_ENABLE_OTLP_HTTP=1"]

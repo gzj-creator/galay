@@ -652,3 +652,39 @@ MCP/serde 迁移后的 C++ MCP 21/21、serde unit 13/13、安装消费 1/1、C M
 - 累计开发验证包含 GCC Release 的 292 项 CTest（289 通过、3 项 io_uring 条件跳过）、GCC Debug 的 28 个 utils 测试、安装消费及 LLVM 22.1.8 原生模块 import；固定 CPU 的时间源和 RPC 对照原始样本已归档。
 - 本次发版重新配置并构建 Linux / GCC Release / epoll 的 `build/rdtsc-eval`（utils、kernel、RPC），292 项 CTest 中 289 通过、3 项 io_uring 条件跳过、0 失败；CMake、Bazel、mcpp 及生成的包版本一致，文档元数据与 68 个本地链接、共享 mcpp skill 结构校验及 diff 检查通过。本次未重跑 mcpp 原生模块构建或性能采样。
 - 未验证原生 AArch64、macOS、Bazel 或全部模块/后端组合；未更新公共 mcpp 索引。工作区既有 `mcpp.lock` 内容哈希改动不纳入本版本。
+
+## v7.1.0 - 2026-10-26
+
+- **版本级别**：次版本（minor）
+- **Git 提交消息**：`feat: 新增 mcpp kernel 构建特性并发布 v7.1.0`
+- **Git tag**：`v7.1.0`
+
+### 变更摘要
+
+本版本收束自 `v7.0.2` 以来对 mcpp 包依赖边界的调整，CMake、Bazel、mcpp
+版本统一为 `7.1.0`。Galay 源码层的依赖方向原本已是
+`galay-kernel -> galay-utils`；本次消除的是 mcpp 包默认同时编译两者的构建耦合。
+
+- **kernel feature 独立承载**：新增非默认 `kernel` feature，包含
+  `galay-kernel` 实现与 `galay.kernel` 模块接口。HTTP、SSL、Redis、MySQL、
+  PostgreSQL、MongoDB、RPC 和 tracing feature 显式传递启用它，其他上层协议
+  通过已有 feature 关系继承。
+- **默认 utils-only 构建**：mcpp 默认源集只保留 `galay-utils`，Linux libaio 改为
+  kernel feature 专属依赖。仅导入 `galay.utils` 的消费者不再编译 kernel，
+  也不再解析 libaio；kernel-only 测试与 benchmark 以
+  `required_features = ["kernel"]` 隔离。
+- **消费迁移**：现有 mcpp 消费者若直接 `import galay.kernel;`，须增加
+  `features = ["kernel"]` 或启用相应上层 feature。utils-only 消费者无需改动；
+  CMake 的 `galay::utils` 与 `galay::kernel` 边界不变。
+
+### 验证范围
+
+- `mcpp run test_utils_import --offline` 通过；默认构建图的 kernel 源文件与
+  libaio 引用均为 0。独立 path 消费者仅导入 `galay.utils` 时构建运行成功。
+- 启用 `features = ["kernel"]` 后，独立消费者同时导入 `galay.utils` 与
+  `galay.kernel` 构建运行成功；`mcpp run test_kernel_taskresult_storage
+  --features kernel --offline` 通过。
+- 默认与 kernel 配置均通过 `mcpp build --configure-only --strict --offline`；
+  CMake 7.1.0 utils-only 配置和构建、版本元数据及 `git diff --check` 通过。
+- 未重跑完整 CTest、Bazel、macOS 或其他 mcpp feature 组合，未更新公共 mcpp
+  索引。
