@@ -310,6 +310,12 @@ bool verify_cpp_waker_still_coalesces() {
     const bool resumed_once = wait_until([&]() {
         return state.resumed.load(std::memory_order_acquire) == 1;
     });
+    // 任务体将返回时继续唤醒，覆盖完成/帧清理交叠以及完成后的过期请求。
+    if (resumed_once) {
+        for (int index = 0; index < 1024; ++index) {
+            state.waker.wake_up();
+        }
+    }
     runtime.stop();
 
     if (!resumed_once || state.resumed.load(std::memory_order_acquire) != 1) {

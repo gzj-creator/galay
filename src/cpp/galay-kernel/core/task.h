@@ -419,7 +419,9 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
         return m_completion_status.load(order) == detail::TaskCompletionStatus::kDone;
     }
 
-    alignas(std::max_align_t) std::byte m_result_storage[kInlineResultBytes]{};  ///< 小对象内联结果存储
+    // Empty 状态下不读取结果字节；store() 先构造对象或写入指针，再发布存储类型。
+    // 因此复用状态时无需清零尚未持有对象的 32 字节缓冲区。
+    alignas(std::max_align_t) std::byte m_result_storage[kInlineResultBytes];  ///< 小对象内联结果存储
     std::coroutine_handle<> m_handle = nullptr;  ///< 底层协程句柄
     Scheduler* m_scheduler = nullptr;  ///< 任务所属调度器
     Runtime* m_runtime = nullptr;  ///< 任务继承到的 Runtime 上下文
@@ -537,7 +539,10 @@ inline void TaskRef::release() noexcept
     }
     auto* state = this->state();
     m_state = nullptr;
-    if (state->m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+    // 只有一个拥有引用时，不存在合法的并发 retain；acquire 接收其他引用
+    // release 之前的写入，独占销毁无需再执行一次原子读改写。
+    if (state->m_refs.load(std::memory_order_acquire) == 1 ||
+        state->m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
         delete state;
     }
 }
@@ -1688,7 +1693,8 @@ public:
     bool await_suspend(std::coroutine_handle<Promise> handle)  ///< 安排子任务执行，并在必要时挂起父任务
     {
         TaskRef waitingTask = handle.promise().task_ref_view();
-        TaskRef childTask = TaskAccess::task_ref(m_task);
+        // awaiter 已持有子任务；调度器入队时取得自己的引用，无需临时增加引用计数。
+        const TaskRef& childTask = TaskAccess::task_ref(m_task);
         if (!childTask.is_valid()) {
             return false;
         }

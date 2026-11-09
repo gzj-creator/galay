@@ -58,6 +58,8 @@ inline void ensure_task_state_free_list_cleanup() noexcept
 }
 
 constexpr std::size_t kFrameSizeClasses[] = {
+    // 小 Task frame 使用独立桶，避免不超过 64 字节的帧占用 128 字节存储。
+    64,
     128,
     256,
     512,
@@ -93,7 +95,8 @@ struct FrameFreeList
     FrameFreeNode* head = nullptr;
     std::size_t count = 0;
 
-    ~FrameFreeList() noexcept
+    /** @brief 在线程退出时释放本桶全部缓存块。 */
+    void clear() noexcept
     {
         while (head != nullptr) {
             auto* node = head;
@@ -110,13 +113,36 @@ struct FrameFreeList
 };
 
 thread_local FrameFreeList g_frameFreeListBuckets[kFrameSizeClassCount];
+
+/** @brief 单独注册 TLS 清理，使热路径访问 frame 桶时无需经过非平凡析构对象的包装。 */
+struct FrameFreeListCleanup
+{
+    ~FrameFreeListCleanup() noexcept
+    {
+        for (auto& bucket : g_frameFreeListBuckets) {
+            bucket.clear();
+        }
+    }
+};
+thread_local FrameFreeListCleanup g_frameFreeListCleanup;
+
+/** @brief 首次使用缓存前注册线程退出清理，与 TaskState 缓存采用相同模式。 */
+inline void ensure_frame_free_list_cleanup() noexcept
+{
+    (void)g_frameFreeListCleanup;
+}
+
 thread_local bool g_frameRecyclerEnabled = true;
 thread_local bool g_failFrameAllocationForTesting = false;
 thread_local bool g_failTaskStateAllocationForTesting = false;
 
 std::size_t frame_size_class_index(std::size_t size) noexcept
 {
-    for (std::size_t index = 0; index < kFrameSizeClassCount; ++index) {
+    // 空 void Task 使用最小桶，直接返回常量以缩短常见小帧的选择路径。
+    if (size <= kFrameSizeClasses[0]) {
+        return 0;
+    }
+    for (std::size_t index = 1; index < kFrameSizeClassCount; ++index) {
         if (size <= kFrameSizeClasses[index]) {
             return index;
         }
@@ -272,6 +298,7 @@ void* allocate_frame_storage(std::size_t size, std::size_t alignment) noexcept
     if (g_frameRecyclerEnabled && alignment <= kFrameDefaultAlignment) {
         const auto index = frame_size_class_index(size);
         if (index < kFrameSizeClassCount) {
+            ensure_frame_free_list_cleanup();
             auto& bucket = g_frameFreeListBuckets[index];
             if (bucket.head != nullptr) {
                 auto* node = bucket.head;
@@ -309,6 +336,7 @@ void release_frame_storage(void* ptr,
         return;
     }
 
+    ensure_frame_free_list_cleanup();
     auto& bucket = g_frameFreeListBuckets[header->bucket];
     if (bucket.count >= kFrameFreeListLimit) {
         release_frame_raw(ptr, alignment);
@@ -493,7 +521,9 @@ bool request_task_resume(const TaskRef& task) noexcept
 
 TaskResumeResult request_task_resume_state_detailed(TaskState* state) noexcept
 {
-    if (!state || !state->m_handle || !state->m_scheduler ||
+    // 外部唤醒只读取原子完成状态；handle 的检查交给 owner 执行入口。
+    // promise 完成时会清空 handle，跨线程读取该普通字段会与帧销毁发生竞态。
+    if (!state || !state->m_scheduler ||
         state->is_done(std::memory_order_relaxed)) {
         return TaskResumeResult::kRejected;
     }

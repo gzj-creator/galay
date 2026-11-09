@@ -143,7 +143,8 @@ bool verify_small_and_overflow_inputs() {
 }
 
 bool verify_boundary_reuse() {
-    constexpr std::array<std::pair<std::size_t, std::size_t>, 5> boundaries{{
+    constexpr std::array<std::pair<std::size_t, std::size_t>, 6> boundaries{{
+        {63, 64},
         {127, 128},
         {255, 256},
         {511, 512},
@@ -628,7 +629,7 @@ bool verify_nested_and_exception_tasks() {
 }
 
 bool verify_fresh_thread_cache_lifecycle() {
-    constexpr std::array<std::size_t, 5> sizes{{128, 256, 512, 1024, 2048}};
+    constexpr std::array<std::size_t, 6> sizes{{64, 128, 256, 512, 1024, 2048}};
     for (size_t round = 0; round < 32; ++round) {
         std::array<void*, sizes.size()> frames{};
         for (size_t i = 0; i < sizes.size(); ++i) {
@@ -652,7 +653,7 @@ bool verify_fresh_thread_cache_lifecycle() {
                     valid = false;
                 }
             }
-            // Thread exit must clean all five populated buckets.
+            // 线程退出必须清理全部已填充的 frame 桶，包括 64 字节小帧桶。
         });
         consumer.join();
         if (!require(valid, "fresh-thread release/reuse changed bucket ownership")) {
