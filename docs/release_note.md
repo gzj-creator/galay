@@ -688,3 +688,30 @@ MCP/serde 迁移后的 C++ MCP 21/21、serde unit 13/13、安装消费 1/1、C M
   CMake 7.1.0 utils-only 配置和构建、版本元数据及 `git diff --check` 通过。
 - 未重跑完整 CTest、Bazel、macOS 或其他 mcpp feature 组合，未更新公共 mcpp
   索引。
+
+
+## v7.1.1 - 2026-11-09
+
+- **版本级别**：修订版本（patch）
+- **Git 提交消息**：`chore: 发布 v7.1.1 并同步版本元数据`
+- **Git tag**：`v7.1.1`
+
+### 变更摘要
+
+本版本收束自 `v7.1.0` 以来的 1 个开发提交与本次发版调整，CMake、Bazel、mcpp
+包版本统一为 `7.1.1`。主线是 `Task` 热路径减重和一处跨线程唤醒竞争修复，
+按修复与小范围优化定为修订版本。
+
+- **协程帧回收桶**：frame recycler 增加 64 B 桶，不超过 64 字节的协程帧不再落到更大的尺寸分类；缓存桶的 TLS 清理单独注册，与 TaskState 缓存同一模式。
+- **子调用减少引用操作**：子任务 awaiter 借用其已持有的 `TaskRef`，省去一次临时 retain/release；调度器入队仍取自己的引用，父 continuation 的拥有引用照常转移。
+- **结果存储与引用释放快路径**：结果存储处于 `Empty` 时跳过 32 B 缓冲清零；`TaskRef` 释放最后一个独占引用时先以 acquire 读计数，只有一个拥有引用且无合法并发 retain 时直接销毁，省去一次原子读改写。共享引用仍走原有 acq_rel 减计数。
+- **修复跨线程唤醒竞争**：`request_task_resume_state_detailed()` 不再在外部线程读取非原子的协程 handle，改为只检查稳定的 scheduler 指针和原子完成态，handle 由 owner 执行入口检查；未新增锁、原子 handle 或新的状态生命周期。
+- **回归与基准**：新增最后引用并发释放测试、小帧桶 63/64/65 B 边界测试和唤醒重复验证，并新增 `Task` 子调用 benchmark。
+- **验证报告**：新增 Task 局部减重验证文档，记录测量口径、噪声限制、io_uring 正确性补验与 sanitizer 结果。
+
+### 验证范围
+
+- epoll Release 完整 kernel 回归 209 项：206 通过、3 项因关闭 io_uring 跳过、0 失败；io_uring 配置下 209 项全部返回成功（其中 10 项为后端内部跳过、以 0 返回）。
+- ASan + UBSan + LSan 在 epoll 下 8/8、io_uring 下 24/24 通过；TSan 同一组测试 8/8、24/24 通过；最后引用释放与 Waker 竞争测试各重复 30 次，共 60 次执行全部通过。
+- 配对采样：子调用 0/4/16 层成本分别下降约 9.9% / 9.9% / 9.3%，有界 CPU spawn 下降约 4.3%；保留空 `Task<void>` 的 RSS 从 328.3 B/个 降到 264.3 B/个，约 19.5%。`Task<int>` 创建/销毁的 A/A 区间未通过 ±3% 噪声检查，不声明稳定加速。
+- 保留缺陷：`kernel.timer_deadline_after_idle` 偶发提前触发在未修改的 `main` 上同样复现，本次未修复。未复验 kqueue、module/import 消费、macOS 与 Bazel，未更新公共 mcpp 索引。

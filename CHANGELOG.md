@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v7.1.1] - 2026-11-09
+
 ### Changed
 
 - 精简现有 `Task` 热路径：为不超过 64 字节的协程帧增加独立回收桶，子任务 awaiter 借用其已持有的引用，并跳过空结果存储的无效清零和独占最后引用的原子减计数；新增子任务链 benchmark 与生命周期、帧回收边界测试。
@@ -22,6 +24,10 @@
 ### Docs
 
 - 新增 Task 局部减重报告，记录性能测量限制、main 基线问题、io_uring 正确性与 sanitizer 验证结果；本次继续使用现有 `Task`，未增加 TinyTask 或新 Scheduler。
+
+### Chore
+
+- CMake、Bazel、mcpp 包版本统一提升为 `7.1.1`，README 消费示例与 RDTSC 文档的适用版本同步更新。
 
 ## [v7.1.0] - 2026-10-26
 
