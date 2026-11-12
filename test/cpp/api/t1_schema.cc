@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-api/schema.h>
+#include <galay/cpp/galay-doc/schema.h>
 #include <serde/json/json.hpp>
 #include <serde/reflect/reflect_macros.hpp>
 

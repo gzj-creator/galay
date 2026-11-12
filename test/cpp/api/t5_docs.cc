@@ -1,6 +1,6 @@
 #include <galay/cpp/galay-http/server/api_contract.h>
 #include <galay/cpp/galay-http/server/http_server.h>
-#include <galay/cpp/galay-api/ui_assets.h>
+#include <galay/cpp/galay-doc/ui_assets.h>
 #include <serde/json/json.hpp>
 
 #include <arpa/inet.h>
@@ -62,7 +62,7 @@ public:
     Assets()
     {
         std::array<char, 32> name{};
-        constexpr std::string_view pattern = "/tmp/galay-api-docs-XXXXXX";
+        constexpr std::string_view pattern = "/tmp/galay-doc-XXXXXX";
         const auto copied = pattern.copy(name.data(), pattern.size());
         require(copied == pattern.size(), "cannot copy temporary directory template");
         const char* created = ::mkdtemp(name.data());

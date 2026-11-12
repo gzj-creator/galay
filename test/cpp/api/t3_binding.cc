@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-api/binding.h>
+#include <galay/cpp/galay-doc/binding.h>
 #include <serde/reflect/reflect_macros.hpp>
 
 #include <cstdint>

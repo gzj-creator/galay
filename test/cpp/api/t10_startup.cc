@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-api/api_router.h>
+#include <galay/cpp/galay-doc/api_router.h>
 #include <galay/cpp/galay-http/server/http_server.h>
 #ifdef GALAY_HTTP2_FEATURE_ENABLED
 #include <galay/cpp/galay-http2/server/http2_server.h>

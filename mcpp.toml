@@ -68,7 +68,7 @@ required_features = ["serde"]
 [targets.example_api_users]
 kind = "bin"
 main = "examples/cpp/api/e1_users.cc"
-required_features = ["api"]
+required_features = ["doc"]
 
 [targets.benchmark_serde_struct_formats]
 kind = "bin"
@@ -332,10 +332,10 @@ sources = [
 ]
 implies = ["kernel"]
 
-# API browser resources are checked into the source tree; no prebuild step is needed.
-# No galay.api module facade is provided in this release.
-[features.api]
-sources = ["src/cpp/galay-api/*.cc"]
+# API 文档 UI 资源已纳入源码，无需预生成步骤。
+# 当前未提供 C++ 命名模块 facade。
+[features.doc]
+sources = ["src/cpp/galay-doc/*.cc"]
 implies = ["http", "serde"]
 
 [features.websocket]

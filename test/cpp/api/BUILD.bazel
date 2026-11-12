@@ -5,7 +5,7 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_test")
         name = name,
         srcs = [source, "route_fixture.h"],
         copts = ["-std=c++23", "-UNDEBUG"],
-        deps = ["//src/cpp/galay-api:galay-api"] +
+        deps = ["//src/cpp/galay-doc:galay-doc"] +
                (["//src/cpp/galay-http2:galay-http2"] if name == "native_builder" else []),
     )
     for name, source in [
@@ -25,14 +25,14 @@ cc_binary(
     name = "startup_server",
     srcs = ["t10_startup.cc"],
     copts = ["-std=c++23", "-UNDEBUG"],
-    deps = ["//src/cpp/galay-api:galay-api", "//src/cpp/galay-http2:galay-http2"],
+    deps = ["//src/cpp/galay-doc:galay-doc", "//src/cpp/galay-http2:galay-http2"],
 )
 
 cc_binary(
     name = "transport_server",
     srcs = ["t11_transport_server.cc"],
     copts = ["-std=c++23", "-UNDEBUG"],
-    deps = ["//src/cpp/galay-api:galay-api", "//src/cpp/galay-http2:galay-http2"],
+    deps = ["//src/cpp/galay-doc:galay-doc", "//src/cpp/galay-http2:galay-http2"],
 )
 
 sh_test(

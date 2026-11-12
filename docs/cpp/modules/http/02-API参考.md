@@ -147,14 +147,14 @@ struct HttpServerConfig {
 
 `HttpServerBuilder` 的真实配置项来自 `galay-http/server/galay-http/http_server.h`：
 
-现在为 `HttpServerBuilder<EnableSwagger = false>`。`build()` 返回
+现在为 `HttpServerBuilder<EnableDocs = false>`。`build()` 返回
 `ApiResult<std::unique_ptr<HttpServer>>`，必须检查结果；普通路由使用
-`add_handler` / `add_request_handler`，typed 路由包含 `galay-api/api_router.h`
+`add_handler` / `add_request_handler`，typed 路由包含 `galay-doc/api_router.h`
 后使用 `add_api`。`<true>` 支持 `api_info`、`docs`、`export_openapi`，成功构建
 后原生 server 的 `start()` 返回 `ApiResult<void>`。直接原生连接模式使用
 `HttpServer(HttpServerBuilder<>().build_config())`，配置导出不包含注册路由。
 HTTPS、h2c、H2 builder 使用同一模板开关和注册接口，完整说明见
-[API 模块](../api/README.md)。
+[API 文档模块](../api/README.md)。
 
 - `host(std::string)`
 - `port(uint16_t)`
@@ -574,7 +574,7 @@ struct H2cServerConfig {
 
 `H2cServer` 的服务端入口：
 
-`H2cServerBuilder<EnableSwagger = false>::build()` 返回
+`H2cServerBuilder<EnableDocs = false>::build()` 返回
 `ApiResult<std::unique_ptr<H2cServer>>`，无参数 `start()` 返回 `ApiResult<void>`，
 都需检查。直接 native stream/static 配置使用 `build_config()` 传给原生构造函数；
 builder 请求路由不可与 stream/active handler 或 static mounts 混用。
@@ -715,7 +715,7 @@ struct H2ServerConfig {
 - `stream_handler`
 - `active_conn_handler`
 
-`H2ServerBuilder<EnableSwagger = false>::build()` 返回
+`H2ServerBuilder<EnableDocs = false>::build()` 返回
 `ApiResult<std::unique_ptr<H2Server>>`，无参数 `start()` 返回 `ApiResult<void>`，
 需要检查结果；请求注册、文档开关和 native handler 冲突规则与 h2c 相同。
 

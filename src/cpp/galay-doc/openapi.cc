@@ -391,7 +391,7 @@ ApiResult<std::string> schema_json(const Schema& schema) {
     if (auto checked = check_schema(schema); !checked) return std::unexpected(std::move(checked.error()));
     std::string output;
     Writer writer{[&](std::string_view fragment) -> json::result<void> {
-        // append returns only *this, not a fallible result.
+        // append 没有独立的错误返回值；此处只需追加片段，显式忽略其引用返回值。
         (void)output.append(fragment);
         return {};
     }};
@@ -428,7 +428,7 @@ ApiResult<PathInfo> inspect_path(std::string_view path) {
             }
             result.parameters.push_back(std::string(name));
             result.openapi_path.push_back('{');
-            // append returns only the destination string reference.
+            // 此处只需追加路径参数，显式忽略 append 返回的目标字符串引用。
             (void)result.openapi_path.append(name);
             result.openapi_path.push_back('}');
             (void)result.shape.append("{}");
@@ -441,7 +441,7 @@ ApiResult<PathInfo> inspect_path(std::string_view path) {
                     return std::unexpected(failure(ApiErrorCode::kInvalidPath, "path literal segments must use unreserved ASCII characters"));
                 }
             }
-            // append returns only the destination string reference.
+            // 此处只需追加字面路径段，显式忽略 append 返回的目标字符串引用。
             (void)result.openapi_path.append(segment);
             (void)result.shape.append(segment);
         }
@@ -577,7 +577,7 @@ ApiResult<std::string> render_openapi(const ApiInfo& info, std::span<const Endpo
     }
     std::string output;
     Writer writer{[&](std::string_view fragment) -> json::result<void> {
-        // append returns only *this, not a fallible result.
+        // append 没有独立的错误返回值；此处只需追加片段，显式忽略其引用返回值。
         (void)output.append(fragment);
         return {};
     }};

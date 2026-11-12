@@ -22,7 +22,7 @@ int main()
 {
     namespace fs = std::filesystem;
     std::array<char, 40> directory{};
-    constexpr std::string_view pattern = "/tmp/galay-api-embedded-XXXXXX";
+    constexpr std::string_view pattern = "/tmp/galay-doc-embedded-XXXXXX";
     require(pattern.copy(directory.data(), pattern.size()) == pattern.size(), "copy directory template");
     require(::mkdtemp(directory.data()) != nullptr, "create empty deployment directory");
     std::error_code error;
@@ -39,8 +39,8 @@ int main()
     require(!error, "restore working directory");
     require(fs::remove(directory.data(), error) && !error, "remove empty deployment directory");
     if (!installed) std::cerr << installed.error().message << '\n';
-    require(installed.has_value(), "default Swagger must not require a resource directory");
-    require(prepared.docs_installed, "default Swagger marks document routes installed");
+    require(installed.has_value(), "default documentation must not require a resource directory");
+    require(prepared.docs_installed, "document installation marks document routes as installed");
     constexpr std::array names{
         "swagger-ui.css", "swagger-ui-bundle.js", "swagger-ui-standalone-preset.js",
         "favicon-16x16.png", "favicon-32x32.png", "LICENSE", "NOTICE", "README.md", "SHA256SUMS"};
@@ -50,6 +50,6 @@ int main()
                 "embedded UI and provenance routes must exist without deployed files");
     }
     require(prepared.router.find_handler(galay::http::HttpMethod::GET, "/openapi.json").request_handler != nullptr,
-            "default Swagger installs the REST document");
+            "default documentation installs the API description");
     std::cout << "Embedded UI installs from an empty working directory\n";
 }

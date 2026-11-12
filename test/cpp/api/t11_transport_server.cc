@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-api/api_router.h>
+#include <galay/cpp/galay-doc/api_router.h>
 #include <galay/cpp/galay-http/server/http_server.h>
 #ifdef GALAY_HTTP2_FEATURE_ENABLED
 #include <galay/cpp/galay-http2/server/http2_server.h>
@@ -222,18 +222,18 @@ int run_server(Builder& builder, const std::string& directory)
     return 0;
 }
 
-template<bool EnableSwagger>
+template<bool EnableDocs>
 int select_transport(const std::string& transport, std::uint16_t port,
                      const std::string& certificate, const std::string& key, const std::string& directory)
 {
     if (transport == "http") {
-        galay::http::HttpServerBuilder<EnableSwagger> builder;
+        galay::http::HttpServerBuilder<EnableDocs> builder;
         builder.host("127.0.0.1").port(port).io_scheduler_count(2).parallel_scheduler_count(1);
         return run_server(builder, directory);
     }
 #ifdef GALAY_SSL_FEATURE_ENABLED
     if (transport == "https") {
-        galay::http::HttpsServerBuilder<EnableSwagger> builder;
+        galay::http::HttpsServerBuilder<EnableDocs> builder;
         builder.host("127.0.0.1").port(port).cert_path(certificate).key_path(key)
             .io_scheduler_count(2).parallel_scheduler_count(1);
         return run_server(builder, directory);
@@ -241,13 +241,13 @@ int select_transport(const std::string& transport, std::uint16_t port,
 #endif
 #ifdef GALAY_HTTP2_FEATURE_ENABLED
     if (transport == "h2c") {
-        galay::http2::H2cServerBuilder<EnableSwagger> builder;
+        galay::http2::H2cServerBuilder<EnableDocs> builder;
         builder.host("127.0.0.1").port(port).io_scheduler_count(2).parallel_scheduler_count(1).ping_enabled(false);
         return run_server(builder, directory);
     }
 #ifdef GALAY_SSL_FEATURE_ENABLED
     if (transport == "h2") {
-        galay::http2::H2ServerBuilder<EnableSwagger> builder;
+        galay::http2::H2ServerBuilder<EnableDocs> builder;
         builder.host("127.0.0.1").port(port).cert_path(certificate).key_path(key)
             .io_scheduler_count(2).parallel_scheduler_count(1).ping_enabled(false);
         return run_server(builder, directory);
@@ -265,10 +265,10 @@ int main(int argc, char** argv)
     std::string transport = "http";
     std::string certificate, key, directory, export_path;
     std::uint16_t port = 0;
-    bool no_swagger = false;
+    bool no_docs = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view option = argv[index];
-        if (option == "--no-swagger") { no_swagger = true; continue; }
+        if (option == "--no-docs") { no_docs = true; continue; }
         if (index + 1 == argc) return 2;
         const std::string_view value = argv[++index];
         if (option == "--transport") transport = value;
@@ -297,6 +297,6 @@ int main(int argc, char** argv)
         return written && closed ? 0 : 1;
     }
     if (!port || std::signal(SIGINT, request_stop) == SIG_ERR || std::signal(SIGTERM, request_stop) == SIG_ERR) return 2;
-    return no_swagger ? select_transport<false>(transport, port, certificate, key, directory)
+    return no_docs ? select_transport<false>(transport, port, certificate, key, directory)
                       : select_transport<true>(transport, port, certificate, key, directory);
 }

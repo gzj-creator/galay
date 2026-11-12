@@ -1,5 +1,12 @@
-#ifndef GALAY_API_ROUTER_H
-#define GALAY_API_ROUTER_H
+/**
+ * @file api_router.h
+ * @brief 为原生 HTTP server builder 实现类型化 API 请求处理。
+ * @details add_api 根据输入 DTO 生成绑定、校验和 OpenAPI 操作描述；启用文档时，
+ *          builder 会在 build() 前生成并挂载 OpenAPI JSON 与 Swagger UI。
+ */
+
+#ifndef GALAY_DOC_ROUTER_H
+#define GALAY_DOC_ROUTER_H
 
 #include <galay/cpp/galay-http/server/api_contract.h>
 #include "binding.h"
@@ -23,7 +30,7 @@ struct RouteState {
     std::vector<int> error_statuses;
 };
 
-// By-value parameters belong to the coroutine frame, not to a temporary lambda closure.
+// 按值接收协程参数，使请求和路由状态由协程帧持有，不依赖临时 lambda 闭包的生命周期。
 template<class Input, class Output, class Handler>
 kernel::Task<http::HttpResponseResult> execute_route(std::shared_ptr<RouteState<Input, Handler>> state,
                                                    http::HttpRequest request, bool head) {
@@ -95,9 +102,9 @@ namespace galay::http::server_detail {
 
 using namespace galay::api;
 
-template<bool EnableSwagger>
+template<bool EnableDocs>
 template<http::HttpMethod Method, class Input, class Output, class Handler>
-ApiResult<void> ServerRoutes<EnableSwagger>::add_api(std::string path, Handler handler, Operation operation,
+ApiResult<void> ServerRoutes<EnableDocs>::add_api(std::string path, Handler handler, Operation operation,
                                 InputBinding<Input> binding) {
     if (built_) return std::unexpected(ApiError{ApiErrorCode::kFrozenBuilder, "server builder has already been built", 500});
     if constexpr (!std::is_invocable_r_v<kernel::Task<ApiResult<Output>>, Handler&, ApiContext&, Input>) {
@@ -127,7 +134,7 @@ ApiResult<void> ServerRoutes<EnableSwagger>::add_api(std::string path, Handler h
         http::HttpRequestHandler route = [state = std::move(state)](http::HttpRequest request) {
             return router_detail::execute_route<Input, Output>(state, std::move(request), Method == http::HttpMethod::HEAD);
         };
-        if constexpr (EnableSwagger) docs_.endpoints.push_back(std::move(endpoint));
+        if constexpr (EnableDocs) docs_.endpoints.push_back(std::move(endpoint));
         routes_.push_back({std::move(key), http::HttpRouteEntry{{}, std::move(route)}});
         return {};
     }

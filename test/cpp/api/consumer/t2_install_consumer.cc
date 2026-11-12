@@ -1,5 +1,5 @@
 #include <galay/cpp/galay-http/server/http_server.h>
-#include <galay/cpp/galay-api/api_router.h>
+#include <galay/cpp/galay-doc/api_router.h>
 #include <serde/json/json.hpp>
 #include <serde/reflect/reflect_macros.hpp>
 #include <concepts>
@@ -76,6 +76,6 @@ int main() {
     require(visible && !(*visible)->is_running(), "native construction does not listen");
     galay::http::HttpServerBuilder<> hidden;
     hidden.io_scheduler_count(1).parallel_scheduler_count(1);
-    require(register_items(hidden).has_value() && hidden.build().has_value(), "same registration without Swagger");
+    require(register_items(hidden).has_value() && hidden.build().has_value(), "same registration without documentation");
     require(std::puts("Installed native server builder consumer passed") >= 0, "write result");
 }

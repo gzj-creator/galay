@@ -1,7 +1,7 @@
 #ifndef GALAY_TEST_API_ROUTE_FIXTURE_H
 #define GALAY_TEST_API_ROUTE_FIXTURE_H
 
-#include <galay/cpp/galay-api/api_router.h>
+#include <galay/cpp/galay-doc/api_router.h>
 #include <galay/cpp/galay-http/server/http_server.h>
 
 namespace fixture {

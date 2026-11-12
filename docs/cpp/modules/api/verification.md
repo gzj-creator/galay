@@ -1,5 +1,9 @@
 # API 验证记录
 
+2026-11-12 起，该文档生成模块统一命名为 `galay-doc`：源码目录为
+`src/cpp/galay-doc`，CMake target 为 `galay::doc`，构建选项为 `GALAY_BUILD_DOC`。
+下文旧名称和旧命令保留为当时的验证记录，不是当前构建入口。
+
 2026-10-09 起，Swagger UI 资源直接固化在 `galay-api/ui_assets.cc` 中，`assets`
 目录与构建期生成脚本已移除。本文中的旧资源路径、生成器测试及浏览器命令
 保留为历史执行记录。当前浏览器验收命令不再接收资源目录：

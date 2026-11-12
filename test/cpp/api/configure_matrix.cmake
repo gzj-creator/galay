@@ -40,10 +40,10 @@ function(check_config name expected_result expected_message)
 endfunction()
 
 # The fixture deliberately has no serde submodule, yet HTTP without API must configure.
-check_config(api_off success "" -DGALAY_BUILD_API=OFF -DGALAY_BUILD_SERDE=OFF)
+check_config(api_off success "" -DGALAY_BUILD_DOC=OFF -DGALAY_BUILD_SERDE=OFF)
 file(READ "${work}/api_off/build.ninja" off_build)
-# Inspect target rules, not absolute fixture paths that may contain galay-api.
-if(off_build MATCHES "(^|\n)build (galay-api|serde_simdjson):|(^|\n)build src/cpp/galay-api/")
+# Inspect target rules, not absolute fixture paths that may contain galay-doc.
+if(off_build MATCHES "(^|\n)build (galay-doc|serde_simdjson):|(^|\n)build src/cpp/galay-doc/")
     message(FATAL_ERROR "API=OFF introduced API dependencies")
 endif()
 execute_process(COMMAND "${CMAKE_COMMAND}" --build "${work}/api_off"
@@ -57,12 +57,12 @@ execute_process(COMMAND "${work}/api_off/plain_http_consumer" RESULT_VARIABLE re
 if(NOT result EQUAL 0)
     message(FATAL_ERROR "Plain HTTP without API/serde failed to run: ${result}")
 endif()
-check_config(missing_http failure "GALAY_BUILD_API requires GALAY_BUILD_HTTP=ON"
-    -DGALAY_BUILD_API=ON -DGALAY_BUILD_HTTP=OFF -DGALAY_BUILD_SERDE=ON)
-check_config(missing_serde_option failure "GALAY_BUILD_API requires GALAY_BUILD_HTTP=ON"
-    -DGALAY_BUILD_API=ON -DGALAY_BUILD_SERDE=OFF)
+check_config(missing_http failure "GALAY_BUILD_DOC requires GALAY_BUILD_HTTP=ON"
+    -DGALAY_BUILD_DOC=ON -DGALAY_BUILD_HTTP=OFF -DGALAY_BUILD_SERDE=ON)
+check_config(missing_serde_option failure "GALAY_BUILD_DOC requires GALAY_BUILD_HTTP=ON"
+    -DGALAY_BUILD_DOC=ON -DGALAY_BUILD_SERDE=OFF)
 check_config(missing_serde_source failure "Galay serde submodule is missing"
-    -DGALAY_BUILD_API=ON -DGALAY_BUILD_SERDE=ON)
+    -DGALAY_BUILD_DOC=ON -DGALAY_BUILD_SERDE=ON)
 
 # The API source fixture deliberately has no assets directory.
 set(source "${work}/source-with-serde")
@@ -77,10 +77,10 @@ foreach(pair IN ITEMS "src/cpp" "thirdparty/concurrentqueue" "thirdparty/serde" 
 endforeach()
 file(APPEND "${source}/CMakeLists.txt" "
 add_executable(embedded_consumer \"${GALAY_SOURCE_DIR}/test/cpp/api/t9_embedded.cc\")
-target_link_libraries(embedded_consumer PRIVATE galay::api)
+target_link_libraries(embedded_consumer PRIVATE galay::doc)
 ")
 check_config(without_ui_resources success ""
-    -DGALAY_BUILD_API=ON -DGALAY_BUILD_SERDE=ON)
+    -DGALAY_BUILD_DOC=ON -DGALAY_BUILD_SERDE=ON)
 execute_process(COMMAND "${CMAKE_COMMAND}" --build "${work}/without_ui_resources"
     --target embedded_consumer --parallel 2
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)

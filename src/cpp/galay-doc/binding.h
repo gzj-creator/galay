@@ -1,5 +1,12 @@
-#ifndef GALAY_API_BINDING_H
-#define GALAY_API_BINDING_H
+/**
+ * @file binding.h
+ * @brief 实现输入 DTO 的 path/query 绑定和 JSON 请求体解码。
+ * @details 绑定使用 serde 反射描述符，同时生成运行时解码计划与 OpenAPI 参数 Schema；
+ *          成员约束和静态描述符契约在注册及请求处理阶段分别校验。
+ */
+
+#ifndef GALAY_DOC_BINDING_H
+#define GALAY_DOC_BINDING_H
 
 #include <galay/cpp/galay-http/server/api_binding.h>
 #if defined(__APPLE__) && defined(__MACH__)
@@ -112,7 +119,7 @@ ApiResult<void> validate_member(const Descriptor& descriptor, const Value& value
         return std::unexpected(bad_request("field '" + std::string(descriptor.name) + "': " + checked.error()));
     }
     if (retained_default) {
-        // Defaults can contain nested enums, non-finite numbers or invalid UTF-8.
+        // 默认值仍可能含有嵌套枚举、非有限数值或无效 UTF-8，因此也必须验证 JSON 编码。
         const auto encoded = json::serialize(value);
         if (!encoded) {
             return std::unexpected(bad_request("default for field '" + std::string(descriptor.name) + "': " + encoded.error()));
@@ -122,8 +129,8 @@ ApiResult<void> validate_member(const Descriptor& descriptor, const Value& value
 }
 
 inline bool json_media_type(std::string_view type) {
-    // HeaderPair preserves repeated common headers as a comma-separated value.
-    // A request with more than one Content-Type is not an unambiguous JSON body.
+    // HeaderPair 会把重复的普通请求头合并为逗号分隔值；多个 Content-Type 无法
+    // 唯一确定请求体的媒体类型，因此不能按 JSON 处理。
     if (type.find(',') != std::string_view::npos) return false;
     type = type.substr(0, type.find(';'));
     while (!type.empty() && (type.front() == ' ' || type.front() == '\t')) type.remove_prefix(1);
@@ -239,7 +246,7 @@ InputBinding<Input>& InputBinding<Input>::add(ParameterSource source, std::strin
                             [descriptor, source, name, field_name]() -> ApiResult<Parameter> {
                                 auto schema = schema_for_field(descriptor, SchemaUse::input);
                                 if (!schema) return std::unexpected(std::move(schema.error()));
-                                // A textual parameter has no null token; optional means it may be absent.
+                                // 文本参数没有 null token；optional 表示参数可以缺省，而不是可传 null。
                                 schema->nullable = false;
                                 return Parameter{source, name, field_name, schema->description,
                                     source == ParameterSource::path || !reflect::is_optional_v<Value>, std::move(*schema)};

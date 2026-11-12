@@ -81,9 +81,10 @@ struct HttpServerConfig
 /**
  * @brief HTTP 服务器 builder
  * @details builder 不持有线程或监听 socket；真正的 runtime 和监听资源在 `build()` 后的服务器实例中创建。
+ * @tparam EnableDocs 是否在 build() 时生成并安装 OpenAPI 文档与 Swagger UI；类型化路由在两种模式下均可用。
  */
-template<bool EnableSwagger = false>
-class HttpServerBuilder : public server_detail::ServerRoutes<EnableSwagger> {
+template<bool EnableDocs = false>
+class HttpServerBuilder : public server_detail::ServerRoutes<EnableDocs> {
 public:
     HttpServerBuilder() = default;
     explicit HttpServerBuilder(HttpServerConfig config) : m_config(std::move(config)) {}
@@ -731,8 +732,8 @@ protected:
 // 类型别名 - HTTP (AsyncTcpSocket)
 using HttpConnHandler = HttpConnHandlerImpl<AsyncTcpSocket>;
 using HttpServer = HttpServerImpl<AsyncTcpSocket>;
-template<bool EnableSwagger>
-inline api::ApiResult<std::unique_ptr<HttpServer>> HttpServerBuilder<EnableSwagger>::build()
+template<bool EnableDocs>
+inline api::ApiResult<std::unique_ptr<HttpServer>> HttpServerBuilder<EnableDocs>::build()
 {
     return this->template build_native<HttpServer>(m_config, true);
 }
@@ -770,9 +771,10 @@ class HttpsServer;
 /**
  * @brief HTTPS 服务器 builder
  * @details 除监听配置外，还负责收集 TLS 上下文初始化所需的证书与验证策略。
+ * @tparam EnableDocs 是否在 build() 时生成并安装 OpenAPI 文档与 Swagger UI；类型化路由在两种模式下均可用。
  */
-template<bool EnableSwagger = false>
-class HttpsServerBuilder : public server_detail::ServerRoutes<EnableSwagger> {
+template<bool EnableDocs = false>
+class HttpsServerBuilder : public server_detail::ServerRoutes<EnableDocs> {
 public:
     HttpsServerBuilder() = default;
     explicit HttpsServerBuilder(HttpsServerConfig config) : m_config(std::move(config)) {}
@@ -1098,8 +1100,8 @@ private:
     galay::ssl::SslContext m_ssl_ctx;
 };
 
-template<bool EnableSwagger>
-inline api::ApiResult<std::unique_ptr<HttpsServer>> HttpsServerBuilder<EnableSwagger>::build()
+template<bool EnableDocs>
+inline api::ApiResult<std::unique_ptr<HttpsServer>> HttpsServerBuilder<EnableDocs>::build()
 {
     return this->template build_native<HttpsServer>(m_config, false);
 }

@@ -1,5 +1,5 @@
-// Built-in swagger-ui-dist@5.17.14; provenance and update notes: SWAGGER_UI.md.
-#include <galay/cpp/galay-api/ui_assets.h>
+// 内嵌 swagger-ui-dist@5.17.14；上游来源和更新说明见 SWAGGER_UI.md。
+#include <galay/cpp/galay-doc/ui_assets.h>
 #include <array>
 
 namespace galay::api::docs_detail {

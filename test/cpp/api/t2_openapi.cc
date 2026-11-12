@@ -1,5 +1,5 @@
-#include <galay/cpp/galay-api/openapi.h>
-#include <galay/cpp/galay-api/schema.h>
+#include <galay/cpp/galay-doc/openapi.h>
+#include <galay/cpp/galay-doc/schema.h>
 #include <serde/json/json.hpp>
 
 #include <algorithm>

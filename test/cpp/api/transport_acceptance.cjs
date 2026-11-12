@@ -492,7 +492,7 @@ async function main() {
       await client.close();
       await fs.writeFile(path.join(output, `${mode}-server.log`), await server.stop());
     }
-    const hidden_server = await start_server(binary, mode, certificates, output, ['--no-swagger']);
+    const hidden_server = await start_server(binary, mode, certificates, output, ['--no-docs']);
     const hidden_client = await make_client(mode, hidden_server.port, ca);
     try {
       await expect_json(hidden_client, 'getValue', 'GET', '/values/7', '', 200,
@@ -518,7 +518,7 @@ async function main() {
     assert(!/ERROR: (AddressSanitizer|LeakSanitizer)|runtime error:/.test(missing.stdout + missing.stderr),
       `missing-directory cleanup sanitizer failure: ${missing.stdout}${missing.stderr}`);
     evidence.transports.push({ mode, port: server.port, protocol: client.protocol, embeddedAssets: assets.size,
-      docs: true, noSwagger: true, missingDirectoryFailure: true, streams, tls: tls_checks,
+      docs: true, noDocs: true, missingDirectoryFailure: true, streams, tls: tls_checks,
       liveStop: { activeHandler: stopping.activeHandler, incompleteRequest: stopping.incompleteRequest, blockedAsset: stopping.blockedAsset,
         unfinishedHandshake: stopping.unfinishedHandshake, unfinishedPreface: stopping.unfinishedPreface, idleFallback: stopping.idleFallback } });
   }

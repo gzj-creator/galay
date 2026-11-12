@@ -107,8 +107,8 @@ ApiResult<void> validate_document_path(std::string_view path)
         return std::unexpected(ApiError{ApiErrorCode::kInvalidPath,
             "docs path must be absolute, canonical and at most 2048 bytes", 400});
     }
-    // The HTTP router accepts only ASCII unreserved literal segments. Reject
-    // rather than silently encode a URL that it cannot route to the same bytes.
+    // HTTP 路由仅接受 ASCII 非保留字符组成的字面路径段；这里直接拒绝其他字符，
+    // 避免编码后产生路由器无法按相同字节匹配的 URL。
     for (const unsigned char character : path) {
         if (character != '/' && character != '-' && character != '_' &&
             character != '.' && character != '~' &&
@@ -155,8 +155,8 @@ ApiResult<std::string> make_initializer(std::string_view spec_path)
 
 std::string make_html(std::string_view ui_path)
 {
-    // Only validated ASCII literal paths enter HTML attributes; the router
-    // cannot serve quotes, entities or percent-encoded alternatives safely.
+    // 只有已校验的 ASCII 字面路径会写入 HTML 属性；路由器无法安全服务引号、
+    // HTML 实体或百分号编码的等价路径。
     return "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
         "<title>Swagger UI</title>\n<link rel=\"stylesheet\" href=\"" +

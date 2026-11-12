@@ -151,8 +151,12 @@ struct H2cServerConfig
 
 class H2cServer;
 
-template<bool EnableSwagger = false>
-class H2cServerBuilder : public galay::http::server_detail::ServerRoutes<EnableSwagger> {
+/**
+ * @brief H2C 原生 HTTP/2 server builder。
+ * @tparam EnableDocs 是否在 build() 时生成并安装 OpenAPI 文档与 Swagger UI；类型化路由在两种模式下均可用。
+ */
+template<bool EnableDocs = false>
+class H2cServerBuilder : public galay::http::server_detail::ServerRoutes<EnableDocs> {
 public:
     H2cServerBuilder() = default;
     explicit H2cServerBuilder(H2cServerConfig config) : m_config(std::move(config)) {}
@@ -916,8 +920,8 @@ private:
     bool m_start_attempted = false;
 };
 
-template<bool EnableSwagger>
-inline api::ApiResult<std::unique_ptr<H2cServer>> H2cServerBuilder<EnableSwagger>::build() {
+template<bool EnableDocs>
+inline api::ApiResult<std::unique_ptr<H2cServer>> H2cServerBuilder<EnableDocs>::build() {
     return this->template build_native<H2cServer>(build_config(), false);
 }
 
@@ -966,8 +970,12 @@ struct H2ServerConfig
 
 class H2Server;
 
-template<bool EnableSwagger = false>
-class H2ServerBuilder : public galay::http::server_detail::ServerRoutes<EnableSwagger> {
+/**
+ * @brief TLS 上的原生 HTTP/2 server builder。
+ * @tparam EnableDocs 是否在 build() 时生成并安装 OpenAPI 文档与 Swagger UI；类型化路由在两种模式下均可用。
+ */
+template<bool EnableDocs = false>
+class H2ServerBuilder : public galay::http::server_detail::ServerRoutes<EnableDocs> {
 public:
     H2ServerBuilder() = default;
     explicit H2ServerBuilder(H2ServerConfig config) : m_config(std::move(config)) {}
@@ -1558,8 +1566,8 @@ private:
     bool m_start_attempted = false;
 };
 
-template<bool EnableSwagger>
-inline api::ApiResult<std::unique_ptr<H2Server>> H2ServerBuilder<EnableSwagger>::build() {
+template<bool EnableDocs>
+inline api::ApiResult<std::unique_ptr<H2Server>> H2ServerBuilder<EnableDocs>::build() {
     return this->template build_native<H2Server>(build_config(), false);
 }
 #endif

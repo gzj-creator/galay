@@ -66,8 +66,8 @@ endif()
 if(GALAY_BUILD_HTTP2)
     add_subdirectory(src/cpp/galay-http2)
 endif()
-if(GALAY_BUILD_API)
-    add_subdirectory(src/cpp/galay-api)
+if(GALAY_BUILD_DOC)
+    add_subdirectory(src/cpp/galay-doc)
 endif()
 if(GALAY_BUILD_REDIS)
     add_subdirectory(src/cpp/galay-redis)
@@ -99,7 +99,7 @@ endif()
 
 set(GALAY_INSTALL_TARGETS)
 foreach(_galay_target IN ITEMS
-    galay-utils galay-serde galay-kernel galay-ssl galay-http galay-api galay-ws galay-http2
+    galay-utils galay-serde galay-kernel galay-ssl galay-http galay-doc galay-ws galay-http2
     galay-redis galay-rpc galay-mysql galay-postgres galay-mongo galay-etcd galay-mcp
     galay-tracing
     galay-tracing-spdlog galay-tracing-kernel

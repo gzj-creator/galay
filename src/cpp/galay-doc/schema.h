@@ -1,5 +1,12 @@
-#ifndef GALAY_API_SCHEMA_H
-#define GALAY_API_SCHEMA_H
+/**
+ * @file schema.h
+ * @brief 从 serde 静态反射契约构造并校验 OpenAPI Schema。
+ * @details 输入和输出方向分别决定字段 required、nullable 与附加属性规则；
+ *          不支持的递归结构、类型或运行期描述符漂移会以 ApiError 返回。
+ */
+
+#ifndef GALAY_DOC_SCHEMA_H
+#define GALAY_DOC_SCHEMA_H
 
 #include <galay/cpp/galay-http/server/schema_model.h>
 #include <serde/reflect/reflect.hpp>
@@ -145,7 +152,7 @@ bool same_fields(const Static& stable, const Runtime& current) {
     }
 }
 
-// Check descriptor stability, not values or codecs. This never constructs a schema.
+// 这里只检查描述符是否稳定，不检查业务值或 codec，也不会构造 Schema。
 template<class T, class... Seen>
 ApiResult<void> contract(const T* value) {
     using U = std::remove_cvref_t<T>;
@@ -206,7 +213,7 @@ ApiResult<void> validate_metadata(const Descriptor& descriptor) {
     }
     if constexpr (requires { descriptor.options; }) {
         const auto& source = descriptor.options;
-        // An empty optional runs serde's metadata checks without inventing a member value.
+        // 用空 optional 触发 serde 元数据校验，无需伪造一个成员值。
         const reflect::field_options<std::optional<Member>> options{
             .description = source.description, .minimum = source.minimum, .maximum = source.maximum,
             .min_length = source.min_length, .max_length = source.max_length,
@@ -406,6 +413,12 @@ ApiResult<Schema> build(SchemaUse use) {
 
 } // namespace schema_detail
 
+/**
+ * @brief 根据 serde DTO 生成 OpenAPI Schema。
+ * @tparam T DTO 类型。
+ * @param use 输入或输出方向。
+ * @return Schema；类型不受支持或反射契约无效时返回 ApiError。
+ */
 template<class T>
 ApiResult<Schema> schema_for(SchemaUse use) {
     auto schema = schema_detail::build<T>(use);
@@ -419,11 +432,22 @@ ApiResult<Schema> schema_for(SchemaUse use) {
     return schema;
 }
 
+/**
+ * @brief 检查运行期对象的 serde 描述符是否仍符合静态契约。
+ * @param value 待检查的 DTO；同时检查实际嵌套成员。
+ * @return 描述符一致时成功，否则返回契约或元数据错误。
+ */
 template<class T>
 ApiResult<void> validate_contract(const T& value) {
     return schema_detail::contract<T>(std::addressof(value));
 }
 
+/**
+ * @brief 从一个 serde 成员描述符生成字段 Schema。
+ * @param descriptor 必须包含公开成员指针、字段名和可选字段约束。
+ * @param use 输入或输出方向。
+ * @return 字段 Schema；描述符格式或成员类型不支持时返回 ApiError。
+ */
 template<class Descriptor>
 ApiResult<Schema> schema_for_field(const Descriptor& descriptor, SchemaUse use) {
     if constexpr (requires { descriptor.pointer; descriptor.name; }) {

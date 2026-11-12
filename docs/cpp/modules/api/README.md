@@ -1,10 +1,11 @@
-# galay-api
+# galay-doc
 
-`galay-api` 为 HTTP、HTTPS、h2c 和 H2 原生服务提供类型化参数绑定、serde JSON
-编解码、OpenAPI 3.1.0 和内嵌官方 Swagger UI。入口统一到各原生 server builder
+`galay-doc` 为 HTTP、HTTPS、h2c 和 H2 原生服务生成 OpenAPI 3.1.0 文档，并提供
+内嵌官方 Swagger UI。文档从类型化路由、serde 字段契约和操作元数据生成；这些
+契约同时驱动请求绑定、校验和 JSON 编解码。入口统一到各原生 server builder
 的 `add_api`，不再使用独立的 API builder、API server 或文档策略。
 
-四个 builder 都具有 `EnableSwagger = false` 模板参数：
+四个 builder 都具有 `EnableDocs = false` 模板参数：
 
 | Builder | 原生 Server | 额外构建条件 |
 | --- | --- | --- |
@@ -19,13 +20,13 @@
 但没有 DTO 元数据，不会自动变成 OpenAPI 操作。
 
 默认资源固定为 `swagger-ui-dist@5.17.14`，九个服务资源已作为源码内置到
-`galay-api`。部署和构建都不需要 `assets` 目录、额外 JS、CSS、图标、源码路径
+`galay-doc`。部署和构建都不需要 `assets` 目录、额外 JS、CSS、图标、源码路径
 或特定工作目录，不使用 CDN。显式 `docs(config, directory)` 仍可使用完整外置
 资源，缺项失败，不回退。
 
-`GALAY_BUILD_API` 默认 `OFF`，启用时要求 HTTP 和 serde。类型化应用包含
-`galay-api/api_router.h` 及所选原生 server 头，链接 `galay::api`；使用 HTTP/2
-时另链接 `galay::http2`。普通 HTTP 只需 `galay::http`，不引入 API、serde 或 UI。
+`GALAY_BUILD_DOC` 默认 `OFF`，启用时要求 HTTP 和 serde。类型化应用包含
+`galay-doc/api_router.h` 及所选原生 server 头，链接 `galay::doc`；使用 HTTP/2
+时另链接 `galay::http2`。普通 HTTP 只需 `galay::http`，不链接 `galay::doc`，也不引入 serde。
 当前 API 模板使用 C++23 头文件接口，原生 HTTP/HTTP2 模块 facade 仍可消费。
 
 - [快速开始](00-快速开始.md)：构建、运行、四种传输及安装消费。

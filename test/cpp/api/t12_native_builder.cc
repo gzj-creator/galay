@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-api/api_router.h>
+#include <galay/cpp/galay-doc/api_router.h>
 #include <galay/cpp/galay-http/server/http_server.h>
 #ifdef GALAY_HTTP2_FEATURE_ENABLED
 #include <galay/cpp/galay-http2/server/http2_server.h>
@@ -85,7 +85,7 @@ void test_registration()
     const auto repeated_operation = builder.add_api<HttpMethod::GET, NoInput, std::string>(
         "/second", get_value, Operation{.id = "sharedId"});
     require(!repeated_operation && repeated_operation.error().code == ApiErrorCode::kDuplicateOperation,
-        "operation ids are unique even when Swagger is disabled");
+        "operation ids are unique even when document generation is disabled");
 }
 
 template<class Builder>
@@ -135,14 +135,14 @@ int main()
 #endif
     HttpServerBuilder<> hidden;
     hidden.io_scheduler_count(1).parallel_scheduler_count(1);
-    require(register_service(hidden).has_value(), "register with Swagger disabled");
+    require(register_service(hidden).has_value(), "register with document generation disabled");
     auto server = hidden.build();
     require(server.has_value() && !(*server)->is_running(), "build does not listen");
     require(!register_service(hidden) && !hidden.build(), "successful build freezes registration");
 
     HttpServerBuilder<true> visible;
     visible.api_info({.title = "Generated service", .version = "1"});
-    require(register_service(visible).has_value(), "same generated registration with Swagger enabled");
+    require(register_service(visible).has_value(), "same generated registration with document generation enabled");
     auto document = visible.export_openapi();
     require(document && document->find("getValue") != std::string::npos, "offline document");
     require(visible.add_request_handler<HttpMethod::GET>("/docs",

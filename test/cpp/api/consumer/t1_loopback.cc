@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-api/api_router.h>
+#include <galay/cpp/galay-doc/api_router.h>
 #include <galay/cpp/galay-http/server/http_server.h>
 
 #include <arpa/inet.h>
@@ -92,7 +92,7 @@ galay::kernel::Task<galay::api::ApiResult<std::string>> value(galay::api::ApiCon
     co_return "installed";
 }
 
-template<bool EnableSwagger>
+template<bool EnableDocs>
 void run_loopback()
 {
     using namespace galay::api;
@@ -101,12 +101,12 @@ void run_loopback()
     config.port = free_port();
     config.io_scheduler_count = 1;
     config.parallel_scheduler_count = 1;
-    galay::http::HttpServerBuilder<EnableSwagger> builder(config);
-    if constexpr (EnableSwagger) builder.api_info({.title = "Relocated consumer", .version = "1"});
+    galay::http::HttpServerBuilder<EnableDocs> builder(config);
+    if constexpr (EnableDocs) builder.api_info({.title = "Relocated consumer", .version = "1"});
     require(builder.template add_api<galay::http::HttpMethod::GET, NoInput, std::string>(
         "/value", value, Operation{.id = "getValue"}).has_value(), "register typed operation");
     std::string document;
-    if constexpr (EnableSwagger) {
+    if constexpr (EnableDocs) {
         auto exported = builder.export_openapi();
         require(exported.has_value(), "offline document");
         document = std::move(*exported);
@@ -116,13 +116,13 @@ void run_loopback()
     auto& server = **built;
     require(server.start().has_value(), "start native typed server without deployed files");
     require(get(config.port, "/value").body_str() == "\"installed\"", "typed GET result");
-    if constexpr (!EnableSwagger) {
+    if constexpr (!EnableDocs) {
         for (const auto* path : {"/openapi.json", "/docs", "/docs/swagger-ui.css"}) {
             const auto missing = get(config.port, path, galay::http::HttpStatusCode::NotFound_404);
             require(missing.body_str() == "404 Not Found", "disabled mode installs no document resources");
         }
         server.stop();
-        require(std::puts("Relocated typed consumer runs without Swagger") >= 0, "write result");
+        require(std::puts("Relocated typed consumer runs without documentation") >= 0, "write result");
         return;
     }
     require(get(config.port, "/openapi.json").body_str() == document, "immutable REST document");

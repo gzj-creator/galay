@@ -3,9 +3,9 @@
 ## 头文件与契约
 
 原生入口为 `galay-http/server/http_server.h`、`galay-http2/server/http2_server.h`。
-使用 typed 注册时再包含 `galay-api/api_router.h` 并链接 `galay::api`；HTTP/2
+使用 typed 注册时再包含 `galay-doc/api_router.h` 并链接 `galay::doc`；HTTP/2
 另链接 `galay::http2`。轻量契约声明在 HTTP 中，不引入 serde；绑定、schema、
-JSON 和 Swagger 实现留在可选 API 模块。内部准备产物不作为应用构建入口。
+JSON 和 Swagger UI 实现由可选 `galay-doc` 模块提供。内部准备产物不作为应用构建入口。
 
 | `galay::api` 类型 / 函数 | 用途 |
 | --- | --- |
@@ -22,7 +22,7 @@ JSON 和 Swagger 实现留在可选 API 模块。内部准备产物不作为应�
 ## Builder
 
 `HttpServerBuilder`、`HttpsServerBuilder`、`H2cServerBuilder`、`H2ServerBuilder`
-都有 `EnableSwagger = false` 模板参数和以下公共注册接口：
+都有 `EnableDocs = false` 模板参数和以下公共注册接口：
 
 | 接口 | 返回值 / 语义 |
 | --- | --- |
@@ -86,7 +86,7 @@ optional 可缺失或为 null，输出字段仍存在。静态与运行期 serde
 
 ## 文档资源
 
-默认固定 `swagger-ui-dist@5.17.14`，九项资源直接内嵌在 `galay-api` 源码中。显式
+默认固定 `swagger-ui-dist@5.17.14`，九项资源直接内嵌在 `galay-doc` 源码中。显式
 目录须包含下面非空普通文件，每个最多 16 MiB：
 
 ```text

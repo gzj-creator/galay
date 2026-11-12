@@ -11,6 +11,18 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 将 OpenAPI 文档生成模块从 `galay-api` 统一重命名为 `galay-doc`，同步源码目录、CMake/Bazel target、CMake 构建选项、mcpp feature、公开 include 前缀及示例、测试和消费文档；文档模式模板参数统一为 `EnableDocs`，不保留旧名兼容入口。
+
+### Docs
+
+- 为类型化 API 错误、操作元数据、Schema、参数绑定、请求上下文和原生路由注册补充中文 Doxygen 契约注释，并将文档模块实现注释统一为中文。
+
+### Validation
+
+- GCC 14 的 CMake 构建、9 项 API 单元测试、安装后独立 consumer、配置矩阵、启动和 HTTP/HTTPS/h2c/H2 传输验收通过；`mcpp build --features doc --configure-only --offline` 与 `git diff --check` 通过。未运行 Bazel 构建。
+
 ## [v7.1.1] - 2026-11-09
 
 ### Changed
