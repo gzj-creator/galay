@@ -19,6 +19,44 @@ target_compile_definitions(galay-kernel-test-scheduler PUBLIC
 target_link_libraries(galay-kernel-test-scheduler PUBLIC
     $<TARGET_PROPERTY:galay-kernel,LINK_LIBRARIES>)
 
+# 内核测试的稳定标准库公共头。共享一份 PCH，避免为每个单源可执行文件
+# 重复生成体量较大的预编译产物。
+set(GALAY_KERNEL_TEST_PCH_HEADERS
+    <array>
+    <atomic>
+    <chrono>
+    <coroutine>
+    <cstring>
+    <expected>
+    <iostream>
+    <memory>
+    <string>
+    <thread>
+    <vector>
+)
+
+function(galay_add_kernel_test_pch pch_target test_link_target)
+    add_library(${pch_target} OBJECT pch/test_pch.cc)
+    target_compile_features(${pch_target} PRIVATE cxx_std_23)
+    target_include_directories(${pch_target}
+        PRIVATE
+            ${CMAKE_SOURCE_DIR}
+            ${CMAKE_BINARY_DIR}/include
+    )
+    target_compile_definitions(${pch_target}
+        PRIVATE
+            GALAY_PROJECT_ROOT="${CMAKE_SOURCE_DIR}"
+            GALAY_SOURCE_ROOT="${CMAKE_SOURCE_DIR}/src/cpp"
+    )
+    target_link_libraries(${pch_target} PRIVATE ${test_link_target})
+    target_precompile_headers(${pch_target}
+        PRIVATE ${GALAY_KERNEL_TEST_PCH_HEADERS})
+endfunction()
+
+galay_add_kernel_test_pch(galay-kernel-test-pch galay::kernel)
+galay_add_kernel_test_pch(
+    galay-kernel-test-scheduler-pch galay-kernel-test-scheduler)
+
 set(GALAY_KERNEL_SCENARIO_t2_tcp tcp_basic)
 set(GALAY_KERNEL_SCENARIO_t3_tcp tcp_server)
 set(GALAY_KERNEL_SCENARIO_t4_tcp tcp_client)
@@ -61,8 +99,15 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
             GALAY_SOURCE_ROOT="${CMAKE_SOURCE_DIR}/src/cpp"
     )
     if(TEST_NAME STREQUAL "t122_taskresult_storage")
+        # 该测试额外的警告升级参数与共享 PCH 不兼容，保持独立编译。
         target_compile_options(${TEST_NAME} PRIVATE
             $<$<CXX_COMPILER_ID:GNU>:-Werror=free-nonheap-object>)
+    elseif(TEST_SCHEDULER_ADAPTER_INCLUDE)
+        target_precompile_headers(${TEST_NAME}
+            REUSE_FROM galay-kernel-test-scheduler-pch)
+    else()
+        target_precompile_headers(${TEST_NAME}
+            REUSE_FROM galay-kernel-test-pch)
     endif()
     string(REGEX REPLACE "^t[0-9]+_" "" SCENARIO_NAME "${TEST_NAME}")
     set(SCENARIO_OVERRIDE "GALAY_KERNEL_SCENARIO_${TEST_NAME}")

@@ -109,6 +109,7 @@ def audit_tests() -> None:
         )
         approved_single_tests = {
             "test/cpp/config/t_module_config_surface.cc",
+            "test/cpp/kernel/pch/test_pch.cc",
             "test/cpp/utils/t_import_smoke.cc",
         }
         if not grouped_utils and rel(path) not in approved_single_tests and not TEST_RE.match(path.name):
