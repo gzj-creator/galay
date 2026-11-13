@@ -553,7 +553,9 @@ bool test_waiter_registration_retains_task_reference()
     auto task = receive_across_thread(&channel, &state);
     galay::kernel::TaskRef keeper = galay::kernel::detail::TaskAccess::task_ref(task);
     auto* taskState = keeper.state();
-    if (taskState == nullptr || !taskState->m_handle) {
+    if (taskState == nullptr || !taskState->m_handle ||
+        taskState->m_scheduler != nullptr ||
+        taskState->m_queued.load(std::memory_order_acquire)) {
         return false;
     }
 
@@ -565,9 +567,14 @@ bool test_waiter_registration_retains_task_reference()
 
     int value = 73;
     const bool sent = channel.send(std::move(value), true);
+    // 手工驱动任务没有 scheduler，也从未进入 m_queued 入队协议；
+    // Inline 直接恢复完成后没有队列标志需要复位。
+    const bool queue_flag_clear =
+        !taskState->m_queued.load(std::memory_order_acquire);
     return state.entered.load(std::memory_order_acquire) &&
         refsWhileRegistered == refsBeforeSuspend + 1 && sent &&
-        state.done.load(std::memory_order_acquire) && state.success && state.value == 73;
+        state.done.load(std::memory_order_acquire) && state.success && state.value == 73 &&
+        queue_flag_clear;
 }
 
 bool test_second_waiter_does_not_disturb_registered_waiter()

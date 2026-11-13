@@ -1663,6 +1663,8 @@ private:
             return;
         }
 
+        // 无 scheduler 的手工驱动任务不会进入 request_task_resume_state()，
+        // 因而不存在 m_queued 标志需要由恢复路径复位。
         if (wakeMode == WakeMode::Inline && waiterState->m_scheduler == nullptr &&
             waiterState->m_handle) {
             waiterState->m_handle.resume();
