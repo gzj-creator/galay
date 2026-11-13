@@ -39,7 +39,10 @@ bool verify_local_ready_budget(const char* label) {
         }
     }
 
-    SchedulerTestAccess::process_pending(scheduler);
+    if (SchedulerTestAccess::process_pending(scheduler) == 0) {
+        std::cerr << "[T40] " << label << " first pass resumed no task\n";
+        return false;
+    }
 
     const int completed_after_first_pass = g_completed.load(std::memory_order_relaxed);
     if (completed_after_first_pass >= kTaskCount) {
@@ -54,7 +57,10 @@ bool verify_local_ready_budget(const char* label) {
         return false;
     }
 
-    SchedulerTestAccess::process_pending(scheduler);
+    if (SchedulerTestAccess::process_pending(scheduler) == 0) {
+        std::cerr << "[T40] " << label << " later pass resumed no task\n";
+        return false;
+    }
 
     if (g_completed.load(std::memory_order_relaxed) != kTaskCount) {
         std::cerr << "[T40] " << label << " did not finish remaining ready tasks\n";

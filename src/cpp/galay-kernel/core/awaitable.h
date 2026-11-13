@@ -248,13 +248,6 @@ struct IOContextBase: public AwaitableBase {
     virtual bool handle_complete(GHandle handle) = 0;  ///< 在传统后端上消费一次就绪事件并返回该操作是否已完成
 #endif
 
-    // SequenceAwaitable 调度时可由上下文动态指定下一次等待方向；
-    // 返回 INVALID 表示沿用静态 task.type。
-    /**
-     * @brief 返回动态事件方向；INVALID 表示沿用静态事件类型
-     * @return 当前对象的类型、状态或错误码
-     */
-    virtual IOEventType type() const { return IOEventType::INVALID; }
 };
 
 struct AcceptIOContext;
@@ -1666,17 +1659,9 @@ struct SequenceAwaitableBase: public AwaitableBase, public TimeoutTimerBinding {
      */
     virtual bool empty() const = 0;
 
-    IOEventType resolve_task_event_type(const IOTask& task) const {
-        if (task.context == nullptr) {
-            return task.type;
-        }
-        IOEventType desired = task.context->type();
-        return desired == IOEventType::INVALID ? task.type : desired;
-    }
-
     IOEventType active_event_type() const {
         const auto* task = front();
-        return task == nullptr ? IOEventType::INVALID : resolve_task_event_type(*task);
+        return task == nullptr ? IOEventType::INVALID : task->type;
     }
 
     bool waits_on(IOController::Index slot) const {

@@ -1028,7 +1028,7 @@ int IOUringReactor::add_sequence(IOController* controller) {
             return -EINVAL;
         }
 
-        const IOEventType type = owner->resolve_task_event_type(*task);
+        const IOEventType type = task->type;
         IOController::Index slot = IOController::READ;
         if (!resolve_sequence_slot(type, slot)) {
             return -EINVAL;

@@ -155,7 +155,7 @@
 - `Host(IPType, ip, port)` 直接调用 `inet_pton(...)` 写入底层地址，但当前构造函数本身不返回解析错误；文本地址是否合法，最终由后续系统调用通过 `IOError` 暴露
 - `from_sock_addr(...)` 会按 `ss_family` 自动选择 `sockaddr_in` / `sockaddr_in6` 的有效长度
 
-`IOErrorCode` / `IOError` / `Infallible`：
+`IOErrorCode` / `IOError`：
 
 - `enum IOErrorCode : uint32_t`
   - `kDisconnectError`
@@ -180,14 +180,12 @@
 - `uint64_t code() const`
 - `std::string message() const`
 - `void reset()`
-- `class Infallible`
 
 语义说明：
 
 - `IOError::code()` 把系统错误码放在高 32 位、`IOErrorCode` 放在低 32 位
 - `IOError::contains(...)` 只检查组合码里的低 32 位逻辑错误码
 - `IOError::message()` 会拼接逻辑错误文案与 `strerror(system_code)`；当 `system_code==0` 时文本尾部会是 `(sys: no error)`
-- `Infallible` 是空标记类型，用在逻辑上不会失败的路径或模板特化里
 
 `Bytes`：
 

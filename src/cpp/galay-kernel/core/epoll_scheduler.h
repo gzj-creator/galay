@@ -62,12 +62,6 @@ public:
 /** @brief 默认 epoll 调度器 */
 using EpollScheduler = EpollSchedulerT<DefaultIOSchedulerConfig>;
 
-/** @brief 高性能 epoll 调度器 */
-using HighPerformanceEpollScheduler = EpollSchedulerT<HighPerformanceIOSchedulerConfig>;
-
-/** @brief 低延迟 epoll 调度器 */
-using LowLatencyEpollScheduler = EpollSchedulerT<LowLatencyIOSchedulerConfig>;
-
 } // namespace galay::kernel
 #endif
 #endif

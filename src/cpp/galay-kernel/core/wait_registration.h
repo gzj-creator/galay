@@ -4,15 +4,14 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 提供 WaitRegistration，一种无锁单等待者注册机制，跟踪等待者地址
- * 和代数计数器。被 waker 系统用于协调跨线程的安全唤醒。
+ * @details 提供 WaitRegistration，一种无锁单等待者注册机制，跟踪等待者地址。
+ * 被 waker 系统用于协调跨线程的安全唤醒。
  */
 
 #ifndef GALAY_KERNEL_WAIT_REGISTRATION_H
 #define GALAY_KERNEL_WAIT_REGISTRATION_H
 
 #include <atomic>
-#include <cstdint>
 
 namespace galay::kernel {
 
@@ -20,7 +19,6 @@ namespace galay::kernel {
  * @brief 无锁单等待者注册槽
  *
  * @details 允许一个等待者注册其地址，唤醒者可以原子地消费该地址。
- * 代数计数器用于检测等待者变更时的过期唤醒。
  */
 class WaitRegistration
 {
@@ -42,9 +40,6 @@ public:
                                               std::memory_order_relaxed)) {
             return false;
         }
-        [[maybe_unused]] const uint64_t previous_generation =
-            m_generation.fetch_add(1, std::memory_order_acq_rel);
-        // 返回值只是旧代数；调用方只依赖成功注册后的单调递增副作用。
         return true;
     }
 
@@ -101,17 +96,8 @@ public:
         return m_waiter.load(std::memory_order_acquire) != nullptr;
     }
 
-    /**
-     * @brief 获取当前代数计数器
-     * @return 单调递增的代数值
-     */
-    uint64_t generation() const noexcept {
-        return m_generation.load(std::memory_order_acquire);
-    }
-
 private:
     std::atomic<void*> m_waiter{nullptr};  ///< 已注册的等待者地址
-    std::atomic<uint64_t> m_generation{0};  ///< 每次 arm() 调用时递增
     std::atomic<bool> m_pending_wake{false};  ///< waiter 注册前到达的一次唤醒
 };
 

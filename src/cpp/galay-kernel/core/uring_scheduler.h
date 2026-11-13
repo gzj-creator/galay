@@ -62,12 +62,6 @@ public:
 /** @brief 默认 io_uring 调度器 */
 using IOUringScheduler = IOUringSchedulerT<DefaultIOSchedulerConfig>;
 
-/** @brief 高性能 io_uring 调度器 */
-using HighPerformanceIOUringScheduler = IOUringSchedulerT<HighPerformanceIOSchedulerConfig>;
-
-/** @brief 低延迟 io_uring 调度器 */
-using LowLatencyIOUringScheduler = IOUringSchedulerT<LowLatencyIOSchedulerConfig>;
-
 } // namespace galay::kernel
 #endif
 #endif

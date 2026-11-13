@@ -21,17 +21,6 @@
 namespace galay::kernel {
 
 /**
- * @brief 调度器主循环阶段
- * @details 供测试和诊断观察一次事件循环迭代所处的阶段。
- */
-enum class SchedulerCoreStage {
-    CollectRemote,       ///< 拉取跨线程注入任务
-    CollectCompletions,  ///< 收集后端完成事件
-    RunReady,            ///< 恢复 ready 队列中的任务
-    Poll,                ///< 进入后端 poll 等待
-};
-
-/**
  * @brief 一次 ready pass 的统计结果
  */
 struct SchedulerReadyPassSummary {
@@ -189,29 +178,6 @@ public:
     template <typename ResumeFn>
     size_t run_ready_pass(ResumeFn&& resume_fn) {
         return run_ready_pass(std::forward<ResumeFn>(resume_fn), [](size_t) {});
-    }
-
-    template <typename CollectCompletionsFn,
-              typename PollFn,
-              typename ResumeFn,
-              typename StageObserverFn>
-    void run_loop_iteration(CollectCompletionsFn&& collect_completions_fn,
-                          PollFn&& poll_fn,
-                          ResumeFn&& resume_fn,
-        StageObserverFn&& stage_observer_fn) {
-        stage_observer_fn(SchedulerCoreStage::CollectRemote);
-        collect_remote();
-
-        stage_observer_fn(SchedulerCoreStage::CollectCompletions);
-        collect_completions_fn();
-
-        stage_observer_fn(SchedulerCoreStage::RunReady);
-        run_ready_pass(std::forward<ResumeFn>(resume_fn));
-
-        if (!has_pending_work()) {
-            stage_observer_fn(SchedulerCoreStage::Poll);
-            poll_fn();
-        }
     }
 
 private:

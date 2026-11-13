@@ -29,7 +29,6 @@ namespace galay::kernel
 enum class TimerFlag : int {
     kDone = 1 << 0,    ///< 定时器已触发并完成
     kCancel = 1 << 1,  ///< 定时器被显式取消
-    kTimeout = 1 << 2, ///< 兼容枚举位；TimeoutTimer 以 Completion 为唯一真相
 };
 
 /**

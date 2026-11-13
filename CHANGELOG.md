@@ -19,6 +19,9 @@
 
 - 删除 IO 调度器间任务窃取路径及 `ChaseLevTaskRing`，本地就绪队列改为 owner 线程独占、无原子操作的 `LocalReadyStack`；同步删除窃取域配置、窃取统计、跨线程窃取测试与 `shared-*` 基准样本。
 - 删除公开的 `Runtime::stats()` 与 `RuntimeStats`，运行时不再暴露 IO 窃取计数；删除仅供窃取路径使用的 `m_resume_owner_only` 状态和 C 协程 `ReadyEntryHooks::resume_owner_only` 钩子。
+- 删除 `WakeCoordinator` 的 3 个诊断计数器、5 个零调用访问器及每次唤醒的原子累加；删除 `SchedulerCoreStage`、`run_loop_iteration` 和仅测试使用的 `process_pending_tasks` 包装，测试辅助改为直接驱动 `run_ready_pass`。
+- 删除 `TaskRef` 版本的任务结果初始化/写入重载、`AsyncWaiterAwaitable<void>` 与 `AsyncMutexAwaitable` 的 `await_suspend(Waker)` 重载、SPSC 有界通道未读取的 `wakeIssued`、`IOContextBase::type()` 动态事件方向虚钩子，以及 `WaitRegistration` 的代数计数。
+- 删除 `GALAY_IOURING_WAIT_TIMEOUT_NS` 兼容别名、六个 `HighPerformance*` / `LowLatency*` 调度器别名，以及零引用的 `Infallible` 和 `TimerFlag::kTimeout`。
 
 ### Docs
 
@@ -27,9 +30,9 @@
 ### Validation
 
 - GCC 14 的 CMake 构建、9 项 API 单元测试、安装后独立 consumer、配置矩阵、启动和 HTTP/HTTPS/h2c/H2 传输验收通过；`mcpp build --features doc --configure-only --offline` 与 `git diff --check` 通过。未运行 Bazel 构建。
-- 标准内核构建通过；204 项内核 CTest 全部返回成功，其中 3 项按环境跳过，0 失败。
-- ASan/UBSan 与 TSan 各运行 8 项定向生命周期测试，均 8/8 通过；TSan 仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
-- `python3 test/scripts/t5_optimization_measurement.py` 15 项通过；`b42 --sample owner-64`、`b28` smoke 通过；`TaskState` 尺寸仍为 128 字节。
+- 标准内核 Release 构建通过；231 项内核 CTest 中 228 项通过、3 项按环境跳过、0 失败。
+- ASan/UBSan/LSan 与 TSan 各运行 7 项定向测试，均 7/7 通过；TSan 使用 `setarch -R` 规避容器地址空间映射限制，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
+- 6 项脚本门禁全部通过；`python3 test/scripts/t5_optimization_measurement.py` 15 项通过；`b42 --sample owner-64`、`b28` smoke 通过；`TaskState` 尺寸仍为 128 字节；`git diff --check` 通过。
 
 ## [v7.1.1] - 2026-11-09
 

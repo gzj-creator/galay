@@ -9,8 +9,12 @@ namespace galay::kernel {
 
 struct SchedulerTestAccess {
     template <typename SchedulerT>
-    static void process_pending(SchedulerT& scheduler) {
-        scheduler.process_pending_tasks();
+    static size_t process_pending(SchedulerT& scheduler) {
+        return scheduler.m_core.run_ready_pass(
+            [&scheduler](TaskRef& task) { scheduler.resume(task); },
+            [&scheduler](size_t drained) {
+                scheduler.m_wake_coordinator.on_remote_collected(drained);
+            });
     }
 
     template <typename SchedulerT>

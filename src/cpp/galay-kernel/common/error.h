@@ -6,7 +6,7 @@
  *
  * @details 定义内核级 I/O 错误的 IOErrorCode 枚举以及 IOError 类，
  * IOError 将 IOErrorCode 和平台系统错误（errno/WSAGetLastError）
- * 打包为单个 64 位值。同时定义 Infallible，用于不可能失败的操作的标记类型。
+ * 打包为单个 64 位值。
  */
 
 #ifndef GALAY_KERNEL_ERROR_H
@@ -94,13 +94,6 @@ private:
     uint64_t make_error_code(IOErrorCode io_error_code, uint32_t system_code);
 private:
     uint64_t m_code;  ///< 打包的错误码
-};
-
-/**
-* @brief 不可能失败的操作的标记类型
-*/
-class Infallible
-{
 };
 
 }

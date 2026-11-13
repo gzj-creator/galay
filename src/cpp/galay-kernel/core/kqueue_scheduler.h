@@ -50,12 +50,6 @@ public:
 /** @brief 默认 kqueue 调度器 */
 using KqueueScheduler = KqueueSchedulerT<DefaultIOSchedulerConfig>;
 
-/** @brief 高性能 kqueue 调度器 */
-using HighPerformanceKqueueScheduler = KqueueSchedulerT<HighPerformanceIOSchedulerConfig>;
-
-/** @brief 低延迟 kqueue 调度器 */
-using LowLatencyKqueueScheduler = KqueueSchedulerT<LowLatencyIOSchedulerConfig>;
-
 } // namespace galay::kernel
 #endif
 #endif

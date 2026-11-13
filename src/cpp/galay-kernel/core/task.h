@@ -270,21 +270,6 @@ struct TaskAccess;  ///< 供内核实现访问 Task 私有状态的辅助入口
 template <typename T>
 class TaskAwaiter;  ///< `co_await Task<T>` 使用的 awaiter
 /**
- * @brief 初始化任务结果存储
- * @param task 协程任务
- * @return 无返回值
- */
-template <typename T>
-void initialize_task_result(const TaskRef& task) noexcept;
-/**
- * @brief 写入任务结果
- * @param task 协程任务
- * @param value 待设置或处理的值
- * @return 操作成功时返回 true，否则返回 false
- */
-template <typename T, typename U>
-bool store_task_result(const TaskRef& task, U&& value);
-/**
  * @brief 以返回值消费任务结果
  * @param task 协程任务
  * @return 成功时返回 T，失败时返回 TaskResultError 错误
@@ -677,26 +662,10 @@ struct TaskResultStorageTraits
 };
 
 template <typename T>
-void initialize_task_result(const TaskRef& task) noexcept
-{
-    if (auto* state = task.state()) {
-        state->m_destroy_result = &TaskResultStorageTraits<T>::destroy;
-    }
-}
-
-template <typename T>
 void initialize_task_result(TaskState* state) noexcept
 {
     if (state != nullptr) {
         state->m_destroy_result = &TaskResultStorageTraits<T>::destroy;
-    }
-}
-
-template <>
-inline void initialize_task_result<void>(const TaskRef& task) noexcept
-{
-    if (auto* state = task.state()) {
-        state->m_destroy_result = nullptr;
     }
 }
 
@@ -706,17 +675,6 @@ inline void initialize_task_result<void>(TaskState* state) noexcept
     if (state != nullptr) {
         state->m_destroy_result = nullptr;
     }
-}
-
-template <typename T, typename U>
-bool store_task_result(const TaskRef& task, U&& value)
-{
-    auto* state = task.state();
-    if (state == nullptr) {
-        return false;
-    }
-    TaskResultStorageTraits<T>::store(*state, std::forward<U>(value));
-    return true;
 }
 
 template <typename T, typename U>

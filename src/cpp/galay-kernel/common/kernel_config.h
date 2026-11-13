@@ -107,21 +107,9 @@
  * 它独立于毫秒后端的 idle/timeout 配置；io_uring 最终等待时间取时间轮
  * 推导值与本上限的较小者。毫秒后端使用 GALAY_KERNEL_IO_POLL_TIMEOUT_MAX_MS，
  * 并在边界处向上取整。
- * 旧的 GALAY_IOURING_WAIT_TIMEOUT_NS 名称仅作为同值兼容别名保留。
  */
 #ifndef GALAY_KERNEL_IO_POLL_WAIT_MAX_NS
-#ifdef GALAY_IOURING_WAIT_TIMEOUT_NS
-#define GALAY_KERNEL_IO_POLL_WAIT_MAX_NS GALAY_IOURING_WAIT_TIMEOUT_NS
-#else
 #define GALAY_KERNEL_IO_POLL_WAIT_MAX_NS 10000000ULL
-#endif
-#endif
-
-// 配置优先级：调用方显式提供的新宏优先；仅提供旧宏时由它初始化上面的
-// 新宏；两者都未提供时，再把旧名称定义为指向新宏的单向别名，避免两个
-// 名称同时出现在构建参数中时发生递归展开。
-#ifndef GALAY_IOURING_WAIT_TIMEOUT_NS
-#define GALAY_IOURING_WAIT_TIMEOUT_NS GALAY_KERNEL_IO_POLL_WAIT_MAX_NS
 #endif
 
 /**

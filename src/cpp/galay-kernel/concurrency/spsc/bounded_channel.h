@@ -185,7 +185,6 @@ struct BoundedChannelWaiter
     std::atomic<size_t> pins{0}; ///< 队列入口或推进方持有的固定槽引用数。
     std::atomic<BoundedWaiterState> state{BoundedWaiterState::kIdle};
     std::atomic<BoundedWaiterWakePhase> wakePhase{BoundedWaiterWakePhase::kArming};
-    std::atomic<bool> wakeIssued{false};
     std::atomic<bool> queued{false};
 
     /**
@@ -221,7 +220,6 @@ struct BoundedChannelWaiter
         retryRequested.store(0, std::memory_order_relaxed);
         wakePhase.store(BoundedWaiterWakePhase::kArming,
                         std::memory_order_relaxed);
-        wakeIssued.store(false, std::memory_order_relaxed);
         queued.store(false, std::memory_order_relaxed);
         waiter_generation = nextGeneration;
         state.store(BoundedWaiterState::kWaiting, std::memory_order_release);
@@ -1201,7 +1199,6 @@ private:
                         std::memory_order_acq_rel,
                         std::memory_order_acquire)) {
                     Waker waker = std::move(waiter.waker);
-                    waiter.wakeIssued.store(true, std::memory_order_release);
                     pendingWake.set_waker(std::move(waker));
                     return;
                 }
@@ -1393,7 +1390,6 @@ private:
         waiter.retryRequested.store(0, std::memory_order_relaxed);
         waiter.wakePhase.store(BoundedWaiterWakePhase::kArming,
                                std::memory_order_relaxed);
-        waiter.wakeIssued.store(false, std::memory_order_relaxed);
         waiter.queued.store(false, std::memory_order_relaxed);
         waiter.state.store(BoundedWaiterState::kIdle, std::memory_order_release);
         return true;

@@ -12,7 +12,7 @@
 #define GALAY_KERNEL_WAKE_COORDINATOR_H
 
 #include <atomic>
-#include <cstdint>
+#include <cstddef>
 #include <utility>
 
 namespace galay::kernel {
@@ -21,7 +21,6 @@ namespace galay::kernel {
  * @brief 协调注入线程与事件循环之间的唤醒请求
  *
  * @details 使用待处理标志和休眠标志来合并冗余唤醒。
- * 维护请求、发出和合并唤醒的诊断计数器。
  */
 class WakeCoordinator
 {
@@ -48,17 +47,13 @@ public:
      */
     template <typename NotifyFn>
     bool request_wake(bool queue_was_empty, NotifyFn&& notify_fn) {
-        m_wake_requests.fetch_add(1, std::memory_order_relaxed);
         if (!(queue_was_empty || m_sleeping.load(std::memory_order_acquire))) {
-            m_coalesced_wakes.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
         if (m_wakeup_pending.exchange(true, std::memory_order_acq_rel)) {
-            m_coalesced_wakes.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
         std::forward<NotifyFn>(notify_fn)();
-        m_wake_emits.fetch_add(1, std::memory_order_relaxed);
         return true;
     }
 
@@ -72,7 +67,6 @@ public:
     template <typename NotifyFn>
     void force_wake(NotifyFn&& notify_fn) {
         std::forward<NotifyFn>(notify_fn)();
-        m_wake_emits.fetch_add(1, std::memory_order_relaxed);
     }
 
     /**
@@ -115,37 +109,9 @@ public:
         cancel_pending_wake();
     }
 
-    /** @return true 事件循环当前处于休眠状态 */
-    bool is_sleeping() const noexcept {
-        return m_sleeping.load(std::memory_order_acquire);
-    }
-
-    /** @return true 唤醒已发出但尚未被消费 */
-    bool has_pending_wake() const noexcept {
-        return m_wakeup_pending.load(std::memory_order_acquire);
-    }
-
-    /** @return 收到的唤醒请求总数 */
-    uint64_t wake_requests() const noexcept {
-        return m_wake_requests.load(std::memory_order_acquire);
-    }
-
-    /** @return 实际发出的唤醒系统调用总数 */
-    uint64_t wake_emits() const noexcept {
-        return m_wake_emits.load(std::memory_order_acquire);
-    }
-
-    /** @return 被合并（跳过）的唤醒总数 */
-    uint64_t coalesced_wakes() const noexcept {
-        return m_coalesced_wakes.load(std::memory_order_acquire);
-    }
-
 private:
     std::atomic<bool>& m_sleeping;        ///< 调度器休眠状态的外部引用
     std::atomic<bool>& m_wakeup_pending;  ///< 待处理唤醒标志的外部引用
-    std::atomic<uint64_t> m_wake_requests{0};   ///< 诊断：请求总数
-    std::atomic<uint64_t> m_wake_emits{0};      ///< 诊断：发出总数
-    std::atomic<uint64_t> m_coalesced_wakes{0}; ///< 诊断：合并总数
 };
 
 }  // namespace galay::kernel

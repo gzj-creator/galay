@@ -322,12 +322,6 @@ private:
         return true;
     }
 
-    void process_pending_tasks()
-    {
-        detail::io_scheduler_process_pending_tasks(
-            m_core, m_wake_coordinator, [this](TaskRef& task) { this->resume(task); });
-    }
-
     void event_loop()
     {
         auto& backend = static_cast<Derived&>(*this);

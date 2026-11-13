@@ -28,17 +28,8 @@ int main() {
         return 1;
     }
 
-    if (registration.generation() != 1) {
-        std::cerr << "[T44] expected generation=1, got " << registration.generation() << "\n";
-        return 1;
-    }
-
     if (registration.arm(second_waiter)) {
         std::cerr << "[T44] arm must not overwrite an occupied waiter slot\n";
-        return 1;
-    }
-    if (registration.generation() != 1) {
-        std::cerr << "[T44] rejected arm must not advance generation\n";
         return 1;
     }
 
@@ -60,12 +51,6 @@ int main() {
 
     if (!registration.arm(second_waiter)) {
         std::cerr << "[T44] failed to re-arm second waiter\n";
-        return 1;
-    }
-
-    if (registration.generation() != 2) {
-        std::cerr << "[T44] expected generation=2 after re-arm, got "
-                  << registration.generation() << "\n";
         return 1;
     }
 

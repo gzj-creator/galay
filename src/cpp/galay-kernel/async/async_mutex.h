@@ -97,12 +97,6 @@ public:
      */
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;
-    /**
-     * @brief 使用外部 Waker 注册等待，用于 C coroutine bridge
-     * @param waker 协程唤醒器
-     * @return 协程需要保持挂起时返回 true，否则返回 false
-     */
-    bool await_suspend(Waker waker) noexcept;
     std::expected<void, IOError> await_resume() noexcept
     {
         cancel_waiter();
@@ -258,15 +252,6 @@ template <typename Promise>
 inline bool AsyncMutexAwaitable::await_suspend(std::coroutine_handle<Promise> handle) noexcept {
     auto* mutex = m_mutex;
     m_waiter = std::make_shared<AsyncMutexWaiter>(Waker(handle));
-    auto waiter = m_waiter;
-    mutex->m_waiters.enqueue(std::move(waiter));
-    mutex->wake_next_waiter_if_unlocked();
-    return true;
-}
-
-inline bool AsyncMutexAwaitable::await_suspend(Waker waker) noexcept {
-    auto* mutex = m_mutex;
-    m_waiter = std::make_shared<AsyncMutexWaiter>(std::move(waker));
     auto waiter = m_waiter;
     mutex->m_waiters.enqueue(std::move(waiter));
     mutex->wake_next_waiter_if_unlocked();

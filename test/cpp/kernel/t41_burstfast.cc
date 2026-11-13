@@ -36,7 +36,10 @@ bool verify_injected_burst_fast_path(const char* label) {
         }
     }
 
-    SchedulerTestAccess::process_pending(scheduler);
+    if (SchedulerTestAccess::process_pending(scheduler) == 0) {
+        std::cerr << "[T41] " << label << " resumed no injected task\n";
+        return false;
+    }
 
     const int completed_after_first_pass = g_completed.load(std::memory_order_relaxed);
     if (completed_after_first_pass != kTaskCount) {

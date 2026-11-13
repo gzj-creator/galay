@@ -24,22 +24,6 @@ namespace galay::kernel {
 namespace detail {
 
 /**
- * @brief 处理跨线程注入与本地 ready 队列（三后端共用）
- * @param resume_fn 须由具体调度器传入，以便在派生类上下文中调用受保护的 `Scheduler::resume`
- * @param core 调度核心
- * @param wake_coordinator 唤醒协调器
- * @return 无返回值
- */
-template <typename ResumeFn>
-inline void io_scheduler_process_pending_tasks(SchedulerCore& core,
-                                           WakeCoordinator& wake_coordinator,
-                                           ResumeFn&& resume_fn) {
-    (void)core.run_ready_pass(
-        std::forward<ResumeFn>(resume_fn),
-        [&](size_t drained) { wake_coordinator.on_remote_collected(drained); });
-}
-
-/**
  * @brief IO 调度器主循环骨架：本地 follow-up、时间轮 tick、无待办时调用 poll_fn
  * @param post_passes_fn 在每次 run_local_followup_passes 之后调用（例如 kqueue 提交 m_pending_changes；
  *        当 has_pending_work 为真时不会进入 poll，此处仍能保证延迟注册落地）
