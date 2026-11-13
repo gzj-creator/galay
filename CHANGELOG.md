@@ -14,6 +14,7 @@
 ### Changed
 
 - 将 OpenAPI 文档生成模块从 `galay-api` 统一重命名为 `galay-doc`，同步源码目录、CMake/Bazel target、CMake 构建选项、mcpp feature、公开 include 前缀及示例、测试和消费文档；文档模式模板参数统一为 `EnableDocs`，不保留旧名兼容入口。
+- 将 `TaskState` 的 `m_then`、`m_next` 从 `std::optional<TaskRef>` 改为 `TaskRef`，去掉两个 8 B 的可选包装并复用任务引用的空状态；`sizeof(TaskState)` 仍为 128 B，`then()` 与 `co_await Task` 行为保持不变。
 
 ### Removed
 
@@ -32,6 +33,7 @@
 - GCC 14 的 CMake 构建、9 项 API 单元测试、安装后独立 consumer、配置矩阵、启动和 HTTP/HTTPS/h2c/H2 传输验收通过；`mcpp build --features doc --configure-only --offline` 与 `git diff --check` 通过。未运行 Bazel 构建。
 - 标准内核 Release 构建通过；231 项内核 CTest 中 228 项通过、3 项按环境跳过、0 失败。
 - ASan/UBSan/LSan 与 TSan 各运行 7 项定向测试，均 7/7 通过；TSan 使用 `setarch -R` 规避容器地址空间映射限制，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
+- 阶段 4a 的 9 项协程与生命周期定向测试在 ASan/UBSan/LSan 和 TSan 下均 9/9 通过；TSan 继续使用 `setarch -R`，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 6 项脚本门禁全部通过；`python3 test/scripts/t5_optimization_measurement.py` 15 项通过；`b42 --sample owner-64`、`b28` smoke 通过；`TaskState` 尺寸仍为 128 字节；`git diff --check` 通过。
 
 ## [v7.1.1] - 2026-11-09

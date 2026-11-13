@@ -583,13 +583,13 @@ void complete_task_state(TaskState* state) noexcept
         state->m_completion_status.notify_all();
     }
 
-    auto schedule_continuation = [](std::optional<TaskRef>& continuation) {
-        if (!continuation.has_value()) {
+    auto schedule_continuation = [](TaskRef& continuation) {
+        if (!continuation.is_valid()) {
             return;
         }
 
-        TaskRef next = std::move(*continuation);
-        continuation.reset();
+        TaskRef next = std::move(continuation);
+        continuation = TaskRef{};
         if (request_task_resume(next)) {
             return;
         }

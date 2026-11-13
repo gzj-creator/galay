@@ -427,8 +427,8 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
      * @return 无返回值
      */
     void (*m_destroy_result)(TaskState&) noexcept = nullptr;
-    std::optional<TaskRef> m_then;  ///< `then()` 追加的 continuation 任务
-    std::optional<TaskRef> m_next;  ///< 当前 `co_await` 后要恢复的父任务
+    TaskRef m_then;  ///< `then()` 追加的 continuation 任务
+    TaskRef m_next;  ///< 当前 `co_await` 后要恢复的父任务
 };
 
 // Keep ownership transfers visible to CRTP callers so moved-from cleanup and
@@ -544,8 +544,8 @@ inline void set_task_runtime(const TaskRef& task, Runtime* runtime) noexcept
 {
     if (auto* state = task.state()) {
         state->m_runtime = runtime;
-        if (state->m_then.has_value()) {
-            if (auto* thenState = state->m_then->state(); thenState && thenState->m_runtime == nullptr) {
+        if (state->m_then.is_valid()) {
+            if (auto* thenState = state->m_then.state(); thenState && thenState->m_runtime == nullptr) {
                 thenState->m_runtime = runtime;
             }
         }
@@ -568,8 +568,8 @@ inline void set_task_scheduler(const TaskRef& task, Scheduler* scheduler) noexce
 {
     if (auto* state = task.state()) {
         state->m_scheduler = scheduler;
-        if (state->m_then.has_value() && state->m_then->belong_scheduler() == nullptr) {
-            set_task_scheduler(*state->m_then, scheduler);
+        if (state->m_then.is_valid() && state->m_then.belong_scheduler() == nullptr) {
+            set_task_scheduler(state->m_then, scheduler);
         }
     }
 }
@@ -1654,7 +1654,7 @@ public:
         }
         childTask.state()->m_next = std::move(waitingTask);
         if (!detail::schedule_task_immediately(childTask)) {
-            childTask.state()->m_next.reset();
+            childTask.state()->m_next = TaskRef{};
             detail::store_task_error(childTask, TaskResultError(TaskResultErrorCode::kScheduleFailed));
             detail::complete_task_state(childTask);
             return false;
