@@ -279,7 +279,7 @@ class UnboundedChannel
 {
 private:
     // AArch64 平台按 128B 隔离 producer publication 与 waiter 热状态；
-    // 其他当前支持平台使用 64B。固定值由 galay-utils/common/defn.hpp 统一提供。
+    // 其他当前支持平台使用 64B。固定值由 galay-utils/common/cache_line.hpp 统一提供。
     static constexpr uint8_t kPumpRunning = 1U;
     static constexpr uint8_t kRecvWork = 1U << 1U;
     static constexpr uint8_t kRecvWaiterPathUsed = 1U;

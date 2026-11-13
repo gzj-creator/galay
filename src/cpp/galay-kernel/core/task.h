@@ -19,7 +19,7 @@
 #ifndef GALAY_KERNEL_TASK_H
 #define GALAY_KERNEL_TASK_H
 
-#include "../../galay-utils/common/defn.hpp"
+#include "../../galay-utils/common/cache_line.hpp"
 
 #include <atomic>
 #include <array>

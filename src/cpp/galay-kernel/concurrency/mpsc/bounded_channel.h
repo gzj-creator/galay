@@ -977,7 +977,7 @@ public:
     }
 
 private:
-    // 缓存行隔离大小由 galay-utils/common/defn.hpp 统一提供，保证公开模板布局稳定。
+    // 缓存行隔离大小由 galay-utils/common/cache_line.hpp 统一提供，保证公开模板布局稳定。
     static constexpr size_t kTailClosedBit =
         size_t{1} << (sizeof(size_t) * 8U - 1U);
     static constexpr size_t kTailPositionMask = kTailClosedBit - 1U;

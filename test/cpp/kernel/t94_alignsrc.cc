@@ -2,7 +2,7 @@
  * @file t94_alignsrc.cc
  * @brief 用途：锁定运行时修复、平台声明和构建入口的源码收口结果。
  * 关键覆盖点：Timer 原子 flag、Windogalay-ws/IOCP 收口、Bazel BUILD、concurrentqueue 建模、
- * AioCommitAwaitable 的 scheduler 空指针保护、宏污染清理。
+ * AioCommitAwaitable 的 scheduler 空指针保护、宏污染清理和缓存行头文件依赖边界。
  * 通过条件：关键源码 token 与顺序满足预期，测试返回 0。
  */
 
@@ -83,6 +83,9 @@ int main() {
     const auto aio_file_h = source_root / "galay-kernel" / "async" / "async_aio.h";
     const auto defn_hpp = source_root / "galay-kernel" / "common" / "defn.hpp";
     const auto kqueue_scheduler_h = source_root / "galay-kernel" / "core" / "kqueue_scheduler.h";
+    const auto task_h = source_root / "galay-kernel" / "core" / "task.h";
+    const auto cache_line_hpp = source_root / "galay-utils" / "common" / "cache_line.hpp";
+    const auto utils_defn_hpp = source_root / "galay-utils" / "common" / "defn.hpp";
 
     std::vector<std::string> failures;
 
@@ -95,6 +98,9 @@ int main() {
     const std::string aio_content = read_all(aio_file_h);
     const std::string defn_content = read_all(defn_hpp);
     const std::string kqueue_scheduler_content = read_all(kqueue_scheduler_h);
+    const std::string task_content = read_all(task_h);
+    const std::string cache_line_content = read_all(cache_line_hpp);
+    const std::string utils_defn_content = read_all(utils_defn_hpp);
 
     if (timer_content.empty()) failures.push_back(timer_hpp.string() + ": failed to read file");
     if (option_content.empty()) failures.push_back(option_cmake.string() + ": failed to read file");
@@ -104,7 +110,41 @@ int main() {
     if (aio_content.empty()) failures.push_back(aio_file_h.string() + ": failed to read file");
     if (defn_content.empty()) failures.push_back(defn_hpp.string() + ": failed to read file");
     if (kqueue_scheduler_content.empty()) failures.push_back(kqueue_scheduler_h.string() + ": failed to read file");
+    if (task_content.empty()) failures.push_back(task_h.string() + ": failed to read file");
+    if (cache_line_content.empty()) failures.push_back(cache_line_hpp.string() + ": failed to read file");
+    if (utils_defn_content.empty()) failures.push_back(utils_defn_hpp.string() + ": failed to read file");
     if (!std::filesystem::exists(kernel_build)) failures.push_back(kernel_build.string() + ": missing Bazel BUILD file");
+
+    require_contains(failures,
+                    cache_line_hpp,
+                    cache_line_content,
+                    "inline constexpr size_t kCacheLineSize = 128;",
+                    "expected the AArch64 ABI cache-line size");
+    require_contains(failures,
+                    cache_line_hpp,
+                    cache_line_content,
+                    "inline constexpr size_t kCacheLineSize = 64;",
+                    "expected the other-architecture ABI cache-line size");
+    require_contains(failures,
+                    utils_defn_hpp,
+                    utils_defn_content,
+                    "#include \"cache_line.hpp\"",
+                    "expected the utils definition header to re-export the cache-line header");
+    require_not_contains(failures,
+                       utils_defn_hpp,
+                       utils_defn_content,
+                       "inline constexpr size_t kCacheLineSize",
+                       "cache-line size must be defined only by cache_line.hpp");
+    require_contains(failures,
+                    task_h,
+                    task_content,
+                    "#include \"../../galay-utils/common/cache_line.hpp\"",
+                    "task.h must use the lightweight cache-line header");
+    require_not_contains(failures,
+                       task_h,
+                       task_content,
+                       "galay-utils/common/defn.hpp",
+                       "task.h must not pull in the heavyweight utils definition header");
 
     require_contains(failures,
                     timer_hpp,

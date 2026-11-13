@@ -17,6 +17,7 @@
 
 ### Changed
 
+- 将 `galay::utils::kCacheLineSize` 从 `galay-utils/common/defn.hpp` 下沉到只依赖架构宏和 `<cstddef>` 的 `cache_line.hpp`，并让 `task.h` 直接包含该轻量头文件；AArch64 的 128 B 与其他架构的 64 B ABI 值保持不变，`defn.hpp` 继续向既有调用方暴露同一常量。
 - 将 OpenAPI 文档生成模块从 `galay-api` 统一重命名为 `galay-doc`，同步源码目录、CMake/Bazel target、CMake 构建选项、mcpp feature、公开 include 前缀及示例、测试和消费文档；文档模式模板参数统一为 `EnableDocs`，不保留旧名兼容入口。
 - 将 `TaskState` 的 `m_then`、`m_next` 从 `std::optional<TaskRef>` 改为 `TaskRef`，去掉两个 8 B 的可选包装并复用任务引用的空状态；`sizeof(TaskState)` 仍为 128 B，`then()` 与 `co_await Task` 行为保持不变。
 
@@ -34,6 +35,8 @@
 
 ### Validation
 
+- 阶段 8 第 1 项的同配置干净 Release 构建完成 1601 步；Ninja 任务累计为 1986.000 秒、用户态 CPU 时间为 1473.01 秒、墙钟为 497.07 秒，迁移前对应为 2131.307 秒、1509.33 秒和 531.68 秒；这些是单次构建记录，不作为稳定性能结论。
+- 阶段 8 第 1 项的增量重建通过；233 项内核 CTest 中 228 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；6 项脚本门禁、t5 优化测量脚本 15/15 和 `git diff --check` 通过。
 - GCC 14 的 CMake 构建、9 项 API 单元测试、安装后独立 consumer、配置矩阵、启动和 HTTP/HTTPS/h2c/H2 传输验收通过；`mcpp build --features doc --configure-only --offline` 与 `git diff --check` 通过。未运行 Bazel 构建。
 - 标准内核 Release 构建通过；231 项内核 CTest 中 228 项通过、3 项按环境跳过、0 失败。
 - ASan/UBSan/LSan 与 TSan 各运行 7 项定向测试，均 7/7 通过；TSan 使用 `setarch -R` 规避容器地址空间映射限制，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
