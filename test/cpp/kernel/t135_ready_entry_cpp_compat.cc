@@ -118,18 +118,12 @@ public:
 struct FakeCoroState {
     detail::ReadyEntryCoroHeader header;
     Scheduler* owner = nullptr;
-    bool owner_only = false;
     std::atomic<int>* resumed = nullptr;
     std::atomic<int>* released = nullptr;
 };
 
 Scheduler* fake_owner_scheduler(void* state) noexcept {
     return static_cast<FakeCoroState*>(state)->owner;
-}
-
-bool fake_resume_owner_only(void* state) noexcept {
-    auto* fake = static_cast<FakeCoroState*>(state);
-    return fake->owner_only;
 }
 
 bool fake_resume(void* state) noexcept {
@@ -149,7 +143,6 @@ void fake_release(void* state) noexcept {
 
 constexpr detail::ReadyEntryHooks kFakeCoroHooks{
     .owner_scheduler = fake_owner_scheduler,
-    .resume_owner_only = fake_resume_owner_only,
     .resume = fake_resume,
     .release = fake_release,
 };
@@ -187,7 +180,6 @@ bool verify_c_coroutine_ready_entry_hooks() {
     std::atomic<int> released{0};
     FakeCoroState state{
         .owner = &owner,
-        .owner_only = true,
         .resumed = &resumed,
         .released = &released,
     };
@@ -199,10 +191,6 @@ bool verify_c_coroutine_ready_entry_hooks() {
     }
     if (detail::ready_entry_scheduler(entry) != &owner) {
         std::cerr << "[T135] C coroutine ReadyEntry should expose owner scheduler\n";
-        return false;
-    }
-    if (!detail::ready_entry_resume_owner_only(entry)) {
-        std::cerr << "[T135] C coroutine ReadyEntry should expose owner-only resume\n";
         return false;
     }
     if (!detail::resume_ready_entry(entry) ||
@@ -278,73 +266,6 @@ bool verify_scheduler_core_accepts_ready_entry_resume() {
         return false;
     }
     return true;
-}
-
-bool verify_owner_only_c_coroutine_entry_is_returned_to_caller() {
-    std::atomic<int> released{0};
-    FakeCoroState state{
-        .owner_only = true,
-        .released = &released,
-    };
-    detail::ReadyEntry entry = make_fake_coro_entry(&state);
-    ChaseLevTaskRing ring;
-
-    if (!ring.push_back(entry) || entry.is_valid()) {
-        std::cerr << "[T135] failed to queue fake C coroutine entry\n";
-        return false;
-    }
-
-    detail::ReadyEntry stolen;
-    if (ring.steal_front(stolen) || !stolen.is_valid()) {
-        std::cerr << "[T135] owner-only C coroutine entry should be returned to caller after CAS\n";
-        detail::release_ready_entry(stolen);
-        return false;
-    }
-    if (ring.size() != 0 || released.load(std::memory_order_acquire) != 0) {
-        std::cerr << "[T135] ring should not pre-CAS peek or release owner-only C coroutine entry\n";
-        return false;
-    }
-
-    detail::release_ready_entry(stolen);
-    if (released.load(std::memory_order_acquire) != 1) {
-        std::cerr << "[T135] returned owner-only C coroutine entry should release exactly once\n";
-        return false;
-    }
-    return true;
-}
-
-bool verify_worker_requeues_owner_only_entry_through_inject_queue() {
-    std::atomic<int> released{0};
-    FakeCoroState state{
-        .owner_only = true,
-        .released = &released,
-    };
-    detail::ReadyEntry entry = make_fake_coro_entry(&state);
-    IOReadyQueue worker;
-
-    if (!worker.local_ring.push_back(entry)) {
-        std::cerr << "[T135] failed to queue worker owner-only probe\n";
-        return false;
-    }
-
-    detail::ReadyEntry stolen;
-    if (worker.steal_front(stolen) || stolen.is_valid()) {
-        std::cerr << "[T135] worker owner-only probe must not be exposed to stealer\n";
-        detail::release_ready_entry(stolen);
-        return false;
-    }
-    if (!worker.has_pending_injected() || worker.local_ring.size() != 0 ||
-        released.load(std::memory_order_acquire) != 0) {
-        std::cerr << "[T135] worker should requeue owner-only entry through inject queue\n";
-        return false;
-    }
-
-    if (worker.drain_injected() != 1 || !worker.pop_next(stolen)) {
-        std::cerr << "[T135] owner should recover worker-requeued owner-only entry\n";
-        return false;
-    }
-    detail::release_ready_entry(stolen);
-    return released.load(std::memory_order_acquire) == 1;
 }
 
 bool verify_pending_ready_entries_release_on_worker_destroy() {
@@ -502,12 +423,6 @@ int main() {
         return 1;
     }
     if (!verify_scheduler_core_accepts_ready_entry_resume()) {
-        return 1;
-    }
-    if (!verify_owner_only_c_coroutine_entry_is_returned_to_caller()) {
-        return 1;
-    }
-    if (!verify_worker_requeues_owner_only_entry_through_inject_queue()) {
         return 1;
     }
     if (!verify_pending_ready_entries_release_on_worker_destroy()) {

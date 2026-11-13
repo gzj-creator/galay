@@ -1,6 +1,6 @@
 /**
  * @file t103_ringshutdown.cc
- * @brief 验证 Chase-Lev ring 析构时会释放仍排队的任务引用。
+ * @brief 验证 LocalReadyStack 析构时会释放仍排队的任务引用。
  */
 
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
@@ -27,16 +27,16 @@ bool run_scenario() {
     const uint32_t refs_before_destroy = state->m_refs.load(std::memory_order_acquire);
 
     {
-        ChaseLevTaskRing ring;
-        if (!ring.push_back(std::move(queued))) {
-            std::cerr << "[T103] failed to enqueue task into ring\n";
+        LocalReadyStack stack;
+        if (!stack.push_back(std::move(queued))) {
+            std::cerr << "[T103] failed to enqueue task into local stack\n";
             return false;
         }
     }
 
     const uint32_t refs_after_destroy = state->m_refs.load(std::memory_order_acquire);
     if (refs_after_destroy + 1 != refs_before_destroy) {
-        std::cerr << "[T103] ring destruction should release exactly one queued task ref, before="
+        std::cerr << "[T103] stack destruction should release exactly one queued task ref, before="
                   << refs_before_destroy << ", after=" << refs_after_destroy << "\n";
         return false;
     }
@@ -51,6 +51,6 @@ int main() {
         return 1;
     }
 
-    std::cout << "T103-ChaseLevRingShutdownRelease PASS\n";
+    std::cout << "T103-LocalReadyStackShutdownRelease PASS\n";
     return 0;
 }

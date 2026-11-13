@@ -84,7 +84,6 @@ std::optional<MicroMeasurement> measure_compute_resume(size_t iterations) {
 template <size_t BatchSize>
 std::optional<MicroMeasurement> measure_io_resume_drain(size_t repetitions) {
     IOReadyQueue worker;
-    worker.set_stealing_enabled(false);
     std::array<TaskRef, BatchSize> tasks;
     for (TaskRef& task : tasks) {
         task = TaskRef(new TaskState(std::coroutine_handle<>{}), false);
@@ -103,7 +102,7 @@ std::optional<MicroMeasurement> measure_io_resume_drain(size_t repetitions) {
         }
         for (size_t i = 0; i < BatchSize; ++i) {
             TaskRef popped;
-            if (!worker.local_ring.pop_back(popped)) {
+            if (!worker.local_stack.pop_back(popped)) {
                 return std::nullopt;
             }
             popped.state()->m_resume_queue_claimed.store(

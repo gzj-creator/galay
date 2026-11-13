@@ -106,12 +106,12 @@ class MeasurementTest(unittest.TestCase):
     def test_ring_samples_and_ownership_accounting(self):
         self.assertEqual(measure.workloads(["ring"]),
                          [("ring", sample) for sample in
-                          ("owner-1", "owner-64", "shared-1", "shared-64")])
+                          ("owner-1", "owner-64")])
         raw = ("ReadyRing sample=owner-64 iterations=1000 elapsed_ns=100000000 "
                "cpu_ns=90000000 releases=1000 errors=0\n")
         result = measure.micro_record("ring", "owner-64", raw, 1000)
         self.assertEqual(result["ring.owner-64.ns_per_op"], 100000)
-        for bad in (raw.replace("owner-64", "shared-64"),
+        for bad in (raw.replace("owner-64", "owner-128"),
                     raw.replace("iterations=1000", "iterations=1024"),
                     raw.replace("releases=1000", "releases=999"),
                     raw.replace("releases=1000", "releases=1001"),

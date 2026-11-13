@@ -15,6 +15,11 @@
 
 - 将 OpenAPI 文档生成模块从 `galay-api` 统一重命名为 `galay-doc`，同步源码目录、CMake/Bazel target、CMake 构建选项、mcpp feature、公开 include 前缀及示例、测试和消费文档；文档模式模板参数统一为 `EnableDocs`，不保留旧名兼容入口。
 
+### Removed
+
+- 删除 IO 调度器间任务窃取路径及 `ChaseLevTaskRing`，本地就绪队列改为 owner 线程独占、无原子操作的 `LocalReadyStack`；同步删除窃取域配置、窃取统计、跨线程窃取测试与 `shared-*` 基准样本。
+- 删除公开的 `Runtime::stats()` 与 `RuntimeStats`，运行时不再暴露 IO 窃取计数；删除仅供窃取路径使用的 `m_resume_owner_only` 状态和 C 协程 `ReadyEntryHooks::resume_owner_only` 钩子。
+
 ### Docs
 
 - 为类型化 API 错误、操作元数据、Schema、参数绑定、请求上下文和原生路由注册补充中文 Doxygen 契约注释，并将文档模块实现注释统一为中文。
@@ -22,6 +27,9 @@
 ### Validation
 
 - GCC 14 的 CMake 构建、9 项 API 单元测试、安装后独立 consumer、配置矩阵、启动和 HTTP/HTTPS/h2c/H2 传输验收通过；`mcpp build --features doc --configure-only --offline` 与 `git diff --check` 通过。未运行 Bazel 构建。
+- 标准内核构建通过；204 项内核 CTest 全部返回成功，其中 3 项按环境跳过，0 失败。
+- ASan/UBSan 与 TSan 各运行 8 项定向生命周期测试，均 8/8 通过；TSan 仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
+- `python3 test/scripts/t5_optimization_measurement.py` 15 项通过；`b42 --sample owner-64`、`b28` smoke 通过；`TaskState` 尺寸仍为 128 字节。
 
 ## [v7.1.1] - 2026-11-09
 

@@ -1,6 +1,6 @@
 /**
  * @file t176_io_worker_ring_mode.cc
- * @brief 验证 IO ring 的 owner-only 生命周期、槽位复用与停机后的模式切换。
+ * @brief 验证 owner 线程本地就绪栈的容量、顺序和所有权。
  */
 
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
@@ -23,131 +23,86 @@ void release_fake(void* ptr) noexcept {
 
 constexpr detail::ReadyEntryHooks kHooks{
     .owner_scheduler = nullptr,
-    .resume_owner_only = nullptr,
     .resume = nullptr,
     .release = release_fake,
 };
 
 bool verify_empty_and_single_task() {
-    for (const size_t advance : {size_t(0), ChaseLevTaskRing::kCapacity - 5}) {
-        FakeCoro coro{};
-        coro.header.hooks = &kHooks;
-        ChaseLevTaskRing ring;
-        detail::ReadyEntry out;
-        for (size_t i = 0; i < advance; ++i) {
-            detail::ReadyEntry entry(detail::ReadyEntryKind::CCoroutine, &coro);
-            if (!ring.push_back(entry) || !ring.steal_front(out)) { return false; }
-            detail::release_ready_entry(out);
-        }
-        ring.set_stealing_enabled(false);
-        for (size_t cycle = 0; cycle < 4096; ++cycle) {
-            // Cover both initial and advanced empty cursors, then a single task.
-            for (size_t poll = 0; poll < 8; ++poll) {
-                if (ring.pop_back(out) || out.is_valid() || !ring.empty() ||
-                    ring.remaining_capacity() != ChaseLevTaskRing::kCapacity) {
-                    return false;
-                }
+    FakeCoro coro{};
+    coro.header.hooks = &kHooks;
+    LocalReadyStack stack;
+    detail::ReadyEntry out;
+    for (size_t cycle = 0; cycle < 4096; ++cycle) {
+        for (size_t poll = 0; poll < 8; ++poll) {
+            if (stack.pop_back(out) || out.is_valid() || !stack.empty() ||
+                stack.size() != 0 ||
+                stack.remaining_capacity() != LocalReadyStack::kCapacity) {
+                return false;
             }
-            detail::ReadyEntry entry(detail::ReadyEntryKind::CCoroutine, &coro);
-            if (!ring.push_back(entry) || entry.is_valid() || ring.size() != 1 ||
-                !ring.pop_back(out) || out.state() != &coro) { return false; }
-            detail::release_ready_entry(out);
-            if (coro.releases != advance + cycle + 1 || !ring.empty()) { return false; }
+        }
+        detail::ReadyEntry entry(detail::ReadyEntryKind::CCoroutine, &coro);
+        if (!stack.push_back(entry) || entry.is_valid() || stack.size() != 1 ||
+            stack.remaining_capacity() != LocalReadyStack::kCapacity - 1 ||
+            !stack.pop_back(out) || out.state() != &coro) {
+            return false;
+        }
+        detail::release_ready_entry(out);
+        if (coro.releases != cycle + 1 || !stack.empty()) {
+            return false;
         }
     }
-    return true;
+    detail::ReadyEntry invalid;
+    return !stack.push_back(invalid);
 }
 
-bool verify_owner_only_lifecycle() {
-    constexpr size_t capacity = ChaseLevTaskRing::kCapacity;
+bool verify_capacity_order_and_ownership() {
+    constexpr size_t capacity = LocalReadyStack::kCapacity;
     std::array<TaskRef, capacity> tasks;
     std::array<FakeCoro, capacity> coros{};
     for (size_t i = 0; i < capacity; ++i) {
         tasks[i] = TaskRef(new TaskState(std::coroutine_handle<>{}), false);
         coros[i].header.hooks = &kHooks;
     }
-    ChaseLevTaskRing ring;
+    LocalReadyStack stack;
     detail::ReadyEntry out;
-    // Advance both cursors before entering owner-only mode to exercise wraparound.
-    for (size_t i = 0; i < capacity - 5; ++i) {
-        detail::ReadyEntry seed{TaskRef(tasks[0])};
-        if (!ring.push_back(seed) || !ring.steal_front(out)) { return false; }
-        detail::release_ready_entry(out);
-    }
-    ring.set_stealing_enabled(false);
-    if (ring.pop_back(out) || out.is_valid()) { return false; }
-    for (size_t cycle = 0; cycle < 16; ++cycle) {
-        // Empty polling must preserve the advanced cursors and full refill capacity.
-        for (size_t poll = 0; poll < capacity; ++poll) {
-            if (ring.pop_back(out) || out.is_valid() || !ring.empty() ||
-                ring.size() != 0 || ring.remaining_capacity() != capacity) { return false; }
-        }
+    for (size_t cycle = 0; cycle < 4; ++cycle) {
         for (size_t i = 0; i < capacity; ++i) {
             detail::ReadyEntry entry = (i % 2 == 0)
                 ? detail::ReadyEntry(TaskRef(tasks[i]))
                 : detail::ReadyEntry(detail::ReadyEntryKind::CCoroutine, &coros[i]);
-            if (!ring.push_back(entry) || entry.is_valid()) { return false; }
+            if (!stack.push_back(entry) || entry.is_valid()) { return false; }
         }
         detail::ReadyEntry extra{TaskRef(tasks[0])};
-        if (ring.push_back(extra) || !extra.is_valid() ||
-            ring.steal_front(out) || out.is_valid()) { return false; }
+        if (stack.push_back(extra) || !extra.is_valid() ||
+            stack.size() != capacity || stack.remaining_capacity() != 0) {
+            return false;
+        }
         detail::release_ready_entry(extra);
         for (size_t i = capacity; i > 0; --i) {
             const size_t index = i - 1;
-            if (!ring.pop_back(out) ||
+            if (!stack.pop_back(out) ||
                 out.state() != (index % 2 == 0
                     ? static_cast<void*>(tasks[index].state())
                     : static_cast<void*>(&coros[index]))) { return false; }
             detail::release_ready_entry(out);
         }
-        if (!ring.empty() || ring.pop_back(out)) { return false; }
+        if (!stack.empty() || stack.pop_back(out)) { return false; }
         for (size_t i = 0; i < capacity; ++i) {
             if (tasks[i].state()->m_refs.load() != 1 ||
                 (i % 2 != 0 && coros[i].releases != cycle + 1)) { return false; }
         }
     }
-    // Clear a partially drained mixed ring and ensure consumed slots stay empty.
+    const size_t releases_before_clear = coros[0].releases;
     detail::ReadyEntry cpp{TaskRef(tasks[0])};
     detail::ReadyEntry c(detail::ReadyEntryKind::CCoroutine, &coros[0]);
-    if (!ring.push_back(cpp) || !ring.push_back(c) || !ring.pop_back(out)) { return false; }
-    detail::release_ready_entry(out);
-    ring.clear();
-    ring.clear();
-    return tasks[0].state()->m_refs.load() == 1 && coros[0].releases == 1 && ring.empty();
-}
-
-bool verify_reenable_stealing() {
-    TaskRef task(new TaskState(std::coroutine_handle<>{}), false);
-    ChaseLevTaskRing ring;
-    detail::ReadyEntry out;
-    for (size_t cycle = 0; cycle < 4; ++cycle) {
-        ring.set_stealing_enabled(false);
-        detail::ReadyEntry invalid;
-        if (ring.push_back(invalid)) { return false; }
-        for (size_t i = 0; i < ChaseLevTaskRing::kCapacity; ++i) {
-            detail::ReadyEntry entry{TaskRef(task)};
-            if (!ring.push_back(entry)) { return false; }
-        }
-        for (size_t i = 0; i < ChaseLevTaskRing::kCapacity; ++i) {
-            if (!ring.pop_back(out) || out.state() != task.state()) { return false; }
-            detail::release_ready_entry(out);
-        }
-        // With no workers active, reuse every owner-drained slot via the CAS path.
-        // A load-only pop would leave stale entries and reject these pushes.
-        ring.set_stealing_enabled(true);
-        for (size_t i = 0; i < ChaseLevTaskRing::kCapacity; ++i) {
-            detail::ReadyEntry entry{TaskRef(task)};
-            if (!ring.push_back(entry)) { return false; }
-        }
-        for (size_t i = 0; i < ChaseLevTaskRing::kCapacity; ++i) {
-            const bool popped = i % 2 == 0 ? ring.pop_back(out) : ring.steal_front(out);
-            if (!popped || out.state() != task.state()) { return false; }
-            detail::release_ready_entry(out);
-        }
-        if (!ring.empty() || ring.pop_back(out) || ring.steal_front(out) ||
-            task.state()->m_refs.load() != 1) { return false; }
+    if (!stack.push_back(cpp) || !stack.push_back(c) || !stack.pop_back(out)) {
+        return false;
     }
-    return true;
+    detail::release_ready_entry(out);
+    stack.clear();
+    stack.clear();
+    return tasks[0].state()->m_refs.load() == 1 &&
+        coros[0].releases == releases_before_clear + 1 && stack.empty();
 }
 } // namespace
 
@@ -156,35 +111,26 @@ int main() {
         std::cerr << "[T176] empty polling or single-task roundtrip failure\n";
         return 1;
     }
-    if (!verify_owner_only_lifecycle()) {
-        std::cerr << "[T176] owner-only capacity/order/ownership failure\n";
-        return 1;
-    }
-    if (!verify_reenable_stealing()) {
-        std::cerr << "[T176] re-enabled ring retained consumed slots or references\n";
+    if (!verify_capacity_order_and_ownership()) {
+        std::cerr << "[T176] local stack capacity/order/ownership failure\n";
         return 1;
     }
     IOReadyQueue worker;
-    worker.set_stealing_enabled(false);
 
-    TaskRef queued(new TaskState(std::coroutine_handle<>{}), false);
-    if (!worker.local_ring.push_back(std::move(queued))) {
-        std::cerr << "[T176] failed to populate local ring\n";
-        return 1;
-    }
-
-    TaskRef stolen;
-    if (worker.steal_front(stolen)) {
-        std::cerr << "[T176] disabled IO worker still allowed local-ring stealing\n";
+    TaskRef queued = TaskRef(new TaskState(std::coroutine_handle<>{}), false);
+    TaskState* const queued_state = queued.state();
+    if (!worker.local_stack.push_back(std::move(queued))) {
+        std::cerr << "[T176] failed to populate local stack\n";
         return 1;
     }
 
     TaskRef popped;
-    if (!worker.local_ring.pop_back(popped) || !popped.is_valid()) {
-        std::cerr << "[T176] rejected steal removed the owner task\n";
+    if (!worker.local_stack.pop_back(popped) ||
+        !popped.is_valid() || popped.state() != queued_state) {
+        std::cerr << "[T176] failed to pop the owner-local task\n";
         return 1;
     }
 
-    std::cout << "T176-IOWorkerRingMode PASS\n";
+    std::cout << "T176-LocalReadyStack PASS\n";
     return 0;
 }

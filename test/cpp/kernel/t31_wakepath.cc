@@ -30,8 +30,8 @@ static_assert(std::is_constructible_v<Waker, TaskRef>,
 static_assert(std::is_same_v<decltype(IOReadyQueue{}.ready_lifo_slot),
                              std::optional<detail::ReadyEntry>>,
               "IOReadyQueue::ready_lifo_slot must store ReadyEntry");
-static_assert(std::is_same_v<decltype(IOReadyQueue{}.local_ring), ChaseLevTaskRing>,
-              "IOReadyQueue::local_ring must store the fixed-capacity Chase-Lev ring");
+static_assert(std::is_same_v<decltype(IOReadyQueue{}.local_stack), LocalReadyStack>,
+              "IOReadyQueue::local_stack must store the fixed-capacity owner-local stack");
 static_assert(std::is_same_v<decltype(IOReadyQueue{}.ready_inject_queue),
                              moodycamel::ConcurrentQueue<detail::ReadyEntry>>,
               "IOReadyQueue::ready_inject_queue must store ReadyEntry");

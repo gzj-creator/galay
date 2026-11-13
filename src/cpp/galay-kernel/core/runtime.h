@@ -7,8 +7,7 @@
  * @details 定义 Runtime（顶层调度器编排器）、RuntimeHandle（运行时上下文轻量访问器）、
  * RuntimeConfig（构造参数）和 RuntimeBuilder（流式配置 API）。
  *
- * Runtime 持有 IO 调度器、compute 调度器和阻塞执行器，
- * 支持 IO 调度器间的工作窃取和 CPU 亲和性绑定。
+ * Runtime 持有 IO 调度器、compute 调度器和阻塞执行器，并支持 CPU 亲和性绑定。
  */
 
 #ifndef GALAY_KERNEL_RUNTIME_H
@@ -31,7 +30,6 @@
 #include <thread>
 #include <type_traits>
 #include <utility>
-#include <span>
 #include <vector>
 
 namespace galay::kernel
@@ -63,14 +61,6 @@ struct RuntimeConfig {
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;  ///< IO scheduler 数；AUTO 表示按 CPU 自动推导
     size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;  ///< parallel scheduler 数；AUTO 表示按 CPU 自动推导
     RuntimeAffinityConfig affinity;  ///< Runtime 的绑核策略
-};
-
-/**
- * @brief Runtime 级别的调度统计快照
- * @details 当前只暴露 IO scheduler 的 work-stealing 计数。
- */
-struct RuntimeStats {
-    std::vector<IOSchedulerStealStats> io_schedulers;  ///< 与 get_io_scheduler(i) 对齐的 stealing 统计
 };
 
 /**
@@ -309,12 +299,6 @@ public:
      */
     RuntimeHandle handle() noexcept;
     /**
-     * @brief 返回 Runtime 管理的 scheduler 统计；应在 stop() 后或外部同步下调用
-     * @return RuntimeStats 操作结果
-     */
-    RuntimeStats stats() const;
-
-    /**
      * @brief Runtime 当前是否已启动
      * @return 满足所检查条件时返回 true，否则返回 false
      */
@@ -397,16 +381,8 @@ private:
      * @return RuntimeError 操作结果
      */
     static RuntimeError map_task_result_error(const detail::TaskResultError& error) noexcept;
-    /**
-     * @brief 为 Runtime 管理的 IO scheduler 下发 steal-domain 配置
-     * @return 无返回值
-     */
-    void configure_io_scheduler_steal_domains();
-
     std::vector<std::unique_ptr<IOScheduler>> m_io_schedulers;  ///< Runtime 持有的 IO scheduler 集合
     std::vector<std::unique_ptr<ParallelScheduler>> m_parallel_schedulers;  ///< Runtime 持有的 parallel scheduler 集合
-
-    std::vector<IOScheduler*> m_io_scheduler_sibling_view;  ///< Runtime 管理的 IO scheduler pointer view
 
     std::atomic<uint32_t> m_io_index{0};  ///< IO scheduler 轮询游标
     std::atomic<uint32_t> m_parallel_index{0};  ///< parallel scheduler 轮询游标

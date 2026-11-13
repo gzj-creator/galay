@@ -1,8 +1,6 @@
 /**
  * @file b42_ready_ring_lifecycle.cc
  * @brief Ready ring push/pop/release cost, with fixed work and separate warmup.
- * @note The shared samples exercise the stealing-enabled owner path without
- *       concurrent stealers; concurrency correctness belongs to T100.
  */
 
 #include "../common/benchmark_environment.h"
@@ -33,18 +31,15 @@ void release_probe(void* state) noexcept {
 
 constexpr detail::ReadyEntryHooks kHooks{
     .owner_scheduler = nullptr,
-    .resume_owner_only = nullptr,
     .resume = nullptr,
     .release = release_probe,
 };
 
 bool measure(std::string_view sample, size_t iterations, bool print) {
-    const bool shared = sample == "shared-1" || sample == "shared-64";
-    const size_t batch = sample == "owner-64" || sample == "shared-64" ? 64 : 1;
+    const size_t batch = sample == "owner-64" ? 64 : 1;
     std::array<EntryProbe, 64> probes{};
     for (auto& probe : probes) { probe.header.hooks = &kHooks; }
-    ChaseLevTaskRing ring;
-    ring.set_stealing_enabled(shared);
+    LocalReadyStack stack;
     size_t completed = 0;
     size_t errors = 0;
     galay::benchmark::MicroMeasurement measurement;
@@ -53,18 +48,18 @@ bool measure(std::string_view sample, size_t iterations, bool print) {
         const size_t count = std::min(batch, iterations - completed);
         for (size_t i = 0; i < count; ++i) {
             detail::ReadyEntry entry(detail::ReadyEntryKind::CCoroutine, &probes[i]);
-            if (!ring.push_back(entry)) {
+            if (!stack.push_back(entry)) {
                 detail::release_ready_entry(entry);
                 ++errors;
                 break;
             }
         }
         if (errors != 0) { break; }
-        // Keep the real ring state observable across fill/drain without a CPU fence.
-        asm volatile("" : : "g"(&ring) : "memory");
+        // Keep the real stack state observable across fill/drain without a CPU fence.
+        asm volatile("" : : "g"(&stack) : "memory");
         for (size_t i = count; i > 0; --i) {
             detail::ReadyEntry entry;
-            if (!ring.pop_back(entry)) { ++errors; break; }
+            if (!stack.pop_back(entry)) { ++errors; break; }
             errors += entry.state() != &probes[i - 1];
             detail::release_ready_entry(entry);
             ++completed;
@@ -75,7 +70,7 @@ bool measure(std::string_view sample, size_t iterations, bool print) {
     size_t released = 0;
     for (const auto& probe : probes) { released += probe.releases; }
     const bool valid = measurement.cpu_ns >= 0 && errors == 0 && completed == iterations &&
-        released == iterations && ring.empty();
+        released == iterations && stack.empty();
     if (print) {
         const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
             measurement.elapsed).count();
@@ -94,11 +89,10 @@ int main(int argc, char** argv) {
     if (!galay::benchmark::initialize_benchmark_environment()) { return 1; }
     galay::benchmark::MicroOptions options;
     if (!galay::benchmark::parse_micro_options(argc, argv, options)) {
-        std::cerr << "Usage: --sample owner-1|owner-64|shared-1|shared-64 --iterations N\n";
+        std::cerr << "Usage: --sample owner-1|owner-64 --iterations N\n";
         return 1;
     }
-    constexpr std::array<std::string_view, 4> samples{
-        "owner-1", "owner-64", "shared-1", "shared-64"};
+    constexpr std::array<std::string_view, 2> samples{"owner-1", "owner-64"};
     bool matched = false;
     for (const auto sample : samples) {
         if (!options.sample.empty() && options.sample != sample) { continue; }

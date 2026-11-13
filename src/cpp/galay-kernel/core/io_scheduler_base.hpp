@@ -35,8 +35,6 @@ class IOSchedulerBase : public SchedulerBase<Derived, kIOScheduler>
         , m_reactor(reactor_capacity, m_last_error_code)
         , m_batch_size(batch_size)
     {
-        // IO 注册和 reactor 提交保持 owner 线程亲和，禁止跨线程窃取执行。
-        m_worker.set_stealing_enabled(false);
         m_worker.close_resume_admission();
     }
 
@@ -166,28 +164,6 @@ public:
      * @return std::optional<IOError> 结果，含义见函数说明
      */
     std::optional<IOError> last_error() const { return detail::load_backend_error(m_last_error_code); }
-
-    /**
-     * @brief 启动前配置 Runtime 借用的 sibling 视图；视图须覆盖整个运行周期。
-     * @param siblings 同级调度器集合
-     * @param self_index 当前调度器索引
-     * @return 无返回值
-     */
-    void configure_steal_domain(std::span<IOScheduler* const> siblings, size_t self_index) {
-        m_worker.configure_steal_domain(self_index, siblings);
-    }
-
-    /**
-     * @brief 内部窃取队列入口；当前 IO 后端默认禁用窃取。
-     * @return IOReadyQueue* 指针
-     */
-    IOReadyQueue* steal_worker_state() noexcept { return &m_worker; }
-
-    /**
-     * @brief 仅在停止或外部同步后读取统计快照。
-     * @return 当前调度器的工作窃取统计快照
-     */
-    IOSchedulerStealStats steal_stats() const noexcept { return m_worker.snapshot_steal_stats(); }
 
 protected:
     // 具体调度器析构前先 stop，保证 reactor/队列直到工作线程退出后才析构。

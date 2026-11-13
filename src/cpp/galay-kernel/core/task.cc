@@ -531,12 +531,10 @@ TaskResumeResult request_task_resume_state_detailed(TaskState* state) noexcept
     if (state->m_queued.exchange(true, std::memory_order_acq_rel)) {
         return TaskResumeResult::kAlreadyQueued;
     }
-    state->m_resume_owner_only.store(true, std::memory_order_release);
     if (state->m_scheduler->schedule_resume(TaskRef(state, true))) {
         return TaskResumeResult::kAccepted;
     }
 
-    state->m_resume_owner_only.store(false, std::memory_order_release);
     state->m_queued.store(false, std::memory_order_release);
     return TaskResumeResult::kRejected;
 }
@@ -609,13 +607,9 @@ void complete_task_state(TaskState* state) noexcept
                 true,
                 std::memory_order_acq_rel,
                 std::memory_order_acquire)) {
-            nextState->m_resume_owner_only.store(true,
-                                                 std::memory_order_release);
             if (scheduler->schedule_deferred(next)) {
                 return;
             }
-            nextState->m_resume_owner_only.store(false,
-                                                 std::memory_order_release);
             nextState->m_queued.store(false, std::memory_order_release);
         }
 

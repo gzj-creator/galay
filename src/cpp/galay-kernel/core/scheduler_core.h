@@ -1,11 +1,11 @@
 /**
  * @file scheduler_core.h
- * @brief 调度器事件循环核心，支持 ready-pass 和工作窃取
+ * @brief 调度器事件循环核心，驱动 ready-pass
  * @author galay-kernel
  * @version 1.0.0
  *
  * @details 实现 SchedulerCore，驱动每次迭代的任务处理周期：
- * 收集跨线程注入任务、以预算限制运行 ready pass、空闲时回退到从兄弟调度器窃取任务。
+ * 收集跨线程注入任务，以预算限制运行 ready pass，并在空闲时进入后端 poll。
  */
 
 #ifndef GALAY_KERNEL_SCHEDULER_CORE_H
@@ -84,10 +84,6 @@ public:
 
     bool has_pending_work() const noexcept {
         return m_worker.has_local_work() || m_worker.has_pending_injected();
-    }
-
-    bool try_steal() noexcept {
-        return m_worker.try_steal();
     }
 
     template <typename OnRemoteCollectedFn>
@@ -213,10 +209,8 @@ public:
         run_ready_pass(std::forward<ResumeFn>(resume_fn));
 
         if (!has_pending_work()) {
-            if (!try_steal()) {
-                stage_observer_fn(SchedulerCoreStage::Poll);
-                poll_fn();
-            }
+            stage_observer_fn(SchedulerCoreStage::Poll);
+            poll_fn();
         }
     }
 

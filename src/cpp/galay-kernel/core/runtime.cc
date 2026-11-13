@@ -4,13 +4,12 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 实现 Runtime 生命周期管理、默认调度器创建、亲和性配置、
- * 工作窃取域设置以及线程局部 RuntimeHandle 访问器。
+ * @details 实现 Runtime 生命周期管理、默认调度器创建、亲和性配置以及
+ * 线程局部 RuntimeHandle 访问器。
  */
 
 #include "runtime.h"
 #include "timer_scheduler.h"
-#include <span>
 #include <thread>
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
@@ -51,8 +50,6 @@ std::expected<void, RuntimeError> Runtime::start()
     }
 
     apply_affinity_config();
-    configure_io_scheduler_steal_domains();
-
     TimerScheduler::get_instance()->start();
     for (auto& scheduler : m_io_schedulers) {
         auto started = scheduler->start();
@@ -93,17 +90,6 @@ void Runtime::stop()
 RuntimeHandle Runtime::handle() noexcept
 {
     return RuntimeHandle(this);
-}
-
-RuntimeStats Runtime::stats() const
-{
-    RuntimeStats snapshot;
-    snapshot.io_schedulers.reserve(m_io_schedulers.size());
-    for (const auto& scheduler : m_io_schedulers) {
-        snapshot.io_schedulers.push_back(
-            scheduler ? scheduler->steal_stats() : IOSchedulerStealStats{});
-    }
-    return snapshot;
 }
 
 IOScheduler* Runtime::get_io_scheduler(size_t index)
@@ -249,26 +235,6 @@ void Runtime::apply_affinity_config()
     }
     for (size_t i = 0; i < m_parallel_schedulers.size(); ++i) {
         m_parallel_schedulers[i]->set_affinity(affinity.custom_parallel_cpus[i]);
-    }
-}
-
-void Runtime::configure_io_scheduler_steal_domains()
-{
-    const size_t io_count = m_io_schedulers.size();
-    if (io_count == 0) {
-        m_io_scheduler_sibling_view.clear();
-        return;
-    }
-
-    m_io_scheduler_sibling_view.clear();
-    m_io_scheduler_sibling_view.reserve(io_count);
-    for (auto& scheduler : m_io_schedulers) {
-        m_io_scheduler_sibling_view.push_back(scheduler.get());
-    }
-
-    const std::span<IOScheduler* const> siblings{m_io_scheduler_sibling_view.data(), m_io_scheduler_sibling_view.size()};
-    for (size_t index = 0; index < siblings.size(); ++index) {
-        siblings[index]->configure_steal_domain(siblings, index);
     }
 }
 

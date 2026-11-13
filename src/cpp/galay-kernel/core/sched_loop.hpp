@@ -82,10 +82,6 @@ void run_io_scheduler_event_loop(std::atomic<bool>& running,
             wake_coordinator.mark_awake();
             continue;
         }
-        if (core.try_steal()) {
-            wake_coordinator.mark_awake();
-            continue;
-        }
         poll_fn();
         wake_coordinator.mark_awake();
     }

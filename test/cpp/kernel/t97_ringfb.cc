@@ -34,19 +34,19 @@ TaskRef make_task_ref() {
 bool run_scenario() {
     constexpr size_t kRemainingCapacity = 4;
     constexpr size_t kExtraInjected = 3;
-    constexpr size_t kRingCapacity = ChaseLevTaskRing::kCapacity;
+    constexpr size_t kRingCapacity = LocalReadyStack::kCapacity;
 
     IOReadyQueue single_item_worker;
-    if (!single_item_worker.local_ring.push_back(make_task_ref())) {
+    if (!single_item_worker.local_stack.push_back(make_task_ref())) {
         std::cerr << "[T97] failed to enqueue single-item ring probe\n";
         return false;
     }
     TaskRef single_popped;
-    if (!single_item_worker.local_ring.pop_back(single_popped)) {
+    if (!single_item_worker.local_stack.pop_back(single_popped)) {
         std::cerr << "[T97] failed to pop single-item ring probe\n";
         return false;
     }
-    if (!single_item_worker.local_ring.empty()) {
+    if (!single_item_worker.local_stack.empty()) {
         std::cerr << "[T97] ring should be empty after single-item pop_back\n";
         return false;
     }
@@ -56,7 +56,7 @@ bool run_scenario() {
 
     const size_t fill_count = kRingCapacity - kRemainingCapacity;
     for (size_t i = 0; i < fill_count; ++i) {
-        if (!worker.local_ring.push_back(make_task_ref())) {
+        if (!worker.local_stack.push_back(make_task_ref())) {
             std::cerr << "[T97] failed to fill ring (index=" << i << ")\n";
             return false;
         }
@@ -91,7 +91,7 @@ bool run_scenario() {
 
     for (size_t i = 0; i < kRemainingCapacity; ++i) {
         TaskRef popped;
-        if (!worker.local_ring.pop_back(popped)) {
+        if (!worker.local_stack.pop_back(popped)) {
             std::cerr << "[T97] failed to free ring slot " << i << "\n";
             return false;
         }
@@ -144,7 +144,7 @@ bool run_resume_admission_scenario() {
 
     size_t popped = 0;
     TaskRef task;
-    while (worker.local_ring.pop_back(task)) {
+    while (worker.local_stack.pop_back(task)) {
         ++popped;
         task = TaskRef{};
     }
@@ -183,7 +183,7 @@ bool run_resume_fifo_scenario() {
 
     for (size_t i = 0; i < expected.size(); ++i) {
         TaskRef popped;
-        if (!worker.local_ring.pop_back(popped) ||
+        if (!worker.local_stack.pop_back(popped) ||
             popped.state() != expected[i]) {
             std::cerr << "[T97] resume order mismatch at index " << i << "\n";
             return false;
@@ -196,11 +196,10 @@ bool run_resume_fifo_scenario() {
     return true;
 }
 
-bool run_resume_batched_fifo_scenario(bool stealing_enabled) {
-    constexpr size_t capacity = ChaseLevTaskRing::kCapacity;
+bool run_resume_batched_fifo_scenario() {
+    constexpr size_t capacity = LocalReadyStack::kCapacity;
     std::array<TaskRef, capacity + 17> tasks;
     IOReadyQueue worker;
-    worker.set_stealing_enabled(stealing_enabled);
     for (TaskRef& task : tasks) {
         task = make_task_ref();
         if (!worker.schedule_resume(task).has_value()) { return false; }
@@ -215,7 +214,7 @@ bool run_resume_batched_fifo_scenario(bool stealing_enabled) {
         }
         for (size_t i = 0; i < expected; ++i) {
             TaskRef popped;
-            if (!worker.local_ring.pop_back(popped) ||
+            if (!worker.local_stack.pop_back(popped) ||
                 popped.state() != tasks[offset + i].state() ||
                 !detail::resume_task_state(popped.state())) {
                 std::cerr << "[T97] partial resume batch FIFO mismatch\n";
@@ -223,7 +222,7 @@ bool run_resume_batched_fifo_scenario(bool stealing_enabled) {
             }
         }
         offset += expected;
-        if (!worker.local_ring.empty() ||
+        if (!worker.local_stack.empty() ||
             worker.injected_outstanding.load() != tasks.size() - offset) { return false; }
     }
     for (const TaskRef& task : tasks) {
@@ -261,7 +260,7 @@ bool run_resume_admission_lifecycle_scenario() {
     }
 
     TaskRef task;
-    if (!worker.local_ring.pop_back(task) || !task.is_valid() ||
+    if (!worker.local_stack.pop_back(task) || !task.is_valid() ||
         !detail::resume_task_state(task.state())) {
         std::cerr << "[T97] stopped worker failed to run accepted resume task\n";
         return false;
@@ -275,13 +274,13 @@ bool run_resume_admission_lifecycle_scenario() {
 }
 
 bool run_resume_fairness_scenario() {
-    constexpr size_t kRingCapacity = ChaseLevTaskRing::kCapacity;
+    constexpr size_t kRingCapacity = LocalReadyStack::kCapacity;
     constexpr size_t kAttempts = 8;
     IOReadyQueue worker;
     worker.resize_inject_buffer(8);
 
     for (size_t i = 0; i + 1 < kRingCapacity; ++i) {
-        if (!worker.local_ring.push_back(make_task_ref())) {
+        if (!worker.local_stack.push_back(make_task_ref())) {
             std::cerr << "[T97] failed to fill fairness ring at " << i << "\n";
             return false;
         }
@@ -306,7 +305,7 @@ bool run_resume_fairness_scenario() {
             return false;
         }
         TaskRef popped;
-        if (!worker.local_ring.pop_back(popped) || !popped.is_valid()) {
+        if (!worker.local_stack.pop_back(popped) || !popped.is_valid()) {
             std::cerr << "[T97] fairness probe failed to pop drained task\n";
             return false;
         }
@@ -521,60 +520,56 @@ bool run_resume_queue_ownership_scenario() {
 
 
 bool run_mixed_drain_accounting_scenario() {
-    for (bool stealing : {false, true}) {
-        IOReadyQueue worker;
-        worker.set_stealing_enabled(stealing);
-        worker.resize_inject_buffer(8);
-        std::array<TaskRef, 32> normal;
-        std::array<TaskRef, 17> resumes;
-        for (auto& task : normal) { task = make_task_ref(); }
-        for (auto& task : resumes) { task = make_task_ref(); }
-        for (size_t i = 0; i < normal.size(); ++i) {
-            const auto accepted = worker.schedule_injected(normal[i]);
-            if (!accepted.has_value() || *accepted != (i == 0)) { return false; }
-        }
-        for (auto& task : resumes) {
-            const auto accepted = worker.schedule_resume(task);
-            if (!accepted.has_value() || *accepted) { return false; }
-        }
-        constexpr size_t kSlots = 7;
-        for (size_t i = kSlots; i < ChaseLevTaskRing::kCapacity; ++i) {
-            if (!worker.local_ring.push_back(make_task_ref())) { return false; }
-        }
-        size_t normal_seen = 0;
-        size_t resume_seen = 0;
-        while (worker.has_pending_injected()) {
-            const auto before = worker.injected_outstanding.load();
-            const size_t drained = worker.drain_injected();
-            if (drained == 0 || drained > kSlots ||
-                worker.injected_outstanding.load() != before - drained ||
-                !worker.has_owner_drained_injected()) { return false; }
-            for (size_t i = 0; i < drained; ++i) {
-                TaskRef task;
-                if (!worker.local_ring.pop_back(task)) { return false; }
-                if (task.state()->m_resume_queue_claimed.load()) {
-                    if (resume_seen >= resumes.size() ||
-                        task.state() != resumes[resume_seen++].state() ||
-                        !detail::resume_task_state(task.state())) { return false; }
-                } else {
-                    if (normal_seen >= normal.size() ||
-                        task.state() != normal[normal_seen++].state()) { return false; }
-                }
+    IOReadyQueue worker;
+    worker.resize_inject_buffer(8);
+    std::array<TaskRef, 32> normal;
+    std::array<TaskRef, 17> resumes;
+    for (auto& task : normal) { task = make_task_ref(); }
+    for (auto& task : resumes) { task = make_task_ref(); }
+    for (size_t i = 0; i < normal.size(); ++i) {
+        const auto accepted = worker.schedule_injected(normal[i]);
+        if (!accepted.has_value() || *accepted != (i == 0)) { return false; }
+    }
+    for (auto& task : resumes) {
+        const auto accepted = worker.schedule_resume(task);
+        if (!accepted.has_value() || *accepted) { return false; }
+    }
+    constexpr size_t kSlots = 7;
+    for (size_t i = kSlots; i < LocalReadyStack::kCapacity; ++i) {
+        if (!worker.local_stack.push_back(make_task_ref())) { return false; }
+    }
+    size_t normal_seen = 0;
+    size_t resume_seen = 0;
+    while (worker.has_pending_injected()) {
+        const auto before = worker.injected_outstanding.load();
+        const size_t drained = worker.drain_injected();
+        if (drained == 0 || drained > kSlots ||
+            worker.injected_outstanding.load() != before - drained) { return false; }
+        for (size_t i = 0; i < drained; ++i) {
+            TaskRef task;
+            if (!worker.local_stack.pop_back(task)) { return false; }
+            if (task.state()->m_resume_queue_claimed.load()) {
+                if (resume_seen >= resumes.size() ||
+                    task.state() != resumes[resume_seen++].state() ||
+                    !detail::resume_task_state(task.state())) { return false; }
+            } else {
+                if (normal_seen >= normal.size() ||
+                    task.state() != normal[normal_seen++].state()) { return false; }
             }
         }
-        if (normal_seen != normal.size() || resume_seen != resumes.size() ||
-            worker.has_pending_resume() || worker.drain_injected() != 0) { return false; }
-        for (auto& task : normal) {
-            if (task.state()->m_refs.load() != 1) { return false; }
-        }
-        for (auto& task : resumes) {
-            if (task.state()->m_refs.load() != 1 ||
-                task.state()->m_resume_queue_claimed.load()) { return false; }
-        }
-        const auto next = worker.schedule_injected(make_task_ref());
-        if (!next.has_value() || !*next || worker.drain_injected() != 1 ||
-            worker.injected_outstanding.load() != 0) { return false; }
     }
+    if (normal_seen != normal.size() || resume_seen != resumes.size() ||
+        worker.has_pending_resume() || worker.drain_injected() != 0) { return false; }
+    for (auto& task : normal) {
+        if (task.state()->m_refs.load() != 1) { return false; }
+    }
+    for (auto& task : resumes) {
+        if (task.state()->m_refs.load() != 1 ||
+            task.state()->m_resume_queue_claimed.load()) { return false; }
+    }
+    const auto next = worker.schedule_injected(make_task_ref());
+    if (!next.has_value() || !*next || worker.drain_injected() != 1 ||
+        worker.injected_outstanding.load() != 0) { return false; }
     std::cout << "T97 mixed drain: bounded batches/FIFO/pending/zero transition PASS\n";
     return true;
 }
@@ -583,7 +578,6 @@ bool run_mixed_drain_concurrent_scenario() {
     constexpr size_t kItems = 8192;
     for (bool close_during_drain : {false, true}) {
         IOReadyQueue worker;
-        worker.set_stealing_enabled(false);
         worker.resize_inject_buffer(8);
         std::array<TaskRef, kItems> normal;
         std::array<TaskRef, kItems> resumes;
@@ -616,7 +610,7 @@ bool run_mixed_drain_concurrent_scenario() {
             const size_t drained = worker.drain_injected();
             size_t popped = 0;
             TaskRef task;
-            while (worker.local_ring.pop_back(task)) {
+            while (worker.local_stack.pop_back(task)) {
                 const bool resume = task.state()->m_resume_queue_claimed.load();
                 ++consumed[resume ? 1 : 0];
                 if (resume && !detail::resume_task_state(task.state())) { valid = false; }
@@ -764,7 +758,7 @@ bool run_resume_duplicate_pending_scenario() {
     }
     if (worker.drain_injected() != 1 || worker.injected_outstanding.load() != 0) { return false; }
     TaskRef popped;
-    if (!worker.local_ring.pop_back(popped) || popped.state() != task.state() ||
+    if (!worker.local_stack.pop_back(popped) || popped.state() != task.state() ||
         worker.schedule_resume(task).has_value() || worker.injected_outstanding.load() != 0 ||
         !detail::resume_task_state(popped.state())) { return false; }
     popped = TaskRef{};
@@ -896,7 +890,7 @@ int main() {
     if (!run_resume_fifo_scenario()) {
         return 1;
     }
-    if (!run_resume_batched_fifo_scenario(false) || !run_resume_batched_fifo_scenario(true)) {
+    if (!run_resume_batched_fifo_scenario()) {
         return 1;
     }
     if (!run_resume_admission_lifecycle_scenario()) {

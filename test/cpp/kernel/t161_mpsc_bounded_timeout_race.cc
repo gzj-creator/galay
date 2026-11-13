@@ -415,7 +415,6 @@ public:
 
         // 精确覆盖 resume_task_state() 已出队、尚未 handle.resume() 的窗口。
         state->m_queued.store(false, std::memory_order_relaxed);
-        state->m_resume_owner_only.store(false, std::memory_order_relaxed);
         m_timers.front()->handle_timeout();
         const bool noDuplicateWake = m_ready.empty();
         state->m_handle.resume();

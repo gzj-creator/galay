@@ -24,7 +24,7 @@ BENCHMARKS = {
     "frame": "coroutine_frame_allocator_pressure",
     "ring": "ready_ring_lifecycle",
 }
-RING_SAMPLES = ("owner-1", "owner-64", "shared-1", "shared-64")
+RING_SAMPLES = ("owner-1", "owner-64")
 FRAME_SAMPLES = ("frame_size_128", "frame_size_4096", "frame_mixed_recycler",
                  "task_void_unsubmitted_destroy", "task_int_unsubmitted_destroy",
                  "task_void_complete_destroy", "task_int_complete_destroy", "task_suspend_resume")

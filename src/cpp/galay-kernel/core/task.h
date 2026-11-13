@@ -434,7 +434,6 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
     std::atomic<detail::TaskCompletionStatus> m_completion_status{detail::TaskCompletionStatus::kPending};
     std::atomic<bool> m_queued{false};  ///< 任务是否已在调度队列中
     std::atomic<bool> m_resume_queue_claimed{false};  ///< 是否已被 resume admission 接管
-    std::atomic<bool> m_resume_owner_only{false};  ///< 是否必须由 owner scheduler 线程恢复
     std::atomic<bool> m_result_consumed{false};  ///< 任务结果是否已被 join/await 消费
     std::optional<detail::TaskResultError> m_result_error;  ///< 任务错误
     ResultStorageKind m_result_kind = ResultStorageKind::Empty;  ///< 当前结果存储形态
@@ -1432,7 +1431,7 @@ enum class ReadyEntryKind : uintptr_t {
 /**
  * @brief C 协程 ready entry 的 hook 表。
  * @details C 协程状态对象必须以 ReadyEntryCoroHeader 作为首字段，使调度器可用
- *          void* state 查询 owner、owner-only 约束、恢复入口和 ready 引用释放入口。
+ *          void* state 查询 owner、恢复入口和 ready 引用释放入口。
  */
 struct ReadyEntryHooks
 {
@@ -1442,12 +1441,6 @@ struct ReadyEntryHooks
      * @return Scheduler* 指针
      */
     Scheduler* (*owner_scheduler)(void* state) noexcept = nullptr;
-    /**
-     * @brief 是否只能由 owner scheduler 恢复
-     * @param state 状态对象
-     * @return 仅允许 owner scheduler 恢复时返回 true，否则返回 false
-     */
-    bool (*resume_owner_only)(void* state) noexcept = nullptr;
     /**
      * @brief 恢复 C 协程；成功后 ready entry 会释放
      * @param state 状态对象
@@ -1616,16 +1609,6 @@ inline Scheduler* ready_entry_scheduler(const ReadyEntry& entry) noexcept
         : nullptr;
 }
 
-inline bool ready_entry_resume_owner_only(const ReadyEntry& entry) noexcept
-{
-    if (auto* state = entry.task_state()) {
-        return state->m_resume_owner_only.load(std::memory_order_acquire);
-    }
-    const auto* hooks = ready_entry_hooks(entry);
-    return hooks != nullptr && hooks->resume_owner_only != nullptr &&
-        hooks->resume_owner_only(entry.state());
-}
-
 inline bool resume_task_state(TaskState* state)
 {
     if (!state || !state->m_handle || state->is_done(std::memory_order_relaxed)) {
@@ -1633,7 +1616,6 @@ inline bool resume_task_state(TaskState* state)
     }
     state->m_queued.store(false, std::memory_order_relaxed);
     state->m_resume_queue_claimed.store(false, std::memory_order_release);
-    state->m_resume_owner_only.store(false, std::memory_order_relaxed);
     if (state->m_runtime == nullptr || state->m_runtime == current_runtime()) {
         state->m_handle.resume();
         return true;

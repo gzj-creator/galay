@@ -305,7 +305,6 @@ public:
         }
 
         state->m_queued.store(false, std::memory_order_relaxed);
-        state->m_resume_owner_only.store(false, std::memory_order_relaxed);
         m_timers.front()->handle_timeout();
         const bool noDuplicateWake = m_ready.empty();
         state->m_handle.resume();
