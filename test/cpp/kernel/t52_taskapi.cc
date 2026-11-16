@@ -155,6 +155,8 @@ static_assert(HasErrorMessage<detail::TaskResultError>);
 static_assert(HasErrorMessage<BlockingExecutorError>);
 static_assert(HasTaskThenLvalue<Task<void>>);
 static_assert(HasTaskThenRvalue<Task<void>>);
+static_assert(!HasTaskThenLvalue<Task<int>>);
+static_assert(!HasTaskThenRvalue<Task<int>>);
 static_assert(HasTaskAwaitOperator<Task<int>>);
 static_assert(HasTaskAwaitOperator<Task<void>>);
 static_assert(std::same_as<

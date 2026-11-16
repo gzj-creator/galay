@@ -580,6 +580,11 @@ namespace detail
 
 struct TaskRefStorageAccess
 {
+    static TaskRef borrow(TaskState* state) noexcept
+    {
+        return TaskRef::borrowed(state);
+    }
+
     static TaskState* release_state(TaskRef& task) noexcept
     {
         if (task.is_borrowed()) {
