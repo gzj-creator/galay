@@ -155,6 +155,11 @@ int main() {
                        task_content,
                        "#include <condition_variable>",
                        "task.h blocking completion must not depend on condition_variable");
+    require_not_contains(failures,
+                       task_h,
+                       task_content,
+                       "#include <thread>",
+                       "task.h must not depend on thread");
 
     require_contains(failures,
                     timer_hpp,

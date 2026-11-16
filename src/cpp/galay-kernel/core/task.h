@@ -31,7 +31,6 @@
 #include <new>
 #include <optional>
 #include <string_view>
-#include <thread>
 #include <type_traits>
 #include <utility>
 
@@ -220,12 +219,6 @@ bool request_task_resume(const TaskRef& task) noexcept;
  * @return 操作成功时返回 true，否则返回 false
  */
 bool request_task_resume_state(TaskState* state) noexcept;
-/**
- * @brief 查询调度器线程 ID；scheduler 为空时返回默认值
- * @param scheduler 执行异步操作的 IO 调度器
- * @return std::thread::id 操作结果
- */
-std::thread::id scheduler_thread_id(Scheduler* scheduler) noexcept;
 /**
  * @brief 标记任务完成并触发 continuation 清理
  * @param task 协程任务

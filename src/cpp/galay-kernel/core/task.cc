@@ -17,12 +17,19 @@
 #include "scheduler_dispatch.hpp"
 
 #include <limits>
+#include <thread>
 
 namespace galay::kernel
 {
 
 namespace
 {
+
+/** @brief 查询调度器线程 ID；scheduler 为空时返回默认值。 */
+std::thread::id scheduler_thread_id(Scheduler* scheduler) noexcept
+{
+    return scheduler ? scheduler->thread_id() : std::thread::id{};
+}
 
 thread_local Runtime* g_currentRuntime = nullptr;
 struct TaskStateFreeNode
@@ -542,11 +549,6 @@ TaskResumeResult request_task_resume_state_detailed(TaskState* state) noexcept
 bool request_task_resume_state(TaskState* state) noexcept
 {
     return request_task_resume_state_detailed(state) == TaskResumeResult::kAccepted;
-}
-
-std::thread::id scheduler_thread_id(Scheduler* scheduler) noexcept
-{
-    return scheduler ? scheduler->thread_id() : std::thread::id{};
 }
 
 void attach_task_continuation(const TaskRef& task, TaskRef next) noexcept
