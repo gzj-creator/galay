@@ -16,6 +16,8 @@
 #include "io_controller.hpp"
 #include "../common/timer_manager.hpp"
 #include <future>
+#include <type_traits>
+#include <utility>
 
 namespace galay::kernel {
 
@@ -207,41 +209,25 @@ protected:
     bool schedule_impl(TaskRef task) noexcept
     {
         if (!this->bind_task(task)) { return false; }
-        if (std::this_thread::get_id() == this->m_threadId) {
-            m_worker.schedule_local(std::move(task));
-            return true;
-        }
-        return wake_after_injection(m_worker.schedule_injected(std::move(task)));
+        return schedule_to_owner(std::move(task), SchedulePolicy::kNormal);
     }
 
     bool schedule_resume_impl(TaskRef task) noexcept
     {
         if (!this->bind_task(task)) { return false; }
-        if (std::this_thread::get_id() == this->m_threadId) {
-            m_worker.schedule_local(std::move(task));
-            return true;
-        }
-        return wake_after_injection(m_worker.schedule_resume(std::move(task)));
+        return schedule_to_owner(std::move(task), SchedulePolicy::kResume);
     }
 
     bool schedule_ready_entry_impl(detail::ReadyEntry& entry) noexcept
     {
         if (!entry.is_valid() || detail::ready_entry_scheduler(entry) != this) { return false; }
-        if (std::this_thread::get_id() == this->m_threadId) {
-            m_worker.schedule_local(std::move(entry));
-            return true;
-        }
-        return wake_after_injection(m_worker.schedule_injected(std::move(entry)));
+        return schedule_to_owner(std::move(entry), SchedulePolicy::kNormal);
     }
 
     bool schedule_deferred_impl(TaskRef task) noexcept
     {
         if (!this->bind_task(task)) { return false; }
-        if (std::this_thread::get_id() == this->m_threadId) {
-            m_worker.schedule_local_deferred(std::move(task));
-            return true;
-        }
-        return wake_after_injection(m_worker.schedule_injected(std::move(task)));
+        return schedule_to_owner(std::move(task), SchedulePolicy::kDeferred);
     }
 
     bool schedule_immediately_impl(TaskRef task) noexcept
@@ -314,12 +300,54 @@ protected:
     std::atomic<bool> m_running{false};
 
 private:
+    enum class SchedulePolicy {
+        kNormal,
+        kResume,
+        kDeferred,
+    };
+
+    template <typename Work>
+    bool schedule_to_owner(Work&& work, SchedulePolicy policy) noexcept
+    {
+        if (std::this_thread::get_id() == this->m_threadId) {
+            if (policy == SchedulePolicy::kDeferred) {
+                m_worker.schedule_local_deferred(std::forward<Work>(work));
+            } else {
+                m_worker.schedule_local(std::forward<Work>(work));
+            }
+            return true;
+        }
+        if constexpr (std::is_same_v<std::remove_cvref_t<Work>, TaskRef>) {
+            if (policy == SchedulePolicy::kResume) {
+                return wake_after_injection(
+                    m_worker.schedule_resume(std::forward<Work>(work)));
+            }
+        }
+        return wake_after_injection(
+            m_worker.schedule_injected(std::forward<Work>(work)));
+    }
+
     bool wake_after_injection(std::optional<bool> queue_was_empty) noexcept
     {
         if (!queue_was_empty) { return false; }
         // 返回值只表示唤醒是否合并；成功入队的任务始终已被接纳。
         (void)m_wake_coordinator.request_wake(*queue_was_empty, [this]() { notify(); });
         return true;
+    }
+
+    void drain_owner_work_after_stop(Derived& backend)
+    {
+        // Accept 的最小停机闭环；其他 operation 的统一 drain 属于后续阶段。
+        // 仍在 owner 上，local resume admission 可完成已接纳的等待者。
+        // io_uring 的 flush_backend 为空实现；epoll/kqueue 在此落地停机注册变化。
+        m_reactor.stop_accepts();
+        while (m_core.has_pending_work()) {
+            const auto ran = m_core.run_ready_pass(
+                [this](TaskRef& task) { this->resume(task); },
+                [this](size_t drained) { m_wake_coordinator.on_remote_collected(drained); });
+            if (ran == 0) { break; }
+            backend.flush_backend();
+        }
     }
 
     void event_loop()
@@ -331,39 +359,7 @@ private:
             [this](TaskRef& task) { this->resume(task); },
             [&backend]() { backend.poll_backend(); },
             [&backend]() { backend.flush_backend(); });
-#ifdef USE_EPOLL
-        // Accept 的最小停机闭环；其他 operation 的统一 drain 属于后续阶段。
-        // 仍在 owner 上，local resume admission 可完成已接纳的等待者。
-        m_reactor.stop_accepts();
-        while (m_core.has_pending_work()) {
-            const auto ran = m_core.run_ready_pass(
-                [this](TaskRef& task) { this->resume(task); },
-                [this](size_t drained) { m_wake_coordinator.on_remote_collected(drained); });
-            if (ran == 0) { break; }
-            backend.flush_backend();
-        }
-#endif
-#ifdef USE_IOURING
-        // io_uring has no readiness registration queue, but its persistent
-        // accept resource still needs an owner-side logical stop completion.
-        m_reactor.stop_accepts();
-        while (m_core.has_pending_work()) {
-            const auto ran = m_core.run_ready_pass(
-                [this](TaskRef& task) { this->resume(task); },
-                [this](size_t drained) { m_wake_coordinator.on_remote_collected(drained); });
-            if (ran == 0) { break; }
-        }
-#endif
-#ifdef USE_KQUEUE
-        m_reactor.stop_accepts();
-        while (m_core.has_pending_work()) {
-            const auto ran = m_core.run_ready_pass(
-                [this](TaskRef& task) { this->resume(task); },
-                [this](size_t drained) { m_wake_coordinator.on_remote_collected(drained); });
-            if (ran == 0) { break; }
-            backend.flush_backend();
-        }
-#endif
+        drain_owner_work_after_stop(backend);
     }
 };
 
