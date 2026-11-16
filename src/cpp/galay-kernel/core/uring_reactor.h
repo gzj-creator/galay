@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <expected>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace galay::kernel {

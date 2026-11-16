@@ -49,6 +49,7 @@ int main() {
 
     const std::vector<std::filesystem::path> required_files = {
         kernel_dir / "backend_reactor.h",
+        kernel_dir / "io_scheduler_adapter.hpp",
         kernel_dir / "kqueue_reactor.h",
         kernel_dir / "epoll_reactor.h",
         kernel_dir / "uring_reactor.h",
@@ -120,7 +121,7 @@ int main() {
     const std::vector<BackendBoundaryExpectation> boundary_expectations = {
         {
             kernel_dir / "epoll_scheduler.h",
-            kernel_dir / "epoll_scheduler.cc",
+            kernel_dir / "io_scheduler_adapter.hpp",
             {
                 "m_epoll_fd",
                 "m_event_fd",
@@ -140,7 +141,7 @@ int main() {
         },
         {
             kernel_dir / "uring_scheduler.h",
-            kernel_dir / "uring_scheduler.cc",
+            kernel_dir / "io_scheduler_adapter.hpp",
             {
                 "m_ring",
                 "m_event_fd",

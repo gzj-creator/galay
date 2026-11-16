@@ -60,12 +60,12 @@ int main() {
     const auto root = project_root();
     const auto epoll_header = root / "galay-kernel" / "core" / "epoll_reactor.h";
     const auto epoll_source = root / "galay-kernel" / "core" / "epoll_reactor.cc";
-    const auto epoll_scheduler = root / "galay-kernel" / "core" / "epoll_scheduler.cc";
+    const auto scheduler_adapter = root / "galay-kernel" / "core" / "io_scheduler_adapter.hpp";
 
     const std::string epoll_header_text = read_all(epoll_header);
     const std::string epoll_source_text = read_all(epoll_source);
-    const std::string epoll_scheduler_text = read_all(epoll_scheduler);
-    if (epoll_header_text.empty() || epoll_source_text.empty() || epoll_scheduler_text.empty()) {
+    const std::string scheduler_adapter_text = read_all(scheduler_adapter);
+    if (epoll_header_text.empty() || epoll_source_text.empty() || scheduler_adapter_text.empty()) {
         std::cerr << "[T106] failed to read epoll source files\n";
         return 1;
     }
@@ -116,9 +116,10 @@ int main() {
         return 1;
     }
 
-    if (!contains_text(epoll_scheduler_text, "void EpollSchedulerBackend::flush_backend()") ||
-        !contains_text(epoll_scheduler_text, "(void)m_reactor.flush_pending_changes();")) {
-        std::cerr << "[T106] expected EpollScheduler event loop to flush pending changes post-pass\n";
+    if (!contains_text(scheduler_adapter_text, "void flush_backend()") ||
+        !contains_text(scheduler_adapter_text, "Kind != IOSchedulerBackendKind::kIOUring") ||
+        !contains_text(scheduler_adapter_text, "(void)m_reactor.flush_pending_changes();")) {
+        std::cerr << "[T106] expected shared scheduler adapter to flush pending changes post-pass\n";
         return 1;
     }
 

@@ -214,9 +214,6 @@ set_tests_properties(kernel.prefetch PROPERTIES TIMEOUT 120 PROCESSORS 2)
 foreach(CONFIG_PRESET IN ITEMS high_performance low_latency)
     set(CONFIG_TARGET galay-kernel-config-${CONFIG_PRESET})
     add_library(${CONFIG_TARGET} OBJECT
-        ${PROJECT_SOURCE_DIR}/src/cpp/galay-kernel/core/epoll_scheduler.cc
-        ${PROJECT_SOURCE_DIR}/src/cpp/galay-kernel/core/uring_scheduler.cc
-        ${PROJECT_SOURCE_DIR}/src/cpp/galay-kernel/core/kqueue_scheduler.cc
         t192_scheduler_config.cc)
     target_link_libraries(${CONFIG_TARGET} PRIVATE galay::kernel)
     if(CONFIG_PRESET STREQUAL "high_performance")

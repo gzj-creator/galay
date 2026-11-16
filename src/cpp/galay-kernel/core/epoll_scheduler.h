@@ -8,14 +8,17 @@
 #define GALAY_KERNEL_EPOLL_SCHEDULER_H
 
 #include "epoll_reactor.h"
-#include "io_scheduler_base.hpp"
-#include "../common/scheduler_config.h"
+#include "io_scheduler_adapter.hpp"
 
 #ifdef USE_EPOLL
 namespace galay::kernel {
 
 /** @brief 同一后端所有配置共享的调度与 IO 注册实现；仅允许派生配置类型构造。 */
-class EpollSchedulerBackend : public IOSchedulerBase<EpollSchedulerBackend, EpollReactor>
+class EpollSchedulerBackend
+    : public detail::IOSchedulerAdapter<
+          EpollSchedulerBackend,
+          EpollReactor,
+          detail::IOSchedulerBackendKind::kEpoll>
 {
 public:
     /**
@@ -30,33 +33,20 @@ public:
     void timeout_accept(AcceptAwaitable& awaitable) { m_reactor.timeout_accept(awaitable); }
 
 protected:
-    explicit EpollSchedulerBackend(int max_events, int batch_size);
+    using Adapter = detail::IOSchedulerAdapter<
+        EpollSchedulerBackend,
+        EpollReactor,
+        detail::IOSchedulerBackendKind::kEpoll>;
+    using Adapter::Adapter;
     /** @brief 在线程退出后再析构 reactor 和队列；调用前须关闭借用者的异步源。 */
-    ~EpollSchedulerBackend();
-
-private:
-    friend class IOSchedulerBase<EpollSchedulerBackend, EpollReactor>;
-    void poll_backend();
-    void flush_backend();
+    ~EpollSchedulerBackend() = default;
 };
 
 /** @brief 配置模板只负责构造容量；公共借用入口始终分派到同一真实后端基类。 */
 template <typename Config = DefaultIOSchedulerConfig>
-class EpollSchedulerT : public EpollSchedulerBackend
+class EpollSchedulerT
+    : public detail::IOSchedulerMaxEventsAdapter<EpollSchedulerBackend, Config>
 {
-public:
-    using ConfigType = Config;
-
-    explicit EpollSchedulerT()
-        : EpollSchedulerBackend(
-            static_cast<int>(Config::kMaxEvents), static_cast<int>(Config::kBatchSize))
-    {}
-
-    EpollSchedulerT(const EpollSchedulerT&) = delete;
-    EpollSchedulerT& operator=(const EpollSchedulerT&) = delete;
-
-    static constexpr size_t max_events() noexcept { return Config::kMaxEvents; }
-    static constexpr size_t batch_size() noexcept { return Config::kBatchSize; }
 };
 
 /** @brief 默认 epoll 调度器 */

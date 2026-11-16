@@ -8,43 +8,33 @@
 #define GALAY_KERNEL_KQUEUE_SCHEDULER_H
 
 #include "kqueue_reactor.h"
-#include "io_scheduler_base.hpp"
-#include "../common/scheduler_config.h"
+#include "io_scheduler_adapter.hpp"
 
 #ifdef USE_KQUEUE
 namespace galay::kernel {
 
 /** @brief 同一后端所有配置共享的调度与 IO 注册实现；仅允许派生配置类型构造。 */
-class KqueueSchedulerBackend : public IOSchedulerBase<KqueueSchedulerBackend, KqueueReactor>
+class KqueueSchedulerBackend
+    : public detail::IOSchedulerAdapter<
+          KqueueSchedulerBackend,
+          KqueueReactor,
+          detail::IOSchedulerBackendKind::kKqueue>
 {
 protected:
-    explicit KqueueSchedulerBackend(int max_events, int batch_size);
+    using Adapter = detail::IOSchedulerAdapter<
+        KqueueSchedulerBackend,
+        KqueueReactor,
+        detail::IOSchedulerBackendKind::kKqueue>;
+    using Adapter::Adapter;
     /** @brief 在线程退出后再析构 reactor 和队列；调用前须关闭借用者的异步源。 */
-    ~KqueueSchedulerBackend();
-
-private:
-    friend class IOSchedulerBase<KqueueSchedulerBackend, KqueueReactor>;
-    void poll_backend();
-    void flush_backend();
+    ~KqueueSchedulerBackend() = default;
 };
 
 /** @brief 配置模板只负责构造容量；公共借用入口始终分派到同一真实后端基类。 */
 template <typename Config = DefaultIOSchedulerConfig>
-class KqueueSchedulerT : public KqueueSchedulerBackend
+class KqueueSchedulerT
+    : public detail::IOSchedulerMaxEventsAdapter<KqueueSchedulerBackend, Config>
 {
-public:
-    using ConfigType = Config;
-
-    explicit KqueueSchedulerT()
-        : KqueueSchedulerBackend(
-            static_cast<int>(Config::kMaxEvents), static_cast<int>(Config::kBatchSize))
-    {}
-
-    KqueueSchedulerT(const KqueueSchedulerT&) = delete;
-    KqueueSchedulerT& operator=(const KqueueSchedulerT&) = delete;
-
-    static constexpr size_t max_events() noexcept { return Config::kMaxEvents; }
-    static constexpr size_t batch_size() noexcept { return Config::kBatchSize; }
 };
 
 /** @brief 默认 kqueue 调度器 */

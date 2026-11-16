@@ -30,6 +30,7 @@ class IOSchedulerBase : public SchedulerBase<Derived, kIOScheduler>
     friend class SchedulerBase<Derived, kIOScheduler>;
     friend struct SchedulerTestAccess;
 
+protected:
     explicit IOSchedulerBase(int reactor_capacity, int batch_size)
         : m_worker(static_cast<size_t>(batch_size))
         , m_wake_coordinator(m_sleeping, m_wakeup_pending)

@@ -17,6 +17,7 @@
 
 ### Changed
 
+- 将 epoll、kqueue、io_uring 调度器的构造/析构、平台 poll 超时转换、readiness flush 和配置容量入口收敛到公共 `detail::IOSchedulerAdapter` 模板，删除三个只承载相同生命周期的后端 `.cc`；保留 kqueue 与 epoll/io_uring 的 accept 接口差异，以及 io_uring 不执行 readiness flush 的语义。同步为 `uring_reactor.h` 补齐 `std::unordered_map` 的直接头文件依赖。
 - 合并 IO 调度器四个任务投递入口的 owner/跨线程分派骨架，保留恢复任务的专用无分配队列和延迟任务的 FIFO 语义；将 epoll、kqueue、io_uring 三份停止排空循环收敛为一个 helper，io_uring 继续以空 `flush_backend()` 跳过 readiness 提交。
 - 将单线程与多线程时间轮重复的五层容量、层选择、槽位、级联边界和绝对到期 tick 计算合并到 `detail::TimerWheelGeometry`；两套管理器继续各自维护定时器队列、计数和 tick 协议，单线程级联的向下取整与多线程的向上取整语义保持不变。新增几何边界测试并同步模块 prelude 与安装布局。
 - 合并 `task.h` 中 `void` 与有返回值类型的重复骨架：`Task<T>` 统一承载 `Task<void>` 的等待、移动和生命周期语义，`then()` 通过 `requires std::is_void_v<T>` 仅向 `void` 任务暴露；`JoinHandle<void>` 复用通用结果句柄；`TaskPromise` 的帧分配、返回对象、初始/最终挂起、异常处理和状态清理移入 CRTP 基类，两个 promise 特化只保留 `return_value` / `return_void`。公开调用方式、协程执行与等待语义保持不变。
@@ -42,6 +43,7 @@
 
 ### Validation
 
+- 阶段 7 第 5 项的 Release 全量构建通过 645/645 步；235 项内核 CTest 无失败，其中 3 项按环境跳过、2 项已知缺陷用例禁用；8 项配置门禁、6 项脚本门禁、io_uring 后端干净编译和 `git diff --check` 通过。适配层相关 7 项调度器测试在 TSan 下全部通过，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 7 第 6 项的 Release 全量增量构建通过；235 项内核 CTest 无失败，其中 3 项按环境跳过、2 项已知缺陷用例禁用；调度器投递与停止路径 7 项定向用例、8 项配置门禁、6 项脚本门禁及 `git diff --check` 通过。TSan 使用 `setarch x86_64 -R` 运行 `epollacc`、`followpass`、`wokenown`、`scheduler_static_dispatch`、`runtime_pending_accept_lsan` 5/5 通过，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 7 第 4 项的 Release 全量增量构建通过；235 项内核 CTest 中 233 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败。8 项配置门禁、6 项脚本门禁、模块 prelude 检查、安装 include 布局和 `git diff --check` 通过；TSan 下 `wheel`、`timer_deadline_after_idle` 与新增的 `timer_wheel_geometry` 3/3 通过，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 7 第 1 项最终调整后的 Release 增量构建完成 892 步。234 项内核 CTest 首轮有 1 项定时边界用例在并行负载下提前 1 ms 触发，其余 228 项通过、3 项按环境跳过、2 项已知缺陷用例禁用；该用例随后连续 20 次复跑全部通过。6 项脚本门禁、8 项配置门禁、`t52` 的 `then()` 类型边界和 `git diff --check` 通过。最终调整后重新构建的 ASan/UBSan/LSan 与 TSan 各六项定向回归（`joinhandle`、`then_runtime`、`then_surface`、`await_task`、`taskapi`、`coroutine_frame_allocator`）全部通过；TSan 使用 `setarch x86_64 -R`，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
