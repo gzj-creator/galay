@@ -56,17 +56,19 @@ struct TaskResultStorageTraits
     static void destroy(TaskState& state) noexcept
     {
         if constexpr (kInline) {
-            if (state.m_result_kind == TaskState::ResultStorageKind::Inline) {
+            if (state.result_storage_kind() ==
+                TaskState::ResultStorageKind::Inline) {
                 std::destroy_at(reinterpret_cast<T*>(state.result_storage()));
             }
         } else {
-            if (state.m_result_kind == TaskState::ResultStorageKind::Heap) {
+            if (state.result_storage_kind() ==
+                TaskState::ResultStorageKind::Heap) {
                 auto*& ptr = *reinterpret_cast<T**>(state.result_storage());
                 delete ptr;
                 ptr = nullptr;
             }
         }
-        state.m_result_kind = TaskState::ResultStorageKind::Empty;
+        state.set_result_storage_kind(TaskState::ResultStorageKind::Empty);
     }
 
     template <typename U>
@@ -74,17 +76,18 @@ struct TaskResultStorageTraits
     {
         if constexpr (kInline) {
             std::construct_at(reinterpret_cast<T*>(state.result_storage()), std::forward<U>(value));
-            state.m_result_kind = TaskState::ResultStorageKind::Inline;
+            state.set_result_storage_kind(TaskState::ResultStorageKind::Inline);
         } else {
             *reinterpret_cast<T**>(state.result_storage()) = new T(std::forward<U>(value));
-            state.m_result_kind = TaskState::ResultStorageKind::Heap;
+            state.set_result_storage_kind(TaskState::ResultStorageKind::Heap);
         }
     }
 
     static std::expected<T, TaskResultError> try_take(TaskState& state)
     {
         if constexpr (kInline) {
-            if (state.m_result_kind != TaskState::ResultStorageKind::Inline) {
+            if (state.result_storage_kind() !=
+                TaskState::ResultStorageKind::Inline) {
                 return std::unexpected(TaskResultError(TaskResultErrorCode::kResultUnavailable));
             }
             T value = std::move(*reinterpret_cast<T*>(state.result_storage()));
@@ -92,13 +95,14 @@ struct TaskResultStorageTraits
             return value;
         }
 
-        if (state.m_result_kind != TaskState::ResultStorageKind::Heap) {
+        if (state.result_storage_kind() !=
+            TaskState::ResultStorageKind::Heap) {
             return std::unexpected(TaskResultError(TaskResultErrorCode::kResultUnavailable));
         }
         auto*& ptr = *reinterpret_cast<T**>(state.result_storage());
         auto* result = ptr;
         ptr = nullptr;
-        state.m_result_kind = TaskState::ResultStorageKind::Empty;
+        state.set_result_storage_kind(TaskState::ResultStorageKind::Empty);
         std::unique_ptr<T> holder(result);
         return std::move(*holder);
     }
@@ -133,14 +137,14 @@ bool store_task_result(TaskState* state, U&& value)
 inline void store_task_error(const TaskRef& task, TaskResultError error) noexcept
 {
     if (auto* state = task.state()) {
-        state->m_result_error = std::move(error);
+        state->set_result_error(std::move(error));
     }
 }
 
 inline void store_task_error(TaskState* state, TaskResultError error) noexcept
 {
     if (state != nullptr) {
-        state->m_result_error = std::move(error);
+        state->set_result_error(std::move(error));
     }
 }
 
@@ -155,10 +159,10 @@ std::expected<T, TaskResultError> try_take_task_result(const TaskRef& task)
     if (!wait_task_completion(task)) {
         return std::unexpected(TaskResultError(TaskResultErrorCode::kInvalidState));
     }
-    if (state->m_result_error.has_value()) {
-        return std::unexpected(*state->m_result_error);
+    if (state->has_result_error()) {
+        return std::unexpected(state->result_error());
     }
-    if (state->m_result_consumed.exchange(true, std::memory_order_acq_rel)) {
+    if (!state->try_mark_result_consumed()) {
         return std::unexpected(TaskResultError(TaskResultErrorCode::kAlreadyConsumed));
     }
 

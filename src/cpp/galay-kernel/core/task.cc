@@ -390,7 +390,8 @@ TaskState::~TaskState()
     // 已完成的 frame 会由 final_suspend() == suspend_never 销毁；只有未完成且
     // 尚未提交的 frame 才需要执行这条显式清理路径。
     destroy_task_frame_for_state_teardown(this);
-    if (m_destroy_result != nullptr && m_result_kind != ResultStorageKind::Empty) {
+    if (m_destroy_result != nullptr &&
+        result_storage_kind() != ResultStorageKind::Empty) {
         m_destroy_result(*this);
     }
 }

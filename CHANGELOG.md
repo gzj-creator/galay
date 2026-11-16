@@ -17,6 +17,7 @@
 
 ### Changed
 
+- 将 `TaskState` 的结果存储形态、任务错误和结果消费标志合并到单个原子状态字节；错误码与存储形态继续在同一任务完成发布前写入，消费资格仍通过原子操作只授予一个 `join` / `co_await` 调用方。删除对 `<optional>` 的直接依赖并新增全部 6 种错误码及 8 个消费者竞争回归；`TaskState` 在本机仍为 128 字节、64 字节对齐，不据此声称尺寸缩减或性能改善。
 - 将 MySQL 与 Postgres 连接池 acquire/lease awaitable 中重复的创建、排队、唤醒和租约状态机收敛到 `galay-utils/common/connection_pool_awaitable.hpp`，协议差异通过 MySQL/Postgres traits 注入；删除两个 `pool_awaitable.inl`，保留现有错误文本、建连失败回收、排队等待和返回值语义，并同步模块 prelude 与安装布局。
 - 将 MPMC、MPSC、SPSC 六个通道实现中重复的平台 CPU pause、指数退避和 waiter 状态定义收敛到 `concurrency/detail/channel_cpu_pause.h`、`channel_backoff.h` 与 `channel_waiter_state.h`；统一使用九态 `ChannelWaiterState` 超集和分级 `ChannelBackoff`，保留 Apple AArch64 有界/MPMC 无界通道的 ISB 以及 MPSC/SPSC 无界通道的 YIELD 平台行为，删除旧内部枚举、退避类、重复 intrinsics include 和不再需要的 `<thread>` 依赖。行为保持不变。
 - 将 `awaitable.h` 中重复的 `ReadvIOContext` / `WritevIOContext` 实现收敛为 `detail::VectorIOContext<Event>`，保留两个公开源码名称，并统一借用计数校验、参数错误结果和 io_uring `msghdr` 初始化；`awaitable.inl` 的 21 处完成结果尾部收敛到公共 helper，继续区分需重试的 `kNotReady` 与最终结果。
@@ -46,6 +47,7 @@
 
 ### Validation
 
+- 阶段 4d 的 Release 全目标构建通过 886/886 步；208 项已注册内核 CTest 中 206 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；新增结果状态、结果存储、任务生命周期和完成等待 4 项 TSan 定向测试通过，8 项配置门禁、6 项脚本门禁、旧字段引用检查及 `git diff --check` 通过。TSan 构建仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 7 第 9 项的模块化 Release 构建通过；MySQL/Postgres 36 项 CTest 中 20 项通过、16 项因未配置数据库而是跳过、0 失败；安装 include 布局、内核内部相对 include、模块 prelude 和样式 4 项门禁通过；最终增量构建、`git diff --check` 及 MySQL/Postgres 中旧 `pool_awaitable.inl` 引用检查通过。
 - 阶段 7 第 8 项的最终清理后 Release 增量构建通过；235 个已注册内核 CTest 中 230 项通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；通道与拓扑相关 17/17 项 TSan 测试、8 项配置门禁、6 项脚本门禁和 `git diff --check` 通过。TSan 构建仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 7 第 7 项的 Release 全量构建通过 588/588 步；235 个已注册内核 CTest 中 230 项通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；8 项配置门禁、6 项脚本门禁、io_uring 后端干净编译及最终增量复编译和 `git diff --check` 通过。最终源码上的 readv/writev、sequence 与 socket 路径 8 项 TSan 用例通过，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。

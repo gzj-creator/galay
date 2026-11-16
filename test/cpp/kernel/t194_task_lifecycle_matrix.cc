@@ -50,9 +50,11 @@ bool verify() {
             } else {
                 if (!owner.state()->is_done() || owner.state()->m_handle || destroyed != 1) { return false; }
                 if constexpr (std::is_same_v<T, Large>) {
-                    if (owner.state()->m_result_kind != TaskState::ResultStorageKind::Heap) { return false; }
+                    if (owner.state()->result_storage_kind() !=
+                        TaskState::ResultStorageKind::Heap) { return false; }
                 } else if constexpr (std::is_same_v<T, int>) {
-                    if (owner.state()->m_result_kind != TaskState::ResultStorageKind::Inline) { return false; }
+                    if (owner.state()->result_storage_kind() !=
+                        TaskState::ResultStorageKind::Inline) { return false; }
                 }
             }
         }
