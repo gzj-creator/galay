@@ -24,6 +24,9 @@
 #if __has_include("../../galay-utils/buffer/type_ring_buffer.hpp")
 #include "../../galay-utils/buffer/type_ring_buffer.hpp"
 #endif
+#if __has_include("../../galay-utils/common/cache_line.hpp")
+#include "../../galay-utils/common/cache_line.hpp"
+#endif
 #if __has_include("../../galay-utils/common/defn.hpp")
 #include "../../galay-utils/common/defn.hpp"
 #endif
@@ -146,9 +149,6 @@
 #endif
 #if __has_include(<optional>)
 #include <optional>
-#endif
-#if __has_include(<random>)
-#include <random>
 #endif
 #if __has_include(<span>)
 #include <span>

@@ -19,6 +19,7 @@
 #define GALAY_KERNEL_THREAD_SAFE_TIMER_MANAGER_HPP
 
 #include "timer.hpp"
+#include "timer_wheel.hpp"
 #include "../../galay-utils/common/defn.hpp"
 #include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 #include <cstddef>
@@ -49,24 +50,26 @@ namespace galay::kernel
  * - 第5层：64个槽，每槽 18小时，覆盖 18小时-48天
  */
 class ThreadSafeTimerManager
+    : public detail::TimerWheelGeometry
 {
 public:
     using ptr = std::shared_ptr<ThreadSafeTimerManager>;
     using TimerList = std::list<Timer::ptr>;
+    using Wheel = detail::TimerWheelGeometry;
 
     // 时间轮配置
-    static constexpr size_t WHEEL1_SIZE = 256;
-    static constexpr size_t WHEEL2_SIZE = 64;
-    static constexpr size_t WHEEL3_SIZE = 64;
-    static constexpr size_t WHEEL4_SIZE = 64;
-    static constexpr size_t WHEEL5_SIZE = 64;
+    static constexpr size_t WHEEL1_SIZE = Wheel::kWheel1Size;
+    static constexpr size_t WHEEL2_SIZE = Wheel::kWheel2Size;
+    static constexpr size_t WHEEL3_SIZE = Wheel::kWheel3Size;
+    static constexpr size_t WHEEL4_SIZE = Wheel::kWheel4Size;
+    static constexpr size_t WHEEL5_SIZE = Wheel::kWheel5Size;
 
     // 每层的时间跨度（以 tick 为单位）
-    static constexpr uint64_t WHEEL1_SPAN = WHEEL1_SIZE;
-    static constexpr uint64_t WHEEL2_SPAN = WHEEL1_SPAN * WHEEL2_SIZE;
-    static constexpr uint64_t WHEEL3_SPAN = WHEEL2_SPAN * WHEEL3_SIZE;
-    static constexpr uint64_t WHEEL4_SPAN = WHEEL3_SPAN * WHEEL4_SIZE;
-    static constexpr uint64_t WHEEL5_SPAN = WHEEL4_SPAN * WHEEL5_SIZE;
+    static constexpr uint64_t WHEEL1_SPAN = Wheel::kWheel1Span;
+    static constexpr uint64_t WHEEL2_SPAN = Wheel::kWheel2Span;
+    static constexpr uint64_t WHEEL3_SPAN = Wheel::kWheel3Span;
+    static constexpr uint64_t WHEEL4_SPAN = Wheel::kWheel4Span;
+    static constexpr uint64_t WHEEL5_SPAN = Wheel::kWheel5Span;
 
     // 批量处理大小
     static constexpr size_t BATCH_SIZE = 256;
@@ -245,16 +248,16 @@ public:
                m_wheelSize.load(std::memory_order_relaxed) > 0) {
 
             // 级联处理
-            if ((m_currentTick & (WHEEL1_SIZE - 1)) == 0 && m_currentTick > 0) {
+            if (Wheel::is_cascade_tick(0, m_currentTick)) {
                 cascade_wheel2();
             }
-            if ((m_currentTick & (WHEEL2_SPAN - 1)) == 0 && m_currentTick > 0) {
+            if (Wheel::is_cascade_tick(1, m_currentTick)) {
                 cascade_wheel3();
             }
-            if ((m_currentTick & (WHEEL3_SPAN - 1)) == 0 && m_currentTick > 0) {
+            if (Wheel::is_cascade_tick(2, m_currentTick)) {
                 cascade_wheel4();
             }
-            if ((m_currentTick & (WHEEL4_SPAN - 1)) == 0 && m_currentTick > 0) {
+            if (Wheel::is_cascade_tick(3, m_currentTick)) {
                 cascade_wheel5();
             }
 
@@ -324,7 +327,7 @@ private:
 
         uint64_t remainingNs = expireTimeNs - nowNs;
         // Round up so a timer is never placed in a slot before its deadline.
-        uint64_t delayTicks = (remainingNs + m_tickDuration - 1) / m_tickDuration;
+        uint64_t delayTicks = Wheel::ceil_ticks(remainingNs, m_tickDuration);
 
         // 检查是否超出最大范围
         if (delayTicks >= WHEEL5_SPAN) {
@@ -333,25 +336,11 @@ private:
         }
 
         // 计算绝对到期 tick
-        uint64_t absoluteTick = currentTickFromStart + delayTicks;
+        uint64_t absoluteTick = Wheel::expiry_tick(currentTickFromStart, delayTicks);
 
-        // 根据延迟 tick 数选择合适的层
-        if (delayTicks < WHEEL1_SPAN) {
-            size_t slot = absoluteTick & (WHEEL1_SIZE - 1);
-            m_wheel1[slot].push_back(std::move(timer));
-        } else if (delayTicks < WHEEL2_SPAN) {
-            size_t slot = (absoluteTick >> 8) & (WHEEL2_SIZE - 1);
-            m_wheel2[slot].push_back(std::move(timer));
-        } else if (delayTicks < WHEEL3_SPAN) {
-            size_t slot = (absoluteTick >> 14) & (WHEEL3_SIZE - 1);
-            m_wheel3[slot].push_back(std::move(timer));
-        } else if (delayTicks < WHEEL4_SPAN) {
-            size_t slot = (absoluteTick >> 20) & (WHEEL4_SIZE - 1);
-            m_wheel4[slot].push_back(std::move(timer));
-        } else {
-            size_t slot = (absoluteTick >> 26) & (WHEEL5_SIZE - 1);
-            m_wheel5[slot].push_back(std::move(timer));
-        }
+        insert_timer(Wheel::layer_for_delay(delayTicks),
+                     absoluteTick,
+                     std::move(timer));
 
         m_wheelSize.fetch_add(1, std::memory_order_relaxed);
     }
@@ -362,7 +351,7 @@ private:
      */
     void process_wheel1()
     {
-        size_t idx = m_currentTick & (WHEEL1_SIZE - 1);
+        size_t idx = Wheel::slot_index(0, m_currentTick);
         auto& slot = m_wheel1[idx];
 
         for (auto& timer : slot) {
@@ -380,25 +369,25 @@ private:
      */
     void cascade_wheel2()
     {
-        size_t idx = (m_currentTick >> 8) & (WHEEL2_SIZE - 1);
+        size_t idx = Wheel::slot_index(1, m_currentTick);
         cascade_slot(m_wheel2[idx]);
     }
 
     void cascade_wheel3()
     {
-        size_t idx = (m_currentTick >> 14) & (WHEEL3_SIZE - 1);
+        size_t idx = Wheel::slot_index(2, m_currentTick);
         cascade_slot(m_wheel3[idx]);
     }
 
     void cascade_wheel4()
     {
-        size_t idx = (m_currentTick >> 20) & (WHEEL4_SIZE - 1);
+        size_t idx = Wheel::slot_index(3, m_currentTick);
         cascade_slot(m_wheel4[idx]);
     }
 
     void cascade_wheel5()
     {
-        size_t idx = (m_currentTick >> 26) & (WHEEL5_SIZE - 1);
+        size_t idx = Wheel::slot_index(4, m_currentTick);
         cascade_slot(m_wheel5[idx]);
     }
 
@@ -432,31 +421,42 @@ private:
 
             uint64_t remainingNs = expireTimeNs - nowNs;
             // Preserve the deadline when cascading between wheel levels.
-            uint64_t remainingTicks =
-                (remainingNs + m_tickDuration - 1) / m_tickDuration;
+            uint64_t remainingTicks = Wheel::ceil_ticks(remainingNs, m_tickDuration);
 
-            uint64_t absoluteTick = m_currentTick + remainingTicks;
+            uint64_t absoluteTick = Wheel::expiry_tick(m_currentTick, remainingTicks);
 
             // 重新分配到合适的层（不增加 wheel_size，因为已经在轮中）
-            if (remainingTicks < WHEEL1_SPAN) {
-                size_t slot_idx = absoluteTick & (WHEEL1_SIZE - 1);
-                m_wheel1[slot_idx].push_back(std::move(timer));
-            } else if (remainingTicks < WHEEL2_SPAN) {
-                size_t slot_idx = (absoluteTick >> 8) & (WHEEL2_SIZE - 1);
-                m_wheel2[slot_idx].push_back(std::move(timer));
-            } else if (remainingTicks < WHEEL3_SPAN) {
-                size_t slot_idx = (absoluteTick >> 14) & (WHEEL3_SIZE - 1);
-                m_wheel3[slot_idx].push_back(std::move(timer));
-            } else if (remainingTicks < WHEEL4_SPAN) {
-                size_t slot_idx = (absoluteTick >> 20) & (WHEEL4_SIZE - 1);
-                m_wheel4[slot_idx].push_back(std::move(timer));
-            } else if (remainingTicks < WHEEL5_SPAN) {
-                size_t slot_idx = (absoluteTick >> 26) & (WHEEL5_SIZE - 1);
-                m_wheel5[slot_idx].push_back(std::move(timer));
+            if (remainingTicks < WHEEL5_SPAN) {
+                insert_timer(Wheel::layer_for_delay(remainingTicks),
+                             absoluteTick,
+                             std::move(timer));
             } else {
                 // 超出范围，丢弃
                 m_wheelSize.fetch_sub(1, std::memory_order_relaxed);
             }
+        }
+    }
+
+    /**
+     * @brief 把定时器写入指定层的槽位
+     * @param layer 零基层号
+     * @param absolute_tick 绝对到期 tick
+     * @param timer 要写入的定时器
+     * @return 无返回值
+     */
+    void insert_timer(size_t layer, uint64_t absolute_tick, Timer::ptr timer)
+    {
+        const size_t slot = Wheel::slot_index(layer, absolute_tick);
+        if (layer == 0) {
+            m_wheel1[slot].push_back(std::move(timer));
+        } else if (layer == 1) {
+            m_wheel2[slot].push_back(std::move(timer));
+        } else if (layer == 2) {
+            m_wheel3[slot].push_back(std::move(timer));
+        } else if (layer == 3) {
+            m_wheel4[slot].push_back(std::move(timer));
+        } else {
+            m_wheel5[slot].push_back(std::move(timer));
         }
     }
 

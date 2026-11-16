@@ -165,6 +165,9 @@
 #if __has_include("../../galay-kernel/common/timer_manager_mt.hpp")
 #include "../../galay-kernel/common/timer_manager_mt.hpp"
 #endif
+#if __has_include("../../galay-kernel/common/timer_wheel.hpp")
+#include "../../galay-kernel/common/timer_wheel.hpp"
+#endif
 #if __has_include("../../galay-kernel/concurrency/mpmc/bounded_channel.h")
 #include "../../galay-kernel/concurrency/mpmc/bounded_channel.h"
 #endif
@@ -222,6 +225,9 @@
 #if __has_include("../../galay-kernel/core/operation_state.hpp")
 #include "../../galay-kernel/core/operation_state.hpp"
 #endif
+#if __has_include("../../galay-kernel/core/ready_entry.h")
+#include "../../galay-kernel/core/ready_entry.h"
+#endif
 #if __has_include("../../galay-kernel/core/runtime.h")
 #include "../../galay-kernel/core/runtime.h"
 #endif
@@ -239,6 +245,9 @@
 #endif
 #if __has_include("../../galay-kernel/core/task.h")
 #include "../../galay-kernel/core/task.h"
+#endif
+#if __has_include("../../galay-kernel/core/task_ref.h")
+#include "../../galay-kernel/core/task_ref.h"
 #endif
 #if __has_include("../../galay-kernel/core/timeout.hpp")
 #include "../../galay-kernel/core/timeout.hpp"
@@ -293,6 +302,9 @@
 #endif
 #if __has_include("../../galay-utils/buffer/ring_buffer.hpp")
 #include "../../galay-utils/buffer/ring_buffer.hpp"
+#endif
+#if __has_include("../../galay-utils/common/cache_line.hpp")
+#include "../../galay-utils/common/cache_line.hpp"
 #endif
 #if __has_include("../../galay-utils/common/defn.hpp")
 #include "../../galay-utils/common/defn.hpp"
@@ -462,9 +474,6 @@
 #if __has_include(<pthread.h>)
 #include <pthread.h>
 #endif
-#if __has_include(<random>)
-#include <random>
-#endif
 #if __has_include(<sched.h>)
 #include <sched.h>
 #endif
@@ -524,6 +533,9 @@
 #endif
 #if __has_include(<time.h>)
 #include <time.h>
+#endif
+#if __has_include(<tuple>)
+#include <tuple>
 #endif
 #if __has_include(<type_traits>)
 #include <type_traits>

@@ -17,6 +17,7 @@
 #define GALAY_KERNEL_TIMERMANAGER_HPP
 
 #include "timer.hpp"
+#include "timer_wheel.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <list>
@@ -49,24 +50,26 @@ namespace galay::kernel
      * @note 多线程场景请使用 ThreadSafeTimerManager（timer_manager_mt.hpp）。
      */
     class TimingWheelTimerManager
+        : public detail::TimerWheelGeometry
     {
     public:
         using ptr = std::shared_ptr<TimingWheelTimerManager>;
         using TimerList = std::list<Timer::ptr>;
+        using Wheel = detail::TimerWheelGeometry;
 
         // 时间轮配置
-        static constexpr size_t WHEEL1_SIZE = 256;  ///< 第1层：256 个槽
-        static constexpr size_t WHEEL2_SIZE = 64;   ///< 第2层：64 个槽
-        static constexpr size_t WHEEL3_SIZE = 64;   ///< 第3层：64 个槽
-        static constexpr size_t WHEEL4_SIZE = 64;   ///< 第4层：64 个槽
-        static constexpr size_t WHEEL5_SIZE = 64;   ///< 第5层：64 个槽
+        static constexpr size_t WHEEL1_SIZE = Wheel::kWheel1Size;  ///< 第1层：256 个槽
+        static constexpr size_t WHEEL2_SIZE = Wheel::kWheel2Size;  ///< 第2层：64 个槽
+        static constexpr size_t WHEEL3_SIZE = Wheel::kWheel3Size;  ///< 第3层：64 个槽
+        static constexpr size_t WHEEL4_SIZE = Wheel::kWheel4Size;  ///< 第4层：64 个槽
+        static constexpr size_t WHEEL5_SIZE = Wheel::kWheel5Size;  ///< 第5层：64 个槽
 
         // 每层的时间跨度（以 tick 为单位）
-        static constexpr uint64_t WHEEL1_SPAN = WHEEL1_SIZE;                           ///< 256 ticks
-        static constexpr uint64_t WHEEL2_SPAN = WHEEL1_SPAN * WHEEL2_SIZE;             ///< 16384 ticks
-        static constexpr uint64_t WHEEL3_SPAN = WHEEL2_SPAN * WHEEL3_SIZE;             ///< 1048576 ticks
-        static constexpr uint64_t WHEEL4_SPAN = WHEEL3_SPAN * WHEEL4_SIZE;             ///< 67108864 ticks
-        static constexpr uint64_t WHEEL5_SPAN = WHEEL4_SPAN * WHEEL5_SIZE;             ///< 4294967296 ticks
+        static constexpr uint64_t WHEEL1_SPAN = Wheel::kWheel1Span;  ///< 256 ticks
+        static constexpr uint64_t WHEEL2_SPAN = Wheel::kWheel2Span;  ///< 16384 ticks
+        static constexpr uint64_t WHEEL3_SPAN = Wheel::kWheel3Span;  ///< 1048576 ticks
+        static constexpr uint64_t WHEEL4_SPAN = Wheel::kWheel4Span;  ///< 67108864 ticks
+        static constexpr uint64_t WHEEL5_SPAN = Wheel::kWheel5Span;  ///< 4294967296 ticks
 
         /**
          * @brief 以可配置的 tick 间隔构造时间轮管理器
@@ -134,40 +137,19 @@ namespace galay::kernel
             uint64_t remainingNs = expireTimeNs - nowNs;
 
             // 向上取整到下一个 tick，避免边界定时器因少量调度开销被立即触发。
-            uint64_t delayTicks = (remainingNs + m_tickDuration - 1) / m_tickDuration;
+            uint64_t delayTicks = Wheel::ceil_ticks(remainingNs, m_tickDuration);
 
             // 计算绝对到期 tick（使用与 tick() 相同的计算方式）
             uint64_t elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 now - m_startTime).count();
             uint64_t currentTickFromStart = elapsed / m_tickDuration;
-            uint64_t absoluteTick = currentTickFromStart + delayTicks;
+            uint64_t absoluteTick = Wheel::expiry_tick(currentTickFromStart, delayTicks);
             // 检查是否超出最大范围
             if (delayTicks >= WHEEL5_SPAN) {
                 return false;  // 超出范围
             }
 
-            // 根据延迟 tick 数选择合适的层
-            if (delayTicks < WHEEL1_SPAN) {
-                // 第1层：0-255 ticks
-                size_t slot = absoluteTick & (WHEEL1_SIZE - 1);
-                m_wheel1[slot].push_back(timer);
-            } else if (delayTicks < WHEEL2_SPAN) {
-                // 第2层：256-16383 ticks
-                size_t slot = (absoluteTick >> 8) & (WHEEL2_SIZE - 1);
-                m_wheel2[slot].push_back(timer);
-            } else if (delayTicks < WHEEL3_SPAN) {
-                // 第3层：16384-1048575 ticks
-                size_t slot = (absoluteTick >> 14) & (WHEEL3_SIZE - 1);
-                m_wheel3[slot].push_back(timer);
-            } else if (delayTicks < WHEEL4_SPAN) {
-                // 第4层：1048576-67108863 ticks
-                size_t slot = (absoluteTick >> 20) & (WHEEL4_SIZE - 1);
-                m_wheel4[slot].push_back(timer);
-            } else {
-                // 第5层：67108864-4294967295 ticks
-                size_t slot = (absoluteTick >> 26) & (WHEEL5_SIZE - 1);
-                m_wheel5[slot].push_back(timer);
-            }
+            insert_timer(Wheel::layer_for_delay(delayTicks), absoluteTick, std::move(timer));
 
             ++m_size;
 
@@ -252,22 +234,22 @@ namespace galay::kernel
             while (m_currentTick <= targetTick && m_size > 0) {
                 // 级联必须在处理当前槽之前执行
                 // 级联：每 256 tick，从第2层降级到第1层
-                if ((m_currentTick & (WHEEL1_SIZE - 1)) == 0 && m_currentTick > 0) {
+                if (Wheel::is_cascade_tick(0, m_currentTick)) {
                     cascade_wheel2(nowNs);
                 }
 
                 // 级联：每 16384 tick，从第3层降级到第2层
-                if ((m_currentTick & (WHEEL2_SPAN - 1)) == 0 && m_currentTick > 0) {
+                if (Wheel::is_cascade_tick(1, m_currentTick)) {
                     cascade_wheel3(nowNs);
                 }
 
                 // 级联：每 1048576 tick，从第4层降级到第3层
-                if ((m_currentTick & (WHEEL3_SPAN - 1)) == 0 && m_currentTick > 0) {
+                if (Wheel::is_cascade_tick(2, m_currentTick)) {
                     cascade_wheel4(nowNs);
                 }
 
                 // 级联：每 67108864 tick，从第5层降级到第4层
-                if ((m_currentTick & (WHEEL4_SPAN - 1)) == 0 && m_currentTick > 0) {
+                if (Wheel::is_cascade_tick(3, m_currentTick)) {
                     cascade_wheel5(nowNs);
                 }
 
@@ -295,7 +277,7 @@ namespace galay::kernel
          */
         void process_wheel1()
         {
-            size_t idx = m_currentTick & (WHEEL1_SIZE - 1);
+            size_t idx = Wheel::slot_index(0, m_currentTick);
             auto& slot = m_wheel1[idx];
 
             auto it = slot.begin();
@@ -320,7 +302,7 @@ namespace galay::kernel
          */
         void cascade_wheel2(uint64_t nowNs)
         {
-            size_t idx = (m_currentTick >> 8) & (WHEEL2_SIZE - 1);
+            size_t idx = Wheel::slot_index(1, m_currentTick);
             cascade_slot(m_wheel2[idx], nowNs);
         }
 
@@ -331,7 +313,7 @@ namespace galay::kernel
          */
         void cascade_wheel3(uint64_t nowNs)
         {
-            size_t idx = (m_currentTick >> 14) & (WHEEL3_SIZE - 1);
+            size_t idx = Wheel::slot_index(2, m_currentTick);
             cascade_slot(m_wheel3[idx], nowNs);
         }
 
@@ -342,7 +324,7 @@ namespace galay::kernel
          */
         void cascade_wheel4(uint64_t nowNs)
         {
-            size_t idx = (m_currentTick >> 20) & (WHEEL4_SIZE - 1);
+            size_t idx = Wheel::slot_index(3, m_currentTick);
             cascade_slot(m_wheel4[idx], nowNs);
         }
 
@@ -353,7 +335,7 @@ namespace galay::kernel
          */
         void cascade_wheel5(uint64_t nowNs)
         {
-            size_t idx = (m_currentTick >> 26) & (WHEEL5_SIZE - 1);
+            size_t idx = Wheel::slot_index(4, m_currentTick);
             cascade_slot(m_wheel5[idx], nowNs);
         }
 
@@ -391,7 +373,7 @@ namespace galay::kernel
                 uint64_t remainingNs = expireTimeNs - nowNs;
 
                 // 计算剩余的 tick 数
-                uint64_t remainingTicks = remainingNs / m_tickDuration;
+                uint64_t remainingTicks = Wheel::floor_ticks(remainingNs, m_tickDuration);
 
                 if (remainingTicks == 0) {
                     // 不足一个 tick，立即执行
@@ -401,28 +383,38 @@ namespace galay::kernel
                 }
 
                 // 计算绝对到期 tick
-                uint64_t absoluteTick = m_currentTick + remainingTicks;
+                uint64_t absoluteTick = Wheel::expiry_tick(m_currentTick, remainingTicks);
 
-                // 重新分配到合适的层（使用与 push 相同的逻辑）
-                if (remainingTicks < WHEEL1_SPAN) {
-                    size_t slot_idx = absoluteTick & (WHEEL1_SIZE - 1);
-                    m_wheel1[slot_idx].push_back(timer);
-                } else if (remainingTicks < WHEEL2_SPAN) {
-                    size_t slot_idx = (absoluteTick >> 8) & (WHEEL2_SIZE - 1);
-                    m_wheel2[slot_idx].push_back(timer);
-                } else if (remainingTicks < WHEEL3_SPAN) {
-                    size_t slot_idx = (absoluteTick >> 14) & (WHEEL3_SIZE - 1);
-                    m_wheel3[slot_idx].push_back(timer);
-                } else if (remainingTicks < WHEEL4_SPAN) {
-                    size_t slot_idx = (absoluteTick >> 20) & (WHEEL4_SIZE - 1);
-                    m_wheel4[slot_idx].push_back(timer);
-                } else if (remainingTicks < WHEEL5_SPAN) {
-                    size_t slot_idx = (absoluteTick >> 26) & (WHEEL5_SIZE - 1);
-                    m_wheel5[slot_idx].push_back(timer);
+                // 重新分配到合适的层（使用与 push 相同的槽位逻辑）
+                if (remainingTicks < WHEEL5_SPAN) {
+                    insert_timer(Wheel::layer_for_delay(remainingTicks), absoluteTick, timer);
                 } else {
                     // 超出范围，丢弃
                     --m_size;
                 }
+            }
+        }
+
+        /**
+         * @brief 把定时器写入指定层的槽位
+         * @param layer 零基层号
+         * @param absoluteTick 绝对到期 tick
+         * @param timer 要写入的定时器
+         * @return 无返回值
+         */
+        void insert_timer(size_t layer, uint64_t absoluteTick, Timer::ptr timer)
+        {
+            const size_t slot = Wheel::slot_index(layer, absoluteTick);
+            if (layer == 0) {
+                m_wheel1[slot].push_back(std::move(timer));
+            } else if (layer == 1) {
+                m_wheel2[slot].push_back(std::move(timer));
+            } else if (layer == 2) {
+                m_wheel3[slot].push_back(std::move(timer));
+            } else if (layer == 3) {
+                m_wheel4[slot].push_back(std::move(timer));
+            } else {
+                m_wheel5[slot].push_back(std::move(timer));
             }
         }
 

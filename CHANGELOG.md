@@ -17,6 +17,7 @@
 
 ### Changed
 
+- 将单线程与多线程时间轮重复的五层容量、层选择、槽位、级联边界和绝对到期 tick 计算合并到 `detail::TimerWheelGeometry`；两套管理器继续各自维护定时器队列、计数和 tick 协议，单线程级联的向下取整与多线程的向上取整语义保持不变。新增几何边界测试并同步模块 prelude 与安装布局。
 - 合并 `task.h` 中 `void` 与有返回值类型的重复骨架：`Task<T>` 统一承载 `Task<void>` 的等待、移动和生命周期语义，`then()` 通过 `requires std::is_void_v<T>` 仅向 `void` 任务暴露；`JoinHandle<void>` 复用通用结果句柄；`TaskPromise` 的帧分配、返回对象、初始/最终挂起、异常处理和状态清理移入 CRTP 基类，两个 promise 特化只保留 `return_value` / `return_void`。公开调用方式、协程执行与等待语义保持不变。
 - 将 `task.h` 拆分为 `task_ref.h` 与 `ready_entry.h`：`TaskState`、`TaskRef` 和调度器绑定辅助进入轻量任务状态头，`TaskResumeQueue`、`ReadyEntry` 及其恢复入口只由调度器和对应测试显式依赖；`task.h` 不再暴露 ready queue 内部类型，`Waker` 只依赖 `TaskRef`。同步更新安装布局与头文件边界检查。行为保持不变；本次保留该拆分的依据是结构边界与耦合降低，单次干净构建及针对性语法测量均未证明稳定编译加速。
 - 将内部 `scheduler_thread_id` 查询移入 `task.cc` 的匿名命名空间，移除 `task.h` 中对应的声明和 `<thread>` 依赖；至此 `task.h` 不再包含 `<mutex>`、`<condition_variable>` 或 `<thread>`，线程相关实现仍保留在需要它的源文件中。
@@ -40,6 +41,7 @@
 
 ### Validation
 
+- 阶段 7 第 4 项的 Release 全量增量构建通过；235 项内核 CTest 中 233 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败。8 项配置门禁、6 项脚本门禁、模块 prelude 检查、安装 include 布局和 `git diff --check` 通过；TSan 下 `wheel`、`timer_deadline_after_idle` 与新增的 `timer_wheel_geometry` 3/3 通过，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 7 第 1 项最终调整后的 Release 增量构建完成 892 步。234 项内核 CTest 首轮有 1 项定时边界用例在并行负载下提前 1 ms 触发，其余 228 项通过、3 项按环境跳过、2 项已知缺陷用例禁用；该用例随后连续 20 次复跑全部通过。6 项脚本门禁、8 项配置门禁、`t52` 的 `then()` 类型边界和 `git diff --check` 通过。最终调整后重新构建的 ASan/UBSan/LSan 与 TSan 各六项定向回归（`joinhandle`、`then_runtime`、`then_surface`、`await_task`、`taskapi`、`coroutine_frame_allocator`）全部通过；TSan 使用 `setarch x86_64 -R`，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 8 第 5 项（同时完成阶段 7 第 2 项）的同配置干净 Release 构建完成 1613 步，墙钟 481.61 秒、用户态 CPU 时间 1494.16 秒、Ninja 任务累计 1928.526 秒；与上一条 423.00 秒单次基线对比时不声称编译加速。仅包含 `task.h` 的预处理文本从 60346 行降至 60048 行，`-fsyntax-only` 中位数从 1.190523 秒变为 1.194501 秒，基本持平。234 项内核 CTest 中 229 项通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；6 项脚本门禁、3 项配置门禁和 `git diff --check` 通过。
 - 阶段 8 第 2 项的同配置干净 Release 构建完成 1613 步；墙钟从 455.50 秒记录为 423.00 秒，用户态 CPU 时间从 1417.37 秒记录为 1329.64 秒，Ninja 任务累计从 1822.437 秒记录为 1691.804 秒。以上是单次前后记录，不作为稳定性能结论。
