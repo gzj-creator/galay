@@ -1,4 +1,5 @@
 /** @brief 调度器静态分派、类型边界及 Runtime 所有权契约。 */
+#include <galay/cpp/galay-kernel/core/ready_entry.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #if defined(USE_IOURING)
 #include <galay/cpp/galay-kernel/core/uring_scheduler.h>

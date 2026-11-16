@@ -5,6 +5,7 @@
 
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include "test/cpp/common/scheduler_test_adapter.h"
+#include <galay/cpp/galay-kernel/core/ready_entry.h>
 #include <galay/cpp/galay-kernel/core/waker.h>
 
 #include <atomic>

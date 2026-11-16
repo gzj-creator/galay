@@ -19,6 +19,7 @@
 #include "../common/error.h"
 #include "../common/kernel_config.h"
 #include "../common/scheduler_config.h"
+#include "ready_entry.h"
 #include "task.h"
 #include <atomic>
 #include <cstdint>

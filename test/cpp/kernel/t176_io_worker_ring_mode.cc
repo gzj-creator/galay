@@ -4,6 +4,7 @@
  */
 
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
+#include <galay/cpp/galay-kernel/core/ready_entry.h>
 
 #include <coroutine>
 #include <array>

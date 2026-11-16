@@ -84,6 +84,8 @@ int main() {
     const auto defn_hpp = source_root / "galay-kernel" / "common" / "defn.hpp";
     const auto kqueue_scheduler_h = source_root / "galay-kernel" / "core" / "kqueue_scheduler.h";
     const auto task_h = source_root / "galay-kernel" / "core" / "task.h";
+    const auto task_ref_h = source_root / "galay-kernel" / "core" / "task_ref.h";
+    const auto ready_entry_h = source_root / "galay-kernel" / "core" / "ready_entry.h";
     const auto cache_line_hpp = source_root / "galay-utils" / "common" / "cache_line.hpp";
     const auto utils_defn_hpp = source_root / "galay-utils" / "common" / "defn.hpp";
 
@@ -99,6 +101,8 @@ int main() {
     const std::string defn_content = read_all(defn_hpp);
     const std::string kqueue_scheduler_content = read_all(kqueue_scheduler_h);
     const std::string task_content = read_all(task_h);
+    const std::string task_ref_content = read_all(task_ref_h);
+    const std::string ready_entry_content = read_all(ready_entry_h);
     const std::string cache_line_content = read_all(cache_line_hpp);
     const std::string utils_defn_content = read_all(utils_defn_hpp);
 
@@ -111,6 +115,8 @@ int main() {
     if (defn_content.empty()) failures.push_back(defn_hpp.string() + ": failed to read file");
     if (kqueue_scheduler_content.empty()) failures.push_back(kqueue_scheduler_h.string() + ": failed to read file");
     if (task_content.empty()) failures.push_back(task_h.string() + ": failed to read file");
+    if (task_ref_content.empty()) failures.push_back(task_ref_h.string() + ": failed to read file");
+    if (ready_entry_content.empty()) failures.push_back(ready_entry_h.string() + ": failed to read file");
     if (cache_line_content.empty()) failures.push_back(cache_line_hpp.string() + ": failed to read file");
     if (utils_defn_content.empty()) failures.push_back(utils_defn_hpp.string() + ": failed to read file");
     if (!std::filesystem::exists(kernel_build)) failures.push_back(kernel_build.string() + ": missing Bazel BUILD file");
@@ -136,15 +142,40 @@ int main() {
                        "inline constexpr size_t kCacheLineSize",
                        "cache-line size must be defined only by cache_line.hpp");
     require_contains(failures,
+                    task_ref_h,
+                    task_ref_content,
+                    "#include \"../../galay-utils/common/cache_line.hpp\"",
+                    "task_ref.h must use the lightweight cache-line header");
+    require_not_contains(failures,
+                       task_ref_h,
+                       task_ref_content,
+                       "galay-utils/common/defn.hpp",
+                       "task_ref.h must not pull in the heavyweight utils definition header");
+    require_contains(failures,
+                    ready_entry_h,
+                    ready_entry_content,
+                    "#include \"task_ref.h\"",
+                    "ready_entry.h must depend only on the lightweight task reference header");
+    require_contains(failures,
                     task_h,
                     task_content,
-                    "#include \"../../galay-utils/common/cache_line.hpp\"",
-                    "task.h must use the lightweight cache-line header");
+                    "#include \"task_ref.h\"",
+                    "task.h must expose TaskRef through the task reference header");
     require_not_contains(failures,
                        task_h,
                        task_content,
-                       "galay-utils/common/defn.hpp",
-                       "task.h must not pull in the heavyweight utils definition header");
+                       "#include \"ready_entry.h\"",
+                       "task.h must not expose scheduler ready queue internals");
+    require_not_contains(failures,
+                       task_h,
+                       task_content,
+                       "class TaskResumeQueue",
+                       "task.h must not define the scheduler resume queue");
+    require_not_contains(failures,
+                       task_h,
+                       task_content,
+                       "struct ReadyEntry\n",
+                       "task.h must not define the scheduler ready entry");
     require_not_contains(failures,
                        task_h,
                        task_content,

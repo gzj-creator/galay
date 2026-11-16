@@ -12,8 +12,11 @@
 #ifndef GALAY_KERNEL_WAKER_H
 #define GALAY_KERNEL_WAKER_H
 
+#include "task_ref.h"
+
 #include <concepts>
-#include "task.h"
+#include <coroutine>
+#include <cstdint>
 
 namespace galay::kernel
 {

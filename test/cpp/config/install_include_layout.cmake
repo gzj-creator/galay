@@ -20,7 +20,9 @@ set(consumer_build_dir "${smoke_root}/consumer-build")
 foreach(required_source_path
         IN ITEMS
         "src/cpp/galay-kernel/core/runtime.h"
+        "src/cpp/galay-kernel/core/ready_entry.h"
         "src/cpp/galay-kernel/core/task.h"
+        "src/cpp/galay-kernel/core/task_ref.h"
         "src/cpp/galay-kernel/common/error.h"
         "src/cpp/galay-kernel/concurrency/spsc/bounded_channel.h"
         "src/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"
@@ -159,7 +161,9 @@ endif()
 foreach(required_header
         IN ITEMS
         "include/galay/cpp/galay-kernel/core/runtime.h"
+        "include/galay/cpp/galay-kernel/core/ready_entry.h"
         "include/galay/cpp/galay-kernel/core/task.h"
+        "include/galay/cpp/galay-kernel/core/task_ref.h"
         "include/galay/cpp/galay-kernel/common/error.h"
         "include/galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h"
         "include/galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"

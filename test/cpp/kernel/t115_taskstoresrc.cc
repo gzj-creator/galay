@@ -35,11 +35,13 @@ bool contains_text(const std::string& haystack, const std::string& needle) {
 int main() {
     const auto root = project_root();
     const auto task_h = root / "galay-kernel" / "core" / "task.h";
+    const auto task_ref_h = root / "galay-kernel" / "core" / "task_ref.h";
     const auto task_cc = root / "galay-kernel" / "core" / "task.cc";
 
     const std::string task_h_text = read_all(task_h);
+    const std::string task_ref_h_text = read_all(task_ref_h);
     const std::string task_cc_text = read_all(task_cc);
-    if (task_h_text.empty() || task_cc_text.empty()) {
+    if (task_h_text.empty() || task_ref_h_text.empty() || task_cc_text.empty()) {
         std::cerr << "[T115] failed to read Task sources\n";
         return 1;
     }
@@ -68,15 +70,16 @@ int main() {
         std::cerr << "[T115] expected TaskPromise<void> to stop allocating shared_ptr completion state\n";
         return 1;
     }
-    if (!contains_text(task_h_text, "static void* operator new(std::size_t size);")) {
-        std::cerr << "[T115] expected TaskState to declare class-specific operator new\n";
+    if (!contains_text(task_ref_h_text, "static void* operator new(std::size_t size);")) {
+        std::cerr << "[T115] expected TaskState in task_ref.h to declare class-specific operator new\n";
         return 1;
     }
-    if (!contains_text(task_h_text, "static void operator delete(void* ptr, std::size_t size) noexcept;")) {
-        std::cerr << "[T115] expected TaskState to declare sized operator delete\n";
+    if (!contains_text(task_ref_h_text, "static void operator delete(void* ptr, std::size_t size) noexcept;")) {
+        std::cerr << "[T115] expected TaskState in task_ref.h to declare sized operator delete\n";
         return 1;
     }
     if (contains_text(task_h_text, "struct TaskWaiter") ||
+        contains_text(task_ref_h_text, "struct TaskWaiter") ||
         contains_text(task_cc_text, "new TaskWaiter")) {
         std::cerr << "[T115] expected TaskState wait to avoid a separately allocated waiter\n";
         return 1;
