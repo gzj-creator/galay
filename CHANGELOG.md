@@ -17,6 +17,7 @@
 
 ### Changed
 
+- 将 `TaskCompletionState<T>` 与 `void` 特化的 `spawn_blocking` 完成通知从互斥量加条件变量改为原子完成状态与 `wait`/`notify_all`；生产者以 release 发布结果或错误，并发 `take()` 通过原子交换保证只有一个消费者取得结果，并移除 `task.h` 对 `<mutex>` 和 `<condition_variable>` 的依赖。
 - 为 193 个常规内核测试和 10 个测试调度器适配用例各提供一份共享标准库 PCH，覆盖常用容器、并发、协程和输入输出头；只有一个源文件的测试复用同一份预编译产物，带额外警告参数的 `t122_taskresult_storage` 继续保持独立编译。
 - 将 `galay::utils::kCacheLineSize` 从 `galay-utils/common/defn.hpp` 下沉到只依赖架构宏和 `<cstddef>` 的 `cache_line.hpp`，并让 `task.h` 直接包含该轻量头文件；AArch64 的 128 B 与其他架构的 64 B ABI 值保持不变，`defn.hpp` 继续向既有调用方暴露同一常量。
 - 将 OpenAPI 文档生成模块从 `galay-api` 统一重命名为 `galay-doc`，同步源码目录、CMake/Bazel target、CMake 构建选项、mcpp feature、公开 include 前缀及示例、测试和消费文档；文档模式模板参数统一为 `EnableDocs`，不保留旧名兼容入口。
@@ -36,6 +37,8 @@
 
 ### Validation
 
+- 阶段 7 第 3 项的 Release 全量增量构建通过；新增 `t206` 连续运行 20 次通过，覆盖多等待者、并发单次消费、值发布顺序、错误唤醒和 `void` 路径；234 项内核 CTest 中 229 项通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败，6 项脚本门禁通过。
+- 阶段 7 第 3 项的 ASan/UBSan/LSan 与 TSan 各运行 `blocking_completion`、`spawnblk` 2/2 通过；TSan 使用 `setarch x86_64 -R`，新增完成态测试在该模式下重复 20 次均通过。
 - 阶段 8 第 3 项的同配置干净 Release 构建完成 1609 步；墙钟从 497.07 秒记录为 448.97 秒，用户态 CPU 时间从 1473.01 秒记录为 1343.30 秒，Ninja 任务累计从 1986.000 秒记录为 1794.384 秒，204 个内核测试对象合计从 1059.077 秒记录为 914.560 秒；两份共享 PCH 合计约 156 MB。以上是单次前后记录，不作为稳定性能结论。
 - 阶段 8 第 3 项的增量重配置通过；233 项内核 CTest 中 228 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；6 项脚本门禁、t5 优化测量脚本 15/15 和 `git diff --check` 通过。
 - 阶段 8 第 1 项的同配置干净 Release 构建完成 1601 步；Ninja 任务累计为 1986.000 秒、用户态 CPU 时间为 1473.01 秒、墙钟为 497.07 秒，迁移前对应为 2131.307 秒、1509.33 秒和 531.68 秒；这些是单次构建记录，不作为稳定性能结论。

@@ -145,6 +145,16 @@ int main() {
                        task_content,
                        "galay-utils/common/defn.hpp",
                        "task.h must not pull in the heavyweight utils definition header");
+    require_not_contains(failures,
+                       task_h,
+                       task_content,
+                       "#include <mutex>",
+                       "task.h blocking completion must not depend on mutex");
+    require_not_contains(failures,
+                       task_h,
+                       task_content,
+                       "#include <condition_variable>",
+                       "task.h blocking completion must not depend on condition_variable");
 
     require_contains(failures,
                     timer_hpp,

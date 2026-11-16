@@ -23,13 +23,11 @@
 
 #include <atomic>
 #include <array>
-#include <condition_variable>
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <memory>
-#include <mutex>
 #include <new>
 #include <optional>
 #include <string_view>
@@ -747,12 +745,10 @@ struct TaskCompletionState
     template <typename U>
     void set_value(U&& value)
     {
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_value = std::forward<U>(value);
-            m_ready = true;
-        }
-        m_cv.notify_all();
+        m_value = std::forward<U>(value);
+        m_completion_status.store(detail::TaskCompletionStatus::kDone,
+                                  std::memory_order_release);
+        m_completion_status.notify_all();
     }
 
     /**
@@ -762,12 +758,10 @@ struct TaskCompletionState
      */
     void set_error(detail::TaskResultError error)
     {
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_error = std::move(error);
-            m_ready = true;
-        }
-        m_cv.notify_all();
+        m_error = std::move(error);
+        m_completion_status.store(detail::TaskCompletionStatus::kDone,
+                                  std::memory_order_release);
+        m_completion_status.notify_all();
     }
 
     /**
@@ -777,8 +771,7 @@ struct TaskCompletionState
      */
     void wait() const
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
-        m_cv.wait(lock, [this]() { return m_ready; });
+        wait_ready();
     }
 
     /**
@@ -787,29 +780,35 @@ struct TaskCompletionState
      */
     std::expected<T, detail::TaskResultError> take()
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
-        m_cv.wait(lock, [this]() { return m_ready; });
-        if (m_consumed) {
+        wait_ready();
+        if (m_consumed.exchange(true, std::memory_order_acq_rel)) {
             return std::unexpected(detail::TaskResultError(detail::TaskResultErrorCode::kAlreadyConsumed));
         }
         if (m_error.has_value()) {
-            m_consumed = true;
             return std::unexpected(*m_error);
         }
         if (!m_value.has_value()) {
             return std::unexpected(detail::TaskResultError(detail::TaskResultErrorCode::kResultUnavailable));
         }
-        m_consumed = true;
         return std::move(*m_value);
     }
 
 private:
-    mutable std::mutex m_mutex;
-    mutable std::condition_variable m_cv;
+    /** @brief 等待生产者发布完成状态；acquire 保证结果字段可见。 */
+    void wait_ready() const
+    {
+        auto status = m_completion_status.load(std::memory_order_acquire);
+        while (status != detail::TaskCompletionStatus::kDone) {
+            m_completion_status.wait(status, std::memory_order_acquire);
+            status = m_completion_status.load(std::memory_order_acquire);
+        }
+    }
+
     std::optional<T> m_value;
     std::optional<detail::TaskResultError> m_error;
-    bool m_ready = false;
-    bool m_consumed = false;
+    std::atomic<detail::TaskCompletionStatus> m_completion_status{
+        detail::TaskCompletionStatus::kPending};  ///< 完成状态与等待通知共享同一原子地址
+    std::atomic<bool> m_consumed{false};  ///< 保证并发 take() 只有一个消费者取得结果
 };
 
 /**
@@ -821,50 +820,51 @@ struct TaskCompletionState<void>
 {
     void set_value()  ///< 标记任务成功完成并唤醒等待者
     {
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_ready = true;
-        }
-        m_cv.notify_all();
+        m_completion_status.store(detail::TaskCompletionStatus::kDone,
+                                  std::memory_order_release);
+        m_completion_status.notify_all();
     }
 
     void set_error(detail::TaskResultError error)  ///< 写入任务错误并唤醒等待者
     {
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_error = std::move(error);
-            m_ready = true;
-        }
-        m_cv.notify_all();
+        m_error = std::move(error);
+        m_completion_status.store(detail::TaskCompletionStatus::kDone,
+                                  std::memory_order_release);
+        m_completion_status.notify_all();
     }
 
     void wait() const  ///< 阻塞等待任务结束，不消耗完成状态
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
-        m_cv.wait(lock, [this]() { return m_ready; });
+        wait_ready();
     }
 
     std::expected<void, detail::TaskResultError> take()  ///< 消费完成状态；重复消费时返回错误
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
-        m_cv.wait(lock, [this]() { return m_ready; });
-        if (m_consumed) {
+        wait_ready();
+        if (m_consumed.exchange(true, std::memory_order_acq_rel)) {
             return std::unexpected(detail::TaskResultError(detail::TaskResultErrorCode::kAlreadyConsumed));
         }
         if (m_error.has_value()) {
-            m_consumed = true;
             return std::unexpected(*m_error);
         }
-        m_consumed = true;
         return {};
     }
 
 private:
-    mutable std::mutex m_mutex;
-    mutable std::condition_variable m_cv;
+    /** @brief 等待生产者发布完成状态；acquire 保证错误字段可见。 */
+    void wait_ready() const
+    {
+        auto status = m_completion_status.load(std::memory_order_acquire);
+        while (status != detail::TaskCompletionStatus::kDone) {
+            m_completion_status.wait(status, std::memory_order_acquire);
+            status = m_completion_status.load(std::memory_order_acquire);
+        }
+    }
+
     std::optional<detail::TaskResultError> m_error;
-    bool m_ready = false;
-    bool m_consumed = false;
+    std::atomic<detail::TaskCompletionStatus> m_completion_status{
+        detail::TaskCompletionStatus::kPending};  ///< 完成状态与等待通知共享同一原子地址
+    std::atomic<bool> m_consumed{false};  ///< 保证并发 take() 只有一个消费者取得结果
 };
 
 /**
