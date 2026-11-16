@@ -17,6 +17,7 @@
 
 ### Changed
 
+- 将 MPMC、MPSC、SPSC 六个通道实现中重复的平台 CPU pause、指数退避和 waiter 状态定义收敛到 `concurrency/detail/channel_cpu_pause.h`、`channel_backoff.h` 与 `channel_waiter_state.h`；统一使用九态 `ChannelWaiterState` 超集和分级 `ChannelBackoff`，保留 Apple AArch64 有界/MPMC 无界通道的 ISB 以及 MPSC/SPSC 无界通道的 YIELD 平台行为，删除旧内部枚举、退避类、重复 intrinsics include 和不再需要的 `<thread>` 依赖。行为保持不变。
 - 将 `awaitable.h` 中重复的 `ReadvIOContext` / `WritevIOContext` 实现收敛为 `detail::VectorIOContext<Event>`，保留两个公开源码名称，并统一借用计数校验、参数错误结果和 io_uring `msghdr` 初始化；`awaitable.inl` 的 21 处完成结果尾部收敛到公共 helper，继续区分需重试的 `kNotReady` 与最终结果。
 - 将 epoll、kqueue、io_uring 调度器的构造/析构、平台 poll 超时转换、readiness flush 和配置容量入口收敛到公共 `detail::IOSchedulerAdapter` 模板，删除三个只承载相同生命周期的后端 `.cc`；保留 kqueue 与 epoll/io_uring 的 accept 接口差异，以及 io_uring 不执行 readiness flush 的语义。同步为 `uring_reactor.h` 补齐 `std::unordered_map` 的直接头文件依赖。
 - 合并 IO 调度器四个任务投递入口的 owner/跨线程分派骨架，保留恢复任务的专用无分配队列和延迟任务的 FIFO 语义；将 epoll、kqueue、io_uring 三份停止排空循环收敛为一个 helper，io_uring 继续以空 `flush_backend()` 跳过 readiness 提交。
@@ -44,6 +45,7 @@
 
 ### Validation
 
+- 阶段 7 第 8 项的最终清理后 Release 增量构建通过；235 个已注册内核 CTest 中 230 项通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；通道与拓扑相关 17/17 项 TSan 测试、8 项配置门禁、6 项脚本门禁和 `git diff --check` 通过。TSan 构建仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 7 第 7 项的 Release 全量构建通过 588/588 步；235 个已注册内核 CTest 中 230 项通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；8 项配置门禁、6 项脚本门禁、io_uring 后端干净编译及最终增量复编译和 `git diff --check` 通过。最终源码上的 readv/writev、sequence 与 socket 路径 8 项 TSan 用例通过，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 7 第 5 项的 Release 全量构建通过 645/645 步；235 项内核 CTest 无失败，其中 3 项按环境跳过、2 项已知缺陷用例禁用；8 项配置门禁、6 项脚本门禁、io_uring 后端干净编译和 `git diff --check` 通过。适配层相关 7 项调度器测试在 TSan 下全部通过，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 7 第 6 项的 Release 全量增量构建通过；235 项内核 CTest 无失败，其中 3 项按环境跳过、2 项已知缺陷用例禁用；调度器投递与停止路径 7 项定向用例、8 项配置门禁、6 项脚本门禁及 `git diff --check` 通过。TSan 使用 `setarch x86_64 -R` 运行 `epollacc`、`followpass`、`wokenown`、`scheduler_static_dispatch`、`runtime_pending_accept_lsan` 5/5 通过，仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。

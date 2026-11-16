@@ -789,15 +789,16 @@ bool run_recv_pump_skips_cancelled_waiter()
         !galay::mpmc::BoundedChannelTestAccess::enqueue_recv_waiter(channel, live)) {
         return false;
     }
-    cancelled->state.store(galay::mpmc::BoundedWaiterState::kCancelled,
-                           std::memory_order_release);
+    cancelled->state.store(
+        galay::kernel::detail::ChannelWaiterState::kCancelled,
+        std::memory_order_release);
     if (!galay::mpmc::BoundedChannelTestAccess::enqueue_value(channel, 73)) {
         return false;
     }
 
     galay::mpmc::BoundedChannelTestAccess::request_recv_pump(channel);
     return live->state.load(std::memory_order_acquire) ==
-            galay::mpmc::BoundedWaiterState::kFulfilled &&
+            galay::kernel::detail::ChannelWaiterState::kFulfilled &&
         live->value.has_value() && *live->value == 73 && channel.empty() &&
         galay::mpmc::BoundedChannelTestAccess::pump_idle(channel);
 }

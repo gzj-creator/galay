@@ -14,13 +14,9 @@
 #include "../../common/error.h"
 #include "../../core/timeout.hpp"
 #include "../../core/waker.h"
+#include "../detail/channel_cpu_pause.h"
+#include "../detail/channel_waiter_state.h"
 #include "../../../galay-utils/common/defn.hpp"
-
-#if defined(_MSC_VER)
-#include <intrin.h>
-#elif defined(__x86_64__) || defined(__i386__)
-#include <emmintrin.h>
-#endif
 
 #include <atomic>
 #include <array>
@@ -50,6 +46,8 @@ using kernel::kClosed;
 using kernel::kNotReady;
 using kernel::kTimeout;
 
+namespace channel_detail = ::galay::kernel::detail;
+
 /**
  * @brief 约束 MPMC 无界通道可存储的元素类型。
  * @tparam T 元素类型；底层无界队列要求可移动且可默认构造，所有数据搬运操作
@@ -60,15 +58,6 @@ concept UnboundedValue = std::movable<T> && std::default_initializable<T> &&
     std::is_nothrow_default_constructible_v<T> &&
     std::is_nothrow_move_constructible_v<T> &&
     std::is_nothrow_move_assignable_v<T>;
-
-enum class UnboundedWaiterState : uint8_t {
-    kWaiting,
-    kCancelled,
-    kFulfilling,
-    kFulfilled,
-    kClosed,
-    kFailed
-};
 
 enum class UnboundedWaiterProgress : uint8_t {
     kBlocked,    ///< waiter 仍存活但当前没有消息可交付。
@@ -83,7 +72,8 @@ struct UnboundedChannelWaiter
     kernel::detail::DeferredWaker localWaker;
     const TimeoutTimer::ptr timeoutTimer; ///< 发布后只读，避免 stale entry 与完成方并发修改。
     kernel::detail::DeferredWaker* const completionWaker;
-    std::atomic<UnboundedWaiterState> state{UnboundedWaiterState::kWaiting};
+    std::atomic<channel_detail::ChannelWaiterState> state{
+        channel_detail::ChannelWaiterState::kWaiting};
     std::atomic<bool> queued{false};
 
     explicit UnboundedChannelWaiter(Waker waiter_waker,
@@ -99,24 +89,11 @@ struct UnboundedChannelWaiter
 
 namespace detail {
 
-inline void unbounded_channel_cpu_pause() noexcept
-{
-#if defined(_MSC_VER)
-    YieldProcessor();
-#elif defined(__x86_64__) || defined(__i386__)
-    _mm_pause();
-#elif defined(__APPLE__) && defined(__aarch64__)
-    __asm__ __volatile__("isb" ::: "memory");
-#elif defined(__aarch64__) || defined(__arm__)
-    __asm__ __volatile__("yield" ::: "memory");
-#endif
-}
-
 inline void unbounded_channel_backoff(uint32_t& step) noexcept
 {
     const uint32_t count = uint32_t{1} << (step < 6 ? step : 6);
     for (uint32_t index = 0; index < count; ++index) {
-        unbounded_channel_cpu_pause();
+        channel_detail::channel_cpu_pause();
     }
     if (step < 6) {
         ++step;
@@ -127,8 +104,8 @@ template <UnboundedValue T>
 void wait_for_unbounded_channel_fulfillment(UnboundedChannelWaiter<T>& waiter) noexcept
 {
     while (waiter.state.load(std::memory_order_acquire) ==
-           UnboundedWaiterState::kFulfilling) {
-        unbounded_channel_cpu_pause();
+           channel_detail::ChannelWaiterState::kFulfilling) {
+        channel_detail::channel_cpu_pause();
     }
 }
 
@@ -773,7 +750,7 @@ private:
     void lock_block_pool() noexcept
     {
         while (m_blockPoolLock.test_and_set(std::memory_order_acquire)) {
-            detail::unbounded_channel_cpu_pause();
+            channel_detail::channel_cpu_pause();
         }
     }
 
@@ -1082,7 +1059,7 @@ private:
                     m_tail.load(std::memory_order_relaxed);
                 if (latest != tail) {
                     tail = latest;
-                    detail::unbounded_channel_cpu_pause();
+                    channel_detail::channel_cpu_pause();
                     continue;
                 }
                 return false;
@@ -1097,7 +1074,7 @@ private:
                         m_tail.load(std::memory_order_relaxed);
                     if (latest != tail) {
                         tail = latest;
-                        detail::unbounded_channel_cpu_pause();
+                        channel_detail::channel_cpu_pause();
                         last = nullptr;
                         break;
                     }
@@ -1120,7 +1097,7 @@ private:
                 catch_up_block_anchors();
                 return true;
             }
-            detail::unbounded_channel_cpu_pause();
+            channel_detail::channel_cpu_pause();
         }
     }
 
@@ -1355,7 +1332,7 @@ private:
                         m_tail.load(std::memory_order_relaxed);
                     if (latest != tail) {
                         tail = latest;
-                        detail::unbounded_channel_cpu_pause();
+                        channel_detail::channel_cpu_pause();
                         continue;
                     }
                     return false;
@@ -1367,7 +1344,7 @@ private:
                                              std::memory_order_relaxed)) {
                 break;
             }
-            detail::unbounded_channel_cpu_pause();
+            channel_detail::channel_cpu_pause();
         }
         Slot& slot = block->slots[static_cast<size_t>(
             position & (kSlotsPerBlock - 1))];
@@ -1438,7 +1415,7 @@ private:
                                                    position + 1,
                                                    std::memory_order_relaxed,
                                                    std::memory_order_relaxed)) {
-                    detail::unbounded_channel_cpu_pause();
+                    channel_detail::channel_cpu_pause();
                     continue;
                 }
                 if ((position & (kSlotsPerBlock - 1)) ==
@@ -1455,7 +1432,7 @@ private:
                 return std::nullopt;
             }
             position = m_head.load(std::memory_order_relaxed);
-            detail::unbounded_channel_cpu_pause();
+            channel_detail::channel_cpu_pause();
         }
     }
 
@@ -1484,10 +1461,10 @@ private:
 
     bool claim_waiter(const WaiterPtr& waiter) noexcept
     {
-        UnboundedWaiterState expected = UnboundedWaiterState::kWaiting;
+        channel_detail::ChannelWaiterState expected = channel_detail::ChannelWaiterState::kWaiting;
         return waiter->state.compare_exchange_strong(
             expected,
-            UnboundedWaiterState::kFulfilling,
+            channel_detail::ChannelWaiterState::kFulfilling,
             std::memory_order_acq_rel,
             std::memory_order_acquire);
     }
@@ -1536,7 +1513,7 @@ private:
                    static_cast<uint8_t>(observed | kRecvWaiterPathUsed),
                    std::memory_order_seq_cst,
                    std::memory_order_seq_cst)) {
-            detail::unbounded_channel_cpu_pause();
+            channel_detail::channel_cpu_pause();
         }
     }
 
@@ -1576,17 +1553,17 @@ private:
             const auto start = timeoutTimer->try_begin_operation();
             if (start == TimeoutTimer::OperationStart::kBusy) {
                 const auto state = waiter->state.load(std::memory_order_acquire);
-                if (state == UnboundedWaiterState::kWaiting &&
+                if (state == channel_detail::ChannelWaiterState::kWaiting &&
                     enqueue_waiter(waiter)) {
                     return UnboundedWaiterProgress::kBlocked;
                 }
                 return UnboundedWaiterProgress::kSkipped;
             }
             if (start == TimeoutTimer::OperationStart::kTimeoutWon) {
-                UnboundedWaiterState expected = UnboundedWaiterState::kWaiting;
+                channel_detail::ChannelWaiterState expected = channel_detail::ChannelWaiterState::kWaiting;
                 if (!waiter->state.compare_exchange_strong(
                         expected,
-                        UnboundedWaiterState::kCancelled,
+                        channel_detail::ChannelWaiterState::kCancelled,
                         std::memory_order_acq_rel,
                         std::memory_order_acquire)) {
                     // timeout winner 或当前 operation owner 会发布最终状态。
@@ -1603,7 +1580,7 @@ private:
             if (timeoutOperationStarted) {
                 const auto aborted = timeoutTimer->abort_operation();
                 if (aborted == TimeoutTimer::OperationAbort::kTimeoutWon) {
-                    waiter->state.store(UnboundedWaiterState::kCancelled,
+                    waiter->state.store(channel_detail::ChannelWaiterState::kCancelled,
                                         std::memory_order_release);
                     timeoutTimer->wake_timeout_winner();
                     return UnboundedWaiterProgress::kSkipped;
@@ -1628,8 +1605,8 @@ private:
             const bool completionCommitted =
                 !timeoutOperationStarted || timeoutTimer->commit_operation();
             waiter->state.store(completionCommitted
-                                    ? UnboundedWaiterState::kFulfilled
-                                    : UnboundedWaiterState::kFailed,
+                                    ? channel_detail::ChannelWaiterState::kFulfilled
+                                    : channel_detail::ChannelWaiterState::kFailed,
                                 std::memory_order_release);
             wake_waiter(*waiter);
             return UnboundedWaiterProgress::kProgressed;
@@ -1639,8 +1616,8 @@ private:
             const bool completionCommitted =
                 !timeoutOperationStarted || timeoutTimer->commit_operation();
             waiter->state.store(completionCommitted
-                                    ? UnboundedWaiterState::kClosed
-                                    : UnboundedWaiterState::kFailed,
+                                    ? channel_detail::ChannelWaiterState::kClosed
+                                    : channel_detail::ChannelWaiterState::kFailed,
                                 std::memory_order_release);
             wake_waiter(*waiter);
             return UnboundedWaiterProgress::kProgressed;
@@ -1649,7 +1626,7 @@ private:
         if (!enqueue_waiter(waiter)) {
             const bool completionCommitted =
                 !timeoutOperationStarted || timeoutTimer->commit_operation();
-            waiter->state.store(UnboundedWaiterState::kFailed,
+            waiter->state.store(channel_detail::ChannelWaiterState::kFailed,
                                 std::memory_order_release);
             if (!completionCommitted) {
                 // kFailed 已是唯一可传播的终态，不再覆盖。
@@ -1657,14 +1634,14 @@ private:
             wake_waiter(*waiter);
             return UnboundedWaiterProgress::kProgressed;
         }
-        waiter->state.store(UnboundedWaiterState::kWaiting, std::memory_order_release);
+        waiter->state.store(channel_detail::ChannelWaiterState::kWaiting, std::memory_order_release);
         if (!timeoutOperationStarted) {
             return UnboundedWaiterProgress::kBlocked;
         }
 
         const auto aborted = timeoutTimer->abort_operation();
         if (aborted == TimeoutTimer::OperationAbort::kTimeoutWon) {
-            waiter->state.store(UnboundedWaiterState::kCancelled,
+            waiter->state.store(channel_detail::ChannelWaiterState::kCancelled,
                                 std::memory_order_release);
             timeoutTimer->wake_timeout_winner();
             return UnboundedWaiterProgress::kSkipped;
@@ -1768,7 +1745,7 @@ private:
                    static_cast<uint8_t>(observed | kRecvCleanupPending),
                    std::memory_order_release,
                    std::memory_order_relaxed)) {
-            detail::unbounded_channel_cpu_pause();
+            channel_detail::channel_cpu_pause();
         }
         request_recv_pump();
     }
@@ -1826,7 +1803,7 @@ inline bool UnboundedRecvAwaitable<T>::await_suspend(
         Waker(handle), std::move(timeoutTimer));
     m_waiter = waiter;
     if (!channel->enqueue_waiter(waiter)) {
-        waiter->state.store(UnboundedWaiterState::kFailed, std::memory_order_release);
+        waiter->state.store(channel_detail::ChannelWaiterState::kFailed, std::memory_order_release);
         return false;
     }
     channel->register_recv_waiter_path();
@@ -1849,15 +1826,15 @@ inline std::expected<T, IOError> UnboundedRecvAwaitable<T>::await_resume() noexc
         detail::wait_for_unbounded_channel_fulfillment(*m_waiter);
         const auto state = m_waiter->state.load(std::memory_order_acquire);
         m_waiter->completionWaker->clear_waker();
-        if (state == UnboundedWaiterState::kFulfilled && m_waiter->value.has_value()) {
+        if (state == channel_detail::ChannelWaiterState::kFulfilled && m_waiter->value.has_value()) {
             T value = std::move(*m_waiter->value);
             m_waiter->value.reset();
             return value;
         }
-        if (state == UnboundedWaiterState::kClosed) {
+        if (state == channel_detail::ChannelWaiterState::kClosed) {
             return std::unexpected(IOError(kClosed, 0));
         }
-        if (state == UnboundedWaiterState::kFailed) {
+        if (state == channel_detail::ChannelWaiterState::kFailed) {
             return std::unexpected(IOError(kNotReady, 0));
         }
     }
@@ -1886,14 +1863,14 @@ inline void UnboundedRecvAwaitable<T>::mark_timeout() noexcept
     if (!m_waiter) {
         return;
     }
-    UnboundedWaiterState expected = UnboundedWaiterState::kWaiting;
+    channel_detail::ChannelWaiterState expected = channel_detail::ChannelWaiterState::kWaiting;
     if (m_waiter->state.compare_exchange_strong(expected,
-                                                UnboundedWaiterState::kCancelled,
+                                                channel_detail::ChannelWaiterState::kCancelled,
                                                 std::memory_order_acq_rel,
                                                 std::memory_order_acquire)) {
         m_waiter->completionWaker->clear_waker();
         m_channel->request_recv_cleanup();
-    } else if (expected == UnboundedWaiterState::kCancelled) {
+    } else if (expected == channel_detail::ChannelWaiterState::kCancelled) {
         m_waiter->completionWaker->clear_waker();
     }
 }
@@ -1930,7 +1907,7 @@ inline bool UnboundedRecvBatchAwaitable<T>::await_suspend(
         Waker(handle), std::move(timeoutTimer));
     m_waiter = waiter;
     if (!channel->enqueue_waiter(waiter)) {
-        waiter->state.store(UnboundedWaiterState::kFailed, std::memory_order_release);
+        waiter->state.store(channel_detail::ChannelWaiterState::kFailed, std::memory_order_release);
         return false;
     }
     channel->register_recv_waiter_path();
@@ -1952,7 +1929,7 @@ UnboundedRecvBatchAwaitable<T>::await_resume() noexcept
         detail::wait_for_unbounded_channel_fulfillment(*m_waiter);
         const auto state = m_waiter->state.load(std::memory_order_acquire);
         m_waiter->completionWaker->clear_waker();
-        if (state == UnboundedWaiterState::kFulfilled && m_waiter->value.has_value()) {
+        if (state == channel_detail::ChannelWaiterState::kFulfilled && m_waiter->value.has_value()) {
             std::vector<T> values;
             values.reserve(m_count);
             values.push_back(std::move(*m_waiter->value));
@@ -1966,10 +1943,10 @@ UnboundedRecvBatchAwaitable<T>::await_resume() noexcept
             }
             return values;
         }
-        if (state == UnboundedWaiterState::kClosed) {
+        if (state == channel_detail::ChannelWaiterState::kClosed) {
             return std::unexpected(IOError(kClosed, 0));
         }
-        if (state == UnboundedWaiterState::kFailed) {
+        if (state == channel_detail::ChannelWaiterState::kFailed) {
             return std::unexpected(IOError(kNotReady, 0));
         }
     }
@@ -1995,14 +1972,14 @@ inline void UnboundedRecvBatchAwaitable<T>::mark_timeout() noexcept
     if (!m_waiter) {
         return;
     }
-    UnboundedWaiterState expected = UnboundedWaiterState::kWaiting;
+    channel_detail::ChannelWaiterState expected = channel_detail::ChannelWaiterState::kWaiting;
     if (m_waiter->state.compare_exchange_strong(expected,
-                                                UnboundedWaiterState::kCancelled,
+                                                channel_detail::ChannelWaiterState::kCancelled,
                                                 std::memory_order_acq_rel,
                                                 std::memory_order_acquire)) {
         m_waiter->completionWaker->clear_waker();
         m_channel->request_recv_cleanup();
-    } else if (expected == UnboundedWaiterState::kCancelled) {
+    } else if (expected == channel_detail::ChannelWaiterState::kCancelled) {
         m_waiter->completionWaker->clear_waker();
     }
 }

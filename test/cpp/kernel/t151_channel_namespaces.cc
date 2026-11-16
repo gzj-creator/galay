@@ -546,7 +546,7 @@ bool check_mpmc_unbounded_waiter_handshake()
         !producerBeforeRegistration && producerAfterRegistration && enqueued &&
         pumpIdle &&
         waiter->state.load(std::memory_order_acquire) ==
-            galay::mpmc::UnboundedWaiterState::kWaiting &&
+            galay::kernel::detail::ChannelWaiterState::kWaiting &&
         queuedCopies == 1;
 }
 

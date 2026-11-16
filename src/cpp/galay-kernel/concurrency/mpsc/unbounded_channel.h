@@ -20,6 +20,7 @@
 #include "../../core/timeout.hpp"
 #include "../../core/wait_registration.h"
 #include "../../core/waker.h"
+#include "../detail/channel_cpu_pause.h"
 #include "../../../galay-utils/common/defn.hpp"
 
 #include <algorithm>
@@ -39,12 +40,6 @@
 #include <utility>
 #include <vector>
 
-#if defined(_MSC_VER)
-#include <intrin.h>
-#elif defined(__x86_64__) || defined(__i386__)
-#include <emmintrin.h>
-#endif
-
 namespace galay::mpsc
 {
 
@@ -59,6 +54,8 @@ using kernel::WithTimeout;
 using kernel::kClosed;
 using kernel::kParamInvalid;
 using kernel::kTimeout;
+
+namespace channel_detail = ::galay::kernel::detail;
 
 /**
  * @brief 约束 UnboundedChannel 可接受的元素类型。
@@ -386,17 +383,6 @@ class UnboundedChannel
 private:
     static constexpr size_t kBlockTargetBytes = 4096;
     static constexpr size_t kConsumerQuota = 64;
-
-    static void cpu_pause() noexcept
-    {
-#if defined(_MSC_VER)
-        YieldProcessor();
-#elif defined(__x86_64__) || defined(__i386__)
-        _mm_pause();
-#elif defined(__aarch64__) || defined(__arm__)
-        __asm__ __volatile__("yield" ::: "memory");
-#endif
-    }
 
     struct Slot
     {
@@ -1161,7 +1147,7 @@ public:
             while (stream->control.gate.load(std::memory_order_seq_cst) !=
                    ProducerGate::kOpen) {
                 if (spins < 64) {
-                    cpu_pause();
+                    channel_detail::channel_cpu_pause_yield_on_apple();
                     ++spins;
                 } else {
                     std::this_thread::yield();

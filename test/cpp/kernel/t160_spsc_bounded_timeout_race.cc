@@ -689,7 +689,7 @@ bool run_peer_completion_before_armed(AwaitKind kind)
     scheduler.release_retained_state();
     return progress == galay::spsc::BoundedWaiterProgress::kCompleted &&
         waiter->state.load(std::memory_order_acquire) ==
-            galay::spsc::BoundedWaiterState::kIdle &&
+            galay::kernel::detail::ChannelWaiterState::kIdle &&
         wakeDeferred && ownerContinuesSynchronously && channelStateCorrect && reclaimed;
 }
 

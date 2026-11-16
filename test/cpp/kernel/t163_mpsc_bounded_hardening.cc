@@ -308,7 +308,7 @@ bool run_active_waiter_accounting()
             1 ||
         !recvChannel.try_send(21) ||
         recvWaiter->state.load(std::memory_order_acquire) !=
-            galay::mpsc::bounded_detail::WaiterState::kFulfilled ||
+            galay::kernel::detail::ChannelWaiterState::kFulfilled ||
         !recvWaiter->value.has_value() || *recvWaiter->value != 21 ||
         galay::mpsc::BoundedChannelTestAccess::recv_waiter_count(recvChannel) !=
             0 ||
@@ -335,7 +335,7 @@ bool run_active_waiter_accounting()
     return first.has_value() && *first == 31 && rest.has_value() &&
         rest->size() == 2 && (*rest)[0] == 32 && (*rest)[1] == 33 &&
         sendWaiter->state.load(std::memory_order_acquire) ==
-            galay::mpsc::bounded_detail::WaiterState::kFulfilled &&
+            galay::kernel::detail::ChannelWaiterState::kFulfilled &&
         !sendWaiter->value.has_value() &&
         galay::mpsc::BoundedChannelTestAccess::send_waiter_count(sendChannel) ==
             0;

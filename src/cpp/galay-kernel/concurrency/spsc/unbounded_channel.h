@@ -18,13 +18,8 @@
 #include "../../core/timeout.hpp"
 #include "../../core/wait_registration.h"
 #include "../../core/waker.h"
+#include "../detail/channel_cpu_pause.h"
 #include "../../../galay-utils/common/defn.hpp"
-
-#if defined(_MSC_VER)
-#include <intrin.h>
-#elif defined(__x86_64__) || defined(__i386__)
-#include <emmintrin.h>
-#endif
 
 #include <algorithm>
 #include <array>
@@ -57,20 +52,10 @@ using kernel::kNotReady;
 using kernel::kOutOfMemory;
 using kernel::kTimeout;
 
+namespace channel_detail = ::galay::kernel::detail;
+
 namespace detail
 {
-
-inline void unbounded_channel_cpu_pause() noexcept
-{
-#if defined(_MSC_VER)
-    YieldProcessor();
-#elif defined(__x86_64__) || defined(__i386__)
-    _mm_pause();
-#elif defined(__aarch64__) || defined(__arm__)
-    __asm__ __volatile__("yield" ::: "memory");
-#endif
-}
-
 template <typename T>
 concept UnboundedQueueValue = std::is_object_v<T> &&
     std::same_as<T, std::remove_cv_t<T>> &&
@@ -1605,7 +1590,7 @@ private:
 #ifdef GALAY_SPSC_UNBOUNDED_RECLAIM_WAIT_TEST_POINT
             GALAY_SPSC_UNBOUNDED_RECLAIM_WAIT_TEST_POINT();
 #endif
-            detail::unbounded_channel_cpu_pause();
+            channel_detail::channel_cpu_pause_yield_on_apple();
             phase = m_waiter.phase.load(std::memory_order_acquire);
         }
     }
