@@ -84,6 +84,9 @@
 #if __has_include("../../galay-kernel/core/io_scheduler.hpp")
 #include "../../galay-kernel/core/io_scheduler.hpp"
 #endif
+#if __has_include("../../galay-kernel/core/io_scheduler_adapter.hpp")
+#include "../../galay-kernel/core/io_scheduler_adapter.hpp"
+#endif
 #if __has_include("../../galay-kernel/core/io_scheduler_base.hpp")
 #include "../../galay-kernel/core/io_scheduler_base.hpp"
 #endif
@@ -153,6 +156,9 @@
 #if __has_include("../../galay-utils/common/cache_line.hpp")
 #include "../../galay-utils/common/cache_line.hpp"
 #endif
+#if __has_include("../../galay-utils/common/connection_pool_awaitable.hpp")
+#include "../../galay-utils/common/connection_pool_awaitable.hpp"
+#endif
 #if __has_include("../../galay-utils/common/defn.hpp")
 #include "../../galay-utils/common/defn.hpp"
 #endif
@@ -203,6 +209,9 @@
 #endif
 #if __has_include(<cstring>)
 #include <cstring>
+#endif
+#if __has_include(<ctime>)
+#include <ctime>
 #endif
 #if __has_include(<deque>)
 #include <deque>

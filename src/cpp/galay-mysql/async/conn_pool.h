@@ -5,7 +5,8 @@
  * @version 1.0.0
  *
  * @details 提供异步MySQL连接池管理，支持连接获取、归还、自动创建和等待；
- *          acquire/lease 等待体分离在 details/pool_awaitable.h/.inl。
+ *          acquire/lease 等待体分离在 details/pool_awaitable.h，公共状态机位于
+ *          galay-utils/common/connection_pool_awaitable.hpp。
  */
 
 #ifndef GALAY_MYSQL_CONNECTION_POOL_H
@@ -16,6 +17,7 @@
 #include "../../galay-kernel/core/io_scheduler.hpp"
 #include "../../galay-kernel/core/task.h"
 #include "../../galay-kernel/core/waker.h"
+#include "../../galay-utils/common/connection_pool_awaitable.hpp"
 #include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 #include <memory>
 #include <vector>
@@ -31,6 +33,8 @@ class MysqlConnectionPool;
 
 namespace detail
 {
+
+struct MysqlPoolAwaitableTraits;
 
 struct MysqlPoolWaiter {
     explicit MysqlPoolWaiter(galay::kernel::Waker waiter_waker)
@@ -119,6 +123,7 @@ public:
 
 private:
     friend class MysqlConnectionPool;
+    friend struct detail::MysqlPoolAwaitableTraits;
 
     MysqlPoolLease(MysqlConnectionPool* pool, AsyncMysqlClient<>* client) noexcept;
 
@@ -186,7 +191,7 @@ public:
     size_t idle_count() const;
 
 private:
-    friend class AcquireAwaitable;
+    friend struct detail::MysqlPoolAwaitableTraits;
 
     /**
      * @brief 尝试从空闲队列获取连接

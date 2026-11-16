@@ -38,8 +38,8 @@ int main()
     const auto pool_source = read_file(source_root / "galay-mysql" / "async" / "conn_pool.cc");
     const auto awaitable_header =
         read_file(source_root / "galay-mysql" / "details" / "pool_awaitable.h");
-    const auto awaitable_inline =
-        read_file(source_root / "galay-mysql" / "details" / "pool_awaitable.inl");
+    const auto shared_awaitable =
+        read_file(source_root / "galay-utils" / "common" / "connection_pool_awaitable.hpp");
 
     if (contains(pool_header, "class AcquireAwaitable\n") ||
         contains(pool_header, "class LeaseAwaitable\n") ||
@@ -47,9 +47,12 @@ int main()
         contains(pool_source, "LeaseAwaitable::await_resume") ||
         !contains(awaitable_header, "class MysqlConnectionPool::AcquireAwaitable") ||
         !contains(awaitable_header, "class MysqlConnectionPool::LeaseAwaitable") ||
-        !contains(awaitable_inline, "MysqlConnectionPool::AcquireAwaitable::await_resume") ||
-        !contains(awaitable_inline, "MysqlConnectionPool::LeaseAwaitable::await_resume")) {
-        std::cerr << "MySQL pool awaitable declarations/definitions must live in details/pool_awaitable files\n";
+        !contains(awaitable_header, "MysqlPoolAwaitableTraits") ||
+        !contains(awaitable_header, "ConnectionPoolAcquireAwaitable") ||
+        !contains(awaitable_header, "ConnectionPoolLeaseAwaitable") ||
+        !contains(shared_awaitable, "class ConnectionPoolAcquireAwaitable") ||
+        !contains(shared_awaitable, "class ConnectionPoolLeaseAwaitable")) {
+        std::cerr << "MySQL pool awaitables must use the shared coroutine state machine through protocol traits\n";
         return 1;
     }
 
@@ -61,7 +64,7 @@ int main()
              ".wait(",
          }) {
         if (contains(pool_header, forbidden) || contains(pool_source, forbidden) ||
-            contains(awaitable_header, forbidden) || contains(awaitable_inline, forbidden)) {
+            contains(awaitable_header, forbidden) || contains(shared_awaitable, forbidden)) {
             std::cerr << "async MySQL pool coroutine path must not use blocking synchronization: "
                       << forbidden << "\n";
             return 1;

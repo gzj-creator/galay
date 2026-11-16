@@ -1,95 +1,138 @@
+/**
+ * @file pool_awaitable.h
+ * @brief Postgres 连接池对公共协程等待体状态机的协议适配。
+ */
+
 #ifndef GALAY_POSTGRES_DETAILS_POOL_AWAITABLE_H
 #define GALAY_POSTGRES_DETAILS_POOL_AWAITABLE_H
 
 #include "../async/conn_pool.h"
 
-#include <concepts>
+namespace galay::postgres::detail
+{
+
+/** @brief 为公共连接池 awaitable 提供 Postgres 类型、错误和访问入口。 */
+struct PostgresPoolAwaitableTraits
+{
+    using Pool = PostgresConnectionPool;
+    using Client = AsyncPostgresClient<>;
+    using Waiter = PostgresPoolWaiter;
+    using ConnectAwaitable = PostgresConnectAwaitable<>;
+    using Lease = PostgresPoolLease;
+    using Error = PostgresError;
+    using TaskRef = galay::kernel::TaskRef;
+
+    /**
+     * @brief 创建绑定当前协程唤醒器的 Postgres 等待节点。
+     * @tparam Promise 协程 promise 类型。
+     * @param handle 当前协程句柄。
+     * @return 连接池等待节点。
+     */
+    template <typename Promise>
+    static std::shared_ptr<Waiter> make_waiter(
+        std::coroutine_handle<Promise> handle)
+    {
+        return std::make_shared<Waiter>(galay::kernel::Waker(handle));
+    }
+
+    static Client* try_acquire(Pool& pool) { return pool.try_acquire(); }
+    static Client* create_client(Pool& pool) { return pool.create_client(); }
+
+    static bool enqueue_waiter(Pool& pool,
+                               const std::shared_ptr<Waiter>& waiter)
+    {
+        return pool.enqueue_waiter(waiter);
+    }
+
+    static bool has_idle_connection(Pool& pool) noexcept
+    {
+        return pool.m_idle_connections.load(std::memory_order_acquire) > 0;
+    }
+
+    static bool wake_one_waiter(Pool& pool) { return pool.wake_one_waiter(); }
+
+    static const PostgresConfig& connect_config(Pool& pool) noexcept
+    {
+        return pool.m_postgres_config;
+    }
+
+    static Client* waiter_client(Waiter& waiter) noexcept
+    {
+        return waiter.client.load(std::memory_order_acquire);
+    }
+
+    /** @brief Postgres 建连失败时把客户端槽位放回可重建队列。 */
+    static void on_connect_failure(Pool& pool, Client* client)
+    {
+        pool.recycle_disconnected(client);
+    }
+
+    /**
+     * @brief 把公共错误分类转换为 Postgres 错误。
+     * @param code 公共等待体错误分类。
+     * @return 带 Postgres 内部错误码的协议错误。
+     */
+    static Error make_error(
+        galay::utils::detail::ConnectionPoolAwaitableErrorCode code)
+    {
+        using ErrorCode =
+            galay::utils::detail::ConnectionPoolAwaitableErrorCode;
+        switch (code) {
+        case ErrorCode::kMissingConnectAwaitable:
+            return PostgresError(
+                POSTGRES_ERROR_INTERNAL,
+                "Missing connect awaitable while creating a pool connection");
+        case ErrorCode::kConnectWithoutValue:
+            return PostgresError(
+                POSTGRES_ERROR_INTERNAL,
+                "Connect awaitable resumed without a final value");
+        case ErrorCode::kWaitingWithoutClient:
+            return PostgresError(
+                POSTGRES_ERROR_INTERNAL,
+                "Pool waiter resumed without a connection");
+        case ErrorCode::kEnqueueFailed:
+            return PostgresError(
+                POSTGRES_ERROR_INTERNAL,
+                "Failed to enqueue PostgreSQL pool waiter");
+        case ErrorCode::kInvalidState:
+            return PostgresError(POSTGRES_ERROR_INTERNAL,
+                                 "Invalid PostgreSQL pool acquire state");
+        }
+        return PostgresError(POSTGRES_ERROR_INTERNAL,
+                             "Invalid PostgreSQL pool acquire state");
+    }
+
+    static Lease make_lease(Pool& pool, Client* client) noexcept
+    {
+        return Lease(&pool, client);
+    }
+};
+
+} // namespace galay::postgres::detail
 
 namespace galay::postgres
 {
 
+/** @brief Postgres 连接池的连接获取等待体。 */
 class PostgresConnectionPool::AcquireAwaitable
+    : public galay::utils::detail::ConnectionPoolAcquireAwaitable<
+          detail::PostgresPoolAwaitableTraits>
 {
 public:
-    explicit AcquireAwaitable(PostgresConnectionPool& pool);
-
-    bool await_ready() const noexcept { return false; }
-
-    template<typename Promise>
-    requires requires(const Promise& promise) {
-        { promise.task_ref_view() } -> std::same_as<const galay::kernel::TaskRef&>;
-    }
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        if (m_state != State::Invalid) {
-            return false;
-        }
-
-        m_client = m_pool.try_acquire();
-        if (m_client != nullptr) {
-            m_state = State::Ready;
-            return false;
-        }
-
-        m_client = m_pool.create_client();
-        if (m_client != nullptr) {
-            m_state = State::Creating;
-            m_connect_awaitable.emplace(*m_client, m_pool.m_postgres_config);
-            return m_connect_awaitable->await_suspend(handle);
-        }
-
-        m_state = State::Waiting;
-        m_waiter = std::make_shared<detail::PostgresPoolWaiter>(galay::kernel::Waker(handle));
-        if (!m_pool.enqueue_waiter(m_waiter)) {
-            m_state = State::EnqueueFailed;
-            return false;
-        }
-        if (m_pool.m_idle_connections.load(std::memory_order_acquire) > 0) {
-            (void)m_pool.wake_one_waiter();
-        }
-        return true;
-    }
-
-    std::expected<std::optional<AsyncPostgresClient<>*>, PostgresError> await_resume();
-
-private:
-    enum class State
-    {
-        Invalid,
-        Ready,
-        Waiting,
-        Creating,
-        EnqueueFailed,
-    };
-
-    PostgresConnectionPool& m_pool;
-    AsyncPostgresClient<>* m_client = nullptr;
-    std::shared_ptr<detail::PostgresPoolWaiter> m_waiter;
-    std::optional<PostgresConnectAwaitable<>> m_connect_awaitable;
-    State m_state = State::Invalid;
+    using Base = galay::utils::detail::ConnectionPoolAcquireAwaitable<
+        detail::PostgresPoolAwaitableTraits>;
+    using Base::Base;
 };
 
+/** @brief Postgres 连接池的 RAII 租约获取等待体。 */
 class PostgresConnectionPool::LeaseAwaitable
+    : public galay::utils::detail::ConnectionPoolLeaseAwaitable<
+          detail::PostgresPoolAwaitableTraits>
 {
 public:
-    explicit LeaseAwaitable(PostgresConnectionPool& pool);
-
-    bool await_ready() const noexcept { return m_acquire.await_ready(); }
-
-    template<typename Promise>
-    requires requires(const Promise& promise) {
-        { promise.task_ref_view() } -> std::same_as<const galay::kernel::TaskRef&>;
-    }
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_acquire.await_suspend(handle);
-    }
-
-    std::expected<std::optional<PostgresPoolLease>, PostgresError> await_resume();
-
-private:
-    PostgresConnectionPool& m_pool;
-    AcquireAwaitable m_acquire;
+    using Base = galay::utils::detail::ConnectionPoolLeaseAwaitable<
+        detail::PostgresPoolAwaitableTraits>;
+    using Base::Base;
 };
 
 } // namespace galay::postgres

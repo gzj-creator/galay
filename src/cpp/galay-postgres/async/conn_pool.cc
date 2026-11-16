@@ -223,6 +223,4 @@ PostgresConnectionPool::LeaseAwaitable PostgresConnectionPool::lease()
     return LeaseAwaitable(*this);
 }
 
-#include "../details/pool_awaitable.inl"
-
 } // namespace galay::postgres

@@ -3,6 +3,7 @@
 
 #include "client.h"
 #include "../../galay-kernel/core/waker.h"
+#include "../../galay-utils/common/connection_pool_awaitable.hpp"
 
 #include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 
@@ -20,6 +21,8 @@ class PostgresConnectionPool;
 
 namespace detail
 {
+
+struct PostgresPoolAwaitableTraits;
 
 struct PostgresPoolWaiter
 {
@@ -66,6 +69,7 @@ public:
 
 private:
     friend class PostgresConnectionPool;
+    friend struct detail::PostgresPoolAwaitableTraits;
     PostgresPoolLease(PostgresConnectionPool* pool, AsyncPostgresClient<>* client) noexcept;
 
     PostgresConnectionPool* m_pool = nullptr;
@@ -99,7 +103,7 @@ public:
     }
 
 private:
-    friend class AcquireAwaitable;
+    friend struct detail::PostgresPoolAwaitableTraits;
 
     AsyncPostgresClient<>* try_acquire();
     AsyncPostgresClient<>* create_client();
