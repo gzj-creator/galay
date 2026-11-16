@@ -552,20 +552,6 @@ bool request_task_resume_state(TaskState* state) noexcept
     return request_task_resume_state_detailed(state) == TaskResumeResult::kAccepted;
 }
 
-void attach_task_continuation(const TaskRef& task, TaskRef next) noexcept
-{
-    auto* state = task.state();
-    if (state == nullptr) {
-        return;
-    }
-
-    inherit_task_runtime(next, state->m_runtime);
-    if (next.belong_scheduler() == nullptr && state->m_scheduler != nullptr) {
-        set_task_scheduler(next, state->m_scheduler);
-    }
-    state->m_then = std::move(next);
-}
-
 void complete_task_state(const TaskRef& task) noexcept
 {
     complete_task_state(task.state());
@@ -623,7 +609,6 @@ void complete_task_state(TaskState* state) noexcept
         }
     };
 
-    schedule_continuation(state->m_then);
     schedule_continuation(state->m_next);
 }
 

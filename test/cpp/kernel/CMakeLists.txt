@@ -70,8 +70,6 @@ set(GALAY_KERNEL_SCENARIO_t25_await await_sequence)
 set(GALAY_KERNEL_SCENARIO_t61_await await_task)
 set(GALAY_KERNEL_SCENARIO_t32_batchrecv batchrecv_progress)
 set(GALAY_KERNEL_SCENARIO_t33_batchrecv batchrecv_stress)
-set(GALAY_KERNEL_SCENARIO_t54_then then_runtime)
-set(GALAY_KERNEL_SCENARIO_t62_then then_surface)
 set(GALAY_KERNEL_SCENARIO_t89_awready awready_surface)
 set(GALAY_KERNEL_SCENARIO_t90_awready awready_runtime)
 

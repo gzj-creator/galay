@@ -553,8 +553,6 @@ builder iovec 公开面：
 - `template <typename T> class Task`
 - `template <typename T> class JoinHandle`
 - `class TaskRef`
-- `Task<void>& then(Task<void> next) &`
-- `Task<void>&& then(Task<void> next) &&`
 - `template <typename T> bool schedule_task(Scheduler&, Task<T>&&)`
 - `template <typename T> bool schedule_task_deferred(Scheduler&, Task<T>&&)`
 - `template <typename T> bool schedule_task_immediately(Scheduler&, Task<T>&&)`
@@ -565,7 +563,7 @@ builder iovec 公开面：
 - `Task<T>`：公开任务返回类型；可直接 `co_await`，也可通过 `Runtime::block_on_io(...)`、`Runtime::block_on_cpu(...)`、`Runtime::spawn_io(...)`、`Runtime::spawn_cpu(...)` 及 `RuntimeHandle` 对应入口提交
 - `JoinHandle<T>::wait()`：阻塞到结果就绪，但不提取结果
 - `JoinHandle<T>::join()`：提取结果或重抛异常；结果只能消费一次
-- `Task<void>::then(...)`：用于根任务链式串接，continuation 生命周期不依赖调用点临时对象
+- 根任务串行组合：在父协程中依次 `co_await` 子任务；`Task<T>` 不提供 `then`、`map` 或 `flatMap` 一类组合器
 - `TaskRef`：轻量任务引用；主要供 scheduler/runtime 内核和低层测试使用
 
 内部说明：
@@ -577,7 +575,6 @@ builder iovec 公开面：
 
 - `Task<T>` move 后仍共享同一底层任务状态；完成位和 continuation 挂接都在共享的 `TaskState` 上
 - `co_await child_task()` 会先尝试把子任务立即提交到当前等待者所属调度器；若子任务尚未完成，则把等待者挂到子任务 continuation
-- `Task<void>::then(...)` 仅承接根任务串接语义；当前没有泛型 `map/flatMap` 一类 combinator
 - 被等待协程完成后，waiter 会通过其所属 `Scheduler::schedule(...)` 路径恢复，而不是直接跨线程恢复底层句柄
 - 低层直接调度 task 时，推荐通过 `schedule_task(...)` / `schedule_task_deferred(...)` / `schedule_task_immediately(...)` 包装辅助函数，而不是手工拆 `TaskRef`
 

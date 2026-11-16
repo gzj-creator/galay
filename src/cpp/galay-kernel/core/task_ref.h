@@ -217,13 +217,6 @@ void complete_task_state(const TaskRef& task) noexcept;
  */
 void complete_task_state(TaskState* state) noexcept;
 /**
- * @brief 为任务追加下一段 continuation
- * @param task 协程任务
- * @param next 后继对象
- * @return 无返回值
- */
-void attach_task_continuation(const TaskRef& task, TaskRef next) noexcept;
-/**
  * @brief 阻塞等待任务完成；无有效任务状态时返回 false
  * @param task 协程任务
  * @return 操作成功时返回 true，否则返回 false
@@ -461,7 +454,6 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
      * @return 无返回值
      */
     void (*m_destroy_result)(TaskState&) noexcept = nullptr;
-    TaskRef m_then;  ///< `then()` 追加的 continuation 任务
     TaskRef m_next;  ///< 当前 `co_await` 后要恢复的父任务
 
 private:
@@ -606,11 +598,6 @@ inline void set_task_runtime(const TaskRef& task, Runtime* runtime) noexcept
 {
     if (auto* state = task.state()) {
         state->m_runtime = runtime;
-        if (state->m_then.is_valid()) {
-            if (auto* thenState = state->m_then.state(); thenState && thenState->m_runtime == nullptr) {
-                thenState->m_runtime = runtime;
-            }
-        }
     }
 }
 
@@ -630,9 +617,6 @@ inline void set_task_scheduler(const TaskRef& task, Scheduler* scheduler) noexce
 {
     if (auto* state = task.state()) {
         state->m_scheduler = scheduler;
-        if (state->m_then.is_valid() && state->m_then.belong_scheduler() == nullptr) {
-            set_task_scheduler(state->m_then, scheduler);
-        }
     }
 }
 

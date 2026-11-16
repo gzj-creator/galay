@@ -63,12 +63,23 @@ Task<int> parent_task(std::atomic<int>* steps) {
     co_return *child + 1;
 }
 
-Task<void> then_step(std::atomic<int>* sequence, int expected, int next) {
+Task<void> sequence_step(std::atomic<int>* sequence, int expected, int next) {
     int observed = sequence->load(std::memory_order_acquire);
     if (observed == expected) {
         sequence->store(next, std::memory_order_release);
     }
     co_return;
+}
+
+Task<void> sequential_steps(std::atomic<int>* sequence) {
+    const auto first = co_await sequence_step(sequence, 0, 1);
+    if (!first) {
+        co_return;
+    }
+    const auto second = co_await sequence_step(sequence, 1, 2);
+    if (!second) {
+        co_return;
+    }
 }
 
 struct ManualWakeState {
@@ -337,18 +348,18 @@ bool verify_runtime_cpp_compatibility() {
     return true;
 }
 
-bool verify_then_compatibility() {
+bool verify_co_await_chaining() {
     Runtime runtime = RuntimeBuilder()
         .io_scheduler_count(1)
         .parallel_scheduler_count(1)
         .build();
 
     std::atomic<int> sequence{0};
-    auto result = runtime.block_on_io(then_step(&sequence, 0, 1).then(then_step(&sequence, 1, 2)));
+    auto result = runtime.block_on_io(sequential_steps(&sequence));
     runtime.stop();
 
     if (!result.has_value() || sequence.load(std::memory_order_acquire) != 2) {
-        std::cerr << "[T135] then() continuation did not run in order\n";
+        std::cerr << "[T135] co_await continuation did not run in order\n";
         return false;
     }
     return true;
@@ -432,7 +443,7 @@ int main() {
     if (!verify_runtime_cpp_compatibility()) {
         return 1;
     }
-    if (!verify_then_compatibility()) {
+    if (!verify_co_await_chaining()) {
         return 1;
     }
     if (!verify_cross_thread_wake_and_coalescing()) {

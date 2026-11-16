@@ -364,21 +364,6 @@ public:
      * @return 操作结果，类型由函数实现推导
      */
     auto operator co_await() &&;
-    /**
-     * @brief 为 `void` 任务追加 continuation，返回当前左值引用
-     * @param next 后继对象
-     * @return Task<T>& 引用
-     */
-    Task& then(Task next) &
-        requires std::is_void_v<T>;
-    /**
-     * @brief 为 `void` 任务追加 continuation，返回当前右值引用
-     * @param next 后继对象
-     * @return Task<T>&& 引用
-     */
-    Task&& then(Task next) &&
-        requires std::is_void_v<T>;
-
 private:
     friend class Runtime;
     template <typename U>
@@ -584,22 +569,6 @@ template <typename T>
 inline auto Task<T>::operator co_await() &&  ///< 以右值任务创建 awaiter
 {
     return detail::TaskAwaiter<T>(std::move(*this));
-}
-
-template <typename T>
-inline Task<T>& Task<T>::then(Task<T> next) &
-    requires std::is_void_v<T>  ///< 为 void 任务追加 continuation，返回左值引用
-{
-    detail::attach_task_continuation(m_task, detail::TaskAccess::detach_task(std::move(next)));
-    return *this;
-}
-
-template <typename T>
-inline Task<T>&& Task<T>::then(Task<T> next) &&
-    requires std::is_void_v<T>  ///< 为 void 任务追加 continuation，返回右值引用
-{
-    detail::attach_task_continuation(m_task, detail::TaskAccess::detach_task(std::move(next)));
-    return std::move(*this);
 }
 
 namespace detail

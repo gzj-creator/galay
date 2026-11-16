@@ -15,7 +15,7 @@
 - 高层任务入口现在包括 `Runtime::block_on_io(Task<T>)`、`Runtime::block_on_cpu(Task<T>)`、`Runtime::spawn_io(Task<T>)`、`Runtime::spawn_cpu(Task<T>)`、`Runtime::spawn_blocking(...)`
 - `JoinHandle<T>` 的公开结果路径收口为 `join()` / `wait()`
 - runtime 上下文可通过 `Runtime::handle()`、`RuntimeHandle::current()`、`RuntimeHandle::try_current()` 获取
-- `Task<void>::then(...)` 是当前保留的链式根任务接口
+- 根任务串行组合在父协程中通过 `co_await` 完成，`Task<T>` 不再提供链式 `then()` 接口
 - `TaskRef`、协程绑定与 resume plumbing 已收敛为 runtime/scheduler 内核细节，不再作为高层工作流 API 推荐
 - `start()` / `stop()`、调度器轮询、全局 `TimerScheduler` 的完整说明已折回主干页
 

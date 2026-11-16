@@ -128,6 +128,17 @@ Task<void> stop_drain_step(std::atomic<int>* steps) {
     co_return;
 }
 
+Task<void> stop_drain_sequence(std::atomic<int>* steps) {
+    const auto first = co_await stop_drain_step(steps);
+    if (!first) {
+        co_return;
+    }
+    const auto second = co_await stop_drain_step(steps);
+    if (!second) {
+        co_return;
+    }
+}
+
 struct SelfWakeAwaitable {
     bool await_ready() const noexcept { return false; }
 
@@ -434,9 +445,9 @@ void run_tests() {
         }
     }
 
-    // 测试11：stop 关闭 resume admission 后仍排空普通任务产生的 continuation
+    // 测试11：stop 关闭 resume admission 后仍排空 co_await 产生的父任务恢复
     {
-        LogInfo("[Test 11] Stop drains completion continuations...");
+        LogInfo("[Test 11] Stop drains co_await completion continuations...");
         g_total++;
 
         ParallelScheduler scheduler;
@@ -460,8 +471,7 @@ void run_tests() {
             const bool chainScheduled = blockerScheduled &&
                 blockerStarted.load(std::memory_order_acquire) &&
                 scheduler.schedule(detail::TaskAccess::detach_task(
-                    stop_drain_step(&continuationSteps)
-                        .then(stop_drain_step(&continuationSteps))));
+                    stop_drain_sequence(&continuationSteps)));
 
             std::thread stopper([&scheduler]() { scheduler.stop(); });
             const auto stopDeadline = std::chrono::steady_clock::now() + 1500ms;
@@ -481,7 +491,7 @@ void run_tests() {
         }
 
         if (passed) {
-            LogInfo("[Test 11] PASSED: stop drained both continuation steps");
+            LogInfo("[Test 11] PASSED: stop drained both co_await steps");
             g_passed++;
         } else {
             LogError("[Test 11] FAILED: continuation_steps={}",

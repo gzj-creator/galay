@@ -35,6 +35,7 @@
 
 ### Removed
 
+- 删除公开的 `Task<void>::then()` 两个重载及其专用 `m_then` continuation 状态、`attach_task_continuation`、runtime/scheduler 传播和完成分派路径；根任务串行组合统一改为在父协程中依次 `co_await`，删除仅锁定旧接口的 `t54_then` / `t62_then`，并同步 API、协程和运行时文档。`TaskState` 在本机仍为 128 字节、64 字节对齐，不据删除字段声称尺寸或性能改善。
 - 删除 IO 调度器间任务窃取路径及 `ChaseLevTaskRing`，本地就绪队列改为 owner 线程独占、无原子操作的 `LocalReadyStack`；同步删除窃取域配置、窃取统计、跨线程窃取测试与 `shared-*` 基准样本。
 - 删除公开的 `Runtime::stats()` 与 `RuntimeStats`，运行时不再暴露 IO 窃取计数；删除仅供窃取路径使用的 `m_resume_owner_only` 状态和 C 协程 `ReadyEntryHooks::resume_owner_only` 钩子。
 - 删除 `WakeCoordinator` 的 3 个诊断计数器、5 个零调用访问器及每次唤醒的原子累加；删除 `SchedulerCoreStage`、`run_loop_iteration` 和仅测试使用的 `process_pending_tasks` 包装，测试辅助改为直接驱动 `run_ready_pass`。
@@ -47,6 +48,7 @@
 
 ### Validation
 
+- 阶段 4b 的 Release 全目标构建通过 928/928 步；206 项已注册内核 CTest 中 201 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；任务 API、`co_await` 串行恢复和生命周期相关的 10 项 TSan 测试通过，8 项配置门禁、6 项脚本门禁、`TaskState` 尺寸与旧接口引用检查及 `git diff --check` 通过。TSan 构建仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 4d 的 Release 全目标构建通过 886/886 步；208 项已注册内核 CTest 中 206 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；新增结果状态、结果存储、任务生命周期和完成等待 4 项 TSan 定向测试通过，8 项配置门禁、6 项脚本门禁、旧字段引用检查及 `git diff --check` 通过。TSan 构建仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 7 第 9 项的模块化 Release 构建通过；MySQL/Postgres 36 项 CTest 中 20 项通过、16 项因未配置数据库而是跳过、0 失败；安装 include 布局、内核内部相对 include、模块 prelude 和样式 4 项门禁通过；最终增量构建、`git diff --check` 及 MySQL/Postgres 中旧 `pool_awaitable.inl` 引用检查通过。
 - 阶段 7 第 8 项的最终清理后 Release 增量构建通过；235 个已注册内核 CTest 中 230 项通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；通道与拓扑相关 17/17 项 TSan 测试、8 项配置门禁、6 项脚本门禁和 `git diff --check` 通过。TSan 构建仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
