@@ -253,8 +253,12 @@ struct IOContextBase: public AwaitableBase {
 struct AcceptIOContext;
 struct RecvIOContext;
 struct SendIOContext;
-struct ReadvIOContext;
-struct WritevIOContext;
+namespace detail {
+template <IOEventType Event>
+struct VectorIOContext;
+} // namespace detail
+using ReadvIOContext = detail::VectorIOContext<IOEventType::READV>;
+using WritevIOContext = detail::VectorIOContext<IOEventType::WRITEV>;
 struct ConnectIOContext;
 struct FileReadIOContext;
 struct FileWriteIOContext;
@@ -744,11 +748,18 @@ struct SendAwaitable: public SendIOContext, public TimeoutSupport<SendAwaitable>
 
 // ---- Readv ----
 
+namespace detail {
+
 /**
- * @brief readv 操作的上下文
+ * @brief readv/writev 共用的 scatter-gather IO 上下文
+ * @tparam Event 后端操作类型，只允许 READV 或 WRITEV
  */
-struct ReadvIOContext: public IOContextBase {
-    explicit ReadvIOContext(std::span<const struct iovec> iovecs)
+template <IOEventType Event>
+struct VectorIOContext: public IOContextBase {
+    static_assert(Event == IOEventType::READV || Event == IOEventType::WRITEV,
+                  "VectorIOContext only supports READV and WRITEV");
+
+    explicit VectorIOContext(std::span<const struct iovec> iovecs)
         : m_iovecs(iovecs) {
 #ifdef USE_IOURING
         init_msghdr();
@@ -756,7 +767,7 @@ struct ReadvIOContext: public IOContextBase {
     }
 
     template<size_t N>
-    ReadvIOContext(std::array<struct iovec, N>& iovecs, size_t count)
+    VectorIOContext(std::array<struct iovec, N>& iovecs, size_t count)
         : m_iovecs(iovecs.data(), bounded_borrowed_count(count, N)) {
         mark_invalid_borrowed_count(count, N);
 #ifdef USE_IOURING
@@ -765,7 +776,7 @@ struct ReadvIOContext: public IOContextBase {
     }
 
     template<size_t N>
-    ReadvIOContext(struct iovec (&iovecs)[N], size_t count)
+    VectorIOContext(struct iovec (&iovecs)[N], size_t count)
         : m_iovecs(iovecs, bounded_borrowed_count(count, N)) {
         mark_invalid_borrowed_count(count, N);
 #ifdef USE_IOURING
@@ -775,14 +786,14 @@ struct ReadvIOContext: public IOContextBase {
 
 #ifdef USE_IOURING
     /**
-     * @brief 处理 io_uring readv 完成事件
+     * @brief 处理 io_uring scatter-gather 完成事件
      * @param cqe io_uring 完成队列条目
      * @param handle 句柄
      * @return 该 IO 操作已完成时返回 true，仍需继续处理时返回 false
      */
     bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;
 #else
-    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 readv 就绪事件
+    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 scatter-gather 就绪事件
 #endif
 
     static size_t bounded_borrowed_count(size_t count, size_t capacity) noexcept {
@@ -801,7 +812,7 @@ struct ReadvIOContext: public IOContextBase {
     }
 
     std::span<const struct iovec> m_iovecs;  ///< 借用的 iovec 数组视图
-    std::expected<size_t, IOError> m_result;  ///< 实际读取字节数或错误
+    std::expected<size_t, IOError> m_result;  ///< 实际传输字节数或错误
     uint64_t m_immediate_result = 0;  ///< 构造阶段即可返回的参数错误
 
 #ifdef USE_IOURING
@@ -813,6 +824,8 @@ struct ReadvIOContext: public IOContextBase {
     struct msghdr m_msg{};  ///< io_uring 使用的辅助 msghdr
 #endif
 };
+
+} // namespace detail
 
 /**
  * @brief readv 的可等待对象
@@ -846,76 +859,6 @@ struct ReadvAwaitable: public ReadvIOContext, public TimeoutSupport<ReadvAwaitab
 };
 
 // ---- Writev ----
-
-/**
- * @brief writev 操作的上下文
- */
-struct WritevIOContext: public IOContextBase {
-    explicit WritevIOContext(std::span<const struct iovec> iovecs)
-        : m_iovecs(iovecs) {
-#ifdef USE_IOURING
-        init_msghdr();
-#endif
-    }
-
-    template<size_t N>
-    WritevIOContext(std::array<struct iovec, N>& iovecs, size_t count)
-        : m_iovecs(iovecs.data(), bounded_borrowed_count(count, N)) {
-        mark_invalid_borrowed_count(count, N);
-#ifdef USE_IOURING
-        init_msghdr();
-#endif
-    }
-
-    template<size_t N>
-    WritevIOContext(struct iovec (&iovecs)[N], size_t count)
-        : m_iovecs(iovecs, bounded_borrowed_count(count, N)) {
-        mark_invalid_borrowed_count(count, N);
-#ifdef USE_IOURING
-        init_msghdr();
-#endif
-    }
-
-#ifdef USE_IOURING
-    /**
-     * @brief 处理 io_uring writev 完成事件
-     * @param cqe io_uring 完成队列条目
-     * @param handle 句柄
-     * @return 该 IO 操作已完成时返回 true，仍需继续处理时返回 false
-     */
-    bool handle_complete(struct io_uring_cqe* cqe, GHandle handle) override;
-#else
-    bool handle_complete(GHandle handle) override;  ///< 处理传统后端 writev 就绪事件
-#endif
-
-    static size_t bounded_borrowed_count(size_t count, size_t capacity) noexcept {
-        return count <= capacity ? count : 0;
-    }
-
-    static bool borrowed_count_valid(size_t count, size_t capacity) noexcept {
-        return count <= capacity;
-    }
-
-    void mark_invalid_borrowed_count(size_t count, size_t capacity) {
-        if (!borrowed_count_valid(count, capacity)) {
-            m_result = std::unexpected(IOError(kParamInvalid, 0));
-            m_immediate_result = true;
-        }
-    }
-
-    std::span<const struct iovec> m_iovecs;  ///< 借用的 iovec 数组视图
-    std::expected<size_t, IOError> m_result;  ///< 实际写入字节数或错误
-    uint64_t m_immediate_result = 0;  ///< 构造阶段即可返回的参数错误
-
-#ifdef USE_IOURING
-    void init_msghdr() {
-        m_msg.msg_iov = const_cast<struct iovec*>(m_iovecs.data());
-        m_msg.msg_iovlen = m_iovecs.size();
-    }
-
-    struct msghdr m_msg{};  ///< io_uring 使用的辅助 msghdr
-#endif
-};
 
 /**
  * @brief writev 的可等待对象
