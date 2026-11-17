@@ -713,7 +713,7 @@ public:
             m_state->m_handle = nullptr;
         }
         m_state = nullptr;
-        m_task_view = TaskRef{};
+        TaskRefStorageAccess::clear_borrow(m_task_view);
     }
 
     /**

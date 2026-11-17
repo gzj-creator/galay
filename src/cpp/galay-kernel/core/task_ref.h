@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <expected>
 #include <new>
+#include <optional>
 #include <string_view>
 
 namespace galay::kernel
@@ -376,48 +377,37 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
     /** @brief 返回当前任务结果的存储形态。 */
     ResultStorageKind result_storage_kind() const noexcept
     {
-        return static_cast<ResultStorageKind>(
-            m_result_state.load(std::memory_order_relaxed) &
-            kResultStorageKindMask);
+        return m_result_kind;
     }
 
     /**
-     * @brief 更新任务结果存储形态，并保留同一字节中的错误与消费状态。
+     * @brief 更新任务结果存储形态。
      * @param kind 当前存储形态。
      */
     void set_result_storage_kind(ResultStorageKind kind) noexcept
     {
-        update_result_state(
-            kResultStorageKindMask, static_cast<ResultStateBits>(kind));
+        m_result_kind = kind;
     }
 
     /** @brief 判断任务是否通过错误通道完成。 */
     bool has_result_error() const noexcept
     {
-        return (m_result_state.load(std::memory_order_acquire) &
-                kResultErrorMask) != 0;
+        return m_result_error.has_value();
     }
 
     /** @brief 返回已记录的任务错误；仅应在 has_result_error() 为真时调用。 */
     detail::TaskResultError result_error() const noexcept
     {
-        const auto encoded = static_cast<detail::TaskResultErrorCode>(
-            ((m_result_state.load(std::memory_order_relaxed) &
-              kResultErrorMask) >>
-             kResultErrorShift) -
-            1);
-        return detail::TaskResultError(encoded);
+        return *m_result_error;
     }
 
     /**
-     * @brief 记录任务错误，并保留同一字节中的存储形态与消费状态。
+     * @brief 记录任务错误。
      * @param error 待交付的任务错误。
      */
     void set_result_error(detail::TaskResultError error) noexcept
     {
-        const auto encoded = static_cast<ResultStateBits>(
-            1 + static_cast<ResultStateBits>(error.code()));
-        update_result_state(kResultErrorMask, encoded << kResultErrorShift);
+        m_result_error = error;
     }
 
     /**
@@ -426,9 +416,7 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
      */
     bool try_mark_result_consumed() noexcept
     {
-        return (m_result_state.fetch_or(kResultConsumedMask,
-                                        std::memory_order_acq_rel) &
-                kResultConsumedMask) == 0;
+        return !m_result_consumed.exchange(true, std::memory_order_acq_rel);
     }
 
     // Empty 状态下不读取结果字节；store() 先构造对象或写入指针，再发布存储类型。
@@ -446,43 +434,15 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
     std::atomic<detail::TaskCompletionStatus> m_completion_status{detail::TaskCompletionStatus::kPending};
     std::atomic<bool> m_queued{false};  ///< 任务是否已在调度队列中
     std::atomic<bool> m_resume_queue_claimed{false};  ///< 是否已被 resume admission 接管
-    // 结果错误、存储形态和单次消费标志共用一个原子字节：低两位保存存储
-    // 形态，随后三位保存“错误码加一”，第五位表示结果已被消费。
-    std::atomic<uint8_t> m_result_state{0};
+    std::atomic<bool> m_result_consumed{false};  ///< 任务结果是否已被 join/await 消费
+    std::optional<detail::TaskResultError> m_result_error;  ///< 任务错误
+    ResultStorageKind m_result_kind = ResultStorageKind::Empty;  ///< 当前结果存储形态
     /**
      * @brief 销毁尚未消费的结果对象
      * @return 无返回值
      */
     void (*m_destroy_result)(TaskState&) noexcept = nullptr;
     TaskRef m_next;  ///< 当前 `co_await` 后要恢复的父任务
-
-private:
-    using ResultStateBits = uint8_t;
-    static constexpr ResultStateBits kResultStorageKindMask = 0x03;
-    static constexpr ResultStateBits kResultErrorShift = 2;
-    static constexpr ResultStateBits kResultErrorMask = 0x1C;
-    static constexpr ResultStateBits kResultConsumedMask = 0x20;
-    static_assert(std::atomic<ResultStateBits>::is_always_lock_free);
-    static_assert(static_cast<ResultStateBits>(
-                      detail::TaskResultErrorCode::kResumeFailed) <
-                  (kResultErrorMask >> kResultErrorShift));
-
-    /**
-     * @brief 原子替换结果状态中的指定位。
-     * @param mask 待替换的位。
-     * @param value 新位值。
-     */
-    void update_result_state(ResultStateBits mask,
-                             ResultStateBits value) noexcept
-    {
-        // 错误和存储形态只会在完成发布前写入；完成后仅允许唯一消费方更新
-        // 存储形态。消费标志本身通过 fetch_or 原子占位，因此这里保留其位即可。
-        const ResultStateBits current =
-            m_result_state.load(std::memory_order_relaxed);
-        m_result_state.store(
-            static_cast<ResultStateBits>((current & ~mask) | (value & mask)),
-            std::memory_order_relaxed);
-    }
 };
 
 // Keep ownership transfers visible to CRTP callers so moved-from cleanup and
@@ -652,6 +612,12 @@ struct TaskRefStorageAccess
     static TaskRef borrow(TaskState* state) noexcept
     {
         return TaskRef::borrowed(state);
+    }
+
+    /** @brief 清空非拥有 view，不减少底层状态引用计数。 */
+    static void clear_borrow(TaskRef& task) noexcept
+    {
+        task.m_state = nullptr;
     }
 
     static TaskState* release_state(TaskRef& task) noexcept

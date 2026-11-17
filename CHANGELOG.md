@@ -17,7 +17,6 @@
 
 ### Changed
 
-- 将 `TaskState` 的结果存储形态、任务错误和结果消费标志合并到单个原子状态字节；错误码与存储形态继续在同一任务完成发布前写入，消费资格仍通过原子操作只授予一个 `join` / `co_await` 调用方。删除对 `<optional>` 的直接依赖并新增全部 6 种错误码及 8 个消费者竞争回归；`TaskState` 在本机仍为 128 字节、64 字节对齐，不据此声称尺寸缩减或性能改善。
 - 将 MySQL 与 Postgres 连接池 acquire/lease awaitable 中重复的创建、排队、唤醒和租约状态机收敛到 `galay-utils/common/connection_pool_awaitable.hpp`，协议差异通过 MySQL/Postgres traits 注入；删除两个 `pool_awaitable.inl`，保留现有错误文本、建连失败回收、排队等待和返回值语义，并同步模块 prelude 与安装布局。
 - 将 MPMC、MPSC、SPSC 六个通道实现中重复的平台 CPU pause、指数退避和 waiter 状态定义收敛到 `concurrency/detail/channel_cpu_pause.h`、`channel_backoff.h` 与 `channel_waiter_state.h`；统一使用九态 `ChannelWaiterState` 超集和分级 `ChannelBackoff`，保留 Apple AArch64 有界/MPMC 无界通道的 ISB 以及 MPSC/SPSC 无界通道的 YIELD 平台行为，删除旧内部枚举、退避类、重复 intrinsics include 和不再需要的 `<thread>` 依赖。行为保持不变。
 - 将 `awaitable.h` 中重复的 `ReadvIOContext` / `WritevIOContext` 实现收敛为 `detail::VectorIOContext<Event>`，保留两个公开源码名称，并统一借用计数校验、参数错误结果和 io_uring `msghdr` 初始化；`awaitable.inl` 的 21 处完成结果尾部收敛到公共 helper，继续区分需重试的 `kNotReady` 与最终结果。
@@ -42,6 +41,10 @@
 - 删除 `TaskRef` 版本的任务结果初始化/写入重载、`AsyncWaiterAwaitable<void>` 与 `AsyncMutexAwaitable` 的 `await_suspend(Waker)` 重载、SPSC 有界通道未读取的 `wakeIssued`、`IOContextBase::type()` 动态事件方向虚钩子，以及 `WaitRegistration` 的代数计数。
 - 删除 `GALAY_IOURING_WAIT_TIMEOUT_NS` 兼容别名、六个 `HighPerformance*` / `LowLatency*` 调度器别名，以及零引用的 `Infallible` 和 `TimerFlag::kTimeout`。
 
+### Fixed
+
+- 修复任务链的稳定每节点回退：promise 析构直接清空非拥有 `TaskRef` view；结果消费标志、错误和存储形态恢复为独立字段，成功结果发布不再执行原子位域读改写，消费资格恢复为单次原子交换。`TaskState` 保持 128 字节，任务 API 与单次消费语义不变。
+
 ### Docs
 
 - 记录 `TaskState` 热/冷字段重排的 A/A + A/B 实验：4 个场景中 3 个收益区间跨过 1，按预定门槛回退代码，保留原字段布局并写明测量边界。
@@ -49,6 +52,7 @@
 
 ### Validation
 
+- 修复后的 B43 在固定 CPU 2 上完成 40 对复测：深度 4 比 `43917218` 快约 4.3%，深度 16 快约 2.1%；相对 `af2c33c0` 的 20 对中心值为 1.005 / 1.003，两个区间均跨过 1。`try_take_task_result` 由 `0xc6` 降至 `0xa5` 字节，六项任务回归及 TSan `t208_task_result_state` 通过。
 - 阶段 4e 使用固定 CPU 2、20 对 A/A、独立 40 对 A/A 和 40 对 A/B 验证 `TaskState` 热/冷字段重排；B43 的 0/4/16 层子链与 B35 任务 churn 覆盖约 1–2% 级变化，3 个场景的 95% 区间跨过 1，候选代码已回退；候选和回退后的 `t208` 均通过，`git diff --check` 通过。
 - 阶段 4b 的 Release 全目标构建通过 928/928 步；206 项已注册内核 CTest 中 201 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；任务 API、`co_await` 串行恢复和生命周期相关的 10 项 TSan 测试通过，8 项配置门禁、6 项脚本门禁、`TaskState` 尺寸与旧接口引用检查及 `git diff --check` 通过。TSan 构建仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 4d 的 Release 全目标构建通过 886/886 步；208 项已注册内核 CTest 中 206 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；新增结果状态、结果存储、任务生命周期和完成等待 4 项 TSan 定向测试通过，8 项配置门禁、6 项脚本门禁、旧字段引用检查及 `git diff --check` 通过。TSan 构建仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
