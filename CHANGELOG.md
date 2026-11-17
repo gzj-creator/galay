@@ -44,10 +44,12 @@
 
 ### Docs
 
+- 记录 `TaskState` 热/冷字段重排的 A/A + A/B 实验：4 个场景中 3 个收益区间跨过 1，按预定门槛回退代码，保留原字段布局并写明测量边界。
 - 为类型化 API 错误、操作元数据、Schema、参数绑定、请求上下文和原生路由注册补充中文 Doxygen 契约注释，并将文档模块实现注释统一为中文。
 
 ### Validation
 
+- 阶段 4e 使用固定 CPU 2、20 对 A/A、独立 40 对 A/A 和 40 对 A/B 验证 `TaskState` 热/冷字段重排；B43 的 0/4/16 层子链与 B35 任务 churn 覆盖约 1–2% 级变化，3 个场景的 95% 区间跨过 1，候选代码已回退；候选和回退后的 `t208` 均通过，`git diff --check` 通过。
 - 阶段 4b 的 Release 全目标构建通过 928/928 步；206 项已注册内核 CTest 中 201 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；任务 API、`co_await` 串行恢复和生命周期相关的 10 项 TSan 测试通过，8 项配置门禁、6 项脚本门禁、`TaskState` 尺寸与旧接口引用检查及 `git diff --check` 通过。TSan 构建仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 4d 的 Release 全目标构建通过 886/886 步；208 项已注册内核 CTest 中 206 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；新增结果状态、结果存储、任务生命周期和完成等待 4 项 TSan 定向测试通过，8 项配置门禁、6 项脚本门禁、旧字段引用检查及 `git diff --check` 通过。TSan 构建仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
 - 阶段 7 第 9 项的模块化 Release 构建通过；MySQL/Postgres 36 项 CTest 中 20 项通过、16 项因未配置数据库而是跳过、0 失败；安装 include 布局、内核内部相对 include、模块 prelude 和样式 4 项门禁通过；最终增量构建、`git diff --check` 及 MySQL/Postgres 中旧 `pool_awaitable.inl` 引用检查通过。
