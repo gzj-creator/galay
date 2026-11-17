@@ -11,3 +11,9 @@ version = "0.3.113"
 source  = "index+compat@0.3.113"
 hash    = "fnv1a:298964da1eb74e01"
 
+[package."compat.openssl"]
+namespace = "compat"
+version = "3.5.1"
+source  = "index+compat@3.5.1"
+hash    = "fnv1a:493bf976865af208"
+

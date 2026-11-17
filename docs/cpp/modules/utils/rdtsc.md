@@ -5,8 +5,8 @@ system: galay
 module: galay-utils
 doc_type: api
 status: active
-applies_to: v7.1.1 的 C++23 utils 实现；GCC/Clang x86-64 与 AArch64
-updated_at: 2026-11-09
+applies_to: v8.0.0 的 C++23 utils 实现；GCC/Clang x86-64 与 AArch64
+updated_at: 2026-11-17
 access_level: internal
 ---
 

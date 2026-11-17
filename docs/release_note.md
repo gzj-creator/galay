@@ -715,3 +715,31 @@ MCP/serde 迁移后的 C++ MCP 21/21、serde unit 13/13、安装消费 1/1、C M
 - ASan + UBSan + LSan 在 epoll 下 8/8、io_uring 下 24/24 通过；TSan 同一组测试 8/8、24/24 通过；最后引用释放与 Waker 竞争测试各重复 30 次，共 60 次执行全部通过。
 - 配对采样：子调用 0/4/16 层成本分别下降约 9.9% / 9.9% / 9.3%，有界 CPU spawn 下降约 4.3%；保留空 `Task<void>` 的 RSS 从 328.3 B/个 降到 264.3 B/个，约 19.5%。`Task<int>` 创建/销毁的 A/A 区间未通过 ±3% 噪声检查，不声明稳定加速。
 - 保留缺陷：`kernel.timer_deadline_after_idle` 偶发提前触发在未修改的 `main` 上同样复现，本次未修复。未复验 kqueue、module/import 消费、macOS 与 Bazel，未更新公共 mcpp 索引。
+
+## v8.0.0 - 2026-11-17
+
+- **版本级别**：大版本（major）
+- **Git 提交消息**：`refactor: 收敛内核热路径并发布 v8.0.0`
+- **Git tag**：`v8.0.0`
+
+### 变更摘要
+
+本版本收束自 `v7.1.1` 以来的 21 个开发提交及本次发版调整，CMake、Bazel、mcpp
+包版本统一为 `8.0.0`。核心接口删除了 `Task<void>::then()`、`Runtime::stats()`
+及相关公开类型，文档生成模块也完成改名，消费者需要调整调用和 include 后重新编译，
+因此按大版本发布。
+
+- **Task 与协程热路径**：`Task<T>` 统一承载 `void` 与有返回值类型的等待、移动和生命周期骨架，promise 的帧分配、初始/最终挂起和状态清理收口到共享实现；`TaskState`、`TaskRef` 与就绪队列拆到轻量头文件，阻塞完成态改为原子结果发布与通知，`task.h` 不再依赖 `<mutex>`、`<condition_variable>` 或 `<thread>`。
+- **公开接口收敛**：删除 `Task<void>::then()` 的链式 continuation，根任务串行组合改为在父协程中依次 `co_await`；删除 `Runtime::stats()`、`RuntimeStats`、IO 任务窃取、唤醒诊断计数器和仅供旧路径使用的内部包装。消费者若使用上述接口须先迁移并重新编译。
+- **调度与并发实现合并**：epoll、kqueue、io_uring 的生命周期、停止排空和投递骨架收敛到共享适配层，本地就绪队列改为 owner 线程独占；时间轮容量、层级与 tick 几何计算合并为共享实现；MPMC、MPSC、SPSC 通道统一等待状态和退避策略；MySQL/Postgres 连接池共享 acquire/lease awaitable；readv/writev 与完成结果尾部处理去重，保留各后端和协议原有语义。
+- **文档模块改名**：`galay-api` 统一更名为 `galay-doc`，同步 CMake/Bazel target、mcpp `doc` feature、公开 include 前缀、示例和测试；文档模式模板参数统一为 `EnableDocs`，不保留旧名入口。
+- **稳定性修复与回归工具**：修复任务链稳定每节点回退，恢复结果消费标志、错误和存储字段的独立发布路径；为内核测试提供共享 PCH，并新增两个默认禁用的已知缺陷复现用例，避免把未修复缺陷混入绿色回归。
+- **依赖与版本元数据**：CMake、Bazel、mcpp 版本统一为 `8.0.0`；README 的 mcpp 消费版本和 RDTSC 文档适用范围同步更新，`mcpp.lock` 补充 full feature 使用的 OpenSSL 解析记录。
+
+### 验证范围
+
+- 本次在 Linux x86_64 / LLVM 22.1.8 / mcpp 2026.10.11.1 上，以 `full` Release 分别完成 epoll 与 io_uring 全模块构建，各 217 个编译单元，34 个可执行目标全部生成。
+- epoll 下运行 mcpp 清单声明的全部 21 个回归目标：19 个通过，2 个 io_uring 专属用例按设计跳过，0 失败。
+- io_uring 下运行同一组 21 个目标：全部返回成功，其中 2 个 epoll 专属用例在程序内打印跳过，0 失败；io_uring accept 资源与类型化完成回归明确报告 `backend=io_uring`。
+- io_uring 验证使用系统 liburing 2.5 头文件与运行时；mcpp 私有加载器的运行路径通过临时验证环境补齐，未改动发布源码。本次 mcpp 回归覆盖清单声明的全部回归目标，不等同于 CMake CTest 的全部 559 个测试源文件矩阵。
+- 版本元数据更新后重新执行严格 configure、差异检查和文档链接检查；未验证 macOS/kqueue、Bazel、C ABI 构建或其他架构，未更新公共 mcpp 索引。

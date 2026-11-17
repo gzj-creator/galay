@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v8.0.0] - 2026-11-17
+
 ### Added
 
 - 新增两个默认禁用的内核已知缺陷复现测试：跨调度器预绑定子任务在错误线程执行，以及 `ParallelScheduler` 空闲时跨线程恢复等待 1 ms 超时；同步明确 SPSC 无界通道的 Inline 直恢复仅用于无 scheduler 的手工驱动任务，不进入 `m_queued` 队列协议。
@@ -23,14 +25,14 @@
 - 将 epoll、kqueue、io_uring 调度器的构造/析构、平台 poll 超时转换、readiness flush 和配置容量入口收敛到公共 `detail::IOSchedulerAdapter` 模板，删除三个只承载相同生命周期的后端 `.cc`；保留 kqueue 与 epoll/io_uring 的 accept 接口差异，以及 io_uring 不执行 readiness flush 的语义。同步为 `uring_reactor.h` 补齐 `std::unordered_map` 的直接头文件依赖。
 - 合并 IO 调度器四个任务投递入口的 owner/跨线程分派骨架，保留恢复任务的专用无分配队列和延迟任务的 FIFO 语义；将 epoll、kqueue、io_uring 三份停止排空循环收敛为一个 helper，io_uring 继续以空 `flush_backend()` 跳过 readiness 提交。
 - 将单线程与多线程时间轮重复的五层容量、层选择、槽位、级联边界和绝对到期 tick 计算合并到 `detail::TimerWheelGeometry`；两套管理器继续各自维护定时器队列、计数和 tick 协议，单线程级联的向下取整与多线程的向上取整语义保持不变。新增几何边界测试并同步模块 prelude 与安装布局。
-- 合并 `task.h` 中 `void` 与有返回值类型的重复骨架：`Task<T>` 统一承载 `Task<void>` 的等待、移动和生命周期语义，`then()` 通过 `requires std::is_void_v<T>` 仅向 `void` 任务暴露；`JoinHandle<void>` 复用通用结果句柄；`TaskPromise` 的帧分配、返回对象、初始/最终挂起、异常处理和状态清理移入 CRTP 基类，两个 promise 特化只保留 `return_value` / `return_void`。公开调用方式、协程执行与等待语义保持不变。
+- 合并 `task.h` 中 `void` 与有返回值类型的重复骨架：`Task<T>` 统一承载 `Task<void>` 的等待、移动和生命周期语义；`JoinHandle<void>` 复用通用结果句柄；`TaskPromise` 的帧分配、返回对象、初始/最终挂起、异常处理和状态清理移入 CRTP 基类，两个 promise 特化只保留 `return_value` / `return_void`。协程执行与等待语义保持不变，`Task<void>::then()` 的最终移除见本节 Removed。
 - 将 `task.h` 拆分为 `task_ref.h` 与 `ready_entry.h`：`TaskState`、`TaskRef` 和调度器绑定辅助进入轻量任务状态头，`TaskResumeQueue`、`ReadyEntry` 及其恢复入口只由调度器和对应测试显式依赖；`task.h` 不再暴露 ready queue 内部类型，`Waker` 只依赖 `TaskRef`。同步更新安装布局与头文件边界检查。行为保持不变；本次保留该拆分的依据是结构边界与耦合降低，单次干净构建及针对性语法测量均未证明稳定编译加速。
 - 将内部 `scheduler_thread_id` 查询移入 `task.cc` 的匿名命名空间，移除 `task.h` 中对应的声明和 `<thread>` 依赖；至此 `task.h` 不再包含 `<mutex>`、`<condition_variable>` 或 `<thread>`，线程相关实现仍保留在需要它的源文件中。
 - 将 `TaskCompletionState<T>` 与 `void` 特化的 `spawn_blocking` 完成通知从互斥量加条件变量改为原子完成状态与 `wait`/`notify_all`；生产者以 release 发布结果或错误，并发 `take()` 通过原子交换保证只有一个消费者取得结果，并移除 `task.h` 对 `<mutex>` 和 `<condition_variable>` 的依赖。
 - 为 193 个常规内核测试和 10 个测试调度器适配用例各提供一份共享标准库 PCH，覆盖常用容器、并发、协程和输入输出头；只有一个源文件的测试复用同一份预编译产物，带额外警告参数的 `t122_taskresult_storage` 继续保持独立编译。
 - 将 `galay::utils::kCacheLineSize` 从 `galay-utils/common/defn.hpp` 下沉到只依赖架构宏和 `<cstddef>` 的 `cache_line.hpp`，并让定义 `TaskState` 的 `task_ref.h` 直接包含该轻量头文件；AArch64 的 128 B 与其他架构的 64 B ABI 值保持不变，`defn.hpp` 继续向既有调用方暴露同一常量。
 - 将 OpenAPI 文档生成模块从 `galay-api` 统一重命名为 `galay-doc`，同步源码目录、CMake/Bazel target、CMake 构建选项、mcpp feature、公开 include 前缀及示例、测试和消费文档；文档模式模板参数统一为 `EnableDocs`，不保留旧名兼容入口。
-- 将 `TaskState` 的 `m_then`、`m_next` 从 `std::optional<TaskRef>` 改为 `TaskRef`，去掉两个 8 B 的可选包装并复用任务引用的空状态；`sizeof(TaskState)` 仍为 128 B，`then()` 与 `co_await Task` 行为保持不变。
+- 将 `TaskState` 的 `m_then`、`m_next` 从 `std::optional<TaskRef>` 改为 `TaskRef`，去掉两个 8 B 的可选包装并复用任务引用的空状态；`sizeof(TaskState)` 仍为 128 B，`co_await Task` 行为保持不变。
 
 ### Removed
 
@@ -50,8 +52,14 @@
 - 记录 `TaskState` 热/冷字段重排的 A/A + A/B 实验：4 个场景中 3 个收益区间跨过 1，按预定门槛回退代码，保留原字段布局并写明测量边界。
 - 为类型化 API 错误、操作元数据、Schema、参数绑定、请求上下文和原生路由注册补充中文 Doxygen 契约注释，并将文档模块实现注释统一为中文。
 
+### Chore
+
+- CMake、Bazel、mcpp 包版本统一提升为 `8.0.0`，README 消费示例与 RDTSC 文档适用版本同步更新；`mcpp.lock` 补充 full feature 的 OpenSSL 依赖解析记录。
+
 ### Validation
 
+- 本次发版在 Linux x86_64 / LLVM 22.1.8 / mcpp 2026.10.11.1 上分别完成 epoll 与 io_uring 的 `full` Release 全模块构建，各 217 个编译单元，34 个可执行目标全部生成。epoll 下 21 个 mcpp 回归目标中 19 个通过、2 个 io_uring 专属用例跳过、0 失败；io_uring 下 21 个目标全部返回成功，其中 2 个 epoll 专属用例在程序内跳过、0 失败。
+- 版本元数据更新后完成严格 mcpp configure，CMake、Bazel、mcpp 版本一致为 `8.0.0`，62 个本地 Markdown 链接全部可解析，`git diff --check` 通过。
 - 修复后的 B43 在固定 CPU 2 上完成 40 对复测：深度 4 比 `43917218` 快约 4.3%，深度 16 快约 2.1%；相对 `af2c33c0` 的 20 对中心值为 1.005 / 1.003，两个区间均跨过 1。`try_take_task_result` 由 `0xc6` 降至 `0xa5` 字节，六项任务回归及 TSan `t208_task_result_state` 通过。
 - 阶段 4e 使用固定 CPU 2、20 对 A/A、独立 40 对 A/A 和 40 对 A/B 验证 `TaskState` 热/冷字段重排；B43 的 0/4/16 层子链与 B35 任务 churn 覆盖约 1–2% 级变化，3 个场景的 95% 区间跨过 1，候选代码已回退；候选和回退后的 `t208` 均通过，`git diff --check` 通过。
 - 阶段 4b 的 Release 全目标构建通过 928/928 步；206 项已注册内核 CTest 中 201 项执行通过、3 项按环境跳过、2 项已知缺陷用例禁用、0 失败；任务 API、`co_await` 串行恢复和生命周期相关的 10 项 TSan 测试通过，8 项配置门禁、6 项脚本门禁、`TaskState` 尺寸与旧接口引用检查及 `git diff --check` 通过。TSan 构建仅有 vendored `concurrentqueue` 的 `atomic_thread_fence` 工具限制告警。
