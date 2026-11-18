@@ -743,3 +743,24 @@ MCP/serde 迁移后的 C++ MCP 21/21、serde unit 13/13、安装消费 1/1、C M
 - io_uring 下运行同一组 21 个目标：全部返回成功，其中 2 个 epoll 专属用例在程序内打印跳过，0 失败；io_uring accept 资源与类型化完成回归明确报告 `backend=io_uring`。
 - io_uring 验证使用系统 liburing 2.5 头文件与运行时；mcpp 私有加载器的运行路径通过临时验证环境补齐，未改动发布源码。本次 mcpp 回归覆盖清单声明的全部回归目标，不等同于 CMake CTest 的全部 559 个测试源文件矩阵。
 - 版本元数据更新后重新执行严格 configure、差异检查和文档链接检查；未验证 macOS/kqueue、Bazel、C ABI 构建或其他架构，未更新公共 mcpp 索引。
+
+## v9.0.0 - 2026-11-18
+
+- **版本级别**：主版本（major）
+- **Git 提交消息**：`refactor: 移除 C ABI 并发布 v9.0.0`
+- **Git tag**：`v9.0.0`
+
+### 变更摘要
+
+本次汇总 `v8.0.0` 以来的 C ABI 移除与 serde 升级。C 接口的移除是破坏性变更；依赖原 C ABI 的消费者需迁移至 C++23 接口后再升级。
+
+- **移除 C ABI 与 C 协程运行时**：删除各模块的 C 封装及配套示例、测试、基准、文档和 Linux 执行矩阵规则。不再提供 `GALAY_BUILD_C_API`、`include/galay/c` 或 `galay::c-*` 安装目标。
+- **收敛核心构建**：根 CMake 项目只声明 `CXX`，`consumer-minimal` 预设只启用 utils 和 kernel；配置与安装回归检查不启用 C 且不导出 C ABI。
+- **升级 serde 至 `v0.6.0`**：子模块与 Bazel 依赖对齐已发布版本，保留 mcpp 路径依赖及锁文件。普通和嵌套结构体可免注册进行 JSON/TOML 双格式编解码；已有显式字段契约不变。双格式示例覆盖嵌套结构体及结构体数组。
+- **同步版本元数据**：CMake、Bazel、mcpp 统一为 `9.0.0`，README 的消费示例与 RDTSC 文档适用版本一并更新。
+
+### 验证范围
+
+- Linux x86_64 / GCC 14：`consumer-minimal` 核心构建未启用 C，全部 7 个 `config.*` CTest 通过，包括安装布局和导出目标检查。
+- LLVM 22.1.8 / mcpp 2026.10.11.1：`full` 特性的离线锁定严格配置通过；`serde` 特性的 Release 构建、双格式回归、模块导入回归和免注册双格式示例通过。
+- 未运行全量测试矩阵或 Bazel 构建，未更新公共 mcpp 索引。

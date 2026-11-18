@@ -8,7 +8,7 @@ galay 是一个基于 C++23 协程的高性能异步网络与协议框架，提�
 - **全链路异步**：网络/文件 IO、TLS、协议解析、客户端连接池均基于协程，可 `co_await` 组合。
 - **多协议支持**：HTTP/1.1、HTTP/2、WebSocket、TLS，以及 Redis / MySQL / PostgreSQL / MongoDB / etcd / RPC / MCP 等客户端。
 - **可观测性**：内置 `tracing` 链路追踪模块（span、sampler、OTLP 导出、日志关联）。
-- **结构体序列化**：通过独立 serde 依赖，字段注册一次即可进行 JSON/TOML 编解码，错误通过 `std::expected` 返回。
+- **结构体序列化**：通过独立 serde 依赖，普通结构体可免注册进行 JSON/TOML 编解码，也可显式声明字段契约；错误通过 `std::expected` 返回。
 - **模块化构建**：C++ 模块位于 `src/cpp/galay-*`，支持 CMake 与 Bazel。
 - **C++23 Modules**（可选）：在受支持的编译器上可启用 `galay_*` 模块目标。
 
@@ -74,7 +74,7 @@ Galay 和 serde 分别在 `mcpp.toml` 中固定声明 `namespace = "gzj-creator"
 
 ```toml
 [dependencies]
-"gzj-creator.galay" = "8.0.0"
+"gzj-creator.galay" = "9.0.0"
 ```
 
 默认只启用 utils。需要 `import galay.kernel;` 时显式启用 `kernel` feature；
@@ -82,20 +82,20 @@ HTTP、SSL、Redis、数据库、RPC 与 tracing feature 会自动带上它：
 
 ```toml
 [dependencies]
-"gzj-creator.galay" = { version = "8.0.0", features = ["kernel"] }
+"gzj-creator.galay" = { version = "9.0.0", features = ["kernel"] }
 ```
 
 配置的索引提供对应版本后，在消费者仓库中执行：
 
 ```bash
-mcpp add gzj-creator.galay@8.0.0
+mcpp add gzj-creator.galay@9.0.0
 mcpp build
 ```
 
 首次构建生成锁文件，依赖已安装后可使用 `mcpp build --offline --locked`。
 包位于 `~/.mcpp/registry/data/xpkgs/`，
 所有使用同一 `MCPP_HOME` 的仓库共用它；消费者不声明 `path` 或 Git 依赖。
-清单中的命名空间声明不等于发布；新机器使用 `8.0.0` 前，官方或自建索引必须
+清单中的命名空间声明不等于发布；新机器使用 `9.0.0` 前，官方或自建索引必须
 提供该版本及可下载的包资源。
 
 按需关闭部分构建：
