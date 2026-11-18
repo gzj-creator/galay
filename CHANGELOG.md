@@ -18,6 +18,7 @@
 ### Changed
 
 - 根 CMake 项目仅声明 `CXX`，`consumer-minimal` 预设只构建 utils 和 kernel；配置与安装测试验证核心构建不启用 C、安装包不含 C ABI，并从 Linux 执行矩阵中移除 C 专用规则。
+- serde 子模块及 Bazel 依赖更新至 `v0.6.0`；普通和嵌套结构体可免注册读写 JSON、TOML，显式协议契约不变。快速开始与双格式示例展示子结构体及结构体数组。
 
 ## [v8.0.0] - 2026-11-17
 

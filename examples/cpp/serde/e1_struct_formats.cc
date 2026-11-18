@@ -1,25 +1,25 @@
 #include <serde/json/json.hpp>
 #include <serde/toml/toml.hpp>
-#include <serde/reflect/reflect_macros.hpp>
 
 #include <iostream>
 #include <string>
 #include <vector>
 
-struct ServerConfig {
+struct Endpoint {
     std::string host;
-    std::vector<std::string> routes;
     int port{};
+    bool operator==(const Endpoint&) const = default;
+};
+
+struct ServerConfig {
+    Endpoint primary;
+    std::vector<Endpoint> replicas;
     bool enabled{};
     bool operator==(const ServerConfig&) const = default;
 };
 
-#define SERVER_FIELDS(X) X(host) X(port) X(enabled) X(routes)
-REFLECT_FIELDS(ServerConfig, SERVER_FIELDS)
-#undef SERVER_FIELDS
-
 int main() {
-    const ServerConfig server{"127.0.0.1", {"/health", "/api"}, 8080, true};
+    const ServerConfig server{{"127.0.0.1", 8080}, {{"127.0.0.1", 8081}}, true};
 
     const auto json_text = json::serialize(server);
     if (!json_text) {
