@@ -19,13 +19,12 @@
     {
       "name": "developer-full",
       "displayName": "Developer full",
-      "description": "Build all modules, C API wrappers, tests, examples, and benchmarks.",
+      "description": "Build all modules, tests, examples, and benchmarks.",
       "inherits": "base",
       "cacheVariables": {
         "BUILD_TESTING": "ON",
         "GALAY_BUILD_EXAMPLES": "ON",
         "GALAY_BUILD_BENCHMARKS": "ON",
-        "GALAY_BUILD_C_API": "ON",
         "GALAY_BUILD_UTILS": "ON",
         "GALAY_BUILD_KERNEL": "ON",
         "GALAY_BUILD_SSL": "ON",
@@ -46,13 +45,13 @@
     {
       "name": "consumer-minimal",
       "displayName": "Consumer minimal",
-      "description": "Build only the core utils and kernel C++ targets without tests, examples, benchmarks, or C ABI wrappers.",
+      "description": "Build only the core utils and kernel targets without tests, examples, or benchmarks.",
       "inherits": "base",
       "cacheVariables": {
         "BUILD_TESTING": "OFF",
         "GALAY_BUILD_EXAMPLES": "OFF",
         "GALAY_BUILD_BENCHMARKS": "OFF",
-        "GALAY_BUILD_C_API": "OFF",
+        "GALAY_BUILD_SERDE": "OFF",
         "GALAY_BUILD_UTILS": "ON",
         "GALAY_BUILD_KERNEL": "ON",
         "GALAY_BUILD_SSL": "OFF",
@@ -76,7 +75,6 @@
       "description": "Build all C++ modules and try the io_uring backend on Linux.",
       "inherits": "developer-full",
       "cacheVariables": {
-        "GALAY_BUILD_C_API": "OFF",
         "GALAY_DISABLE_IOURING": "OFF"
       }
     },
@@ -88,7 +86,6 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "GALAY_BUILD_DEBUG": "OFF",
-        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -fno-omit-frame-pointer",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -fno-omit-frame-pointer"
       }
     }

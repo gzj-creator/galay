@@ -1,7 +1,3 @@
-if(GALAY_BUILD_C_API)
-    add_subdirectory(c)
-endif()
-
 if(GALAY_BUILD_KERNEL)
     add_subdirectory(cpp/kernel)
 endif()

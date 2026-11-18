@@ -284,55 +284,6 @@ int main() {
         }
     }
 
-    const auto c_waiter_path = std::filesystem::path(GALAY_PROJECT_ROOT) /
-        "src" / "c" / "galay-kernel-c" / "async-c" / "async_waiter.c";
-    const std::string c_waiter = read_all(c_waiter_path);
-    if (c_waiter.empty()) {
-        failures.push_back(c_waiter_path.string() + ": failed to read async_waiter.c");
-    } else {
-        const std::string wait_fn =
-            extract_function(c_waiter, "C_IOResult galay_c_async_waiter_wait");
-        if (wait_fn.empty()) {
-            failures.push_back(c_waiter_path.string() +
-                               ": failed to locate galay_c_async_waiter_wait");
-        } else {
-            const auto publish_pos = wait_fn.find("impl->task");
-            const auto park_pos = wait_fn.find("galay_c_coro_task_park_prepared()");
-            if (publish_pos == std::string::npos || park_pos == std::string::npos ||
-                publish_pos >= park_pos) {
-                failures.push_back(c_waiter_path.string() +
-                                   ": failed to locate publish/park boundary in galay_c_async_waiter_wait");
-            } else {
-                require_contains(failures,
-                                c_waiter_path,
-                                wait_fn.substr(publish_pos, park_pos - publish_pos),
-                                "impl->ready",
-                                "C async waiter must re-check ready after publishing the task slot");
-                require_contains(failures,
-                                c_waiter_path,
-                                wait_fn.substr(park_pos),
-                                "impl->ready",
-                                "C async waiter must re-check ready after parking");
-            }
-        }
-
-        const std::string notify_fn =
-            extract_function(c_waiter,
-                            "C_AsyncWaiterResultCode galay_c_async_waiter_notify");
-        if (notify_fn.empty()) {
-            failures.push_back(c_waiter_path.string() +
-                               ": failed to locate galay_c_async_waiter_notify");
-        } else {
-            const auto ready_pos = notify_fn.find("impl->ready");
-            const auto task_pos = notify_fn.find("impl->task");
-            if (ready_pos == std::string::npos || task_pos == std::string::npos ||
-                ready_pos >= task_pos) {
-                failures.push_back(c_waiter_path.string() +
-                                   ": notify must set ready before exchanging the task slot");
-            }
-        }
-    }
-
     if (!failures.empty()) {
         for (const auto& failure : failures) {
             std::cerr << "[T126] " << failure << '\n';

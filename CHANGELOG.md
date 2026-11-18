@@ -11,6 +11,14 @@
 
 ## [Unreleased]
 
+### Removed
+
+- 移除 Galay 的 C ABI 封装、C 协程运行时及配套示例、测试、基准和文档；删除 `GALAY_BUILD_C_API` 开关，不再安装 `include/galay/c` 或导出 `galay::c-*` 目标。
+
+### Changed
+
+- 根 CMake 项目仅声明 `CXX`，`consumer-minimal` 预设只构建 utils 和 kernel；配置与安装测试验证核心构建不启用 C、安装包不含 C ABI，并从 Linux 执行矩阵中移除 C 专用规则。
+
 ## [v8.0.0] - 2026-11-17
 
 ### Added

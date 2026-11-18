@@ -37,7 +37,6 @@ PERFORMANCE_DOCS = tuple(ROOT.glob("docs/**/05-性能测试.md"))
 POLICY_NOTICE = "正式对标政策（2026-08-21）"
 
 FORBIDDEN_TARGETS = {
-    "benchmark/c/kernel/CMakeLists.txt": ("benchmark_c_kernel_libuv_echo_server PRIVATE",),
     "benchmark/cpp/kernel/CMakeLists.txt": (
         "GALAY_KERNEL_COMPARE_SOURCES",
         "benchmark_kernel_compare_mpsc_paired",

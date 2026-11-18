@@ -42,7 +42,6 @@ active_scan_paths=(
   test/mongo
   test/mysql
   test/cpp/postgres
-  test/c/postgres
   test/redis
   test/rpc
   test/ssl
@@ -78,7 +77,6 @@ cmake -S "${root}" -B "${build}" \
   -DGALAY_BUILD_ETCD=OFF \
   -DGALAY_BUILD_MCP=OFF \
   -DGALAY_BUILD_TRACING=OFF \
-  -DGALAY_BUILD_C_API=OFF \
   -DBUILD_TESTING=OFF \
   -DCMAKE_INSTALL_PREFIX="${prefix}"
 

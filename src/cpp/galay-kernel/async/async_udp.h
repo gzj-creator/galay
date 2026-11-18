@@ -93,7 +93,7 @@ public:
      * @brief 创建 UDP socket 并以返回值报告系统调用错误。
      * @param type IP 协议类型（IPV4/IPV6）
      * @return 成功返回可用 AsyncUdpSocket；socket() 失败时返回 IOError(kOpenFailed, errno)。
-     * @note 不启动任何协程，也不阻塞；适合 C ABI/FFI 边界显式映射错误。
+     * @note 不启动任何协程，也不阻塞。
      */
     static std::expected<AsyncUdpSocket, galay::kernel::IOError> create(
         galay::kernel::IPType type = galay::kernel::IPType::IPV4);

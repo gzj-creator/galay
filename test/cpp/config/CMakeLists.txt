@@ -40,13 +40,6 @@ add_test(
 )
 
 add_test(
-    NAME config.c_api_header_naming
-    COMMAND ${CMAKE_COMMAND}
-        -D GALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/c_api_header_naming.cmake
-)
-
-add_test(
     NAME config.build_type_option
     COMMAND ${CMAKE_COMMAND}
         -D GALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}

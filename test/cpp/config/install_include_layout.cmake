@@ -27,17 +27,6 @@ foreach(required_source_path
         "src/cpp/galay-kernel/common/timer_wheel.hpp"
         "src/cpp/galay-kernel/concurrency/spsc/bounded_channel.h"
         "src/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"
-        "src/c/galay-kernel-c/kernel.h"
-        "src/c/galay-common-c/common/macro.h"
-        "src/c/galay-utils-c/macro.h"
-        "src/c/galay-kernel-c/common-c/macro.h"
-        "src/c/galay-http2-c/macro.h"
-        "src/c/galay-rpc-c/macro.h"
-        "src/c/galay-mongo-c/macro.h"
-        "src/c/galay-tracing-c/macro.h"
-        "src/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel.h"
-        "src/c/galay-kernel-c/concurrency-c/mpsc/bounded_channel.h"
-        "src/c/galay-kernel-c/concurrency-c/spsc/bounded_channel.h"
         "src/cpp/galay-utils/buffer/ring_buffer.hpp"
         "src/cpp/galay-utils/common/macro.hpp"
         "src/cpp/galay-utils/common/string.hpp"
@@ -81,6 +70,7 @@ endforeach()
 
 foreach(forbidden_source_path
         IN ITEMS
+        ".wroktree"
         "src/kernel/kernel/runtime.h"
         "src/kernel"
         "src/utils"
@@ -109,6 +99,14 @@ foreach(forbidden_source_path
         message(FATAL_ERROR "Unexpected old source path: ${forbidden_source_path}")
     endif()
 endforeach()
+
+file(READ "${GALAY_SOURCE_DIR}/.gitignore" gitignore_content)
+if(gitignore_content MATCHES "(^|\n)\\.wroktree/")
+    message(FATAL_ERROR ".gitignore must not keep the misspelled .wroktree entry.")
+endif()
+if(NOT gitignore_content MATCHES "(^|\n)\\.worktree/")
+    message(FATAL_ERROR ".gitignore must ignore the canonical .worktree directory.")
+endif()
 
 file(READ "${GALAY_SOURCE_DIR}/CMakeLists.txt" root_cmake_content)
 file(READ "${GALAY_SOURCE_DIR}/cmake/option.cmake" option_cmake_content)
@@ -219,28 +217,6 @@ foreach(fast_float_header IN ITEMS
 endforeach()
 
 file(READ "${GALAY_BINARY_DIR}/CMakeCache.txt" galay_cache_content)
-if(galay_cache_content MATCHES "GALAY_BUILD_C_API:BOOL=ON")
-    foreach(required_c_header
-            IN ITEMS
-            "include/galay/c/galay-kernel-c/kernel.h"
-            "include/galay/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel.h"
-            "include/galay/c/galay-kernel-c/concurrency-c/mpsc/bounded_channel.h"
-            "include/galay/c/galay-kernel-c/concurrency-c/spsc/bounded_channel.h")
-        if(NOT EXISTS "${prefix_dir}/${required_c_header}")
-            message(FATAL_ERROR "Missing installed C API header: ${required_c_header}")
-        endif()
-    endforeach()
-    foreach(legacy_c_header
-            IN ITEMS
-            "include/galay/c/galay-kernel-c/concurrency-c/channel_c.h"
-            "include/galay/c/galay-kernel-c/concurrency-c/bounded_channel_c.h"
-            "include/galay/c/galay-kernel-c/concurrency-c/mpsc_channel_c.h"
-            "include/galay/c/galay-kernel-c/concurrency-c/unsafe_channel_c.h")
-        if(EXISTS "${prefix_dir}/${legacy_c_header}")
-            message(FATAL_ERROR "Legacy C API header must not be installed: ${legacy_c_header}")
-        endif()
-    endforeach()
-endif()
 
 foreach(required_module_header
         IN ITEMS
@@ -262,6 +238,7 @@ endforeach()
 
 foreach(forbidden_header
         IN ITEMS
+        "include/galay/c"
         "include/kernel/kernel/runtime.h"
         "include/galay-kernel/core/runtime.h"
         "include/galay-kernel/kernel/runtime.h"
@@ -289,6 +266,9 @@ foreach(forbidden_header
 endforeach()
 
 file(READ "${prefix_dir}/lib/cmake/galay/galayTargets.cmake" installed_targets_content)
+if(installed_targets_content MATCHES "galay::c-")
+    message(FATAL_ERROR "Installed CMake targets must not export C ABI libraries.")
+endif()
 if(installed_targets_content MATCHES "INTERFACE_INCLUDE_DIRECTORIES[^\n]*include/galay/cpp")
     message(FATAL_ERROR "Installed CMake targets must expose only the aggregate include root, not include/galay/cpp.")
 endif()
@@ -423,7 +403,7 @@ file(WRITE "${consumer_source_dir}/main.cc"
 
 file(WRITE "${consumer_source_dir}/CMakeLists.txt" [=[
 cmake_minimum_required(VERSION 3.20)
-project(galay_install_include_layout_consumer LANGUAGES C CXX)
+project(galay_install_include_layout_consumer LANGUAGES CXX)
 
 find_package(galay CONFIG REQUIRED)
 
@@ -432,32 +412,6 @@ target_compile_features(consumer PRIVATE cxx_std_23)
 set_target_properties(consumer PROPERTIES NO_SYSTEM_FROM_IMPORTED ON)
 target_link_libraries(consumer PRIVATE galay::kernel)
 ]=])
-
-if(galay_cache_content MATCHES "GALAY_BUILD_C_API:BOOL=ON")
-    file(WRITE "${consumer_source_dir}/c_main.c"
-        "#include <galay/c/galay-common-c/common/macro.h>\n"
-        "#include <galay/c/galay-http2-c/macro.h>\n"
-        "#include <galay/c/galay-mongo-c/macro.h>\n"
-        "#include <galay/c/galay-rpc-c/macro.h>\n"
-        "#include <galay/c/galay-tracing-c/macro.h>\n"
-        "#include <galay/c/galay-utils-c/macro.h>\n"
-        "#include <galay/c/galay-kernel-c/kernel.h>\n"
-        "int main(void) {\n"
-        "  C_RuntimeConfig config = galay_c_runtime_config_default();\n"
-        "  return config.io_scheduler_count == C_RUNTIME_SCHEDULER_COUNT_AUTO &&\n"
-        "      GALAY_HTTP2_FRAME_HEADER_LENGTH == 9u &&\n"
-        "      GALAY_MONGO_MAX_KEY_LENGTH == 255u &&\n"
-        "      GALAY_RPC_HEADER_SIZE == 16u &&\n"
-        "      GALAY_TRACING_TRACE_ID_HEX_LENGTH == 32u &&\n"
-        "      GALAY_UTILS_OK == GALAY_OK ? 0 : 1;\n"
-        "}\n")
-    file(APPEND "${consumer_source_dir}/CMakeLists.txt" [=[
-
-add_executable(c_consumer c_main.c)
-set_target_properties(c_consumer PROPERTIES NO_SYSTEM_FROM_IMPORTED ON)
-target_link_libraries(c_consumer PRIVATE galay::c-kernel)
-]=])
-endif()
 
 set(configure_command
     "${CMAKE_COMMAND}"

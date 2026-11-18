@@ -39,5 +39,5 @@ TLS 使用原生证书配置；h2c 使用 prior knowledge，浏览器直连 HTTP
 H2 over TLS 并确认 ALPN `h2`。原生 HTTP/1 fallback 404 不算 typed H2 的
 HTTP/1 兼容入口。HTTPS 是 HTTP/1 over TLS。
 
-不包含 `.api` 解析器或生成器、WebSocket/AsyncAPI、API C ABI、multipart、
+不包含 `.api` 解析器或生成器、WebSocket/AsyncAPI、multipart、
 多值 query、热更新或额外反射系统。公开头、构建 target、示例和测试优先于文档。

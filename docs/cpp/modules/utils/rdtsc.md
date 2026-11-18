@@ -136,7 +136,7 @@ RPC benchmark 新增 `--clock steady|rdtsc`，默认 `steady`；`-n` 默认 1,00
 
 ## 生产代码接入审查结论
 
-适用范围：2026-10-12 当前工作区的 `src/cpp/` 生产实现，补充核对 `src/c/` 的单调时钟等待；不把 `test/`、`benchmark/`、第三方代码或生成的 module prelude 计入生产候选。**当前没有满足全部前提的生产计时路径，生产时间源保留原实现。** 这轮结论来自时间调用、时间字段及调用链的核对，不能将微基准的取时收益写成已完成的生产优化。
+适用范围：2026-10-12 工作区的 `src/cpp/` 生产实现，不把 `test/`、`benchmark/`、第三方代码或生成的 module prelude 计入生产候选。**当前没有满足全部前提的生产计时路径，生产时间源保留原实现。** 这轮结论来自时间调用、时间字段及调用链的核对，不能将微基准的取时收益写成已完成的生产优化。
 
 审查同时覆盖直接 `steady_clock::now()` / `system_clock::now()`、`RpcClock` / `SteadyClock` 别名、模板 `Clock::now()`、`Time::current_time_*()`、`clock_gettime()` 和 `std::time()`。随后检查 `time_point`、`started_at`、`m_start_time`、`m_last_used`、原子时间字段及 `wait_for` / `wait_until` 的消费者。可重复搜索命令和命中记录见 [生产时间调用盘点](evidence/rdtsc_production_time_inventory_2026-10-12.txt)。
 
@@ -160,7 +160,6 @@ RPC benchmark 新增 `--clock steady|rdtsc`，默认 `steady`；`-n` 默认 1,00
 | [Span](../../../../src/cpp/galay-tracing/kernel/span.h)、[OTLP exporter](../../../../src/cpp/galay-tracing/kernel/otlp_http_exporter.cc)、[batch processor](../../../../src/cpp/galay-tracing/kernel/batch_span_processor.cc) | 公开起止/event `Clock::time_point`、导出器消费时间点、flush/shutdown deadline 与原子截止时间 | 对象可移动和跨线程交付，导出/调度契约不能接收无纪元 tick |
 | [日志时间](../../../../src/cpp/galay-tracing/log/log_record.h)、[HTTP 文件时间](../../../../src/cpp/galay-http/server/http_etag.h)、[HTTP/2 文件时间](../../../../src/cpp/galay-http2/server/h2_static_file.cc)、[etcd cluster](../../../../src/cpp/galay-etcd/cluster/etcd_cluster_client.h)、[Salt](../../../../src/cpp/galay-utils/crypto/salt.hpp) 的 timestamp | 墙钟/文件时间或携带毫秒时间戳的输出 | 缺少 Unix epoch，不能替换；multipart 边界等墙钟调用也不在持续时间采样范围 |
 | [tracing ID 的 fallback_word](../../../../src/cpp/galay-tracing/common/id_format.cc) | 时钟读数与原子计数混合生成标识符 | 没有起止区间和性能样本，运行时权限/初始化也无注入契约，不为低成本读数新增全局计数器 |
-| [C coroutine timeout](../../../../src/c/galay-kernel-c/coro-c/coro_task.c)、[C bounded channel](../../../../src/c/galay-kernel-c/concurrency-c/bounded_channel.c)、[C async mutex](../../../../src/c/galay-kernel-c/async-c/async_mutex.c)、[C async waiter](../../../../src/c/galay-kernel-c/async-c/async_waiter.c) | `CLOCK_MONOTONIC` 毫秒截止时间与等待检查 | C 层仍是调度/等待语义，不新增 C++ 计数器桥接 |
 
 ### 为什么局部耗时结果仍不足以接入
 

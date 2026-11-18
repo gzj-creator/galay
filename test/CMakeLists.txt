@@ -5,10 +5,6 @@ else()
     add_compile_options(-UNDEBUG)
 endif()
 
-if(GALAY_BUILD_C_API)
-    add_subdirectory(c)
-endif()
-
 add_subdirectory(cpp/config)
 
 if(GALAY_BUILD_UTILS)

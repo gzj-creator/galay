@@ -13,10 +13,6 @@ platforms   = ["linux", "macos"]
 path = "src/cpp/galay-utils/module/galay_utils.cppm"
 
 [build]
-# mcpp builds the C++ implementation and C++23 module interfaces only.  The C
-# ABI wrappers under src/c and their architecture-specific coroutine assembly
-# are intentionally outside this package; C++ consumers use the named modules
-# and C++ headers directly.
 sources = [
     "src/cpp/galay-utils/**/*.cc",
     "src/cpp/galay-utils/module/*.cppm",

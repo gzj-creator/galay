@@ -20,7 +20,7 @@ foreach(benchmark_source IN LISTS GALAY_KERNEL_BENCHMARK_SOURCES)
 endforeach()
 
 # The only external kernel baseline is the same-language Boost.Asio coroutine
-# harness. Older Crossbeam/libuv sources remain as historical fixtures but are
+# harness. Older Crossbeam sources remain as historical fixtures but are
 # intentionally not part of the formal benchmark build.
 find_path(GALAY_BOOST_ASIO_INCLUDE_DIR
     NAMES boost/asio.hpp

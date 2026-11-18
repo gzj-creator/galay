@@ -714,7 +714,7 @@ H2/h2c evidence 各记录24并发 stream（peak24）、trailers、长度不符 r
 ```bash
 cmake -DGALAY_SOURCE_DIR=$PWD \
   -DGALAY_BINARY_DIR=/tmp/galay-api-transport-validation \
-  -DGALAY_CXX_COMPILER=/usr/bin/g++-14 -DGALAY_C_COMPILER=/usr/bin/gcc-14 \
+  -DGALAY_CXX_COMPILER=/usr/bin/g++-14 \
   -P test/cpp/api/transport_matrix.cmake \
   > build/naming-release/api-transport-matrix-delivery.log 2>&1
 python3 scripts/common/106_gen_module_prelude.py --check
@@ -890,7 +890,6 @@ consumer 的独立 evidence 再验一次，同样 128 observations / 45 边界�
 cmake -DGALAY_SOURCE_DIR="$PWD" \
   -DGALAY_BINARY_DIR="$PWD/build/native-api-features" \
   -DGALAY_CXX_COMPILER=/usr/bin/g++-14 \
-  -DGALAY_C_COMPILER=/usr/bin/gcc-14 \
   -P test/cpp/api/transport_matrix.cmake
 ```
 

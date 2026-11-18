@@ -59,8 +59,6 @@ endif()
 option(GALAY_BUILD_EXAMPLES "Build enabled module examples" ON)
 # 是否构建已启用模块的 benchmark 程序。
 option(GALAY_BUILD_BENCHMARKS "Build enabled module benchmarks" ON)
-# 是否构建 C ABI 包装目标。
-option(GALAY_BUILD_C_API "Build C ABI wrapper targets" ON)
 
 # 当 CMake、生成器和编译器支持命名模块依赖扫描时，
 # 是否启用 CMake 原生 C++23 模块文件集；只影响模块扫描与编译。

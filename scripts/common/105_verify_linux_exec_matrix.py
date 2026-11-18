@@ -41,7 +41,6 @@ EXTERNAL_PATTERNS = (
 )
 
 SELF_CONTAINED_BENCHMARKS = (
-    "benchmark/c/redis/benchmark_c_redis_auth_pipeline_smoke",
     "benchmark/cpp/rpc/benchmark_rpc_service_discovery_latency",
 )
 
@@ -50,7 +49,6 @@ PEER_PATTERNS = (
     "client_",
     "tls_client_throughput",
     "ssl_tls_client_throughput",
-    "tcp_socket_client_throughput",
 )
 
 LONG_RUNNING_PATTERNS = (
@@ -97,7 +95,6 @@ class PairPlan:
     client_args: tuple[str, ...]
     host: str
     port: int
-    probe_port: bool = True
 
 
 def normalize_rel(path: str) -> str:
@@ -219,16 +216,7 @@ def run_command(build_root: Path, argv: list[str], timeout_seconds: float) -> tu
 
 
 def run_executable(build_root: Path, rel: str, timeout_seconds: float) -> tuple[int, bool, str]:
-    return run_command(build_root, [str(build_root / rel), *single_executable_args(rel)], timeout_seconds)
-
-
-def single_executable_args(rel: str) -> tuple[str, ...]:
-    rel = normalize_rel(rel)
-    if rel == "benchmark/c/kernel/benchmark_c_kernel_async_waiter_signal":
-        return ("100",)
-    if rel == "benchmark/c/kernel/benchmark_c_kernel_coro_tcp_iov_sendfile":
-        return ("20",)
-    return ()
+    return run_command(build_root, [str(build_root / rel)], timeout_seconds)
 
 
 def find_free_port() -> int:
@@ -243,16 +231,6 @@ def source_root() -> Path:
 
 def build_pair_plan(rel: str, build_root: Path) -> PairPlan | None:
     rel = normalize_rel(rel)
-
-    if rel == "benchmark/c/kernel/benchmark_c_kernel_tcp_socket_client_throughput":
-        port = find_free_port()
-        return PairPlan(
-            server_rel="benchmark/c/kernel/benchmark_c_kernel_tcp_socket_server_throughput",
-            server_args=(str(port), "1"),
-            client_args=("-p", str(port), "-c", "1", "-d", "1"),
-            host="127.0.0.1",
-            port=port,
-        )
 
     if rel == "benchmark/cpp/ssl/benchmark_ssl_tls_client_throughput":
         port = find_free_port()
@@ -269,17 +247,6 @@ def build_pair_plan(rel: str, build_root: Path) -> PairPlan | None:
             client_args=("127.0.0.1", str(port), "1", "1", "47", "1", "3"),
             host="127.0.0.1",
             port=port,
-        )
-
-    if rel == "examples/c/ws/example_c_ws_echo_client":
-        port = find_free_port()
-        return PairPlan(
-            server_rel="examples/c/ws/example_c_ws_echo_server",
-            server_args=(str(port),),
-            client_args=("127.0.0.1", str(port), "/"),
-            host="127.0.0.1",
-            port=port,
-            probe_port=False,
         )
 
     ssl_pairs = {
@@ -378,13 +345,7 @@ def run_pair(build_root: Path,
         text=True,
         start_new_session=True,
     )
-    if plan.probe_port:
-        server_ready = wait_for_tcp_port(server_proc, plan.host, plan.port, server_timeout)
-    else:
-        time.sleep(min(0.3, server_timeout))
-        server_ready = server_proc.poll() is None
-
-    if not server_ready:
+    if not wait_for_tcp_port(server_proc, plan.host, plan.port, server_timeout):
         server_output = terminate_process_group(server_proc)
         server_rc = server_proc.returncode if server_proc.returncode is not None else 124
         server_status = classify_result(plan.server_rel, server_rc, False, server_output)

@@ -101,12 +101,12 @@ file(MAKE_DIRECTORY "${consumer_source_dir}")
 
 file(WRITE "${consumer_source_dir}/CMakeLists.txt" [=[
 cmake_minimum_required(VERSION 3.20)
-project(galay_canonical_cpp_targets LANGUAGES C CXX)
+project(galay_canonical_cpp_targets LANGUAGES CXX)
 
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(GALAY_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GALAY_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
-set(GALAY_BUILD_C_API OFF CACHE BOOL "" FORCE)
+set(GALAY_BUILD_SERDE OFF CACHE BOOL "" FORCE)
 set(GALAY_BUILD_SSL OFF CACHE BOOL "" FORCE)
 set(GALAY_BUILD_HTTP OFF CACHE BOOL "" FORCE)
 set(GALAY_BUILD_WS OFF CACHE BOOL "" FORCE)
@@ -121,6 +121,11 @@ set(GALAY_BUILD_MCP OFF CACHE BOOL "" FORCE)
 set(GALAY_BUILD_TRACING OFF CACHE BOOL "" FORCE)
 
 add_subdirectory("@GALAY_SOURCE_DIR@" galay)
+
+get_property(enabled_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
+if("C" IN_LIST enabled_languages)
+    message(FATAL_ERROR "Galay's core targets must configure without enabling C.")
+endif()
 
 foreach(required_target IN ITEMS galay-utils galay-kernel galay::utils galay::kernel)
     if(NOT TARGET ${required_target})

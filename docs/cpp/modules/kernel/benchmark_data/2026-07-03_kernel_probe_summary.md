@@ -14,14 +14,13 @@
 - `CMAKE_BUILD_TYPE=Debug`
 - `BUILD_TESTING=OFF`
 - `GALAY_BUILD_BENCHMARKS=OFF`
-- `GALAY_BUILD_C_API=OFF`
 - `GALAY_BUILD_KERNEL=ON`
 - `GALAY_DISABLE_IOURING=ON`
 - Generator: Ninja
 
 Commands and results:
 
-- `rtk rg -n "BENCH|BUILD_TEST|BUILD_TESTING|CMAKE_BUILD_TYPE|CMAKE_GENERATOR|CMAKE_MAKE_PROGRAM|CMAKE_CXX_COMPILER|CMAKE_C_COMPILER|ENABLE|GALAY" CMakeCache.txt`
+- `rtk rg -n "BENCH|BUILD_TEST|BUILD_TESTING|CMAKE_BUILD_TYPE|CMAKE_GENERATOR|CMAKE_MAKE_PROGRAM|CMAKE_CXX_COMPILER|ENABLE|GALAY" CMakeCache.txt`
   - Result: current build is Debug and benchmark targets are disabled.
 - `rtk cmake --build . --target help | rtk rg 'benchmark_kernel|benchmark|kernel'`
   - Result: only `galay-kernel` library/install targets were listed; no kernel benchmark targets were present.
@@ -37,7 +36,6 @@ Commands and results:
 - `benchmark/cpp/kernel/CMakeLists.txt` maps `b14_scheduler_wakeup_latency.cc` to `benchmark_kernel_scheduler_wakeup_latency`.
 - `benchmark/cpp/kernel/CMakeLists.txt` maps `b18_ready_entry_wakeup_latency.cc` to `benchmark_kernel_ready_entry_wakeup_latency`.
 - `benchmark/cpp/kernel/CMakeLists.txt` maps `b20_thread_safe_timer_manager.cc` to `benchmark_kernel_thread_safe_timer_manager`.
-- `benchmark/c/kernel/CMakeLists.txt` maps `b24_coro_sleep_latency.c` to `benchmark_c_kernel_coro_sleep_latency` when C API benchmarks are enabled.
 
 ## Competitor probe
 
@@ -64,7 +62,6 @@ rtk cmake -S .. -B ../build-kernel-bench-release \
   -DCMAKE_BUILD_TYPE=Release \
   -DGALAY_BUILD_BENCHMARKS=ON \
   -DGALAY_BUILD_KERNEL=ON \
-  -DGALAY_BUILD_C_API=ON \
   -DBUILD_TESTING=OFF
 
 rtk cmake --build ../build-kernel-bench-release \
@@ -73,7 +70,6 @@ rtk cmake --build ../build-kernel-bench-release \
            benchmark_kernel_scheduler_wakeup_latency \
            benchmark_kernel_ready_entry_wakeup_latency \
            benchmark_kernel_thread_safe_timer_manager \
-           benchmark_c_kernel_coro_sleep_latency \
   --parallel
 
 rtk ../build-kernel-bench-release/benchmark/cpp/kernel/benchmark_kernel_parallel_scheduler_throughput 4
@@ -81,5 +77,4 @@ rtk ../build-kernel-bench-release/benchmark/cpp/kernel/benchmark_kernel_mpsc_cha
 rtk ../build-kernel-bench-release/benchmark/cpp/kernel/benchmark_kernel_scheduler_wakeup_latency
 rtk ../build-kernel-bench-release/benchmark/cpp/kernel/benchmark_kernel_ready_entry_wakeup_latency
 rtk ../build-kernel-bench-release/benchmark/cpp/kernel/benchmark_kernel_thread_safe_timer_manager
-rtk ../build-kernel-bench-release/benchmark/c/kernel/benchmark_c_kernel_coro_sleep_latency
 ```

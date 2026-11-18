@@ -16,11 +16,6 @@
 
 namespace {
 
-std::filesystem::path project_root()
-{
-    return std::filesystem::path(GALAY_PROJECT_ROOT);
-}
-
 std::filesystem::path cpp_root()
 {
     return std::filesystem::path(GALAY_SOURCE_ROOT);
@@ -121,15 +116,8 @@ void require_contains(const std::filesystem::path& path,
 
 int main()
 {
-    const auto project_root = ::project_root();
     const auto root = cpp_root();
     const std::vector<std::filesystem::path> source_paths = {
-        project_root / "src" / "c" / "galay-kernel-c" / "core-c" / "runtime.c",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "tcp_socket.c",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "udp_socket.c",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_file.c",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "aio_file.c",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "file_watcher.c",
         root / "galay-kernel" / "async" / "async_tcp.h",
         root / "galay-kernel" / "async" / "async_tcp.cc",
         root / "galay-kernel" / "async" / "async_udp.h",

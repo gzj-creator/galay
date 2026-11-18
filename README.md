@@ -9,7 +9,7 @@ galay 是一个基于 C++23 协程的高性能异步网络与协议框架，提�
 - **多协议支持**：HTTP/1.1、HTTP/2、WebSocket、TLS，以及 Redis / MySQL / PostgreSQL / MongoDB / etcd / RPC / MCP 等客户端。
 - **可观测性**：内置 `tracing` 链路追踪模块（span、sampler、OTLP 导出、日志关联）。
 - **结构体序列化**：通过独立 serde 依赖，字段注册一次即可进行 JSON/TOML 编解码，错误通过 `std::expected` 返回。
-- **模块化构建**：C++ 模块位于 `src/cpp/galay-*`，C ABI 模块位于 `src/c/galay-*-c`，默认启用，可通过 `-DGALAY_BUILD_C_API=OFF` 关闭；同时支持 CMake 与 Bazel。
+- **模块化构建**：C++ 模块位于 `src/cpp/galay-*`，支持 CMake 与 Bazel。
 - **C++23 Modules**（可选）：在受支持的编译器上可启用 `galay_*` 模块目标。
 
 ## 模块
@@ -121,13 +121,11 @@ cmake -B build -DGALAY_ENABLE_CPP23_MODULES=ON
 ```
 galay/
 ├── src/cpp/galay-*/ # C++ 功能模块源码
-├── src/c/galay-*-c/ # C ABI 模块源码、common 与 bridge 层
 ├── examples/        # 各模块使用示例
 ├── test/            # 单元 / 集成测试（GoogleTest + CTest）
 ├── benchmark/       # 性能基准测试
 ├── thirdparty/      # 随 Galay 分发的第三方源码与许可证
 ├── docs/cpp/modules/# C++ 模块文档
-├── docs/c/modules/  # C ABI 模块文档
 ├── cmake/           # CMake 选项、依赖与包配置
 └── scripts/         # 辅助脚本
 ```
@@ -135,8 +133,6 @@ galay/
 ## 文档
 
 每个模块的完整文档位于 [`docs/cpp/modules/`](docs/cpp/modules/)，覆盖快速开始、架构设计、API 参考、使用指南、示例代码、性能测试、高级主题与常见问题。
-
-C ABI 文档位于 [`docs/c/modules/`](docs/c/modules/)，按模块对齐 `src/c/galay-*-c`，包括 `bridge`、`common`、`utils` 等共享层文档。
 
 版本与发版记录见 [CHANGELOG.md](CHANGELOG.md) 与 [docs/release_note.md](docs/release_note.md)。
 

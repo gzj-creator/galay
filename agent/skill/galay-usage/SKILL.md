@@ -1,18 +1,18 @@
 ---
 name: galay-framework
-description: Use when building, integrating, or extending anything on the galay C++23 coroutine networking framework — servers/clients for HTTP/1.1, HTTP/2, WebSocket, TLS, Redis, MySQL, MongoDB, etcd, RPC, MCP, tracing, or its C ABI. Covers the runtime/Task model, include/link/build conventions, error-handling contracts, and per-module API entry points so an agent can start coding immediately.
+description: Use when integrating or extending the galay C++23 coroutine networking framework. Covers the runtime and Task model, build and linking conventions, error handling, and module APIs.
 ---
 
 # galay 框架使用指南
 
 ## 概述
 
-galay 是一个基于 **C++23 协程** 的高性能异步网络与协议框架，从协程运行时内核到各类协议客户端/服务端一站式覆盖。所有 IO（网络/文件/TLS/协议）都是协程化的，可用 `co_await` 组合；错误通过 `std::expected<T, E>`（C++）或结果码/`C_IOResult`（C）**显式传播，不用异常**。
+galay 是一个基于 **C++23 协程** 的高性能异步网络与协议框架，从协程运行时内核到各类协议客户端/服务端一站式覆盖。所有 IO（网络/文件/TLS/协议）都是协程化的，可用 `co_await` 组合；错误通过 `std::expected<T, E>` **显式传播，不用异常**。
 
 - 仓库根：`/Users/gongzhijie/Desktop/projects/git/galay`
-- 两套 API：C++ 模块（`src/cpp/galay-*`，命名空间 `galay::*`）与 C ABI（`src/c/galay-*-c`，前缀 `galay_*`）。
-- 完整文档：每个模块在 `docs/cpp/modules/<name>/`（`00-快速开始` / `01-架构设计` / `02-API参考` / `03-使用指南` / `04-示例代码` …），C 侧在 `docs/c/modules/<name>/`。
-- 可运行示例：`examples/cpp/<module>/include/*.cc`（头文件模式）与 `examples/cpp/<module>/mcpp/*.cc`（C++23 module 模式）；C 示例在 `examples/c/<module>/*.c`。
+- C++ 模块位于 `src/cpp/galay-*`，命名空间为 `galay::*`。
+- 完整文档：每个模块在 `docs/cpp/modules/<name>/`（`00-快速开始` / `01-架构设计` / `02-API参考` / `03-使用指南` / `04-示例代码` …）。
+- 可运行示例：`examples/cpp/<module>/include/*.cc`（头文件模式）与 `examples/cpp/<module>/mcpp/*.cc`（C++23 module 模式）。
 
 ## 何时使用本 skill
 
@@ -20,12 +20,10 @@ galay 是一个基于 **C++23 协程** 的高性能异步网络与协议框架�
 - 需要正确的 include 路径、CMake 链接目标、命名空间、构建开关。
 - 需要 Runtime / `Task<T>` / 调度器 / channel / 定时器等运行时原语的用法。
 - 需要某个协议模块（http/http2/ws/redis/mysql/mongo/etcd/rpc/mcp/tracing/ssl）的 API 入口。
-- 通过 C ABI 从 C 或其它语言 FFI 驱动框架。
 
 ## 参考文件（按需加载，勿一次性全读）
 
 - **[references/cpp-api.md](references/cpp-api.md)** — 13 个 C++ 模块的公开类型、方法签名与最小示例。写 C++ 时按模块查这一份。
-- **[references/c-api.md](references/c-api.md)** — C ABI 层的错误约定、runtime/coro 驱动模型、每模块 handle 与关键签名、完整 C 示例。写 C/FFI 时查这一份。
 
 编码前先读本页“核心心智模型 + 约定”，再打开对应参考文件的目标模块小节；需要更深内容时才进 `docs/` 与 `examples/`。
 
@@ -33,7 +31,7 @@ galay 是一个基于 **C++23 协程** 的高性能异步网络与协议框架�
 
 1. **Runtime 是入口。** 创建 `Runtime`（或 `RuntimeBuilder`），把 IO 根协程用 `block_on_io` / `spawn_io` 提交，把纯计算根协程用 `block_on_cpu` / `spawn_cpu` 提交。Runtime 管理 IO 调度器、compute 调度器、阻塞线程池。
 2. **业务逻辑写成 `Task<T>` 协程。** IO 操作返回 awaitable，用 `co_await` 取 `std::expected<...>`；判 `if (!result)` 处理失败，`result.error().message()` 拿原因。
-3. **不抛异常。** C++ 可恢复错误一律 `std::expected<T, E>`；C 一律 `galay_status_t` / `C_IOResult`。所有非 void 返回值必须处理（见仓库 `CLAUDE.md` 准则 5、6）。
+3. **不抛异常。** 可恢复错误用 `std::expected<T, E>`。所有非 void 返回值必须处理（见仓库 `CLAUDE.md` 准则 5、6）。
 4. **禁止把协程逻辑拆成返回 `Task`/`Task<T>` 的 helper**（会产生额外协程帧/调度点）；关键控制流留在调用点附近（准则 7）。
 5. **客户端模块常见形态**：`XxxClientBuilder().scheduler(sched).build()` → `co_await client.connect(...)` → `co_await client.<op>(...)` → `co_await client.close()`。数据类客户端多为异步 + 连接池，部分提供 `sync/` 同步变体。
 6. **服务端模块常见形态**：`XxxServerBuilder().host().port()...build()` → 注册 handler/router → `server.start(...)`。HTTP handler 签名 `Task<void>(HttpConn&, HttpRequest)`。
@@ -70,10 +68,7 @@ int main() {
 
 ### include 前缀与命名空间
 
-| 语言 | include 前缀 | 命名空间 / 前缀 |
-| --- | --- | --- |
-| C++ | `<galay/cpp/galay-<module>/...>` | `galay::kernel`、`galay::async`、`galay::http`、`galay::http2`、`galay::websocket`、`galay::redis`、`galay::mysql`、`galay::mongo`、`galay::etcd`、`galay::rpc`、`galay::mcp`、`galay::tracing`、`galay::utils`、`galay::ssl` |
-| C | `<galay/c/galay-<module>-c/...>` | 函数 `galay_<module>_<action>()`、类型 `galay_<module>_<type>_t`、共享值类型 `C_Host`/`C_IOResult`/`C_RuntimeConfig` |
+公开头文件使用 `<galay/cpp/galay-<module>/...>`，各模块的命名空间见下方模块地图。
 
 ### CMake / Bazel 引入模块
 
@@ -103,7 +98,6 @@ cc_binary(
 - 外部 Bazel/Bzlmod 消费时仓库名是 `galay`，label 前加 `@galay`，例如 `@galay//src/cpp/galay-kernel:galay-kernel`。
 - 例外/补充：CMake `galay::ws` 对应 Bazel `//src/cpp/galay-ws:galay-ws`；Redis 的 Rediss 实现随 `galay-redis` 目标按 `GALAY_SSL_FEATURE_ENABLED` 条件编译。
 - C++ target：`galay::kernel`、`galay::http`、`galay::http2`、`galay::ws`（注意 CMake target 是 `galay::ws`，但 C++ 命名空间是 `galay::websocket`）、`galay::redis`、`galay::mysql`、`galay::mongo`、`galay::etcd`、`galay::rpc`、`galay::mcp`、`galay::tracing`（附 `galay::tracing-kernel`、`galay::tracing-spdlog`）、`galay::utils`、`galay::ssl`。异步 socket 类型在 `galay::async` **命名空间**里，随 `galay::kernel` 提供，无独立 target。
-- C target：`galay::c-kernel`、`galay::c-common`、`galay::c-http`、`galay::c-http2`、`galay::c-ws`、`galay::c-redis`、`galay::c-mysql`、`galay::c-postgres`、`galay::c-mongo`、`galay::c-etcd`、`galay::c-rpc`、`galay::c-mcp`、`galay::c-ssl`、`galay::c-tracing`、`galay::c-utils`。
 - C++23 module 模式（`-DGALAY_ENABLE_CPP23_MODULES=ON`，需 CMake ≥ 3.28 + Ninja/VS + 非 AppleClang）：`import galay.kernel;`、`import galay.http;`、`import galay.http2;`、`import galay.websocket;`、`import galay.redis;`、`import galay.mysql;`、`import galay.mongo;`、`import galay.etcd;`、`import galay.rpc;`（`import galay.rpc.etcd;`）、`import galay.mcp;`、`import galay.tracing;`、`import galay.utils;`、`import galay.ssl;`。
 
 常用模块映射：
@@ -129,7 +123,6 @@ cc_binary(
 | 开关 | 默认 | 作用 |
 | --- | --- | --- |
 | `GALAY_BUILD_KERNEL` / `_UTILS` / `_SSL` / `_HTTP` / `_HTTP2` / `_WS` / `_REDIS` / `_MYSQL` / `_MONGO` / `_ETCD` / `_RPC` / `_MCP` / `_TRACING` | ON | 逐模块开关 |
-| `GALAY_BUILD_C_API` | ON | 构建 C ABI 层 |
 | `BUILD_TESTING` / `GALAY_BUILD_EXAMPLES` / `GALAY_BUILD_BENCHMARKS` | 视预设 | 测试 / 示例 / 基准 |
 | `GALAY_BUILD_SHARED_LIBS` | OFF | 动态库 |
 | `GALAY_ENABLE_CPP23_MODULES` | OFF | 启用命名模块目标 |
@@ -164,7 +157,6 @@ ctest --test-dir build --output-on-failure
 | rpc | RPC 框架：unary + 流式、服务端/客户端、服务发现 | `galay::rpc` | `galay::rpc` | cpp-api.md |
 | mcp | Model Context Protocol：server/client，stdio/http 传输 | `galay::mcp` | `galay::mcp` | cpp-api.md |
 | tracing | 链路追踪：Span、Sampler、OTLP 导出、日志关联 | `galay::tracing` | `galay::tracing` | cpp-api.md |
-| C ABI | 上述全部模块的 C 封装 | `galay::c-*` | `galay_*` | c-api.md |
 
 ## 编码准则（本仓库强制，源自 `CLAUDE.md`）
 
@@ -172,7 +164,7 @@ ctest --test-dir build --output-on-failure
 2. **简洁优先**：用最少代码解决，不做投机性抽象/配置/错误处理。
 3. **外科手术式修改**：只动必须动的，匹配现有风格，不顺手重构邻近代码。
 4. **目标驱动**：把任务转成可验证目标，配合 TDD（先写失败测试）；测试放 `test/<module>`，压测/基准放 `benchmark/<module>`。
-5. **异常禁用**：C++ 不新增 `throw`/`try`/`catch`；错误用 `std::expected` 传播。C 用结果结构体/错误码，且每个公开错误枚举都要有 `*_get_error(...)` 字符串函数。
+5. **异常禁用**：不新增 `throw`/`try`/`catch`；可恢复错误用 `std::expected` 传播。
 6. **返回值必须处理**：所有非 void 返回值都要判断/传播；不得 void-cast 或裸调用丢弃。
 7. **不过度拆 helper**：尤其不要把协程拆成返回 `Task`/`Task<T>` 的 helper；确需拆分先问用户。
 

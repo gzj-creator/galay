@@ -88,20 +88,20 @@ def main() -> int:
     )
     check(
         matrix.classify_result(
-            "benchmark/c/kernel/benchmark_c_kernel_tcp_socket_client_throughput",
+            "benchmark/cpp/ssl/benchmark_ssl_tls_client_throughput",
             10,
             False,
-            "[EXTERNAL_DEP] TCP echo server is required",
+            "[EXTERNAL_DEP] TLS echo server is required",
         )
         == "EXTERNAL_DEP",
         "explicit external dependency marker should be EXTERNAL_DEP",
     )
     check(
         matrix.classify_result(
-            "benchmark/c/kernel/benchmark_c_kernel_tcp_socket_client_throughput",
+            "benchmark/cpp/ssl/benchmark_ssl_tls_client_throughput",
             10,
             False,
-            "tcp_socket_client_throughput errors=32",
+            "tls_client_throughput errors=32",
         )
         == "NEEDS_PEER",
         "standalone client benchmark should be NEEDS_PEER",
@@ -133,10 +133,10 @@ def main() -> int:
     )
     check(
         matrix.classify_result(
-            "examples/c/kernel/example_c_kernel_async_file_copy",
+            "examples/cpp/kernel/example_kernel_include_udp_echo",
             13,
             False,
-            "async_file_copy unsupported: operation unsupported",
+            "udp echo unsupported: operation unsupported",
         )
         == "SKIP",
         "explicit unsupported backend should be SKIP",
@@ -153,22 +153,17 @@ def main() -> int:
     )
 
     pair = matrix.build_pair_plan(
-        "benchmark/c/kernel/benchmark_c_kernel_tcp_socket_client_throughput",
+        "benchmark/cpp/ssl/benchmark_ssl_tls_client_throughput",
         ROOT / "build-local-full",
     )
-    check(pair is not None, "known TCP throughput client should have a pair plan")
+    check(pair is not None, "known TLS throughput client should have a pair plan")
     check(
-        pair.server_rel == "benchmark/c/kernel/benchmark_c_kernel_tcp_socket_server_throughput",
-        "TCP throughput pair should launch the matching server",
-    )
-    check("-p" in pair.client_args, "TCP throughput pair should pass the dynamic server port")
-    check(
-        matrix.single_executable_args("benchmark/c/kernel/benchmark_c_kernel_async_waiter_signal") == ("100",),
-        "async waiter signal benchmark should run a short smoke workload",
+        pair.server_rel == "benchmark/cpp/ssl/benchmark_ssl_tls_server_throughput",
+        "TLS throughput pair should launch the matching server",
     )
     check(
-        matrix.single_executable_args("benchmark/c/kernel/benchmark_c_kernel_coro_tcp_iov_sendfile") == ("20",),
-        "sendfile benchmark should run a short smoke workload",
+        str(pair.port) in pair.server_args and str(pair.port) in pair.client_args,
+        "TLS throughput pair should pass the dynamic port to the server and client",
     )
     check(
         matrix.classify_result(
@@ -179,16 +174,13 @@ def main() -> int:
         ) == "LONG_RUNNING",
         "MPSC prefetch stress benchmark timeout should be LONG_RUNNING",
     )
-    for rel in (
-        "benchmark/c/redis/benchmark_c_redis_auth_pipeline_smoke",
-        "benchmark/cpp/rpc/benchmark_rpc_service_discovery_latency",
-    ):
-        check(not matrix.is_external_dep(rel), f"{rel} should not require an external service")
-        check(not matrix.is_long_running(rel), f"{rel} should receive the normal finite benchmark timeout")
-        check(
-            matrix.executable_timeout(rel, 30, 1, 3) == 30,
-            f"{rel} should receive the default timeout",
-        )
+    rel = "benchmark/cpp/rpc/benchmark_rpc_service_discovery_latency"
+    check(not matrix.is_external_dep(rel), f"{rel} should not require an external service")
+    check(not matrix.is_long_running(rel), f"{rel} should receive the normal finite benchmark timeout")
+    check(
+        matrix.executable_timeout(rel, 30, 1, 3) == 30,
+        f"{rel} should receive the default timeout",
+    )
     ssl_pair = matrix.build_pair_plan(
         "examples/cpp/ssl/example_ssl_include_echo_client",
         ROOT / "build-local-full",

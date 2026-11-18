@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(galay VERSION 8.0.0 LANGUAGES C CXX)
+project(galay VERSION 8.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,15 +33,6 @@ file(CREATE_LINK
     SYMBOLIC
     COPY_ON_ERROR
 )
-if(GALAY_BUILD_C_API)
-    file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/include/galay/c)
-    file(CREATE_LINK
-        ${PROJECT_SOURCE_DIR}/src/c
-        ${CMAKE_BINARY_DIR}/include/galay/c
-        SYMBOLIC
-        COPY_ON_ERROR
-    )
-endif()
 
 if(GALAY_BUILD_UTILS)
     add_subdirectory(src/cpp/galay-utils)
@@ -93,9 +84,6 @@ endif()
 if(GALAY_BUILD_TRACING)
     add_subdirectory(src/cpp/galay-tracing)
 endif()
-if(GALAY_BUILD_C_API)
-    add_subdirectory(src/c)
-endif()
 
 set(GALAY_INSTALL_TARGETS)
 foreach(_galay_target IN ITEMS
@@ -103,10 +91,6 @@ foreach(_galay_target IN ITEMS
     galay-redis galay-rpc galay-mysql galay-postgres galay-mongo galay-etcd galay-mcp
     galay-tracing
     galay-tracing-spdlog galay-tracing-kernel
-    galay-c-common
-    galay-c-utils galay-c-kernel galay-c-ssl galay-c-http galay-c-ws
-    galay-c-http2 galay-c-redis galay-c-rpc galay-c-mysql galay-c-postgres
-    galay-c-mongo galay-c-etcd galay-c-mcp galay-c-tracing
 )
     if(TARGET ${_galay_target})
         list(APPEND GALAY_INSTALL_TARGETS ${_galay_target})
@@ -261,13 +245,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     install(DIRECTORY ${GALAY_PROJECT_SOURCE_ROOT}/thirdparty/fast_float/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/fast_float
         FILES_MATCHING PATTERN "*.h" PATTERN "LICENSE-*" PATTERN "README.md"
-    )
-endif()
-if(GALAY_BUILD_C_API)
-    install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/c/
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/c
-        FILES_MATCHING
-            PATTERN "*.h"
     )
 endif()
 

@@ -83,10 +83,9 @@ CMAKE_C_COMPILER=/usr/bin/cc
 CMAKE_BUILD_TYPE=Release
 GALAY_BUILD_BENCHMARKS=ON
 BUILD_TESTING=ON
-GALAY_BUILD_C_API=OFF
 ```
 
-`build-release/` 已包含完整 C++ benchmark 目标清单，但本轮探测时大部分 benchmark 可执行文件尚未实际生成；只有已构建并可运行的二进制才能作为正式压测输入。C API benchmark 不在该构建中，因为 `GALAY_BUILD_C_API=OFF`。
+`build-release/` 已包含完整 C++ benchmark 目标清单，但本轮探测时大部分 benchmark 可执行文件尚未实际生成；只有已构建并可运行的二进制才能作为正式压测输入。
 
 ### 正式压测建议构建命令
 ```bash
@@ -143,7 +142,6 @@ cmake --build build-release --parallel
 - `CMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG`
 - `GALAY_BUILD_BENCHMARKS=ON`
 - `BUILD_TESTING=ON`
-- `GALAY_BUILD_C_API=OFF`
 
 ### 本轮实际使用版本
 
